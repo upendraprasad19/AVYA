@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
+
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 
@@ -103,7 +105,24 @@ class ReferralRepository {
       final errorMsg = (body?['error'] as String?) ??
           'Could not apply that code. Please try again.';
       return RedemptionResult.failure(errorMsg);
+    } on FunctionException catch (e, stack) {
+      // supabase_flutter THROWS FunctionException on any non-2xx, so the EF's 4xx
+      // validation responses (unrecognized / expired / self-referral / already-
+      // redeemed / not-a-new-recruit) never reach the status==200 branch above —
+      // they land HERE. Surface the SERVER's user-facing copy (details['error'])
+      // instead of a generic "Network error" that hides WHY the code failed.
+      unawaited(ErrorTelemetry.recordNonFatal(
+        e,
+        stack,
+        reason: 'referral_repository_redeem',
+        extra: {'status': e.status.toString()},
+      ));
+      final details = e.details;
+      final serverMsg = (details is Map) ? details['error'] as String? : null;
+      return RedemptionResult.failure(
+          serverMsg ?? 'Could not apply that code. Please try again.');
     } catch (e, stack) {
+      // True transport failure (no HTTP response).
       unawaited(ErrorTelemetry.recordNonFatal(
         e,
         stack,

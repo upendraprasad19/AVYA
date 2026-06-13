@@ -4520,9 +4520,14 @@ concepts:
         notes: |
           Server-side atomic write — inserts into referral_redemptions
           + grants trial subscription. Client never writes this table
-          directly; only the Edge Function (via JWT-scoped supabase
-          client) has the INSERT path. 23505 race fallback returns 200
-          with alreadyRedeemed:true.
+          directly; only the Edge Function has the INSERT path. d2b9e6
+          (2026-06-13): the EF now uses a PURE service-role client +
+          getUser(token) for the cross-user referral_codes read + the
+          RPC. The prior createClient(URL, SERVICE_ROLE,
+          {global:{headers:{Authorization}}}) made PostgREST run as
+          `authenticated`, RLS-blocking the referrer-code read + the
+          service_role-only RPC -> 0 redemptions ever. 23505 race
+          fallback returns 200 with alreadyRedeemed:true.
       - file: lib/features/profile/repositories/referral_repository.dart
         line_range: 75-105
         method: ReferralRepository.redeem
@@ -4564,6 +4569,7 @@ concepts:
       - code
       - created_at
     regression_test: test/contracts/referral_repository_only_test.dart
+    behavioral_test_path: test/contracts/referral_redeem_success_contract_test.dart  # d2b9e6 — EF service-role pattern + success-contract across the 3 callers
     telemetry:
       failure_op_types:
         - referral_repository_has_redeemed

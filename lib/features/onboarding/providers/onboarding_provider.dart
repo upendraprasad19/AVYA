@@ -534,8 +534,11 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       final stashedCode = ref.read(referralCodeStashProvider).trim();
       if (stashedCode.isNotEmpty) {
         try {
-          final response = await SupabaseService.instance.client.functions
-              .invoke('redeem-referral', body: {'code': stashedCode});
+          // Route through callFunction (refreshes the JWT first) — a raw invoke on
+          // an aged/backgrounded web token 401s silently (§2.31; the gate at
+          // check_authed_invoke_fresh_token.dart now catches this callsite).
+          final response = await SupabaseService.instance.callFunction(
+              'redeem-referral', body: {'code': stashedCode});
           if (response.status == 200) {
             debugPrint('[referral] redeemed $stashedCode at onboarding');
             // Refresh subscription cache so any PRO grant reflects immediately.

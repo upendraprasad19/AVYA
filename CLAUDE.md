@@ -321,6 +321,15 @@ When a planned refactor touches a known bug class (writer/reader drift, restore 
 
 See `feedback_gates_before_refactor.md`. This rule turns multi-day refactors into atomic-safe rolling commits.
 
+### 4.12 Plan review ×2 + discipline-before-skill (NEW — founder directive 2026-06-13)
+
+Two standing invariants, codified after a 4-round pre-implementation review of the test2 fix-batch caught two *wrong* fixes BEFORE a line was written (a referral "auth" bug that was really an RLS-context bug; a "broad-blast calc" that was already half-shipped with a silent overwrite + a fabricated body-fat default):
+
+1. **Every implementation plan is independently reviewed TWICE before execution.** Dispatch context-blind reviewers (assume loopholes; verify every claim against code + live state, never subagent prose). **Review #2 runs on the POST-review-#1 (hardened) plan** — the corrections themselves can introduce new defects (they did: a SECURITY-DEFINER RPC that would have re-created the anon-executable bug; a `body_fat ?? 18.0` default feeding a fabricated value into every skip-user's calc). When successive reviews keep surfacing *new* material issues, that is the signal the unit is too large — **split it and ship the smallest converged piece**, don't review the large thing a fifth time. Ref: `feedback_plan_review_twice.md`.
+2. **Discipline is enforced BEFORE every skill invocation.** Before any Skill call, load + apply the relevant invariants first (CLAUDE.md §4; the Wardroom brand soul for copy work; the bugfix/observation workflow for fixes) — never fire a skill blind. Ref: `feedback_discipline_before_skill.md`.
+
+These bind the planning / `/code-review` / `/hermes-pass` / brainstorming flows.
+
 ### 4.9 Common process pitfalls
 
 | Pitfall | How to avoid | Source |
