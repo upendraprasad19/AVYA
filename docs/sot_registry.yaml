@@ -4499,6 +4499,74 @@ concepts:
       - approved_for_library
       - created_at
 
+  - concept: community_review_queue
+    domain: profile
+    behavioral_test_required: true  # c7d4f1 — source-grep contract + live smoke; the Deno EF cross-user read is not unit-testable in flutter (Gate 42 acknowledged)
+    description: |
+      Profile → Submissions → COMMUNITY REVIEW: pending custom foods/exercises
+      submitted by OTHER users (submitted && !approved) for the current user to
+      approve/reject. The cross-user read is BLOCKED by own-only SELECT RLS on
+      user_custom_foods / user_custom_exercises (auth.uid()=user_id), so it MUST
+      route through the service-role Edge Function get-community-review-items
+      (diagnose c7d4f1, same class as referral d2b9e6). The EF anonymizes
+      (strips submitter user_id) and returns only submitted-not-approved rows
+      from other users, limit 20. Votes INSERT community_reviews; ≥10 approve
+      votes auto-promote via the SECURITY DEFINER trigger trg_auto_approve_community
+      and the promote-community-item cron (both BYPASSRLS).
+    writers:
+      - file: supabase/functions/get-community-review-items/index.ts
+        line_range: 1-9999
+        method: serve (service-role cross-user read)
+        notes: |
+          Pure service-role client (BYPASSRLS) + getUser(token). Returns
+          {items:[...]} per kind; submitter user_id stripped; .neq('user_id',
+          callerId). The ONLY sanctioned cross-user reader of user_custom_*.
+      - file: lib/shared/repositories/submissions_repository.dart
+        line_range: 100-115
+        method: castCommunityVote
+        notes: INSERT community_reviews (reviewer_id, item_type, item_id, vote).
+    readers:
+      - file: lib/shared/repositories/submissions_repository.dart
+        line_range: 50-95
+        method: fetchPendingFoodReviews / fetchPendingExerciseReviews
+        semantic: queue-fetch
+        fields_read: [id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, category, logging_type]
+        notes: |
+          Route through SupabaseService.callFunction('get-community-review-items')
+          (response.data as Map → ['items']). NO direct cross-user .from() read.
+          currentUserId param retained for signature stability; caller identity
+          is derived server-side from the JWT.
+      - file: lib/features/profile/screens/submissions_screen.dart
+        line_range: 305-381
+        method: _CommunityReviewBody._load
+        semantic: display
+        fields_read: [id, name, kind, calories_per_100g, protein_per_100g, category, logging_type]
+        notes: |
+          Filters already-voted items via fetchAlreadyReviewedKeys (own votes,
+          own-only RLS). Both _load catches telemeter via recordNonFatal.
+    cloud_table: user_custom_foods, user_custom_exercises, community_reviews
+    cloud_columns:
+      - submitted_to_db
+      - approved
+      - submitted_to_library
+      - approved_for_library
+      - reviewer_id
+      - item_type
+      - item_id
+      - vote
+    telemetry_op_types:
+      failure:
+        - submissions_community_review_load
+        - submissions_my_load
+    class_constraints: |
+      The cross-user pending-review read MUST go through
+      get-community-review-items (service-role). No widget/provider/repository
+      may read user_custom_foods / user_custom_exercises cross-user
+      (.neq('user_id', ...)) directly — own-only RLS returns 0 rows. The
+      submitter user_id MUST be stripped from the EF response (anonymized).
+      community_reviews SELECT is own-only (migration 092); vote tallies run
+      BYPASSRLS. Pinned by test/contracts/community_review_rls_context_c7d4f1_test.dart.
+
   - concept: referral_redemption
     domain: profile
     behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
