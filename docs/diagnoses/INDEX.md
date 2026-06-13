@@ -24,6 +24,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### onboarding_preview_commit_calc_parity (1 bugs)
 - 2026-06-13 f1b6d4 — >
 
+### edge_function_cross_user_read_rls_context (1 bugs)
+- 2026-06-13 d2b9e6 — >
+
 ### signup_aware_restore_copy (1 bugs)
 - 2026-06-13 d5e1b9 — >
 
@@ -701,6 +704,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-06-13 | b9c4f1 | > | expanded_starved_by_fixed_siblings | test/contracts/food_card_name_single_line_test.dart |
 | 2026-06-13 | e8a2c1 | > | responsive_picker_host | test/contracts/responsive_picker_host_test.dart |
 | 2026-06-13 | f1b6d4 | > | onboarding_preview_commit_calc_parity | test/contracts/plan_screen_targets_match_completeOnboarding_test.dart |
+| 2026-06-13 | d2b9e6 | > | edge_function_cross_user_read_rls_context | test/contracts/referral_redeem_success_contract_test.dart |
 | 2026-06-13 | d5e1b9 | > | signup_aware_restore_copy | test/contracts/restoring_signup_copy_test.dart |
 | 2026-06-13 | a3d7e2 | > | realtime_teardown_on_reconnect_exhaustion | test/contracts/weight_realtime_teardown_on_exhaustion_test.dart |
 | 2026-06-12 | f4d1b7 | > | commit_gate_hash_stability | test/contracts/review_gate_hash_raw_bytes_test.dart |

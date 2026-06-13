@@ -39,11 +39,20 @@ interface RedeemRequest {
 export async function handleRedeemReferral(
   body: RedeemRequest,
   supabase: ReturnType<typeof createClient>,
+  token: string,
 ): Promise<Response> {
   const requestId = crypto.randomUUID().split("-")[0];
 
-  // 0. Get authenticated user
-  const { data: authData, error: authErr } = await supabase.auth.getUser();
+  // 0. Authenticate the caller.
+  // `supabase` is a PURE service-role client (BYPASSRLS). It MUST be — the
+  // referral_codes lookup below reads the REFERRER's code row, which an
+  // authenticated-context client cannot (own-only RLS: auth.uid()=user_id), AND
+  // redeem_referral_atomic is EXECUTE-granted to service_role only. The prior
+  // client baked the user JWT into global.headers, which made PostgREST run as
+  // `authenticated` → every redemption failed (0 rows ever). We instead pass the
+  // token separately and validate it explicitly via getUser(token) (mirror the
+  // delete-account e8a1c3 fix). Diagnose: referral-rls-context (2026-06-13 Unit 1).
+  const { data: authData, error: authErr } = await supabase.auth.getUser(token);
   if (authErr || !authData?.user) {
     return new Response(
       JSON.stringify({ error: "Authentication required", request_id: requestId }),
@@ -112,7 +121,10 @@ export async function handleRedeemReferral(
     // 7. 23505 race fallback — two concurrent requests slipped past step 5
     if (rpcErr.code === "23505") {
       return new Response(
-        JSON.stringify({ alreadyRedeemed: true, request_id: requestId }),
+        // success:true so EVERY success-ish 200 carries the same flag the clients
+        // read (invite_friends_sheet checks body['success']) — else the idempotent
+        // 23505-race path shows a false "invalid code" error. B-pass P2 (2026-06-13).
+        JSON.stringify({ success: true, alreadyRedeemed: true, request_id: requestId }),
         {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -129,8 +141,11 @@ export async function handleRedeemReferral(
     );
   }
 
+  // `success: true` is the canonical success flag all three clients read
+  // (referral_repository, invite_friends_sheet, onboarding redeem). `days_granted`
+  // kept for back-compat. One shape → no writer/reader drift across callers.
   return new Response(
-    JSON.stringify({ days_granted: DAYS_GRANTED, request_id: requestId }),
+    JSON.stringify({ success: true, days_granted: DAYS_GRANTED, request_id: requestId }),
     {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -164,13 +179,17 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "");
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // PURE service-role client — NO global Authorization header. Passing the user
+    // JWT in global.headers makes PostgREST derive the role from the JWT and run as
+    // `authenticated`, RLS-blocking the cross-user referral_codes lookup and the
+    // service_role-only RPC (the live P0). The caller is authenticated separately
+    // via getUser(token) inside the handler.
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const body = await req.json().catch(() => ({})) as RedeemRequest;
-    return await handleRedeemReferral(body, supabase);
+    return await handleRedeemReferral(body, supabase, token);
   } catch (err) {
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[redeem-referral] request_id=${requestId}`, err);

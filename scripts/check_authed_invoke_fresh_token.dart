@@ -46,7 +46,12 @@ const _lookback = 15;
 // The callFunction wrapper itself — its raw invoke is the refresh-wrapped impl.
 const _exempt = <String>{'lib/core/services/supabase_service.dart'};
 
-final _invoke = RegExp(r'\.functions\.invoke\(');
+// `\s*` matches newlines, so a MULTI-LINE split call is caught:
+//   `...client.functions⏎              .invoke('redeem-referral', ...)`
+// The prior `\.functions\.invoke\(` matched line-by-line and MISSED exactly that
+// shape at onboarding_provider.dart:537-538 — which is why the §2.31 Obs#9 sweep's
+// gate stayed green while that raw-invoke callsite leaked (Unit 1, 2026-06-13).
+final _invoke = RegExp(r'\.functions\s*\.invoke\(');
 
 // Newline-preserving comment strip (line numbers stay accurate). Without it the
 // gate flags `.functions.invoke(` inside a // comment (e.g. razorpay_service.dart
@@ -77,9 +82,12 @@ void main(List<String> args) {
       .where((f) => f.path.endsWith('.dart'))) {
     final rel = f.path.replaceAll('\\', '/');
     if (_exempt.contains(rel)) continue;
-    final lines = _stripComments(f.readAsStringSync()).split('\n');
-    for (var i = 0; i < lines.length; i++) {
-      if (!_invoke.hasMatch(lines[i])) continue;
+    // Content-level scan (not line-by-line) so a multi-line `.functions\n.invoke(`
+    // is matched; derive the 1-based line from the match offset.
+    final content = _stripComments(f.readAsStringSync());
+    final lines = content.split('\n');
+    for (final m in _invoke.allMatches(content)) {
+      final i = '\n'.allMatches(content.substring(0, m.start)).length; // 0-based line
       final from = (i - _lookback) < 0 ? 0 : i - _lookback;
       final window = lines.sublist(from, i + 1).join('\n');
       if (window.contains('ensureFreshToken')) continue;

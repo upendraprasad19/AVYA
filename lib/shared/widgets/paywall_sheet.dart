@@ -143,8 +143,11 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     });
 
     try {
-      final response = await SupabaseService.instance.client.functions
-          .invoke('validate-promo', body: {'code': code});
+      // Route through callFunction (refreshes the JWT first) — a raw invoke on an
+      // aged/backgrounded web token 401s silently (§2.31); validate-promo is authed.
+      // Surfaced by the multi-line-aware gate fix (Unit 1, 2026-06-13).
+      final response = await SupabaseService.instance.callFunction(
+          'validate-promo', body: {'code': code});
 
       final data = response.data as Map<String, dynamic>?;
       if (data == null) {
