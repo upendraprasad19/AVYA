@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -11,7 +14,7 @@ import '../../../shared/widgets/error_state.dart';
 ///
 /// Before the APK-test-1-batch (2026-04-24) the community submission
 /// surfaces were split across Profile as two separate rows:
-///   * "Review Community Items" -> `CommunityReviewSheet` bottom sheet
+///   * "Review Community Items" -> a community-review bottom sheet (since removed)
 ///   * "My Submissions"          -> `MySubmissionsScreen` route
 ///
 /// Users tested the app and couldn't find their own submissions because
@@ -184,7 +187,9 @@ class _MySubmissionsBodyState extends State<_MySubmissionsBody> {
         _rows = rows;
         _error = null;
       });
-    } catch (_) {
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'submissions_my_load'));
       if (!mounted) return;
       setState(() => _error = 'Couldn\'t load submissions.');
     }
@@ -291,9 +296,10 @@ class _MySubmissionsBodyState extends State<_MySubmissionsBody> {
 
 // ── Tab 2: COMMUNITY REVIEW ─────────────────────────────────────────
 //
-// Mirrors `CommunityReviewSheet._loadPendingItems`. Shows pending
-// foods/exercises from OTHER users that the current user hasn't voted
-// on yet. Approve/Reject writes to `community_reviews`.
+// Shows pending foods/exercises from OTHER users (fetched via the
+// get-community-review-items Edge Function — own-only RLS blocks a direct
+// cross-user read) that the current user hasn't voted on yet. Approve/Reject
+// writes to `community_reviews`.
 
 class _CommunityReviewBody extends StatefulWidget {
   const _CommunityReviewBody();
@@ -352,7 +358,9 @@ class _CommunityReviewBodyState extends State<_CommunityReviewBody> {
         _loading = false;
         _error = null;
       });
-    } catch (_) {
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'submissions_community_review_load'));
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -373,7 +381,9 @@ class _CommunityReviewBodyState extends State<_CommunityReviewBody> {
         itemId: item['id'] as String,
         approve: approve,
       );
-    } catch (_) {
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'submissions_community_vote'));
       if (mounted) {
         setState(() => _pendingItems.add(item));
       }

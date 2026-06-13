@@ -616,6 +616,7 @@ const SMOKE_TOLERATED_CODES = {
   'admin-verify-payment': [401, 400],
   'admin-wipe-storage': [401, 400],
   'delete-account': [401, 400],
+  'get-community-review-items': [401], // verify_jwt — unauth smoke gets a gateway 401 (expected, not a failure)
   'create-razorpay-order': [401, 400],
   'razorpay-webhook': [400, 401], // missing signature header → 400 is healthy
   'ai-proxy': [400, 401],          // missing user_id → 400 is healthy

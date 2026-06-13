@@ -45,38 +45,42 @@ class SubmissionsRepository {
 
   // ── Community Review ────────────────────────────────────────────────────
 
-  /// Fetches up to 20 pending community food submissions not authored by
-  /// [currentUserId] and not yet approved.
+  /// Fetches up to 20 pending community food submissions not authored by the
+  /// caller and not yet approved, via the `get-community-review-items` Edge
+  /// Function.
+  ///
+  /// The direct cross-user read this replaced was blocked by own-only SELECT
+  /// RLS (`auth.uid() = user_id`) on `user_custom_foods`, so the queue was
+  /// always empty (diagnose community-review-rls-context, Unit 2). The caller
+  /// identity is derived SERVER-SIDE from the JWT; [currentUserId] is retained
+  /// for signature stability but is not sent (the server ignores client-
+  /// supplied ids). Submitter `user_id` is stripped server-side (anonymized).
   ///
   /// Returns rows with: id, name, calories_per_100g, protein_per_100g,
-  /// carbs_per_100g, fat_per_100g, user_id.
+  /// carbs_per_100g, fat_per_100g. Throws `FunctionException` on non-2xx —
+  /// callers (`_CommunityReviewBody._load`) let it propagate to their telemetry
+  /// + error-state catch.
   Future<List<Map<String, dynamic>>> fetchPendingFoodReviews(
       String currentUserId) async {
-    final res = await SupabaseService.instance.client
-        .from('user_custom_foods')
-        .select(
-            'id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, user_id')
-        .eq('submitted_to_db', true)
-        .eq('approved', false)
-        .neq('user_id', currentUserId)
-        .limit(20);
-    return List<Map<String, dynamic>>.from(res as List);
+    final response = await SupabaseService.instance
+        .callFunction('get-community-review-items', body: {'kind': 'food'});
+    final body = response.data as Map?;
+    final items = (body?['items'] as List?) ?? const [];
+    return List<Map<String, dynamic>>.from(items);
   }
 
   /// Fetches up to 20 pending community exercise submissions not authored by
-  /// [currentUserId] and not yet approved.
+  /// the caller and not yet approved, via the `get-community-review-items` Edge
+  /// Function. Same RLS rationale + anonymization as [fetchPendingFoodReviews].
   ///
-  /// Returns rows with: id, name, category, logging_type, user_id.
+  /// Returns rows with: id, name, category, logging_type.
   Future<List<Map<String, dynamic>>> fetchPendingExerciseReviews(
       String currentUserId) async {
-    final res = await SupabaseService.instance.client
-        .from('user_custom_exercises')
-        .select('id, name, category, logging_type, user_id')
-        .eq('submitted_to_library', true)
-        .eq('approved_for_library', false)
-        .neq('user_id', currentUserId)
-        .limit(20);
-    return List<Map<String, dynamic>>.from(res as List);
+    final response = await SupabaseService.instance
+        .callFunction('get-community-review-items', body: {'kind': 'exercise'});
+    final body = response.data as Map?;
+    final items = (body?['items'] as List?) ?? const [];
+    return List<Map<String, dynamic>>.from(items);
   }
 
   /// Returns a set of 'kind:id' keys for items the user has already reviewed,

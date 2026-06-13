@@ -9,6 +9,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### user_scoped_box_before_openForUser (1 bugs)
 - 2026-06-13 a7c3f8 — >
 
+### edge_function_cross_user_read_rls_context (2 bugs)
+- 2026-06-13 c7d4f1 — >
+- 2026-06-13 d2b9e6 — >
+
 ### platform_guarded_native_init (1 bugs)
 - 2026-06-13 b2e9d3 — >
 
@@ -23,9 +27,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### onboarding_preview_commit_calc_parity (1 bugs)
 - 2026-06-13 f1b6d4 — >
-
-### edge_function_cross_user_read_rls_context (1 bugs)
-- 2026-06-13 d2b9e6 — >
 
 ### signup_aware_restore_copy (1 bugs)
 - 2026-06-13 d5e1b9 — >
@@ -699,6 +700,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-06-13 | a7c3f8 | > | user_scoped_box_before_openForUser | test/contracts/coach_backfill_after_openforuser_test.dart |
+| 2026-06-13 | c7d4f1 | > | edge_function_cross_user_read_rls_context | test/contracts/community_review_rls_context_c7d4f1_test.dart |
 | 2026-06-13 | b2e9d3 | > | platform_guarded_native_init | test/contracts/crashlytics_web_guard_test.dart |
 | 2026-06-13 | c4f1a7 | > | edge_function_caller_token_freshness | test/contracts/delete_account_fresh_token_test.dart |
 | 2026-06-13 | b9c4f1 | > | expanded_starved_by_fixed_siblings | test/contracts/food_card_name_single_line_test.dart |
