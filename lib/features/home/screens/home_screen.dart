@@ -11,6 +11,7 @@ import 'package:icanbefitter/shared/mixins/hive_tab_scaffold.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/widgets/weight_trend_chart.dart';
+import 'package:icanbefitter/shared/widgets/pwa_install/pwa_install_banner.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
@@ -432,6 +433,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }),
         _buildStreakWarning(ref),
         _buildExpiryBanner(ref),
+        // Unit 3 obs 6 — web-only "Add to Home Screen" prompt (kIsWeb-gated
+        // inside the widget; SizedBox.shrink on Android/iOS + when not
+        // installable). Below the safety banners, above the calendar.
+        const PwaInstallBanner(),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
           child: WeeklyCalendar(

@@ -44,6 +44,9 @@ class HealthSyncService {
   /// Request Health Connect / HealthKit permissions.
   /// Returns true if all requested permissions are granted.
   Future<bool> requestPermissions() async {
+    // Unit 3 obs 2b: Health Connect / HealthKit have no web binding — calling
+    // _ensureConfigured() (native Health()) on web dead-ends the CONNECT flow.
+    if (kIsWeb) return false;
     try {
       _ensureConfigured();
       _permissionsGranted = await _health!.requestAuthorization(
@@ -85,6 +88,7 @@ class HealthSyncService {
 
   /// Fetch total steps for today from Health Connect.
   Future<int?> fetchStepsToday() async {
+    if (kIsWeb) return null; // Unit 3 obs 2b — native-only
     if (_health == null || !_permissionsGranted) {
       debugPrint('[HealthSync] fetchStepsToday skipped: health=${_health != null}, perms=$_permissionsGranted');
       return null;
@@ -105,6 +109,7 @@ class HealthSyncService {
 
   /// Fetch the latest weight entry from the last 7 days.
   Future<double?> fetchLatestWeight() async {
+    if (kIsWeb) return null; // Unit 3 obs 2b — native-only
     if (_health == null || !_permissionsGranted) return null;
     try {
       final now = DateTime.now();
@@ -141,6 +146,7 @@ class HealthSyncService {
   /// to recover previously-granted access. If that fails it falls back to
   /// [requestPermissions] which may show the system dialog.
   Future<void> syncToHive() async {
+    if (kIsWeb) return; // Unit 3 obs 2b — native-only; no-op on web
     _lastSyncWroteData = false;
 
     if (_health == null || !_permissionsGranted) {

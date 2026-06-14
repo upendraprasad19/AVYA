@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -57,9 +58,11 @@ class BiometricSyncCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      isSyncEnabled
-                          ? 'Google Fit / Health Connect'
-                          : 'Tap to enable',
+                      kIsWeb
+                          ? 'Available in the mobile app'
+                          : isSyncEnabled
+                              ? 'Google Fit / Health Connect'
+                              : 'Tap to enable',
                       style: AppTypography.bodySm.copyWith(
                         color: AppColors.textDim,
                       ),
@@ -67,23 +70,40 @@ class BiometricSyncCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Sharp slab CONNECT / SYNCED toggle
+              // Sharp slab CONNECT / SYNCED toggle. On web there is no Health
+              // Connect / HealthKit binding (Unit 3 obs 2b) — disable the tap
+              // and render a dimmed "APP ONLY" chip so it never dead-ends.
               GestureDetector(
-                onTap: onToggleSync,
+                onTap: kIsWeb ? null : onToggleSync,
                 behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: isSyncEnabled ? Colors.transparent : AppColors.accent,
-                    border: Border.all(color: AppColors.accent),
-                    borderRadius: BorderRadius.circular(AppRadius.sharp),
-                  ),
-                  child: Text(
-                    isSyncEnabled ? 'SYNCED' : 'CONNECT',
-                    style: AppTypography.monoXs.copyWith(
-                      color: isSyncEnabled ? AppColors.accent : AppColors.bgDeep,
-                      letterSpacing: 2.5,
-                      fontWeight: FontWeight.w700,
+                child: Opacity(
+                  opacity: kIsWeb ? 0.4 : 1.0,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      // On web the chip is always the dimmed "APP ONLY" state
+                      // (gold-fill + dark text), regardless of a returning
+                      // mobile user's isSyncEnabled (B-pass Finding 8).
+                      color: (isSyncEnabled && !kIsWeb)
+                          ? Colors.transparent
+                          : AppColors.accent,
+                      border: Border.all(color: AppColors.accent),
+                      borderRadius: BorderRadius.circular(AppRadius.sharp),
+                    ),
+                    child: Text(
+                      kIsWeb
+                          ? 'APP ONLY'
+                          : isSyncEnabled
+                              ? 'SYNCED'
+                              : 'CONNECT',
+                      style: AppTypography.monoXs.copyWith(
+                        color: (isSyncEnabled && !kIsWeb)
+                            ? AppColors.accent
+                            : AppColors.bgDeep,
+                        letterSpacing: 2.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
