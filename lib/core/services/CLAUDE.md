@@ -31,7 +31,7 @@ Also in this directory:
 - `subscription_service.dart` — `isPro()` + `gate()` + server verify with cache.
 - `error_telemetry.dart` — `recordNonFatal` (the helper every catch block must use).
 - `usage_counter_service.dart` — increment-at-API-call counters (post Test #11).
-- Migrators: `exlog_key_migrator.dart`, `nlog_key_migrator.dart`, `hive_field_rename_migrator.dart`, `user_config_migrator.dart`, etc.
+- Migrators: `exlog_key_migrator.dart`, `nlog_key_migrator.dart`, `hive_field_rename_migrator.dart`, `user_config_migrator.dart`, `body_fat_default_healer.dart` (Unit 4 c3f2d8 — nulls a legacy fabricated onboarding body-fat `18.0` where `body_fat_percent==18.0 && body_fat_assessed_at==null`; clears the CLOUD column FIRST under a fresh token, THEN local, so the omit-null profile sync + re-hydrating restore can't silently revert it; idempotent, kill-switch `disable_bodyfat_heal`; wired in `auth_provider._ensureLocalUser` after the cross-account guard), etc.
 
 ## Single-source-of-truth contracts
 

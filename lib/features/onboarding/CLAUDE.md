@@ -36,6 +36,7 @@ its outgoing extras so every field captured upstream survives to Plan.
 | `user_full_name` | `identity_screen.dart` input → `OnboardingNotifier.completeOnboarding` → `users.full_name` cloud column (NOT user_profile) + `userBox['profile']['full_name']` | profile header, every screen that greets the user by name. |
 | `muster_to_profile_bridge` | Q3..Q5 muster-style answers → profile fields. APK Test #15.4 / B2 dropped Q1+Q2, made Q5 single-select. Migration 063 + bridge + backfill. | profile screen. |
 | Plan-screen preview targets | `plan_screen._computeTargets` calls canonical `BmrCalculator.calculateTargets` with every real input (weight, height, DOB-derived age, sex, activity_level, goal, pace_preference, target_weight_kg, body_fat_pct). Returns `targets.dailyCalories` + `targets.proteinGrams` verbatim. | What `completeOnboarding` writes to the profile — **no drift** between preview and saved profile (APK Test #1 fix). |
+| Body-fat calc input (Unit 4, c3f2d8) | BOTH `_computeTargets` (preview) AND `completeOnboarding` (commit) route body-fat through the SINGLE shared `BmrCalculator.bodyFatForCalc(bf, disabled:)` selector → Katch-McArdle when provided, Mifflin when null/disabled. Parity by construction (no per-site ternary). Kill-switch `disable_bodyfat_calc`. A skip SAVES null (never a fabricated 18.0/0.0). | `profile_provider.recalculateTargets` consumes `body_fat_percent` via Katch on every profile edit; `body_stats.dart` displays it (null → "—"). SoT concept `onboarding_bodyfat_calc_input`; heal in `lib/core/services/CLAUDE.md` (BodyFatDefaultHealer). |
 
 ## Stepped flow (default since PR Y–AB, expanded over PR AI 2026-04-20, APK Test #1 2026-04-24, APK Test #2 2026-04-25)
 
@@ -129,13 +130,19 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
   "plan screen shows X, saved profile gets Y" drift. Pre-2026-04-24 this used a reduced
   goal-only formula (`weight × 32 + 250` for build_muscle, `weight × 2` for protein) that
   ignored half the inputs.
-- **Body fat is optional with blank default** (APK-test-1-batch). `stats_screen.dart`
-  controller seeds to `''` (was `'18'`), label reads `BODY FAT % · OPT`, hint shows em-dash
-  ghost when empty. When blank, `BmrCalculator` falls back to Mifflin-St Jeor (weight +
-  height + age + sex) which is accurate enough for onboarding; the old "we'll estimate at
-  18%" snackbar was misleading (no estimation happens — Mifflin-St Jeor doesn't use body
-  fat at all) and has been rephrased to "Skipping body fat — using weight + height. Scan
-  later from Profile to refine."
+- **Body fat is optional, and now ACTUALLY feeds the calc** (APK-test-1-batch; Unit 4
+  c3f2d8 2026-06-14). `stats_screen.dart` controller seeds to `''`, label `BODY FAT % · OPT`,
+  em-dash ghost when empty. **When PROVIDED**, body-fat now flows into the SAVED calc
+  (Katch-McArdle, lean-mass based) via the shared `BmrCalculator.bodyFatForCalc` selector —
+  pre-Unit-4 both the preview and the commit silently dropped it (always Mifflin). **When
+  BLANK**, `stats_screen` forwards `null` (was a fabricated `?? 18.0`) and `completeOnboarding`
+  parses with `_parseDoubleOrNull` → SAVES `null` (was 18.0, briefly 0.0): Mifflin-St Jeor +
+  `body_stats` shows "—". The fabricated 18.0 was invisible at onboarding (its own calc ignored
+  body-fat) but `profile_provider.recalculateTargets` consumed it via Katch on the FIRST profile
+  edit → a made-up 18% recompute. `BodyFatDefaultHealer` (boot) clears legacy fabricated 18.0
+  rows. The skip snackbar still reads "Skipping body fat — using weight + height. Scan later
+  from Profile to refine." Kill-switches: `disable_bodyfat_calc` (calc), `disable_bodyfat_heal`
+  (heal).
 - **Details step CTA is `CONTINUE →`, not `CALIBRATE PLAN →`** (APK-test-1-batch). Pre-2026-
   04-24 the Stats → Details navigation button was labelled "CALIBRATE PLAN", misleading since
   plan calibration doesn't happen until REPORT FOR DUTY on step 05. Renamed to `CONTINUE →`;

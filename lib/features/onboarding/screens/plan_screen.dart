@@ -517,9 +517,11 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       //   diet_preference: 'balanced' → 'veg' (Indian-first default)
       //   injuries: []  → ['none']  (matches edit_profile convention)
       notifier.setAnswer('diet_preference', 'veg');
+      // Unit 4 (d-bf): no fabricated default (was `?? 18.0`) — the root source
+      // is stats_screen; this is defense-in-depth. Skip → null → Mifflin.
       notifier.setAnswer(
           'body_fat_percent',
-          (widget.data['body_fat_pct'] as num?)?.toDouble() ?? 18.0);
+          (widget.data['body_fat_pct'] as num?)?.toDouble());
       notifier.setAnswer('injuries', <String>['none']);
       notifier.setAnswer('start_date', 'this_monday');
 
@@ -607,6 +609,13 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       age = widget.data['age'] as int;
     }
 
+    // Unit 4 (d-bf): honor body-fat (Katch when the user provided it, Mifflin
+    // when null) via the shared BmrCalculator.bodyFatForCalc helper — the SAME
+    // helper completeOnboarding calls, so the preview == the saved value (no
+    // drift, structural). Skip → bf == null → Mifflin.
+    final bf = (widget.data['body_fat_pct'] as num?)?.toDouble();
+    final bodyFatDisabled =
+        HiveService.instance.configBox.get('disable_bodyfat_calc') == true;
     final targets = BmrCalculator.calculateTargets(
       weightKg: weight,
       heightCm: height,
@@ -615,10 +624,9 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       activityLevel: activityLevel,
       goal: mappedGoal,
       pacePreference: pace,
-      // Obs#6: mirror completeOnboarding — null target when <= 0, and do NOT
-      // pass bodyFatPercent (the commit uses Mifflin-St Jeor). Keeps preview==saved.
       targetWeightKg:
           (targetWeight != null && targetWeight > 0) ? targetWeight : null,
+      bodyFatPercent: BmrCalculator.bodyFatForCalc(bf, disabled: bodyFatDisabled),
     );
 
     // Days per week — trust the Details screen value. Only infer when

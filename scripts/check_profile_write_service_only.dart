@@ -12,6 +12,13 @@
 //
 // Allowed locations:
 //   - lib/features/profile/services/profile_write_service.dart
+//   - lib/core/services/body_fat_default_healer.dart (Unit 4 c3f2d8) — a one-time
+//     boot heal that nulls the fabricated onboarding body_fat 18.0 default. It is
+//     a DELIBERATE exception: it must NOT route through ProfileWriteService's
+//     sync/recompute fan-out (founder-locked: no daily_calories backfill), must
+//     NOT bump updated_at (a system heal, not a user edit), and uses a specific
+//     cloud-first ordering. Fully tested (body_fat_default_heal_test.dart); the
+//     profile READ is registered in the user_full_name reader manifest.
 //   - test/ + integration_test/ (fixtures only; production lib/ excluded)
 //
 // Exit 0 = pass / no ProfileWriteService yet (initial warn mode).
@@ -37,7 +44,12 @@ void main(List<String> args) async {
   for (final entity in libDir.listSync(recursive: true)) {
     if (entity is! File || !entity.path.endsWith('.dart')) continue;
     final normPath = entity.path.replaceAll('\\', '/');
-    if (normPath.endsWith('lib/features/profile/services/profile_write_service.dart')) continue;
+    // Canonical writer + the documented body-fat heal exception (see header).
+    const allowed = <String>[
+      'lib/features/profile/services/profile_write_service.dart',
+      'lib/core/services/body_fat_default_healer.dart',
+    ];
+    if (allowed.any(normPath.endsWith)) continue;
     final lines = entity.readAsLinesSync();
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];

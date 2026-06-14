@@ -432,7 +432,10 @@ class _StatsScreenState extends State<StatsScreen> {
         'weight_kg': weight,
         'target_weight_kg': resolvedTarget,
         'height_cm': height,
-        'body_fat_pct': bodyFat ?? 18.0,
+        // Unit 4 (d-bf): NO fabricated default — skip → null → Mifflin in the
+        // calc (the old ?? 18.0 fed a made-up 18% into the profile-edit Katch
+        // recompute). The real value flows through when the user enters it.
+        'body_fat_pct': bodyFat,
         'activity_level': _activity,
       },
     );
