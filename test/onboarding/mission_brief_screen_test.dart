@@ -46,9 +46,20 @@ void main() {
       expect(find.byType(RichText), findsWidgets);
     });
 
-    testWidgets('renders Instagram link', (tester) async {
+    testWidgets('does NOT render an Instagram CTA (removed Unit 5 2026-06-14)',
+        (tester) async {
       await tester.pumpWidget(buildScreen());
-      expect(find.byType(GestureDetector), findsWidgets);
+      // The Instagram handle lived in a RichText span — find.text can't see
+      // inside RichText, so walk every RichText's plain text and pin the
+      // handle's absence SEMANTICALLY. (A structural find.byType(GestureDetector)
+      // check would be brittle + coincidental — the CONTINUE ElevatedButton
+      // legitimately owns its own gesture layer.)
+      final hasInstagram = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .any((rt) =>
+              rt.text.toPlainText().toLowerCase().contains('icanbefitter'));
+      expect(hasInstagram, isFalse,
+          reason: 'Instagram CTA must stay removed from the Mission Brief');
     });
 
     testWidgets('renders single CONTINUE CTA', (tester) async {
