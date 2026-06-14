@@ -3098,6 +3098,7 @@ concepts:
       # The `user_full_name` concept is narrowly about the `full_name`
       # field. These callers don't read `full_name` so they belong here,
       # not in `readers:` of this concept.
+      - { file: lib/core/services/body_fat_default_healer.dart, reason: "Unit 4 c3f2d8 — reads+nulls profile.body_fat_percent to heal the fabricated onboarding 18.0 default; not a full_name reader" }
       - { file: lib/core/services/hive_user_session.dart, reason: "reads profile.id for cross-account ownership check" }
       - { file: lib/core/services/stat_snapshot_service.dart, reason: "reads goal/weight/height for lifetime stat snapshot" }
       - { file: lib/core/services/subscription_service.dart, reason: "reads profile.id for cross-account isPro guard" }
@@ -5188,6 +5189,55 @@ concepts:
         method: _generateReport(silent) + initState refresh
         semantic: display-only
     contract_test_path: test/contracts/weekly_report_canonical_target_test.dart
+
+  - concept: onboarding_bodyfat_calc_input
+    domain: nutrition
+    behavioral_test_path: test/contracts/body_fat_default_heal_test.dart
+    description: |
+      The onboarding calorie calc HONORS the user's body-fat: BmrCalculator runs
+      Katch-McArdle when body-fat is provided, Mifflin-St Jeor when skipped (fix
+      c3f2d8, 2026-06-14). The PREVIEW (plan_screen._computeTargets) and the COMMIT
+      (onboarding_provider.completeOnboarding) MUST feed body-fat through the
+      SINGLE shared selector BmrCalculator.bodyFatForCalc(bf, disabled:) so the
+      preview calories == the saved daily_calories (no per-site ternary drift).
+      Kill-switch disable_bodyfat_calc reverts every site to Mifflin in one
+      expression. A SKIP saves NULL body_fat_percent — NEVER a fabricated 18.0/0.0
+      (those persist + render as "18%"/"0%" in body_stats and feed the profile-edit
+      Katch recompute; only null degrades correctly to "—" + Mifflin).
+      BodyFatDefaultHealer (boot, post-auth, cross-account-safe) nulls a legacy
+      fabricated 18.0 (exactly 18.0 AND body_fat_assessed_at == null) cloud-first
+      then local; kill-switch disable_bodyfat_heal. No daily_calories backfill.
+    writers:
+      - file: lib/features/onboarding/screens/stats_screen.dart
+        method: _onContinue (route extra body_fat_pct)
+        notes: forwards the RAW nullable body-fat (was `bodyFat ?? 18.0`).
+      - file: lib/features/onboarding/screens/plan_screen.dart
+        method: _computeTargets (preview) + _onReportForDuty (setAnswer body_fat_percent)
+        notes: preview feeds BmrCalculator.bodyFatForCalc; no fabricated default.
+      - file: lib/features/onboarding/providers/onboarding_provider.dart
+        method: completeOnboarding
+        notes: _parseDoubleOrNull(body_fat_percent) -> saves null on skip; feeds bodyFatForCalc.
+      - file: lib/core/utils/bmr_calculator.dart
+        method: bodyFatForCalc + calculateTargets
+        notes: SINGLE flag-gated selector — preview==commit by construction.
+      - file: lib/core/services/body_fat_default_healer.dart
+        method: runIfNeeded (wired in auth_provider._ensureLocalUser)
+        notes: boot heal of fabricated 18.0; clears cloud column first then local; idempotent.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/features/profile/providers/profile_provider.dart
+        method: recalculateTargets
+        semantic: latest
+        notes: consumes body_fat_percent via Katch on EVERY profile edit (the live bug surface).
+      - file: lib/features/profile/screens/profile/body_stats.dart
+        method: _buildBodyStatsInner
+        semantic: display-only
+        notes: null -> em-dash; a fabricated 18.0/0.0 would render "18%"/"0%".
+    contract_test_path: test/contracts/onboarding_bodyfat_calc_test.dart
+    class_constraints: |
+      Never persist a fabricated body-fat. Onboarding preview + commit MUST both
+      route the body-fat arg through BmrCalculator.bodyFatForCalc — never a
+      hand-copied `flag ? bf : null` ternary (drift risk). A skip saves null.
 
   - concept: ui_header_no_clip
     domain: cross_domain

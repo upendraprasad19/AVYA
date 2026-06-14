@@ -81,6 +81,20 @@ class BmrCalculator {
     }
   }
 
+  /// Unit 4 (d-bf) — the body-fat value to feed [calculateTargets], honoring
+  /// the `disable_bodyfat_calc` kill-switch. Returns null (→ Mifflin-St Jeor)
+  /// when [disabled] is true OR [bodyFatPercent] is null. SINGLE SOURCE for the
+  /// onboarding PREVIEW (`plan_screen._computeTargets`) AND COMMIT
+  /// (`onboarding_provider.completeOnboarding`) — both call this, so the
+  /// preview calories cannot drift from the saved daily_calories. Pure (no Hive
+  /// dependency: the caller reads the flag and passes [disabled]) so the
+  /// flag-gating is behaviorally testable. Caller computes
+  /// `disabled = configBox.get('disable_bodyfat_calc') == true`.
+  static double? bodyFatForCalc(double? bodyFatPercent, {required bool disabled}) {
+    if (disabled) return null;
+    return bodyFatPercent;
+  }
+
   /// Activity level multipliers.
   static const Map<String, double> activityMultipliers = {
     'sedentary': 1.2,

@@ -302,6 +302,18 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       final activityLevel =
           BmrCalculator.resolveActivityLevel(lifestyleActivity, daysPerWeek);
 
+      // Unit 4 (d-bf): honor body-fat in the SAVED calc (Katch when provided,
+      // Mifflin when null). Parsed here (was below, AFTER the calc). The flag is
+      // the kill-switch; the SAME expression runs in plan_screen._computeTargets
+      // so the preview == the saved daily_calories. NULLABLE parse (NOT the
+      // 0-flooring _parseDouble) — a skip-user must SAVE null, not 0.0: the calc
+      // treats both as Mifflin, but the saved value feeds body_stats.dart which
+      // renders 0.0 as a fabricated "0%" (only null → "—"). Same class as the
+      // 18.0 default this unit removes — never persist a made-up body-fat.
+      final bodyFatPercent = _parseDoubleOrNull(a['body_fat_percent']);
+      final bodyFatDisabled =
+          HiveService.instance.configBox.get('disable_bodyfat_calc') == true;
+
       final targets = BmrCalculator.calculateTargets(
         weightKg: currentWeightKg,
         heightCm: heightCm,
@@ -311,6 +323,8 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         goal: primaryGoal,
         pacePreference: (a['pace_preference'] as String?) ?? 'balanced',
         targetWeightKg: targetWeightKg > 0 ? targetWeightKg : null,
+        bodyFatPercent:
+            BmrCalculator.bodyFatForCalc(bodyFatPercent, disabled: bodyFatDisabled),
       );
 
       // Fields set via setAnswer in plan_screen._onReportForDuty that were
@@ -324,7 +338,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
           <String>['none'];
       final dietPreference =
           (a['diet_preference'] as String?) ?? 'veg';
-      final bodyFatPercent = _parseDouble(a['body_fat_percent']);
+      // `bodyFatPercent` is parsed earlier now (Unit 4 d-bf — fed into the calc).
       // String field (`this_monday` / `next_monday` / etc.) distinct
       // from the local DateTime-typed `startDate` used below for
       // `generateAndSchedule`.
@@ -591,6 +605,16 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     if (value is int) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? 0;
     return 0;
+  }
+
+  /// Like [_parseDouble] but returns null (not 0.0) for absent/blank input.
+  /// Used for OPTIONAL numeric fields (e.g. body_fat_percent) where 0.0 is a
+  /// fabricated value that would persist + display as "0%". Unit 4 (d-bf).
+  double? _parseDoubleOrNull(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 
   int _parseInt(dynamic value, {int fallback = 0}) {

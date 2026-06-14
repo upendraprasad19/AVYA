@@ -18,6 +18,7 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/streak_freeze_clamp_migrator.dart';
 import 'package:icanbefitter/core/services/user_config_migrator.dart';
+import 'package:icanbefitter/core/services/body_fat_default_healer.dart';
 import 'package:icanbefitter/core/services/logging_type_repair_migrator.dart';
 import 'package:icanbefitter/core/services/wlog_type_backfill_migrator.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
@@ -438,6 +439,16 @@ class AuthNotifier extends Notifier<AuthState2> {
       debugPrint('[auth/_ensureLocalUser] config→user migration failed: $e');
       // Non-fatal — readers will see legacy configBox values until next
       // launch. Cross-account guard would still clear them if needed.
+    }
+
+    // Unit 4 (d-bf) — heal the fabricated onboarding body-fat 18.0 (clears the
+    // cloud column FIRST, then local) so the profile-edit Katch recompute stops
+    // consuming a made-up value. Idempotent + kill-switched (disable_bodyfat_heal).
+    try {
+      await BodyFatDefaultHealer.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] body-fat default heal failed: $e');
+      // Non-fatal — retries next session (cloud + local stay consistent 18.0).
     }
 
     // Bug f8c1a5 (APK Test #16.2) Layer 2 — one-shot clamp of any
