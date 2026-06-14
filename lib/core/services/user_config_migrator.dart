@@ -109,6 +109,9 @@ class UserConfigMigrator {
   static const List<String> _intentionallyShared = [
     'pending_referral_code',
     'logout_in_progress',
+    // Unit 3 obs 6 — per-device/browser PWA-install-banner dismiss preference
+    // (web only; not user data). Documentation-only list; no gate reads it.
+    'pwa_banner_dismissed',
   ];
 
   /// Runs the migration once per device. Idempotent.

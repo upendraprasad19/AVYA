@@ -85,37 +85,31 @@ const _taglinesGeneric = <String>[
   'Discipline hit. Brain still buffering.',
 ];
 
-/// Deterministic tagline picker — same (date, workoutName, seed) always
+/// Deterministic tagline picker — same (exercises, workoutName, seed) always
 /// returns the same tagline so the post-completion card and the "View Card"
-/// sheet don't drift.
-String _pickTagline(String workoutName, int seed) {
-  final upper = workoutName.toUpperCase();
+/// sheet don't drift. Category is derived from the workout's EXERCISES (shared
+/// with the async QuotePicker path via `QuotePicker.categoryForExercises`), so
+/// a custom-named workout still gets a matching tagline (Unit 3 obs 2).
+String _pickTagline(List<String> exerciseNames, String workoutName, int seed) {
   final rng = Random(seed);
-  if (upper.contains('PULL') || upper.contains('BACK') ||
-      upper.contains('ROW') || upper.contains('DEADLIFT') ||
-      upper.contains('BICEP') || upper.contains('CURL')) {
-    return _taglinesPull[rng.nextInt(_taglinesPull.length)];
+  final category =
+      QuotePicker.categoryForExercises(exerciseNames, workoutName);
+  switch (category) {
+    case 'pull':
+      return _taglinesPull[rng.nextInt(_taglinesPull.length)];
+    case 'push':
+      return _taglinesPush[rng.nextInt(_taglinesPush.length)];
+    case 'legs':
+      return _taglinesLegs[rng.nextInt(_taglinesLegs.length)];
+    case 'core':
+      return _taglinesCore[rng.nextInt(_taglinesCore.length)];
+    case 'cardio':
+      return _taglinesCardio[rng.nextInt(_taglinesCardio.length)];
+    default:
+      // full_body / arms / general → local generic pool (the async JSON path
+      // carries dedicated full_body/arms quotes; this sync fallback is brief).
+      return _taglinesGeneric[rng.nextInt(_taglinesGeneric.length)];
   }
-  if (upper.contains('PUSH') || upper.contains('CHEST') ||
-      upper.contains('PRESS') || upper.contains('SHOULDER') ||
-      upper.contains('TRICEP')) {
-    return _taglinesPush[rng.nextInt(_taglinesPush.length)];
-  }
-  if (upper.contains('LEG') || upper.contains('SQUAT') ||
-      upper.contains('LUNGE') || upper.contains('GLUTE') ||
-      upper.contains('QUAD') || upper.contains('HAMSTRING') ||
-      upper.contains('CALF')) {
-    return _taglinesLegs[rng.nextInt(_taglinesLegs.length)];
-  }
-  if (upper.contains('CORE') || upper.contains('ABS') ||
-      upper.contains('PLANK') || upper.contains('CRUNCH')) {
-    return _taglinesCore[rng.nextInt(_taglinesCore.length)];
-  }
-  if (upper.contains('CARDIO') || upper.contains('RUN') ||
-      upper.contains('HIIT') || upper.contains('JUMP')) {
-    return _taglinesCardio[rng.nextInt(_taglinesCardio.length)];
-  }
-  return _taglinesGeneric[rng.nextInt(_taglinesGeneric.length)];
 }
 
 /// Data required to render a Workout Receipt card.
@@ -270,6 +264,7 @@ class WorkoutReceiptData {
       totalSets: totalSets,
       prs: data.detectedPRs,
       tagline: _pickTagline(
+        exerciseList.map((e) => e.name).toList(),
         workoutName,
         _taglineSeed(workoutDate, workoutName, totalVolume, totalSets),
       ),
@@ -504,6 +499,7 @@ class WorkoutReceiptData {
       prs: prs,
       sessionLabel: sessionLabel,
       tagline: _pickTagline(
+        exerciseList.map((e) => e.name).toList(),
         workoutName,
         _taglineSeed(date, workoutName, totalVolume, totalSets),
       ),
@@ -624,7 +620,9 @@ class WorkoutReceiptCard extends StatelessWidget {
             const SizedBox(height: 14),
             FutureBuilder<String>(
               future: QuotePicker.pickForCategory(
-                category: QuotePicker.categoryForWorkout(data.workoutName),
+                category: QuotePicker.categoryForExercises(
+                    data.exercises.map((e) => e.name).toList(),
+                    data.workoutName),
                 seed: data.taglineSeed,
               ),
               builder: (context, snapshot) {

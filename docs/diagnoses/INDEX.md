@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### client_web_platform_gating (1 bugs)
+- 2026-06-14 d8f3a2 — >
+
 ### user_scoped_box_before_openForUser (1 bugs)
 - 2026-06-13 a7c3f8 — >
 
@@ -699,6 +702,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-14 | d8f3a2 | > | client_web_platform_gating | test/contracts/unit3_web_ux_gates_test.dart |
 | 2026-06-13 | a7c3f8 | > | user_scoped_box_before_openForUser | test/contracts/coach_backfill_after_openforuser_test.dart |
 | 2026-06-13 | c7d4f1 | > | edge_function_cross_user_read_rls_context | test/contracts/community_review_rls_context_c7d4f1_test.dart |
 | 2026-06-13 | b2e9d3 | > | platform_guarded_native_init | test/contracts/crashlytics_web_guard_test.dart |

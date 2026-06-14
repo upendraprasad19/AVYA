@@ -49,13 +49,22 @@ class QuotePicker {
     return pool[rng.nextInt(pool.length)].text;
   }
 
+  /// Word-boundary keyword match (case-insensitive input is pre-uppercased).
+  /// SHORT keywords MUST be word-bounded — bare `.contains('LAT')` matched
+  /// mid-word ("test temp**lat**e" → pull → the founder's stray "lat" quote,
+  /// Unit 3 obs 2; also "warm-up"→ARM, "leverage"→LEG, "grow"→ROW,
+  /// "absolute"→ABS, "grunt"→RUN). Long unambiguous keywords (PULL, PRESS,
+  /// SQUAT, …) stay substrings so compounds like "Pulldown" still match.
+  static bool _hasWord(String upperName, String pattern) =>
+      RegExp(pattern).hasMatch(upperName);
+
   /// Derive a quote category from a workout name. Falls back to 'general'.
   static String categoryForWorkout(String workoutName) {
     final name = workoutName.toUpperCase();
     if (name.contains('PULL') || name.contains('BACK') ||
-        name.contains('ROW') || name.contains('DEADLIFT') ||
-        name.contains('BICEP') || name.contains('CURL') ||
-        name.contains('LAT')) {
+        name.contains('DEADLIFT') || name.contains('BICEP') ||
+        name.contains('CURL') ||
+        _hasWord(name, r'\bLATS?\b') || _hasWord(name, r'\bROWS?\b')) {
       return 'pull';
     }
     if (name.contains('PUSH') || name.contains('CHEST') ||
@@ -63,27 +72,57 @@ class QuotePicker {
         name.contains('TRICEP')) {
       return 'push';
     }
-    if (name.contains('LEG') || name.contains('SQUAT') ||
-        name.contains('LUNGE') || name.contains('GLUTE') ||
-        name.contains('QUAD') || name.contains('HAMSTRING') ||
-        name.contains('CALF')) {
+    if (name.contains('SQUAT') || name.contains('LUNGE') ||
+        name.contains('GLUTE') || name.contains('QUAD') ||
+        name.contains('HAMSTRING') || name.contains('CALF') ||
+        _hasWord(name, r'\bLEGS?\b')) {
       return 'legs';
     }
-    if (name.contains('CORE') || name.contains('ABS') ||
-        name.contains('PLANK') || name.contains('CRUNCH')) {
+    if (name.contains('CORE') || name.contains('PLANK') ||
+        name.contains('CRUNCH') || _hasWord(name, r'\bABS?\b')) {
       return 'core';
     }
-    if (name.contains('CARDIO') || name.contains('RUN') ||
-        name.contains('HIIT') || name.contains('JUMP')) {
+    if (name.contains('CARDIO') || name.contains('HIIT') ||
+        name.contains('JUMP') || _hasWord(name, r'\bRUN')) {
       return 'cardio';
     }
     if (name.contains('FULL BODY') || name.contains('FULL-BODY')) {
       return 'full_body';
     }
-    if (name.contains('ARM') || name.contains('BICEP') ||
-        name.contains('TRICEP')) {
+    if (_hasWord(name, r'\bARMS?\b')) {
       return 'arms';
     }
     return 'general';
+  }
+
+  /// Derive a quote category from the workout's actual EXERCISES, falling back
+  /// to the workout name, then 'general'. Exercise names carry the muscle
+  /// signal even when the workout has a generic custom name (Unit 3 obs 2 — a
+  /// "test template" of pull exercises should get a pull quote, not a
+  /// name-derived mismatch). Deterministic for a given exercise list (stable
+  /// insertion order → stable tie-break), so the post-completion card and the
+  /// "View Card" sheet never drift.
+  static String categoryForExercises(
+    List<String> exerciseNames,
+    String workoutName,
+  ) {
+    final counts = <String, int>{};
+    for (final n in exerciseNames) {
+      final c = categoryForWorkout(n);
+      if (c != 'general') counts[c] = (counts[c] ?? 0) + 1;
+    }
+    if (counts.isNotEmpty) {
+      var bestKey = counts.keys.first;
+      var bestCount = counts[bestKey]!;
+      for (final entry in counts.entries) {
+        if (entry.value > bestCount) {
+          bestKey = entry.key;
+          bestCount = entry.value;
+        }
+      }
+      return bestKey;
+    }
+    // No specific exercise signal — fall back to the workout name, then general.
+    return categoryForWorkout(workoutName);
   }
 }

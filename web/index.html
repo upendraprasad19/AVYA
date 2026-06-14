@@ -29,6 +29,42 @@
 
   <title>Avya FIT</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- PWA install prompt capture (Unit 3 obs 6). Stash beforeinstallprompt +
+       suppress the default mini-infobar so Flutter can show its own banner. -->
+  <script>
+    (function () {
+      window._avyaDeferredPrompt = null;
+      window._avyaInstalled = false;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window._avyaDeferredPrompt = e;
+      });
+      window.addEventListener('appinstalled', function () {
+        window._avyaInstalled = true;
+        window._avyaDeferredPrompt = null;
+      });
+      window.avyaPwaCanInstall = function () {
+        return !window._avyaInstalled && !!window._avyaDeferredPrompt;
+      };
+      window.avyaPwaPromptInstall = function () {
+        var p = window._avyaDeferredPrompt;
+        if (!p) return;
+        window._avyaDeferredPrompt = null;
+        p.prompt();
+      };
+      // iOS Safari never fires beforeinstallprompt → manual hint instead.
+      window.avyaPwaIsIosSafari = function () {
+        var ua = window.navigator.userAgent || '';
+        var iOS = /iPad|iPhone|iPod/.test(ua) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        var webkit = /WebKit/.test(ua);
+        var notOtherBrowser = !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+        var standalone = window.navigator.standalone === true;
+        return iOS && webkit && notOtherBrowser && !standalone;
+      };
+    })();
+  </script>
   
   
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
