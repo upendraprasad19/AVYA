@@ -1,26 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 
-class MissionBriefScreen extends ConsumerWidget {
+/// The founder's personal note — the first screen every new user reads.
+///
+/// Copy is the founder-locked Mission Brief (Unit 5, 2026-06-14). The
+/// injury/comeback story + the "No one is coming to save you" closer are
+/// verbatim as approved. The Instagram CTA was removed from this screen
+/// (acquisition friction on the trust-building first screen — founder call
+/// 2026-06-14).
+class MissionBriefScreen extends StatelessWidget {
   const MissionBriefScreen({super.key, this.readOnly = false});
 
   final bool readOnly;
 
-  Future<void> _openInstagram() async {
-    final native = Uri.parse('instagram://user?username=icanbefitter');
-    if (await canLaunchUrl(native)) {
-      await launchUrl(native);
-    } else {
-      await launchUrl(Uri.parse('https://instagram.com/icanbefitter'));
-    }
-  }
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    // Gold-italic emphasis for the power phrases (matches the Wardroom voice).
+    TextSpan accent(String text) => TextSpan(
+          text: text,
+          style: AppTypography.bodyL.copyWith(
+            color: AppColors.accent,
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.w500,
+            height: 1.6,
+          ),
+        );
+
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: readOnly
@@ -128,58 +135,40 @@ class MissionBriefScreen extends ConsumerWidget {
                     height: 1.6,
                   ),
                   children: [
-                    const TextSpan(text: 'Welcome aboard.\n\nYou\'re not joining an app. You\'re reporting in.\n\n'),
+                    const TextSpan(text: 'Welcome aboard, Recruit.\n\n'),
                     const TextSpan(
-                      text: 'For 14 years I trained men in the Indian Navy. Discipline ',
-                    ),
-                    TextSpan(
-                      text: 'isn\'t motivation',
-                      style: AppTypography.bodyL.copyWith(
-                        color: AppColors.accent,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w500,
-                        height: 1.6,
-                      ),
+                      text:
+                          'Early in my Navy training, I shattered my right leg '
+                          'on a cross-country run — broken in several places. '
+                          'While it healed with a rod inside, I started lifting. '
+                          'Skinny. Humbled. No coach, no gym. I just never gave '
+                          'up.\n\n',
                     ),
                     const TextSpan(
-                      text: ' — it\'s structure. A plan you can follow when you don\'t feel like it.\n\nThat\'s what AVYA is. The discipline of military training. The science of certified coaching. Built for the long haul.\n\nYou do the work. ',
+                      text:
+                          'Fourteen years in uniform taught me the truth nobody '
+                          'sells you — discipline ',
                     ),
-                    TextSpan(
-                      text: 'AVYA holds the discipline',
-                      style: AppTypography.bodyL.copyWith(
-                        color: AppColors.accent,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w500,
-                        height: 1.6,
-                      ),
+                    accent("isn't motivation"),
+                    const TextSpan(
+                      text:
+                          ". It's structure. A plan you follow on the days you "
+                          "don't feel like it.\n\n",
                     ),
                     const TextSpan(
-                      text: '.\n\n',
+                      text:
+                          "That's what AVYA is. The structure of military "
+                          'training, the science of certified coaching — built '
+                          'to carry you when willpower runs out.\n\n',
                     ),
-                    TextSpan(
-                      text: 'Show up. Earn promotions. Become the man who lasts',
-                      style: AppTypography.bodyL.copyWith(
-                        color: AppColors.accent,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w500,
-                        height: 1.6,
-                      ),
-                    ),
-                    const TextSpan(
-                      text: '.\n\nThe AI runs the drills. ',
-                    ),
-                    TextSpan(
-                      text: 'The playbook is mine',
-                      style: AppTypography.bodyL.copyWith(
-                        color: AppColors.accent,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w500,
-                        height: 1.6,
-                      ),
-                    ),
-                    const TextSpan(
-                      text: '.\n\n',
-                    ),
+                    const TextSpan(text: 'You do the work. '),
+                    accent('AVYA holds the line'),
+                    const TextSpan(text: '.\n\n'),
+                    accent(
+                        'Show up. Earn your promotions. Become the man who lasts'),
+                    const TextSpan(text: '.\n\n'),
+                    accent(
+                        'No one is coming to save you, Recruit. The one who can → is you.'),
                   ],
                 ),
               ),
@@ -201,30 +190,6 @@ class MissionBriefScreen extends ConsumerWidget {
                   style: AppTypography.mono.copyWith(
                     fontSize: 12,
                     color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Center(
-                child: GestureDetector(
-                  onTap: _openInstagram,
-                  child: RichText(
-                    text: TextSpan(
-                      style: AppTypography.mono.copyWith(
-                        fontSize: 11,
-                        color: AppColors.textMute,
-                      ),
-                      children: [
-                        const TextSpan(text: 'Daily wins on Instagram → '),
-                        TextSpan(
-                          text: '@icanbefitter',
-                          style: TextStyle(
-                            color: AppColors.accent,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ),

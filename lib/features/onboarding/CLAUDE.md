@@ -50,8 +50,13 @@ Welcome       (/onboarding)            → sets no state, just CTA           (un
 [/restoring]                            → branded gate; awaits user_profile lookup
                                           + restoreFromCloud() in parallel
    ↓ (no row in user_profile → new user)
-Mission Brief (/onboarding/mission-brief) → founder photo + locked copy +
-                                            subtle Instagram link;
+Mission Brief (/onboarding/mission-brief) → founder photo + founder-locked
+                                            note (injury/comeback story +
+                                            "No one is coming to save you"
+                                            closer; Unit 5 2026-06-14). The
+                                            Instagram CTA was REMOVED (founder
+                                            call — acquisition friction on the
+                                            trust-building first screen).
                                             CONTINUE → Identity            (step 00)
    ↓
 Identity      (/onboarding/identity)   → full_name, date_of_birth, sex     (01 · 05)
