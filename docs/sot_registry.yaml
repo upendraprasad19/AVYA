@@ -4653,6 +4653,71 @@ concepts:
         - test/contracts/referral_repository_only_test.dart — pins the
           two named callers explicitly.
 
+  - concept: referral_trial_subscription_grant
+    domain: profile
+    description: |
+      The DB-layer GRANT half of a referral redemption (sibling of
+      `referral_redemption`, which covers the redemption row + transport).
+      redeem_referral_atomic (migration 038) INSERTs a `referral_trial` row
+      into `subscriptions` for BOTH referrer and referee (or extends an
+      existing active sub's end_date), and the AFTER INSERT/UPDATE trigger
+      trg_subscription_update_user -> update_user_subscription_status()
+      promotes users.subscription_status='pro' + sets subscription_expires_at.
+      Migration 094 (a1c9f4) made this path actually work for the first time
+      ever: it DROPPED the razorpay_* NOT NULL that 23502'd every referral_trial
+      INSERT (referral has never once succeeded — 0 rows), and hardened the
+      shared trigger's expiry write to a monotonic GREATEST (never lower an
+      existing future expiry). The granted PRO state is consumed client-side via
+      the `subscription_state` concept.
+    writers:
+      - file: supabase/migrations/038_redeem_referral_atomic.sql
+        line_range: 1-9999
+        method: redeem_referral_atomic
+        notes: |
+          SECURITY DEFINER RPC. INSERTs a referral_trial subscription when the
+          target has no future-dated active sub, else extends end_date; runs for
+          referrer + referee. Omits razorpay_* (null for non-purchase grants) —
+          requires migration 094's DROP NOT NULL to succeed.
+      - file: supabase/migrations/094_subscriptions_razorpay_nullable.sql
+        line_range: 1-9999
+        method: update_user_subscription_status trigger + DROP NOT NULL
+        notes: |
+          a1c9f4. (a) DROP NOT NULL on subscriptions.razorpay_order_id /
+          razorpay_payment_id / razorpay_signature so the referral_trial INSERT
+          stops 23502-ing. (b) CREATE OR REPLACE the shared grant trigger with a
+          monotonic expiry write GREATEST(COALESCE(subscription_expires_at,
+          NEW.end_date), NEW.end_date) — closes a reachable expiry-demotion vector.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/subscription_service.dart
+        line_range: 1-9999
+        method: SubscriptionService.isPro / gate
+        semantic: pass-through
+        fields_read: [via users.subscription_status]
+        notes: |
+          The grant's user-visible effect (PRO) is read through the
+          `subscription_state` concept: the trigger sets users.subscription_status,
+          which subscription_service reads. The server trigger
+          trg_subscription_update_user is the intermediate writer of that column.
+    cloud_table: subscriptions
+    cloud_columns:
+      - user_id
+      - plan
+      - status
+      - start_date
+      - end_date
+      - razorpay_order_id
+      - razorpay_payment_id
+      - razorpay_signature
+    regression_test: test/contracts/referral_trial_subscription_grant_test.dart
+    behavioral_test_path: test/sql/onconflict_live_arbiter.sql  # a1c9f4 — live RPC-call case 'redeem_referral_atomic:2_referral_trial_rows' (2 rows, no UNIQUE-NULL collision) + 'trigger_greatest:no_expiry_demotion'
+    telemetry:
+      failure_op_types:
+        - referral_repository_redeem
+    related_concepts:
+      - referral_redemption
+      - subscription_state
+
   - concept: rank_promotion_log
     domain: profile
     behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO

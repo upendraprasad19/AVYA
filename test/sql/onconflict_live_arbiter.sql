@@ -77,6 +77,8 @@ DECLARE
   v_date date := current_date;
   v_log_id uuid;   -- parent nutrition_logs id for the item arbiter test (f7e3a1)
   v_tmpl_id uuid;  -- parent workout_templates id for the template_exercises FK (F-A)
+  v_referrer uuid := '00000000-0000-0000-0000-0000000a11cf'::uuid;  -- "Bob", referral grant referrer (a1c9f4)
+  v_greatest uuid := '00000000-0000-0000-0000-0000000a11d0'::uuid;  -- monotonic-expiry trigger test user (a1c9f4)
 BEGIN
   -- Insert a synthetic user row so FK-bearing inserts don't hit 23503
   -- on user_id. Best-effort — if the FK isn't there or the user already
@@ -94,6 +96,26 @@ BEGIN
   BEGIN
     INSERT INTO public.users (id, email, full_name)
       VALUES (v_user, 'test+arbiter@avya.local', 'arbiter test')
+      ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  -- a1c9f4 — synthetic referrer + greatest users for cases 27/28. public.users.id
+  -- FKs auth.users (users_id_fk_auth), so seed auth.users FIRST then public.users,
+  -- both best-effort like the v_user setup above.
+  BEGIN
+    INSERT INTO auth.users (id, email, created_at)
+      VALUES (v_referrer, 'test+arb-referrer@avya.local', v_now),
+             (v_greatest, 'test+arb-greatest@avya.local', v_now)
+      ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+  BEGIN
+    INSERT INTO public.users (id, email, full_name)
+      VALUES (v_referrer, 'test+arb-referrer@avya.local', 'arbiter referrer'),
+             (v_greatest, 'test+arb-greatest@avya.local', 'arbiter greatest')
       ON CONFLICT (id) DO NOTHING;
   EXCEPTION WHEN OTHERS THEN
     NULL;
@@ -401,6 +423,55 @@ BEGIN
     INSERT INTO _v_results VALUES ('saved_diet_plans:user_id', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('saved_diet_plans:user_id', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  ----- 27. redeem_referral_atomic -> 2 referral_trial subscriptions (a1c9f4) ----
+  -- NOT an onConflict test, but the actual failing referral callsite, verified on
+  -- the live schema with this same harness. The RPC takes the code as a PARAM and
+  -- never reads referral_codes (that lookup lives in the EF), so no code row needed.
+  -- Pre-094: the RPC's subscriptions INSERT 23502s on the razorpay_* NOT NULL ->
+  -- this case is 'fail'. Post-094: both referrer + referee get a referral_trial row,
+  -- both with NULL razorpay_payment_id (proving no UNIQUE-NULL collision) -> 'ok'.
+  BEGIN
+    INSERT INTO public.users (id, email, full_name)
+      VALUES (v_referrer, 'test+arbiter-referrer@avya.local', 'arbiter referrer')
+      ON CONFLICT (id) DO NOTHING;
+    PERFORM public.redeem_referral_atomic('AVYA-ARBTEST', v_referrer, v_user, 7);
+    IF (SELECT count(*) FROM public.subscriptions
+          WHERE plan = 'referral_trial'
+            AND user_id IN (v_referrer, v_user)
+            AND razorpay_payment_id IS NULL) = 2 THEN
+      INSERT INTO _v_results VALUES ('redeem_referral_atomic:2_referral_trial_rows', 'ok', NULL, NULL);
+    ELSE
+      INSERT INTO _v_results VALUES ('redeem_referral_atomic:2_referral_trial_rows', 'fail', 'ASSERT',
+        'expected 2 referral_trial rows with NULL razorpay_payment_id');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('redeem_referral_atomic:2_referral_trial_rows', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  ----- 28. update_user_subscription_status monotonic GREATEST guard (a1c9f4) ----
+  -- A far-future active grant, then an EARLIER one: the trigger must NOT lower
+  -- users.subscription_expires_at. Pre-094 the first insert 23502s (razorpay NOT
+  -- NULL) AND the old trigger overwrote the expiry downward -> 'fail'. Post-094 the
+  -- GREATEST guard keeps the 365-day expiry -> 'ok'.
+  BEGIN
+    INSERT INTO public.users (id, email, full_name)
+      VALUES (v_greatest, 'test+arbiter-greatest@avya.local', 'arbiter greatest')
+      ON CONFLICT (id) DO NOTHING;
+    INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date)
+      VALUES (v_greatest, 'referral_trial', 'active', v_now, v_now + interval '365 days');
+    INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date)
+      VALUES (v_greatest, 'referral_trial', 'active', v_now, v_now + interval '7 days');
+    IF (SELECT subscription_expires_at FROM public.users WHERE id = v_greatest)
+         >= v_now + interval '364 days' THEN
+      INSERT INTO _v_results VALUES ('trigger_greatest:no_expiry_demotion', 'ok', NULL, NULL);
+    ELSE
+      INSERT INTO _v_results VALUES ('trigger_greatest:no_expiry_demotion', 'fail', 'ASSERT',
+        'expiry lowered below the existing 365-day grant');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('trigger_greatest:no_expiry_demotion', 'fail', SQLSTATE, SQLERRM);
   END;
 
 END $outer$;
