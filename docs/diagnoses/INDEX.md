@@ -6,6 +6,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### subscription_state (6 bugs)
+- 2026-06-16 a1c9f4 — >
+- 2026-06-08 b4e2a9 — >
+- 2026-05-31 c7e1a4 — >
+- 2026-05-06 979a8e — PRO upgrade did not reflect immediately in train screen; train expanded view showed 0 sets; macros displayed incorrectly — three stacked bugs from the first on-device audit.
+- 2026-05-06 69276a — subscriptionInfoProvider was not invalidated on cold-start subscription state writes (verify, downgrade), so PRO status changes did not propagate to the UI until next hot restart.
+- 2026-05-04 5d2ff1 — razorpay-webhook derived plan (monthly/yearly) from client-supplied body.plan instead of payment amount, allowing a monthly payment to grant yearly entitlement.
+
 ### client_web_platform_gating (1 bugs)
 - 2026-06-14 d8f3a2 — >
 
@@ -101,13 +109,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### fitness_goal_resolution (2 bugs)
 - 2026-06-08 a4f7e1 — >
 - 2026-06-07 f19a7c — >
-
-### subscription_state (5 bugs)
-- 2026-06-08 b4e2a9 — >
-- 2026-05-31 c7e1a4 — >
-- 2026-05-06 979a8e — PRO upgrade did not reflect immediately in train screen; train expanded view showed 0 sets; macros displayed incorrectly — three stacked bugs from the first on-device audit.
-- 2026-05-06 69276a — subscriptionInfoProvider was not invalidated on cold-start subscription state writes (verify, downgrade), so PRO status changes did not propagate to the UI until next hot restart.
-- 2026-05-04 5d2ff1 — razorpay-webhook derived plan (monthly/yearly) from client-supplied body.plan instead of payment amount, allowing a monthly payment to grant yearly entitlement.
 
 ### rank_monotonic_current_code (4 bugs)
 - 2026-06-08 d7c3f1 — >
@@ -705,6 +706,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-16 | a1c9f4 | > | subscription_state | test/contracts/referral_trial_subscription_grant_test.dart |
 | 2026-06-14 | d8f3a2 | > | client_web_platform_gating | test/contracts/unit3_web_ux_gates_test.dart |
 | 2026-06-14 | c3f2d8 | > | onboarding_bodyfat_calc_input | test/contracts/onboarding_bodyfat_calc_test.dart |
 | 2026-06-13 | a7c3f8 | > | user_scoped_box_before_openForUser | test/contracts/coach_backfill_after_openforuser_test.dart |

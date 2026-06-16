@@ -9,10 +9,13 @@
 // verify-payment never sent the column → 23502 on every fallback).
 //
 // **Heuristic, not airtight:** the gate cannot inspect live Supabase.
-// Instead it scans recent migrations for `ALTER COLUMN ... SET NOT NULL`
-// or `<col> ... NOT NULL` in `CREATE TABLE` statements, extracts
-// `(table, column)` pairs, and asserts every `<table>` insert/upsert
-// callsite includes the column. False-positive resilient: when a
+// Instead it scans migrations in lexical order for `ALTER COLUMN ...
+// SET NOT NULL` / `DROP NOT NULL`, resolves the LATEST state per
+// (table, column) (a later DROP relaxes an earlier SET — a1c9f4), keeps
+// the still-required `(table, column)` pairs, and asserts every `<table>`
+// insert/upsert callsite includes the column. (Inline `CREATE TABLE ...
+// NOT NULL` is NOT parsed — only ALTER mutations.) False-positive
+// resilient: when a
 // callsite is allowlisted (see `_allowlist` below) it's skipped with
 // rationale.
 //
@@ -81,32 +84,49 @@ class NotNullColumn {
 
 void main() {
   // ── 1. Discover NOT NULL columns from migrations ──────────────────────────
-  final notNullCols = <NotNullColumn>{};
-
   final migrationsDir = Directory(_migrationsDir);
   if (!migrationsDir.existsSync()) {
     stderr.writeln('[Gate 19] WARN — $_migrationsDir not found. Exit 0.');
     exit(0);
   }
 
-  for (final entity in migrationsDir.listSync()) {
-    if (entity is! File || !entity.path.endsWith('.sql')) continue;
-    final src = entity.readAsStringSync();
+  // Ordered resolver (a1c9f4 / Gate-19 hardening): a later migration can RELAX
+  // a NOT NULL via `ALTER COLUMN ... DROP NOT NULL`. Iterate migrations in
+  // lexical filename order and track the LATEST state per (table,column):
+  // `SET NOT NULL` → required, `DROP NOT NULL` → relaxed. One combined regex
+  // whose allMatches() returns in source-position order also resolves a
+  // within-file SET-then-DROP correctly. The final NOT-NULL set is the columns
+  // whose latest mutation left them required. (Migration 094 drops the
+  // subscriptions.razorpay_* columns; without this the gate would keep
+  // asserting NOT NULL on now-nullable columns — stale, false debt.)
+  final notNullState = <String, bool>{}; // 'table.column' → isNotNull (latest)
+  final migrationFiles = migrationsDir
+      .listSync()
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.sql'))
+      .toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
 
-    // ALTER ... SET NOT NULL pattern
-    final alterRegex = RegExp(
-      r"ALTER\s+TABLE\s+(?:public\.)?(\w+)\s+ALTER\s+COLUMN\s+(\w+)\s+SET\s+NOT\s+NULL",
-      multiLine: true,
-      caseSensitive: false,
-    );
-    for (final m in alterRegex.allMatches(src)) {
+  final notNullMutRegex = RegExp(
+    r"ALTER\s+TABLE\s+(?:public\.)?(\w+)\s+ALTER\s+COLUMN\s+(\w+)\s+(SET|DROP)\s+NOT\s+NULL",
+    multiLine: true,
+    caseSensitive: false,
+  );
+  for (final entity in migrationFiles) {
+    final src = entity.readAsStringSync();
+    for (final m in notNullMutRegex.allMatches(src)) {
       final table = m.group(1)!;
-      final col = m.group(2)!;
-      if (_auditedTables.contains(table)) {
-        notNullCols.add(NotNullColumn(table, col));
-      }
+      if (!_auditedTables.contains(table)) continue;
+      notNullState['$table.${m.group(2)!}'] = m.group(3)!.toUpperCase() == 'SET';
     }
   }
+
+  final notNullCols = <NotNullColumn>{};
+  notNullState.forEach((key, isNotNull) {
+    if (!isNotNull) return;
+    final dot = key.indexOf('.');
+    notNullCols.add(NotNullColumn(key.substring(0, dot), key.substring(dot + 1)));
+  });
 
   if (notNullCols.isEmpty) {
     stdout.writeln(
