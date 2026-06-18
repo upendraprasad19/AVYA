@@ -110,6 +110,7 @@ for GATE in scripts/check_*.dart; do
   case "$GATE_NAME" in
     check_apk_size_within_bounds.dart|\
     check_apk_release_signed.dart|\
+    check_plan_review_record_exists.dart|\
     check_telemetry_pii_classification.dart|\
     check_unawaited_has_error_sink.dart|\
     check_razorpay_key_flavor.dart|\

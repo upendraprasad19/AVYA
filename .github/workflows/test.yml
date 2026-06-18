@@ -80,6 +80,7 @@ jobs:
             case "$NAME" in
               check_apk_size_within_bounds.dart|\
               check_hooks_installed.dart|\
+              check_plan_review_record_exists.dart|\
               check_telemetry_pii_classification.dart|\
               check_unawaited_has_error_sink.dart|\
               check_razorpay_key_flavor.dart|\
@@ -106,6 +107,30 @@ jobs:
             echo "::error::One or more audit gates failed."
             exit 1
           fi
+
+  # ── Plan-review record gate (P1.A keystone, §4.12) ─────────────
+  # The ONE structurally-gateable point for plan-quality: a merge-to-main
+  # commit, in CI. A >=account merged branch must carry a converged
+  # docs/plan-reviews/<branch>.md. Needs fetch-depth:0 so HEAD^1..HEAD^2
+  # (the merged branch diff) is reachable — the shared jobs are shallow.
+  plan-review-record:
+    name: Plan-review record (>=account merge-to-main)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Check plan-review record exists
+        run: dart run scripts/check_plan_review_record_exists.dart
 
   # ── Tier 2: Contract Tests ─────────────────────────────────────
   # Verifies Hive key agreements, retry guards, Edge Function patterns.
