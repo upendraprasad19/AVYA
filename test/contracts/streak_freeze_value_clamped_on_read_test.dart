@@ -61,18 +61,28 @@ void main() {
     // `ref.read(subscriptionServiceProvider).isPro() ? 3 : 1` instead
     // of `SubscriptionService.instance.isPro() ? 3 : 1`. Accept either
     // form — both express "tier-derived cap, 3 for PRO else 1".
+    // Phase 2 (discipline-overhaul, 2026-06-18) — upgraded to
+    // ref.watch(subscriptionInfoProvider).isPro so a mid-session PRO
+    // grant immediately rebuilds this notifier and flips the cap 1→3
+    // without requiring an auth change or app relaunch. Accept all three
+    // canonical forms.
     final singletonForm = RegExp(
         r'SubscriptionService\.instance\.isPro\(\)\s*\?\s*3\s*:\s*1');
-    final providerForm = RegExp(
+    final providerReadForm = RegExp(
         r'ref\.read\(\s*subscriptionServiceProvider\s*\)\.isPro\(\)\s*\?\s*3\s*:\s*1');
+    final providerWatchForm = RegExp(
+        r'ref\.watch\(\s*subscriptionInfoProvider\s*\)\.isPro\s*\?\s*3\s*:\s*1');
     expect(
-      singletonForm.hasMatch(stripped) || providerForm.hasMatch(stripped),
+      singletonForm.hasMatch(stripped) ||
+          providerReadForm.hasMatch(stripped) ||
+          providerWatchForm.hasMatch(stripped),
       isTrue,
       reason:
           'StreakFreezeNotifier.build must compute the cap from the live tier — '
-          '3 for PRO, 1 for free. Accepts either `SubscriptionService.instance` '
-          '(legacy singleton) or `ref.read(subscriptionServiceProvider)` '
-          '(post-A7 canonical provider).',
+          '3 for PRO, 1 for free. Accepts: `SubscriptionService.instance` '
+          '(legacy singleton), `ref.read(subscriptionServiceProvider)` '
+          '(post-A7 canonical provider), or `ref.watch(subscriptionInfoProvider)` '
+          '(Phase 2 reactive — cap flips 1→3 on mid-session PRO grant).',
     );
   });
 }

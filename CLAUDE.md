@@ -6,6 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## ⚠️ DISCIPLINE-FIRST (before ANY investigation, fix, or skill)
+
+**Before investigating a bug, proposing a fix, OR invoking any skill:** load and apply the governing invariants first.
+
+1. **Debugging a bug?** Load the six-step debugging methodology (`docs/playbook/common-pitfalls.md` + `.claude/skills/debugging/SKILL.md`) AND the §4.1 observation→propose workflow. Never jump to a root-cause hypothesis without naming writers + readers by file:line first.
+2. **Proposing a fix?** Apply §4 process invariants (no-deferrals §4.2, build/commit gates §4.3, coding rules §4.4, discipline gates §4.5) before writing a single line.
+3. **Invoking a skill?** Read the SKILL.md for that skill, apply the relevant §4 invariants, AND (for copy/UI work) load the Wardroom brand soul (`lib/shared/widgets/wardroom/CLAUDE.md`). Never fire a skill blind.
+4. **This rule EXTENDS §4.12** (discipline-before-skill — founder directive 2026-06-13) to cover investigation itself. §4.12 covers skill invocations; this section covers the earlier step of investigation and root-cause analysis.
+5. **No exceptions.** The observation workflow, the six-step methodology, and §4 invariants are not optional context — they are required pre-conditions for ANY code-touching action.
+
+---
+
 ## 0. DEVELOPMENT COMMANDS
 
 ### Environment Setup

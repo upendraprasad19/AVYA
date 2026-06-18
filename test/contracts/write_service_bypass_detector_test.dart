@@ -26,6 +26,26 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+/// Wraps [Directory.listSync] with a small retry loop to absorb the
+/// transient [FileSystemException] that Windows throws when many test
+/// workers scan the same directory tree concurrently.  The root cause is
+/// a brief OS-level sharing violation; a short back-off resolves it
+/// without changing any assertion logic.
+List<FileSystemEntity> _robustListSync(
+  Directory d, {
+  int attempts = 4,
+  Duration backoff = const Duration(milliseconds: 150),
+}) {
+  for (var i = 0; ; i++) {
+    try {
+      return d.listSync(recursive: true, followLinks: false);
+    } on FileSystemException {
+      if (i >= attempts - 1) rethrow;
+      sleep(backoff);
+    }
+  }
+}
+
 /// Files allowed to write `exlog_*` / `wlog_*` keys directly. Anything
 /// else must route through `WorkoutWriteService`.
 const _workoutPrefixAllowlist = <String>[
@@ -124,7 +144,7 @@ class _IndirectKey {
 
 Iterable<File> _libDartFiles() sync* {
   final root = Directory('lib');
-  for (final entity in root.listSync(recursive: true, followLinks: false)) {
+  for (final entity in _robustListSync(root)) {
     if (entity is File && entity.path.endsWith('.dart')) yield entity;
   }
 }
