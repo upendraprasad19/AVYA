@@ -5,7 +5,13 @@ review_rounds: 2
 ground_truth_verified: true
 verdict: converged
 bpass: pending
+# bpass_review: docs/reviews/<id>-review.md  ← ADD THIS when bpass flips to accepted;
+#   must point to a file under docs/reviews/ that contains `verdict: accepted` (line-anchored).
+#   Required by P1.H/F3 gate (anti-fabrication; check_plan_review_record_exists.dart).
 hermes: pending
+# hermes_report: docs/audit/<id>-hermes.md   ← ADD THIS when hermes flips to accepted;
+#   must point to a file under docs/audit/ that contains `verdict: accepted` (line-anchored).
+#   Only required for catastrophic tier; this batch is platform so only bpass_review needed.
 ---
 
 # Plan-review record — discipline-overhaul

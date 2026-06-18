@@ -192,6 +192,48 @@ void main(List<String> args) {
     exit(die('${recFile.path}: catastrophic requires hermes: accepted.'));
   }
 
+  // P1.H / F3 (anti-fabrication): when bpass/hermes claim "accepted", require
+  // a corresponding reference file that EXISTS and carries `verdict: accepted`.
+  // This stops a fabricated `bpass: accepted` with no real review behind it.
+  //
+  // bpass_review: → path under docs/reviews/ (e.g. docs/reviews/<id>-review.md)
+  // hermes_report: → path under docs/audit/ (e.g. docs/audit/<id>-hermes.md)
+  if (field('bpass') == 'accepted') {
+    final bpassRef = field('bpass_review');
+    if (bpassRef == null || bpassRef.isEmpty) {
+      exit(die('${recFile.path}: bpass: accepted requires a bpass_review: field '
+          'naming a file under docs/reviews/ that exists and contains '
+          '`verdict: accepted`.'));
+    }
+    final bpassFile = File(bpassRef);
+    if (!bpassFile.existsSync()) {
+      exit(die('${recFile.path}: bpass_review: $bpassRef does not exist on disk.'));
+    }
+    final bpassContent = bpassFile.readAsStringSync();
+    if (!RegExp(r'^verdict:\s*accepted\s*$', multiLine: true).hasMatch(bpassContent)) {
+      exit(die('${recFile.path}: bpass_review file $bpassRef does not contain '
+          '`verdict: accepted` (line-anchored). Fabricated acceptance is not allowed.'));
+    }
+  }
+
+  if (field('hermes') == 'accepted') {
+    final hermesRef = field('hermes_report');
+    if (hermesRef == null || hermesRef.isEmpty) {
+      exit(die('${recFile.path}: hermes: accepted requires a hermes_report: field '
+          'naming a file under docs/audit/ that exists and contains '
+          '`verdict: accepted`.'));
+    }
+    final hermesFile = File(hermesRef);
+    if (!hermesFile.existsSync()) {
+      exit(die('${recFile.path}: hermes_report: $hermesRef does not exist on disk.'));
+    }
+    final hermesContent = hermesFile.readAsStringSync();
+    if (!RegExp(r'^verdict:\s*accepted\s*$', multiLine: true).hasMatch(hermesContent)) {
+      exit(die('${recFile.path}: hermes_report file $hermesRef does not contain '
+          '`verdict: accepted` (line-anchored). Fabricated acceptance is not allowed.'));
+    }
+  }
+
   stdout.writeln('$tag PASS: branch `$branch` ($maxTier) has a converged plan-review record '
       '($rounds rounds, ground-truth-verified).');
   exit(0);

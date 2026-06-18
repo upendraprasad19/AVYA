@@ -10,7 +10,18 @@
 // check_regression_catalog.dart. CI didn't invoke any. The drift detection
 // these gates promised was illusory.
 //
-// Exit 0 = pass: every check script invoked from both surfaces.
+// P1.H / F2 extension (discipline-overhaul, 2026-06-18): ALSO enumerate
+// `scripts/validate_*.dart` and `scripts/audit_*.dart`. These are non-check_*
+// enforcement scripts and the old gate was blind to them (G3 hole from the
+// fool-proofing review). For each, require it be invoked SOMEWHERE in
+// pre-commit.sh OR test.yml (an explicit `dart run scripts/<name>.dart`
+// mention — they're not in the `check_*` loop), OR be in
+// `_explicitAllowList` for genuinely on-demand validators (on-demand = run
+// by a skill or hook, not the auto-loop). Library files with no `main()` are
+// excluded from the scan.
+//
+// Exit 0 = pass: every check/validate/audit script invoked from both surfaces
+//          (or allow-listed).
 // Exit 1 = fail.
 //
 // Allowlist: gates that are intentionally NOT in both surfaces (e.g.
@@ -58,6 +69,52 @@ const _allowList = <String, String>{
       'Runs `flutter test --reporter json` internally — too slow for pre-commit. Manual / CI artifact gate (Gate 41 audit T9).',
 };
 
+// Explicit allowlist for validate_*.dart and audit_*.dart scripts (P1.H/F2).
+// These are NOT in the check_* dynamic loop, so they need an explicit
+// `dart run scripts/<name>.dart` somewhere in pre-commit.sh OR test.yml,
+// OR a matching entry here with a reason they are genuinely on-demand.
+//
+// "On-demand" means: the script is a per-artifact validator invoked by a
+// skill/hook at authoring time (not a repo-wide gate that should fire on
+// every commit). Library files without a main() are excluded from scanning
+// entirely (they can never be `dart run`-ned).
+const _explicitAllowList = <String, String>{
+  // Library modules (no main() — cannot be dart-run directly).
+  'validate_diagnose_doc_lib.dart':
+      'Library module (no main()); imported by validate_diagnose_doc.dart and '
+          'check_bugfix_commits_have_diagnose.dart.',
+  'validate_agent_diagnose_stanza_lib.dart':
+      'Library module (no main()); imported by validate_agent_diagnose_stanza.dart.',
+
+  // Per-artifact on-demand validators (invoked by commit-msg.sh, skill hooks,
+  // or manually at authoring time — NOT repo-wide loop gates).
+  'validate_diagnose_doc.dart':
+      'Per-artifact validator; invoked by scripts/commit-msg.sh:65 at commit '
+          'time for bug-fix commits, and by /build-apk Gate 10. Not a loop gate.',
+  'validate_agent_diagnose_stanza.dart':
+      'Per-artifact validator for subagent diagnose stanza output; invoked '
+          'manually by the /diagnose-bug skill. Not a repo-wide loop gate.',
+  'validate_adr.dart':
+      'Per-artifact validator; invoked by the /adr skill after authoring a new '
+          'ADR. Not a repo-wide loop gate.',
+  'validate_incident_doc.dart':
+      'Per-artifact validator; invoked by the /incident skill after authoring an '
+          'incident post-mortem. Not a repo-wide loop gate.',
+  'validate_markdown_links.dart':
+      'Advisory link-rot check; walks all docs/*.md + CLAUDE.md files. '
+          'Too broad for pre-commit (touches .claude/worktrees links that may be '
+          'stale by design). Run manually / in audit batches.',
+
+  // On-demand audit scripts (require flutter test --reporter=json or full git
+  // log scan — too slow for pre-commit, not suitable for the check_* loop).
+  'audit_discipline_history.dart':
+      'Discipline-history audit (full git log scan since 2026-04-24); too slow '
+          'for pre-commit. Run manually or in quarterly audit batches.',
+  'audit_test_pyramid.dart':
+      'Test-pyramid classifier; requires `flutter test --reporter=json` — too '
+          'slow for pre-commit. Run manually or in quarterly audit batches.',
+};
+
 void main(List<String> args) async {
   final warnOnly = args.contains('--warn-only');
   final scriptsDir = Directory('scripts');
@@ -76,6 +133,8 @@ void main(List<String> args) async {
   final workflowContent = workflow.readAsStringSync();
 
   final unwired = <String>[];
+
+  // --- check_*.dart (existing logic, unchanged) ---
   final allChecks = scriptsDir
       .listSync()
       .whereType<File>()
@@ -114,19 +173,54 @@ void main(List<String> args) async {
     }
   }
 
+  // --- validate_*.dart and audit_*.dart (P1.H/F2 extension) ---
+  // These are NOT in the dynamic check_* loop. Each must either:
+  //   (a) appear as an explicit `dart run scripts/<name>.dart` call in
+  //       pre-commit.sh OR test.yml, OR
+  //   (b) be in _explicitAllowList (genuinely on-demand).
+  // Library files without main() are excluded via _explicitAllowList.
+  final allNonCheck = scriptsDir
+      .listSync()
+      .whereType<File>()
+      .map((f) => f.path.split(RegExp(r'[\\/]')).last)
+      .where((n) =>
+          (n.startsWith('validate_') || n.startsWith('audit_')) &&
+          n.endsWith('.dart'))
+      .toList();
+
+  for (final script in allNonCheck) {
+    if (_explicitAllowList.containsKey(script)) continue;
+    // Must appear as an explicit invocation in at least one surface.
+    final inPreCommit = preCommitContent.contains(script);
+    final inWorkflow = workflowContent.contains(script);
+    if (!inPreCommit && !inWorkflow) {
+      unwired.add('$script [validate_*/audit_*] (not in pre-commit OR workflow, '
+          'and no _explicitAllowList entry)');
+    }
+    // Note: validate_*/audit_* only need ONE surface (not both) when they're
+    // single-surface by design (e.g. Gate 40 runs both, but a commit-msg-only
+    // validator is acceptable with just one). If a script is wired to BOTH
+    // surfaces that's fine — we only fail on zero coverage.
+  }
+
   final tag = warnOnly ? '[Gate 33 WARN]' : '[Gate 33]';
+  final total = allChecks.length + allNonCheck.length;
   if (unwired.isEmpty) {
-    stdout.writeln('$tag PASS: all ${allChecks.length} gate scripts wired (or allow-listed).');
+    stdout.writeln('$tag PASS: all $total gate/validator scripts covered '
+        '(${allChecks.length} check_*, ${allNonCheck.length} validate_*/audit_*).');
     exit(0);
   }
-  stderr.writeln('$tag FAIL: ${unwired.length} gate(s) not wired:');
+  stderr.writeln('$tag FAIL: ${unwired.length} script(s) not covered:');
   for (final u in unwired) {
     stderr.writeln('  - $u');
   }
   stderr.writeln('');
-  stderr.writeln('Fix: add `dart run scripts/<name>.dart` invocation to BOTH:');
+  stderr.writeln('Fix (check_*): add `dart run scripts/<name>.dart` to BOTH:');
   stderr.writeln('  - scripts/pre-commit.sh');
   stderr.writeln('  - .github/workflows/test.yml');
+  stderr.writeln('Fix (validate_*/audit_*): add `dart run scripts/<name>.dart`');
+  stderr.writeln('  to pre-commit.sh or test.yml, OR add an entry to');
+  stderr.writeln('  _explicitAllowList with a reason (on-demand validators only).');
   exit(warnOnly ? 0 : 1);
 }
 

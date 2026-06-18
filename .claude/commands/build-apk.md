@@ -77,6 +77,54 @@ if [ ! -f ".env" ]; then
 fi
 ```
 
+### Gate 3.5 — Discipline-CI green on main (MANDATORY — P1.H/F1, 2026-06-18)
+
+**Applies to ALL build paths, including `--from-green` and `--emergency-bypass`.**
+
+Before building, verify that the latest CI run of "Test & Analyze" on `main` concluded
+`success` for the exact SHA being built. This gate catches the case where a
+`plan-review-record` failure or Gate-40 failure is silently live on `main` — releasing an APK
+from such a `main` ships code whose discipline contract is broken.
+
+```bash
+SHA=$(git rev-parse HEAD)
+echo "[Gate 3.5] Checking discipline-CI on main for SHA $SHA..."
+CI_RESULT=$(gh run list \
+  --branch main \
+  --workflow "Test & Analyze" \
+  --limit 1 \
+  --json conclusion,headSha \
+  --jq ".[0] | {conclusion: .conclusion, headSha: .headSha}" 2>/dev/null || true)
+
+CI_CONCLUSION=$(echo "$CI_RESULT" | jq -r '.conclusion // empty')
+CI_SHA=$(echo "$CI_RESULT" | jq -r '.headSha // empty')
+
+if [ -z "$CI_CONCLUSION" ]; then
+  # gh unavailable or no run found — warn and proceed (best-effort).
+  echo "[Gate 3.5] WARN: could not check CI conclusion (gh unavailable or no run). "
+  echo "  Proceeding on your explicit build request — ensure CI is green before distributing."
+elif [ "$CI_SHA" != "$SHA" ]; then
+  echo "[Gate 3.5] ABORT: latest CI run is for SHA $CI_SHA, not $SHA."
+  echo "  Push your changes and wait for CI to pass before building."
+  exit 1
+elif [ "$CI_CONCLUSION" != "success" ]; then
+  echo "[Gate 3.5] ABORT: discipline-CI is not green on main."
+  echo "  Latest CI conclusion: $CI_CONCLUSION (SHA $CI_SHA)"
+  echo "  The 'Test & Analyze' workflow (which includes the plan-review-record"
+  echo "  and Gate-40 jobs) must conclude 'success' before an APK can be released."
+  echo "  Fix the failing CI job, push, confirm green, then re-run /build-apk."
+  exit 1
+else
+  echo "[Gate 3.5] PASS: discipline-CI is green (SHA $CI_SHA, conclusion=success)."
+fi
+```
+
+**Why this gate is mandatory (not skippable):** The solo-founder workflow has no PR gate
+before release — APK = the release artifact. A `main` with a failing `plan-review-record`
+check means the batch shipped without the required ×2 context-blind reviews + ground-truth
+audit. An APK from such a `main` distributes un-reviewed code. Gate 3.5 is the last
+enforcement point before the artifact leaves the repo.
+
 ### Gate 4 — `flutter analyze --no-fatal-infos` (existing)
 
 ```bash
