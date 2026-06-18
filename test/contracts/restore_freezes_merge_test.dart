@@ -9,7 +9,13 @@
 // take the LOWER available; cloud-refill-newer → cloud; local-refill-newer →
 // local + sync up. Pure function, behaviorally tested here.
 //
-// closes-diagnose: a8f3d1
+// D1 (f9d2e7): used_dates is now a PERMANENT ledger (commitRefill prunes >365d,
+// never clears) so used_dates is ALWAYS the union of BOTH sides -- even on the
+// newer-refill branches that previously dropped the older side. The weekly
+// BUDGET (available / last_refill) still follows the newer refill. The two
+// newer-refill cases below assert the union (pre-D1 they expected empty).
+//
+// closes-diagnose: a8f3d1, f9d2e7
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 
@@ -55,26 +61,46 @@ void main() {
       expect(r.available, 2, reason: 'lower available (conservative)');
     });
 
-    test('cloud refill strictly newer → cloud is the current-week truth', () {
+    test('cloud refill strictly newer → cloud BUDGET, but used_dates UNIONS '
+        'the local historical freeze (D1 permanent ledger)', () {
       final r = merge(
         la: 1, lu: ['2026-06-02'], ll: '2026-06-01',
         ca: 3, cu: const [], cl: '2026-06-08',
       );
-      expect(r.available, 3);
-      expect(r.usedDates, isEmpty);
+      expect(r.available, 3, reason: 'cloud is the newer-week budget');
+      expect(r.usedDates, ['2026-06-02'],
+          reason: 'D1: never drop a historically-frozen day, even when cloud '
+              'refill is newer (pre-D1 this returned empty)');
       expect(r.lastRefill, '2026-06-08');
       expect(r.scheduleSyncUp, isFalse);
     });
 
-    test('local refill strictly newer → keep local + schedule sync up', () {
+    test('local refill strictly newer → local BUDGET + sync up, used_dates '
+        'UNIONS the cloud historical freeze (D1 permanent ledger)', () {
       final r = merge(
         la: 3, lu: const [], ll: '2026-06-08',
         ca: 1, cu: ['2026-06-02'], cl: '2026-06-01',
       );
-      expect(r.available, 3);
-      expect(r.usedDates, isEmpty);
+      expect(r.available, 3, reason: 'local is the newer-week budget');
+      expect(r.usedDates, ['2026-06-02'],
+          reason: 'D1: keep the cloud-side historical freeze (pre-D1 empty)');
       expect(r.lastRefill, '2026-06-08');
       expect(r.scheduleSyncUp, isTrue, reason: 'push the newer local up to cloud');
+    });
+
+    test('D1 permanent ledger: newer-refill branch unions used_dates from BOTH '
+        'weeks (never drops the older side)', () {
+      // local is the newer week (06-08) AND consumed 06-09; cloud is an older
+      // week (06-01) that recorded a freeze on 06-02. The permanent ledger must
+      // keep BOTH — pre-D1 the local-newer branch returned only local's list.
+      final r = merge(
+        la: 2, lu: ['2026-06-09'], ll: '2026-06-08',
+        ca: 1, cu: ['2026-06-02'], cl: '2026-06-01',
+      );
+      expect(r.usedDates, ['2026-06-02', '2026-06-09'],
+          reason: 'union of both weeks, sorted');
+      expect(r.available, 2, reason: 'local newer-week budget');
+      expect(r.scheduleSyncUp, isTrue);
     });
 
     test('cloud last_refill null → local wins + sync up', () {

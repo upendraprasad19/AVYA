@@ -1425,12 +1425,14 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     // Calculated on-the-fly by scanning schedule backwards.
     // Handles rest days, schedule changes, and template swaps correctly.
     //
-    // C-14 (audit-2026-05-11) — completeWorkout is the canonical
-    // mutation surface for streak state. If the walk-back encounters
-    // a missed day BEFORE today and the user has a freeze available,
-    // CONSUME it — that's the right user-facing semantic. All other
-    // call sites use `currentStreak()` for pure reads.
-    final streakDays = repo.consumeMissedDayIfFreezeAvailable();
+    // C-14 (audit-2026-05-11) — completeWorkout is the canonical mutation
+    // surface for streak state. D2 (f9d2e7): route through the SINGLE gated
+    // reckon site instead of calling consume directly. For a real
+    // completeWorkout (post-restore, has schedule) reckon persists missed-day
+    // freeze consumption exactly as before; the gates only suppress the
+    // pre-restore / empty-box edge (where consuming would be unsafe), still
+    // returning an accurate read-only count to store.
+    final streakDays = repo.reckonStreakDecayAndPersist();
 
     // ── Weekly streak (kept for badge logic — not shown in UI) ───
     final currentWeekNum = WorkoutScheduleService.instance.getCurrentWeekNumber();

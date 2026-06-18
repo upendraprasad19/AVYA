@@ -27,11 +27,20 @@ extension SyncServiceRestoreCompleteness on SyncService {
           ? usedRaw.map((e) => e.toString()).toList()
           : <String>[];
       final lastRefill = p['streak_freezes_last_refill'] as String?;
+      // Phase 2 Unit C — include the first-pro-grant flag so it
+      // survives reinstalls and cross-device scenarios. The column
+      // was added by migration 095 (default false; backfill covers
+      // ever-PRO users). Only push when it is explicitly true so
+      // brand-new free users don't stomp a backfill-true cloud row
+      // with false on first sync.
+      final grantDone =
+          p['streak_freezes_first_pro_grant_done'] as bool? ?? false;
       await _supabase.client.from('user_progress').upsert({
         'user_id': userId,
         'streak_freezes_available': available,
         'streak_freezes_used_dates': used,
         if (lastRefill != null) 'streak_freezes_last_refill': lastRefill,
+        if (grantDone) 'streak_freezes_first_pro_grant_done': true,
       }, onConflict: 'user_id');
     } catch (e, st) {
       debugPrint('[SyncService.syncFreezes] error: $e\n$st');
@@ -132,7 +141,8 @@ extension SyncServiceRestoreCompleteness on SyncService {
           .from('user_progress')
           .select(
             'streak_freezes_available, streak_freezes_used_dates, '
-            'streak_freezes_last_refill',
+            'streak_freezes_last_refill, '
+            'streak_freezes_first_pro_grant_done',
           )
           .eq('user_id', userId)
           .maybeSingle();
@@ -173,6 +183,15 @@ extension SyncServiceRestoreCompleteness on SyncService {
       existingMap['streak_freeze_used_dates'] = merged.usedDates;
       if (merged.lastRefill != null) {
         existingMap['streak_freezes_last_refill'] = merged.lastRefill;
+      }
+      // Phase 2 Unit C — restore the grant-done flag from cloud so a
+      // reinstall doesn't phantom-grant 3 freezes on first boot.
+      // Only overwrite local with cloud=true (never regress a local
+      // true back to cloud false — cloud backfill may lag first sync).
+      final cloudGrantDone =
+          res['streak_freezes_first_pro_grant_done'] as bool? ?? false;
+      if (cloudGrantDone) {
+        existingMap['streak_freezes_first_pro_grant_done'] = true;
       }
       await box.put('progress', existingMap);
       if (merged.scheduleSyncUp) {

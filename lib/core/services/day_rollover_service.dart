@@ -20,6 +20,7 @@ import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart'
 
 // ── Train providers (workout plan, stats) ──
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
 // ── Profile providers (biometrics from health sync) ──
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -149,6 +150,20 @@ class DayRolloverObserver with WidgetsBindingObserver {
       debugPrint('[DayRollover] refillIfNewWeek failed (non-fatal): $e\n$st');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'day_rollover_streak_freeze_refill'));
+    }
+
+    // D2 (f9d2e7) — streak-decay reckon. Refill runs FIRST (tops up the weekly
+    // budget) THEN reckon, so an idle user's missed days are consumed + PERSISTED
+    // on app-open — not only on completeWorkout (pre-D2 the read-only streak
+    // display and the persisted freeze count diverged). Gated inside reckon
+    // (restoreCompletedTick > 0 + non-empty schedule) so a pre-restore cold
+    // start can't spuriously decay.
+    try {
+      WorkoutRepository.instance.reckonStreakDecayAndPersist();
+    } catch (e, st) {
+      debugPrint('[DayRollover] streak reckon failed (non-fatal): $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'day_rollover_streak_reckon'));
     }
 
     // 2. Store new date

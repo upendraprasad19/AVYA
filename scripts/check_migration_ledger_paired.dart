@@ -48,6 +48,24 @@ void main(List<String> args) async {
       .where((l) => l.isNotEmpty)
       .toList();
 
+  // The ledger is an EXISTING file → it stages as MODIFIED, never ADDED. So the
+  // ledger-staged check MUST use the FULL staged set (any status), not the
+  // --diff-filter=A (added-only) list used for migration detection above.
+  // (Bug fix 2026-06-18 / f9d2e7: the added-only list never contains the
+  // modified ledger, so every legit migration+ledger commit false-failed — this
+  // gate landed P1.G this same batch and the streak migrations were its first
+  // real exercise.)
+  final allStagedResult = await Process.run(
+    'git',
+    ['diff', '--cached', '--name-only'],
+    stdoutEncoding: utf8,
+  );
+  final allStagedFiles = (allStagedResult.stdout as String)
+      .split('\n')
+      .map((l) => l.trim())
+      .where((l) => l.isNotEmpty)
+      .toList();
+
   // Match `supabase/migrations/NNN_*.sql` (NNN = 3+ digits).
   final migrationRegex =
       RegExp(r'^supabase/migrations/(\d{3,})_.*\.sql$', caseSensitive: false);
@@ -67,7 +85,7 @@ void main(List<String> args) async {
   }
 
   // ── Check ledger is also staged ───────────────────────────────────────────
-  final ledgerStaged = stagedFiles.contains(_ledgerPath);
+  final ledgerStaged = allStagedFiles.contains(_ledgerPath);
   if (!ledgerStaged) {
     final msg =
         '[Gate-MLP] FAIL: ${stagedMigrations.length} migration(s) staged but '

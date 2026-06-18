@@ -2797,6 +2797,9 @@ concepts:
       - file: lib/features/train/repositories/workout_repository.dart
         line_range: 169-240
         method: calculateCurrentStreak (consumes freeze)
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 202-227
+        method: reckonStreakDecayAndPersist (D2 f9d2e7 — single gated consume site; rollover + completeWorkout; restoreCompletedTick + non-empty-schedule gated)
       - file: lib/features/home/providers/home_provider.dart
         line_range: 244-270
         method: StreakFreezeNotifier._refillIfNewWeek
@@ -2861,6 +2864,7 @@ concepts:
       - test/contracts/streak_freeze_refill_race_test.dart
       - test/contracts/streak_progress_service_concurrency_test.dart
       - test/contracts/streak_frozen_day_persists_protection_test.dart  # 5e8a1c: a spent freeze protects its day on every recompute (was: walk broke at the frozen day → streak collapse → rank stuck at SD2)
+      - test/contracts/streak_decay_reckon_permanent_ledger_test.dart  # f9d2e7: D1 permanent ledger (commitRefill prune-not-clear; a frozen day survives a refill) + D2 gated reckon (rollover persists; tick==0 / empty-schedule do NOT decay)
     reader_allow_files:
       # Debug-only year-simulation harness (kDebugMode-gated; release-inert).
       # resetJourney wipes healthBox['streaks'] to re-baseline a clean journey —
@@ -2903,6 +2907,102 @@ concepts:
       SnackBar. Splash cold-start (splash_screen._runDeferredInit) MUST
       clear it on every launch to prevent leak from a prior session that
       set the flag but never reached the home read.
+
+      Phase 2 / diagnose f9d2e7 — PERMANENT freeze ledger + single decay site.
+      D1: commitRefill NO LONGER clears streak_freeze_used_dates each week; it
+      PRUNES entries older than the 365-day walk horizon (prunePastHorizon). The
+      permanent ledger makes the 5e8a1c "a spent freeze protects its day forever"
+      invariant survive a Monday refill (pre-D1 the weekly clear dropped it →
+      re-consume / streak break — the founder's "streak 1 after idle days").
+      mergeFreezeProgress therefore ALWAYS unions used_dates on every branch (the
+      weekly BUDGET available/last_refill still follows the newer refill). D2: the
+      SINGLE decay/consume site is WorkoutRepository.reckonStreakDecayAndPersist
+      (rollover + completeWorkout), gated on restoreCompletedTick > 0 AND a
+      non-empty schedule so a pre-restore / cold-start-empty device never
+      spuriously decays; it persists via commitConsume and returns a read-only
+      count when gated off. The grant denominator + first-PRO grant live in the
+      sibling concept [[streak_freeze_first_pro_grant]].
+
+  - concept: streak_freeze_first_pro_grant
+    domain: workout
+    description: |
+      One-time grant of 3 streak freezes on first-ever PRO upgrade.
+      Controlled by `streak_freezes_first_pro_grant_done` (boolean) stored
+      in userBox['progress'] (Hive) and user_progress column (Postgres,
+      migration 095). Migration-095 backfill pre-sets the flag to true for
+      every ever-PRO / has-subscription user so a boot-refresh of an
+      existing PRO user never phantom-grants 3 freezes. The flag is
+      NEVER cleared on lapse (resetToFreeCapOnLapse preserves it) so a
+      re-purchase after lapse does not re-grant.
+    writers:
+      - file: lib/core/services/streak_progress_service.dart
+        line_range: 172-205
+        method: grantFirstProFreezes
+        notes: |
+          Reads flag from progress map; no-op if already true. Sets
+          streak_freezes_available = max(current, 3) then flag = true.
+          Fire-and-forget syncFreezes() + telemetry.
+      - file: lib/core/services/streak_progress_service.dart
+        line_range: 206-230
+        method: resetToFreeCapOnLapse
+        notes: |
+          Clamps streak_freezes_available to 1 on lapse. Does NOT touch
+          the flag — preserving grant history across lapse+re-buy cycles.
+      - file: lib/core/services/sync/sync_restore_completeness.dart
+        line_range: 130-192
+        method: _restoreFreezes
+        notes: |
+          On restore: reads flag from cloud, writes true to Hive if cloud
+          is true (never regresses a local true back to false).
+    # Narrow single-field concept within the shared userBox['progress'] map
+    # (only streak_freezes_first_pro_grant_done). The `streaks` concept owns the
+    # exhaustive reader manifest for the 'progress' prefix — Gate 18's
+    # prefix-level exhaustiveness applies THERE, not here (the other 7
+    # progress-readers read different fields, not this flag). So: not complete.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/core/services/streak_progress_service.dart
+        line_range: 172-179
+        method: grantFirstProFreezes (idempotency check)
+        semantic: pass-through
+        fields_read: [streak_freezes_first_pro_grant_done]
+        notes: |
+          First read before any write — the gate that makes the grant
+          idempotent on every boot-refresh.
+      - file: lib/core/services/sync/sync_restore_completeness.dart
+        line_range: 29-43
+        method: syncFreezes
+        semantic: pass-through
+        fields_read: [streak_freezes_first_pro_grant_done]
+        notes: |
+          Only pushes the flag when local value is true (conditional
+          include in upsert map to avoid regressing a backfill-true
+          cloud row with a false first-sync from a brand-new user).
+    behavioral_test_path: test/contracts/streak_freeze_first_pro_grant_behavioral_test.dart
+    hive:
+      box: userBox
+      key_prefix: "progress"
+      key_formula: "userBox['progress']['streak_freezes_first_pro_grant_done']"
+    cloud:
+      table: user_progress
+      columns: [streak_freezes_first_pro_grant_done]
+    sync_methods: [syncFreezes]
+    restore_methods: [_restoreFreezes]
+    telemetry:
+      failure_op_types: [streak_freeze_first_pro_grant, streak_freeze_lapse_reset]
+    class_constraints: |
+      Phantom-grant prevention requires BOTH guards to be in place:
+      1. Migration-095 backfill: marks all ever-PRO users as done=true
+         before this code deploys. Ensures existing PRO users do not
+         get phantom-granted 3 freezes on next boot.
+      2. grantFirstProFreezes() flag check: idempotent guard inside the
+         method. Defense-in-depth for reinstall/restore races where the
+         backfill flag lands in Hive via _restoreFreezes (Step C of
+         restore) BEFORE writeSubscriptionState fires (Step D).
+      The free→PRO transition gate in subscription_service.dart
+      writeSubscriptionState captures oldIsPro BEFORE the MigratedKey
+      write so a renewal (PRO→PRO) is correctly classified as NOT a
+      transition and does not call grantFirstProFreezes().
 
   - concept: sleep_logs
     domain: health
