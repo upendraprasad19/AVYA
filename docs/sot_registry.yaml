@@ -46,7 +46,7 @@ concepts:
 
   - concept: workout_receipt_rendering
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/workout_receipt_rendering_behavioral_test.dart
     description: |
       Per-set chip Wrap rendered after a completed workout.
       Reads from Hive exlog_* keys via the indexed lookup; deduplicates
@@ -154,7 +154,7 @@ concepts:
 
   - concept: workout_log_edit_surface
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/workout_log_edit_surface_behavioral_test.dart
     description: |
       Single edit surface for completed-workout logs. 4 entry points
       route through it: receipt sheet Edit button, Home View Card,
@@ -258,7 +258,7 @@ concepts:
 
   - concept: exercise_logs_read_path
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/exercise_logs_read_path_behavioral_test.dart
     description: |
       Indexed O(1) read of all exlog_* rows for a given IST date.
       Falls back to a once-built date-keyed map for legacy rows.
@@ -320,7 +320,7 @@ concepts:
 
   - concept: scheduled_workouts_mutations
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/scheduled_workouts_mutations_behavioral_test.dart
     description: |
       All schedule mutations (generate, clean-sync on template edit,
       reschedule on days/week change). Owns schedule_YYYY-MM-DD keys.
@@ -397,7 +397,7 @@ concepts:
 
   - concept: nutrition_total_calories
     domain: nutrition
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/nutrition_total_calories_behavioral_test.dart
     description: |
       Totals on every nlog_* row are computed from items[] with
       per-item Atwater fallback (raw > 0 ? raw : 4P+4C+9F). Never
@@ -555,7 +555,7 @@ concepts:
 
   - concept: food_log_delete_with_undo
     domain: nutrition
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/food_log_delete_with_undo_behavioral_test.dart
     description: |
       Single delete surface for food logs. Stashes log before delete;
       restoreFoodLog writes back at deterministic key
@@ -645,7 +645,7 @@ concepts:
 
   - concept: ai_snapshot_building
     domain: ai_coach
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/ai_snapshot_building_behavioral_test.dart
     description: |
       buildAiContext is the ONE builder. _compactContext is the ONE
       trimmer. Never construct ad-hoc snapshots in provider code.
@@ -738,7 +738,6 @@ concepts:
 
   - concept: subscription_state
     domain: subscription
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
     behavioral_test_path: test/contracts/subscription_expiry_banner_behavioral_test.dart
     description: |
       isPro() + gate() are the ONLY entry points. Never read
@@ -886,7 +885,7 @@ concepts:
 
   - concept: water_target
     domain: water
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/water_target_behavioral_test.dart
     description: |
       Daily water goal. Read precedence: user override
       (userBox['water_target_override_ml']) → computed (weight × 35
@@ -961,7 +960,7 @@ concepts:
 
   - concept: diet_plan_saved_loaded
     domain: nutrition
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/diet_plan_saved_loaded_behavioral_test.dart
     description: |
       Saved diet plan (one row per user). One reader of
       configBox['saved_diet_plan']. Returns Map<String, PlannedSlot>
@@ -1035,7 +1034,7 @@ concepts:
 
   - concept: weekly_report_data
     domain: ai_coach
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/weekly_report_data_behavioral_test.dart
     description: |
       ONE source for Weekly Report 4-up sparklines. Reads last-7-days
       series from healthBox (weight, forward-filled), nutritionBox
@@ -1099,7 +1098,7 @@ concepts:
 
   - concept: day_rollover_provider_invalidation
     domain: rollover
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/day_rollover_provider_invalidation_behavioral_test.dart
     description: |
       Canonical "today" provider invalidation list. Run on splash
       cold launch + once daily at IST midnight. Single source of
@@ -1160,7 +1159,7 @@ concepts:
 
   - concept: hive_field_name_exlog
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/hive_field_name_exlog_behavioral_test.dart
     description: |
       WriteService output keys are a contract with every consumer.
       Field renames must update writer + every consumer in same PR
@@ -1356,7 +1355,7 @@ concepts:
 
   - concept: hive_field_name_nlog
     domain: nutrition
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/hive_field_name_nlog_writer_to_reader_test.dart
     description: |
       WriteService output keys are a contract with every consumer.
     writers:
@@ -1603,7 +1602,7 @@ concepts:
 
   - concept: restore_completeness
     domain: cross_domain
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/restore_completeness_writes_test.dart
     description: |
       Three ad-hoc sync surfaces outside workout/nutrition domain
       fan-outs. These cover surfaces that were Hive-only before
@@ -1778,7 +1777,6 @@ concepts:
 
   - concept: week_completion_check
     domain: workout
-    behavioral_test_required: true
     behavioral_test_path: test/contracts/week_completion_check_test.dart
     description: |
       Whether a plan week has ≥1 completed scheduled day — drives the ✓
@@ -1810,7 +1808,6 @@ concepts:
 
   - concept: biometric_sync_state
     domain: health
-    behavioral_test_required: true
     behavioral_test_path: test/contracts/biometric_sync_state_test.dart
     description: |
       Health-Connect connection state on the BiometricSyncCard. The open
@@ -1839,7 +1836,6 @@ concepts:
 
   - concept: cold_start_restore_refresh
     domain: cross_domain
-    behavioral_test_required: true
     behavioral_test_path: test/contracts/background_restore_test.dart
     description: |
       Home cards refresh when the cold-start restore heals in the background.
@@ -1889,7 +1885,6 @@ concepts:
 
   - concept: phase_blocks_bucketing
     domain: workout
-    behavioral_test_required: true
     behavioral_test_path: test/contracts/past_phase_bucketing_test.dart
     description: |
       Grouping of past schedule rows into completed phase blocks. Each
@@ -1933,7 +1928,7 @@ concepts:
 
   - concept: user_scoped_hive_keys
     domain: cross_domain
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/user_scoped_hive_keys_behavioral_test.dart
     description: |
       Anything user-specific that previously lived in shared
       configBox now reads/writes through MigratedKey. The 31-key
@@ -2085,7 +2080,7 @@ concepts:
 
   - concept: subscription_payment_grace_window
     domain: subscription
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/subscription_payment_grace_window_behavioral_test.dart
     description: |
       10-min grace window after Razorpay success during which
       verifyFromServer is suppressed from downgrading the
@@ -2144,7 +2139,7 @@ concepts:
 
   - concept: workout_completion_status
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/workout_completion_status_writer_to_reader_test.dart
     description: |
       The schedule_<date>.status field drives the calendar, home card state,
       and streak logic. Legal values: planned | completed | skipped | shifted.
@@ -2283,7 +2278,7 @@ concepts:
 
   - concept: workout_templates
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/workout_templates_writer_to_reader_test.dart
     description: |
       Workout templates stored as tmpl_<ms> or tmpl_<nameHash> Hive keys.
       Multi-day AI templates split into N rows with group_id/group_day_index.
@@ -2369,7 +2364,7 @@ concepts:
 
   - concept: exercise_personal_records
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/exercise_personal_records_writer_to_reader_test.dart
     description: |
       PR detection: after each set log, _rescanPrFor walks all exlog_* rows
       for the exercise chronologically (sorted by date+created_at), marks
@@ -2468,7 +2463,7 @@ concepts:
 
   - concept: water_logs
     domain: nutrition
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/water_logs_writer_to_reader_test.dart
     description: |
       Daily water intake stored as water_ml_<YYYY-MM-DD> in healthBox.
       A separate counter pattern (addWater/increment/decrement) mutates
@@ -2689,7 +2684,7 @@ concepts:
 
   - concept: weight_logs
     domain: health
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/weight_logs_writer_to_reader_test.dart
     description: |
       Weight entries stored as weight_<IST-date> in healthBox, type='weight_log'.
       Real-time cloud sync via Supabase Realtime channel on weight_logs table.
@@ -2911,7 +2906,7 @@ concepts:
 
   - concept: sleep_logs
     domain: health
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/sleep_logs_behavioral_test.dart
     description: |
       Sleep entries stored per-day as sleep_log_<YYYY-MM-DD> in healthBox.
       A legacy list key 'sleep_logs' also exists (chat-logged path via
@@ -3024,7 +3019,7 @@ concepts:
 
   - concept: user_full_name
     domain: auth_profile
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/user_full_name_behavioral_test.dart
     description: |
       User's display name stored in userBox['profile']['full_name'] AND on
       users.full_name cloud column. The 'users' table (not user_profile) is
@@ -3141,7 +3136,6 @@ concepts:
 
   - concept: profile_image_url_display
     domain: auth_profile
-    behavioral_test_required: true
     behavioral_test_path: test/contracts/profile_image_url_stable_test.dart
     description: |
       Profile avatar + banner image URLs. Stored in userBox['profile']
@@ -3189,7 +3183,7 @@ concepts:
 
   - concept: onboarding_completed_at
     domain: auth_profile
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/onboarding_completed_at_behavioral_test.dart
     description: |
       Boolean flag 'onboarding_completed' in userBox (via MigratedKey) +
       timestamp 'onboarding_completed_at' in user_profile cloud table
@@ -3304,7 +3298,7 @@ concepts:
 
   - concept: coach_interactions
     domain: ai_coach
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/coach_interactions_behavioral_test.dart
     description: |
       Chat interaction rows stored as coach_<ms> Hive keys in coachBox.
       Synced to ai_coach_interactions cloud table with deterministic
@@ -3402,7 +3396,7 @@ concepts:
 
   - concept: coaching_notes
     domain: ai_coach
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/coaching_notes_behavioral_test.dart
     description: |
       Accumulated coaching facts extracted nightly from that day's
       conversations. Stored as singleton coachBox['coaching_notes'] = Map
@@ -3484,7 +3478,7 @@ concepts:
 
   - concept: log_client_error_payload
     domain: telemetry
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/log_client_error_payload_behavioral_test.dart
     description: |
       Contract for the 'log-client-error' Edge Function request body.
       Every invocation from ErrorTelemetry must include these fields.
@@ -3535,7 +3529,7 @@ concepts:
 
   - concept: error_telemetry_helper
     domain: telemetry
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/error_telemetry_helper_behavioral_test.dart
     description: |
       Flutter-side helper class. Two methods: recordNonFatal (exception
       with stack trace → Crashlytics + log-client-error) and logEvent
@@ -3760,7 +3754,7 @@ concepts:
 
   - concept: muster_to_profile_bridge
     domain: ai_coach
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/muster_to_profile_bridge_behavioral_test.dart
     description: |
       MusterScreen (post-onboarding 3-question chat) writes 6 keys to
       coachBox via InductionService.recordMusterAnswer. For 4 of those
@@ -4033,7 +4027,7 @@ concepts:
 
   - concept: coach_memory_coach_notes_upward_sync
     domain: ai_coach
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/coach_memory_coach_notes_upward_sync_behavioral_test.dart
     description: |
       Hive `coachBox['coaching_notes']` → cloud `coach_memory.coach_notes`
       column name asymmetry. Pre-audit-2026-05-16 the upward sync omitted
@@ -4096,7 +4090,7 @@ concepts:
 
   - concept: workout_schedule_service_routes_through_write_service
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/workout_schedule_service_routes_through_write_service_behavioral_test.dart
     description: |
       All 9 schedule mutations in WorkoutScheduleService route through
       `WorkoutWriteService.upsertScheduled` (mutex + sync + invalidation).
@@ -4193,7 +4187,7 @@ concepts:
 
   - concept: health_write_service
     domain: health
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/health_write_service_behavioral_test.dart
     description: |
       Canonical writer for the health domain (sleep, weight, measurement,
       water, urine, hydration). Mirrors WorkoutWriteService + NutritionWriteService.
@@ -4278,7 +4272,7 @@ concepts:
 
   - concept: ai_proxy_placeholder_resolution
     domain: ai_coach
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    presence_only: true  # Deno EF placeholder insert, no Flutter unit-test seam
     description: |
       `ai-proxy` food_text_analysis branch reserves a placeholder row
       BEFORE calling Gemini (so the rate-limit trigger can count atomically).
@@ -4344,7 +4338,7 @@ concepts:
 
   - concept: workout_read_service
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/workout_read_service_behavioral_test.dart
     description: |
       Canonical READ service for workout-domain Hive surfaces.
       Owns the per-set MAX semantic (best reps / duration / weight),
@@ -4381,7 +4375,7 @@ concepts:
 
   - concept: nutrition_read_service
     domain: nutrition
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/nutrition_read_service_behavioral_test.dart
     description: |
       Canonical READ service for nutrition-domain Hive surfaces.
       Owns the daily macro summation (with `is_saved_meal` exclusion)
@@ -4412,7 +4406,7 @@ concepts:
 
   - concept: health_read_service
     domain: health
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/health_read_service_behavioral_test.dart
     description: |
       Canonical READ service for health-domain Hive surfaces.
       Exposes latest-weight / sleep-hours-for-date / water-ml-for-date
@@ -4433,7 +4427,7 @@ concepts:
 
   - concept: custom_exercises_mutations
     domain: workout
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/custom_exercises_mutations_behavioral_test.dart
     description: |
       User-created custom exercises stored at customBox key
       `custom_exercise_<id>` (Hive) and cloud table
@@ -4505,7 +4499,7 @@ concepts:
 
   - concept: community_review_queue
     domain: profile
-    behavioral_test_required: true  # c7d4f1 — source-grep contract + live smoke; the Deno EF cross-user read is not unit-testable in flutter (Gate 42 acknowledged)
+    presence_only: true  # cross-user read is a Deno EF, not Flutter-unit-testable
     description: |
       Profile → Submissions → COMMUNITY REVIEW: pending custom foods/exercises
       submitted by OTHER users (submitted && !approved) for the current user to
@@ -4573,7 +4567,7 @@ concepts:
 
   - concept: referral_redemption
     domain: profile
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/referral_redeem_success_contract_test.dart
     description: |
       Referral code redemption flow. Two read/write paths converge on
       this concept: (a) `referral_redemptions` table read to determine
@@ -4723,7 +4717,7 @@ concepts:
 
   - concept: rank_promotion_log
     domain: profile
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/rank_promotion_log_behavioral_test.dart
     description: |
       Read-only access to `rank_promotions` — the server-authored
       append-only log of rank-up events used to render the
@@ -4862,7 +4856,7 @@ concepts:
 
   - concept: singleton_lifecycle_registry
     domain: core_services
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    behavioral_test_path: test/contracts/singleton_lifecycle_registry_behavioral_test.dart
     description: |
       Process-wide callback registry that bridges static `.instance`
       singletons (which live outside the Riverpod graph) into the
@@ -4933,7 +4927,7 @@ concepts:
 
   - concept: typography_canonical_source
     domain: design_system
-    behavioral_test_required: true  # B5 D2 (audit 2026-05-20) — Gate 42 TODO
+    presence_only: true  # static structural property, source-grep gate is sufficient
     description: |
       `AppTypography` (lib/core/theme/typography.dart) is the single
       source-of-truth for every text style in the app. All
@@ -5040,6 +5034,7 @@ concepts:
 
   - concept: dependency_canonical_http_client
     domain: infrastructure
+    presence_only: true  # dep-canonicalization, source-grep gate IS the test
     description: |
       `package:dio ^5.9.2` is the single canonical HTTP client used
       everywhere under `lib/`. No file in `lib/` may `import
@@ -5151,7 +5146,7 @@ concepts:
 
   - concept: workout_schedule_read_path
     domain: workout
-    behavioral_test_required: true
+    behavioral_test_path: test/contracts/workout_schedule_read_path_behavioral_test.dart
     description: |
       Plan generation orchestration + calendar/week/phase reads. Owns:
       generateAndSchedule, generateAndScheduleFromDate,
@@ -5192,7 +5187,7 @@ concepts:
 
   - concept: workout_schedule_write_path
     domain: workout
-    behavioral_test_required: true
+    behavioral_test_path: test/contracts/workout_schedule_write_path_behavioral_test.dart
     description: |
       Schedule mutations not tied to swap or template:
       markCompleted, markSkipped, pauseRange, redoWeek4, copyWeek.
@@ -5237,7 +5232,7 @@ concepts:
 
   - concept: weekly_report_target_and_freshness
     domain: nutrition
-    behavioral_test_required: true  # source-grep + live EF-invoke proof (c7a1f5)
+    behavioral_test_path: test/contracts/weekly_report_target_and_freshness_behavioral_test.dart
     description: |
       The Weekly Report's calorie/protein target MUST be the canonical stored
       target (user_profile.daily_calories / protein_grams) — the same value the
@@ -5309,7 +5304,7 @@ concepts:
 
   - concept: ui_header_no_clip
     domain: cross_domain
-    behavioral_test_required: true  # source-grep (presentation; b2e9d4)
+    presence_only: true  # presentation property, source-grep gate is sufficient
     description: |
       Tab-screen header titles shrink-to-fit (FittedBox scaleDown), never clip
       with maxLines:1 + ellipsis (fix b2e9d4, 2026-06-02). Pure presentation.
@@ -5370,7 +5365,7 @@ concepts:
 
   - concept: swap_counters
     domain: workout
-    behavioral_test_required: true
+    behavioral_test_path: test/contracts/swap_counters_behavioral_test.dart
     description: |
       Swap engine + travel mode + week-scoped swap counter. Owns:
       swapDays (whole-day swap, increments counter), swapExerciseInDay
@@ -5402,7 +5397,7 @@ concepts:
 
   - concept: template_scheduling
     domain: workout
-    behavioral_test_required: true
+    behavioral_test_path: test/contracts/template_scheduling_behavioral_test.dart
     description: |
       Custom template assignment to specific dates. Owns:
       assignTemplateToDate (backs up displaced day to displaced_<date>),
