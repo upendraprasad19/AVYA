@@ -63,6 +63,24 @@ void main() {
     await HiveService.instance.configBox.clear();
   });
 
+  tearDown(() async {
+    // isPro() on an expired (or cross-account) subscription fires a
+    // fire-and-forget _downgradeLocally() — an async chain whose FIRST op
+    // (isPro := false) runs synchronously, but whose later deletes
+    // (expiresAt, plan, localActivationAt, lastVerified) are DEFERRED past an
+    // await. If a deferred delete(expiresAt) lands during the NEXT test's
+    // write→read gap it nulls the freshly-written expiry, and isPro() then
+    // returns kDebugMode (true in tests, line ~355) instead of the expected
+    // false. That cross-test contamination passes locally but flakes in CI
+    // (slower event loop). Drain the deferred chain here so each test's
+    // fire-and-forget async stays confined to itself. (Pure test-isolation
+    // fix — production isPro() is correct: isPro := false short-circuits every
+    // subsequent call before the expiresAt-null branch is reached.)
+    for (var i = 0; i < 12; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+  });
+
   // ignore: deprecated_member_use
   final sub = SubscriptionService.instance;
 
