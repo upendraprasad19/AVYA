@@ -451,10 +451,12 @@ class SimulationService {
     final repo = WorkoutRepository.instance;
     final progress = UserRepository.instance.getProgress() ?? {};
     final totalDone = ((progress['total_workouts_done'] as int?) ?? 0) + 1;
-    // Mutating variant (what real completeWorkout uses): consumes + persists a
-    // freeze for any missed day in the walk-back, so the streak survives the
-    // ~15% adherence skips across weeks (paired with the weekly refill above).
-    final streakDays = repo.consumeMissedDayIfFreezeAvailable(); // seam-aware
+    // Mutating variant. NOTE (Hermes L1, f9d2e7): this calls consume DIRECTLY,
+    // intentionally bypassing reckonStreakDecayAndPersist's restoreCompletedTick +
+    // non-empty-schedule gates — the sim drives its own clock seam and never waits
+    // for a real restore tick. Dev-only (kDebugMode, release-inert); NOT a third
+    // production consume site (reckon's "single site" docstring means prod).
+    final streakDays = repo.consumeMissedDayIfFreezeAvailable(); // seam-aware (sim)
     await UserRepository.instance.updateProgress({
       'total_workouts_done': totalDone,
       'current_streak_days': streakDays,

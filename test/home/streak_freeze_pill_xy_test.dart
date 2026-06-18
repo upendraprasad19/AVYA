@@ -89,13 +89,17 @@ void main() {
       // Source-grep the conditional rather than instantiate Riverpod —
       // SubscriptionService is a singleton and bootstrapping it here would
       // require a full Hive setup. The conditional is the contract.
+      // Phase 2 (discipline-overhaul, f9d2e7): the cap now reads the REACTIVE
+      // ref.watch(subscriptionInfoProvider).isPro (was SubscriptionService.isPro())
+      // so a mid-session PRO grant flips the denominator 1→3 without a relaunch.
       expect(
-        homeProvSrc.contains('isPro() ? 3 : 1') ||
-            homeProvSrc.contains('isPro() ? 3:1'),
+        homeProvSrc.contains('subscriptionInfoProvider).isPro ? 3 : 1') ||
+            homeProvSrc.contains('subscriptionInfoProvider).isPro ? 3:1'),
         isTrue,
         reason:
-            'streakFreezeMaxProvider must read SubscriptionService.isPro() '
-            'and return 3 (PRO) or 1 (free). Founder direction 2026-05-10.',
+            'streakFreezeMaxProvider must read ref.watch(subscriptionInfoProvider).isPro '
+            'and return 3 (PRO) or 1 (free), REACTIVELY (Phase 2 reactive denominator, '
+            'f9d2e7). Was SubscriptionService.isPro() (founder direction 2026-05-10).',
       );
     });
   });

@@ -103,6 +103,12 @@ class ErrorTelemetry {
     'bug_class_new_',
     'writer_reader_drift_',
     'sync_failure_dead_letter',
+
+    // Streak-freeze lifecycle — money-relevant + once-per-lifecycle, so an event
+    // dropped in a cooldown window is UNRECOVERABLE (Hermes L37, f9d2e7). MUST
+    // stay in sync with the server HIGH_PRIORITY_OP_TYPES (twin test).
+    'streak_freeze_first_pro_grant',
+    'streak_freeze_lapse_reset',
   ];
 
   /// Returns true when [opType] should bypass client-side rate-limit

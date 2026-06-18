@@ -33,7 +33,21 @@ COMMIT_SUBJECT=$(head -n1 "$COMMIT_MSG_FILE")
 COMMIT_BODY=$(tail -n +2 "$COMMIT_MSG_FILE")
 
 if ! echo "$COMMIT_SUBJECT" | grep -qE '^(fix|bug|regression)(\([^)]*\))?:'; then
-  # Not a bug-fix commit; gate not applicable.
+  # Not a strict bug-fix commit; mandatory gate not applicable.
+  #
+  # NARROW HEURISTIC (warn-only, P1.G discipline-overhaul 2026-06-18):
+  # If the subject is feat:/refactor:/chore: but the body reads like a bug fix
+  # (whole-word match for bug/regression/broke/broken, or the phrase "fixes a"),
+  # suggest adding a closes-diagnose: ref.  This is advisory — never blocks —
+  # to avoid training the --no-verify reflex (see feedback_mistake_no_verify_reflex.md).
+  if echo "$COMMIT_SUBJECT" | grep -qE '^(feat|refactor|chore)(\([^)]*\))?:'; then
+    if echo "$COMMIT_BODY" | grep -qiE '\bbug\b|\bregression\b|\bbroke\b|\bbroken\b|fixes a'; then
+      echo "[commit-msg] HINT: commit subject is '$(echo "$COMMIT_SUBJECT" | cut -d: -f1):' but the body"
+      echo "             mentions bug/regression/broke/broken. If this is a bug fix, consider:"
+      echo "               closes-diagnose: <6+-hex-char-id>"
+      echo "             (This is advisory — your commit is NOT blocked.)"
+    fi
+  fi
   exit 0
 fi
 

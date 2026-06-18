@@ -3,23 +3,35 @@
 // Gate 40 (Tech-debt audit 2026-05-20, B4 deliverable): validate audit
 // closure YAML files in `docs/audit/*_audit_closures.yaml`.
 //
+// P1.E extension (discipline-overhaul, 2026-06-18): also validates
+// `docs/audit/*.closure.yaml` batch ledgers — one per multi-item batch
+// (≥4 findings/units). Together these enforce the closed==N structural
+// invariant: every item must carry a terminal_state before the batch
+// can close, making deferrals structurally impossible (a non-terminal
+// item fails the count gate).
+//
 // Per `feedback_no_deferrals_tech_debt_class.md` + `feedback_audit_closure
 // _yaml_required.md` + `feedback_closure_yaml_per_finding_discipline.md`,
-// every multi-category audit produces a closure ledger enumerating every
-// finding ID + terminal state. This validator asserts the schema:
+// every multi-category audit AND every multi-item batch produces a closure
+// ledger enumerating every finding/unit ID + terminal state. This validator
+// asserts the schema:
 //
 //   1. Every finding has exactly one terminal state from the allowed set:
-//      closed_in_commit | upstream_blocked | verified_clean
+//      closed_in_commit | upstream_blocked | blocked_on_user | verified_clean
 //   2. NO `deferred:` key permitted (extends feedback_no_deferrals to
-//      audits).
+//      audits and all multi-item batches).
 //   3. closed_in_commit entries reference a real git SHA OR a labelled
 //      branch state (e.g. "feat/tech-debt-audit-resume-2 (uncommitted)"
 //      while work-in-progress) AND name a verification path.
 //   4. upstream_blocked entries have both `blocker:` and `reopen_when:` fields.
-//   5. verified_clean entries have `evidence:` or `notes:`.
-//   6. total_findings matches `findings:` list length.
-//   7. closed_count matches the count of entries with terminal_state set.
-//   8. Stale-comment detection (B5 D1 hardening, per
+//   5. blocked_on_user entries have a `reason:` field describing the required
+//      user action before the item can close.
+//   6. verified_clean entries have `evidence:` or `notes:`.
+//   7. total_findings (or total:) matches `findings:` list length.
+//   8. closed_count matches the count of entries with terminal_state set
+//      (closed == N structural invariant — ALL items must be terminal for
+//      the batch to be considered done; non-terminal items fail the gate).
+//   9. Stale-comment detection (B5 D1 hardening, per
 //      feedback_closure_yaml_per_finding_discipline.md): findings whose
 //      ONLY status signal is a `# NOT YET CLOSED` / `# PARTIAL` /
 //      `# IN PROGRESS` / `# CLOSED in current working tree` / similar
@@ -33,6 +45,7 @@
 //   dart run scripts/validate_audit_closure.dart --strict       # fail on any
 //                                                                 # entry without
 //                                                                 # terminal_state
+//   dart run scripts/validate_audit_closure.dart --warn-only    # never exit 1
 //
 // Exit 0 = pass.
 // Exit 1 = fail.
@@ -42,6 +55,7 @@ import 'dart:io';
 const _allowedStates = {
   'closed_in_commit',
   'upstream_blocked',
+  'blocked_on_user',
   'verified_clean',
 };
 
@@ -59,13 +73,19 @@ void main(List<String> args) async {
       stdout.writeln('[Gate 40] SKIP: docs/audit/ not present.');
       exit(0);
     }
-    for (final entity in dir.listSync()) {
-      if (entity is File && entity.path.endsWith('_audit_closures.yaml')) {
-        files.add(entity);
+    for (final entity in dir.listSync(recursive: true)) {
+      if (entity is File) {
+        final name = entity.path.replaceAll('\\', '/').split('/').last;
+        // Accept both quarterly *_audit_closures.yaml and batch *.closure.yaml.
+        if (name.endsWith('_audit_closures.yaml') ||
+            name.endsWith('.closure.yaml')) {
+          files.add(entity);
+        }
       }
     }
     if (files.isEmpty) {
-      stdout.writeln('[Gate 40] SKIP: no *_audit_closures.yaml files in docs/audit/.');
+      stdout.writeln(
+          '[Gate 40] SKIP: no *_audit_closures.yaml or *.closure.yaml files in docs/audit/.');
       exit(0);
     }
   } else {
@@ -152,12 +172,11 @@ List<String> _validate(File file, bool strict, List<String> warnings) {
     return violations;
   }
 
-  // ignore: unused_local_variable
   var totalCount = -1;
-  // ignore: unused_local_variable
   var declaredClosed = -1;
   for (final line in lines) {
-    final tm = RegExp(r'^total_findings:\s*(\d+)').firstMatch(line);
+    // Accept both total_findings: and total: (batch ledger shorthand).
+    final tm = RegExp(r'^(?:total_findings|total):\s*(\d+)').firstMatch(line);
     if (tm != null) totalCount = int.parse(tm.group(1)!);
     final cm = RegExp(r'^closed_count:\s*(\d+)').firstMatch(line);
     if (cm != null) declaredClosed = int.parse(cm.group(1)!);
@@ -265,6 +284,11 @@ List<String> _validate(File file, bool strict, List<String> warnings) {
       if ((f['reopen_when'] ?? '').isEmpty) {
         violations.add('${file.path}:$ln → finding $id upstream_blocked needs `reopen_when:` field.');
       }
+    } else if (state == 'blocked_on_user') {
+      if ((f['reason'] ?? '').isEmpty) {
+        violations.add('${file.path}:$ln → finding $id blocked_on_user needs `reason:` field '
+            '(what user action is required before this item can close).');
+      }
     } else if (state == 'verified_clean') {
       if ((f['evidence'] ?? '').isEmpty && (f['notes'] ?? '').isEmpty) {
         violations.add('${file.path}:$ln → finding $id verified_clean needs `evidence:` or `notes:` field.');
@@ -272,17 +296,34 @@ List<String> _validate(File file, bool strict, List<String> warnings) {
     }
   }
 
-  // total_findings sanity (advisory — informational only because the
-  // lightweight parser can over-count if the YAML structure shifts).
+  // ── closed == N structural invariant (P1.E, discipline-overhaul 2026-06-18) ──
+  // Every item in the batch MUST carry a terminal_state for the batch to be
+  // considered done. A non-terminal item makes the closed tally < total,
+  // which fails the gate. This makes deferrals structurally impossible:
+  // you cannot ship a closure ledger with an open item; you must either close
+  // it or mark it blocked_on_user / upstream_blocked with the required fields.
+  final nonTerminalCount = findings.length - closedTally;
+  if (nonTerminalCount > 0) {
+    violations.add(
+        '${file.path} → closed == N FAIL: $closedTally/${findings.length} items have '
+        'terminal_state. $nonTerminalCount item(s) are non-terminal — a deferral is '
+        'structurally impossible; every item must carry '
+        'terminal_state: closed_in_commit | upstream_blocked | blocked_on_user | verified_clean.');
+  }
+
+  // total_findings / total: sanity check.
   if (totalCount >= 0 &&
       (totalCount - findings.length).abs() > 3) {
-    violations.add('${file.path} → total_findings ($totalCount) drifts > 3 '
+    violations.add('${file.path} → total/total_findings ($totalCount) drifts > 3 '
         'from actual findings count (${findings.length}).');
   }
-  // closed_count sanity — advisory. The lightweight parser cannot reliably
-  // count terminal_state across multi-line YAML; CI uses Python yaml or
-  // dart yaml package for an authoritative count. For now this gate
-  // enforces the schema, not the counter.
+
+  // closed_count declared value must match computed tally.
+  if (declaredClosed >= 0 && declaredClosed != closedTally) {
+    violations.add('${file.path} → closed_count: $declaredClosed declared but '
+        'recomputed tally = $closedTally. Recompute from per-entry data '
+        '(never increment without updating entries — CLAUDE.md §4.10).');
+  }
 
   return violations;
 }

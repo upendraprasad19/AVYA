@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 
 /// Severity of the Home subscription-expiry banner (diagnose 2026-06-06).
@@ -247,6 +248,11 @@ class SubscriptionService {
     required String expiresAt,
     required String plan,
   }) async {
+    // Phase 2 Unit C — capture old PRO state BEFORE the write so we
+    // can detect a free→PRO TRANSITION below. If the box is not yet
+    // open (very early boot), isPro() returns false safely.
+    final oldIsPro = this.isPro();
+
     // Test #10.1 — write via MigratedKey (per-user userBox post-migration).
     try {
       await MigratedKey.write(_isProKey, isPro);
@@ -278,6 +284,24 @@ class SubscriptionService {
     try {
       onStateChanged?.call();
     } catch (_) {}
+
+    // Phase 2 Unit C — first-PRO instant-3 freeze grant.
+    // Fire ONLY on a genuine free→PRO transition (oldIsPro==false,
+    // isPro==true) AND only when the session box is open (user is
+    // the current owner). This prevents phantom-grants on:
+    //   - Every boot-refresh of an already-PRO user (oldIsPro==true).
+    //   - Renewals (still PRO, no transition).
+    //   - Very-early-boot calls before openForUser (session==null,
+    //     guard returns false).
+    // The migration-095 backfill and the flag's own idempotency check
+    // inside grantFirstProFreezes() are defence-in-depth layers.
+    if (!oldIsPro && isPro) {
+      final sessionOwned =
+          HiveUserSession.currentOwnerFullId != null;
+      if (sessionOwned) {
+        StreakProgressService.instance.grantFirstProFreezes();
+      }
+    }
   }
 
   // ── Core API ────────────────────────────────────────────────
@@ -858,5 +882,17 @@ class SubscriptionService {
     try {
       onStateChanged?.call();
     } catch (_) {}
+
+    // Phase 2 Unit C — clamp streak_freezes_available back to the
+    // free-tier cap (1) on lapse. Does NOT touch the grant-done flag
+    // (intentional — re-purchase must NOT re-grant 3 freezes; the
+    // weekly refill on the first PRO Monday is the correct path).
+    // Cross-account guard (subscription_expiry_banner P0): only mutate the
+    // progress map when a session is open — with no owner, the userBox write
+    // leaks into the shared box. Same rule as the grant hook in
+    // writeSubscriptionState.
+    if (HiveUserSession.currentOwnerFullId != null) {
+      StreakProgressService.instance.resetToFreeCapOnLapse();
+    }
   }
 }

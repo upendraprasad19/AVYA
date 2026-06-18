@@ -46,6 +46,7 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -152,6 +153,11 @@ void main() {
         'streak_freeze_used_dates': <String>[],
       });
 
+      // Use a RECENT consumed date so commitRefill's 365-day prune (D1) keeps
+      // it — the point is that the consume SURVIVES the refill.
+      final consumedDate =
+          istDateStr(nowWall().subtract(const Duration(days: 1)));
+
       // Both methods are synchronous; calling them in sequence on the
       // same tick proves the no-lost-update invariant. The race
       // surface (cross-device cloud sync) is covered by migration
@@ -160,16 +166,17 @@ void main() {
       // contract pinned here is purely sequential semantics.
       StreakProgressService.instance.commitConsume(
         freezesAvailableAfterConsume: 0,
-        usedDatesAfterConsume: const ['2026-05-24'],
+        usedDatesAfterConsume: [consumedDate],
       );
       StreakProgressService.instance.commitRefill(
         maxFreezes: 3,
         thisMondayStr: '2026-05-25',
       );
 
-      // Post-condition: consume dropped 1→0, refill bumped 0→1.
-      // commitRefill resets streak_freeze_used_dates to [] per its
-      // documented contract (weekly reset). Pin that behavior.
+      // Post-condition: consume dropped 1→0, refill bumped 0→1. D1 (f9d2e7):
+      // commitRefill NO LONGER clears streak_freeze_used_dates — it is a
+      // PERMANENT ledger (prune >365d only), so the just-consumed day SURVIVES
+      // the refill and keeps protecting the streak walk-back.
       final progress =
           HiveService.instance.userBox.get('progress') as Map;
       expect(progress['streak_freezes_available'], 1,
@@ -179,10 +186,10 @@ void main() {
               'last_refill.');
       expect(
         (progress['streak_freeze_used_dates'] as List).cast<String>(),
-        isEmpty,
-        reason: 'commitRefill resets streak_freeze_used_dates per its '
-            'documented contract (weekly reset on Monday). The fact '
-            'that consume ran first must NOT prevent the refill reset.',
+        contains(consumedDate),
+        reason: 'D1 (f9d2e7): commitRefill no longer CLEARS used_dates — the '
+            'permanent ledger preserves the consumed day across the refill so '
+            'the walk-back keeps protecting it (pre-D1 this asserted []).',
       );
     });
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
@@ -173,6 +174,60 @@ class WorkoutRepository {
   /// it back to user_progress in the same write.
   int consumeMissedDayIfFreezeAvailable() =>
       _calculateStreak(consume: true);
+
+  bool _reckonInFlight = false;
+
+  /// D2 (f9d2e7) — the SINGLE streak-decay reckon site. Runs the schedule
+  /// walk-back and PERSISTS any freeze consumption for missed days, but ONLY
+  /// when it is safe to do so. Called from the two legitimate decay triggers:
+  ///   - `DayRolloverObserver` (every app-open / midnight rollover) so an idle
+  ///     user's missed days are reconciled even WITHOUT completing a workout.
+  ///     Pre-D2 consume fired ONLY on completeWorkout, so the read-only
+  ///     `currentStreak()` display (which SIMULATES consumption) and the
+  ///     persisted freeze count silently diverged — the founder's "streak 1 /
+  ///     freeze 1 after two idle days" symptom.
+  ///   - `train_provider.completeWorkout` (the canonical mutation surface).
+  ///
+  /// GATES (both must hold to PERSIST; otherwise returns a read-only count):
+  ///   1. `restoreCompletedTick > 0` — never decay before the cloud restore has
+  ///      confirmed the real completion history. A returning user's cold start
+  ///      restores `schedule_*` rows whose `status` may lag; reckoning first
+  ///      would read completed days as missed → spurious consume / streak break.
+  ///   2. non-empty schedule — a cold-start-empty device has nothing to decay
+  ///      (the anchor already bounds the walk; this is belt-and-braces so a
+  ///      pre-restore empty box never decays).
+  /// In-process reentrancy guard so overlapping triggers can't double-persist.
+  ///
+  /// Returns the current streak count either way (read-only when gated off) so
+  /// callers always get an accurate number to store.
+  int reckonStreakDecayAndPersist() {
+    if (_reckonInFlight) return currentStreak(); // reentrancy guard
+    _reckonInFlight = true;
+    try {
+      final restoreSettled =
+          SyncService.instance.restoreCompletedTick.value > 0;
+      if (restoreSettled && _hasAnyScheduleRow()) {
+        return consumeMissedDayIfFreezeAvailable(); // persist + count
+      }
+      // Gated off — read-only count, no persist. Breadcrumb (Hermes L37, f9d2e7)
+      // so a founder debugging "streak/freeze didn't update after idle days" can
+      // see WHY decay was suppressed (debug-only; not release telemetry noise).
+      debugPrint('[WorkoutRepository] reckon GATED-OFF: '
+          'restoreSettled=$restoreSettled hasSchedule=${_hasAnyScheduleRow()}');
+      return currentStreak();
+    } finally {
+      _reckonInFlight = false;
+    }
+  }
+
+  /// True when the local workout box holds at least one `schedule_*` row —
+  /// the D2 reckon's non-empty-schedule gate.
+  bool _hasAnyScheduleRow() {
+    for (final key in _hive.workoutBox.keys) {
+      if (key.toString().startsWith('schedule_')) return true;
+    }
+    return false;
+  }
 
   /// Legacy entry — kept for back-compat. Now a thin wrapper that
   /// preserves the prior mutating behaviour. New callers should use

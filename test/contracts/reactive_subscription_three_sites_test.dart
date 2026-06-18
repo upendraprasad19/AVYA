@@ -127,5 +127,102 @@ void main() {
         );
       },
     );
+
+    test(
+      'H-3a — streakFreezeMaxProvider watches subscriptionInfoProvider',
+      () {
+        // Phase 2 (discipline-overhaul, 2026-06-18) — the freeze
+        // denominator must flip 1→3 the instant a mid-session PRO grant
+        // lands without an auth change or app relaunch.
+        //
+        // Pre-fix: `ref.read(subscriptionServiceProvider).isPro()` was a
+        // snapshot — the Provider body only rebuilt on authUserIdTokenProvider
+        // change (i.e. sign-out/sign-in), so a fresh payment that wrote
+        // isPro=true kept showing "1/1" until relaunch. Same stale-pro
+        // class as APK Test #12 / C-2.
+        final src =
+            _src('lib/features/home/providers/home_provider.dart');
+        final idx = src.indexOf('final streakFreezeMaxProvider');
+        expect(idx, greaterThan(0));
+        final endIdx = src.indexOf('\n})', idx + 10);
+        final body = src.substring(idx, endIdx > idx ? endIdx : src.length);
+
+        expect(
+          body,
+          contains('ref.watch(subscriptionInfoProvider).isPro'),
+          reason:
+              'streakFreezeMaxProvider must watch subscriptionInfoProvider '
+              'so a mid-session PRO grant (onStateChanged → invalidate) '
+              'immediately rebuilds the provider and flips the max 1→3.',
+        );
+        expect(
+          body.contains('ref.read(subscriptionServiceProvider).isPro()'),
+          isFalse,
+          reason:
+              'streakFreezeMaxProvider must not call '
+              'subscriptionServiceProvider.isPro() directly — that '
+              'snapshot does not rebuild on onStateChanged (only on '
+              'authUserIdTokenProvider change).',
+        );
+      },
+    );
+
+    test(
+      'H-3b — StreakFreezeNotifier.build() watches subscriptionInfoProvider',
+      () {
+        // Phase 2 (discipline-overhaul, 2026-06-18) — the cap inside
+        // StreakFreezeNotifier must also be reactive so that the stored
+        // clamp immediately applies the PRO cap=3 when PRO is granted
+        // mid-session.
+        final src =
+            _src('lib/features/home/providers/home_provider.dart');
+        final idx = src.indexOf('class StreakFreezeNotifier');
+        expect(idx, greaterThan(0));
+        final endIdx = src.indexOf('\nfinal streakFreezeProvider', idx + 10);
+        final body = src.substring(idx, endIdx > idx ? endIdx : src.length);
+
+        expect(
+          body,
+          contains('ref.watch(subscriptionInfoProvider).isPro'),
+          reason:
+              'StreakFreezeNotifier.build() must watch '
+              'subscriptionInfoProvider for the cap computation so that '
+              'the stored value is clamped reactively on PRO upgrade '
+              '(not only at next auth change).',
+        );
+        expect(
+          body.contains('ref.read(subscriptionServiceProvider).isPro()'),
+          isFalse,
+          reason:
+              'StreakFreezeNotifier must not call '
+              'subscriptionServiceProvider.isPro() directly — stale-pro '
+              'class fix.',
+        );
+      },
+    );
+
+    test(
+      'H-3c — home_screen invalidateOnRetry includes streakFreezeProvider',
+      () {
+        // Phase 2 (discipline-overhaul, 2026-06-18) — invalidateOnRetry
+        // is the bg-restore heal path. Without streakFreezeProvider, a
+        // restored freeze count that changed Hive during the bg-restore
+        // would not reflect until the next render cycle.
+        final src = _src('lib/features/home/screens/home_screen.dart');
+        final idx = src.indexOf('void invalidateOnRetry(WidgetRef ref)');
+        expect(idx, greaterThan(0));
+        final endIdx = src.indexOf('\n  }', idx + 10);
+        final body = src.substring(idx, endIdx > idx ? endIdx : src.length);
+
+        expect(
+          body,
+          contains('ref.invalidate(streakFreezeProvider)'),
+          reason:
+              'invalidateOnRetry must invalidate streakFreezeProvider so '
+              'a bg-restore that modifies streak_freezes_available triggers '
+              'a rebuild of the streak badge denominator.',
+        );
+      },
+    );
   });
 }

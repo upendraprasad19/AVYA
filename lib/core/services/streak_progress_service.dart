@@ -49,8 +49,10 @@ class StreakProgressService {
   /// Weekly refill (called from `StreakFreezeNotifier._refillIfNewWeek`).
   ///
   /// Reads the current progress map, bumps `streak_freezes_available`
-  /// by +1 (clamped at [maxFreezes]), resets the weekly
-  /// `streak_freeze_used_dates` list, stamps
+  /// by +1 (clamped at [maxFreezes]), PRUNES the PERMANENT
+  /// `streak_freeze_used_dates` ledger to the 365-day walk-back horizon
+  /// (D1, f9d2e7 — it no longer CLEARS the ledger weekly; a day protected
+  /// by a spent freeze stays protected forever), stamps
   /// `streak_freezes_last_refill = thisMondayStr`. Idempotent —
   /// callers must pre-check `lastRefill < thisMondayStr` before
   /// invoking.
@@ -65,15 +67,29 @@ class StreakProgressService {
         (progress['streak_freezes_available'] as int?) ?? 0;
     final newAvailable = (currentAvailable + 1).clamp(0, maxFreezes);
 
+    // D1 (f9d2e7): the used-dates ledger is PERMANENT. Pre-fix this CLEARED
+    // it to [] every week, so after a Monday refill a prior-week frozen day
+    // dropped out of the ledger → the streak walk-back (which treats
+    // usedDates.contains(day) as permanent protection, 5e8a1c) either
+    // re-consumed that day (double-charge) or broke the streak. Now we only
+    // PRUNE entries older than the 365-day walk-back horizon to bound growth.
+    final prunedUsed = prunePastHorizon(
+      (progress['streak_freeze_used_dates'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const <String>[],
+    );
+
     UserRepository.instance.updateProgress({
       'streak_freezes_available': newAvailable,
-      'streak_freeze_used_dates': <String>[],
+      'streak_freeze_used_dates': prunedUsed,
       'streak_freezes_last_refill': thisMondayStr,
     });
     unawaited(SyncService.instance.syncFreezes());
     debugPrint(
         '[StreakProgressService] refill: $currentAvailable → $newAvailable '
-        '(max=$maxFreezes, monday=$thisMondayStr)');
+        '(max=$maxFreezes, monday=$thisMondayStr, '
+        'ledger=${prunedUsed.length} dates)');
     // B1 telemetry — diagnostic event so we can post-mortem from
     // client_errors whether refill actually landed and what the count
     // bumped from/to. LOW-priority op_type (rate-limited).
@@ -83,6 +99,16 @@ class StreakProgressService {
           'max=$maxFreezes monday=$thisMondayStr',
     ));
     return newAvailable;
+  }
+
+  /// Prunes streak-freeze used-dates older than the 365-day streak walk-back
+  /// horizon so the PERMANENT ledger (D1, f9d2e7) cannot grow without bound.
+  /// Date strings are IST 'YYYY-MM-DD' (lexically sortable, produced by
+  /// `istDateStr` == `formatDateKey`). Returns a sorted copy. Clock-aware
+  /// (`nowWall()`) so it honors the dev/year-sim time seam.
+  static List<String> prunePastHorizon(List<String> usedDates) {
+    final cutoff = istDateStr(nowWall().subtract(const Duration(days: 365)));
+    return usedDates.where((d) => d.compareTo(cutoff) >= 0).toList()..sort();
   }
 
   /// Commit freezes-consumed state. Called from
@@ -169,20 +195,93 @@ class StreakProgressService {
     return commitRefill(maxFreezes: maxFreezes, thisMondayStr: thisMondayStr);
   }
 
-  /// Pure, refill-aware merge of local vs cloud streak-freeze state for the
-  /// restore path (`_restoreFreezes`). `streak_freeze_used_dates` is PER-WEEK
-  /// (cleared on refill — see [commitRefill]), so the merge keys on last_refill:
-  ///   - SAME week (equal last_refill): UNION used_dates — never lose a consume
-  ///     written locally during the background-restore window (or on another
-  ///     device) — and take the LOWER available (never refund a freeze).
-  ///   - cloud refill STRICTLY newer: cloud is the current-week truth.
-  ///   - local refill strictly newer (or cloud last_refill null): keep local;
-  ///     the caller schedules a syncFreezes to push it up.
-  /// Pre-fix `_restoreFreezes` lumped equal-refill into cloud-wins AND
-  /// unconditionally overwrote used_dates → a same-week local consume was wiped
-  /// and the freeze refunded (spurious streak break). The slow-boot flip
-  /// (ADR-0014) opened the window by landing /home before restore Step C.
-  /// closes-diagnose: a8f3d1.
+  // ── First-PRO grant / lapse-reset (Phase 2 Unit C) ─────────
+
+  /// Grants 3 streak freezes on the FIRST-EVER PRO upgrade.
+  ///
+  /// Idempotent: if `streak_freezes_first_pro_grant_done == true`
+  /// the method is a no-op, so boot-refresh of an already-PRO
+  /// user (which calls `writeSubscriptionState(isPro:true)` every
+  /// launch) NEVER re-triggers the grant. The migration-095 backfill
+  /// pre-sets the flag for every user who was ever PRO, so the
+  /// phantom-grant-on-reinstall path is also blocked.
+  ///
+  /// Guard: caller must verify `HiveUserSession.currentOwnerFullId
+  /// != null` before calling — ensures the session box (and therefore
+  /// the progress map) is open and owned by the correct user. The
+  /// flag itself is the final safety net.
+  void grantFirstProFreezes() {
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final alreadyGranted =
+        (progress['streak_freezes_first_pro_grant_done'] as bool?) ?? false;
+    if (alreadyGranted) return; // idempotent guard
+
+    final currentAvailable =
+        (progress['streak_freezes_available'] as int?) ?? 0;
+    final newAvailable = currentAvailable < 3 ? 3 : currentAvailable;
+
+    UserRepository.instance.updateProgress({
+      'streak_freezes_available': newAvailable,
+      'streak_freezes_first_pro_grant_done': true,
+    });
+    unawaited(SyncService.instance.syncFreezes());
+    debugPrint('[StreakProgressService] grantFirstProFreezes: '
+        '$currentAvailable → $newAvailable (flag set)');
+    unawaited(ErrorTelemetry.logEvent(
+      'streak_freeze_first_pro_grant',
+      message: 'before=$currentAvailable after=$newAvailable',
+    ));
+  }
+
+  /// Resets `streak_freezes_available` to the free-tier cap (1) on
+  /// subscription lapse. Called from `_downgradeLocally` in
+  /// `SubscriptionService`.
+  ///
+  /// Contract: ONLY clamps `available` — does NOT touch the
+  /// `streak_freezes_first_pro_grant_done` flag. Preserving the flag
+  /// ensures a re-purchase after lapse does NOT re-grant 3 freezes
+  /// (the weekly refill at the start of the new PRO week is the
+  /// correct restore path).
+  void resetToFreeCapOnLapse() {
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final currentAvailable =
+        (progress['streak_freezes_available'] as int?) ?? 1;
+    final cappedAvailable = currentAvailable > 1 ? 1 : currentAvailable;
+    if (cappedAvailable != currentAvailable) {
+      UserRepository.instance.updateProgress({
+        'streak_freezes_available': cappedAvailable,
+        // flag intentionally NOT written — preserve grant history so a
+        // re-purchase after lapse does NOT re-grant 3.
+      });
+      debugPrint('[StreakProgressService] resetToFreeCapOnLapse: '
+          '$currentAvailable → $cappedAvailable');
+      unawaited(ErrorTelemetry.logEvent(
+        'streak_freeze_lapse_reset',
+        message: 'before=$currentAvailable after=$cappedAvailable',
+      ));
+    }
+    // B-pass Finding 4 (f9d2e7): ALWAYS push on lapse — even when local is
+    // already at/below the free cap — so a stale cloud row (a higher available
+    // from an unsynced mid-week PRO state) converges to the free cap and a
+    // later reinstall's restore cannot re-inflate a free user back above 1.
+    unawaited(SyncService.instance.syncFreezes());
+  }
+
+  /// Pure merge of local vs cloud streak-freeze state for the restore path
+  /// (`_restoreFreezes`). D1 (f9d2e7): `streak_freeze_used_dates` is now a
+  /// PERMANENT ledger (commitRefill prunes >365d, never clears), so used_dates
+  /// is ALWAYS the UNION of both sides — neither a stale cloud snapshot nor a
+  /// fresh local consume may ever drop a historically-frozen day. The weekly
+  /// BUDGET (`available` / `last_refill`) still keys on last_refill:
+  ///   - SAME week (equal last_refill): take the LOWER available (never refund).
+  ///   - cloud refill STRICTLY newer: cloud available is the current-week truth.
+  ///   - local refill strictly newer (or cloud last_refill null): keep local
+  ///     available; the caller schedules a syncFreezes to push it up.
+  /// Pre-D1 this treated used_dates as PER-WEEK and dropped it on the
+  /// newer-refill branches; with the a8f3d1 fix (which stopped the unconditional
+  /// same-week overwrite) the union is now total. The slow-boot flip (ADR-0014)
+  /// opened the concurrent-consume window restore must tolerate.
+  /// closes-diagnose: a8f3d1, f9d2e7.
   static FreezeMergeResult mergeFreezeProgress({
     required int localAvailable,
     required List<String> localUsed,
@@ -192,10 +291,12 @@ class StreakProgressService {
     required String? cloudLastRefill,
   }) {
     int clamp3(int v) => v.clamp(0, 3);
-    List<String> sortedUnion(Iterable<String> a, Iterable<String> b) =>
-        (<String>{...a, ...b}.toList())..sort();
+    // D1 (f9d2e7): PERMANENT ledger → used_dates is ALWAYS the union of both
+    // sides, on EVERY branch. Pure (no clock dependency here) — growth is
+    // bounded by commitRefill's weekly prune, so this stays deterministic.
+    final mergedUsed = (<String>{...localUsed, ...cloudUsed}.toList())..sort();
 
-    // Same week on both sides — the bg-restore-window / cross-device case.
+    // Same week on both sides — take the LOWER available (never refund a freeze).
     if (localLastRefill != null &&
         cloudLastRefill != null &&
         localLastRefill == cloudLastRefill) {
@@ -203,31 +304,31 @@ class StreakProgressService {
           localAvailable < cloudAvailable ? localAvailable : cloudAvailable;
       return FreezeMergeResult(
         available: clamp3(avail),
-        usedDates: sortedUnion(localUsed, cloudUsed),
+        usedDates: mergedUsed,
         lastRefill: localLastRefill,
         scheduleSyncUp: false,
       );
     }
 
     // cloudWins also covers the brand-new-user case (BOTH last_refill null →
-    // localLastRefill==null → true): no freeze history on either side, so cloud
-    // (available default, used []) is the canonical baseline and lastRefill
-    // stays null until the first weekly refill stamps it. B-pass P2.
+    // localLastRefill==null → true): the weekly budget defers to cloud, but
+    // used_dates is still the (here empty) union. lastRefill stays null until
+    // the first weekly refill stamps it. B-pass P2.
     final bool cloudWins = localLastRefill == null ||
         (cloudLastRefill != null &&
             cloudLastRefill.compareTo(localLastRefill) > 0);
     if (cloudWins) {
       return FreezeMergeResult(
         available: clamp3(cloudAvailable),
-        usedDates: cloudUsed.toList()..sort(),
+        usedDates: mergedUsed,
         lastRefill: cloudLastRefill ?? localLastRefill,
         scheduleSyncUp: false,
       );
     }
-    // Local refill strictly newer — keep local entirely; push it up to cloud.
+    // Local refill strictly newer — keep local available; push it up to cloud.
     return FreezeMergeResult(
       available: clamp3(localAvailable),
-      usedDates: localUsed.toList()..sort(),
+      usedDates: mergedUsed,
       lastRefill: localLastRefill,
       scheduleSyncUp: true,
     );

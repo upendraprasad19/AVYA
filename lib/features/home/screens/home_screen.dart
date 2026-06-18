@@ -138,6 +138,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.invalidate(userFirstNameProvider);
     ref.invalidate(userInitialProvider);
     ref.invalidate(streakProvider);
+    ref.invalidate(streakFreezeProvider); // Phase 2 — freeze denominator reactive
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(todayWorkoutProvider);
     // Train-tab plan providers too, so a bg-restore heal reaches the Train

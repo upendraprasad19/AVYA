@@ -6,6 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## ⚠️ DISCIPLINE-FIRST (before ANY investigation, fix, or skill)
+
+**Before investigating a bug, proposing a fix, OR invoking any skill:** load and apply the governing invariants first.
+
+1. **Debugging a bug?** Load the six-step debugging methodology (`docs/playbook/common-pitfalls.md` + `.claude/skills/debugging/SKILL.md`) AND the §4.1 observation→propose workflow. Never jump to a root-cause hypothesis without naming writers + readers by file:line first.
+2. **Proposing a fix?** Apply §4 process invariants (no-deferrals §4.2, build/commit gates §4.3, coding rules §4.4, discipline gates §4.5) before writing a single line.
+3. **Invoking a skill?** Read the SKILL.md for that skill, apply the relevant §4 invariants, AND (for copy/UI work) load the Wardroom brand soul (`lib/shared/widgets/wardroom/CLAUDE.md`). Never fire a skill blind.
+4. **This rule EXTENDS §4.12** (discipline-before-skill — founder directive 2026-06-13) to cover investigation itself. §4.12 covers skill invocations; this section covers the earlier step of investigation and root-cause analysis.
+5. **No exceptions.** The observation workflow, the six-step methodology, and §4 invariants are not optional context — they are required pre-conditions for ANY code-touching action.
+
+---
+
 ## 0. DEVELOPMENT COMMANDS
 
 ### Environment Setup
@@ -232,6 +244,7 @@ After observations captured + before brainstorming:
 - Multi-bug batches: fix ALL in same batch. No "lower priority" tagging.
 - No "context tight" / "responsible handoff" as a stopping excuse — context management is the agent's job (use TodoWrite, dispatch focused subagents, compact when needed).
 - **The ban is on the SEMANTIC, not the literal string.** Re-wrapping a deferral as `dedicated batch` / `test-maintenance batch` / `cleanup batch` / `next-batch baseline` / `documented baseline for next batch` is the SAME violation as `defer` / `follow-up batch`. When the menu you write would force founder to ratify a deferral to pick any option, the menu is malformed — re-design it. Codified 2026-05-24 as 7th instance per `feedback_mistake_dedicated_batch_is_defer.md` after founder caught the recovery batch's first plan attempting to ship APK +31 with 50 test failures rolled to a "dedicated test-maintenance batch".
+- **Structural closed==N invariant (P1.E, 2026-06-18):** every multi-item batch (≥4 findings/units) or audit MUST produce a `docs/audit/<batch>.closure.yaml` with per-entry `terminal_state:` ∈ {`closed_in_commit`, `upstream_blocked`, `blocked_on_user`, `verified_clean`} and no `deferred:` key. Gate 40 (`scripts/validate_audit_closure.dart`) recomputes the closed tally and FAILS if any item is non-terminal (closed < N). This makes deferrals structurally impossible — a non-terminal item blocks the gate. Small 2–3 item bugfix batches keep the existing per-fix diagnose-doc + TodoWrite discipline instead.
 - Refs: `feedback_no_deferrals.md`, `feedback_no_deferrals_recurrence.md`, `feedback_no_stop_until_done.md`, `feedback_mistake_dedicated_batch_is_defer.md`.
 
 ### 4.3 Build / commit / push gates
@@ -327,6 +340,8 @@ Two standing invariants, codified after a 4-round pre-implementation review of t
 
 1. **Every implementation plan is independently reviewed TWICE before execution.** Dispatch context-blind reviewers (assume loopholes; verify every claim against code + live state, never subagent prose). **Review #2 runs on the POST-review-#1 (hardened) plan** — the corrections themselves can introduce new defects (they did: a SECURITY-DEFINER RPC that would have re-created the anon-executable bug; a `body_fat ?? 18.0` default feeding a fabricated value into every skip-user's calc). When successive reviews keep surfacing *new* material issues, that is the signal the unit is too large — **split it and ship the smallest converged piece**, don't review the large thing a fifth time. Ref: `feedback_plan_review_twice.md`.
 2. **Discipline is enforced BEFORE every skill invocation.** Before any Skill call, load + apply the relevant invariants first (CLAUDE.md §4; the Wardroom brand soul for copy work; the bugfix/observation workflow for fixes) — never fire a skill blind. Ref: `feedback_discipline_before_skill.md`.
+
+3. **A plan-review RECORD makes #1+#2 a *forcing function* (P1.A — discipline overhaul 2026-06-18).** The ×2 review + the ground-truth audit PRODUCE `docs/plan-reviews/<branch>.md` (`review_rounds: ≥2`, `ground_truth_verified: true`, `verdict: converged`; `bpass: accepted` ≥platform; `hermes: accepted` catastrophic). The keystone gate `scripts/check_plan_review_record_exists.dart` enforces it at the **merge-to-main commit, in CI** — the only structurally-gateable point (a local pre-commit `MERGE_HEAD` check is `--no-verify`-bypassable; a `--no-ff` merge skips the local hook entirely; CI is per-push). The dedicated CI job uses `actions/checkout` `fetch-depth: 0` so `HEAD^1..HEAD^2` (the merged branch diff → blast-radius) is reachable. A ≥account merged branch with no converged record fails the build. The record is keyed on the **branch name** (recoverable at both author-time and the merge commit's `Merge branch 'X'` subject) — NOT a staged-diff hash, which is empty at a merge commit.
 
 These bind the planning / `/code-review` / `/hermes-pass` / brainstorming flows.
 

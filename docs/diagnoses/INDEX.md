@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### streak_freeze_denominator_grant_decay (1 bugs)
+- 2026-06-18 f9d2e7 — >
+
 ### subscription_state (6 bugs)
 - 2026-06-16 a1c9f4 — >
 - 2026-06-08 b4e2a9 — >
@@ -706,6 +709,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-18 | f9d2e7 | > | streak_freeze_denominator_grant_decay | test/contracts/streak_freeze_first_pro_grant_behavioral_test.dart |
 | 2026-06-16 | a1c9f4 | > | subscription_state | test/contracts/referral_trial_subscription_grant_test.dart |
 | 2026-06-14 | d8f3a2 | > | client_web_platform_gating | test/contracts/unit3_web_ux_gates_test.dart |
 | 2026-06-14 | c3f2d8 | > | onboarding_bodyfat_calc_input | test/contracts/onboarding_bodyfat_calc_test.dart |

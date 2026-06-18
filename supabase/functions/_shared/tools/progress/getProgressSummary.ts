@@ -1,5 +1,6 @@
 import { z } from "npm:zod@3.25.76";
 import type { ToolContext, ToolDefinition } from "../types.ts";
+import { istDateStr } from "../../ist_date.ts";
 
 const schema = z.object({
   periodDays: z.number().int().min(7).max(365).describe(
@@ -30,8 +31,10 @@ function toDateOnly(s: string): string {
 
 async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
   const { sb, userId } = ctx;
-  // ISO date N days ago (UTC). Used for `date` columns and as a lower bound on `completed_at`.
-  const sinceDate = new Date(Date.now() - args.periodDays * 86400_000).toISOString().slice(0, 10);
+  // IST date N days ago. Used for `date` columns and as a lower bound on `completed_at`.
+  // IST-correct: near IST midnight (05:30 UTC), raw Date.now().toISOString() would yield
+  // yesterday's UTC date, which is today in IST — wrong cut-off for IST-keyed date columns.
+  const sinceDate = istDateStr(new Date(Date.now() - args.periodDays * 86400_000));
   const sinceTs = `${sinceDate}T00:00:00Z`;
 
   // Bug t1m5b0 (APK Test #16.2) — Promise.all over 5 independent SELECTs.

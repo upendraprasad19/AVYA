@@ -283,7 +283,12 @@ class StreakFreezeNotifier extends Notifier<int> {
     // A7 / B5 D9-D10 — migrated from SubscriptionService.instance to the
     // canonical provider so cross-account swaps trigger a reset via
     // ref.listen(authUserIdTokenProvider, …) inside subscriptionServiceProvider.
-    final cap = ref.read(subscriptionServiceProvider).isPro() ? 3 : 1;
+    // Phase 2 (discipline-overhaul, 2026-06-18) — upgraded to
+    // ref.watch(subscriptionInfoProvider).isPro so a mid-session PRO grant
+    // (onStateChanged → invalidate subscriptionInfoProvider) immediately
+    // rebuilds this notifier and flips the cap 1→3 without requiring
+    // an auth change or app relaunch. Pattern from profile_provider.dart:308.
+    final cap = ref.watch(subscriptionInfoProvider).isPro ? 3 : 1;
     return stored.clamp(0, cap);
   }
 }
@@ -297,7 +302,12 @@ final streakFreezeProvider =
 final streakFreezeMaxProvider = Provider<int>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   // A7 / B5 D9-D10 — see comment in StreakFreezeNotifier above.
-  return ref.read(subscriptionServiceProvider).isPro() ? 3 : 1;
+  // Phase 2 (discipline-overhaul, 2026-06-18) — upgraded to
+  // ref.watch(subscriptionInfoProvider).isPro so a mid-session PRO grant
+  // flips the denominator 1→3 immediately (no relaunch). Pattern from
+  // profile_provider.dart:308 (H-1 audit-2026-05-11). Behavioral test:
+  // test/contracts/reactive_subscription_three_sites_test.dart H-3.
+  return ref.watch(subscriptionInfoProvider).isPro ? 3 : 1;
 });
 
 // ── Streak Warning Eligibility (Bug #12) ─────────────────────────

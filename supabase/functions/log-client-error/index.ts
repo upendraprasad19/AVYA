@@ -142,6 +142,11 @@ const HIGH_PRIORITY_OP_TYPES: readonly string[] = [
   "bug_class_new_",
   "writer_reader_drift_",
   "sync_failure_dead_letter", // SyncQueue dead-letter — always P1+
+
+  // Streak-freeze lifecycle — money-relevant + once-per-lifecycle (Hermes L37,
+  // f9d2e7). MUST stay in sync with the client highPriorityOpTypes (twin test).
+  "streak_freeze_first_pro_grant",
+  "streak_freeze_lapse_reset",
 ];
 
 function isHighPriority(opType: string | null): boolean {
