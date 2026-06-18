@@ -88,6 +88,16 @@ fi
 # Pre-commit enforcement (scripts/check_naming_conventions.dart) is
 # out of scope for this batch — the protocol relies on agent discipline.
 
+# Gate 40: validate all docs/audit/ closure ledgers (P1.E, discipline-overhaul
+# 2026-06-18). Enforces closed==N structural invariant: every item in a
+# multi-item batch/audit must carry a terminal_state; non-terminal items fail.
+# NOT in the check_*.dart loop (Gate 33 globs only check_*.dart names).
+echo "[pre-commit] Gate 40: validate_audit_closure..."
+if ! dart run scripts/validate_audit_closure.dart; then
+  echo "[pre-commit] FAIL: audit closure ledger has invalid or non-terminal entries. Fix root cause; do NOT use --no-verify."
+  exit 1
+fi
+
 # Run every scripts/check_*.dart gate (tech-debt audit 2026-05-20 finding I2).
 # Previously 25 of 27 gate scripts were dormant — written but never wired.
 # Allow-list (build-only or advisory) lives in scripts/check_gate_scripts_wired.dart.

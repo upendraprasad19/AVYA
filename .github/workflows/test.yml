@@ -108,6 +108,13 @@ jobs:
             exit 1
           fi
 
+      - name: Gate 40 — validate audit closure ledgers (closed==N)
+        # P1.E (discipline-overhaul 2026-06-18): validates docs/audit/*.closure.yaml
+        # and docs/audit/*_audit_closures.yaml. Every item must have a terminal_state;
+        # a non-terminal item fails the closed==N invariant (structural no-deferrals).
+        # Wired explicitly (not in check_*.dart loop) per §4.2 codification.
+        run: dart run scripts/validate_audit_closure.dart
+
   # ── Plan-review record gate (P1.A keystone, §4.12) ─────────────
   # The ONE structurally-gateable point for plan-quality: a merge-to-main
   # commit, in CI. A >=account merged branch must carry a converged

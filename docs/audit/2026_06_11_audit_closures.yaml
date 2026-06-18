@@ -12,8 +12,8 @@
 # upstream_blocked (dashboard actions, not code).
 audit: 2026-06-11-quarterly-delta-audit
 branch: audit-2026-06-10
-total_findings: 14
-closed_count: 14
+total_findings: 17
+closed_count: 17
 findings:
   # ── Closed in commit (fixes this batch) ──────────────────────────────────
   - id: SEC-1
