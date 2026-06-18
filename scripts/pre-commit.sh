@@ -84,9 +84,11 @@ if git diff --cached --name-only | grep -qE '^docs/handbook/.+\.md$'; then
   git add docs/handbook/INDEX.md
 fi
 
-# Naming convention discipline is documented in root CLAUDE.md §3.7.
-# Pre-commit enforcement (scripts/check_naming_conventions.dart) is
-# out of scope for this batch — the protocol relies on agent discipline.
+# Naming convention discipline is documented in root CLAUDE.md §4.7.
+# Pre-commit enforcement via scripts/check_naming_conventions.dart is
+# wired automatically by the `for GATE in scripts/check_*.dart` loop below
+# (tech-debt audit 2026-05-20 wiring — Gate 33 confirms every check_*.dart
+# is covered). No manual invocation needed here.
 
 # Gate 40: validate all docs/audit/ closure ledgers (P1.E, discipline-overhaul
 # 2026-06-18). Enforces closed==N structural invariant: every item in a
@@ -103,6 +105,14 @@ fi
 # Allow-list (build-only or advisory) lives in scripts/check_gate_scripts_wired.dart.
 # Each script accepts a --warn-only flag during its 24h smoke window;
 # remove the flag once the gate is proven stable.
+# P1.G (2026-06-18): waiver-budget gate runs --warn-only during baseline window.
+# 2 pre-existing open waivers from 2026-05-11 are >14d old; §4.11 gates-before-
+# refactor requires warn-only until those are resolved or superseded by behavioral
+# tests. Remove --warn-only once the waivers in docs/skipped-discipline.md are
+# marked "resolved" with a commit SHA.
+echo "[pre-commit] Gate-SDB (warn-only baseline): check_skipped_discipline_budget..."
+dart run scripts/check_skipped_discipline_budget.dart --warn-only
+
 echo "[pre-commit] Running tech-debt audit gates (bounded-parallel)..."
 # Lean-workflow batch (2026-06-01): the ~28 check_*.dart gates ran sequentially.
 # Run them with BOUNDED concurrency (PRE_COMMIT_GATE_JOBS, default 4) to shave
@@ -129,11 +139,16 @@ for GATE in scripts/check_*.dart; do
     check_two_user_cross_account.dart|\
     check_regression_catalog.dart|\
     check_snapshot_contract.dart|\
-    check_test_runtime_budget.dart)
+    check_test_runtime_budget.dart|\
+    check_skipped_discipline_budget.dart)
       # Razorpay gate: .env.prod is user-only / gitignored secret state.
       # Other gates: require live DB / merge context / build artifact —
       # run via /build-apk skill, NOT pre-commit. See
       # scripts/check_gate_scripts_wired.dart allowlist for rationale.
+      # check_skipped_discipline_budget.dart: ships --warn-only (§4.11
+      # gates-before-refactor baseline window — 2 pre-existing open waivers
+      # from 2026-05-11 are >14d old; remove --warn-only once waivers are
+      # resolved or a behavioral test ships). Invoked explicitly below.
       continue
       ;;
   esac
