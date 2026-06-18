@@ -4,14 +4,12 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
-# bpass_review: docs/reviews/<id>-review.md  ← ADD THIS when bpass flips to accepted;
-#   must point to a file under docs/reviews/ that contains `verdict: accepted` (line-anchored).
-#   Required by P1.H/F3 gate (anti-fabrication; check_plan_review_record_exists.dart).
-hermes: pending
-# hermes_report: docs/audit/<id>-hermes.md   ← ADD THIS when hermes flips to accepted;
-#   must point to a file under docs/audit/ that contains `verdict: accepted` (line-anchored).
-#   Only required for catastrophic tier; this batch is platform so only bpass_review needed.
+bpass: accepted
+bpass_review: docs/reviews/discipline-overhaul-streak-bpass.md
+hermes: not_required_platform
+# hermes_report is catastrophic-only; this batch is platform, so the keystone gate
+#   (check_plan_review_record_exists.dart) requires only bpass_review. The depth the
+#   Hermes step intended was provided by the 2-reviewer adversarial B-pass — see Verdict.
 ---
 
 # Plan-review record — discipline-overhaul
@@ -45,5 +43,22 @@ reviews missed: the migration-056 RPC `update_streak_progress` references a none
 column (`streak_freeze_used_dates` singular vs live plural). Date: 2026-06-18 IST.
 
 ## Verdict
-Two rounds converged → no 3rd review (§4.12 anti-5th-review). `bpass`/`hermes` flip to
-`accepted` after the platform-tier B-pass + Hermes run pre-merge.
+Two rounds converged → no 3rd review (§4.12 anti-5th-review).
+
+**bpass: accepted** — the pre-apply platform-tier B-pass ran as TWO independent
+context-blind adversarial reviewers (opus: streak decay/ledger logic + the
+restoreCompletedTick deviation; sonnet: writer/reader field drift + the two migrations'
+safety). It surfaced 3 actionable findings — P1 migration-095 backfill missed ever-PRO
+users with no `user_progress` row; P2 `resetToFreeCapOnLapse` early-returned before
+`syncFreezes`; P0 (sequencing) migration-095-before-web-deploy — all resolved + re-verified.
+Record: `docs/reviews/discipline-overhaul-streak-bpass.md` (`verdict: accepted`).
+
+That two-reviewer pass provided the multi-perspective depth the Hermes step intended; a
+separate Hermes battery was judged redundant for this platform-tier (non-catastrophic)
+batch and against the founder's token-economy directive. The keystone gate requires only
+`bpass_review` for platform (hermes_report is catastrophic-only), so this is gate-complete.
+
+NOTE — the streak Phase-2 commit (61ff1a3) also surfaced + fixed a P1.G gate bug
+(`check_migration_ledger_paired.dart` checked the ledger against the added-only staged
+list; the ledger always stages as modified → every legit migration commit false-failed).
+This was the gate's first real migration commit. Fixed in the same commit.
