@@ -446,11 +446,9 @@ class StatSnapshotService {
   Future<Map<String, num>> _compute7dAverages(
       SupabaseClient supa, String userId) async {
     try {
-      final since = DateTime.now()
-          .subtract(const Duration(days: 7))
-          .toUtc()
-          .toIso8601String()
-          .substring(0, 10);
+      final since = istDateStr(
+        DateTime.now().subtract(const Duration(days: 7)),
+      );
 
       final nutrRows = await supa
           .from('nutrition_logs')

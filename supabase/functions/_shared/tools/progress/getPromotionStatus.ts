@@ -10,6 +10,7 @@ import { z } from "npm:zod@3.25.76";
 import type { ToolContext, ToolDefinition } from "../types.ts";
 import { LADDER, GATES } from "../../rank_engine.ts";
 import { rankDisplayFor, rankAddressFor } from "../../ceremony_text.ts";
+import { istDateStr } from "../../ist_date.ts";
 
 const schema = z.object({
   scenario_cadence: z
@@ -67,7 +68,9 @@ interface PromotionStatusResult {
 }
 
 function isoDatePlusDays(days: number): string {
-  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  // IST-correct: apply the offset THEN take the date string, so near IST midnight
+  // (05:30 UTC) the projected date lands in the right IST day, not yesterday UTC.
+  return istDateStr(new Date(Date.now() + days * 86_400_000));
 }
 
 /** ETA in days for a gap driven purely by workouts, given a cadence in workouts/week. */
@@ -147,9 +150,7 @@ async function handler(
 
   // ── 5a. Streak + gap: computed inline from workout_logs.date ─────────────
   // Pull distinct workout dates from the last year to compute streak and gap.
-  const cutoff365 = new Date(Date.now() - 365 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const cutoff365 = istDateStr(new Date(Date.now() - 365 * 86_400_000));
   const { data: dateLogs } = await sb
     .from("workout_logs")
     .select("date")
@@ -168,7 +169,7 @@ async function handler(
   let longestGapDays = 0;
   if (sortedDates.length > 0) {
     // Current streak: count consecutive days back from today/yesterday
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = istDateStr(); // IST today, not UTC today
     let cursor = todayStr;
     for (const d of sortedDates) {
       const dayDiff =
