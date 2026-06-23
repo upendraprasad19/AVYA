@@ -23,25 +23,30 @@ extension _FlushCard on _ProfileScreenState {
     final isLast = pos == _FlushPos.last || pos == _FlushPos.only;
     final body = Container(
       padding: padding,
+      // OBS-10 — Flutter throws "A borderRadius can only be given on borders
+      // with uniform colors" whenever a NON-uniform Border (the top-drop rail
+      // trick) is combined with a non-null borderRadius. Only the first/last
+      // cards round corners, so give THEM a uniform Border.all (+ the rounded
+      // radius); the square middle cards get a NULL radius so their non-uniform
+      // top-drop border (1-px shared rail, no double seam) stays legal.
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(isFirst ? AppRadius.card : 0),
-          topRight: Radius.circular(isFirst ? AppRadius.card : 0),
-          bottomLeft: Radius.circular(isLast ? AppRadius.card : 0),
-          bottomRight: Radius.circular(isLast ? AppRadius.card : 0),
-        ),
-        // Top border drops on every card except the first so adjacent
-        // cards share a single 1-px rail (no double-line seam).
-        border: Border(
-          top: BorderSide(
-            color: AppColors.line2,
-            width: isFirst ? 1 : 0,
-          ),
-          left: const BorderSide(color: AppColors.line2),
-          right: const BorderSide(color: AppColors.line2),
-          bottom: const BorderSide(color: AppColors.line2),
-        ),
+        borderRadius: (isFirst || isLast)
+            ? BorderRadius.only(
+                topLeft: Radius.circular(isFirst ? AppRadius.card : 0),
+                topRight: Radius.circular(isFirst ? AppRadius.card : 0),
+                bottomLeft: Radius.circular(isLast ? AppRadius.card : 0),
+                bottomRight: Radius.circular(isLast ? AppRadius.card : 0),
+              )
+            : null,
+        border: (isFirst || isLast)
+            ? Border.all(color: AppColors.line2)
+            : const Border(
+                top: BorderSide(color: AppColors.line2, width: 0),
+                left: BorderSide(color: AppColors.line2),
+                right: BorderSide(color: AppColors.line2),
+                bottom: BorderSide(color: AppColors.line2),
+              ),
       ),
       child: child,
     );

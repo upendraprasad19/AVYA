@@ -106,7 +106,7 @@ extension _SubscriptionSection on _ProfileScreenState {
                           Text(
                             subInfo.isVerifying
                                 ? 'AWAITING WEBHOOK CONFIRMATION'
-                                : 'RENEWS $expiryStr'.toUpperCase(),
+                                : '${(subInfo.plan ?? '').contains('trial') ? 'EXPIRES' : 'RENEWS'} $expiryStr'.toUpperCase(),
                             style: AppTypography.mono.copyWith(
                               fontSize: 10,
                               color: AppColors.textDim,

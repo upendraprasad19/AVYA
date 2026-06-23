@@ -555,7 +555,11 @@ class _MacroRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const Spacer(),
+              // OBS-1 — a greedy Spacer() (flex:1) competed with both Flexibles
+              // (label + number), squeezing each to ~1/3 width and tipping the
+              // macro tile into a 2.5-15px right-overflow at ~390px. A fixed gap
+              // lets the label + number share the remaining width and fit.
+              const SizedBox(width: 8),
               Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,

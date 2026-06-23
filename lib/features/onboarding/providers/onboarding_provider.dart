@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/utils/name_format.dart';
 import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
@@ -357,7 +358,9 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       });
 
       final profile = {
-        'full_name': fullName,
+        // OBS-13 — title-case at the writer (textCapitalization.words is a mobile
+        // keyboard hint only; web saves a lowercase-typed name verbatim).
+        'full_name': titleCaseName(fullName),
         'date_of_birth': dobString,
         'gender': gender,
         'height_cm': heightCm,
