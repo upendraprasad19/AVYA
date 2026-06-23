@@ -94,7 +94,10 @@ void main() {
       reason: 'dispose must cancel _timeoutTimer.',
     );
 
-    final continueIdx = src.indexOf('void _onContinueAnyway()');
+    // Signature-agnostic match: _onContinueAnyway became `Future<void> … async`
+    // (FIX-1 Part B b8e3f1 — it now awaits openForUser before nav). The
+    // contract is that it still cancels _softHintTimer, not its return type.
+    final continueIdx = src.indexOf('_onContinueAnyway()');
     expect(continueIdx, greaterThan(-1));
     final continueBody = src.substring(continueIdx, continueIdx + 300);
     expect(

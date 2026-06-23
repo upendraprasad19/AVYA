@@ -219,6 +219,13 @@ class _EmptyBoxStub implements Box<dynamic> {
 /// `HiveUserSession.openForUser` defensively before any box read. That
 /// async ensure is the canonical bootstrap; this synchronous fallback
 /// covers only the close-race window.
+///
+/// Test-only seam: when non-null, the auth-uid reads below resolve through
+/// this instead of `Supabase.instance` (which can't be initialised in a
+/// pure-VM unit test). Production code MUST leave it null; reset it in
+/// tearDown. Mirrors [GuardedBox.testBypassOwnership].
+String? Function()? debugAuthUidResolverForTests;
+
 GuardedBox<T> wrapUserScopedBox<T>(String root) {
   // APK Test #15.4 / B1 Layer A — disagreement guard.
   // If Supabase has a user but Hive owner is different (or null), refuse
@@ -228,7 +235,8 @@ GuardedBox<T> wrapUserScopedBox<T>(String root) {
   // triggers a rebuild as soon as openForUser completes.
   String? supabaseAuthUid;
   try {
-    supabaseAuthUid = Supabase.instance.client.auth.currentUser?.id;
+    supabaseAuthUid = debugAuthUidResolverForTests?.call() ??
+        Supabase.instance.client.auth.currentUser?.id;
   } catch (_) {
     // Supabase not initialised — fall through to existing logic.
   }
@@ -252,7 +260,8 @@ GuardedBox<T> wrapUserScopedBox<T>(String root) {
   if (fullId == null || hash == null) {
     String? authUid;
     try {
-      authUid = Supabase.instance.client.auth.currentUser?.id;
+      authUid = debugAuthUidResolverForTests?.call() ??
+          Supabase.instance.client.auth.currentUser?.id;
     } catch (_) {
       // Supabase singleton not initialised (very early cold start /
       // pure-VM unit test). Fall through to the StateError surface.
@@ -280,6 +289,49 @@ GuardedBox<T> wrapUserScopedBox<T>(String root) {
   }
 
   if (fullId == null || hash == null) {
+    // APK Test #15.4 / B1 Layer A (e2e-2026-06-21 FIX-1 Part A) — the
+    // owner-null-but-AUTHENTICATED transient. The disagreement guard above
+    // (:244) only fires when `hiveOwnerCheck != null`; during a
+    // sign-out → sign-in as a DIFFERENT user (owner cleared) or a cold-boot
+    // deep-link (openForUser not yet run), owner is NULL while a valid
+    // Supabase session exists AND every user-scoped provider is rebuilding
+    // on authUserIdTokenProvider='<anon>' and reading user-scoped Hive. The
+    // old unconditional throw → blank Home. Serve empty instead (reads →
+    // null/empty; writes → throw-loud via GuardedBox.empty, so an inflight
+    // fire-and-forget sync can't leak into the wrong box) and let Layer B
+    // (currentOwnerListenable → authUserIdTokenProvider) re-invalidate the
+    // watchers once openForUser sets the owner — they rebuild with real
+    // data. Mirrors the :253 disagreement-empty branch for the null-owner
+    // case it missed. KEEP the loud throw ONLY when UNAUTHENTICATED — a
+    // genuine read-before-openForUser ordering bug must still fail loud.
+    final pendingAuthUid = supabaseAuthUid;
+    // §4.6 feature-flag (platform-tier guarded_box, b8e3f1): kill-switch that
+    // reverts to the old loud-throw path verbatim if the serve-empty ever
+    // misbehaves in prod. Read defensively from the GLOBAL configBox (not
+    // user-scoped → no recursion through this guard); configBox may be unopened
+    // in early boot / a pure-VM test, so any failure defaults the fix ON.
+    var disableServeEmpty = false;
+    try {
+      disableServeEmpty =
+          Hive.box('configBox').get('disable_null_owner_serve_empty') == true;
+    } catch (_) {
+      // configBox not open yet — keep the fix ON (serve empty).
+    }
+    if (pendingAuthUid != null && !disableServeEmpty) {
+      // Telemetry: a high-VOLUME timing diagnostic of the pre-open window —
+      // deliberately LOW-priority (sibling of guarded_box_auto_open_fallback),
+      // NOT the per-instance cross-account ALARM guarded_box_disagreement (HIGH).
+      // The AGGREGATE count surfaces a persistent ordering bug; per-instance
+      // drop under a burst is acceptable for a diagnostic (Hermes F1).
+      final shortUid = pendingAuthUid.length >= 8
+          ? pendingAuthUid.substring(0, 8)
+          : pendingAuthUid;
+      unawaited(ErrorTelemetry.logEvent(
+        'guarded_box_null_owner_authenticated',
+        message: 'root=$root authUid=$shortUid',
+      ));
+      return GuardedBox<T>.empty(pendingAuthUid);
+    }
     throw StateError(
       'HiveUserSession not opened — cannot wrap user-scoped box "$root". '
       'Call HiveUserSession.openForUser(userId) after sign-in.',

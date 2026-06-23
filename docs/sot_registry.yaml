@@ -3975,6 +3975,20 @@ concepts:
       throws StateError on writes. Telemetry event
       'guarded_box_disagreement' fires per occurrence.
 
+      Owner-null-but-authenticated transient (FIX-1 Part A, b8e3f1,
+      2026-06-21): when currentOwnerFullId is NULL but a Supabase session
+      IS authenticated (the sign-out→sign-in gap before openForUser runs,
+      or a cold-boot deep-link), wrapUserScopedBox ALSO returns
+      GuardedBox.empty(authUid) — telemetry 'guarded_box_null_owner_authenticated'
+      — instead of throwing. The disagreement branch only covered owner!=null,
+      so this transient previously fell through to the loud
+      'HiveUserSession not opened' StateError → a provider-rebuild throw →
+      blank Home (OBS-6). The loud StateError is KEPT only for owner-null AND
+      UNAUTHENTICATED (a genuine read-before-openForUser ordering bug).
+      app_router._authRedirect (shouldGateOnSessionOpen, Part B) routes such a
+      navigation through /restoring so the empty-serve never mis-routes an
+      onboarded user to /onboarding.
+
       Layer B (liveness): HiveUserSession.currentOwnerListenable is a
       ValueNotifier mirrored under _sessionLock from the 3 locked
       methods (openForUser / closeAll / deleteAllFilesForCurrentUser).
@@ -4014,15 +4028,31 @@ concepts:
           authUid on agreement. 56 user-scoped providers in lib/features/*
           watch this token as the first line of their build() body.
       - file: lib/core/services/guarded_box.dart
-        line_range: 215-240
+        line_range: 222-300
         method: wrapUserScopedBox
         semantic: flag-check
         fields_read: [authUid, currentOwnerFullId]
         notes: |
           Reads Supabase.instance.client.auth.currentUser?.id and
-          HiveUserSession.currentOwnerFullId; returns
-          GuardedBox.empty(authUid) on disagreement. Layer A correctness
-          net — works even if Layer B liveness fails.
+          HiveUserSession.currentOwnerFullId; returns GuardedBox.empty(authUid)
+          on disagreement AND on the owner-null-but-authenticated transient
+          (FIX-1 Part A b8e3f1 — telemetry guarded_box_null_owner_authenticated).
+          Loud StateError kept only for owner-null AND unauthenticated. Layer A
+          correctness net — works even if Layer B liveness fails. A test-only
+          seam (debugAuthUidResolverForTests) lets a pure-VM unit test drive the
+          owner-null path; production leaves it null.
+      - file: lib/core/router/app_router.dart
+        line_range: 1-9999
+        method: _authRedirect / shouldGateOnSessionOpen
+        semantic: flag-check
+        fields_read: [currentOwnerFullId]
+        notes: |
+          FIX-1 Part B (b8e3f1) — when authenticated but currentOwnerFullId is
+          null, routes the navigation to /restoring (onboarding-exempt) so a
+          user-scoped read never serves empty INTO a routing decision (which
+          would mis-route an onboarded user to /onboarding). shouldGateOnSessionOpen
+          is a pure @visibleForTesting predicate pinned by
+          auth_redirect_session_open_guard_test.dart.
       - file: lib/features/profile/providers/profile_provider.dart
         line_range: 1-9999
         method: 8+ user-scoped providers (userProfile / biometric / subscriptionInfo / etc.)
@@ -4105,7 +4135,8 @@ concepts:
         semantic: flag-check
         fields_read: []
     telemetry:
-      - guarded_box_disagreement (Layer A fires)
+      - guarded_box_disagreement (Layer A fires — owner!=null disagreement)
+      - guarded_box_null_owner_authenticated (Layer A — owner-null-but-authenticated transient, FIX-1 Part A b8e3f1)
       - hive_session_opened (Layer B owner change)
       - hive_session_closed (Layer B owner cleared)
     regression_test: test/contracts/auth_invalidation_timing_test.dart
@@ -4113,6 +4144,8 @@ concepts:
     additional_tests:
       - test/contracts/wrap_user_scoped_box_disagreement_test.dart
       - test/contracts/auth_invalidation_contract_test.dart
+      - test/contracts/wrap_user_scoped_box_null_owner_authenticated_test.dart
+      - test/contracts/auth_redirect_session_open_guard_test.dart
     class_constraints: |
       The two layers are intentionally redundant. Layer A is the
       correctness net (no leak even if Layer B fails). Layer B is the
