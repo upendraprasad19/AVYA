@@ -557,7 +557,13 @@ class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
         (profile?['daily_calories'] as num?)?.toDouble() ?? 2000;
     final proteinTarget =
         (profile?['protein_grams'] as num?)?.toDouble() ?? 120;
-    final carbTarget = (profile?['carb_grams'] as num?)?.toDouble() ?? 250;
+    // OBS-11 — dual-name read; a restored profile carries the plural
+    // `carbs_grams` (cloud/restore name), not `carb_grams`. Without this Home's
+    // carb target silently fell to the 250 default. (See nutrition_provider.)
+    final carbTarget =
+        ((profile?['carb_grams'] ?? profile?['carbs_grams']) as num?)
+                ?.toDouble() ??
+            250;
     final fatTarget = (profile?['fat_grams'] as num?)?.toDouble() ?? 65;
 
     // Apply AI-coach calorie target override for today (clamped 800..6000).
