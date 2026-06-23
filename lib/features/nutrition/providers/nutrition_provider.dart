@@ -49,15 +49,26 @@ Map<String, double> _resolveNutritionTargets(
 }) {
   Map<String, double> targets;
 
+  // OBS-11 (2026-06-21) — dual-name read for `carb_grams`. The cloud column +
+  // the restore/sync path (sync_profile `_restoreUserProfile`, sync_service)
+  // use the PLURAL `carbs_grams`; this reader + Home + onboarding use the
+  // SINGULAR `carb_grams`. A RESTORED profile (established account) therefore
+  // carries only `carbs_grams` -> the all-four canonical check below failed on
+  // `carb_grams` -> this fell through to the RECOMPUTE branch, which re-derives
+  // ALL four macros (so calories + protein drifted from the stored canonical,
+  // e.g. 2540/140 -> 2583/150). Reading `carb_grams ?? carbs_grams` lets the
+  // canonical branch fire for restored profiles -> Home == Nutrition ==
+  // user_profile. (Writer/reader field drift — debugging skill §2.1.)
+  final carbCanonical = profile?['carb_grams'] ?? profile?['carbs_grams'];
   if (profile != null &&
       profile['daily_calories'] != null &&
       profile['protein_grams'] != null &&
-      profile['carb_grams'] != null &&
+      carbCanonical != null &&
       profile['fat_grams'] != null) {
     targets = {
       'daily_calories': (profile['daily_calories'] as num).toDouble(),
       'protein_grams': (profile['protein_grams'] as num).toDouble(),
-      'carb_grams': (profile['carb_grams'] as num).toDouble(),
+      'carb_grams': (carbCanonical as num).toDouble(),
       'fat_grams': (profile['fat_grams'] as num).toDouble(),
     };
     return _applyCalorieOverride(targets, date);
@@ -112,6 +123,16 @@ Map<String, double> _resolveNutritionTargets(
     'fat_grams': 80,
   }, date);
 }
+
+/// @visibleForTesting alias for [_resolveNutritionTargets] — OBS-11 dual-name
+/// (`carb_grams ?? carbs_grams`) contract test. Production code uses the
+/// private function.
+@visibleForTesting
+Map<String, double> resolveNutritionTargetsForTest(
+  Map<String, dynamic>? profile, {
+  DateTime? date,
+}) =>
+    _resolveNutritionTargets(profile, date: date);
 
 /// Applies an active `target_override_<date>` calorie delta to the
 /// resolved targets map. Macros are intentionally NOT scaled (the AI
