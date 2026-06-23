@@ -247,7 +247,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Widget _buildBody() {
-    if (isLoading) {
+    if (isLoading || isSessionTearingDown) {
       return const ScreenLoadingSkeleton(cardCount: 5);
     }
 

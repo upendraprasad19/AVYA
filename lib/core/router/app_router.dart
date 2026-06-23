@@ -1,8 +1,9 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/auth/screens/splash_screen.dart';
 import 'package:icanbefitter/features/auth/screens/sign_in_screen.dart';
@@ -502,6 +503,26 @@ class AppRouter {
     ],
   );
 
+  /// FIX-1 Part B (e2e-2026-06-21) — pure predicate for the session-open
+  /// routing guard, extracted so its truth table is unit-testable without a
+  /// live Supabase / Hive / BuildContext. Returns true when an authenticated
+  /// user has reached a session-gated route before `HiveUserSession.openForUser`
+  /// has run (Hive owner still null) and we must route through /restoring to
+  /// open the session first. Onboarding self-navigates pre-session, so it is
+  /// exempt (its own writes open/own the boxes via the sign-up bootstrap).
+  @visibleForTesting
+  static bool shouldGateOnSessionOpen({
+    required bool isInitialized,
+    required bool isAuthenticated,
+    required bool ownerOpen,
+    required bool isOnOnboarding,
+  }) {
+    if (!isInitialized || !isAuthenticated) return false;
+    if (ownerOpen) return false;
+    if (isOnOnboarding) return false;
+    return true;
+  }
+
   /// Auth redirect logic.
   ///
   /// Gracefully handles the case where Supabase is not yet initialized
@@ -554,6 +575,27 @@ class AppRouter {
     // Not signed in -> go to sign-in (unless already there).
     if (!isAuthenticated) {
       return isOnAuthRoute ? null : '/sign-in';
+    }
+
+    // FIX-1 Part B (e2e-2026-06-21) — session-open / cold-boot race guard.
+    // Authenticated, but the user-scoped Hive session may not be open yet
+    // (web reload / deep-link straight to a gated route, process-death
+    // restore, or the sign-out → sign-in gap before openForUser runs). The
+    // user-scoped reads below (onboarding_completed via MigratedKey) now
+    // SERVE EMPTY under FIX-1 Part A instead of throwing — which would
+    // mis-route an onboarded user to /onboarding. Route through /restoring
+    // instead: it opens the session (openForUser) then re-runs this tree with
+    // a valid owner + the correct destination. /splash, /restoring, and
+    // /coach/induction|muster are handled above; onboarding self-navigates
+    // pre-session so it is exempt. RestoringScreen._onContinueAnyway opens the
+    // session before popping, so the escape-hatch can't re-trap here.
+    if (shouldGateOnSessionOpen(
+      isInitialized: HiveService.instance.isInitialized,
+      isAuthenticated: isAuthenticated,
+      ownerOpen: HiveUserSession.currentOwnerFullId != null,
+      isOnOnboarding: isOnOnboarding,
+    )) {
+      return '/restoring';
     }
 
     // Signed in but not onboarded -> go to onboarding.

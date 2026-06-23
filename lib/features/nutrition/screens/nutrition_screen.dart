@@ -151,7 +151,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
 
                 // -- Content --
                 Expanded(
-                  child: isLoading
+                  child: isLoading || isSessionTearingDown
                       ? const ScreenLoadingSkeleton(cardCount: 4)
                       : _buildMealsTabSafe(),
                 ),

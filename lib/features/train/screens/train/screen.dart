@@ -65,7 +65,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
+    if (isLoading || isSessionTearingDown) {
       return Scaffold(
         backgroundColor: AppColors.bg,
         body: const ScreenLoadingSkeleton(cardCount: 4),

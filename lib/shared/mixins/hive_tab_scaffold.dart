@@ -67,6 +67,7 @@
 // than overload it.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 /// Mixin for `ConsumerState<T>` tab screens that follow the
 /// "isLoading skeleton + microtask flag-flip + retry-invalidates-providers"
@@ -78,6 +79,17 @@ mixin HiveTabScaffoldMixin<T extends ConsumerStatefulWidget>
   /// Whether the screen is still in its initial skeleton state. Drives the
   /// `ScreenLoadingSkeleton` render at the top of `build()`.
   bool get isLoading => _isLoading;
+
+  /// OBS-4 (b8e3f1 sibling, 2026-06-21) — true while the auth session is
+  /// tearing down (sign-out) or not yet open (the FIX-1 owner-null window).
+  /// `authUserIdTokenProvider` returns `'<anon>'` the moment the Hive owner is
+  /// cleared — even before Supabase finishes `signOut` — so a tab screen that
+  /// renders now would read an empty box, throw, and flash its
+  /// "Failed to load…" error card. Gate the neutral skeleton on this instead;
+  /// the router redirect to /sign-in (or /restoring) unmounts/reroutes the
+  /// screen momentarily. Tab screens OR this into their `isLoading` branch.
+  bool get isSessionTearingDown =>
+      ref.watch(authUserIdTokenProvider) == '<anon>';
 
   /// Hook called from [retry] to refresh providers feeding this screen.
   /// Default no-op. Override and call `ref.invalidate(myProvider)` for

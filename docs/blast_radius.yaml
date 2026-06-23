@@ -62,6 +62,7 @@ paths:
   - { glob: "supabase/migrations/**", tier: platform }
   - { glob: "lib/core/services/sync/**", tier: platform }
   - { glob: "lib/core/services/hive_user_session.dart", tier: platform }
+  - { glob: "lib/core/services/guarded_box.dart", tier: platform }   # cross-account isolation primitive (Layer A) — failure = cross-account leak
   - { glob: "lib/core/services/hive_service.dart", tier: platform }
   - { glob: "lib/shared/repositories/plan_engine/**", tier: platform }
   - { glob: "CLAUDE.md", tier: platform }

@@ -463,9 +463,28 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     unawaited(SyncService.instance.syncProfileNow(userId));
   }
 
-  void _onContinueAnyway() {
+  Future<void> _onContinueAnyway() async {
     _softHintTimer?.cancel();
     _timeoutTimer?.cancel();
+    // FIX-1 Part B (e2e-2026-06-21) — open the Hive session BEFORE navigating
+    // so the _authRedirect owner-null guard doesn't bounce us straight back to
+    // /restoring (infinite trap). On a reinstall the blocking-restore path
+    // (founder's restore is ~35.9s) can exceed the 30s CONTINUE timer, so
+    // openForUser may not have run yet when the user taps Continue. openForUser
+    // is idempotent + _sessionLock-guarded — safe even if the in-flight restore
+    // already opened the boxes.
+    final userId = SupabaseService.instance.currentUser?.id;
+    if (userId != null) {
+      try {
+        await HiveUserSession.openForUser(userId);
+      } catch (e, st) {
+        // Non-fatal for navigation — the guard re-routes to /restoring which
+        // re-opens — but RECORD it so a genuinely unrecoverable openForUser
+        // (corrupt box) is observable instead of silently looping (B-pass F2.1).
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'restoring_continue_openforuser_failed'));
+      }
+    }
     if (mounted) context.go('/home');
   }
 
