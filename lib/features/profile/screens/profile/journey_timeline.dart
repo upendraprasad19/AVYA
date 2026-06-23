@@ -137,7 +137,9 @@ extension _JourneyTimeline on _ProfileScreenState {
           if (targetWeight > 0 && currentWeight > 0) ...[
             _journeyInsight(
               icon: Icons.flag_outlined,
-              text: 'Goal: ${goal.contains("lose") ? "Lose" : goal.contains("build") ? "Build to" : "Reach"} ${targetWeight.toStringAsFixed(0)}kg',
+              // OBS-12 — read "Reach 70kg" (the target weight is a destination,
+              // not an amount to lose); "Lose 70kg" mis-read as "lose 70 kg".
+              text: 'Goal: Reach ${targetWeight.toStringAsFixed(0)}kg',
               color: AppColors.accent,
             ),
           ],

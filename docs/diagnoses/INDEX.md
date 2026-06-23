@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### e2e_cosmetic_copy_sweep (1 bugs)
+- 2026-06-23 e5c1a2 — >
+
 ### nutrition_target_canonical_read (1 bugs)
 - 2026-06-23 c8a1f4 — >
 
@@ -715,6 +718,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-23 | e5c1a2 | > | e2e_cosmetic_copy_sweep | test/contracts/title_case_name_test.dart |
 | 2026-06-23 | c8a1f4 | > | nutrition_target_canonical_read | test/contracts/nutrition_target_carb_dualname_test.dart |
 | 2026-06-21 | b8e3f1 | > | auth_hive_owner_agreement | test/contracts/wrap_user_scoped_box_null_owner_authenticated_test.dart |
 | 2026-06-18 | f9d2e7 | > | streak_freeze_denominator_grant_decay | test/contracts/streak_freeze_first_pro_grant_behavioral_test.dart |
