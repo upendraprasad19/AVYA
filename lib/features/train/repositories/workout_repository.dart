@@ -207,7 +207,9 @@ class WorkoutRepository {
       final restoreSettled =
           SyncService.instance.restoreCompletedTick.value > 0;
       if (restoreSettled && _hasAnyScheduleRow()) {
-        return consumeMissedDayIfFreezeAvailable(); // persist + count
+        final streak = consumeMissedDayIfFreezeAvailable(); // persist freezes + count
+        _persistCurrentStreakDays(streak); // OBS-8b: keep cloud count fresh on decay
+        return streak;
       }
       // Gated off — read-only count, no persist. Breadcrumb (Hermes L37, f9d2e7)
       // so a founder debugging "streak/freeze didn't update after idle days" can
@@ -218,6 +220,28 @@ class WorkoutRepository {
     } finally {
       _reckonInFlight = false;
     }
+  }
+
+  /// OBS-8b (2026-06-25) — persist the freshly-computed streak to
+  /// `user_progress.current_streak_days`. Pre-fix the reckon stamped ONLY the
+  /// freeze fields, so a streak that DECAYED via the day-rollover reckon (no
+  /// workout logged) left the cloud count stale: current_streak_days was stamped
+  /// ONLY by train_provider on workout COMPLETION (~train_provider.dart:1450). The
+  /// AI snapshot (ai_snapshot_builder) + predictions (prediction_service) read this
+  /// cloud value, so they saw the old count (the founder's "streak 1 after idle
+  /// days" cloud symptom; Home reads a LIVE count so was unaffected). Stamp Hive +
+  /// push via syncProgressNow. No-op when already correct (no sync churn). NOT
+  /// monotonic — current_streak_days SHOULD decay (unlike lifetime/peak fields,
+  /// which need only-increment guards — feedback_monotonic_field_recompute_demotion).
+  void _persistCurrentStreakDays(int streak) {
+    final progress =
+        UserRepository.instance.getProgress() ?? <String, dynamic>{};
+    // num-safe cast: a restored / simulated value may deserialize as double.
+    if ((progress['current_streak_days'] as num?)?.toInt() == streak) return;
+    // updateProgress writes Hive AND fires syncProgressNow() itself
+    // (user_repository.dart:146) — call it ONCE; don't double-push the upsert.
+    unawaited(
+        UserRepository.instance.updateProgress({'current_streak_days': streak}));
   }
 
   /// True when the local workout box holds at least one `schedule_*` row —
