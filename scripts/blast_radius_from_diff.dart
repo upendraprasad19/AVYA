@@ -122,6 +122,25 @@ void main(List<String> args) async {
   if (args.length == 1 && args[0] == '-') {
     paths = await stdinPaths();
   } else if (args.isNotEmpty) {
+    // Positional args are FILE PATHS, not git refs. Passing commit SHAs
+    // (e.g. `blast_radius_from_diff.dart <base> <head>`) silently treated them
+    // as nonexistent filenames → each matched no glob → fell to default_tier
+    // (feature), masking a real >=account range (the 2026-06-25 Unit-C miss).
+    // Detect commit-ish args and FAIL LOUD with the correct stdin-range usage.
+    final refLike = args
+        .where((a) => Process.runSync(
+                'git', ['rev-parse', '--verify', '--quiet', '$a^{commit}'])
+            .exitCode ==
+            0)
+        .toList();
+    if (refLike.isNotEmpty) {
+      stderr.writeln(
+          'blast_radius_from_diff: positional args are FILE PATHS, not git refs. '
+          'These resolve to commits: ${refLike.join(', ')}.\n'
+          'To classify a commit/branch range, pipe the changed file list:\n'
+          '  git diff --name-only <base> <head> | dart run scripts/blast_radius_from_diff.dart -');
+      exit(2);
+    }
     paths = args;
   } else {
     paths = await stagedPaths();

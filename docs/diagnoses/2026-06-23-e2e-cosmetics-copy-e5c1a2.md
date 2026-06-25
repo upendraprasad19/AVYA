@@ -3,7 +3,7 @@ bug_id: e5c1a2
 date: 2026-06-23
 batch: fix-e2e-cosmetics-copy
 status: fixed
-blast_radius: feature
+blast_radius: account
 symptom: >
   Full-charter web E2E (2026-06-21) cosmetic + copy observations (Unit C of the
   fix arc). OBS-1: Home Today-card macro row RenderFlex right-overflow (~2.5-15px)
@@ -78,6 +78,22 @@ in the plan, to finish on the founder's next dev-server visual pass.
 - **OBS-10** flush_card.dart — uniform `Border.all` on rounded (first/last) cards, null radius on square middle cards (kills the borderRadius-uniform assert).
 - **OBS-12** journey_timeline.dart — "Goal: Reach 70kg" (was "Lose 70kg").
 - **OBS-13** onboarding_provider.dart — title-case `full_name` at the writer.
+
+## Completeness recovery (2026-06-25, Hermes)
+This batch is **account**-tier (onboarding_provider + name_format under `lib/core/**`),
+not feature — it was mis-classified by a buggy positional `blast_radius_from_diff` call
+(`feedback_mistake_blast_radius_positional_mode.md`) and merged (`c553ab0`) WITHOUT the
+§4.12 plan-review record; the CI keystone gate caught it (`c553ab0` run red). The
+fix-forward recovery added the record (`docs/plan-reviews/fix-e2e-cosmetics-copy.md`) +
+a deep review (B-pass + 4-lens Hermes, `docs/audit/2026-06-25-hermes-e2e-cosmetics-copy.md`)
+that surfaced two completeness misses:
+- **OBS-13 2nd writer** — `edit_profile_screen.dart:1595` also wrote `full_name` RAW;
+  now `titleCaseName(name)`. Both writers pinned in `title_case_name_test.dart`.
+- **OBS-11 sibling (Unit B)** — `user_repository.ensureComputedTargets` carb singular-only
+  write-back; fixed dual-name. See `c8a1f4`.
+- **Tooling** — `blast_radius_from_diff` now FAILS LOUD on commit-ish positional args
+  (`blast_radius_positional_ref_guard_test.dart`).
+A `titleCaseName` surrogate-pair "corruption" B-pass finding was empirically REFUTED.
 
 ## See also
 - docs/reviews/e2e-fullcharter-2026-06-21-evidence.md (OBS source)

@@ -311,7 +311,11 @@ class NutritionTargets {
         'tdee': tdee,
         'daily_calories': dailyCalories,
         'protein_grams': proteinGrams,
+        // OBS-11 dual-name: emit BOTH the singular (legacy Hive readers) and
+        // the plural `carbs_grams` (Supabase column + restore writer) so a
+        // write-back never re-creates the single-spelling drift.
         'carb_grams': carbGrams,
+        'carbs_grams': carbGrams,
         'fat_grams': fatGrams,
       };
 

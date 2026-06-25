@@ -92,8 +92,21 @@ Reader-side dual-name `carb_grams ?? carbs_grams` in `_resolveNutritionTargets`
 (condition + value) and Home's `carbTarget`. Canonical branch now fires for a
 restored profile → Home == Nutrition == user_profile.
 
+## Completeness recovery (2026-06-25, Hermes)
+A 4-lens Hermes pass on the sibling Unit C found that the OBS-11 sweep missed a THIRD
+carb reader: `user_repository.ensureComputedTargets` (`:217`) gated the "already has
+targets" check on `carb_grams` SINGULAR only → a restored profile (plural only) failed it
+→ the recompute branch (`:265 updateProfileFields(toMap())`) **wrote drifted targets back
+over the canonical** — a write-back (worse than the read-time drift). Dead code today (no
+`lib/` caller) so latent, but the same class. Fixed: dual-name gate at `:217` +
+`bmr_calculator.toMap` now emits BOTH `carb_grams` and `carbs_grams`. Pinned by the two new
+cases in `nutrition_target_carb_dualname_test.dart`. (The single B-pass missed this; the deep
+Hermes pass caught it — `docs/audit/2026-06-25-hermes-e2e-cosmetics-copy.md`.)
+
 ## See also
 - lib/features/nutrition/providers/nutrition_provider.dart (_resolveNutritionTargets + the test alias)
+- lib/shared/repositories/user_repository.dart (ensureComputedTargets dual-name gate — recovery)
+- lib/core/utils/bmr_calculator.dart (NutritionTargets.toMap dual-name emit — recovery)
 - lib/features/home/providers/home_provider.dart (carbTarget dual-name)
 - lib/core/services/sync/sync_profile.dart (_restoreUserProfile verbatim merge — the source of the drift)
 - test/contracts/nutrition_target_carb_dualname_test.dart

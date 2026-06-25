@@ -212,9 +212,12 @@ class UserRepository {
     if (profile == null) return;
 
     // Already has computed targets — nothing to do.
+    // OBS-11 dual-name: a RESTORED profile carries only the cloud PLURAL
+    // `carbs_grams`; the singular-only check would false-negative → recompute
+    // → write-back drifted targets over the canonical. Read both spellings.
     if (profile['daily_calories'] != null &&
         profile['protein_grams'] != null &&
-        profile['carb_grams'] != null &&
+        (profile['carb_grams'] ?? profile['carbs_grams']) != null &&
         profile['fat_grams'] != null) {
       return;
     }

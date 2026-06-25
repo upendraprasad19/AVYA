@@ -17,6 +17,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/utils/name_format.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
@@ -1592,7 +1593,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           : '${_preferredWorkoutTime!.hour.toString().padLeft(2, '0')}:${_preferredWorkoutTime!.minute.toString().padLeft(2, '0')}';
 
       final updates = <String, dynamic>{
-        'full_name': name,
+        // OBS-13 (2nd writer): title-case here too, not just at onboarding.
+        // `textCapitalization.words` is a mobile keyboard hint only — on web a
+        // lowercase-typed edit ("test three") would otherwise re-save raw and
+        // re-greet "Recruit test". Mirrors onboarding_provider.completeOnboarding.
+        'full_name': titleCaseName(name),
         'gender': _gender,
         'height_cm': height,
         'current_weight_kg': weight,
