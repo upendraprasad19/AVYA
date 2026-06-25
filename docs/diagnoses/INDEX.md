@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### streak_current_days_cloud_persist (1 bugs)
+- 2026-06-25 e9d4b7 — >
+
 ### e2e_cosmetic_copy_sweep (1 bugs)
 - 2026-06-23 e5c1a2 — >
 
@@ -718,6 +721,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-25 | e9d4b7 | > | streak_current_days_cloud_persist | test/contracts/streak_decay_reckon_permanent_ledger_test.dart |
 | 2026-06-23 | e5c1a2 | > | e2e_cosmetic_copy_sweep | test/contracts/title_case_name_test.dart |
 | 2026-06-23 | c8a1f4 | > | nutrition_target_canonical_read | test/contracts/nutrition_target_carb_dualname_test.dart |
 | 2026-06-21 | b8e3f1 | > | auth_hive_owner_agreement | test/contracts/wrap_user_scoped_box_null_owner_authenticated_test.dart |

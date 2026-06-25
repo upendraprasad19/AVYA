@@ -1186,7 +1186,7 @@ concepts:
         semantic: per-set
         fields_read: [exercise_name, logging_type, sets, weight_kg, reps_completed, set_number, sets_completed, duration_seconds, duration_sec]
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 622-641
+        line_range: 646-665
         method: totalLifetimeVolumeKg
         semantic: aggregated
         fields_read: [volume_kg, weight_kg, reps_completed]
@@ -1327,7 +1327,7 @@ concepts:
         semantic: aggregated
         fields_read: [type, date, workout_name]
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 506-518
+        line_range: 530-542
         method: getRecentWorkoutCompletionHours
         semantic: per-row
         fields_read: [completed_at]
@@ -2383,7 +2383,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 595-700
+        line_range: 619-724
         method: loadAllExercisePRs
         semantic: per-set
         fields_read: [exercise_name, logging_type, weight_kg, sets[], reps, duration_sec]
@@ -4490,7 +4490,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 610-700
+        line_range: 634-724
         method: loadAllExercisePRs
         semantic: per-set
         fields_read: [via WorkoutReadService.bestPerSetReps / .bestPerSetDuration / .bestPerSetWeight]

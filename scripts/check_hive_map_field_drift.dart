@@ -276,6 +276,11 @@ const _alwaysOk = <String>{
   'plan', 'expires_at', 'is_pro',
   // user_progress map (read by phaseForDate — NOT a schedule_* field; Obs 1):
   'current_phase',
+  // user_progress map — read by _persistCurrentStreakDays (reckon decay persist,
+  // OBS-8b e9d4b7); NOT an exlog/schedule/wlog field. The prefix heuristic
+  // mis-attributes it because workout_repository also walks those prefixes for
+  // the streak/PR calc.
+  'current_streak_days',
   // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +
   // PlanIntegrityReconciler from `user_progress.plan_json`, NOT from a
   // `schedule_*` entry. The prefix heuristic mis-attributes them because both

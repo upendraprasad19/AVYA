@@ -183,6 +183,64 @@ void main() {
           reason: 'the consumed day is recorded in the permanent ledger');
       expect(streak, 1, reason: 'only day-2 completed counts (day-1 frozen)');
     });
+
+    // OBS-8b (2026-06-25) — the reckon must ALSO persist the freshly-computed
+    // current_streak_days. Pre-fix it stamped only the freeze fields, so a streak
+    // that DECAYED via the day-rollover reckon (no workout logged) left cloud
+    // `user_progress.current_streak_days` stale — the AI snapshot + predictions
+    // (the cloud-value readers) then saw the old count (the founder's "streak 1
+    // after idle days" cloud symptom). Home reads a LIVE count so was unaffected.
+    test('OBS-8b: decay with NO freeze persists current_streak_days 1 -> 0',
+        () async {
+      await HiveService.instance.userBox.put('profile', {
+        'id': 'A',
+        'onboarding_completed_at': daysAgo(20).toIso8601String(),
+      });
+      // day-0 pending (never penalised), day-1 MISSED, day-2 completed; 0 freezes
+      // → the walk breaks at day-1 → streak 0.
+      await HiveService.instance.workoutBox.put(
+          'schedule_${key(daysAgo(0))}', {'type': 'PUSH', 'status': 'pending'});
+      await HiveService.instance.workoutBox.put(
+          'schedule_${key(daysAgo(1))}', {'type': 'PUSH', 'status': 'pending'});
+      await HiveService.instance.workoutBox.put('schedule_${key(daysAgo(2))}',
+          {'type': 'PUSH', 'status': 'completed'});
+      await HiveService.instance.userBox.put('progress', {
+        'streak_freezes_available': 0,
+        'streak_freeze_used_dates': <String>[],
+        'current_streak_days': 1, // STALE — the founder's symptom
+      });
+      SyncService.instance.restoreCompletedTick.value = 1;
+      final streak = WorkoutRepository.instance.reckonStreakDecayAndPersist();
+      final p = UserRepository.instance.getProgress()!;
+      expect(streak, 0, reason: 'day-1 missed, no freeze -> streak breaks to 0');
+      expect(p['current_streak_days'], 0,
+          reason: 'OBS-8b: the reckon must persist the decayed count '
+              '(pre-fix left current_streak_days stale at 1)');
+    });
+
+    test('OBS-8b: freeze-consume path persists current_streak_days (stale 7 -> 1)',
+        () async {
+      await seedMissedDay(); // 1 freeze, day-1 missed -> consumed -> streak 1
+      await UserRepository.instance
+          .updateProgress({'current_streak_days': 7}); // stale, merged in
+      SyncService.instance.restoreCompletedTick.value = 1;
+      final streak = WorkoutRepository.instance.reckonStreakDecayAndPersist();
+      final p = UserRepository.instance.getProgress()!;
+      expect(streak, 1);
+      expect(p['current_streak_days'], 1,
+          reason: 'OBS-8b: reckon persists the count even when a freeze saved it');
+    });
+
+    test('OBS-8b: gated-off (restore not settled) does NOT persist the count',
+        () async {
+      await seedMissedDay();
+      await UserRepository.instance.updateProgress({'current_streak_days': 9});
+      SyncService.instance.restoreCompletedTick.value = 0; // gated off
+      WorkoutRepository.instance.reckonStreakDecayAndPersist();
+      expect(UserRepository.instance.getProgress()!['current_streak_days'], 9,
+          reason: 'pre-restore read-only path must not persist a spurious decay '
+              'before completions are restored');
+    });
   });
 
   group('progress-map writer — no lost update (Hermes L27 verification, f9d2e7)',
