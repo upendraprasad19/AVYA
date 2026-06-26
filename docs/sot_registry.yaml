@@ -852,7 +852,7 @@ concepts:
           per tier (2/day free, 5/day PRO). Quality 2048/85 free,
           3000/95 PRO.
       - file: lib/features/auth/screens/splash_screen.dart
-        line_range: 205-225
+        line_range: 231-291
         method: _autoGenerateNextPhaseForPro
         semantic: flag-check
         fields_read: [isPro]
@@ -3292,9 +3292,22 @@ concepts:
       completeOnboarding() stamps both Hive and cloud.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 265-285
+        line_range: 271-551
         method: completeOnboarding
-        notes: stamps onboarding_completed_at in profile map synced via onboarding_sync
+        notes: |
+          Stamps onboarding_completed_at in the Hive profile map (durable BEFORE
+          navigation). The CLOUD stamp is synced FIRE-AND-FORGET via the unawaited
+          _syncOnboardingAndPostActions (Hive-first, diagnose a1f9c4) — no longer
+          awaited on the critical REPORT FOR DUTY path. If the background sync is
+          missed, pending_onboarding_sync + the RestoringScreen Plan-A self-heal
+          (cloud NULL + Hive onboarded -> re-stamp) recover it.
+      - file: lib/features/onboarding/providers/onboarding_provider.dart
+        line_range: 553-617
+        method: _syncOnboardingAndPostActions
+        notes: |
+          Background cloud catch-up (a1f9c4) — syncs the profile (incl.
+          onboarding_completed_at) to cloud fire-and-forget; preserves the
+          sync-before-referral order.
       - file: lib/shared/repositories/user_repository.dart
         line_range: 166-185
         method: setOnboarded

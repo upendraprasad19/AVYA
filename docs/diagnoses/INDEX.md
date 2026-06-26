@@ -12,6 +12,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-22 b4a09c — |
 - 2026-05-17 93aeac — |
 
+### hive_first_boot_onboarding_no_blocking_cloud_await (1 bugs)
+- 2026-06-26 a1f9c4 — >
+
 ### streak_current_days_cloud_persist (1 bugs)
 - 2026-06-25 e9d4b7 — >
 
@@ -723,6 +726,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-06-26 | f3c8d1 | > | ai_snapshot_building | test/contracts/ai_snapshot_builder_only_test.dart |
+| 2026-06-26 | a1f9c4 | > | hive_first_boot_onboarding_no_blocking_cloud_await | test/contracts/boot_onboarding_hive_first_test.dart |
 | 2026-06-25 | e9d4b7 | > | streak_current_days_cloud_persist | test/contracts/streak_decay_reckon_permanent_ledger_test.dart |
 | 2026-06-23 | e5c1a2 | > | e2e_cosmetic_copy_sweep | test/contracts/title_case_name_test.dart |
 | 2026-06-23 | c8a1f4 | > | nutrition_target_canonical_read | test/contracts/nutrition_target_carb_dualname_test.dart |

@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/scheduled_workouts_resync_migrator.dart';
@@ -81,13 +82,33 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _initAndNavigate();
   }
 
+  /// Hive-first boot guard (diagnose a1f9c4). `_runDeferredInit` `await`s
+  /// cloud/IO (`SupabaseService.initialize` → `Supabase.initialize`) with no
+  /// timeout. If that STALLS — slow/cold backend, or a wedged web session —
+  /// the future never completes, so `_navigateNext` never fires and the user
+  /// is stranded on the AVYA seal with NO escape (the `.catchError` only
+  /// handles a THROW, not a HANG). Bound the init so the app always reaches
+  /// the next route and boots offline-first from Hive. On a genuine timeout
+  /// `isAuthenticated` reads false → routes to `/sign-in` (a re-auth is a far
+  /// better degradation than an infinite splash; only fires on a real >12s
+  /// stall — a warm init is <2s). Kill-switch: `disable_splash_init_timeout`.
+  static const Duration _kInitTimeout = Duration(seconds: 12);
+
   Future<void> _initAndNavigate() async {
+    Future<void> guardedInit = _runDeferredInit().catchError((err, stack) {
+      debugPrint('[Splash] deferred init error: $err');
+    });
+    final timeoutDisabled = HiveService.instance.configBox
+            .get('disable_splash_init_timeout') ==
+        true;
+    if (!timeoutDisabled) {
+      guardedInit = guardedInit.timeout(_kInitTimeout, onTimeout: () {
+        debugPrint('[Splash] deferred init exceeded '
+            '${_kInitTimeout.inSeconds}s — navigating anyway (offline-first boot)');
+      });
+    }
     await Future.wait([
-      _runDeferredInit().catchError((err, stack) { // Never block navigation on init failure
-        debugPrint('[Splash] deferred init error: $err');
-        // TODO(follow-up): surface fatal init errors (e.g. corrupted Hive) via a
-        // dedicated /error route with a "Reinstall required" message and request_id.
-      }),
+      guardedInit,
       Future.delayed(const Duration(milliseconds: 3000)),
     ]);
     _navigateNext();
