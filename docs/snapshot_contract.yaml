@@ -581,14 +581,13 @@ orphan_readers:
 
   - key: current_streak_days
     expected_shape: int (top-level)
-    actual_writer_path: NOT EMITTED by buildAiContext
+    actual_writer_path: buildAiContext top-level — real progress.current_streak_days
+      (reliably stamped, e9d4b7), fallback streak_weeks*7 for legacy snapshots
     readers:
       - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 113 }
       - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 150 }
-    drift_class: missing_writer
-    proposed_fix: |
-      Either compute as streak_weeks * 7 (current fallback in reader)
-      or add to writer. Reader fallback is acceptable today.
+    drift_class: resolved
+    resolved_by: "f3c8d1 (2026-06-26) — was unconditional weeks*7; now the real count"
 
   - key: today_workout_name
     expected_shape: string (top-level)
@@ -647,22 +646,23 @@ orphan_readers:
 
   - key: daily_calorie_target
     expected_shape: int (top-level)
-    actual_writer_path: NOT EMITTED — profile.tdee exists but isn't
-      this exact concept
+    actual_writer_path: buildAiContext top-level — goal-adjusted profile.daily_calories
+      (canonical BmrCalculator.toMap), fallback profile.tdee
     readers:
       - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 121 }
-    drift_class: missing_writer
+    drift_class: resolved
+    resolved_by: "f3c8d1 (2026-06-26) — was tdee (maintenance); now daily_calories"
 
   - key: daily_targets.protein
     expected_shape: num (nested map)
-    actual_writer_path: NOT EMITTED
+    actual_writer_path: buildAiContext daily_targets.protein — canonical
+      profile.protein_grams (calories/carbs/fat also added alongside)
     readers:
       - { fn: protein-gap-alert, file: supabase/functions/protein-gap-alert/index.ts, line: 174 }
-    drift_class: missing_writer
-    notes: |
-      Reader explicitly notes "not currently populated by the snapshot
-      writer — kept for forward compat" (index.ts:131-132). Intentional
-      defensive fallback; primary source is `user_profile.protein_g_target`.
+    drift_class: resolved
+    resolved_by: "f3c8d1 (2026-06-26) — was the phantom protein_g_target/protein_target_g
+      keys (no writer → 0); now protein_grams. protein-gap-alert's PRIMARY is already the
+      cloud user_profile.protein_grams, so this is its (now-correct) defensive fallback."
 
 # ── Summary stats (for self-consistency test) ──────────────────────────
 summary:
