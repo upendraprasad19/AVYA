@@ -486,94 +486,34 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // We clear the flag only after a confirmed successful upsert. The
       // 10 s inline retry stays — it catches the common "JWT warm-up"
       // miss right after sign-up — but the flag is the real safety net.
+      // ── Hive-first navigation (diagnose a1f9c4) ─────────────────
+      // Every LOCAL write above (profile, plan, progress, onboarded-stamp) is
+      // durable. The cloud sync + schedule push + referral redeem + verify are
+      // network I/O — they MUST NOT block REPORT FOR DUTY (rule 1): a slow /
+      // cold / stalled backend (e.g. the fresh-signup sync flood on the free
+      // tier) stranded the spinner forever, because the awaited cloud calls
+      // below never resolved AND never threw (the 10s retry only fires on a
+      // THROW, not a HANG). Capture the referral stash NOW (synchronously,
+      // while `ref` is valid), then run the whole cloud chain in the BACKGROUND
+      // preserving its order (the user_profile/users upsert must land before
+      // the referral EF reads the users row). The `pending_onboarding_sync`
+      // flag + bootstrap replay backstop a missed sync. Kill-switch:
+      // `disable_onboarding_async_sync` restores the old blocking path.
       await MigratedKey.write('pending_onboarding_sync', true);
-      try {
-        await _syncOnboardingToSupabase(profile);
-        await MigratedKey.delete('pending_onboarding_sync');
-      } catch (syncErr) {
-        // Visible in debug console for testing; not shown to the user.
-        debugPrint('[Onboarding] Supabase sync failed: $syncErr — scheduling retry');
-        // Telemetry — surface silent upsert failures to `client_errors`.
-        unawaited(SyncService.instance.reportSyncFailure(
-          opType: 'onboarding_sync',
-          error: syncErr,
-        ));
-        // Retry once after 10s — JWT may need refresh after sign-up flow.
-        Future.delayed(const Duration(seconds: 10), () async {
-          try {
-            await SupabaseService.instance.client.auth.refreshSession();
-            await _syncOnboardingToSupabase(profile);
-            await MigratedKey.delete('pending_onboarding_sync');
-            debugPrint('[Onboarding] Retry succeeded');
-          } catch (e) {
-            debugPrint('[Onboarding] Retry also failed: $e — '
-                'pending_onboarding_sync flag left set; bootstrap will replay on next launch');
-            unawaited(SyncService.instance.reportSyncFailure(
-              opType: 'onboarding_sync_retry',
-              error: e,
-              retryCount: 1,
-            ));
-          }
-        });
+      final referralCode = ref.read(referralCodeStashProvider).trim();
+      if (referralCode.isNotEmpty) {
+        // Clear NOW so it can't be replayed; the code is captured above.
+        ref.read(referralCodeStashProvider.notifier).clear();
       }
-
-      // P3 · Push the schedule rows to Supabase immediately so the first
-      // `weekly-recalc` Edge Function run has real data to reason about,
-      // and the cross-device restore picks up the correct dates. Without
-      // this, `scheduled_workouts` stays at 0 rows until the user either
-      // completes a workout or hits the next weekly-sync window.
-      unawaited(SyncService.instance.syncWorkoutData());
-
-      // Refresh the AI-context snapshot in the cloud. The splash screen
-      // already pushed a snapshot earlier in this session, but it ran BEFORE
-      // onboarding answers existed in Hive — so the cloud snapshot is
-      // stale-empty. Pushing now overwrites that row with the real profile,
-      // progress, and computed targets. Fire-and-forget.
-      unawaited(SyncService.instance.pushSnapshot());
-
-      // APK Test #6 / Plan F-9 — capture the baseline starting-stats
-      // snapshot. Idempotent (skips if a `source='onboarding'` row
-      // already exists for this user). Fire-and-forget; failure is
-      // non-fatal — the user proceeds to home regardless. Reports →
-      // Progress Comparison reads this row as the baseline for every
-      // future diff.
-      unawaited(StatSnapshotService.instance.snapshotOnboarding());
-
-      // Fire-and-forget: generate AI prediction card in background.
-      // Non-blocking — user proceeds to home screen immediately.
-      _generatePrediction(profile);
-
-      // ── Referral code redemption ───────────────────────────────
-      // Apply any code entered on the Welcome screen. Runs after the
-      // public.users row is guaranteed to exist (written by
-      // _syncOnboardingToSupabase above). Non-fatal — a failed redeem
-      // must never block the user from reaching home.
-      final stashedCode = ref.read(referralCodeStashProvider).trim();
-      if (stashedCode.isNotEmpty) {
-        try {
-          // Route through callFunction (refreshes the JWT first) — a raw invoke on
-          // an aged/backgrounded web token 401s silently (§2.31; the gate at
-          // check_authed_invoke_fresh_token.dart now catches this callsite).
-          final response = await SupabaseService.instance.callFunction(
-              'redeem-referral', body: {'code': stashedCode});
-          if (response.status == 200) {
-            debugPrint('[referral] redeemed $stashedCode at onboarding');
-            // Refresh subscription cache so any PRO grant reflects immediately.
-            try {
-              await SubscriptionService.instance.verifyFromServer();
-            } catch (_) {
-              // Non-fatal — user will get correct status on next launch.
-            }
-          } else {
-            debugPrint(
-                '[referral] redeem failed at onboarding: ${response.data}');
-          }
-        } catch (e) {
-          debugPrint('[referral] redeem exception at onboarding: $e');
-        } finally {
-          // Clear stash regardless of outcome so it isn't replayed.
-          ref.read(referralCodeStashProvider.notifier).clear();
-        }
+      final cloudCatchUp = _syncOnboardingAndPostActions(profile, referralCode);
+      if (HiveService.instance.configBox
+              .get('disable_onboarding_async_sync') ==
+          true) {
+        await cloudCatchUp; // kill-switch: restore old blocking behaviour
+      } else {
+        unawaited(cloudCatchUp.catchError((Object e, StackTrace s) {
+          debugPrint('[Onboarding] background cloud catch-up error: $e');
+        }));
       }
 
       state = state.copyWith(isCompleting: false, lastComputedTargets: targets);
@@ -600,6 +540,79 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         error: 'Something went wrong: ${e.runtimeType}. Please try again.',
       );
       return null;
+    }
+  }
+
+  /// Cloud catch-up after onboarding's LOCAL writes are durable. Fire-and-forget
+  /// (Hive-first — diagnose a1f9c4) so REPORT FOR DUTY navigation never blocks on
+  /// a slow / stalled backend. ORDER MATTERS: the user_profile/users upsert
+  /// (`_syncOnboardingToSupabase`) must land before the referral EF reads the
+  /// public.users row, so those stay sequential. Uses singletons only (no `ref`
+  /// after the screen may dispose); the referral code is captured + the stash
+  /// cleared by the caller before navigation.
+  Future<void> _syncOnboardingAndPostActions(
+      Map<String, dynamic> profile, String referralCode) async {
+    try {
+      await _syncOnboardingToSupabase(profile);
+      await MigratedKey.delete('pending_onboarding_sync');
+    } catch (syncErr) {
+      // Visible in debug console for testing; not shown to the user.
+      debugPrint('[Onboarding] Supabase sync failed: $syncErr — scheduling retry');
+      // Telemetry — surface silent upsert failures to `client_errors`.
+      unawaited(SyncService.instance.reportSyncFailure(
+        opType: 'onboarding_sync',
+        error: syncErr,
+      ));
+      // Retry once after 10s — JWT may need refresh after sign-up flow.
+      unawaited(Future.delayed(const Duration(seconds: 10), () async {
+        try {
+          await SupabaseService.instance.client.auth.refreshSession();
+          await _syncOnboardingToSupabase(profile);
+          await MigratedKey.delete('pending_onboarding_sync');
+          debugPrint('[Onboarding] Retry succeeded');
+        } catch (e) {
+          debugPrint('[Onboarding] Retry also failed: $e — '
+              'pending_onboarding_sync flag left set; bootstrap will replay on next launch');
+          unawaited(SyncService.instance.reportSyncFailure(
+            opType: 'onboarding_sync_retry',
+            error: e,
+            retryCount: 1,
+          ));
+        }
+      }));
+    }
+
+    // Schedule rows + AI snapshot + baseline stat snapshot + prediction — all
+    // fire-and-forget (each has its own error handling). These also gate
+    // `scheduled_workouts` cloud rows + the first AI-context snapshot.
+    unawaited(SyncService.instance.syncWorkoutData());
+    unawaited(SyncService.instance.pushSnapshot());
+    unawaited(StatSnapshotService.instance.snapshotOnboarding());
+    _generatePrediction(profile);
+
+    // ── Referral code redemption ───────────────────────────────
+    // AFTER the users row upsert above (the EF reads public.users). Non-fatal —
+    // a failed redeem must never block the user from reaching home.
+    if (referralCode.isNotEmpty) {
+      try {
+        // callFunction refreshes the JWT first (§2.31 — a raw invoke on an aged
+        // web token 401s silently; check_authed_invoke_fresh_token.dart gate).
+        final response = await SupabaseService.instance
+            .callFunction('redeem-referral', body: {'code': referralCode});
+        if (response.status == 200) {
+          debugPrint('[referral] redeemed $referralCode at onboarding');
+          // Refresh subscription cache so any PRO grant reflects immediately.
+          try {
+            await SubscriptionService.instance.verifyFromServer();
+          } catch (_) {
+            // Non-fatal — user will get correct status on next launch.
+          }
+        } else {
+          debugPrint('[referral] redeem failed at onboarding: ${response.data}');
+        }
+      } catch (e) {
+        debugPrint('[referral] redeem exception at onboarding: $e');
+      }
     }
   }
 
