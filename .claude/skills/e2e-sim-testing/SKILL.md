@@ -68,8 +68,9 @@ authorization, grant a **time-boxed** temp-PRO row, then **revoke it in cleanup*
 
 ```sql
 -- grant (founder-authorized): end_date = now()+1 day, tagged for cleanup
+-- USE plan='referral_trial' (see the gotcha below) — NOT 'pro_monthly'.
 INSERT INTO subscriptions (user_id, status, plan, end_date, razorpay_order_id, ...)
-VALUES ('<test-user-id>', 'active', 'pro_monthly', now() + interval '1 day', 'E2E_TEST_TEMP_PRO', ...);
+VALUES ('<test-user-id>', 'active', 'referral_trial', now() + interval '1 day', 'E2E_TEST_TEMP_PRO', ...);
 -- revoke (cleanup — REQUIRED):
 DELETE FROM subscriptions WHERE user_id='<test-user-id>' AND razorpay_order_id='E2E_TEST_TEMP_PRO';
 ```
@@ -77,6 +78,21 @@ DELETE FROM subscriptions WHERE user_id='<test-user-id>' AND razorpay_order_id='
 Always tag the temp row (`razorpay_order_id='E2E_TEST_TEMP_PRO'`) so cleanup is a
 single targeted delete. **Verify 0 residual after revoke.** Writing persistent
 prod data is only acceptable when founder-authorized AND explicitly revoked.
+
+> **Gotcha 1 — use `plan='referral_trial'`, not `'pro_monthly'` (live-confirmed 2026-06-21).**
+> `SubscriptionService.refreshFromSupabase` cross-checks a `pro_monthly` row against a
+> real Razorpay payment; a hand-inserted `pro_monthly` with no payment is correctly
+> **rejected** ("no active subscription row — downgrading locally") → the client stays
+> FREE. `referral_trial` is recognized as PRO without a payment, so it's the correct
+> plan for a temp-PRO E2E grant.
+>
+> **Gotcha 2 — the first-PRO instant-3 freeze grant will NOT fire on a cold-boot-as-PRO.**
+> The grant (`first_pro_grant_done` → 3 freezes) keys on a genuine **in-session
+> free→PRO transition**. Booting an account that is *already* PRO (the temp row inserted
+> before launch) does not produce that transition, so `available` stays unchanged and
+> `first_pro_grant_done` stays false — this is WAD, not a bug. Live-verifying the grant
+> needs an in-session-transition harness; it is covered by behavioral test
+> `streak_freeze_first_pro_grant` (#177).
 
 ---
 

@@ -26,10 +26,13 @@ Each assertion has the form:
 > `needs test` means no obvious test exists yet (collected in *Coverage gaps* at the end);
 > `(unverified — confirm)` means I could not fully confirm the behaviour from code and a
 > reader should confirm before relying on it.
+> **Live-verified `<date>`** means the behaviour was confirmed on the running app during a
+> live E2E walk (evidence under `docs/reviews/`); it COMPLEMENTS — does not replace — a
+> `test/` citation (a live walk is a point-in-time confirmation, not a regression guard).
 
 Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 `TRAIN-` train/workout/rank · `NUT-` nutrition · `COACH-` AI coach · `PROF-` profile ·
-`XC-` cross-cutting invariants.
+`COMM-` community review · `XC-` cross-cutting invariants.
 
 ---
 
@@ -38,7 +41,7 @@ Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 ### Sign-in surface & session
 
 - **`AUTH-01`** — WHEN a signed-out user opens the app THEN `splash_screen.dart` routes to the Welcome screen; WHEN a session already exists THEN it routes to `/restoring`. **Verify:** `test/contracts/splash_post_auth_session_gate_test.dart`.
-- **`AUTH-02`** — The sign-in surface (`sign_in_screen.dart`) offers Email, Google OAuth, and Phone OTP entry. **Verify:** needs test (widget).
+- **`AUTH-02`** — The sign-in surface (`sign_in_screen.dart`) offers Email, Google OAuth, and Phone OTP entry. **Verify:** needs test (widget). **Live-verified 2026-06-21** (GOOD-2: ENLIST VIA GOOGLE / PHONE / EMAIL all present).
 - **`AUTH-03`** — WHEN a user requests forgot-password THEN `forgot_password_sheet.dart` sends a reset link via `Supabase.auth.resetPasswordForEmail` with `redirectTo` set to the prod Web origin (never localhost). **Verify:** needs test.
 - **`AUTH-04`** — Phone OTP is NOT wired in prod (Twilio account created but not connected to Supabase Auth) — it fails silently; Email + Google OAuth work normally. **Verify:** `(unverified — confirm)` per `project_pending_twilio_setup.md`; needs prod smoke check.
 - **`AUTH-05`** — WHEN sign-up succeeds THEN a `users` row is created and the user is routed to `/restoring`; `users.full_name` lives on the auth-adjacent `users` table, NOT `user_profile`. **Verify:** `test/contracts/user_full_name_writer_to_reader_test.dart`, `test/contracts/full_name_backfill_test.dart`.
@@ -46,12 +49,12 @@ Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 
 ### Post-auth decision tree
 
-- **`AUTH-07`** — WHEN `/restoring` mounts THEN it runs `AuthSessionBootstrapper.hydrateFromCloud()` and `SyncService.restoreFromCloud()` in parallel; the restore is cancellable. **Verify:** needs test (widget); pure-logic side covered by `test/contracts/auth_session_bootstrapper_test.dart`.
+- **`AUTH-07`** — WHEN `/restoring` mounts THEN it runs `AuthSessionBootstrapper.hydrateFromCloud()` and `SyncService.restoreFromCloud()` in parallel; the restore is cancellable. **Verify:** needs test (widget); pure-logic side covered by `test/contracts/auth_session_bootstrapper_test.dart`. **Live-verified 2026-06-21** (restore ran; the 15s CONTINUE fallback surfaced).
 - **`AUTH-08`** — WHEN `resolveDestination(row)` sees `onboarding_completed_at != NULL` THEN destination is `GoHome`. **Verify:** `test/contracts/auth_session_bootstrapper_test.dart`.
 - **`AUTH-09`** — WHEN `onboarding_completed_at` is NULL AND the Hive profile is populated THEN destination is `GoHome` with Plan-A self-heal (re-stamp `onboarding_completed_at = NOW`). **Verify:** `test/contracts/auth_session_bootstrapper_test.dart`.
 - **`AUTH-10`** — WHEN `onboarding_completed_at` is NULL AND the Hive profile is partially populated THEN destination is `ResumeOnboarding(firstMissingStep)` resuming at Identity→Goal→Stats→Details→Plan in that order. **Verify:** `test/contracts/auth_session_bootstrapper_test.dart`.
-- **`AUTH-11`** — WHEN there is no `user_profile` row at all (new sign-up) THEN destination is `StartMissionBrief` and the in-flight restore is cancelled. **Verify:** `test/contracts/auth_session_bootstrapper_test.dart`.
-- **`AUTH-12`** — WHEN restore does not complete within 15 seconds THEN a CONTINUE button surfaces and the user can reach Home while restore continues in the background. **Verify:** needs test (widget/integration).
+- **`AUTH-11`** — WHEN there is no `user_profile` row at all (new sign-up) THEN destination is `StartMissionBrief` and the in-flight restore is cancelled. **Verify:** `test/contracts/auth_session_bootstrapper_test.dart`. **Live-verified 2026-06-21** (GOOD-12: test3 fresh signup → `/onboarding/mission-brief`).
+- **`AUTH-12`** — WHEN restore does not complete within 15 seconds THEN a CONTINUE button surfaces and the user can reach Home while restore continues in the background. **Verify:** needs test (widget/integration). **Live-verified 2026-06-21** (the 15s CONTINUE surfaced ✓); the CONTINUE→Home routing was the OBS-6/OBS-15 cluster (CONTINUE then bounced to `/sign-in`) — fixed in FIX-1 (`fix-session-open-race`, b8e3f1).
 - **`AUTH-13`** — `restoreFromCloud()` pulls FULL history (`since='2020-01-01'`), NOT a 30/90-day window. **Verify:** needs test (assert the `since` constant); guard against the `feedback_mistake_restore_window.md` regression.
 
 ### Cross-account isolation guard
@@ -64,20 +67,21 @@ Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 
 ### Stepped onboarding funnel
 
-- **`ONB-01`** — The default new-user funnel is 6 numbered screens: Mission Brief (00), Identity (01), Goal (02), Stats (03), Details (04), Plan (05), preceded by an unnumbered Welcome. **Verify:** needs test (integration flow).
+- **`ONB-01`** — The default new-user funnel is 6 numbered screens: Mission Brief (00), Identity (01), Goal (02), Stats (03), Details (04), Plan (05), preceded by an unnumbered Welcome. **Verify:** needs test (integration flow). **Live-verified 2026-06-21** (funnel end-to-end on test3, fresh signup).
 - **`ONB-02`** — WHEN navigating to any `/onboarding/*` sub-route THEN `GoRouter._authRedirect` matches via `location.startsWith('/onboarding')` (NOT `==`) so sub-routes are not bounced to Welcome. **Verify:** needs test (router); regression fixed in `17faa86`.
 - **`ONB-03`** — State is passed between screens via `GoRouter` `state.extra` Map; each screen spreads `...widget.initial` so every upstream field survives to Plan. NO provider commits happen before the final tap. **Verify:** needs test (integration).
 - **`ONB-04`** — Identity captures `full_name`, `date_of_birth`, `sex`. `age` is computed on the fly from DOB and is NEVER stored. Name field auto-focuses, title-cases input, enforces 2–40 chars via `_nameAllowed` regex with inline error; min DOB age 13. **Verify:** needs test (widget).
 - **`ONB-05`** — Goal captures `primary_goal` ∈ {build_muscle, lose_fat, general_fitness, strength}. **Verify:** `test/contracts/plan_generator_inputs_test.dart` (goal enum).
-- **`ONB-06`** — Stats captures `current_weight_kg`, `target_weight_kg`, `height_cm`, `body_fat_pct` (optional, blank default), `activity_level`. WHEN body fat is blank THEN BMR falls back to Mifflin-St Jeor and the copy reads "Skipping body fat — using weight + height." (no false "we'll estimate 18%"). **Verify:** needs test (widget).
+- **`ONB-06`** — Stats captures `current_weight_kg`, `target_weight_kg`, `height_cm`, `body_fat_percent` (optional, blank default — persisted as `body_fat_percent` + `body_fat_assessed_at`, NOT `body_fat_pct`), `activity_level`. WHEN body fat is PROVIDED THEN BMR uses Katch-McArdle and the value is honored in the saved calc (preview == saved; U4 c3f2d8); WHEN blank THEN BMR falls back to Mifflin-St Jeor, the saved `body_fat_percent` is **NULL** (never a fabricated 18%), and the copy reads "Skipping body fat — using weight + height." **Verify:** `test/contracts/onboarding_bodyfat_calc_test.dart`, `test/contracts/body_fat_default_heal_test.dart`. **Live-verified 2026-06-21** (GOOD-14: 22% → `bmr 1584` < Mifflin ~1694, so the value was used; skip → null, not 18%).
 - **`ONB-07`** — Details captures `fitness_experience`, `pace_preference`, `days_per_week` ∈ {3,4,5,6}, `equipment_access`; renders as chip rows with defaults pre-selected (Intermediate/Balanced/4/Basic Gym) so CONTINUE always works. CTA label is `CONTINUE →` (not `CALIBRATE PLAN →`). **Verify:** needs test (widget).
-- **`ONB-08`** — The Plan screen preview targets are computed by `plan_screen._computeTargets` calling canonical `BmrCalculator.calculateTargets` with every real input; the preview `dailyCalories`/`proteinGrams` exactly match what `completeOnboarding` writes (no drift). **Verify:** `test/contracts/plan_screen_targets_match_completeOnboarding_test.dart`.
-- **`ONB-09`** — WHEN the user taps REPORT FOR DUTY on the Plan screen THEN `OnboardingNotifier.completeOnboarding()` runs once, writing the consolidated profile map to `userBox['profile']`, stamping `onboarding_completed_at` (Hive + cloud `user_profile`), and firing the initial sync fan-out. **Verify:** `test/contracts/onboarding_completed_at_writer_to_reader_test.dart`.
+- **`ONB-08`** — The Plan screen preview targets are computed by `plan_screen._computeTargets` calling canonical `BmrCalculator.calculateTargets` with every real input; the preview `dailyCalories`/`proteinGrams` exactly match what `completeOnboarding` writes (no drift). **Verify:** `test/contracts/plan_screen_targets_match_completeOnboarding_test.dart`. **Live-verified 2026-06-21** (GOOD-14: preview 3045/135 == saved).
+- **`ONB-09`** — WHEN the user taps REPORT FOR DUTY on the Plan screen THEN `OnboardingNotifier.completeOnboarding()` runs once, writing the consolidated profile map to `userBox['profile']`, stamping `onboarding_completed_at` (Hive + cloud `user_profile`), and firing the initial sync fan-out. **Verify:** `test/contracts/onboarding_completed_at_writer_to_reader_test.dart`. **Live-verified 2026-06-21** (GOOD-15: stamped 08:37, routed to induction).
 - **`ONB-10`** — `completeOnboarding` persists the four defaulted fields (`lifestyle_activity` from `activity_level`, `diet_preference='veg'`, `injuries=['none']`, `start_date='this_monday'`) into the final profile map; `city` is optional/uncollected. **Verify:** needs test (assert profile map keys post-complete).
 - **`ONB-11`** — WHEN onboarding completes THEN the initial Phase 1 plan is generated locally (`PlanGenerator.generateV4`) from the user's profile and scheduled from `start_date` IST midnight (`phase_started_at`). **Verify:** `test/plan_generator/v4_diagnostic_test.dart` (generation); needs integration test for scheduling.
 - **`ONB-12`** — Phase 1 is ALWAYS free and induction grants rank SD2 immediately. **Verify:** `test/services/rank_service_test.dart` (SD2 default); `business-rules.md` Phase-1-free invariant.
 - **`ONB-13`** — Muster answers (Q3..Q5) bridge into profile fields via `InductionService.recordMusterAnswer` → `_bridgeToProfile` (`known_injuries→injuries`, `typical_wake_time→wake_up_time`, `preferred_workout_time→preferred_workout_time`, `body_part_priorities[0]→physique_focus`). **Verify:** `test/contracts/muster_profile_bridge_test.dart`, `test/contracts/muster_bridge_backfill_test.dart`, `test/contracts/muster_question_count_test.dart`.
 - **`ONB-14`** — The legacy chat onboarding (`/onboarding/chat`) remains reachable for rollback only; the stepped flow is the default path and the inference fallback must never become the default. **Verify:** needs test.
+- **`ONB-15`** — The Mission Brief screen (00) renders the founder-locked narrative (injury/comeback story · "discipline isn't motivation" · "AVYA holds the line" · "Show up. Earn your promotions. Become the man who lasts" · "No one is coming to save you, Recruit" · "Jai Hind. — Upendra") in pure Wardroom/Navy voice with **NO Instagram CTA** (the Unit-5 removal — `url_launcher` Instagram link deleted; the screen is a `StatelessWidget` with no external links). CONTINUE → `/onboarding/identity`; `readOnly:true` variant pops. **Verify:** `test/onboarding/mission_brief_screen_test.dart` (semantic "no `@icanbefitter`/Instagram CTA" assertion). **Live-verified 2026-06-21** (GOOD-13).
 
 ---
 
@@ -194,7 +198,7 @@ Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 ## 4. NUTRITION (`NUT-`)
 
 - **`NUT-01`** — The nutrition screen shows daily targets (calories + protein) computed from the profile via the canonical `BmrCalculator`. **Verify:** needs test (widget); BMR covered by `test/bmr_calculator_test.dart`.
-- **`NUT-02`** — BMR is hybrid: Katch-McArdle (`370 + 21.6 × lean_mass_kg`) when body-fat % is available, else Mifflin-St Jeor; both apply −50 BMR and −100 TDEE offsets; activity level derives from lifestyle + training days. **Verify:** `test/bmr_calculator_test.dart` `(unverified — confirm path)`.
+- **`NUT-02`** — BMR is hybrid: Katch-McArdle (`370 + 21.6 × lean_mass_kg`) when body-fat % is available, else Mifflin-St Jeor; both apply −50 BMR and −100 TDEE offsets; activity level derives from lifestyle + training days. **Verify:** `test/bmr_calculator_test.dart`, `test/contracts/onboarding_bodyfat_calc_test.dart`. **Live-verified 2026-06-21** (GOOD-14: body-fat 22% → Katch-McArdle path used, `bmr 1584` < no-body-fat Mifflin ~1694).
 - **`NUT-03`** — The MY TARGETS projection reads `current_weight_kg`, `target_weight_kg`, `pace_preference` and shows only for `lose_fat`/`build_muscle` goals with a non-zero gap. **Verify:** `test/contracts/nutrition_screen_layout_test.dart`.
 - **`NUT-04`** — Log Food is a 2-tab surface: AI text analysis ("2 chapatis and dal") + Scan meal (camera). **Verify:** `test/contracts/log_food_sheet_test.dart`.
 - **`NUT-05`** — WHEN AI text analysis runs THEN `food_logger_section._analyse` calls `food-text-analysis` Edge Function; the daily counter increments at the API-call site (NOT at save). Server caps 50/day free, 200/day PRO. **Verify:** `test/contracts/food_text_analysis_daily_cap_test.dart`.
@@ -260,9 +264,23 @@ Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 - **`PROF-17`** — Shareable cards (workout receipt, future prediction, beat-my-coach) are all FREE and embed the ICANBEFITTER wordmark + QR → icanbefitter.com. **Verify:** needs test (share-card content).
 - **`PROF-18`** — Notifications inbox is written via `NotificationInboxService.record` and synced via `syncNotificationsInboxEntry`; theme is locked dark. **Verify:** needs test (inbox sync).
 
+### Referral lifecycle (`PROF-19`)
+
+- **`PROF-19`** — Referral lifecycle (extends PROF-14, which covers only the redeemer's grant): each user has a shareable referral code; the Invite Friends surface (Profile › Share & Grow) shares it with the promise "Both get 7 days PRO free". WHEN a new user (signup ≤ 7 days ago) redeems a code via `apply_referral_sheet` THEN the `redeem-referral` Edge Function — service-role client + `getUser(token)` (d2b9e6; ADR-0016) calling the `redeem_referral_atomic(referrer, receiver, days=7)` RPC — grants **7-day PRO (`referral_trial`) to BOTH the referrer and the redeemer**, read by `isPro()`; a 23505 race returns 200 `alreadyRedeemed`. **Verify:** needs test (both-party grant) + Edge Function smoke. (Referrer-code read failed pre-d2b9e6 because the user JWT was passed in the service-role client's global headers → ran as `authenticated` under RLS — see ADR-0016.)
+
 ---
 
-## 7. CROSS-CUTTING (`XC-`)
+## 7. COMMUNITY REVIEW (`COMM-`)
+
+> Surfaced via Profile › Submissions. Charter GAP filled 2026-06-26 (the 2026-06-21 walk verified it live — GOOD-9 — but no assertion existed).
+
+- **`COMM-01`** — The COMMUNITY REVIEW tab shows a **cross-user, anonymized** queue of pending community-submitted exercises (no author shown) with REJECT / APPROVE. The queue is sourced via the `get-community-review-items` Edge Function (service-role client + `getUser(token)` + anonymized projection — NOT a direct table SELECT, because `community_reviews`/submissions are own-only RLS per migration 092; a direct read returns empty for everyone). **Verify:** `test/contracts/community_review_rls_context_c7d4f1_test.dart`. **Live-verified 2026-06-21** (GOOD-9: cross-user queue non-empty, no author leak, no console errors).
+- **`COMM-02`** — MY SUBMISSIONS shows the signed-in user's OWN submitted exercises + each one's status (PENDING / APPROVED / REJECTED). **Verify:** needs test. **Live-verified 2026-06-21** (test2's "test exercise / PENDING" rendered).
+- **`COMM-03`** — WHEN the user votes APPROVE / REJECT THEN the vote mutates the cross-user community item server-side; a quorum promotes a pending exercise into the shared library (`promote-community-item`, which guards `if (source.user_id)` for pseudonymized rows). **Verify:** needs test (vote write path). *(Not exercised in the live walk — mutating real cross-user community data needs explicit founder ok + a reversibility check.)*
+
+---
+
+## 8. CROSS-CUTTING (`XC-`)
 
 - **`XC-01`** — All reads/writes hit Hive first; the UI NEVER blocks on a Supabase response; Supabase writes are background/`unawaited`. **Verify:** `test/contracts/sync_fanout_contract_test.dart`, `test/lints/`.
 - **`XC-02`** — Every PRO feature is gated through `subscription.gate()`; no inline `isPro` checks in widgets; Phase 1 is never gated. **Verify:** `scripts/check_subscription_gate.dart`, `test/subscription/high_value_features_test.dart`.
@@ -278,6 +296,7 @@ Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 - **`XC-12`** — All screens handle loading (skeleton), error (retry), and empty states. **Verify:** needs test (per-screen widget).
 - **`XC-13`** — `plan_generator.dart` is never modified without explicit instruction; it calls no API and queries only Hive `exerciseBox`. **Verify:** `test/contracts/plan_generator_inputs_test.dart`; `scripts/` gate.
 - **`XC-14`** — The SoT registry (`docs/sot_registry.yaml`) is complete: every registered concept has a writer/reader and a behavioral test path. **Verify:** `test/contracts/sot_registry_completeness_test.dart`.
+- **`XC-15`** — Web-platform variants (the app also ships as a `flutter build web` PWA, phone-framed to ≤430px per `app.dart`): native-only integrations degrade GRACEFULLY behind a `kIsWeb` seam, never a broken/throwing surface. Specifically — (a) health sync (Health Connect / Google Fit / Samsung Health) is native-only; on web the health-sync toggle shows a gated dead-end (Unit-3 d8f3a2), not a broken integration; (b) a PWA install banner surfaces on web via a `dart:js_interop` conditional import; (c) Crashlytics is `kIsWeb`-guarded at boot (no web crash reporting, no boot crash). **Verify:** `test/contracts/unit3_web_ux_gates_test.dart`, `test/contracts/crashlytics_web_guard_test.dart`. **Live-verified 2026-06-21** (web walk: health dead-end gated, no boot crash).
 
 ---
 

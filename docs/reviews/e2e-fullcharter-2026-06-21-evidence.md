@@ -76,6 +76,31 @@
 ## Process / skill notes
 - `e2e-sim-testing` §3: temp-PRO grant must use **`plan='referral_trial'`** (a `pro_monthly` row without a Razorpay payment is correctly rejected); the **first-PRO grant won't fire on a cold-boot-as-PRO** — it keys on an in-session free→PRO transition (live-verify deferred; covered by behavioral test #177).
 
+## ✅ Unit F — docs closure (2026-06-26)
+
+All four Unit-F items landed (no live DB apply needed):
+- **#151 founder_metrics — VERIFIED SATISFIED, closed (no new artifact).** The original
+  ask was a "SQL view"; U5 shipped `private.founder_metrics()` (migration **093 LIVE**) — a
+  SECURITY DEFINER **function**, deliberately NOT a view (a view inherits the caller's RLS
+  → would leak aggregate counts to anon via PostgREST; the function in the `private` schema
+  is unreachable by the REST API). Live re-verified 2026-06-26: function exists,
+  `security_definer=true`, returns the 10-col table, and the anon-leak gate holds
+  (`has_function_privilege` → anon=false, authenticated=false, service_role=true). A view
+  would re-introduce the exact leak the founder worried about → **do not build it.** Founder
+  calls it in the SQL editor: `select * from private.founder_metrics();`.
+- **#152 EF-auth + token-freshness contract — DONE.** New **ADR-0016**
+  (`docs/adr/0016-edge-function-user-token-auth-contract.md`) + handbook port
+  (`docs/handbook/bug-classes/edge-function-user-token-auth.md`) capturing both seams
+  (server: service-role client + `getUser(token)`, never JWT-as-apikey / JWT-in-global-headers;
+  client: `callFunction` → `ensureFreshToken`). Gates `check_edge_function_auth_pattern.dart`
+  + `check_authed_invoke_fresh_token.dart`.
+- **#147 charter — DONE.** Added ONB-15 (Mission Brief copy-lock), §7 COMM-01..03 (community
+  review), PROF-19 (referral lifecycle), XC-15 (web-platform variants); fixed ONB-06
+  `body_fat_pct`→`body_fat_percent`; flipped verify-status with **Live-verified 2026-06-21**
+  annotations on the walked assertions (ONB-01/06/08/09, AUTH-02/07/11/12, NUT-02, COMM).
+- **skill** `e2e-sim-testing` §3 — temp-PRO grant SQL corrected to `plan='referral_trial'` +
+  the two gotchas documented.
+
 ## PASSES (verified working live)
 Community Review queue (GAP, c7d4f1/mig-092) ✓ · AI food-log cross-surface integrity (Gemini→Hive→UI→cloud, FK-23503 healthy) ✓ · **body-fat HONOR** (22% saved + used in calc) ✓ · ONB-08 preview==saved (3045/135) ✓ · Mission Brief copy-lock (no Instagram CTA) ✓ · reactive `/3` PRO freeze denominator ✓ · onboarding funnel end-to-end ✓ · AUTH-02/11/12 (sign-in surface, signup→mission-brief, 15s CONTINUE) ✓ · quote fix (no "template" garbage) ✓ · PR/weight/insight cards + empty states ✓ · sign-out confirm dialog ✓.
 

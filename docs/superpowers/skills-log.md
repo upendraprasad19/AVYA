@@ -1,0 +1,1 @@
+- 2026-06-26 · strategic-compact · trigger: batch ship (4 units merged to main: recovery/D/E/AI-chat) + phase boundary (docs phase F next) + deep marathon context · founder: ACCEPTED (ran /compact)
