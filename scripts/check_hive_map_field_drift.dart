@@ -281,6 +281,11 @@ const _alwaysOk = <String>{
   // mis-attributes it because workout_repository also walks those prefixes for
   // the streak/PR calc.
   'current_streak_days',
+  // Profile canonical TARGET fields — read by the AI snapshot's daily_targets +
+  // daily_calorie_target (f3c8d1) from userBox['profile'], NOT from exlog/nlog/
+  // wlog rows. The prefix heuristic mis-attributes them because ai_snapshot_builder
+  // also reads those prefixes for PRs / meals / logs.
+  'daily_calories', 'protein_grams', 'carb_grams', 'carbs_grams', 'fat_grams',
   // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +
   // PlanIntegrityReconciler from `user_progress.plan_json`, NOT from a
   // `schedule_*` entry. The prefix heuristic mis-attributes them because both

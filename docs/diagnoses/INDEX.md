@@ -6,6 +6,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### ai_snapshot_building (4 bugs)
+- 2026-06-26 f3c8d1 — >
+- 2026-06-01 a9c3e2 — >
+- 2026-05-22 b4a09c — |
+- 2026-05-17 93aeac — |
+
 ### streak_current_days_cloud_persist (1 bugs)
 - 2026-06-25 e9d4b7 — >
 
@@ -225,11 +231,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### weight_trend_home_chart (1 bugs)
 - 2026-06-02 e1c6a9 — >
-
-### ai_snapshot_building (3 bugs)
-- 2026-06-01 a9c3e2 — >
-- 2026-05-22 b4a09c — |
-- 2026-05-17 93aeac — |
 
 ### ai_coach_tool_loop_gemini_resilience (1 bugs)
 - 2026-06-01 d4f1c2 — >
@@ -721,6 +722,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-26 | f3c8d1 | > | ai_snapshot_building | test/contracts/ai_snapshot_builder_only_test.dart |
 | 2026-06-25 | e9d4b7 | > | streak_current_days_cloud_persist | test/contracts/streak_decay_reckon_permanent_ledger_test.dart |
 | 2026-06-23 | e5c1a2 | > | e2e_cosmetic_copy_sweep | test/contracts/title_case_name_test.dart |
 | 2026-06-23 | c8a1f4 | > | nutrition_target_canonical_read | test/contracts/nutrition_target_carb_dualname_test.dart |

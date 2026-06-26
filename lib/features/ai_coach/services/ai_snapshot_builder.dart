@@ -94,8 +94,12 @@ class AiSnapshotBuilder {
       // Top-level aliases for cron Edge Function readers.
       // audit-2026-05-17 OI-07-FOLLOWUP — closes-diagnose: 2026-05-17-orphan-reader-aliases-7faa3b
       'current_streak_weeks': progress['current_streak_weeks'] ?? 0,
-      'current_streak_days':
-          ((progress['current_streak_weeks'] as num?)?.toInt() ?? 0) * 7,
+      // OBS-8b: read the REAL schedule-aware daily streak (now reliably stamped
+      // by the reckon + train_provider, e9d4b7). The old `weeks*7` approximation
+      // was wrong on any partial week (10-day streak → 7 or 14). Fall back to it
+      // only if the real field is absent (legacy snapshots).
+      'current_streak_days': (progress['current_streak_days'] as num?)?.toInt() ??
+          (((progress['current_streak_weeks'] as num?)?.toInt() ?? 0) * 7),
       'total_workouts_done': progress['total_workouts_done'] ?? 0,
       'current_weight_kg': profile['current_weight_kg'] ?? 0,
       'target_weight_kg': profile['target_weight_kg'] ?? 0,
@@ -103,11 +107,24 @@ class AiSnapshotBuilder {
       'recent_pr_exercise': _topLevelRecentPrField('exercise_name'),
       'recent_pr_weight': _topLevelRecentPrField('weight_kg'),
       'yesterday_calories': _topLevelYesterdayCalories(),
-      'daily_calorie_target': (profile['tdee'] as num?)?.toInt() ?? 0,
+      // Goal-adjusted target = canonical `daily_calories` (BmrCalculator.toMap /
+      // onboarding / recalculateTargets), NOT `tdee` (maintenance). A fat-loss
+      // user's target is tdee MINUS the deficit; sending tdee made the coach
+      // advise hundreds of kcal too high. (morning-alert reads this field too.)
+      'daily_calorie_target': (profile['daily_calories'] as num?)?.toInt() ??
+          (profile['tdee'] as num?)?.toInt() ??
+          0,
+      // Canonical macro targets (BmrCalculator.toMap emit set). The legacy
+      // `protein_g_target` / `protein_target_g` keys were NEVER written by any
+      // writer → the coach saw a 0 g protein goal on every turn. Carbs/fat/calories
+      // added so the coach can compute REMAINING macros vs `today_nutrition`.
       'daily_targets': {
-        'protein': (profile['protein_g_target'] as num?)?.toDouble() ??
-            (profile['protein_target_g'] as num?)?.toDouble() ??
+        'calories': (profile['daily_calories'] as num?)?.toDouble() ?? 0,
+        'protein': (profile['protein_grams'] as num?)?.toDouble() ?? 0,
+        'carbs': ((profile['carb_grams'] ?? profile['carbs_grams']) as num?)
+                ?.toDouble() ??
             0,
+        'fat': (profile['fat_grams'] as num?)?.toDouble() ?? 0,
       },
       'this_week_workouts': _getThisWeekWorkouts(),
       'today_nutrition': _getTodayNutrition(),
@@ -542,9 +559,19 @@ class AiSnapshotBuilder {
           exerciseNames.add(log['exercise_name'] as String? ?? '');
         }
       }
-      if (log['type'] == 'workout') {
+      // Planned workout days this week. The plan writer (workout_schedule_read_
+      // service.dart:160 via upsertScheduled) stamps `type:'workout'` on each
+      // scheduled workout day (the split — PUSH/PULL — lives in `workout_name`)
+      // and `type:'rest'` on rest days, with the date in `log['date']`. So the
+      // `type=='workout'` count is correct (planned was NOT always 0). The ONLY
+      // refinement (B-pass): EXCLUDE travel days — swap_service.activateTravelMode
+      // marks status:'travel' but keeps the type, and the user is away, so it
+      // isn't a planned gym workout for the coach's "this week" motivation.
+      if (log['type'] == 'workout' &&
+          (log['status'] as String?)?.toLowerCase() != 'travel') {
         final date = log['date'] as String? ?? '';
-        if (date.compareTo(weekStartStr) >= 0 && date.compareTo(weekEndStr) <= 0) {
+        if (date.compareTo(weekStartStr) >= 0 &&
+            date.compareTo(weekEndStr) <= 0) {
           planned++;
         }
       }

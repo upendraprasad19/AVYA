@@ -27,6 +27,7 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/features/ai_coach/services/ai_snapshot_builder.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -186,6 +187,104 @@ void main() {
       // The base keys survive.
       expect(enriched.containsKey('profile'), isTrue);
       expect(enriched.containsKey('progress'), isTrue);
+    });
+
+    // AI-snapshot drift fix (2026-06-26) — the coach reasoned from a WRONG
+    // calorie goal (tdee, not goal-adjusted daily_calories) + a ZERO protein
+    // goal (phantom protein_g_target keys) + a weeks*7 streak, on EVERY turn.
+    // Pin that every target field now reads the canonical (BmrCalculator.toMap
+    // emit set + the real current_streak_days).
+    test('targets read the CANONICAL fields, not tdee / phantom keys / weeks*7',
+        () async {
+      await HiveService.instance.userBox.put('profile', {
+        'id': 'user-3',
+        'full_name': 'B',
+        'gender': 'male',
+        'primary_goal': 'fat_loss',
+        // tdee (maintenance) DELIBERATELY != daily_calories (goal-adjusted).
+        'tdee': 2400,
+        'daily_calories': 1900,
+        'protein_grams': 165,
+        'carb_grams': 180,
+        'fat_grams': 60,
+      });
+      await HiveService.instance.userBox.put('progress', {
+        'current_phase': 1,
+        'current_week': 1,
+        'current_streak_weeks': 3, // weeks*7 would be 21
+        'current_streak_days': 4, // the REAL schedule-aware count
+      });
+
+      final ctx = AiSnapshotBuilder.instance.buildAiContext();
+
+      // #1 — daily_calorie_target = goal-adjusted daily_calories, NOT tdee.
+      expect(ctx['daily_calorie_target'], 1900,
+          reason: 'must send goal-adjusted daily_calories (1900), not tdee (2400)');
+
+      // #2/#4 — daily_targets read the canonical macro fields.
+      final dt = ctx['daily_targets'] as Map<String, dynamic>;
+      expect(dt['protein'], 165.0,
+          reason: 'protein from canonical protein_grams — phantom key gave 0');
+      expect(dt['calories'], 1900.0);
+      expect(dt['carbs'], 180.0);
+      expect(dt['fat'], 60.0);
+
+      // #3 — current_streak_days = the REAL field, not current_streak_weeks*7.
+      expect(ctx['current_streak_days'], 4,
+          reason: 'must read the real current_streak_days (4), not weeks*7 (21)');
+    });
+
+    test('planned_this_week counts type==workout days, excluding rest + travel',
+        () async {
+      await HiveService.instance.userBox.put('profile', {'id': 'u4'});
+      final now = istNow();
+      final weekStart = now.subtract(Duration(days: now.weekday - 1));
+      String dk(int offset) => istDateStr(weekStart.add(Duration(days: offset)));
+      // REAL schedule-row shape (workout_schedule_read_service.dart:160): a
+      // workout day is type:'workout' (split lives in workout_name) with a date
+      // field; rest days are type:'rest'. 3 workout + 1 rest + 1 travel → 3.
+      await HiveService.instance.workoutBox.put('schedule_${dk(0)}',
+          {'type': 'workout', 'workout_name': 'PUSH', 'date': dk(0), 'status': 'pending'});
+      await HiveService.instance.workoutBox.put('schedule_${dk(1)}',
+          {'type': 'workout', 'workout_name': 'PULL', 'date': dk(1), 'status': 'pending'});
+      await HiveService.instance.workoutBox
+          .put('schedule_${dk(2)}', {'type': 'rest', 'date': dk(2)});
+      await HiveService.instance.workoutBox.put('schedule_${dk(3)}',
+          {'type': 'workout', 'workout_name': 'LEGS', 'date': dk(3), 'status': 'pending'});
+      // Travel day keeps type:'workout' but status:'travel' — the user is away,
+      // so it is NOT a planned gym workout (B-pass): must be excluded.
+      await HiveService.instance.workoutBox.put('schedule_${dk(4)}',
+          {'type': 'workout', 'workout_name': 'PUSH', 'date': dk(4), 'status': 'travel'});
+
+      final ctx = AiSnapshotBuilder.instance.buildAiContext();
+      final tw = ctx['this_week_workouts'] as Map<String, dynamic>;
+      expect(tw['planned_this_week'], 3,
+          reason: '3 type==workout days; rest AND travel excluded.');
+    });
+
+    test('current_streak_days FALLS BACK to weeks*7 only when the real field is '
+        'absent (legacy snapshots)', () async {
+      await HiveService.instance.userBox.put('profile', {'id': 'u5'});
+      await HiveService.instance.userBox.put('progress', {
+        'current_phase': 1,
+        'current_streak_weeks': 3,
+        // no current_streak_days → fallback to weeks*7 = 21
+      });
+      final ctx = AiSnapshotBuilder.instance.buildAiContext();
+      expect(ctx['current_streak_days'], 21,
+          reason: 'absent real field → weeks*7 fallback preserves cron behaviour');
+    });
+
+    test('daily_calorie_target FALLS BACK to tdee only when daily_calories is '
+        'absent (pre-toMap profile)', () async {
+      await HiveService.instance.userBox.put('profile', {
+        'id': 'u6',
+        'tdee': 2400,
+        // no daily_calories → fallback to tdee
+      });
+      final ctx = AiSnapshotBuilder.instance.buildAiContext();
+      expect(ctx['daily_calorie_target'], 2400,
+          reason: 'absent canonical → tdee fallback (a pre-canonical profile)');
     });
   });
 }
