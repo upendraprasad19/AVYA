@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### fire_and_forget_sync_coalescing (1 bugs)
+- 2026-06-27 c4f8d2 — >
+
 ### ai_snapshot_building (4 bugs)
 - 2026-06-26 f3c8d1 — >
 - 2026-06-01 a9c3e2 — >
@@ -725,6 +728,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-06-27 | c4f8d2 | > | fire_and_forget_sync_coalescing | test/contracts/sync_coalescer_behavioral_test.dart |
 | 2026-06-26 | f3c8d1 | > | ai_snapshot_building | test/contracts/ai_snapshot_builder_only_test.dart |
 | 2026-06-26 | a1f9c4 | > | hive_first_boot_onboarding_no_blocking_cloud_await | test/contracts/boot_onboarding_hive_first_test.dart |
 | 2026-06-25 | e9d4b7 | > | streak_current_days_cloud_persist | test/contracts/streak_decay_reckon_permanent_ledger_test.dart |

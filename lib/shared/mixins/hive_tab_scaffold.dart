@@ -66,7 +66,12 @@
 // If a future screen needs init-time error capture, extend this mixin rather
 // than overload it.
 
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 /// Mixin for `ConsumerState<T>` tab screens that follow the
@@ -103,16 +108,53 @@ mixin HiveTabScaffoldMixin<T extends ConsumerStatefulWidget>
   /// async kick-offs). NOT re-run on [retry].
   Future<void> initTab() async {}
 
+  /// H5 (Unit H, 2026-06-27) — kill-switch reverting to the pre-Unit-H
+  /// "clear the skeleton only after `await initTab()` resolves" behavior.
+  /// Defensive read: a widget test may pump a tab screen without
+  /// `HiveService.init()`, so a missing configBox defaults to fix-active.
+  bool get _skeletonFirstFrameDisabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_skeleton_first_frame') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() async {
-      try {
-        await initTab();
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
+    if (_skeletonFirstFrameDisabled) {
+      // Pre-Unit-H behavior: flip only after initTab() fully resolves.
+      Future.microtask(() async {
+        try {
+          await initTab();
+        } finally {
+          if (mounted) setState(() => _isLoading = false);
+        }
+      });
+      return;
+    }
+    // H5 — clear the skeleton on the FIRST frame, decoupled from initTab()'s
+    // async tail. Hive is already in-memory, so a slow/hung await inside an
+    // override (or session churn) must NEVER strand the tab on a skeleton.
+    // Run initTab()'s SYNCHRONOUS prefix now (e.g. a pending-promotion
+    // read-and-clear + its own post-frame modal push) BEFORE registering the
+    // flip, so that work is honoured first; let the async tail finish in the
+    // background. The `isLoading || isSessionTearingDown` OR at each tab's
+    // build() is untouched — the FIX-1/OBS-4 logout-flash guard stays intact.
+    final initFuture = initTab();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _isLoading = false);
     });
+    unawaited(initFuture.catchError((Object e, StackTrace s) {
+      debugPrint('[HiveTabScaffoldMixin] initTab() error: $e');
+      // B-pass P2 (c4f8d2) — the async tail now always runs in the background,
+      // so surface its failures to telemetry instead of swallowing silently.
+      unawaited(ErrorTelemetry.recordNonFatal(e, s,
+          reason: 'hive_tab_scaffold_init_tab'));
+    }));
   }
 
   /// Re-fetch path for the screen's error-state retry button. Calls

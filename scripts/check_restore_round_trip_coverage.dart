@@ -25,8 +25,12 @@ const _syncOnlyAllowlist = <String, String>{
       'profile restore is part of restoreFromCloudForUser orchestrator, not per-method',
   'syncWorkoutData':
       'cross-domain orchestrator; restore happens via _restore<Domain> per-prefix',
+  'syncWorkoutDataNow':
+      'H1a (Unit H) non-coalesced fan-out variant of syncWorkoutData; same restore-via-_restore<Domain> pairing',
   'syncNutritionData':
       'cross-domain orchestrator; restore happens via _restoreNutritionLogs / _restoreWaterLogs / etc.',
+  'syncNutritionDataNow':
+      'H1a (Unit H) non-coalesced fan-out variant of syncNutritionData; same restore-via-_restoreNutritionLogs pairing',
   'syncFreezes':
       'restore lives in _restoreFreezes (private); shape verified by '
       'restore_completeness_writes_test',

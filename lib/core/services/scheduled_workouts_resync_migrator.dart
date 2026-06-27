@@ -81,11 +81,15 @@ class ScheduledWorkoutsResyncMigrator {
       if (candidateCount > 0) {
         // Reuse the standard fan-out — Bug B.1's hardened push handles
         // per-row 23503 resolution + null-template fallback. We don't
-        // re-iterate per row here; one syncWorkoutData() call sweeps
+        // re-iterate per row here; one syncWorkoutDataNow() call sweeps
         // every schedule entry under the new lookup-by-name path.
+        // Unit H / H1a — MUST be the NON-coalesced *Now() variant: this is an
+        // awaited migrator that sets its done-flag (below) only after a durable
+        // push; the coalesced syncWorkoutData() could return after merely
+        // marking dirty, leaving the flag set without the push having landed.
         debugPrint(
-            '[ScheduledWorkoutsResyncMigrator] $candidateCount candidate(s); calling syncWorkoutData()');
-        await SyncService.instance.syncWorkoutData();
+            '[ScheduledWorkoutsResyncMigrator] $candidateCount candidate(s); calling syncWorkoutDataNow()');
+        await SyncService.instance.syncWorkoutDataNow();
       } else {
         debugPrint(
             '[ScheduledWorkoutsResyncMigrator] no completed schedule rows; skipping resync');

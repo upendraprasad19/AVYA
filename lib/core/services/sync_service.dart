@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionResponse;
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
@@ -14,6 +15,7 @@ import 'package:icanbefitter/core/services/result.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/sync_coalescer.dart';
 import 'package:icanbefitter/core/services/sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/coach_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/community_sync_domain.dart';
@@ -94,6 +96,9 @@ int _coerceInt(dynamic value, {required int fallback}) {
 class SyncService {
   SyncService._() {
     _registerLifecycle();
+    // H1a (Unit H, 2026-06-27) — flush owed trailing sync passes when the app
+    // backgrounds (best-effort; the next login's full sweep is the backstop).
+    _hive.onAppPaused = flushPendingSyncs;
   }
   static final SyncService _instance = SyncService._();
 
@@ -158,10 +163,61 @@ class SyncService {
     // restore loop has already short-circuited; a fresh restore for
     // the new user must start from `false`.
     _restoreCancelled = false;
+
+    // H1a — drop any owed trailing sync pass for the previous user so a
+    // coalesced burst never lands under the new owner's session.
+    _workoutCoalescer = SyncCoalescer();
+    _nutritionCoalescer = SyncCoalescer();
   }
 
   final HiveService _hive = HiveService.instance;
   final SupabaseService _supabase = SupabaseService.instance;
+
+  /// H1a (Unit H) — coalescers for the fire-and-forget log syncs. A burst of
+  /// per-write `syncWorkoutData()` / `syncNutritionData()` calls collapses to
+  /// 1–2 cloud passes (the signup-storm fix). Reassigned on a user swap (see
+  /// [_onUserChanged]) so an owed trailing pass never lands under the wrong
+  /// owner. Kill-switch `disable_sync_debounce` bypasses both.
+  SyncCoalescer _workoutCoalescer = SyncCoalescer();
+  SyncCoalescer _nutritionCoalescer = SyncCoalescer();
+
+  /// Defensive reads: a test may exercise a sync path without
+  /// `HiveService.init()`; a missing configBox defaults each kill-switch to
+  /// fix-active (the production default, since configBox is always open before
+  /// `runApp`).
+  bool get _syncDebounceDisabled {
+    try {
+      return _hive.configBox.get('disable_sync_debounce') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// H3 (Unit H) — kill-switch reverting [pushSnapshot] to the pre-Unit-H raw
+  /// `functions.invoke` (no cold-start retry).
+  bool get _pushSnapshotViaCallFunctionDisabled {
+    try {
+      return _hive.configBox
+              .get('disable_pushsnapshot_via_callfunction') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// H1a — best-effort flush fired on `AppLifecycleState.paused` (wired to
+  /// [HiveService.onAppPaused] in the constructor). Runs the NON-coalesced
+  /// variants so a burst that coalesced just before backgrounding still reaches
+  /// cloud. Purely best-effort: Hive is the source of truth, so a missed flush
+  /// is a delay (the next login's full sweep re-pushes), never data loss.
+  void flushPendingSyncs() {
+    if (pausedForSimulation) return;
+    // Go THROUGH the coalescer (not the raw *Now()) so a flush that lands while
+    // a pass is already draining sets _dirty for ONE trailing pass instead of
+    // starting a concurrent second fan-out (B-pass P1, diagnose c4f8d2).
+    unawaited(_workoutCoalescer.trigger(syncWorkoutDataNow));
+    unawaited(_nutritionCoalescer.trigger(syncNutritionDataNow));
+  }
 
   /// Tech-debt audit 2026-05-20 / A6 — registered [SyncDomain] wrappers
   /// for the 8 part-files. Each wrapper delegates to the existing
@@ -654,14 +710,28 @@ class SyncService {
 
       final snapshot = compileDailySnapshot();
 
-      // BUG-C (d3a1c7): refresh before the authed daily-snapshot invoke. A
-      // stale access token 401'd push_snapshot, so the plan_json / coach_memory
-      // snapshot never persisted to cloud — the obs-1 stale-plan_json enabler.
-      await _supabase.ensureFreshToken();
-      final response = await _supabase.client.functions.invoke(
-        'daily-snapshot',
-        body: {'snapshot_json': snapshot},
-      );
+      // H3 (Unit H, 2026-06-27) — route through callFunction so a transient
+      // cold-start 502/503/504 retries with backoff instead of failing on the
+      // first attempt (was a raw `functions.invoke` with NO retry). callFunction
+      // refreshes the token first — preserving the BUG-C (d3a1c7) fix where a
+      // stale access token 401'd push_snapshot and dropped the plan_json /
+      // coach_memory snapshot — so the explicit ensureFreshToken() here is now
+      // redundant. Returns the full FunctionResponse; the coach_memory mirror
+      // below still reads response.data. Kill-switch
+      // `disable_pushsnapshot_via_callfunction` reverts to the raw invoke.
+      final FunctionResponse response;
+      if (_pushSnapshotViaCallFunctionDisabled) {
+        await _supabase.ensureFreshToken();
+        response = await _supabase.client.functions.invoke(
+          'daily-snapshot',
+          body: {'snapshot_json': snapshot},
+        );
+      } else {
+        response = await _supabase.callFunction(
+          'daily-snapshot',
+          body: {'snapshot_json': snapshot},
+        );
+      }
 
       if (response.status != 200) {
         debugPrint(

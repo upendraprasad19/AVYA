@@ -139,9 +139,12 @@ void main() {
 
         // Each public sync entry awaits _ensureSessionOpen before any
         // user-scoped Hive read.
+        // Unit H / H1a — the coalesced syncWorkoutData()/syncNutritionData()
+        // entries delegate the Hive-touching fan-out to the *Now() variants, so
+        // the bootstrap (_ensureSessionOpen) now lives there.
         for (final method in const [
-          'syncWorkoutData',
-          'syncNutritionData',
+          'syncWorkoutDataNow',
+          'syncNutritionDataNow',
           'pushSnapshot',
           'checkAndSync',
           '_backfillCustomEntityIds',

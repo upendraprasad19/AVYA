@@ -1465,9 +1465,15 @@ concepts:
       AND the contract test.
     writers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 24-65
-        method: syncWorkoutData (SyncWorkoutExtension)
+        line_range: 24-96
+        method: syncWorkoutData (coalesced entry) -> syncWorkoutDataNow (fan-out)
         notes: |
+          H1a (Unit H, 2026-06-27): syncWorkoutData() is now the COALESCED
+          per-write entry (in-flight + dirty do-while via SyncCoalescer); the
+          actual fan-out body moved to syncWorkoutDataNow(). Awaited callers
+          (boot migrator scheduled_workouts_resync, sim harness) MUST call
+          syncWorkoutDataNow so completion stays durable. Kill-switch
+          disable_sync_debounce bypasses the coalescer.
           Fans out to: _syncWorkoutLogs, _syncExerciseLogs,
           _syncScheduleCompletions, _syncWorkoutTemplates,
           _syncScheduledWorkouts, _syncStreaks.
@@ -1565,9 +1571,13 @@ concepts:
       cloud".
     writers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 14-48
-        method: syncNutritionData
+        line_range: 14-66
+        method: syncNutritionData (coalesced entry) -> syncNutritionDataNow (fan-out)
         notes: |
+          H1a (Unit H, 2026-06-27): syncNutritionData() is now the COALESCED
+          per-write entry (SyncCoalescer); the fan-out body moved to
+          syncNutritionDataNow(). Awaited callers (sim harness) MUST call
+          syncNutritionDataNow. Kill-switch disable_sync_debounce bypasses it.
           Fans out to: _syncNutritionLogs, _syncWaterLogs,
           _syncSavedMeals. Lives in the SyncServiceNutrition extension
           (part of sync_service.dart) per Test #14 refactor.
@@ -1627,7 +1637,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1001-1025
+        line_range: 1076-1100
         method: restoreFromCloudForUser
         semantic: aggregated
         fields_read: [<orchestrates all _restore* methods>]

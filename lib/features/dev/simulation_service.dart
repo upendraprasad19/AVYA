@@ -287,8 +287,11 @@ class SimulationService {
           report.events.add('sync $label failed: $e');
         }
       }
-      await flush('workout', sync.syncWorkoutData);
-      await flush('nutrition+water', sync.syncNutritionData);
+      // Unit H / H1a — the *Now() (non-coalesced) variants guarantee a full
+      // awaited pass; the plain syncWorkoutData()/syncNutritionData() coalesce
+      // and could return after merely marking dirty.
+      await flush('workout', sync.syncWorkoutDataNow);
+      await flush('nutrition+water', sync.syncNutritionDataNow);
       await flush('weight', sync.syncWeightNow);
       await flush('sleep', sync.syncSleepNow);
       await flush('measurements', sync.syncMeasurementsNow);

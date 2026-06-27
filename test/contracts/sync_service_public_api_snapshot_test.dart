@@ -23,6 +23,8 @@ void main() {
         'bumpRestoreCompleted',
         'checkAndSync',
         'drainTelemetryQueue',
+        // H1a (Unit H, 2026-06-27) — app-pause best-effort flush.
+        'flushPendingSyncs',
         'initQueue',
         'pullRecentCrossChannelLogs',
         'pushSnapshot',
@@ -38,6 +40,8 @@ void main() {
         'syncMeasurementsNow',
         'syncNotificationsInboxEntry',
         'syncNutritionData',
+        // H1a (Unit H) — non-coalesced variant for awaited callers.
+        'syncNutritionDataNow',
         'syncProfileNow',
         'syncProgressNow',
         'syncSavedDietPlan',
@@ -45,6 +49,8 @@ void main() {
         'syncSleepNow',
         'syncWeightNow',
         'syncWorkoutData',
+        // H1a (Unit H) — non-coalesced variant for awaited callers.
+        'syncWorkoutDataNow',
         'unsubscribeRealtime',
         'weeklyFullSync',
         // Getters that look like methods (counted as public API surface):

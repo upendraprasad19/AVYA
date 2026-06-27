@@ -21,8 +21,27 @@ part of '../sync_service.dart';
 extension SyncServiceWorkout on SyncService {
   /// Push workout logs + exercise logs + schedule completions to Supabase.
   /// Call this after a workout is completed for near-realtime backup.
+  /// Coalesced fire-and-forget entry (per-write). A burst of calls collapses
+  /// to 1–2 cloud passes via [SyncCoalescer] (Unit H / H1a) instead of one full
+  /// fan-out per write — the signup-storm fix. Awaited callers that need
+  /// durable completion (boot migrators, the sim harness) MUST use
+  /// [syncWorkoutDataNow] instead. Kill-switch `disable_sync_debounce` bypasses
+  /// the coalescer (every call runs the full fan-out — the pre-Unit-H behavior).
   Future<void> syncWorkoutData() async {
-    if (SyncService.pausedForSimulation) return; // sim bulk-backfill
+    if (SyncService.pausedForSimulation) return; // sim bulk-backfill (guard FIRST)
+    if (_syncDebounceDisabled) {
+      await syncWorkoutDataNow();
+      return;
+    }
+    await _workoutCoalescer.trigger(syncWorkoutDataNow);
+  }
+
+  /// Non-coalesced workout-domain push — runs the full fan-out NOW. Called by
+  /// awaited callers (boot migrators, the sim harness) and internally by
+  /// [syncWorkoutData]'s coalescer. Pinned by `sync_fanout_contract_test` +
+  /// `sync_template_before_schedule_order_test`: MUST call all 6 helpers with
+  /// `_syncWorkoutTemplates` BEFORE the parallel `Future.wait` (FK-23503 / Bug B.1).
+  Future<void> syncWorkoutDataNow() async {
     try {
       // APK Test #12.7 — every WorkoutWriteService.logExercise fires
       // this fire-and-forget. If we land before _ensureLocalUser, every
@@ -54,7 +73,7 @@ extension SyncServiceWorkout on SyncService {
       );
     } catch (e, st) {
       // Offline — will sync on next weekly sync.
-      debugPrint('[SyncService.syncWorkoutData] $e');
+      debugPrint('[SyncService.syncWorkoutDataNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'sync_service_sync_workout_data'));

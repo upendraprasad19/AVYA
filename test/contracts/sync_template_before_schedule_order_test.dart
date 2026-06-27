@@ -105,27 +105,30 @@ void main() {
         }
       });
 
-      test('syncWorkoutData awaits sync_workout_templates before parallel batch',
+      test('syncWorkoutDataNow awaits sync_workout_templates before parallel batch',
           () {
+        // Unit H / H1a — the fan-out body (templates-first ordering) moved to
+        // the non-coalesced syncWorkoutDataNow(); syncWorkoutData() is the
+        // coalesced entry that delegates to it.
         final body = extractMethodBody(
           src,
-          r'Future<void>\s+syncWorkoutData\(\)\s*async\s*\{',
+          r'Future<void>\s+syncWorkoutDataNow\(\)\s*async\s*\{',
         );
         expect(body, isNotEmpty,
-            reason: 'syncWorkoutData method body must be extractable');
+            reason: 'syncWorkoutDataNow method body must be extractable');
 
         final templateAwaitIdx = body.indexOf("_syncWorkoutTemplates(userId)");
         final futureWaitIdx = body.indexOf('Future.wait');
         expect(templateAwaitIdx, isNonNegative,
-            reason: '_syncWorkoutTemplates must appear in syncWorkoutData');
+            reason: '_syncWorkoutTemplates must appear in syncWorkoutDataNow');
         expect(futureWaitIdx, isNonNegative,
-            reason: 'Future.wait must appear in syncWorkoutData');
+            reason: 'Future.wait must appear in syncWorkoutDataNow');
         expect(
           templateAwaitIdx < futureWaitIdx,
           isTrue,
           reason:
               '_syncWorkoutTemplates must be sequenced BEFORE the Future.wait '
-              'parallel batch in syncWorkoutData too',
+              'parallel batch in syncWorkoutDataNow too',
         );
       });
     },

@@ -7,7 +7,8 @@
 //     present (the `userBox` gate that makes the migrator idempotent).
 //   • Migrator iterates `schedule_` prefixed keys (`'schedule_'`
 //     literal).
-//   • Migrator calls `SyncService.instance.syncWorkoutData()`.
+//   • Migrator calls `SyncService.instance.syncWorkoutDataNow()` (Unit H/H1a —
+//     the NON-coalesced variant; an awaited migrator needs durable completion).
 //
 // See docs/diagnoses/2026-05-10-resync-migrator-e3f7a8.md.
 
@@ -50,13 +51,15 @@ void main() {
       );
     });
 
-    test('invokes SyncService.instance.syncWorkoutData()', () {
+    test('invokes SyncService.instance.syncWorkoutDataNow()', () {
       expect(
-        src.contains('SyncService.instance.syncWorkoutData()'),
+        src.contains('SyncService.instance.syncWorkoutDataNow()'),
         isTrue,
         reason:
-            'Reuses standard fan-out — Bug B.1 hardened push handles '
-            'per-row 23503 resolution',
+            'Unit H/H1a — an awaited migrator MUST use the NON-coalesced *Now() '
+            'variant (the coalesced syncWorkoutData() could return after merely '
+            'marking dirty, before the push lands). Reuses the standard fan-out '
+            '— Bug B.1 hardened push handles per-row 23503 resolution.',
       );
     });
   });
