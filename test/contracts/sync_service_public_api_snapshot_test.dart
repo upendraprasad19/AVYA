@@ -28,6 +28,9 @@ void main() {
         'initQueue',
         'pullRecentCrossChannelLogs',
         'pushSnapshot',
+        // H1b Part B1 (Unit H, 2026-06-27) — non-coalesced variant for the
+        // eager/durable callers (onboarding first-context, checkAndSync backstop).
+        'pushSnapshotNow',
         'reportSyncFailure',
         'restoreFromCloud',
         'restoreFromCloudForUser',

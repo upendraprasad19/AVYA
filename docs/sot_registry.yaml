@@ -704,14 +704,20 @@ concepts:
           Rebuilds the context via buildAiContext() between retry
           rounds so the snapshot reflects post-mutation Hive state.
       - file: lib/core/services/sync_service.dart
-        line_range: 766-800
-        method: pushSnapshot
+        line_range: 800-845
+        method: pushSnapshot (coalesced) -> pushSnapshotNow (body)
         semantic: pass-through
         fields_read: [<full context map>]
         notes: |
           Compiles daily snapshot from buildAiContext + uploads to
           user_daily_snapshots. Mirror to coach_memory runs in same
-          pass.
+          pass. H1b Part B1 (2026-06-27): pushSnapshot() is now the COALESCED
+          fire-and-forget entry (via _snapshotCoalescer); the verbatim body
+          moved to pushSnapshotNow(). _onUserChanged resets _snapshotCoalescer
+          (cross-account coach_memory leak guard). 3 DURABLE callers bypass the
+          coalescer via pushSnapshotNow(): onboarding completeOnboarding,
+          checkAndSync (awaited backstop), coach_memory_service:142 (freshly-
+          extracted coaching_notes). Kill-switch disable_snapshot_debounce.
     reader_allow_files:
       - { file: lib/core/services/sync/sync_coach.dart, reason: "syncCoachMemoryNow projects coaching_notes UP to cloud — writer-side allow" }
       - { file: lib/core/services/sync/sync_profile.dart, reason: "_restoreUserProfile projects coaching_notes via the user_profile row payload — pass-through writer" }
@@ -1683,7 +1689,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1143-1175
+        line_range: 1195-1225
         method: restoreFromCloudForUser
         semantic: aggregated
         fields_read: [<orchestrates all _restore* methods>]

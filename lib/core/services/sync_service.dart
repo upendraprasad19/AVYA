@@ -168,6 +168,11 @@ class SyncService {
     // coalesced burst never lands under the new owner's session.
     _workoutCoalescer = SyncCoalescer();
     _nutritionCoalescer = SyncCoalescer();
+    // H1b Part B1 (B-fix-1, GATING) — reset the snapshot coalescer too. An owed
+    // trailing pushSnapshot under the NEW owner would mirror the PREVIOUS user's
+    // coach_memory into the new owner's coachBox (auth_hive_owner_agreement
+    // cross-account leak — strictly worse than the cost problem).
+    _snapshotCoalescer = SyncCoalescer();
   }
 
   final HiveService _hive = HiveService.instance;
@@ -180,6 +185,14 @@ class SyncService {
   /// owner. Kill-switch `disable_sync_debounce` bypasses both.
   SyncCoalescer _workoutCoalescer = SyncCoalescer();
   SyncCoalescer _nutritionCoalescer = SyncCoalescer();
+
+  /// H1b Part B1 — coalescer for the fire-and-forget `pushSnapshot()` (~50
+  /// callers each fire it after a write). A burst collapses to 1–2 EF calls.
+  /// MUST be reassigned on a user swap (see [_onUserChanged]) — an owed trailing
+  /// pass under the new owner would mirror the previous user's coach_memory into
+  /// the new owner's `coachBox` (cross-account leak). Kill-switch
+  /// `disable_snapshot_debounce` bypasses it.
+  SyncCoalescer _snapshotCoalescer = SyncCoalescer();
 
   /// Defensive reads: a test may exercise a sync path without
   /// `HiveService.init()`; a missing configBox defaults each kill-switch to
@@ -200,6 +213,17 @@ class SyncService {
       return _hive.configBox
               .get('disable_pushsnapshot_via_callfunction') ==
           true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// H1b Part B1 — kill-switch reverting [pushSnapshot] to the verbatim
+  /// pre-H1b direct (un-coalesced) [pushSnapshotNow]. Defensive read (see
+  /// [_syncDebounceDisabled]).
+  bool get _snapshotDebounceDisabled {
+    try {
+      return _hive.configBox.get('disable_snapshot_debounce') == true;
     } catch (_) {
       return false;
     }
@@ -284,6 +308,11 @@ class SyncService {
     // starting a concurrent second fan-out (B-pass P1, diagnose c4f8d2).
     unawaited(_workoutCoalescer.trigger(syncWorkoutDataNow));
     unawaited(_nutritionCoalescer.trigger(syncNutritionDataNow));
+    // H1b Part B1 (B-fix-3) — best-effort snapshot flush on background. The real
+    // durability guarantee is the eager `pushSnapshotNow()` carve-out (onboarding
+    // + checkAndSync); web `paused` is unreliable, so this is necessary-not-
+    // sufficient.
+    unawaited(_snapshotCoalescer.trigger(pushSnapshotNow));
   }
 
   /// Tech-debt audit 2026-05-20 / A6 — registered [SyncDomain] wrappers
@@ -702,7 +731,10 @@ class SyncService {
       // Includes: profile, progress, workouts, nutrition, water, steps,
       // weight, PRs, coaching notes — full AI context for reports/alerts.
       try {
-        await pushSnapshot();
+        // H1b Part B1 (B-fix-2) — the next-login backstop MUST be durable; call
+        // the non-coalesced *Now() so completion is awaited, not deferred to a
+        // coalescer trailing pass.
+        await pushSnapshotNow();
       } catch (e, st) {
         debugPrint('[SyncService.checkAndSync] Snapshot push failed: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -759,11 +791,31 @@ class SyncService {
     };
   }
 
+  /// H1b Part B1 — coalesced fire-and-forget snapshot entry. The ~50 per-write
+  /// callers collapse to 1–2 `daily-snapshot` EF calls via [_snapshotCoalescer]
+  /// instead of one invoke per write. Callers that need a DURABLE snapshot
+  /// (onboarding first-context, the checkAndSync next-login backstop) MUST call
+  /// [pushSnapshotNow] directly. Kill-switch `disable_snapshot_debounce` bypasses
+  /// the coalescer (every call runs the full push — the pre-H1b behavior).
+  Future<void> pushSnapshot() async {
+    if (pausedForSimulation) return; // sim bulk-backfill (guard FIRST)
+    if (_snapshotDebounceDisabled) {
+      await pushSnapshotNow();
+      return;
+    }
+    await _snapshotCoalescer.trigger(pushSnapshotNow);
+  }
+
   /// Pushes the daily snapshot to Supabase via the `daily-snapshot` Edge
   /// Function. The function upserts `user_daily_snapshots`, runs coaching
   /// notes extraction, and returns the latest `coach_memory` row, which
   /// we mirror into Hive `coachBox['coach_memory']` for local readers.
-  Future<void> pushSnapshot() async {
+  ///
+  /// Non-coalesced — runs the full push NOW. Called by awaited/durable callers
+  /// (onboarding first-context, the checkAndSync next-login backstop) and
+  /// internally by [pushSnapshot]'s coalescer. Kept verbatim from the pre-H1b
+  /// `pushSnapshot` (H3 callFunction routing + coach_memory mirror intact).
+  Future<void> pushSnapshotNow() async {
     // Sim harness: suppress the per-write snapshot storm during a bulk
     // backfill; the harness fires one final pushSnapshot itself.
     if (pausedForSimulation) return;
