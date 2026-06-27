@@ -116,7 +116,13 @@ class SimulationService {
     // Wipe all previously-logged journey data so re-runs start clean (the
     // WriteServices key by date; without this a re-drive double-logs).
     await _clearKeysWithPrefixes(HiveService.instance.workoutBox, const [
-      'exlog_', 'wlog_', 'schedule_', 'displaced_', 'exercise_log_index_'
+      'exlog_', 'wlog_', 'schedule_', 'displaced_', 'exercise_log_index_',
+      // H1b Part A (A-fix-3) — the schedule fingerprint index is a single
+      // reserved key (`sync_sched_payload_hash_index`), NOT a `schedule_`
+      // prefix, so the entries above miss it. A survivor would mis-skip the
+      // sim re-drive's scheduled_workouts push. The full key equals this
+      // prefix, so startsWith deletes exactly it.
+      'sync_sched_payload_hash_index',
     ]);
     await _clearKeysWithPrefixes(HiveService.instance.healthBox,
         const ['weight_', 'sleep_log_', 'water_ml_', 'hydration_', 'step_']);

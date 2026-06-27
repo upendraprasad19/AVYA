@@ -1442,6 +1442,29 @@ extension SyncServiceWorkout on SyncService {
   Future<void> _syncScheduledWorkouts(String userId) async {
     final workoutBox = _hive.workoutBox;
 
+    // H1b Part A — load the sync-owned fingerprint index so an unchanged
+    // planned row can skip its idempotent re-upsert (the returning-login
+    // ~96-upsert tax). The index is loaded once per call, mutated in-memory on
+    // CONFIRMED 200s, and persisted (pruned to live rows) after the loop. When
+    // the kill-switch is set we skip the index entirely → the verbatim pre-H1b
+    // unconditional sweep.
+    final bool schedHashSkipDisabled = _schedHashSkipDisabled;
+    final Map<String, String> schedHashIndex = <String, String>{};
+    if (!schedHashSkipDisabled) {
+      final rawIndex = workoutBox.get(SyncService._schedHashIndexKey);
+      if (rawIndex is Map) {
+        rawIndex.forEach((k, v) {
+          if (k is String && v is String) schedHashIndex[k] = v;
+        });
+      }
+    }
+
+    // H1b Part A — fingerprint delegate. Logic + rationale (UUID v5 / sha1 ⇒
+    // cross-VM-stable, A-fix-4) live in SyncService.schedPayloadFingerprint,
+    // extracted there for behavioral-test coverage of the skip decision.
+    String schedFp(Map<String, dynamic> p) =>
+        SyncService.schedPayloadFingerprint(p);
+
     // APK Test #14 / Bug B.1 — per-call cache of template_name → cloud
     // UUID. A week's worth of schedule rows that share the same template
     // would otherwise N×SELECT. `null` cached values mark known-misses
@@ -1541,11 +1564,32 @@ extension SyncServiceWorkout on SyncService {
               'completed_at': completedAt,
             };
 
+        // H1b Part A — skip the idempotent re-upsert when this date's resolved
+        // payload is byte-identical to the last CONFIRMED push. A-fix-1
+        // (LOAD-BEARING): a `completed` row is NEVER skipped — cloud can be
+        // silently stale (d9b2c5 / Bug B.1) and the resync migrator's one-shot
+        // flag would make a mis-skip PERMANENT, so completed rows always
+        // re-push. Only planned-week regeneration (the bulk of the ~96) skips.
+        final firstPayload = payload(cloudTemplateId);
+        final entryStatus = (entry['status'] ?? 'planned').toString();
+        if (SyncService.schedShouldSkipUpsert(
+          killSwitchDisabled: schedHashSkipDisabled,
+          status: entryStatus,
+          storedFingerprint: schedHashIndex[date],
+          currentFingerprint: schedFp(firstPayload),
+        )) {
+          continue; // cloud already holds this exact row
+        }
+
         try {
           await _supabase.client
               .from('scheduled_workouts')
-              .upsert(payload(cloudTemplateId),
-                  onConflict: 'user_id,scheduled_date');
+              .upsert(firstPayload, onConflict: 'user_id,scheduled_date');
+          // H1b Part A — record the CONFIRMED fingerprint (store-on-200-only:
+          // any throw below leaves no entry → the next pass re-pushes).
+          if (!schedHashSkipDisabled) {
+            schedHashIndex[date] = schedFp(firstPayload);
+          }
         } on Object catch (firstErr) {
           // APK Test #14 / Bug B.1 — distinguish 23503 (FK violation on
           // template_id) from other failures. PostgrestException's code
@@ -1575,11 +1619,17 @@ extension SyncServiceWorkout on SyncService {
             templateNameToCloudId.clear();
             cloudTemplateId = await resolveCloudTemplateId(rawTemplateId);
 
+            final recoveryPayload = payload(cloudTemplateId);
             try {
               await _supabase.client
                   .from('scheduled_workouts')
-                  .upsert(payload(cloudTemplateId),
+                  .upsert(recoveryPayload,
                       onConflict: 'user_id,scheduled_date');
+              // H1b Part A — recovery confirmed; record the (re-resolved)
+              // fingerprint so the next pass skips this now-healed row.
+              if (!schedHashSkipDisabled) {
+                schedHashIndex[date] = schedFp(recoveryPayload);
+              }
               // Recovery succeeded — log telemetry event.
               try {
                 await _reportSyncFailure(
@@ -1601,11 +1651,18 @@ extension SyncServiceWorkout on SyncService {
           // the recovery slot): null-template fallback. Status +
           // completed_at still reach cloud so the calendar tick survives;
           // template attribution is the only loss.
+          final fallbackPayload = payload(null);
           try {
             await _supabase.client
                 .from('scheduled_workouts')
-                .upsert(payload(null),
+                .upsert(fallbackPayload,
                     onConflict: 'user_id,scheduled_date');
+            // H1b Part A — orphan-fallback confirmed; record the null-template
+            // fingerprint. It differs from a resolved-template fingerprint, so a
+            // later pass that resolves the FK re-pushes WITH the template.
+            if (!schedHashSkipDisabled) {
+              schedHashIndex[date] = schedFp(fallbackPayload);
+            }
             try {
               await _reportSyncFailure(
                 opType: 'scheduled_workout_template_orphaned',
@@ -1635,6 +1692,25 @@ extension SyncServiceWorkout on SyncService {
           await _reportSyncFailure(opType: 'upsert_scheduled_workout', error: e);
         } catch (_) {}
       }
+    }
+
+    // H1b Part A (A-fix-2) — persist the fingerprint index, pruned to the
+    // schedule rows still present. A deleted date drops its entry, so a later
+    // re-create re-pushes (covers the delete sites without per-call-site
+    // wiring). Store-back only on the live skip path so the kill-switch leaves
+    // the box verbatim.
+    if (!schedHashSkipDisabled) {
+      final liveDates = <String>{};
+      for (final key in workoutBox.keys) {
+        if (key is String && key.startsWith('schedule_')) {
+          final r = workoutBox.get(key);
+          if (r is Map && r['date'] is String) {
+            liveDates.add(r['date'] as String);
+          }
+        }
+      }
+      await workoutBox.put(SyncService._schedHashIndexKey,
+          SyncService.schedPrunedHashIndex(schedHashIndex, liveDates));
     }
   }
 

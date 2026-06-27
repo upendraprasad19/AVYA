@@ -205,6 +205,73 @@ class SyncService {
     }
   }
 
+  /// H1b Part A — reserved user-scoped `workoutBox` key holding the
+  /// `{scheduled_date: fingerprint}` index that lets an unchanged planned
+  /// `scheduled_workouts` row skip its idempotent re-upsert (a returning login
+  /// re-pushed ~96 rows the cloud already held). Sole writer+reader is
+  /// [_syncScheduledWorkouts] so writer/reader drift is structurally
+  /// impossible; the per-user box file IS the namespace, so it auto-clears on
+  /// user-swap / sign-out / DPDP — no extra wiring.
+  static const String _schedHashIndexKey = 'sync_sched_payload_hash_index';
+
+  /// H1b Part A — kill-switch reverting [_syncScheduledWorkouts] to the verbatim
+  /// pre-H1b unconditional full-sweep upsert (no fingerprint skip). Defensive
+  /// read (see [_syncDebounceDisabled]).
+  bool get _schedHashSkipDisabled {
+    try {
+      return _hive.configBox.get('disable_sched_hash_skip') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// H1b Part A — stable fingerprint of the EXACT `scheduled_workouts` payload
+  /// pushed to cloud. Serializes EVERY entry under a deterministic key sort
+  /// (null → '') so any value change — and a present-vs-absent `template_id`
+  /// (the key set differs) — flips the fingerprint and forces a re-push.
+  /// Key-generic (not a fixed field list) so a future payload column is covered
+  /// automatically — no forget-to-fingerprint drift. [_deterministicId] is UUID
+  /// v5 (sha1-based) → STABLE across VMs/sessions (NOT `String.hashCode`, H-15).
+  /// Pure; extracted for behavioral coverage.
+  @visibleForTesting
+  static String schedPayloadFingerprint(Map<String, dynamic> payload) {
+    final keys = payload.keys.toList()..sort();
+    final canonical =
+        keys.map((k) => '$k=${payload[k] ?? ''}').join('|');
+    return _deterministicId(canonical);
+  }
+
+  /// H1b Part A — the skip decision for one `scheduled_workouts` row. True iff
+  /// the idempotent re-upsert can be skipped because cloud already holds this
+  /// exact payload. A `completed` row NEVER skips (A-fix-1: cloud can be
+  /// silently stale per d9b2c5/B.1 and the resync migrator's one-shot flag makes
+  /// a mis-skip PERMANENT). A null [storedFingerprint] (never pushed, or a prior
+  /// push failed → store-on-200-only) never skips. Pure.
+  @visibleForTesting
+  static bool schedShouldSkipUpsert({
+    required bool killSwitchDisabled,
+    required String status,
+    required String? storedFingerprint,
+    required String currentFingerprint,
+  }) {
+    if (killSwitchDisabled) return false;
+    if (status == 'completed') return false;
+    return storedFingerprint != null &&
+        storedFingerprint == currentFingerprint;
+  }
+
+  /// H1b Part A (A-fix-2) — the fingerprint index pruned to the schedule rows
+  /// still present. A deleted date drops its entry so a later re-create
+  /// re-pushes. Pure (returns a new map).
+  @visibleForTesting
+  static Map<String, String> schedPrunedHashIndex(
+      Map<String, String> index, Set<String> liveDates) {
+    return <String, String>{
+      for (final e in index.entries)
+        if (liveDates.contains(e.key)) e.key: e.value,
+    };
+  }
+
   /// H1a — best-effort flush fired on `AppLifecycleState.paused` (wired to
   /// [HiveService.onAppPaused] in the constructor). Runs the NON-coalesced
   /// variants so a burst that coalesced just before backgrounding still reaches
