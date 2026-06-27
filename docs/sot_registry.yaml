@@ -716,7 +716,7 @@ concepts:
           moved to pushSnapshotNow(). _onUserChanged resets _snapshotCoalescer
           (cross-account coach_memory leak guard). 3 DURABLE callers bypass the
           coalescer via pushSnapshotNow(): onboarding completeOnboarding,
-          checkAndSync (awaited backstop), coach_memory_service:142 (freshly-
+          checkAndSync (awaited backstop), coach_memory_service:146 (freshly-
           extracted coaching_notes). Kill-switch disable_snapshot_debounce.
     reader_allow_files:
       - { file: lib/core/services/sync/sync_coach.dart, reason: "syncCoachMemoryNow projects coaching_notes UP to cloud — writer-side allow" }

@@ -23,6 +23,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
 void main() {
@@ -207,6 +208,59 @@ void main() {
           reason:
               'the fingerprint must be stored ONLY after a confirmed 200 at the '
               '3 success points (plain / 23503-recovery / null-fallback)');
+    });
+  });
+
+  // B-pass P1 — a real Hive put→get round-trip of the index map, not just the
+  // pure statics. Catches a break in the runtime read-path (the dynamic-typed
+  // Map reconstruction the loop head does) that the static tests would miss.
+  group('Hive round-trip — fingerprint index survives put/get + drives the skip',
+      () {
+    late Directory tempDir;
+    late Box box;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('sched_fp_idx');
+      Hive.init(tempDir.path);
+      box = await Hive.openBox('rt_workout');
+    });
+
+    tearDown(() async {
+      await box.close();
+      await Hive.close();
+      await tempDir.delete(recursive: true);
+    });
+
+    test('index map {date: fingerprint} round-trips and feeds schedShouldSkipUpsert',
+        () async {
+      const key = 'sync_sched_payload_hash_index';
+      final fp = SyncService.schedPayloadFingerprint(basePayload());
+
+      // Writer: store the index map exactly as _syncScheduledWorkouts does.
+      await box.put(key, <String, String>{'2026-06-20': fp});
+
+      // Reader: read back + reconstruct Map<String,String> (Hive returns a
+      // dynamic-typed Map; this mirrors the method's load at the loop head).
+      final raw = box.get(key);
+      expect(raw, isA<Map>(),
+          reason: 'index persists as a Map under the reserved key');
+      final index = <String, String>{};
+      (raw as Map).forEach((k, v) {
+        if (k is String && v is String) index[k] = v;
+      });
+
+      expect(index['2026-06-20'], fp,
+          reason: 'the fingerprint survives the Hive round-trip intact');
+      expect(
+        SyncService.schedShouldSkipUpsert(
+          killSwitchDisabled: false,
+          status: 'planned',
+          storedFingerprint: index['2026-06-20'],
+          currentFingerprint: fp,
+        ),
+        isTrue,
+        reason: 'a planned row matching the PERSISTED index skips its re-upsert',
+      );
     });
   });
 }

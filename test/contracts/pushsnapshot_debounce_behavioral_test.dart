@@ -128,6 +128,22 @@ void main() {
       expect(body.contains('_snapshotCoalescer.trigger(pushSnapshotNow)'), isTrue,
           reason: 'app-pause flush must include the snapshot coalescer');
     });
+
+    test('B-fix-4: the coach_memory mirror is guarded by a session re-check', () {
+      // pushSnapshotNow must re-verify the session owner immediately before the
+      // coach_memory mirror — else an in-flight push parked on its EF await
+      // across an A->B swap leaks A's coach_memory into B's coachBox (the
+      // concurrency-lens P1; B-fix-1's coalescer reset only drops an OWED pass).
+      // `currentUser?.id` is a sync getter with no await before the box
+      // resolution, so the check + mirror are atomic.
+      expect(
+        src.contains('_supabase.currentUser?.id != userId'),
+        isTrue,
+        reason:
+            'pushSnapshotNow must skip the coach_memory mirror on a mid-flight '
+            'session swap (cross-account guard, vector 2)',
+      );
+    });
   });
 
   group('B-fix-2 eager carve-outs (durable callers bypass the coalescer)', () {

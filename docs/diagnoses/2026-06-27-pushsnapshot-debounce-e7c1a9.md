@@ -28,7 +28,7 @@ readers: >
   pushSnapshotNow() directly (B-fix-2): onboarding_provider.dart
   completeOnboarding (first AI-context, inside the signup storm);
   sync_service.dart checkAndSync (the next-login backstop, awaited); and
-  lib/features/ai_coach/services/coach_memory_service.dart:142 (the only PROMPT
+  lib/features/ai_coach/services/coach_memory_service.dart:146 (the only PROMPT
   sync of freshly-extracted coachBox['coaching_notes'] — syncCoachMemoryNow is
   only a delayed full-sweep backstop). The caller inventory was verified against
   the actual files: coach_memory_service.dart lives under
@@ -50,7 +50,7 @@ telemetry_op_types:
 cross_account_guard: true
 forbidden_patterns_checked:
   - "Un-debounced fire-and-forget pushSnapshot — every Hive write fired a separate daily-snapshot EF invoke (~50 callers), the snapshot half of the per-login cost storm. FIXED — coalesced via a dedicated _snapshotCoalescer (reusing SyncCoalescer): a burst collapses to 1–2 EF calls. The verbatim body (H3 callFunction + coach_memory mirror) is preserved in pushSnapshotNow."
-  - "Cross-account coach_memory leak — an owed trailing snapshot pass carried into the NEW owner's session would mirror the PREVIOUS user's coach_memory into the new owner's coachBox (auth_hive_owner_agreement class, strictly worse than the cost problem). FIXED — B-fix-1 (GATING): _onUserChanged reassigns _snapshotCoalescer beside _workoutCoalescer / _nutritionCoalescer, so the fresh coalescer carries NO owed work from the prior session. Pinned by the source-grep that asserts all THREE resets in _onUserChanged."
+  - "Cross-account coach_memory leak — TWO vectors: (1) an OWED trailing snapshot pass carried into the NEW owner's session; (2) an ALREADY-IN-FLIGHT pushSnapshotNow parked on its EF await when an A->B swap completes — its response carries A's coach_memory but the mirror resolves _hive.coachBox to B's box (GuardedBox passes: session==owner==B, blind to data-provenance). FIXED by TWO guards: B-fix-1 (GATING) — _onUserChanged reassigns _snapshotCoalescer beside the other two, so the fresh coalescer carries NO owed work (closes vector 1); B-fix-4 (review e7c1a9) — pushSnapshotNow re-checks `_supabase.currentUser?.id == userId` (the entry-captured uid) immediately before the mirror, a SYNC getter with NO await before the _hive.coachBox resolution → atomic w.r.t. the event loop, skipping the mirror on a mid-flight swap (closes vector 2). The B-pass rated vector 2 a false-alarm (reasoned compileDailySnapshot reads current boxes); the concurrency Hermes lens traced deeper — the leak is the RESPONSE mirror, not the compile. Pinned by the 3-coalescer-reset + cross-account-guard source-greps."
   - "A durable snapshot deferred to a coalescer pass that could be lost — onboarding's first AI-context + the checkAndSync next-login backstop need a GUARANTEED snapshot. FIXED — B-fix-2: both call pushSnapshotNow() directly (eager, bypass the coalescer)."
 proposed_fix: >
   H1b Part B1 — split pushSnapshot() into a coalesced fire-and-forget entry +
@@ -59,8 +59,12 @@ proposed_fix: >
   then the kill-switch, then `_snapshotCoalescer.trigger(pushSnapshotNow)`.
   pushSnapshotNow() is the verbatim pre-H1b body (H3 callFunction routing +
   coach_memory mirror + token refresh — all intact). B-fix-1 (GATING):
-  _onUserChanged resets _snapshotCoalescer so an owed pass can't leak the prior
-  user's coach_memory into the new owner's coachBox. B-fix-2: the 3 durable
+  _onUserChanged resets _snapshotCoalescer so an OWED pass can't leak the prior
+  user's coach_memory into the new owner's coachBox. B-fix-4 (review e7c1a9):
+  pushSnapshotNow re-checks _supabase.currentUser?.id == the entry uid right
+  before the mirror (sync getter, no await before the box resolution → atomic),
+  closing the IN-FLIGHT-await vector B-fix-1 alone cannot (an already-parked
+  push). B-fix-2: the 3 durable
   callers (onboarding first-context, checkAndSync backstop, coach_memory_service
   freshly-extracted coaching_notes) call pushSnapshotNow directly. B-fix-3: flushPendingSyncs flushes the snapshot coalescer on
   app-pause (best-effort; the eager carve-out is the real durability guarantee —
@@ -97,7 +101,7 @@ impact_analysis: >
   to thousands of users. The single biggest residual risk (the cross-account
   coach_memory leak via an owed snapshot pass) is closed by B-fix-1, mirroring
   the H1a coalescer-reset pattern. The eager-caller inventory (3: onboarding,
-  checkAndSync, coach_memory_service:142) was confirmed against the actual files —
+  checkAndSync, coach_memory_service:146) was confirmed against the actual files —
   after an initial wrong-dir + head-limited-grep false-negative on
   coach_memory_service that the SoT entry + a direct Read corrected. Reinforces
   the CLAUDE.md rule: verify a path with the FULL path + an UN-truncated grep
@@ -124,10 +128,17 @@ storm, on a different entry point. Cloud cost scales with the *number of calls*.
   pushSnapshotNow)`) + the verbatim `pushSnapshotNow()` body (H3 callFunction +
   coach_memory mirror intact). Kill-switch `disable_snapshot_debounce`.
 - **B-fix-1 (GATING):** `_onUserChanged` resets `_snapshotCoalescer` beside the
-  other two — an owed trailing pass can't mirror the previous user's
-  coach_memory into the new owner's `coachBox` (cross-account leak).
-- **B-fix-2:** the 2 durable callers (onboarding first-context, checkAndSync
-  next-login backstop) call `pushSnapshotNow()` directly (eager).
+  other two — an OWED trailing pass can't mirror the previous user's
+  coach_memory into the new owner's `coachBox` (cross-account leak, vector 1).
+- **B-fix-4 (review e7c1a9):** `pushSnapshotNow` re-checks
+  `_supabase.currentUser?.id == userId` (the entry-captured uid) immediately
+  before the coach_memory mirror — a SYNC getter with no `await` before the
+  `_hive.coachBox` resolution, so it's atomic. Closes the IN-FLIGHT-await vector
+  (vector 2) that B-fix-1 alone cannot: a push already parked on its EF await
+  when an A→B swap completes would otherwise mirror A's response into B's box.
+- **B-fix-2:** the 3 durable callers (onboarding first-context, checkAndSync
+  next-login backstop, coach_memory_service freshly-extracted coaching_notes)
+  call `pushSnapshotNow()` directly (eager).
 - **B-fix-3:** `flushPendingSyncs` flushes the snapshot coalescer on app-pause
   (best-effort; the eager carve-out is the real guarantee).
 - **DROPPED Part B2** — induction/edit_profile/splash stay coalesced (durability
@@ -136,7 +147,7 @@ storm, on a different entry point. Cloud cost scales with the *number of calls*.
 ## Caller-inventory (verified against code — 3 eager carve-outs)
 The eager (non-coalesced) callers are **onboarding** (`onboarding_provider.dart`
 completeOnboarding), **checkAndSync** (`sync_service.dart`, awaited backstop),
-and **coach_memory_service** (`lib/features/ai_coach/services/coach_memory_service.dart:142`
+and **coach_memory_service** (`lib/features/ai_coach/services/coach_memory_service.dart:146`
 — the only prompt sync of freshly-extracted `coachBox['coaching_notes']`).
 
 A process note worth keeping: I initially mis-flagged the coach_memory_service

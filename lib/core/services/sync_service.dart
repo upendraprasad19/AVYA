@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show jsonEncode;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionResponse;
@@ -259,10 +260,14 @@ class SyncService {
   /// Pure; extracted for behavioral coverage.
   @visibleForTesting
   static String schedPayloadFingerprint(Map<String, dynamic> payload) {
-    final keys = payload.keys.toList()..sort();
-    final canonical =
-        keys.map((k) => '$k=${payload[k] ?? ''}').join('|');
-    return _deterministicId(canonical);
+    // Delimiter-SAFE canonical form: sorted keys → jsonEncode. JSON quotes +
+    // escapes every value, so a literal `|`/`=`/`"` inside a value cannot alias
+    // two distinct payloads (the prior `'$k=$v'.join('|')` form was
+    // delimiter-ambiguous — review e7c1a9 P2 hardening).
+    final sorted = <String, dynamic>{
+      for (final k in payload.keys.toList()..sort()) k: payload[k],
+    };
+    return _deterministicId(jsonEncode(sorted));
   }
 
   /// H1b Part A — the skip decision for one `scheduled_workouts` row. True iff
@@ -861,26 +866,43 @@ class SyncService {
       // Mirror coach_memory from the response into Hive (Layer 4/5 identity).
       // Wrapped defensively — a malformed/changed schema must NEVER crash sync.
       if (response.status == 200 && response.data is Map) {
-        try {
-          final data = response.data as Map;
-          final memJson = data['coach_memory'];
-          if (memJson is Map) {
-            final mem = CoachMemory.fromJson(memJson);
-            await mem.writeToBox(_hive.coachBox);
-            debugPrint(
-              '[SyncService.pushSnapshot] coach_memory mirrored to Hive',
-            );
-          }
-        } catch (memErr, st) {
+        // H1b review (e7c1a9, cross-account guard): if the session swapped to a
+        // DIFFERENT user while this push was parked on its EF `await`, the
+        // response carries the ORIGINAL user's coach_memory — mirroring it into
+        // the now-current owner's coachBox is a cross-account leak. B-fix-1's
+        // coalescer reset only drops an OWED trailing pass; it cannot cancel an
+        // already-in-flight one. `currentUser?.id` is a SYNCHRONOUS getter and
+        // there is no `await` between this check and the `_hive.coachBox`
+        // resolution below, so the check + box resolution are atomic w.r.t. the
+        // event loop (a swap can only land before the check → skip, or after the
+        // box is resolved → writes the correct owner's box).
+        if (_supabase.currentUser?.id != userId) {
           debugPrint(
-            '[SyncService.pushSnapshot] coach_memory mirror failed: $memErr',
+            '[SyncService.pushSnapshotNow] session changed mid-push; '
+            'skipping coach_memory mirror (cross-account guard)',
           );
-          // audit-2026-05-11 H-42 — telemetry pair.
-          unawaited(ErrorTelemetry.recordNonFatal(memErr, st,
-              reason: 'sync_service_if_3'));
+        } else {
           try {
-            await _reportSyncFailure(opType: 'mirror_coach_memory_from_snapshot', error: memErr);
-          } catch (_) {}
+            final data = response.data as Map;
+            final memJson = data['coach_memory'];
+            if (memJson is Map) {
+              final mem = CoachMemory.fromJson(memJson);
+              await mem.writeToBox(_hive.coachBox);
+              debugPrint(
+                '[SyncService.pushSnapshot] coach_memory mirrored to Hive',
+              );
+            }
+          } catch (memErr, st) {
+            debugPrint(
+              '[SyncService.pushSnapshot] coach_memory mirror failed: $memErr',
+            );
+            // audit-2026-05-11 H-42 — telemetry pair.
+            unawaited(ErrorTelemetry.recordNonFatal(memErr, st,
+                reason: 'sync_service_if_3'));
+            try {
+              await _reportSyncFailure(opType: 'mirror_coach_memory_from_snapshot', error: memErr);
+            } catch (_) {}
+          }
         }
       }
 
