@@ -1323,7 +1323,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 819-849
+        line_range: 828-858
         method: getWeeklyWorkoutCounts
         semantic: count
         fields_read: [type, date]
@@ -3370,6 +3370,16 @@ concepts:
           Background cloud catch-up (a1f9c4) — syncs the profile (incl.
           onboarding_completed_at) to cloud fire-and-forget; preserves the
           sync-before-referral order.
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 82-135
+        method: _syncUserProfile (via syncProfileNow)
+        notes: |
+          DURABLE recurring writer (c4d8a2). Pre-fix this canonical profile->cloud
+          sync OMITTED onboarding_completed_at, so the column had no recurring
+          writer and the RestoringScreen Plan-A self-heal (which pushes via
+          syncProfileNow -> here) silently dropped it (a no-op) -> the column
+          stayed NULL -> forced re-onboard on a new device. Now carries the
+          column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
         line_range: 166-185
         method: setOnboarded
@@ -3419,13 +3429,18 @@ concepts:
           Reads Hive flag via MigratedKey. Anyone signed in but
           onboarding_completed=false gets bounced to /onboarding.
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 116-140
-        method: self-contained
+        line_range: 118-160
+        method: _earliestUserAnchor
         semantic: latest
         fields_read: [onboarding_completed_at]
+        behavioral_test_path: test/contracts/onboarding_streak_anchor_ist_midnight_test.dart
         notes: |
-          Phase anchor = earliest of onboarding_completed_at +
-          first_workout_date. Reads from userBox['profile'] map.
+          Streak walk-back anchor = earliest of onboarding_completed_at +
+          first_workout_date. Reads from userBox['profile'] map. Normalizes each
+          value to istMidnight(dt) (c4d8a2 / B-pass F1): the durable Hive
+          onboarding_completed_at (a mid-day instant) would otherwise exclude the
+          onboarding-day workout from the date-granular walk. istMidnight only
+          moves the anchor EARLIER, never dropping a completed day.
       - file: lib/features/auth/providers/auth_provider.dart
         line_range: 360-480
         method: _ensureLocalUser (mid-onboarding resume)

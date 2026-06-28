@@ -125,8 +125,18 @@ class WorkoutRepository {
       if (iso == null || iso.isEmpty) return;
       final dt = DateTime.tryParse(iso);
       if (dt == null) return;
-      if (earliest == null || dt.isBefore(earliest!)) {
-        earliest = dt;
+      // Anchor on the IST calendar-date midnight, not the raw instant. The
+      // walk-back stop in _calculateStreak (`date.isBefore(anchor)`) is
+      // date-granular and `date` carries the wall-clock time-of-day, so a
+      // mid-day instant (onboarding_completed_at — now a durable Hive value,
+      // diagnose c4d8a2) would exclude the onboarding-day workout whenever
+      // onboarding's time-of-day exceeds the walk's. istMidnight is idempotent
+      // for the wlog date-strings (already 00:00) and only ever moves the
+      // anchor EARLIER, so it can include the onboarding day but never drop a
+      // completed day. (B-pass Finding 1, docs/reviews/5a1ac3e1cb4d-review.md.)
+      final dayStart = istMidnight(dt);
+      if (earliest == null || dayStart.isBefore(earliest!)) {
+        earliest = dayStart;
       }
     }
 

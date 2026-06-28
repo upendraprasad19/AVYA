@@ -389,6 +389,13 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'carbs_grams': targets.carbGrams,
         'fat_grams': targets.fatGrams,
         'water_target_ml': waterTargetMl,
+        // onboarding_completed_at — stamp the Hive profile too (Unit D, diagnose
+        // c4d8a2). Previously ONLY the cloud profileData write (below) + the
+        // restoring-screen self-heal set this; the Hive profile never carried it,
+        // so local readers (prediction card, rank anchor) saw null AND
+        // _syncUserProfile had nothing to keep the cloud column in step. UTC
+        // (Unit B): it feeds the user_profile.onboarding_completed_at timestamptz.
+        'onboarding_completed_at': DateTime.now().toUtc().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -727,13 +734,16 @@ Format (use • not JSON):
         'email': supabase.auth.currentUser?.email,
         'full_name': profile['full_name'],
         'onboarding_completed': true,
-        'last_active_at': DateTime.now().toIso8601String(),
+        // UTC (Unit B, diagnose c4d8a2): users.last_active_at is a timestamptz;
+        // a naive local ISO was stored ~5.5h ahead, skewing the re-engagement /
+        // founder-metrics cron windows that filter on this column.
+        'last_active_at': DateTime.now().toUtc().toIso8601String(),
       },
       profileData: {
         // Q1 decision tree: RestoringScreen checks this column to determine
         // whether onboarding was completed. Must be written atomically with
         // the rest of the profile so the row is always in a consistent state.
-        'onboarding_completed_at': DateTime.now().toIso8601String(),
+        'onboarding_completed_at': DateTime.now().toUtc().toIso8601String(),
         'date_of_birth': profile['date_of_birth'],
         'gender': profile['gender'],
         'height_cm': profile['height_cm'],
