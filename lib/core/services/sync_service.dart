@@ -1013,7 +1013,8 @@ class SyncService {
           'email': _supabase.currentUser?.email,
           'full_name': p['full_name'],
           'onboarding_completed': true,
-          'last_active_at': DateTime.now().toIso8601String(),
+          // UTC (Unit B, diagnose c4d8a2) — users.last_active_at is a timestamptz.
+          'last_active_at': DateTime.now().toUtc().toIso8601String(),
         },
         profileData: {
           'date_of_birth': p['date_of_birth'],

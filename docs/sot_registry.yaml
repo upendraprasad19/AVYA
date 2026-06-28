@@ -3370,6 +3370,16 @@ concepts:
           Background cloud catch-up (a1f9c4) — syncs the profile (incl.
           onboarding_completed_at) to cloud fire-and-forget; preserves the
           sync-before-referral order.
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 82-135
+        method: _syncUserProfile (via syncProfileNow)
+        notes: |
+          DURABLE recurring writer (c4d8a2). Pre-fix this canonical profile->cloud
+          sync OMITTED onboarding_completed_at, so the column had no recurring
+          writer and the RestoringScreen Plan-A self-heal (which pushes via
+          syncProfileNow -> here) silently dropped it (a no-op) -> the column
+          stayed NULL -> forced re-onboard on a new device. Now carries the
+          column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
         line_range: 166-185
         method: setOnboarded

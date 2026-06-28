@@ -81,6 +81,15 @@ extension SyncServiceProfile on SyncService {
     // Fix: blank filter for strict columns + explicit .round() on integers.
     final payload = <String, dynamic>{
       'user_id': userId,
+      // onboarding_completed_at — durable writer (Unit D, diagnose c4d8a2). This
+      // canonical recurring profile->cloud sync was the ONLY profile path that
+      // OMITTED the column, so a missed onboarding-path write left it permanently
+      // NULL (→ forced re-onboard on a new device), and the restoring-screen
+      // self-heal — which pushes via syncProfileNow → here — silently dropped it
+      // (a no-op). Now kept in step. Guarded: never clobber an existing value
+      // with null.
+      if (SyncService._hasValue(p['onboarding_completed_at']))
+        'onboarding_completed_at': p['onboarding_completed_at'],
       if (SyncService._hasValue(p['date_of_birth'])) 'date_of_birth': p['date_of_birth'],
       if (SyncService._hasValue(p['gender'])) 'gender': p['gender'],
       if (SyncService._hasNumber(p['height_cm'])) 'height_cm': p['height_cm'],
