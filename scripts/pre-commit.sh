@@ -115,11 +115,14 @@ dart run scripts/check_skipped_discipline_budget.dart --warn-only
 
 # Gate-DEU (discipline audit 2026-06-27): flag deferral-EUPHEMISM phrases in the
 # staged Markdown additions (CLAUDE.md §4.2 bans the semantic, not just "defer").
-# Ships --warn-only during the §4.11 baseline window; flip to hard-fail after a 24h
-# soak by deleting this invocation + dropping it from the allowlist `case` below
-# (the check_*.dart loop then runs it without --warn-only). Invoked explicitly here.
-echo "[pre-commit] Gate-DEU (warn-only baseline): check_no_deferral_euphemism..."
-dart run scripts/check_no_deferral_euphemism.dart --warn-only
+# HARD-FAIL since 2026-06-28 (baseline soak cleared — zero false positives). Kept
+# as an explicit pre-commit-only invocation (scans the staged index; CI has no
+# staged diff) + allow-listed from the check_*.dart loop to avoid a double-run.
+echo "[pre-commit] Gate-DEU: check_no_deferral_euphemism..."
+if ! dart run scripts/check_no_deferral_euphemism.dart; then
+  echo "[pre-commit] FAIL: deferral euphemism in staged docs (§4.2). Fix root cause; do NOT use --no-verify."
+  exit 1
+fi
 
 echo "[pre-commit] Running tech-debt audit gates (bounded-parallel)..."
 # Lean-workflow batch (2026-06-01): the ~28 check_*.dart gates ran sequentially.

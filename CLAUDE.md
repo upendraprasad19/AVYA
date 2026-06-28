@@ -15,6 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. **Invoking a skill?** Read the SKILL.md for that skill, apply the relevant §4 invariants, AND (for copy/UI work) load the Wardroom brand soul (`lib/shared/widgets/wardroom/CLAUDE.md`). Never fire a skill blind.
 4. **This rule EXTENDS §4.12** (discipline-before-skill — founder directive 2026-06-13) to cover investigation itself. §4.12 covers skill invocations; this section covers the earlier step of investigation and root-cause analysis.
 5. **No exceptions.** The observation workflow, the six-step methodology, and §4 invariants are not optional context — they are required pre-conditions for ANY code-touching action.
+6. **Harness-injected (2026-06-28).** The highest-recurrence invariants here are now surfaced automatically at the trigger moment by `scripts/discipline_hook.dart`: the hot-set on a bug/fix/observation prompt (UserPromptSubmit), the discipline-before-skill note before any skill (PreToolUse), and a re-injection after compaction (SessionStart). A pre-commit gate (`scripts/check_no_deferral_euphemism.dart`) flags deferral euphemisms in staged docs. **The hook is a reminder, NOT a substitute** — still load the governing rules. See the §7 pointer row.
 
 ---
 
@@ -462,3 +463,4 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Fresh clone onboarding | `docs/onboarding/FRESH_CLONE.md` |
 | Subagent brief preamble | `docs/agent_brief_preamble.md` |
 | End-of-batch maintenance skill | `/update-docs` (`.claude/skills/update-docs/SKILL.md`) |
+| Discipline harness hooks (prompt-time §4 reminders + euphemism gate) | `scripts/discipline_hook.dart` (UserPromptSubmit / PreToolUse:Skill / SessionStart:compact → `.claude/settings.json`) + `scripts/check_no_deferral_euphemism.dart` (pre-commit gate, §4.2). Audit retrospective: `memory/project_discipline_harness_hooks_2026_06_27.md`. |
