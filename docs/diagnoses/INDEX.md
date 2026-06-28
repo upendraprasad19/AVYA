@@ -16,6 +16,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-04 8cc429 — Identity screen allowed proceeding without sex selection and showed wrong step label (missing 01·05 display).
 - 2026-05-03 f9acbc — MissionBriefScreen crashed or showed wrong state when navigated to in readOnly mode because the readOnly param was absent.
 
+### rank_gate_copy_truthfulness (1 bugs)
+- 2026-06-28 f1a9d3 — >
+
 ### snapshot_fanout_coalescing (1 bugs)
 - 2026-06-27 e7c1a9 — >
 
@@ -740,6 +743,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 |---|---|---|---|---|
 | 2026-06-28 | b6d3f9 | > | urine_color_logs | test/contracts/log_urine_sync_routing_test.dart |
 | 2026-06-28 | c4d8a2 | > | onboarding_completed_at | test/contracts/onboarding_completed_at_durable_writer_test.dart |
+| 2026-06-28 | f1a9d3 | > | rank_gate_copy_truthfulness | test/ai_coach/induction_pledge_test.dart |
 | 2026-06-27 | e7c1a9 | > | snapshot_fanout_coalescing | test/contracts/pushsnapshot_debounce_behavioral_test.dart |
 | 2026-06-27 | b4f7e2 | > | scheduled_workouts_idempotent_upsert_skip | test/contracts/sync_scheduled_payload_hash_index_writer_to_reader_test.dart |
 | 2026-06-27 | c4f8d2 | > | fire_and_forget_sync_coalescing | test/contracts/sync_coalescer_behavioral_test.dart |

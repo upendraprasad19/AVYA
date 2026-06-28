@@ -61,8 +61,10 @@ export function formatPromotionCeremony(input: CeremonyInput): string {
     weeksHeld,
   } = input;
 
-  // Officer-track entry: Sub Lieutenant promotion from any enlisted rank
-  // (PO, CPO, MCPO — 100 total workouts threshold).
+  // Officer-track entry: Sub Lieutenant promotion from any enlisted rank.
+  // The gate is 2 years of service + 80% completion (rolling 26 weeks) — NOT a
+  // workout count. totalWorkouts is stated as a stat of the journey, never as
+  // the threshold (the false "104 workouts" claim was OBS-1 / diagnose f1a9d3).
   const officerCrossing =
     newRankCode === "SubLt" &&
     (oldRankCode === "PO" ||
@@ -74,17 +76,18 @@ export function formatPromotionCeremony(input: CeremonyInput): string {
 
   if (officerCrossing) {
     return (
-      `${oldRankAddress}, ${totalWorkouts} workouts on the books. ` +
-      `You've crossed onto the officer track. ` +
+      `${oldRankAddress}, ${weeksHeld} weeks on the line, ${totalWorkouts} ` +
+      `sessions logged straight. You've crossed onto the officer track. ` +
       `Promotion: ${newRankDisplay}. Carry on.`
     );
   }
 
-  // Lt Cdr = 200 workouts — the Contract milestone.
+  // Lt Cdr — the Contract milestone. The gate is 3 years of service + 80%
+  // completion (rolling 52 weeks), NOT a session count (OBS-1 / diagnose f1a9d3).
   if (newRankCode === "LtCdr") {
     return (
-      `${oldRankAddress}, ${totalWorkouts} workouts. ` +
-      `The contract is met. 200 sessions — done straight, logged honest. ` +
+      `${oldRankAddress}, ${weeksHeld} weeks on the line, ${totalWorkouts} ` +
+      `sessions logged honest. The contract is met. ` +
       `Promotion: ${newRankDisplay}. Address change: ${newRankAddress}. Carry on.`
     );
   }
