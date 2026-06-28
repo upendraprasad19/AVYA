@@ -276,7 +276,12 @@ class HealthWriteService {
       };
       await box.put(key, payload);
 
-      unawaited(SyncService.instance.syncNutritionData());
+      // urine_color_<date> lives in healthBox. syncNutritionData() only pushes
+      // nutrition + water_ml_ + saved_meal_ rows (its _syncWaterLogs reads ONLY
+      // water_ml_ keys), so it never reached this urine row — it synced only on
+      // the next FULL sync. Fire the dedicated urine push so it reaches cloud
+      // per-mutation, matching sleep/weight/measurement (diagnose b6d3f9).
+      unawaited(SyncService.instance.pushUrineColorLogsForSyncDomain());
       unawaited(SyncService.instance.pushSnapshot());
 
       return WriteResult.ok(key);
