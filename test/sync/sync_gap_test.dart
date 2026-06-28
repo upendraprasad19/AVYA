@@ -260,12 +260,16 @@ void main() {
   });
 
   group('sync gap — coach_memory_service.extractAndAppendCoachingNotes', () {
-    test('fires pushSnapshot after coachBox put', () {
+    test('fires pushSnapshotNow after coachBox put', () {
       // Tech-debt audit 2026-05-20 / A10 split ai_coach_repository.dart
       // (2127 LOC) into shim + 3 services. The coaching_notes WRITER
       // (extractCoachingNotes / extractAndAppendCoachingNotes) moved
       // into coach_memory_service.dart. The `coachBox.put('coaching_notes', ...)`
-      // is at coach_memory_service.dart:139. Read both shim + new home.
+      // is at coach_memory_service.dart:138. Read both shim + new home.
+      // H1b Part B1 (B-fix-2, 2026-06-28): the call is now the EAGER, durable
+      // `pushSnapshotNow()` (bypasses the new pushSnapshot coalescer) — this is
+      // the ONLY prompt sync of freshly-extracted coaching_notes, so it must not
+      // be deferred to a coalescer trailing pass that could be lost.
       final paths = const [
         'lib/features/ai_coach/repositories/ai_coach_repository.dart',
         'lib/features/ai_coach/services/coach_memory_service.dart',
@@ -275,11 +279,12 @@ void main() {
       expect(coachPutIdx, isNot(-1),
           reason: 'coaching_notes write must exist in coach_memory_service '
               "(post-A10 split). Looked for `coachBox.put('coaching_notes'`.");
-      final pushIdx =
-          src.indexOf('unawaited(SyncService.instance.pushSnapshot())', coachPutIdx);
+      final pushIdx = src.indexOf(
+          'unawaited(SyncService.instance.pushSnapshotNow())', coachPutIdx);
       expect(pushIdx, isNot(-1),
-          reason: 'pushSnapshot must fire after the coaching_notes write so '
-              'the AI snapshot includes the freshly extracted notes.');
+          reason: 'pushSnapshotNow must fire after the coaching_notes write so '
+              'the AI snapshot includes the freshly extracted notes (eager — '
+              'not the coalesced pushSnapshot).');
       expect(pushIdx > coachPutIdx, isTrue);
     });
   });
