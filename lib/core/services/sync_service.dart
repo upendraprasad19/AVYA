@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert' show jsonEncode;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionResponse;
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
@@ -14,6 +16,7 @@ import 'package:icanbefitter/core/services/result.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/sync_coalescer.dart';
 import 'package:icanbefitter/core/services/sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/coach_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/community_sync_domain.dart';
@@ -94,6 +97,9 @@ int _coerceInt(dynamic value, {required int fallback}) {
 class SyncService {
   SyncService._() {
     _registerLifecycle();
+    // H1a (Unit H, 2026-06-27) — flush owed trailing sync passes when the app
+    // backgrounds (best-effort; the next login's full sweep is the backstop).
+    _hive.onAppPaused = flushPendingSyncs;
   }
   static final SyncService _instance = SyncService._();
 
@@ -158,10 +164,161 @@ class SyncService {
     // restore loop has already short-circuited; a fresh restore for
     // the new user must start from `false`.
     _restoreCancelled = false;
+
+    // H1a — drop any owed trailing sync pass for the previous user so a
+    // coalesced burst never lands under the new owner's session.
+    _workoutCoalescer = SyncCoalescer();
+    _nutritionCoalescer = SyncCoalescer();
+    // H1b Part B1 (B-fix-1, GATING) — reset the snapshot coalescer too. An owed
+    // trailing pushSnapshot under the NEW owner would mirror the PREVIOUS user's
+    // coach_memory into the new owner's coachBox (auth_hive_owner_agreement
+    // cross-account leak — strictly worse than the cost problem).
+    _snapshotCoalescer = SyncCoalescer();
   }
 
   final HiveService _hive = HiveService.instance;
   final SupabaseService _supabase = SupabaseService.instance;
+
+  /// H1a (Unit H) — coalescers for the fire-and-forget log syncs. A burst of
+  /// per-write `syncWorkoutData()` / `syncNutritionData()` calls collapses to
+  /// 1–2 cloud passes (the signup-storm fix). Reassigned on a user swap (see
+  /// [_onUserChanged]) so an owed trailing pass never lands under the wrong
+  /// owner. Kill-switch `disable_sync_debounce` bypasses both.
+  SyncCoalescer _workoutCoalescer = SyncCoalescer();
+  SyncCoalescer _nutritionCoalescer = SyncCoalescer();
+
+  /// H1b Part B1 — coalescer for the fire-and-forget `pushSnapshot()` (~50
+  /// callers each fire it after a write). A burst collapses to 1–2 EF calls.
+  /// MUST be reassigned on a user swap (see [_onUserChanged]) — an owed trailing
+  /// pass under the new owner would mirror the previous user's coach_memory into
+  /// the new owner's `coachBox` (cross-account leak). Kill-switch
+  /// `disable_snapshot_debounce` bypasses it.
+  SyncCoalescer _snapshotCoalescer = SyncCoalescer();
+
+  /// Defensive reads: a test may exercise a sync path without
+  /// `HiveService.init()`; a missing configBox defaults each kill-switch to
+  /// fix-active (the production default, since configBox is always open before
+  /// `runApp`).
+  bool get _syncDebounceDisabled {
+    try {
+      return _hive.configBox.get('disable_sync_debounce') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// H3 (Unit H) — kill-switch reverting [pushSnapshot] to the pre-Unit-H raw
+  /// `functions.invoke` (no cold-start retry).
+  bool get _pushSnapshotViaCallFunctionDisabled {
+    try {
+      return _hive.configBox
+              .get('disable_pushsnapshot_via_callfunction') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// H1b Part B1 — kill-switch reverting [pushSnapshot] to the verbatim
+  /// pre-H1b direct (un-coalesced) [pushSnapshotNow]. Defensive read (see
+  /// [_syncDebounceDisabled]).
+  bool get _snapshotDebounceDisabled {
+    try {
+      return _hive.configBox.get('disable_snapshot_debounce') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// H1b Part A — reserved user-scoped `workoutBox` key holding the
+  /// `{scheduled_date: fingerprint}` index that lets an unchanged planned
+  /// `scheduled_workouts` row skip its idempotent re-upsert (a returning login
+  /// re-pushed ~96 rows the cloud already held). Sole writer+reader is
+  /// [_syncScheduledWorkouts] so writer/reader drift is structurally
+  /// impossible; the per-user box file IS the namespace, so it auto-clears on
+  /// user-swap / sign-out / DPDP — no extra wiring.
+  static const String _schedHashIndexKey = 'sync_sched_payload_hash_index';
+
+  /// H1b Part A — kill-switch reverting [_syncScheduledWorkouts] to the verbatim
+  /// pre-H1b unconditional full-sweep upsert (no fingerprint skip). Defensive
+  /// read (see [_syncDebounceDisabled]).
+  bool get _schedHashSkipDisabled {
+    try {
+      return _hive.configBox.get('disable_sched_hash_skip') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// H1b Part A — stable fingerprint of the EXACT `scheduled_workouts` payload
+  /// pushed to cloud. Serializes EVERY entry under a deterministic key sort
+  /// (null → '') so any value change — and a present-vs-absent `template_id`
+  /// (the key set differs) — flips the fingerprint and forces a re-push.
+  /// Key-generic (not a fixed field list) so a future payload column is covered
+  /// automatically — no forget-to-fingerprint drift. [_deterministicId] is UUID
+  /// v5 (sha1-based) → STABLE across VMs/sessions (NOT `String.hashCode`, H-15).
+  /// Pure; extracted for behavioral coverage.
+  @visibleForTesting
+  static String schedPayloadFingerprint(Map<String, dynamic> payload) {
+    // Delimiter-SAFE canonical form: sorted keys → jsonEncode. JSON quotes +
+    // escapes every value, so a literal `|`/`=`/`"` inside a value cannot alias
+    // two distinct payloads (the prior `'$k=$v'.join('|')` form was
+    // delimiter-ambiguous — review e7c1a9 P2 hardening).
+    final sorted = <String, dynamic>{
+      for (final k in payload.keys.toList()..sort()) k: payload[k],
+    };
+    return _deterministicId(jsonEncode(sorted));
+  }
+
+  /// H1b Part A — the skip decision for one `scheduled_workouts` row. True iff
+  /// the idempotent re-upsert can be skipped because cloud already holds this
+  /// exact payload. A `completed` row NEVER skips (A-fix-1: cloud can be
+  /// silently stale per d9b2c5/B.1 and the resync migrator's one-shot flag makes
+  /// a mis-skip PERMANENT). A null [storedFingerprint] (never pushed, or a prior
+  /// push failed → store-on-200-only) never skips. Pure.
+  @visibleForTesting
+  static bool schedShouldSkipUpsert({
+    required bool killSwitchDisabled,
+    required String status,
+    required String? storedFingerprint,
+    required String currentFingerprint,
+  }) {
+    if (killSwitchDisabled) return false;
+    if (status == 'completed') return false;
+    return storedFingerprint != null &&
+        storedFingerprint == currentFingerprint;
+  }
+
+  /// H1b Part A (A-fix-2) — the fingerprint index pruned to the schedule rows
+  /// still present. A deleted date drops its entry so a later re-create
+  /// re-pushes. Pure (returns a new map).
+  @visibleForTesting
+  static Map<String, String> schedPrunedHashIndex(
+      Map<String, String> index, Set<String> liveDates) {
+    return <String, String>{
+      for (final e in index.entries)
+        if (liveDates.contains(e.key)) e.key: e.value,
+    };
+  }
+
+  /// H1a — best-effort flush fired on `AppLifecycleState.paused` (wired to
+  /// [HiveService.onAppPaused] in the constructor). Runs the NON-coalesced
+  /// variants so a burst that coalesced just before backgrounding still reaches
+  /// cloud. Purely best-effort: Hive is the source of truth, so a missed flush
+  /// is a delay (the next login's full sweep re-pushes), never data loss.
+  void flushPendingSyncs() {
+    if (pausedForSimulation) return;
+    // Go THROUGH the coalescer (not the raw *Now()) so a flush that lands while
+    // a pass is already draining sets _dirty for ONE trailing pass instead of
+    // starting a concurrent second fan-out (B-pass P1, diagnose c4f8d2).
+    unawaited(_workoutCoalescer.trigger(syncWorkoutDataNow));
+    unawaited(_nutritionCoalescer.trigger(syncNutritionDataNow));
+    // H1b Part B1 (B-fix-3) — best-effort snapshot flush on background. The real
+    // durability guarantee is the eager `pushSnapshotNow()` carve-out (onboarding
+    // + checkAndSync); web `paused` is unreliable, so this is necessary-not-
+    // sufficient.
+    unawaited(_snapshotCoalescer.trigger(pushSnapshotNow));
+  }
 
   /// Tech-debt audit 2026-05-20 / A6 — registered [SyncDomain] wrappers
   /// for the 8 part-files. Each wrapper delegates to the existing
@@ -579,7 +736,10 @@ class SyncService {
       // Includes: profile, progress, workouts, nutrition, water, steps,
       // weight, PRs, coaching notes — full AI context for reports/alerts.
       try {
-        await pushSnapshot();
+        // H1b Part B1 (B-fix-2) — the next-login backstop MUST be durable; call
+        // the non-coalesced *Now() so completion is awaited, not deferred to a
+        // coalescer trailing pass.
+        await pushSnapshotNow();
       } catch (e, st) {
         debugPrint('[SyncService.checkAndSync] Snapshot push failed: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -636,11 +796,31 @@ class SyncService {
     };
   }
 
+  /// H1b Part B1 — coalesced fire-and-forget snapshot entry. The ~50 per-write
+  /// callers collapse to 1–2 `daily-snapshot` EF calls via [_snapshotCoalescer]
+  /// instead of one invoke per write. Callers that need a DURABLE snapshot
+  /// (onboarding first-context, the checkAndSync next-login backstop) MUST call
+  /// [pushSnapshotNow] directly. Kill-switch `disable_snapshot_debounce` bypasses
+  /// the coalescer (every call runs the full push — the pre-H1b behavior).
+  Future<void> pushSnapshot() async {
+    if (pausedForSimulation) return; // sim bulk-backfill (guard FIRST)
+    if (_snapshotDebounceDisabled) {
+      await pushSnapshotNow();
+      return;
+    }
+    await _snapshotCoalescer.trigger(pushSnapshotNow);
+  }
+
   /// Pushes the daily snapshot to Supabase via the `daily-snapshot` Edge
   /// Function. The function upserts `user_daily_snapshots`, runs coaching
   /// notes extraction, and returns the latest `coach_memory` row, which
   /// we mirror into Hive `coachBox['coach_memory']` for local readers.
-  Future<void> pushSnapshot() async {
+  ///
+  /// Non-coalesced — runs the full push NOW. Called by awaited/durable callers
+  /// (onboarding first-context, the checkAndSync next-login backstop) and
+  /// internally by [pushSnapshot]'s coalescer. Kept verbatim from the pre-H1b
+  /// `pushSnapshot` (H3 callFunction routing + coach_memory mirror intact).
+  Future<void> pushSnapshotNow() async {
     // Sim harness: suppress the per-write snapshot storm during a bulk
     // backfill; the harness fires one final pushSnapshot itself.
     if (pausedForSimulation) return;
@@ -654,14 +834,28 @@ class SyncService {
 
       final snapshot = compileDailySnapshot();
 
-      // BUG-C (d3a1c7): refresh before the authed daily-snapshot invoke. A
-      // stale access token 401'd push_snapshot, so the plan_json / coach_memory
-      // snapshot never persisted to cloud — the obs-1 stale-plan_json enabler.
-      await _supabase.ensureFreshToken();
-      final response = await _supabase.client.functions.invoke(
-        'daily-snapshot',
-        body: {'snapshot_json': snapshot},
-      );
+      // H3 (Unit H, 2026-06-27) — route through callFunction so a transient
+      // cold-start 502/503/504 retries with backoff instead of failing on the
+      // first attempt (was a raw `functions.invoke` with NO retry). callFunction
+      // refreshes the token first — preserving the BUG-C (d3a1c7) fix where a
+      // stale access token 401'd push_snapshot and dropped the plan_json /
+      // coach_memory snapshot — so the explicit ensureFreshToken() here is now
+      // redundant. Returns the full FunctionResponse; the coach_memory mirror
+      // below still reads response.data. Kill-switch
+      // `disable_pushsnapshot_via_callfunction` reverts to the raw invoke.
+      final FunctionResponse response;
+      if (_pushSnapshotViaCallFunctionDisabled) {
+        await _supabase.ensureFreshToken();
+        response = await _supabase.client.functions.invoke(
+          'daily-snapshot',
+          body: {'snapshot_json': snapshot},
+        );
+      } else {
+        response = await _supabase.callFunction(
+          'daily-snapshot',
+          body: {'snapshot_json': snapshot},
+        );
+      }
 
       if (response.status != 200) {
         debugPrint(
@@ -672,26 +866,43 @@ class SyncService {
       // Mirror coach_memory from the response into Hive (Layer 4/5 identity).
       // Wrapped defensively — a malformed/changed schema must NEVER crash sync.
       if (response.status == 200 && response.data is Map) {
-        try {
-          final data = response.data as Map;
-          final memJson = data['coach_memory'];
-          if (memJson is Map) {
-            final mem = CoachMemory.fromJson(memJson);
-            await mem.writeToBox(_hive.coachBox);
-            debugPrint(
-              '[SyncService.pushSnapshot] coach_memory mirrored to Hive',
-            );
-          }
-        } catch (memErr, st) {
+        // H1b review (e7c1a9, cross-account guard): if the session swapped to a
+        // DIFFERENT user while this push was parked on its EF `await`, the
+        // response carries the ORIGINAL user's coach_memory — mirroring it into
+        // the now-current owner's coachBox is a cross-account leak. B-fix-1's
+        // coalescer reset only drops an OWED trailing pass; it cannot cancel an
+        // already-in-flight one. `currentUser?.id` is a SYNCHRONOUS getter and
+        // there is no `await` between this check and the `_hive.coachBox`
+        // resolution below, so the check + box resolution are atomic w.r.t. the
+        // event loop (a swap can only land before the check → skip, or after the
+        // box is resolved → writes the correct owner's box).
+        if (_supabase.currentUser?.id != userId) {
           debugPrint(
-            '[SyncService.pushSnapshot] coach_memory mirror failed: $memErr',
+            '[SyncService.pushSnapshotNow] session changed mid-push; '
+            'skipping coach_memory mirror (cross-account guard)',
           );
-          // audit-2026-05-11 H-42 — telemetry pair.
-          unawaited(ErrorTelemetry.recordNonFatal(memErr, st,
-              reason: 'sync_service_if_3'));
+        } else {
           try {
-            await _reportSyncFailure(opType: 'mirror_coach_memory_from_snapshot', error: memErr);
-          } catch (_) {}
+            final data = response.data as Map;
+            final memJson = data['coach_memory'];
+            if (memJson is Map) {
+              final mem = CoachMemory.fromJson(memJson);
+              await mem.writeToBox(_hive.coachBox);
+              debugPrint(
+                '[SyncService.pushSnapshot] coach_memory mirrored to Hive',
+              );
+            }
+          } catch (memErr, st) {
+            debugPrint(
+              '[SyncService.pushSnapshot] coach_memory mirror failed: $memErr',
+            );
+            // audit-2026-05-11 H-42 — telemetry pair.
+            unawaited(ErrorTelemetry.recordNonFatal(memErr, st,
+                reason: 'sync_service_if_3'));
+            try {
+              await _reportSyncFailure(opType: 'mirror_coach_memory_from_snapshot', error: memErr);
+            } catch (_) {}
+          }
         }
       }
 

@@ -23,9 +23,14 @@ void main() {
         'bumpRestoreCompleted',
         'checkAndSync',
         'drainTelemetryQueue',
+        // H1a (Unit H, 2026-06-27) — app-pause best-effort flush.
+        'flushPendingSyncs',
         'initQueue',
         'pullRecentCrossChannelLogs',
         'pushSnapshot',
+        // H1b Part B1 (Unit H, 2026-06-27) — non-coalesced variant for the
+        // eager/durable callers (onboarding first-context, checkAndSync backstop).
+        'pushSnapshotNow',
         'reportSyncFailure',
         'restoreFromCloud',
         'restoreFromCloudForUser',
@@ -38,6 +43,8 @@ void main() {
         'syncMeasurementsNow',
         'syncNotificationsInboxEntry',
         'syncNutritionData',
+        // H1a (Unit H) — non-coalesced variant for awaited callers.
+        'syncNutritionDataNow',
         'syncProfileNow',
         'syncProgressNow',
         'syncSavedDietPlan',
@@ -45,6 +52,8 @@ void main() {
         'syncSleepNow',
         'syncWeightNow',
         'syncWorkoutData',
+        // H1a (Unit H) — non-coalesced variant for awaited callers.
+        'syncWorkoutDataNow',
         'unsubscribeRealtime',
         'weeklyFullSync',
         // Getters that look like methods (counted as public API surface):
@@ -119,9 +128,17 @@ void main() {
       ];
 
       // Match instance method signatures at exactly 2-space indent
-      // (class instance methods + extension methods). Excludes
-      // statics (no `static ` prefix possible at this indent in
-      // current source) and nested helper functions (4+ space indent).
+      // (class instance methods + extension methods). The pattern requires the
+      // RETURN TYPE immediately after the 2-space indent, so it excludes two
+      // classes by construction (NOT by indent):
+      //   (a) `static `-prefixed members — the `^  static …` text never matches
+      //       `^  (Future|Stream|void)` (e.g. the H1b @visibleForTesting statics
+      //       schedPayloadFingerprint / schedShouldSkipUpsert / schedPrunedHashIndex);
+      //   (b) non-Future/Stream/void return types (String/bool/Map/int).
+      // (Known blind spot, acceptable for now: a future PUBLIC `static Future<…>`
+      // would also be excluded — add an explicit static branch here if one is
+      // ever introduced as tracked public API.) Also excludes nested helper
+      // functions (4+ space indent).
       // Matches: `Future<...>` / `Stream<...>` / `void` returns +
       //          optional `get ` for getters + name + ( or = .
       final methodPattern = RegExp(

@@ -586,7 +586,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     // fire-and-forget (each has its own error handling). These also gate
     // `scheduled_workouts` cloud rows + the first AI-context snapshot.
     unawaited(SyncService.instance.syncWorkoutData());
-    unawaited(SyncService.instance.pushSnapshot());
+    // H1b Part B1 (B-fix-2) — onboarding's first AI-context snapshot is eager
+    // (the non-coalesced *Now()) so it is guaranteed attempted, not deferred to
+    // a coalescer trailing pass that could be lost in the signup-storm load.
+    unawaited(SyncService.instance.pushSnapshotNow());
     unawaited(StatSnapshotService.instance.snapshotOnboarding());
     _generatePrediction(profile);
 

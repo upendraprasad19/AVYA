@@ -109,6 +109,12 @@ class HiveService with WidgetsBindingObserver {
   /// Key in `configBox` holding the last successful compact timestamp.
   static const String _lastCompactKey = 'last_compact_at';
 
+  /// H1a (Unit H, 2026-06-27) — optional hook fired on `AppLifecycleState.paused`
+  /// so a higher layer (SyncService) can flush owed work when the app
+  /// backgrounds. Injected (rather than imported) to avoid a storage→sync
+  /// layering inversion; SyncService wires it in its constructor. Best-effort.
+  void Function()? onAppPaused;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Compact on `paused` — the app is still in memory but the user has
@@ -116,6 +122,7 @@ class HiveService with WidgetsBindingObserver {
     // `detached` (app's about to be killed; no point starting work).
     if (state == AppLifecycleState.paused) {
       _maybeCompact();
+      onAppPaused?.call();
     }
   }
 

@@ -40,8 +40,11 @@ void main() {
   }
 
   group('F5 · sync fan-out contract', () {
-    test('syncWorkoutData() fans out to all 6 workout-domain helpers', () {
-      final body = methodBody(syncServiceSrc, 'syncWorkoutData');
+    test('syncWorkoutDataNow() fans out to all 6 workout-domain helpers', () {
+      // Unit H / H1a — the fan-out body moved to the non-coalesced
+      // syncWorkoutDataNow(); syncWorkoutData() is the coalesced entry that
+      // delegates to it.
+      final body = methodBody(syncServiceSrc, 'syncWorkoutDataNow');
 
       const expectedHelpers = {
         '_syncWorkoutLogs',
@@ -54,13 +57,14 @@ void main() {
 
       for (final helper in expectedHelpers) {
         expect(body.contains(helper), isTrue,
-            reason: 'syncWorkoutData() must fan out to $helper '
+            reason: 'syncWorkoutDataNow() must fan out to $helper '
                     '(see CLAUDE.md §15 sync fan-out contract).');
       }
     });
 
-    test('syncNutritionData() fans out to all 3 nutrition-domain helpers', () {
-      final body = methodBody(syncServiceSrc, 'syncNutritionData');
+    test('syncNutritionDataNow() fans out to all 3 nutrition-domain helpers', () {
+      // Unit H / H1a — fan-out body moved to syncNutritionDataNow().
+      final body = methodBody(syncServiceSrc, 'syncNutritionDataNow');
 
       const expectedHelpers = {
         '_syncNutritionLogs',
@@ -70,7 +74,7 @@ void main() {
 
       for (final helper in expectedHelpers) {
         expect(body.contains(helper), isTrue,
-            reason: 'syncNutritionData() must fan out to $helper '
+            reason: 'syncNutritionDataNow() must fan out to $helper '
                     '(see CLAUDE.md §15 sync fan-out contract).');
       }
     });

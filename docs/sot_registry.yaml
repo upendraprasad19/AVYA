@@ -704,14 +704,20 @@ concepts:
           Rebuilds the context via buildAiContext() between retry
           rounds so the snapshot reflects post-mutation Hive state.
       - file: lib/core/services/sync_service.dart
-        line_range: 638-660
-        method: pushSnapshot
+        line_range: 800-845
+        method: pushSnapshot (coalesced) -> pushSnapshotNow (body)
         semantic: pass-through
         fields_read: [<full context map>]
         notes: |
           Compiles daily snapshot from buildAiContext + uploads to
           user_daily_snapshots. Mirror to coach_memory runs in same
-          pass.
+          pass. H1b Part B1 (2026-06-27): pushSnapshot() is now the COALESCED
+          fire-and-forget entry (via _snapshotCoalescer); the verbatim body
+          moved to pushSnapshotNow(). _onUserChanged resets _snapshotCoalescer
+          (cross-account coach_memory leak guard). 3 DURABLE callers bypass the
+          coalescer via pushSnapshotNow(): onboarding completeOnboarding,
+          checkAndSync (awaited backstop), coach_memory_service:146 (freshly-
+          extracted coaching_notes). Kill-switch disable_snapshot_debounce.
     reader_allow_files:
       - { file: lib/core/services/sync/sync_coach.dart, reason: "syncCoachMemoryNow projects coaching_notes UP to cloud — writer-side allow" }
       - { file: lib/core/services/sync/sync_profile.dart, reason: "_restoreUserProfile projects coaching_notes via the user_profile row payload — pass-through writer" }
@@ -1465,9 +1471,15 @@ concepts:
       AND the contract test.
     writers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 24-65
-        method: syncWorkoutData (SyncWorkoutExtension)
+        line_range: 24-96
+        method: syncWorkoutData (coalesced entry) -> syncWorkoutDataNow (fan-out)
         notes: |
+          H1a (Unit H, 2026-06-27): syncWorkoutData() is now the COALESCED
+          per-write entry (in-flight + dirty do-while via SyncCoalescer); the
+          actual fan-out body moved to syncWorkoutDataNow(). Awaited callers
+          (boot migrator scheduled_workouts_resync, sim harness) MUST call
+          syncWorkoutDataNow so completion stays durable. Kill-switch
+          disable_sync_debounce bypasses the coalescer.
           Fans out to: _syncWorkoutLogs, _syncExerciseLogs,
           _syncScheduleCompletions, _syncWorkoutTemplates,
           _syncScheduledWorkouts, _syncStreaks.
@@ -1558,6 +1570,52 @@ concepts:
       weeklyFullSync() is the safety net but no longer the only path
       for workout-domain rows reaching cloud.
 
+  - concept: sync_scheduled_payload_hash_index
+    domain: workout
+    description: |
+      H1b Part A (2026-06-27, b4f7e2): the sync-owned fingerprint index that
+      gates the idempotent scheduled_workouts re-upsert. Maps scheduled_date ->
+      UUID-v5 fingerprint of the exact payload last CONFIRMED to cloud, so an
+      unchanged PLANNED row skips its re-upsert (the returning-login ~96-upsert
+      tax). The SOLE writer AND reader is _syncScheduledWorkouts ⇒ writer/reader
+      drift is structurally impossible. The per-user workoutBox file IS the
+      namespace -> auto-clears on swap/sign-out/DPDP.
+    writers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1-9999
+        method: _syncScheduledWorkouts (stores index[date]=fingerprint ON CONFIRMED 200 ONLY at the 3 upsert success points; prunes to live rows + persists after the loop)
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: schedPayloadFingerprint / schedShouldSkipUpsert / schedPrunedHashIndex (pure statics) + _schedHashIndexKey const + disable_sched_hash_skip kill-switch
+      - file: lib/features/dev/simulation_service.dart
+        line_range: 1-9999
+        method: resetJourney (A-fix-3 — clears the index key in the workoutBox prefix-clear list)
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1-9999
+        method: _syncScheduledWorkouts (the skip decision reads index[date] for the current row)
+        semantic: latest
+        fields_read: [sync_sched_payload_hash_index.<scheduled_date>]
+    regression_test: test/contracts/sync_scheduled_payload_hash_index_writer_to_reader_test.dart
+    behavioral_test_path: test/contracts/sync_scheduled_payload_hash_index_writer_to_reader_test.dart
+    hive:
+      box: workoutBox
+      key_prefix: "sync_sched_payload_hash_index"
+      key_formula: "reserved single key -> Map{scheduled_date: SyncService._deterministicId(canonical fixed-order payload string)}"
+    cloud:
+      table: scheduled_workouts
+      columns: [user_id, template_id, scheduled_date, week_number, day_of_week, status, completed_at]
+      unique_constraint: "(user_id, scheduled_date)"
+    sync_methods: [_syncScheduledWorkouts]
+    restore_methods: []
+    class_constraints: |
+      A-fix-1: a row with status=='completed' is NEVER skipped (cloud can be
+      silently stale per d9b2c5; a mis-skip is made PERMANENT by the resync
+      migrator's one-shot flag). store-on-200-only: a failed push records no
+      fingerprint -> re-pushes next pass. Kill-switch disable_sched_hash_skip
+      restores the verbatim pre-H1b unconditional sweep.
+
   - concept: sync_fanout_nutrition_domain
     domain: nutrition
     description: |
@@ -1565,9 +1623,13 @@ concepts:
       cloud".
     writers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 14-48
-        method: syncNutritionData
+        line_range: 14-66
+        method: syncNutritionData (coalesced entry) -> syncNutritionDataNow (fan-out)
         notes: |
+          H1a (Unit H, 2026-06-27): syncNutritionData() is now the COALESCED
+          per-write entry (SyncCoalescer); the fan-out body moved to
+          syncNutritionDataNow(). Awaited callers (sim harness) MUST call
+          syncNutritionDataNow. Kill-switch disable_sync_debounce bypasses it.
           Fans out to: _syncNutritionLogs, _syncWaterLogs,
           _syncSavedMeals. Lives in the SyncServiceNutrition extension
           (part of sync_service.dart) per Test #14 refactor.
@@ -1627,7 +1689,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1001-1025
+        line_range: 1195-1225
         method: restoreFromCloudForUser
         semantic: aggregated
         fields_read: [<orchestrates all _restore* methods>]

@@ -139,7 +139,11 @@ class CoachMemoryService {
       'notes': existingNotes,
       'last_extracted': now.toIso8601String(),
     });
-    unawaited(SyncService.instance.pushSnapshot());
+    // H1b Part B1 (B-fix-2) — eager (non-coalesced) push of the freshly-extracted
+    // coaching_notes. This is the only PROMPT sync of coachBox['coaching_notes']
+    // (the next syncCoachMemoryNow full-sweep is just a delayed backstop), so it
+    // must not be deferred to a coalescer pass that could be lost.
+    unawaited(SyncService.instance.pushSnapshotNow());
   }
 
   /// One-time migration: convert legacy coachBox['coaching_notes'] string

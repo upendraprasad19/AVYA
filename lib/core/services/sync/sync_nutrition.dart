@@ -18,8 +18,23 @@ extension SyncServiceNutrition on SyncService {
   ///
   /// Fire-and-forget: offline failure logs silently and retries on next
   /// full sync. Never throws to the caller.
+  /// Coalesced fire-and-forget entry (per-write). A burst collapses to 1–2
+  /// cloud passes via [SyncCoalescer] (Unit H / H1a). Awaited callers (the sim
+  /// harness) MUST use [syncNutritionDataNow]. Kill-switch
+  /// `disable_sync_debounce` bypasses the coalescer.
   Future<void> syncNutritionData() async {
-    if (SyncService.pausedForSimulation) return; // sim bulk-backfill
+    if (SyncService.pausedForSimulation) return; // sim bulk-backfill (guard FIRST)
+    if (_syncDebounceDisabled) {
+      await syncNutritionDataNow();
+      return;
+    }
+    await _nutritionCoalescer.trigger(syncNutritionDataNow);
+  }
+
+  /// Non-coalesced nutrition-domain push — runs the full fan-out NOW. Called by
+  /// awaited callers (the sim harness) and internally by [syncNutritionData]'s
+  /// coalescer. Pinned by `sync_fanout_contract_test`: MUST call all 3 helpers.
+  Future<void> syncNutritionDataNow() async {
     try {
       // APK Test #12.7 — fire-and-forget call from
       // NutritionWriteService.logMeal. Same race as syncWorkoutData.
@@ -38,7 +53,7 @@ extension SyncServiceNutrition on SyncService {
       );
     } catch (e, st) {
       // Offline — will sync on next daily full sync.
-      debugPrint('[SyncService.syncNutritionData] $e');
+      debugPrint('[SyncService.syncNutritionDataNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'sync_service_sync_nutrition_data'));

@@ -224,7 +224,12 @@ void main() {
       //                                        SyncService.
       const pushOnlyAllowlist = <String>{
         'WorkoutData',
+        // Unit H / H1a — non-coalesced fan-out variants (same orchestrator
+        // class as WorkoutData/NutritionData; each calls per-helper _sync*
+        // whose _restore* counterparts exist).
+        'WorkoutDataNow',
         'NutritionData',
+        'NutritionDataNow',
         'HealthDataSnapshot',
         'UrineColorLogs',
         'FitnessSummary',

@@ -65,6 +65,25 @@ Failures from step 3 are captured by `ErrorTelemetry.recordNonFatal` with an
 the user. Every WriteService method returns a `WriteResult` so the caller can
 distinguish "Hive succeeded" from "cloud succeeded".
 
+**Sync fan-out is COALESCED (Unit H, 2026-06-27).** `syncWorkoutData()` /
+`syncNutritionData()` / `pushSnapshot()` are fire-and-forget *coalesced* entries
+(in-flight + dirty do-while via `SyncCoalescer`): a burst of per-write calls
+collapses to 1–2 cloud passes (a fresh signup was ~90 cloud calls; a returning
+login ~190 → a handful — the free-tier-collapse fix, diagnoses c4f8d2 / b4f7e2 /
+e7c1a9). Two rules this imposes on callers:
+- **Awaited / durability-critical callers MUST call the non-coalesced `*Now()`
+  variant** (`syncWorkoutDataNow` / `syncNutritionDataNow` / `pushSnapshotNow`) —
+  a coalesced call may only set `_dirty` and return, so awaiting it does NOT
+  guarantee the cloud write happened this tick. Current `*Now()` callers: the
+  resync migrator, the sim harness, `checkAndSync` (next-login backstop),
+  onboarding first-context, `coach_memory_service` (freshly-extracted notes).
+- **All three coalescers are reassigned in `_onUserChanged`** — an owed trailing
+  pass under a new owner would cross accounts (esp. `pushSnapshot`'s `coach_memory`
+  mirror into `coachBox`). Each path is kill-switched (`disable_sync_debounce` /
+  `disable_sched_hash_skip` / `disable_snapshot_debounce`) to verbatim pre-Unit-H
+  behavior. `_syncScheduledWorkouts` additionally skips an unchanged *planned*
+  row via a sync-owned fingerprint index — but NEVER a `completed` row (d9b2c5).
+
 ## Common pitfalls
 
 | Pitfall | How to avoid | Source |
