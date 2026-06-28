@@ -18,7 +18,7 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 ///   t=0       → typing indicator
 ///   t+1400ms  → Msg 1 (intro) revealed; pause 2400ms
 ///   t+3800ms  → typing indicator
-///   t+5200ms  → Msg 2 (Lt Cdr promise, gold emphasis) revealed; pause 3000ms
+///   t+5200ms  → Msg 2 (rank pledge — gold emphasis) revealed; pause 3000ms
 ///   t+8200ms  → typing indicator
 ///   t+9600ms  → Msg 3 (muster bridge) + I COMMIT button revealed
 ///
