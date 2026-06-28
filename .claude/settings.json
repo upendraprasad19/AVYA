@@ -12,6 +12,36 @@
             "command": "dart run scripts/check_alerts.dart"
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dart run --verbosity=error scripts/discipline_hook.dart"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dart run --verbosity=error scripts/discipline_hook.dart"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dart run --verbosity=error scripts/discipline_hook.dart"
+          }
+        ]
       }
     ]
   }

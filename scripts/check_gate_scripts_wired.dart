@@ -67,6 +67,8 @@ const _allowList = <String, String>{
       'Requires generated snapshot manifest — runs in /build-apk skill. 1 reader-contract violation tracked separately.',
   'check_test_runtime_budget.dart':
       'Runs `flutter test --reporter json` internally — too slow for pre-commit. Manual / CI artifact gate (Gate 41 audit T9).',
+  'check_no_deferral_euphemism.dart':
+      'Scans the STAGED diff (git diff --cached) for deferral-euphemism phrases (§4.2) — meaningful ONLY at pre-commit; CI has no staged index. Runs --warn-only in scripts/pre-commit.sh during the §4.11 baseline (discipline audit 2026-06-27); case-skipped from the auto-loop, invoked explicitly.',
 };
 
 // Explicit allowlist for validate_*.dart and audit_*.dart scripts (P1.H/F2).
