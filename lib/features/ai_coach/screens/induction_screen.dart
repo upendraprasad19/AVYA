@@ -18,7 +18,7 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 ///   t=0       → typing indicator
 ///   t+1400ms  → Msg 1 (intro) revealed; pause 2400ms
 ///   t+3800ms  → typing indicator
-///   t+5200ms  → Msg 2 (Lt Cdr promise, gold emphasis) revealed; pause 3000ms
+///   t+5200ms  → Msg 2 (rank pledge — gold emphasis) revealed; pause 3000ms
 ///   t+8200ms  → typing indicator
 ///   t+9600ms  → Msg 3 (muster bridge) + I COMMIT button revealed
 ///
@@ -235,9 +235,11 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
             ),
             TextSpan(
               text:
-                  'Make Sub Lieutenant rank — 104 workouts on this app — and your life '
-                  "will change. Physically, and in every possible way I can measure. "
-                  "That's not a slogan. That's a guarantee.\n\n",
+                  'Hold the line: your first rank in the opening weeks, Petty '
+                  'Officer by month three. Stay on it and you\'ll make '
+                  'Lieutenant — and your life will change. Physically, and in '
+                  "every way I can measure. That's not a slogan. That's the "
+                  'contract.\n\n',
               style: TextStyle(
                 color: AppColors.accent,
                 fontWeight: FontWeight.w700,
@@ -247,10 +249,12 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
             ),
             const TextSpan(
               text:
-                  '104 workouts is roughly six months of disciplined training. Most don\'t '
-                  'make it past month two. The ones who do — they don\'t recognize themselves '
-                  'in the mirror, in their work, in their relationships. Compounding return. '
-                  "I've seen it happen. I'll show you the way.\n\n",
+                  'Rank here isn\'t bought or rushed — it\'s earned by showing '
+                  'up. Eighty percent of every workout I set you, week after '
+                  'week. Most don\'t make it past month two. The ones who do — '
+                  'they don\'t recognize themselves in the mirror, in their '
+                  'work, in their relationships. Compounding return. '
+                  "I've seen it. I'll show you the way.\n\n",
             ),
             const TextSpan(
               text: 'Tap below to seal it.',
