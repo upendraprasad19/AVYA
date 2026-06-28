@@ -113,6 +113,14 @@ fi
 echo "[pre-commit] Gate-SDB (warn-only baseline): check_skipped_discipline_budget..."
 dart run scripts/check_skipped_discipline_budget.dart --warn-only
 
+# Gate-DEU (discipline audit 2026-06-27): flag deferral-EUPHEMISM phrases in the
+# staged Markdown additions (CLAUDE.md §4.2 bans the semantic, not just "defer").
+# Ships --warn-only during the §4.11 baseline window; flip to hard-fail after a 24h
+# soak by deleting this invocation + dropping it from the allowlist `case` below
+# (the check_*.dart loop then runs it without --warn-only). Invoked explicitly here.
+echo "[pre-commit] Gate-DEU (warn-only baseline): check_no_deferral_euphemism..."
+dart run scripts/check_no_deferral_euphemism.dart --warn-only
+
 echo "[pre-commit] Running tech-debt audit gates (bounded-parallel)..."
 # Lean-workflow batch (2026-06-01): the ~28 check_*.dart gates ran sequentially.
 # Run them with BOUNDED concurrency (PRE_COMMIT_GATE_JOBS, default 4) to shave
@@ -140,6 +148,7 @@ for GATE in scripts/check_*.dart; do
     check_regression_catalog.dart|\
     check_snapshot_contract.dart|\
     check_test_runtime_budget.dart|\
+    check_no_deferral_euphemism.dart|\
     check_skipped_discipline_budget.dart)
       # Razorpay gate: .env.prod is user-only / gitignored secret state.
       # Other gates: require live DB / merge context / build artifact —
