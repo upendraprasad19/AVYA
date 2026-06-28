@@ -76,14 +76,33 @@ proposed_fix: >
   backfills user_profile.onboarding_completed_at = COALESCE(onboarding_completed_at,
   users.created_at) where users.onboarding_completed = true AND
   onboarding_completed_at IS NULL (fixes test7 + any existing rows).
+  (5) Because (1) makes onboarding_completed_at a durable Hive value, the streak
+  walk-back anchor (_earliestUserAnchor, workout_repository.dart) now reads it —
+  its consider() read was dormant while the Hive profile lacked the column.
+  Normalize that anchor to istMidnight(dt): the walk-back stop is date-granular
+  and a raw mid-day instant would exclude the onboarding-day workout when
+  onboarding's time-of-day exceeds the walk's wall clock. istMidnight only moves
+  the anchor earlier, so it can include the onboarding day but never drops a
+  completed day. The plan-proposed bootstrapper reconcile (GoHome if
+  users.onboarding_completed OR onboarding_completed_at) is NOT needed: it would
+  require a cross-table read of users.onboarding_completed (a different table
+  from the user_profile row classifyDestination fetches — the 42703 footgun at
+  auth_session_bootstrapper.dart:106-112), and (2)+(4) fix the cause so the
+  column is reliably non-null for completed users; keying GoHome on
+  onboarding_completed_at != null stays correct.
 regression_test_planned: >
   test/contracts/onboarding_completed_at_durable_writer_test.dart — comment-stripped
   source contract: asserts sync_profile.dart _syncUserProfile payload INCLUDES
   onboarding_completed_at (guarded), completeOnboarding stamps it into the Hive
   profile map, and the last_active_at / onboarding_completed_at writes use
   .toUtc(). Fails on the pre-fix tree (omitted field / naive .toIso8601String()).
+  Behavioral: test/contracts/onboarding_streak_anchor_ist_midnight_test.dart —
+  real Hive + the _calculateStreak walk; a completed workout on the onboarding
+  day (late-in-IST-day onboarding instant) is counted (streak 2, not 1) and the
+  anchor still floors the walk before the onboarding date. Fails on the raw-
+  instant anchor (B-pass Finding 1).
 touched_layers_checked:
-  - "client_code — status: fixed_in_this_batch — 5 edits: onboarding_provider.dart (Hive stamp + 2x .toUtc()), sync_profile.dart (_syncUserProfile payload += onboarding_completed_at), sync_service.dart (.toUtc())."
+  - "client_code — status: fixed_in_this_batch — 6 edits: onboarding_provider.dart (Hive stamp + 2x .toUtc()), sync_profile.dart (_syncUserProfile payload += onboarding_completed_at), sync_service.dart (.toUtc()), workout_repository.dart _earliestUserAnchor (istMidnight normalization — the durable Hive value activated this dormant streak-anchor reader; B-pass Finding 1)."
   - "postgres_data — status: fixed_in_this_batch — migration 098 backfills onboarding_completed_at for onboarded users whose column is NULL (test7)."
   - "postgres_schema — status: verified — user_profile.onboarding_completed_at (timestamptz, nullable) + users.onboarding_completed (bool) confirmed present via live information_schema 2026-06-25."
   - "client_to_server_contract — status: fixed_in_this_batch — _syncUserProfile now syncs onboarding_completed_at; the documented onboarding SoT contract (Hive stamp) is now met."
@@ -113,3 +132,33 @@ then stayed NULL forever → forced re-onboard on a new device.
 Hive stamp at onboarding + `_syncUserProfile` carries the column (guarded) + the
 two cloud-`now()` writes use `.toUtc()` + heal migration 098 backfills existing
 nulls.
+
+## Streak-anchor interaction (B-pass Finding 1)
+The Hive stamp is load-bearing: `_syncUserProfile` reads
+`profile['onboarding_completed_at']` from Hive, so without the stamp the durable
+writer would be inert on the normal path (only the restoring-screen self-heal
+ever populated the Hive value). Keeping the stamp activated a previously-dormant
+reader — `WorkoutRepository._earliestUserAnchor`'s
+`consider(profile['onboarding_completed_at'])` — which had silently fallen back
+to the first-workout date because the Hive profile never carried the column.
+The walk-back stop (`date.isBefore(anchor)`) is date-granular while `date`
+carries the wall-clock time-of-day, so a raw mid-day instant excluded the
+onboarding-day workout when onboarding's time-of-day exceeded the walk's.
+`istMidnight(dt)` normalizes the anchor to the onboarding IST calendar-date
+midnight; because `istMidnight(dt) <= dt`, the anchor can only move earlier — it
+includes the onboarding day but never drops a completed day. (It may now consume
+a streak freeze for a missed *scheduled* day in the onboarding→first-workout
+window — the SoT-intended behavior: those are real missed days the user had the
+app for.)
+
+## Scope note — bootstrapper reconcile NOT taken
+The original plan also proposed a second mechanism: have
+`classifyDestination` return `GoHome` when `users.onboarding_completed = true`
+OR `onboarding_completed_at != null`. That is NOT taken and is NOT required.
+`classifyDestination` fetches only a `user_profile` row; `users.onboarding_completed`
+lives on the `users` table, so the OR would need a cross-table read in the hot
+auth path — the exact 42703 silent-degrade-everyone footgun documented at
+`auth_session_bootstrapper.dart:106-112`. The durable `_syncUserProfile` writer
+(2) plus heal migration 098 (4) repair the cause, so `onboarding_completed_at`
+is reliably non-null for completed users and the existing presence check stays
+correct.
