@@ -232,13 +232,21 @@ extension SyncServiceProfile on SyncService {
     }
   }
 
-  Future<void> _restoreUserProfile(String userId) async {
+  /// [preFetched] / [preFetchedUsers] (C3 single-call): when injected, the
+  /// `user_profile` (limit-1 array) and `users` (object|null) reads are skipped
+  /// and the bundle values are merged instead. Legacy callers omit both →
+  /// byte-identical network behavior. Plan `restore-single-call-c3.md` §4.
+  Future<void> _restoreUserProfile(String userId,
+      {Object? preFetched = _kNoInject,
+      Object? preFetchedUsers = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('user_profile')
-          .select()
-          .eq('user_id', userId)
-          .limit(1);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('user_profile')
+              .select()
+              .eq('user_id', userId)
+              .limit(1)
+          : (preFetched as List? ?? const []);
 
       // APK Test #12.8 / Bug #2 — `full_name` + `email` live on
       // `public.users`, NOT on `user_profile`. Pre-fix the restore only
@@ -247,13 +255,15 @@ extension SyncServiceProfile on SyncService {
       // Merge `users` columns into the same profile map.
       Map<String, dynamic> usersRow = const {};
       try {
-        final u = await _supabase.client
-            .from('users')
-            .select('full_name, email')
-            .eq('id', userId)
-            .maybeSingle();
+        final Object? u = identical(preFetchedUsers, _kNoInject)
+            ? await _supabase.client
+                .from('users')
+                .select('full_name, email')
+                .eq('id', userId)
+                .maybeSingle()
+            : preFetchedUsers;
         if (u != null) {
-          usersRow = Map<String, dynamic>.from(u);
+          usersRow = Map<String, dynamic>.from(u as Map);
         }
       } catch (e, st) {
         // Non-fatal — profile restore still proceeds with whatever the
@@ -308,13 +318,18 @@ extension SyncServiceProfile on SyncService {
     }
   }
 
-  Future<void> _restoreUserProgress(String userId) async {
+  /// [preFetched] (C3 single-call): injected `user_progress` limit-1 array;
+  /// legacy callers omit it → network read. Plan §4.
+  Future<void> _restoreUserProgress(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('user_progress')
-          .select()
-          .eq('user_id', userId)
-          .limit(1);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('user_progress')
+              .select()
+              .eq('user_id', userId)
+              .limit(1)
+          : (preFetched as List? ?? const []);
 
       if (rows.isEmpty) return;
       final cloud = Map<String, dynamic>.from(rows.first as Map);
@@ -343,13 +358,19 @@ extension SyncServiceProfile on SyncService {
   }
 
   /// Restores user preferences from Supabase.
-  Future<void> _restoreUserPreferences(String userId) async {
+  ///
+  /// [preFetched] (C3 single-call): injected `user_preferences` limit-1 array;
+  /// legacy callers omit it → network read. Plan §4.
+  Future<void> _restoreUserPreferences(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('user_preferences')
-          .select()
-          .eq('user_id', userId)
-          .limit(1);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('user_preferences')
+              .select()
+              .eq('user_id', userId)
+              .limit(1)
+          : (preFetched as List? ?? const []);
 
       if (rows.isEmpty) return;
       final cloud = Map<String, dynamic>.from(rows.first as Map);

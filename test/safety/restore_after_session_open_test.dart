@@ -80,7 +80,9 @@ void main() {
 
         // The `coach_memory` table query must NOT request `coaching_notes`.
         // Find the `_restoreCoachMemory` method and inspect the select string.
-        final methodIdx = src.indexOf('_restoreCoachMemory(String userId)');
+        // Match the DEFINITION (return-type prefix), not the orchestrator's
+        // callsite — and tolerate the C3 `{preFetched}` param.
+        final methodIdx = src.indexOf('Future<void> _restoreCoachMemory(');
         expect(methodIdx, greaterThan(0),
             reason: '_restoreCoachMemory method not found.');
 

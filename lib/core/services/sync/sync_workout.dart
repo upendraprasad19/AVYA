@@ -597,12 +597,17 @@ extension SyncServiceWorkout on SyncService {
   }
 
   /// Pulls workout session logs from cloud workout_logs into local Hive.
-  Future<void> _restoreWorkoutLogs(String userId, String since) async {
+  /// [preFetched] (C3 single-call): injected `workout_logs` rows; legacy callers
+  /// omit it → paginated network read. Plan §4.
+  Future<void> _restoreWorkoutLogs(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _fetchAllRows(
-        'workout_logs', userId,
-        dateColumn: 'created_at', since: since, orderBy: 'created_at',
-      );
+      final rows = identical(preFetched, _kNoInject)
+          ? await _fetchAllRows(
+              'workout_logs', userId,
+              dateColumn: 'created_at', since: since, orderBy: 'created_at',
+            )
+          : (preFetched as List? ?? const []);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -652,22 +657,34 @@ extension SyncServiceWorkout on SyncService {
     }
   }
 
-  Future<void> _restoreExerciseLogs(String userId, String since) async {
+  /// [preFetchedExercises] / [preFetchedSets] (C3 single-call): this restore is
+  /// special — it reads BOTH `workout_log_exercises` AND (a second fetch)
+  /// `workout_log_sets`. When injected, both network reads are skipped and the
+  /// bundle arrays are used instead; the per-set reconstruction (groupKey
+  /// `'$wlId|$exId'`) is unchanged. Legacy callers omit both → two network
+  /// reads, byte-identical. Plan `restore-single-call-c3.md` §4 (H-5 groupKey).
+  Future<void> _restoreExerciseLogs(String userId, String since,
+      {Object? preFetchedExercises = _kNoInject,
+      Object? preFetchedSets = _kNoInject}) async {
     try {
-      final rows = await _fetchAllRows(
-        'workout_log_exercises', userId,
-        dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
-      );
+      final rows = identical(preFetchedExercises, _kNoInject)
+          ? await _fetchAllRows(
+              'workout_log_exercises', userId,
+              dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
+            )
+          : (preFetchedExercises as List? ?? const []);
 
       // F4 · Pre-fetch all per-set rows once and index by
       // (workout_log_id, exercise_id) so we can reconstruct the Hive
       // `sets_detail` list without a per-exercise round-trip.
       final setsByLogExercise = <String, List<Map<String, dynamic>>>{};
       try {
-        final setRows = await _fetchAllRows(
-          'workout_log_sets', userId,
-          dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
-        );
+        final setRows = identical(preFetchedSets, _kNoInject)
+            ? await _fetchAllRows(
+                'workout_log_sets', userId,
+                dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
+              )
+            : (preFetchedSets as List? ?? const []);
         for (final raw in setRows) {
           final m = Map<String, dynamic>.from(raw as Map);
           final wlId = m['workout_log_id'] as String? ?? '';
@@ -820,15 +837,19 @@ extension SyncServiceWorkout on SyncService {
     }
   }
 
-  Future<void> _restoreScheduleCompletions(
-      String userId, String since) async {
+  /// [preFetched] (C3 single-call): injected `workout_schedule_completions`
+  /// rows; legacy callers omit it → network read. Plan §4.
+  Future<void> _restoreScheduleCompletions(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('workout_schedule_completions')
-          .select()
-          .eq('user_id', userId)
-          .gte('completed_at', since)
-          .order('scheduled_date');
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('workout_schedule_completions')
+              .select()
+              .eq('user_id', userId)
+              .gte('completed_at', since)
+              .order('scheduled_date')
+          : (preFetched as List? ?? const []);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -908,14 +929,19 @@ extension SyncServiceWorkout on SyncService {
     }
   }
 
-  Future<void> _restoreStreaks(String userId) async {
+  /// [preFetched] (C3 single-call): injected `streaks` rows; legacy callers
+  /// omit it → network read. Plan §4.
+  Future<void> _restoreStreaks(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('streaks')
-          .select()
-          .eq('user_id', userId)
-          .order('week_start', ascending: false)
-          .limit(52);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('streaks')
+              .select()
+              .eq('user_id', userId)
+              .order('week_start', ascending: false)
+              .limit(52)
+          : (preFetched as List? ?? const []);
 
       if (rows.isEmpty) return;
 
@@ -1052,16 +1078,22 @@ extension SyncServiceWorkout on SyncService {
   /// plan_start_date / plan_end_date / schedules (completed-day-preserving
   /// merge); only the `current_plan` object is left untouched when a local one
   /// already exists.
-  Future<void> _restoreWorkoutPlan(String userId) async {
+  /// [preFetched] (C3 single-call): injected `workout_plan` limit-1 array (the
+  /// `user_progress` row carrying `plan_json`); legacy callers omit it → network
+  /// read. Plan §4.
+  Future<void> _restoreWorkoutPlan(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('user_progress')
-          .select('plan_json')
-          .eq('user_id', userId)
-          .limit(1);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('user_progress')
+              .select('plan_json')
+              .eq('user_id', userId)
+              .limit(1)
+          : (preFetched as List? ?? const []);
 
       if (rows.isEmpty) return;
-      final planJson = rows.first['plan_json'];
+      final planJson = (rows.first as Map)['plan_json'];
       if (planJson == null) return;
 
       final bundle = Map<String, dynamic>.from(planJson as Map);
@@ -1295,14 +1327,21 @@ extension SyncServiceWorkout on SyncService {
   }
 
   /// Restores workout templates (with exercises) from Supabase.
-  Future<void> _restoreWorkoutTemplates(String userId) async {
+  /// [preFetched] (C3 single-call): injected `workout_templates` rows, each
+  /// carrying its nested `template_exercises[]` embed (the verbatim PostgREST
+  /// shape the parser reads). Legacy callers omit it → network read.
+  /// Plan §4 (H-1 embed nesting preserved).
+  Future<void> _restoreWorkoutTemplates(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('workout_templates')
-          .select('*, template_exercises(*)')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .limit(500);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('workout_templates')
+              .select('*, template_exercises(*)')
+              .eq('user_id', userId)
+              .eq('is_active', true)
+              .limit(500)
+          : (preFetched as List? ?? const []);
 
       // APK Test #12.9 — collect canonical Hive keys we're about to
       // write so we can sweep stragglers afterward. Pre-12.9 the user's
@@ -1733,25 +1772,32 @@ extension SyncServiceWorkout on SyncService {
   /// `exercises[]` / `type='custom_template'` whenever the embed
   /// resolves. Rows where `template_id IS NULL` (rest days, plan-gen
   /// entries) keep the existing merge — local data survives.
-  Future<void> _restoreScheduledWorkouts(String userId, String since) async {
+  /// [preFetched] (C3 single-call): injected `scheduled_workouts` rows, each
+  /// carrying its nested `template{… template_exercises[]}` embed (the verbatim
+  /// PostgREST shape the parser reads). Legacy callers omit it → network read.
+  /// Plan §4 (H-1 embed nesting preserved).
+  Future<void> _restoreScheduledWorkouts(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
       // APK Test #15.3 / Bug 4a — direct query with embed instead of
       // _fetchAllRows so we can pull the parent template + its
       // exercises in a single round trip. Page size 1000 mirrors
       // _fetchAllRows; in practice no user has anywhere near 1000
       // scheduled workouts (one row per day).
-      final rows = await _supabase.client
-          .from('scheduled_workouts')
-          .select(
-            '*, template:template_id('
-            'id, name, workout_type, '
-            'template_exercises(*)'
-            ')',
-          )
-          .eq('user_id', userId)
-          .gte('scheduled_date', since.substring(0, 10))
-          .order('scheduled_date')
-          .range(0, 999);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('scheduled_workouts')
+              .select(
+                '*, template:template_id('
+                'id, name, workout_type, '
+                'template_exercises(*)'
+                ')',
+              )
+              .eq('user_id', userId)
+              .gte('scheduled_date', since.substring(0, 10))
+              .order('scheduled_date')
+              .range(0, 999)
+          : (preFetched as List? ?? const []);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);

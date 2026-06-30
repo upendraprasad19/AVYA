@@ -168,14 +168,14 @@ void main() {
         '_restoreReferralRedemptions methods', () {
       final src = loadSyncServiceSource().readAsStringSync();
       expect(
-          src.contains('Future<void> _restoreReferralCodes(String userId)'),
+          src.contains('Future<void> _restoreReferralCodes('),
           isTrue,
           reason: 'SyncService must expose _restoreReferralCodes() '
               '(E.10 — referral_codes restore-completeness). Without it, '
               'codes generated on one device vanish on cross-device login.');
       expect(
           src.contains(
-              'Future<void> _restoreReferralRedemptions(String userId)'),
+              'Future<void> _restoreReferralRedemptions('),
           isTrue,
           reason: 'SyncService must expose _restoreReferralRedemptions() '
               '(E.10 — referral_redemptions restore-completeness). Without '

@@ -116,8 +116,18 @@ String _extractMethod(String source, String name) {
   );
   final match = pattern.firstMatch(source);
   if (match == null) return '';
-  // Find the opening `{` after the signature.
-  final openBrace = source.indexOf('{', match.start);
+  // Skip the parameter list (match.end is just past the signature's opening
+  // `(`) so a named/optional param group `{...}` is not mistaken for the body
+  // brace — the C3 single-call refactor added `{Object? preFetched}` params.
+  int pi = match.end;
+  int pdepth = 1;
+  while (pi < source.length && pdepth > 0) {
+    if (source[pi] == '(') pdepth++;
+    if (source[pi] == ')') pdepth--;
+    pi++;
+  }
+  // Find the opening `{` of the BODY after the parameter list.
+  final openBrace = source.indexOf('{', pi);
   if (openBrace < 0) return '';
   // Walk to the matching close brace.
   int depth = 0;

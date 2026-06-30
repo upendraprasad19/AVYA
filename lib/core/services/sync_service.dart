@@ -94,6 +94,19 @@ int _coerceInt(dynamic value, {required int fallback}) {
   return fallback;
 }
 
+/// C3 single-call restore (`restore-user-snapshot` EF) — sentinel for the
+/// optional `preFetched` param on every gated `_restoreX` helper. When the
+/// caller leaves the param at this sentinel the helper runs its existing
+/// network query verbatim (the legacy / fallback / kill-switch path). When the
+/// single-call orchestrator injects a bundle value INSTEAD (even an injected
+/// `null` or `[]` — a legitimately-empty table), the network query is skipped
+/// and the existing apply/parse/merge loop runs against the injected rows.
+///
+/// Distinguishing "not injected" from "injected null" requires a sentinel
+/// (a plain `null` default cannot tell `coach_memory: null` in the bundle from
+/// "caller wants a network fetch"). See plan `restore-single-call-c3.md` §4.
+const Object _kNoInject = Object();
+
 class SyncService {
   SyncService._() {
     _registerLifecycle();
@@ -225,6 +238,20 @@ class SyncService {
   bool get _snapshotDebounceDisabled {
     try {
       return _hive.configBox.get('disable_snapshot_debounce') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// C3 single-call restore — kill-switch reverting [restoreFromCloudForUser]
+  /// to the verbatim legacy Step A/B/C fan-out (no `restore-user-snapshot` EF
+  /// call). Honest rollback (plan §5): a LOCAL Hive config flag (never
+  /// server-populated — there is no RemoteConfig); real levers are this flag,
+  /// the automatic in-pass fallback, and a revert APK + web redeploy. Defensive
+  /// read (see [_syncDebounceDisabled]).
+  bool get _singleCallKillSwitch {
+    try {
+      return _hive.configBox.get('disable_single_call_restore') == true;
     } catch (_) {
       return false;
     }
@@ -1266,8 +1293,35 @@ class SyncService {
     final swTotal = Stopwatch()..start();
     // A4 — reset progress label for this restore pass.
     restoreProgressLabel.value = 'Pulling your dispatch.';
+    // C3 single-call restore — the path discriminator threaded into the final
+    // `restore_completed` telemetry (plan §6): `singlecall` when the
+    // `restore-user-snapshot` EF bundle was applied; `legacy_killswitch` when
+    // the local kill-switch forced the legacy fan-out; `legacy_fallback` when a
+    // single-call FAULT (EF error / non-200 / bad schema / a missing table key)
+    // fell through to the legacy fan-out THIS pass. Set below.
+    String restorePath = 'legacy_fallback';
     try {
       const since = '2020-01-01T00:00:00Z';
+
+      // ── C3 single-call attempt (plan §2/§4/§5) ─────────────────────────
+      // One `restore-user-snapshot` EF round-trip replaces the Step A/B/C
+      // fan-out. FAIL-CLOSED (H-1/H-2): any fault falls through to the
+      // verbatim legacy path below — a partial bundle is NEVER written as a
+      // complete restore. Kill-switch bypasses the attempt entirely.
+      if (_singleCallKillSwitch) {
+        restorePath = 'legacy_killswitch';
+      } else {
+        final singleCallResult = await _attemptSingleCallRestore(userId, since);
+        if (singleCallResult != null) {
+          // Single-call applied the whole bundle (or was cancelled mid-apply):
+          // its own `restore_completed` (success) was already emitted, or it
+          // returns a cancellation. Either way this restore pass is DONE.
+          swTotal.stop();
+          return singleCallResult;
+        }
+        // null → single-call FAULT; restorePath stays 'legacy_fallback' and we
+        // fall through to the legacy fan-out below (heals any clobber).
+      }
 
       // Step A — profile + lightweight data
       if (_restoreCancelled) return RestoreResult.cancelled();
@@ -1379,7 +1433,7 @@ class SyncService {
       // somewhere in steps A-C.
       unawaited(ErrorTelemetry.logEvent('restore_completed',
           message: 'userId=${userId.substring(0, 8)} status=success '
-              'total_ms=${swTotal.elapsedMilliseconds}'));
+              'total_ms=${swTotal.elapsedMilliseconds} path=$restorePath'));
       return RestoreResult.success();
     } catch (e) {
       swTotal.stop();
@@ -1389,10 +1443,282 @@ class SyncService {
       } catch (_) {}
       unawaited(ErrorTelemetry.logEvent('restore_completed',
           message: 'userId=${userId.substring(0, 8)} status=failed '
-              'total_ms=${swTotal.elapsedMilliseconds}'));
+              'total_ms=${swTotal.elapsedMilliseconds} path=$restorePath'));
       return RestoreResult.failed(e);
     }
   }
+
+  /// C3 single-call restore (plan `restore-single-call-c3.md` §2/§4/§5).
+  ///
+  /// Fetches the WHOLE gated-restore dataset in one `restore-user-snapshot` EF
+  /// round-trip and applies it through the SAME `_restoreX` apply/merge loops
+  /// the legacy fan-out uses (via the `preFetched` inject param) — preserving
+  /// the per-row merge policy AND the shared-key write order (workout_plan →
+  /// scheduled_workouts → schedule_completions on `schedule_<date>`;
+  /// user_progress → freezes on `progress`) by running A→B→C SEQUENTIALLY.
+  ///
+  /// Returns:
+  ///   • [RestoreResult.success] — bundle validated + fully applied (emits its
+  ///     own `restore_completed status=success path=singlecall`).
+  ///   • [RestoreResult.cancelled] — a cancel / owner-swap landed at an inter-step
+  ///     checkpoint (H-7). The pre-write check (before Step A) discards the whole
+  ///     snapshot with NO write; a cancel landing MID-batch lets the in-flight step
+  ///     finish its writes (the next inter-step check then returns cancelled) — safe
+  ///     because every restore write is additive/local-wins and the next login
+  ///     re-restores. (B-pass P2 — accurate inter-step semantics.)
+  ///   • `null` — a FAULT (H-1/H-2 fail-closed: callFunction throw / non-200 /
+  ///     non-Map data / `schema_version != 1` / `tables` not a Map / ANY of the
+  ///     29 expected keys ABSENT). The caller falls through to the verbatim
+  ///     legacy fan-out THIS pass (a present key with a null/[] value is a
+  ///     legitimately-empty table, NOT a fault).
+  ///
+  /// NEVER throws — a fault is signalled by returning `null`, so the caller's
+  /// legacy path runs unharmed.
+  Future<RestoreResult?> _attemptSingleCallRestore(
+      String userId, String since) async {
+    final sw = Stopwatch()..start();
+    try {
+      // ── Fetch (one round-trip; e8a1c3 auth via callFunction/fresh token) ──
+      final FunctionResponse resp =
+          await _supabase.callFunction('restore-user-snapshot');
+
+      // ── FAIL-CLOSED validation (H-1/H-2) — extracted to the pure
+      // `validatedSnapshotTables` helper so the partial-200 / missing-key /
+      // bad-schema fault contract is BEHAVIORALLY pinned
+      // (test/sync/restore_single_call_bundle_validation_test.dart). ─────────
+      final Map? tables = validatedSnapshotTables(resp.status, resp.data);
+      if (tables == null) {
+        debugPrint('[SyncService._attemptSingleCallRestore] '
+            'bundle validation failed (status=${resp.status}) → legacy fallback');
+        return null;
+      }
+
+      // ── Cancellation + owner re-assert (H-7), BEFORE any Hive write ────
+      // A StartMissionBrief/ResumeOnboarding cancel, or a fast account-switch
+      // mid-call, must not write user A's bundle into user B's boxes.
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (_supabase.currentUser?.id != userId) {
+        debugPrint('[SyncService._attemptSingleCallRestore] '
+            'owner changed mid-call → cancel (no write)');
+        return RestoreResult.cancelled();
+      }
+
+      Object? row(String key) => tables[key];
+
+      // ── Apply — SAME order as the legacy A→B→C fan-out ─────────────────
+      // Step A (profile + lightweight; workout_plan LAST so the cloud-
+      // authoritative scheduled_workouts overlay in Step B is the later
+      // writer on schedule_<date> — APK Test #12.9).
+      restoreProgressLabel.value = 'Loading profile & plan';
+      final swA = Stopwatch()..start();
+      await _safeRestoreOp(
+          'user_profile',
+          _restoreUserProfile(userId,
+              preFetched: row('user_profile'),
+              preFetchedUsers: row('users')));
+      await _safeRestoreOp('user_progress',
+          _restoreUserProgress(userId, preFetched: row('user_progress')));
+      await _safeRestoreOp(
+          'custom_exercises',
+          _restoreCustomExercises(userId,
+              preFetched: row('user_custom_exercises')));
+      await _safeRestoreOp('custom_foods',
+          _restoreCustomFoods(userId, preFetched: row('user_custom_foods')));
+      await _safeRestoreOp(
+          'workout_templates',
+          _restoreWorkoutTemplates(userId,
+              preFetched: row('workout_templates')));
+      await _safeRestoreOp('user_preferences',
+          _restoreUserPreferences(userId, preFetched: row('user_preferences')));
+      await _safeRestoreOp('workout_plan',
+          _restoreWorkoutPlan(userId, preFetched: row('workout_plan')));
+      swA.stop();
+      unawaited(ErrorTelemetry.logEvent('restore_step_done',
+          message: 'step=A ms=${swA.elapsedMilliseconds} path=singlecall'));
+
+      if (_restoreCancelled) return RestoreResult.cancelled();
+
+      // Step B (bulk history; scheduled_workouts overlays the planned snapshot;
+      // schedule_completions runs AFTER scheduled_workouts on schedule_<date>).
+      restoreProgressLabel.value = 'Catching up your history';
+      final swB = Stopwatch()..start();
+      await _safeRestoreOp('workout_logs',
+          _restoreWorkoutLogs(userId, since, preFetched: row('workout_logs')));
+      await _safeRestoreOp(
+          'exercise_logs',
+          _restoreExerciseLogs(userId, since,
+              preFetchedExercises: row('workout_log_exercises'),
+              preFetchedSets: row('workout_log_sets')));
+      await _safeRestoreOp('weight_logs',
+          _restoreWeightLogs(userId, since, preFetched: row('weight_logs')));
+      await _safeRestoreOp('steps_logs',
+          _restoreStepsLogs(userId, since, preFetched: row('daily_steps')));
+      await _safeRestoreOp(
+          'nutrition_logs',
+          _restoreNutritionLogs(userId, since,
+              preFetched: row('nutrition_logs')));
+      await _safeRestoreOp(
+          'measurements',
+          _restoreMeasurements(userId, since,
+              preFetched: row('body_measurements')));
+      await _safeRestoreOp('water_logs',
+          _restoreWaterLogs(userId, since, preFetched: row('water_logs')));
+      await _safeRestoreOp('sleep_logs',
+          _restoreSleepLogs(userId, since, preFetched: row('sleep_logs')));
+      await _safeRestoreOp(
+          'streaks', _restoreStreaks(userId, preFetched: row('streaks')));
+      await _safeRestoreOp(
+          'scheduled_workouts',
+          _restoreScheduledWorkouts(userId, since,
+              preFetched: row('scheduled_workouts')));
+      await _safeRestoreOp(
+          'schedule_completions',
+          _restoreScheduleCompletions(userId, since,
+              preFetched: row('workout_schedule_completions')));
+      await _safeRestoreOp('saved_meals',
+          _restoreSavedMeals(userId, preFetched: row('user_saved_meals')));
+      await _safeRestoreOp(
+          'coach_interactions',
+          _restoreCoachInteractions(userId, since,
+              preFetched: row('ai_coach_interactions')));
+      await _safeRestoreOp('coach_memory',
+          _restoreCoachMemory(userId, preFetched: row('coach_memory')));
+      swB.stop();
+      unawaited(ErrorTelemetry.logEvent('restore_step_done',
+          message: 'step=B ms=${swB.elapsedMilliseconds} path=singlecall'));
+
+      if (_restoreCancelled) return RestoreResult.cancelled();
+
+      // Step C (restore-completeness surfaces; freezes AFTER user_progress so
+      // the refill-aware merge is the last writer on the `progress` key — H-6).
+      restoreProgressLabel.value = 'Finishing up';
+      final swC = Stopwatch()..start();
+      await _safeRestoreOp(
+          'freezes', _restoreFreezes(userId, preFetched: row('freezes')));
+      await _safeRestoreOp(
+          'notifications_inbox',
+          _restoreNotificationsInbox(userId,
+              preFetched: row('notifications_inbox')));
+      await _safeRestoreOp('saved_diet_plan',
+          _restoreSavedDietPlan(userId, preFetched: row('saved_diet_plan')));
+      await _safeRestoreOp('rank_promotions',
+          _restoreRankPromotions(userId, preFetched: row('rank_promotions')));
+      await _safeRestoreOp('referral_codes',
+          _restoreReferralCodes(userId, preFetched: row('referral_codes')));
+      await _safeRestoreOp(
+          'referral_redemptions',
+          _restoreReferralRedemptions(userId,
+              preFetched: row('referral_redemptions')));
+      swC.stop();
+      unawaited(ErrorTelemetry.logEvent('restore_step_done',
+          message: 'step=C ms=${swC.elapsedMilliseconds} path=singlecall'));
+
+      // ── Subscription refresh — SAME as the legacy path (H-3:
+      // `subscriptions` is NOT in the bundle; refreshFromSupabase applies
+      // grace-window / payment-in-progress / downgrade-suppression logic). ──
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      final swSub = Stopwatch()..start();
+      try {
+        await SubscriptionService.instance.refreshFromSupabase();
+      } catch (e, st) {
+        // Non-fatal — keep cached subscription state (legacy posture).
+        debugPrint('[SyncService._attemptSingleCallRestore] '
+            'subscription refresh error: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_single_call_sub_refresh'));
+        unawaited(_reportSyncFailure(
+            opType: 'subscription_refresh_on_restore', error: e));
+      }
+      swSub.stop();
+      unawaited(ErrorTelemetry.logEvent('restore_step_done',
+          message: 'step=sub ms=${swSub.elapsedMilliseconds} path=singlecall'));
+
+      if (_restoreCancelled) return RestoreResult.cancelled();
+      sw.stop();
+      unawaited(ErrorTelemetry.logEvent('restore_completed',
+          message: 'userId=${userId.substring(0, 8)} status=success '
+              'total_ms=${sw.elapsedMilliseconds} path=singlecall'));
+      return RestoreResult.success();
+    } catch (e, st) {
+      // ANY throw → FAULT. Signal the caller to run the verbatim legacy path
+      // THIS pass (H-2 fail-closed; the legacy ops are individually idempotent
+      // and additive/local-wins, so they heal any partial single-call write).
+      sw.stop();
+      debugPrint('[SyncService._attemptSingleCallRestore] fault → '
+          'legacy fallback: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_single_call_restore_fault'));
+      return null;
+    }
+  }
+
+  /// FAIL-CLOSED validation of the `restore-user-snapshot` bundle (plan §2/§5,
+  /// H-1/H-2). Returns the `tables` map ONLY for a complete, well-formed bundle;
+  /// returns `null` for ANY fault — a non-200 status, non-Map `data`, an
+  /// unrecognised `schema_version`, a non-Map `tables`, or ANY of the 29 expected
+  /// keys ABSENT. A partial bundle must NEVER be written as a complete restore;
+  /// `null` makes the caller fall through to the verbatim legacy fan-out. A
+  /// present key with a null/`[]` value is a legitimately-empty table, NOT a
+  /// fault. Pure + `@visibleForTesting` so the fail-closed contract is pinned by
+  /// a behavioral test rather than a source-grep (feedback_source_grep_false_confidence).
+  @visibleForTesting
+  static Map? validatedSnapshotTables(int status, Object? data) {
+    if (status != 200) return null;
+    if (data is! Map) return null;
+    if (data['schema_version'] != 1) return null;
+    final tables = data['tables'];
+    if (tables is! Map) return null;
+    for (final key in _kSingleCallBundleKeys) {
+      if (!tables.containsKey(key)) return null; // ABSENT key = partial = fault
+    }
+    return tables;
+  }
+
+  /// The canonical single-call bundle keys, exposed so the fail-closed validation
+  /// behavioral test asserts against the SAME source of truth the EF + validator
+  /// use (no hard-coded copy that could drift).
+  @visibleForTesting
+  static List<String> get singleCallBundleKeys =>
+      List<String>.unmodifiable(_kSingleCallBundleKeys);
+
+  /// C3 single-call restore — the 29 table keys the `restore-user-snapshot`
+  /// bundle MUST carry (H-2 fail-closed: an ABSENT key is a fault → legacy
+  /// fallback; a present null/[] value is a legitimately-empty table). Keys are
+  /// the cloud table names as emitted by the EF (NOT the Hive/`_restoreX`
+  /// names). `subscriptions` is intentionally excluded (H-3).
+  static const List<String> _kSingleCallBundleKeys = <String>[
+    // LIST-valued (array of rows; limit-1 reads serialize as a 0/1-element array)
+    'user_profile',
+    'user_progress',
+    'user_preferences',
+    'workout_plan',
+    'workout_templates',
+    'user_custom_exercises',
+    'user_custom_foods',
+    'workout_logs',
+    'workout_log_exercises',
+    'workout_log_sets',
+    'workout_schedule_completions',
+    'weight_logs',
+    'daily_steps',
+    'nutrition_logs',
+    'body_measurements',
+    'water_logs',
+    'sleep_logs',
+    'streaks',
+    'scheduled_workouts',
+    'user_saved_meals',
+    'ai_coach_interactions',
+    'notifications_inbox',
+    'rank_promotions',
+    'referral_redemptions',
+    // OBJECT-valued (single object or null from a maybeSingle/limit-1)
+    'users',
+    'coach_memory',
+    'freezes',
+    'saved_diet_plan',
+    'referral_codes',
+  ];
 
   // ── Fitness Summary Sync (rolling-context → Hive) ───────────
 

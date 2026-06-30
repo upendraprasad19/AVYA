@@ -376,26 +376,37 @@ extension SyncServiceNutrition on SyncService {
 
   // ── Pull helpers ────────────────────────────────────────────
 
-  Future<void> _restoreNutritionLogs(String userId, String since) async {
+  /// [preFetched] (C3 single-call): injected `nutrition_logs` rows, each row
+  /// carrying its nested `nutrition_log_items[]` (the verbatim PostgREST embed
+  /// the parser below reads). Legacy callers omit it → paginated network read.
+  /// Plan `restore-single-call-c3.md` §4 (H-1 embed nesting preserved).
+  Future<void> _restoreNutritionLogs(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
       // Join with nutrition_log_items to restore individual food items.
       // Paginated fetch (1000 per page, max 50,000).
-      final rows = <Map<String, dynamic>>[];
-      int offset = 0;
-      const pageSize = 1000;
-      while (true) {
-        final page = await _supabase.client
-            .from('nutrition_logs')
-            .select('*, nutrition_log_items(*)')
-            .eq('user_id', userId)
-            .gte('created_at', since)
-            .order('created_at')
-            .range(offset, offset + pageSize - 1);
-        for (final r in page) {
-          rows.add(Map<String, dynamic>.from(r as Map));
+      final List rows;
+      if (identical(preFetched, _kNoInject)) {
+        final fetched = <Map<String, dynamic>>[];
+        int offset = 0;
+        const pageSize = 1000;
+        while (true) {
+          final page = await _supabase.client
+              .from('nutrition_logs')
+              .select('*, nutrition_log_items(*)')
+              .eq('user_id', userId)
+              .gte('created_at', since)
+              .order('created_at')
+              .range(offset, offset + pageSize - 1);
+          for (final r in page) {
+            fetched.add(Map<String, dynamic>.from(r as Map));
+          }
+          if (page.length < pageSize || fetched.length >= 50000) break;
+          offset += pageSize;
         }
-        if (page.length < pageSize || rows.length >= 50000) break;
-        offset += pageSize;
+        rows = fetched;
+      } else {
+        rows = preFetched as List? ?? const [];
       }
 
       for (final row in rows) {
@@ -470,12 +481,17 @@ extension SyncServiceNutrition on SyncService {
     }
   }
 
-  Future<void> _restoreWaterLogs(String userId, String since) async {
+  /// [preFetched] (C3 single-call): injected `water_logs` rows; legacy callers
+  /// omit it → paginated network read. Plan §4.
+  Future<void> _restoreWaterLogs(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _fetchAllRows(
-        'water_logs', userId,
-        dateColumn: 'date', since: since.substring(0, 10), orderBy: 'date',
-      );
+      final rows = identical(preFetched, _kNoInject)
+          ? await _fetchAllRows(
+              'water_logs', userId,
+              dateColumn: 'date', since: since.substring(0, 10), orderBy: 'date',
+            )
+          : (preFetched as List? ?? const []);
 
       final healthBox = _hive.healthBox;
       for (final row in rows) {
@@ -517,13 +533,19 @@ extension SyncServiceNutrition on SyncService {
   }
 
   /// Restores saved meals from Supabase.
-  Future<void> _restoreSavedMeals(String userId) async {
+  ///
+  /// [preFetched] (C3 single-call): injected `user_saved_meals` rows; legacy
+  /// callers omit it → network read. Plan §4.
+  Future<void> _restoreSavedMeals(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('user_saved_meals')
-          .select()
-          .eq('user_id', userId)
-          .limit(500);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('user_saved_meals')
+              .select()
+              .eq('user_id', userId)
+              .limit(500)
+          : (preFetched as List? ?? const []);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);

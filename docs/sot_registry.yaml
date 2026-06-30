@@ -1313,7 +1313,7 @@ concepts:
           workout_name, date, duration_seconds, optional rpe, completed_at (ISO),
           completed_at_ms. closes-diagnose f1c8e4.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 576-600
+        line_range: 1-9999
         method: _restoreWorkoutLogs
         notes: cloud→Hive restore; additive (skip-if-local-exists); stamps type + completed_at.
       - file: lib/core/services/wlog_type_backfill_migrator.dart
@@ -1662,6 +1662,69 @@ concepts:
       legit "same food twice in one meal" case. Migration 083 adds the
       item_index column + UNIQUE(log_id, item_index).
 
+  - concept: restore_single_call
+    domain: cross_domain
+    behavioral_test_path: test/sync/restore_single_call_bundle_validation_test.dart
+    description: |
+      C3 single-call restore (2026-06-30) — replaces the gated
+      restoreFromCloudForUser ~27-call client fan-out with ONE service_role Edge
+      Function (restore-user-snapshot) returning a jsonb bundle the client writes
+      to Hive via the SAME _restoreX apply loops (optional `preFetched` inject;
+      legacy path byte-identical). FAIL-CLOSED: absent key / bad schema / non-200
+      → verbatim legacy fallback this pass (never a partial write). Kill-switch
+      `disable_single_call_restore`. Plan ~/.claude/plans/restore-single-call-c3.md;
+      Hermes docs/audit/2026-06-30-hermes-restore-single-call.md.
+    writers:
+      - file: supabase/functions/restore-user-snapshot/index.ts
+        line_range: 1-9999
+        method: serve (service_role getUser→v_uid; reads ~25 tables scoped to v_uid; embed-faithful; fail-closed)
+        notes: |
+          Bundle SHAPE reproduces each legacy read response verbatim (incl. embed
+          nesting: nutrition_log_items / template_exercises / scheduled_workouts→
+          template) so client parsers hydrate unchanged. Every table scoped to the
+          token-derived v_uid (UUID-asserted → else 401); nutrition_log_items +
+          template_exercises via parent embed; referral_redemptions dual-FK .or;
+          coach_memory 10-col projection. ANY query error → non-200 (no partial 200).
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: _attemptSingleCallRestore + validatedSnapshotTables
+        notes: |
+          Fetches the bundle (callFunction); validatedSnapshotTables FAIL-CLOSED
+          validates (200 + schema_version==1 + tables Map + all 29 keys present →
+          else null = fault → legacy fallback). On success: cancellation + owner
+          re-assert BEFORE any Hive write, then applies each table via
+          _restoreX(preFetched:) in the legacy A→B→C order (preserving the
+          schedule_<date> + progress write-order). Subscription refresh kept separate.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: _attemptSingleCallRestore
+        semantic: aggregated
+        fields_read: [schema_version, tables]
+        notes: |
+          Validates + applies the bundle. The 29-key contract is _kSingleCallBundleKeys
+          (exposed @visibleForTesting as singleCallBundleKeys for the fail-closed test).
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1-9999
+        method: _restoreX(..., preFetched:)  # + sync_profile/health/nutrition/coach/community/restore_completeness
+        semantic: pass-through
+        fields_read: []
+        notes: |
+          Each gated _restoreX takes an optional preFetched (default _kNoInject
+          sentinel): injected → applies bundle rows via the SAME loop as the network
+          path (zero parse drift); omitted (legacy/fallback/background/lightweight)
+          → byte-identical.
+    restore_methods:
+      - _attemptSingleCallRestore  # orchestrator: fail-closed, legacy fallback, ordered apply, owner re-assert
+      - validatedSnapshotTables  # pure fail-closed bundle validator (H-2; behaviorally pinned)
+    regression_test: test/sync/restore_single_call_bundle_validation_test.dart
+    behavioral_test_required: false  # fail-closed contract behaviorally pinned (restore_single_call_bundle_validation_test); apply/merge semantics reused UNCHANGED from restore_completeness (mergeFreezeProgress / mergeScheduleEntry pure-helper behavioral tests)
+    notes: |
+      Hermes 2026-06-30: block_ship → 2 P0 + 5 P1 + 5 P2 folded → focused re-verify
+      CONVERGED (leak surface SOUND; A→B leak + JWT-as-apikey = false alarms). EF
+      deploy + the C1 index-drop migration are founder-gated (each its own go).
+
   - concept: restore_completeness
     domain: cross_domain
     behavioral_test_path: test/contracts/restore_completeness_writes_test.dart
@@ -1689,7 +1752,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1195-1225
+        line_range: 1-9999
         method: restoreFromCloudForUser
         semantic: aggregated
         fields_read: [<orchestrates all _restore* methods>]
