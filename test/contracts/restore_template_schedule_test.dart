@@ -44,8 +44,9 @@ void main() {
       // Slice out just _restoreScheduledWorkouts so the assertions can't
       // accidentally match an unrelated occurrence elsewhere in the file
       // (e.g. _restoreWorkoutTemplates also embeds template_exercises).
-      const startMarker =
-          'Future<void> _restoreScheduledWorkouts(String userId, String since)';
+      // Param-robust: the C3 single-call refactor added a `{Object? preFetched}`
+      // named param to the signature, so match the method-name + open paren only.
+      const startMarker = 'Future<void> _restoreScheduledWorkouts(';
       final start = src.indexOf(startMarker);
       expect(start, isNot(-1),
           reason: '_restoreScheduledWorkouts method must exist');

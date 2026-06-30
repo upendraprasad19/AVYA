@@ -164,8 +164,16 @@ String? _methodSlice(String src, String methodName) {
   );
   final m = sigRe.firstMatch(src);
   if (m == null) return null;
-  // Find the opening brace after the signature.
+  // m.end is just past the signature's opening `(`. Skip to the matching
+  // close-paren so a named/optional param group `{...}` inside the parameter
+  // list is not mistaken for the body brace (C3 added `{Object? preFetched}`).
   var i = m.end;
+  var pdepth = 1;
+  while (i < src.length && pdepth > 0) {
+    if (src[i] == '(') pdepth++;
+    if (src[i] == ')') pdepth--;
+    i++;
+  }
   while (i < src.length && src[i] != '{') {
     i++;
   }

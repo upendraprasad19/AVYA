@@ -316,12 +316,17 @@ extension SyncServiceCommunity on SyncService {
     };
   }
 
-  Future<void> _restoreCustomExercises(String userId) async {
+  /// [preFetched] (C3 single-call): injected `user_custom_exercises` rows;
+  /// legacy callers omit it → network read. Plan §4.
+  Future<void> _restoreCustomExercises(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('user_custom_exercises')
-          .select()
-          .eq('user_id', userId);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('user_custom_exercises')
+              .select()
+              .eq('user_id', userId)
+          : (preFetched as List? ?? const []);
 
       if (rows.isEmpty) return;
 
@@ -380,12 +385,17 @@ extension SyncServiceCommunity on SyncService {
     }
   }
 
-  Future<void> _restoreCustomFoods(String userId) async {
+  /// [preFetched] (C3 single-call): injected `user_custom_foods` rows; legacy
+  /// callers omit it → network read. Plan §4.
+  Future<void> _restoreCustomFoods(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('user_custom_foods')
-          .select()
-          .eq('user_id', userId);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('user_custom_foods')
+              .select()
+              .eq('user_id', userId)
+          : (preFetched as List? ?? const []);
 
       if (rows.isEmpty) return;
 

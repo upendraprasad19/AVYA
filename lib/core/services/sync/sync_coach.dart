@@ -160,15 +160,20 @@ extension SyncServiceCoach on SyncService {
   }
 
   /// Restores AI coach interactions from Supabase (for chat history on new device).
-  Future<void> _restoreCoachInteractions(String userId, String since) async {
+  /// [preFetched] (C3 single-call): injected `ai_coach_interactions` rows;
+  /// legacy callers omit it → network read. Plan §4.
+  Future<void> _restoreCoachInteractions(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('ai_coach_interactions')
-          .select()
-          .eq('user_id', userId)
-          .gte('created_at', since)
-          .order('created_at')
-          .limit(1000);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('ai_coach_interactions')
+              .select()
+              .eq('user_id', userId)
+              .gte('created_at', since)
+              .order('created_at')
+              .limit(1000)
+          : (preFetched as List? ?? const []);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -216,19 +221,29 @@ extension SyncServiceCoach on SyncService {
   /// skip the InductionScreen — the cloud row already has [induction_completed_at]
   /// and all muster answers. If the user has no coach_memory row yet (un-inducted),
   /// maybeSingle() returns null and we skip silently.
-  Future<void> _restoreCoachMemory(String userId) async {
+  /// [preFetched] (C3 single-call): injected `coach_memory` object|null;
+  /// legacy callers omit it → network `maybeSingle` read. An injected `null`
+  /// (un-inducted user — a legitimately-empty row) is honored exactly like the
+  /// network null. Plan §4.
+  Future<void> _restoreCoachMemory(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final row = await _supabase.client
-          .from('coach_memory')
-          .select(
-            'committed_at, committed_to_lt_cdr, induction_completed_at, '
-            'why_now, definition_of_winning, known_injuries, '
-            'typical_wake_time, preferred_workout_time, body_part_priorities, '
-            'coach_notes',
-          )
-          .eq('user_id', userId)
-          .maybeSingle();
-      if (row == null) return;
+      final Object? rawRow = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('coach_memory')
+              .select(
+                'committed_at, committed_to_lt_cdr, induction_completed_at, '
+                'why_now, definition_of_winning, known_injuries, '
+                'typical_wake_time, preferred_workout_time, body_part_priorities, '
+                'coach_notes',
+              )
+              .eq('user_id', userId)
+              .maybeSingle()
+          : preFetched;
+      if (rawRow == null) return;
+      // Both the maybeSingle result and an injected bundle value are JSON
+      // objects; normalize to a typed map so the apply loop below is unchanged.
+      final Map row = rawRow as Map;
 
       final coach = _hive.coachBox;
       const keys = [

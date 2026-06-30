@@ -135,18 +135,27 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// match the read pattern in [WorkoutRepository] and [home_provider].
   /// We merge on top of the existing local map so any IST-rollover data
   /// written since the last sync is not lost.
-  Future<void> _restoreFreezes(String userId) async {
+  /// [preFetched] (C3 single-call): injected `freezes` object|null (the 4-col
+  /// `user_progress` subset). Legacy callers omit it → network `maybeSingle`
+  /// read; an injected `null` is honored exactly like the network null. Plan §4.
+  Future<void> _restoreFreezes(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final res = await _supabase.client
-          .from('user_progress')
-          .select(
-            'streak_freezes_available, streak_freezes_used_dates, '
-            'streak_freezes_last_refill, '
-            'streak_freezes_first_pro_grant_done',
-          )
-          .eq('user_id', userId)
-          .maybeSingle();
-      if (res == null) return;
+      final Object? rawRes = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('user_progress')
+              .select(
+                'streak_freezes_available, streak_freezes_used_dates, '
+                'streak_freezes_last_refill, '
+                'streak_freezes_first_pro_grant_done',
+              )
+              .eq('user_id', userId)
+              .maybeSingle()
+          : preFetched;
+      if (rawRes == null) return;
+      // Normalize the maybeSingle result / injected object to a typed map so
+      // the merge logic below is unchanged.
+      final Map res = rawRes as Map;
 
       final box = _hive.userBox;
       final existing = box.get('progress');
@@ -224,17 +233,22 @@ extension SyncServiceRestoreCompleteness on SyncService {
   ///
   /// Uses the notification `id` as the Hive key (not `notif_$id`) to
   /// match what [NotificationInboxService.record] writes.
-  Future<void> _restoreNotificationsInbox(String userId) async {
+  /// [preFetched] (C3 single-call): injected `notifications_inbox` rows; legacy
+  /// callers omit it → network read. Plan §4.
+  Future<void> _restoreNotificationsInbox(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('notifications_inbox')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false)
-          .limit(200);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('notifications_inbox')
+              .select()
+              .eq('user_id', userId)
+              .order('created_at', ascending: false)
+              .limit(200)
+          : (preFetched as List? ?? const []);
 
       final box = _hive.notificationsBox;
-      for (final rawRow in rows as List) {
+      for (final rawRow in rows) {
         final r = Map<String, dynamic>.from(rawRow as Map);
         final id = r['id'] as String?;
         if (id == null || id.isEmpty) continue;
@@ -278,15 +292,21 @@ extension SyncServiceRestoreCompleteness on SyncService {
   ///
   /// One row per user (PRIMARY KEY on user_id). On conflict the cloud
   /// row wins — the user may have saved an updated plan on another device.
-  Future<void> _restoreSavedDietPlan(String userId) async {
+  /// [preFetched] (C3 single-call): injected `saved_diet_plan` object|null;
+  /// legacy callers omit it → network `maybeSingle` read; an injected `null` is
+  /// honored like the network null. Plan §4.
+  Future<void> _restoreSavedDietPlan(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final res = await _supabase.client
-          .from('saved_diet_plans')
-          .select('plan_json')
-          .eq('user_id', userId)
-          .maybeSingle();
+      final Object? res = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('saved_diet_plans')
+              .select('plan_json')
+              .eq('user_id', userId)
+              .maybeSingle()
+          : preFetched;
       if (res == null) return;
-      final planJson = res['plan_json'];
+      final planJson = (res as Map)['plan_json'];
       if (planJson == null) return;
       await MigratedKey.write('saved_diet_plan', planJson);
     } catch (e, st) {
@@ -306,14 +326,19 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// Stored as a raw list of maps so [promotionHistoryProvider] can
   /// optionally fall back to this cache when offline; no schema
   /// translation needed (keys already match cloud column names).
-  Future<void> _restoreRankPromotions(String userId) async {
+  /// [preFetched] (C3 single-call): injected `rank_promotions` rows; legacy
+  /// callers omit it → network read. Plan §4.
+  Future<void> _restoreRankPromotions(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('rank_promotions')
-          .select()
-          .eq('user_id', userId)
-          .order('achieved_at', ascending: false)
-          .limit(20);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('rank_promotions')
+              .select()
+              .eq('user_id', userId)
+              .order('achieved_at', ascending: false)
+              .limit(20)
+          : (preFetched as List? ?? const []);
       await _hive.userBox.put('rank_promotions_history', rows);
     } catch (e, st) {
       debugPrint('[SyncService._restoreRankPromotions] error: $e\n$st');
@@ -345,17 +370,25 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// onboarding sync path inserts the user into `public.users`. The
   /// restore path is FK-direction-agnostic (we SELECT by user_id, not
   /// JOIN), so no special handling is required here.
-  Future<void> _restoreReferralCodes(String userId) async {
+  /// [preFetched] (C3 single-call): injected `referral_codes` object|null
+  /// (already filtered to a non-expired limit-1 row by the EF); legacy callers
+  /// omit it → network `maybeSingle` read; an injected `null` is honored like
+  /// the network null. Plan §4.
+  Future<void> _restoreReferralCodes(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final res = await _supabase.client
-          .from('referral_codes')
-          .select('code, expires_at, created_at')
-          .eq('user_id', userId)
-          .gt('expires_at', DateTime.now().toUtc().toIso8601String())
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-      if (res == null) return;
+      final Object? rawRes = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('referral_codes')
+              .select('code, expires_at, created_at')
+              .eq('user_id', userId)
+              .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+              .order('created_at', ascending: false)
+              .limit(1)
+              .maybeSingle()
+          : preFetched;
+      if (rawRes == null) return;
+      final Map res = rawRes as Map;
       final code = res['code'] as String?;
       final expiresAt = res['expires_at'];
       if (code == null || code.isEmpty) return;
@@ -392,16 +425,22 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// indexed (idx_referral_redemptions_referrer + the implicit unique
   /// index on referee_id), so the `OR` filter is cheap. PostgREST
   /// uses comma-separated `or=` syntax via the `.or()` builder.
-  Future<void> _restoreReferralRedemptions(String userId) async {
+  /// [preFetched] (C3 single-call): injected `referral_redemptions` rows
+  /// (dual-FK matched by the EF); legacy callers omit it → network read.
+  /// Plan §4.
+  Future<void> _restoreReferralRedemptions(String userId,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _supabase.client
-          .from('referral_redemptions')
-          .select(
-            'code, referrer_id, referee_id, days_granted_each, created_at',
-          )
-          .or('referrer_id.eq.$userId,referee_id.eq.$userId')
-          .order('created_at', ascending: false)
-          .limit(50);
+      final rows = identical(preFetched, _kNoInject)
+          ? await _supabase.client
+              .from('referral_redemptions')
+              .select(
+                'code, referrer_id, referee_id, days_granted_each, created_at',
+              )
+              .or('referrer_id.eq.$userId,referee_id.eq.$userId')
+              .order('created_at', ascending: false)
+              .limit(50)
+          : (preFetched as List? ?? const []);
       await _hive.userBox.put('referral_redemption_history', rows);
     } catch (e, st) {
       debugPrint('[SyncService._restoreReferralRedemptions] error: $e\n$st');

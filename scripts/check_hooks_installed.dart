@@ -15,7 +15,18 @@ import 'dart:io';
 
 void main(List<String> args) async {
   final warnOnly = args.contains('--warn-only');
-  final hookFile = File('.git/hooks/pre-commit');
+  // Worktree-aware: in a git worktree `.git` is a FILE (gitdir pointer) and the
+  // hooks live in the COMMON dir, so a hardcoded `.git/hooks/pre-commit` is
+  // absent even though the hook IS installed and running (it invoked this gate).
+  // Resolve the real path via git; fall back to the literal path if git fails.
+  var hookPath = '.git/hooks/pre-commit';
+  try {
+    final r = Process.runSync('git', ['rev-parse', '--git-path', 'hooks/pre-commit']);
+    if (r.exitCode == 0 && (r.stdout as String).trim().isNotEmpty) {
+      hookPath = (r.stdout as String).trim();
+    }
+  } catch (_) {}
+  final hookFile = File(hookPath);
   if (!hookFile.existsSync()) {
     stderr.writeln('[Gate 32] FAIL: .git/hooks/pre-commit not installed');
     stderr.writeln('  Fix: run `sh scripts/setup-hooks.sh` (see CLAUDE.md §0).');

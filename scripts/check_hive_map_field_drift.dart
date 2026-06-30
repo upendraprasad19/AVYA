@@ -267,6 +267,9 @@ const _alwaysOk = <String>{
   'value', 'label', 'icon', 'title', 'subtitle', 'message', 'error',
   'isLoading', 'error_class', 'status', 'data', 'items', 'result',
   // JSON request/response bodies for Edge Functions:
+  // restore-user-snapshot (C3) bundle ENVELOPE — read off the EF JSON response
+  // (data['schema_version'] / data['tables']), NOT off any exlog_/wlog_ Hive map.
+  'schema_version', 'tables',
   'text', 'image', 'image_url', 'type', 'meal_name', 'analysis_type',
   'kcal', 'protein', 'carbs', 'fat', 'fiber', 'quantity', 'name',
   'meal_type',

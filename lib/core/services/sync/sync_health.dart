@@ -286,12 +286,17 @@ extension SyncServiceHealth on SyncService {
 
   // ── Private pull helpers ────────────────────────────────────
 
-  Future<void> _restoreWeightLogs(String userId, String since) async {
+  /// [preFetched] (C3 single-call): injected `weight_logs` rows; legacy callers
+  /// omit it → paginated network read. Plan §4.
+  Future<void> _restoreWeightLogs(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _fetchAllRows(
-        'weight_logs', userId,
-        dateColumn: 'created_at', since: since, orderBy: 'created_at',
-      );
+      final rows = identical(preFetched, _kNoInject)
+          ? await _fetchAllRows(
+              'weight_logs', userId,
+              dateColumn: 'created_at', since: since, orderBy: 'created_at',
+            )
+          : (preFetched as List? ?? const []);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -317,12 +322,17 @@ extension SyncServiceHealth on SyncService {
     }
   }
 
-  Future<void> _restoreMeasurements(String userId, String since) async {
+  /// [preFetched] (C3 single-call): injected `body_measurements` rows; legacy
+  /// callers omit it → paginated network read. Plan §4.
+  Future<void> _restoreMeasurements(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final rows = await _fetchAllRows(
-        'body_measurements', userId,
-        dateColumn: 'created_at', since: since, orderBy: 'created_at',
-      );
+      final rows = identical(preFetched, _kNoInject)
+          ? await _fetchAllRows(
+              'body_measurements', userId,
+              dateColumn: 'created_at', since: since, orderBy: 'created_at',
+            )
+          : (preFetched as List? ?? const []);
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -345,7 +355,10 @@ extension SyncServiceHealth on SyncService {
     }
   }
 
-  Future<void> _restoreSleepLogs(String userId, String since) async {
+  /// [preFetched] (C3 single-call): injected `sleep_logs` rows; legacy callers
+  /// omit it → paginated network read. Plan §4.
+  Future<void> _restoreSleepLogs(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
       // F37 (2026-06-07): route through the paginated _fetchAllRows helper
       // (same as _restoreWeightLogs / _restoreMeasurements siblings). The
@@ -353,10 +366,12 @@ extension SyncServiceHealth on SyncService {
       // truncated the result at the default 1000-row cap, silently dropping
       // older sleep history on restore. _fetchAllRows paginates to the 50k
       // ceiling.
-      final rows = await _fetchAllRows(
-        'sleep_logs', userId,
-        dateColumn: 'created_at', since: since, orderBy: 'created_at',
-      );
+      final rows = identical(preFetched, _kNoInject)
+          ? await _fetchAllRows(
+              'sleep_logs', userId,
+              dateColumn: 'created_at', since: since, orderBy: 'created_at',
+            )
+          : (preFetched as List? ?? const []);
 
       if (rows.isEmpty) return;
 
@@ -384,13 +399,22 @@ extension SyncServiceHealth on SyncService {
   }
 
   /// F20 · Restore daily step totals from Supabase into healthBox.
-  Future<void> _restoreStepsLogs(String userId, String since) async {
+  ///
+  /// [preFetched] (C3 single-call): injected `daily_steps` rows; legacy callers
+  /// omit it → paginated network read. Plan §4.
+  Future<void> _restoreStepsLogs(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
     try {
-      final sinceDate = since.length >= 10 ? since.substring(0, 10) : since;
-      final rows = await _fetchAllRows(
-        'daily_steps', userId,
-        dateColumn: 'date', since: sinceDate, orderBy: 'date',
-      );
+      final List rows;
+      if (identical(preFetched, _kNoInject)) {
+        final sinceDate = since.length >= 10 ? since.substring(0, 10) : since;
+        rows = await _fetchAllRows(
+          'daily_steps', userId,
+          dateColumn: 'date', since: sinceDate, orderBy: 'date',
+        );
+      } else {
+        rows = preFetched as List? ?? const [];
+      }
       if (rows.isEmpty) return;
       final healthBox = _hive.healthBox;
       for (final row in rows) {
