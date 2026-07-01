@@ -22,11 +22,14 @@ env:
 
 jobs:
   # ── Tier 1: Static Analysis + Unit Tests ───────────────────────
-  # Fast gate — runs in ~2 minutes. Blocks all PRs on failure.
+  # Runs analyze + the FULL unit suite (~10 min as the suite has grown to 3000+ tests). Blocks all PRs on failure.
+  # timeout-minutes: 20 gives headroom — the job was cancelled at the old 10-min limit when a slightly
+  # slower runner pushed the ~10-min suite over the edge (2026-07-01; C1 merge run 28517992078 hit 10m15s
+  # twice while "All tests passed!" printed just before the timeout kill). See feedback_local_ci_env_divergence.md.
   analyze-and-unit-test:
     name: Analyze & Unit Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
