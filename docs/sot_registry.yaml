@@ -2699,7 +2699,10 @@ concepts:
       table: water_logs
       # Audit 2026-05-12 P3-G — `logged_at` does NOT exist (verified
       # information_schema 2026-05-12). created_at carries the timestamp.
-      columns: [user_id, date, amount_ml]
+      # 2026-07-01 (C1): amount_ml -> total_ml. The live column + both client
+      # writers (sync_nutrition.dart:299, sync_health.dart) use total_ml;
+      # `amount_ml` never existed on water_logs (verified live dedsavbjuwgarrhphgnl).
+      columns: [user_id, date, total_ml]
       unique_constraint: "(user_id, date)"
     sync_methods: [_syncWaterLogs]
     restore_methods: [_restoreWaterLogs]
