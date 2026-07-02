@@ -4179,10 +4179,19 @@ concepts:
         semantic: flag-check
         fields_read: [authUid, hiveOwner]
         notes: |
-          Watches authStateProvider + currentUserProvider +
-          hiveSessionOwnerProvider. Returns '<anon>' on disagreement;
-          authUid on agreement. 56 user-scoped providers in lib/features/*
-          watch this token as the first line of their build() body.
+          Watches authStateProvider + hiveSessionOwnerProvider for reactivity.
+          authUid is read LIVE from SupabaseService.currentUser (the SAME source
+          wrapUserScopedBox uses, so the gate and the box agree) — NOT via the
+          cached currentUserProvider. OBS-6 residual (a7f2e1, 2026-07-02):
+          currentUserProvider is a plain non-reactive Provider that caches on
+          first read and is never invalidated → on an account switch it stayed
+          stale → authUid != hiveOwner → token stuck '<anon>' → every mixin tab's
+          isSessionTearingDown gate stuck on the skeleton. Kill-switch
+          configBox['disable_live_auth_token_read'] (default OFF = fix ON) reverts
+          to the verbatim cached currentUserProvider read. Returns '<anon>' on
+          disagreement; authUid on agreement. 56 user-scoped providers in
+          lib/features/* watch this token as the first line of their build() body.
+          Behavioral: test/contracts/session_token_stale_authuid_recovery_test.dart.
       - file: lib/core/services/guarded_box.dart
         line_range: 222-300
         method: wrapUserScopedBox
