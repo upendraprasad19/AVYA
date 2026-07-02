@@ -65,8 +65,17 @@ before all Hive boxes finish swapping):
 
 - **Layer A** (correctness): every `wrapUserScopedBox` call short-circuits to
   `GuardedBox.empty(authUid)` if the box's owner is stale → all reads return null/empty/0/false/true. No data leak even if Layer B fails.
-- **Layer B** (liveness): `authStateChangesProvider` invalidates every Hive-backed
-  provider so widgets re-render from the new owner's box once the swap completes.
+- **Layer B** (liveness): `authUserIdTokenProvider` re-emits on `authStateProvider`
+  + `hiveSessionOwnerProvider` so every Hive-backed provider re-renders from the
+  new owner's box once the swap completes. Its `authUid` is read **LIVE** from
+  `SupabaseService.currentUser` (the SAME source `wrapUserScopedBox` uses) — NOT the
+  cached `currentUserProvider`. **OBS-6 residual (a7f2e1, 2026-07-02):**
+  `currentUserProvider` caches on first read + is never invalidated, so on an
+  in-session account switch the token read a STALE uid → stuck `'<anon>'` → the
+  `isSessionTearingDown` skeleton gate stuck on ALL 4 mixin tabs (Home/Train/
+  Nutrition/Profile) until reload. Kill-switch `configBox['disable_live_auth_token_read']`
+  (default OFF = fix ON) reverts to the cached read. Recurrence of b8e3f1 — that
+  fix repaired the box read + blank-Home, not the token source.
 
 Both layers are **intentionally redundant**. Never remove either half. Never
 read user-scoped Hive without going through `wrapUserScopedBox`.
@@ -88,6 +97,7 @@ read user-scoped Hive without going through `wrapUserScopedBox`.
 - `test/contracts/wrap_user_scoped_box_disagreement_test.dart`
 - `test/contracts/auth_invalidation_contract_test.dart`
 - `test/contracts/auth_invalidation_timing_test.dart`
+- `test/contracts/session_token_stale_authuid_recovery_test.dart` — OBS-6 residual: token reads LIVE authUid so it recovers on account-switch (a7f2e1); kill-switch + isolation.
 - `test/contracts/auth_session_bootstrapper_test.dart` — pure-logic `resolveDestination` table.
 - `test/contracts/auth_provider_error_surfacing_test.dart`
 - `test/contracts/full_name_backfill_test.dart`

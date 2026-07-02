@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### auth_hive_owner_agreement (2 bugs)
+- 2026-07-02 a7f2e1 — >
+- 2026-06-21 b8e3f1 — >
+
 ### urine_color_logs (1 bugs)
 - 2026-06-28 b6d3f9 — >
 
@@ -45,9 +49,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### nutrition_target_canonical_read (1 bugs)
 - 2026-06-23 c8a1f4 — >
-
-### auth_hive_owner_agreement (1 bugs)
-- 2026-06-21 b8e3f1 — >
 
 ### streak_freeze_denominator_grant_decay (1 bugs)
 - 2026-06-18 f9d2e7 — >
@@ -741,6 +742,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-02 | a7f2e1 | > | auth_hive_owner_agreement | test/contracts/session_token_stale_authuid_recovery_test.dart |
 | 2026-06-28 | b6d3f9 | > | urine_color_logs | test/contracts/log_urine_sync_routing_test.dart |
 | 2026-06-28 | c4d8a2 | > | onboarding_completed_at | test/contracts/onboarding_completed_at_durable_writer_test.dart |
 | 2026-06-28 | f1a9d3 | > | rank_gate_copy_truthfulness | test/ai_coach/induction_pledge_test.dart |
