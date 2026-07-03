@@ -22,7 +22,7 @@
     "food_database": ["id", "name", "category", "calories_per_100g", "protein_per_100g", "carbs_per_100g", "fat_per_100g", "fiber_per_100g", "standard_serving_desc", "standard_serving_g", "calories_std", "protein_std", "carbs_std", "fat_std", "common_additions", "is_indian", "source", "created_at", "is_veg", "is_vegan"],
     "memory_embeddings": ["id", "user_id", "embedding", "content", "source_type", "metadata", "created_at"],
     "notifications_inbox": ["id", "user_id", "notif_type", "title", "body", "payload", "created_at", "read_at", "archived_at"],
-    "nutrition_log_items": ["id", "log_id", "food_id", "food_name", "quantity_g", "calories", "protein", "carbs", "fat", "created_at", "fiber"],
+    "nutrition_log_items": ["id", "log_id", "food_id", "food_name", "quantity_g", "calories", "protein", "carbs", "fat", "created_at", "fiber", "item_index"],
     "nutrition_logs": ["id", "user_id", "date", "total_calories", "total_protein", "total_carbs", "total_fat", "meal_type", "created_at", "total_fiber"],
     "progress_photos": ["id", "user_id", "storage_path", "body_area", "taken_at", "weight_kg_at_time", "notes", "created_at"],
     "promo_code_uses": ["id", "code", "user_id", "plan_purchased", "original_amount", "discount_applied", "final_amount", "used_at"],

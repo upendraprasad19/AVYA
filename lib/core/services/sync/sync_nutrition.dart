@@ -1,5 +1,118 @@
 part of '../sync_service.dart';
 
+/// audit-fixwave 2026-07-02 / F5 (NUT-02) — pure grouping: coalesce same-slot
+/// (date, meal_type) nutrition logs into ONE payload (union items + summed
+/// totals + earliest created_at). One entry per slot so the natural-key upsert
+/// (user_id,date,meal_type) never drops a second same-slot meal (the NUT-02
+/// data-loss). Logs with a null/empty natural key pass through unmerged (the
+/// sync loop's null-key telemetry guard handles them). Pure (no Hive) so the
+/// merge contract is unit-testable directly.
+List<Map<String, dynamic>> mergeNutritionLogsBySlot(
+    List<Map<String, dynamic>> logs) {
+  final bySlot = <String, Map<String, dynamic>>{};
+  for (final log in logs) {
+    final date = (log['date'] as String?)?.trim();
+    final meal = (log['meal_type'] as String?)?.trim();
+    if (date == null || date.isEmpty || meal == null || meal.isEmpty) {
+      bySlot[' raw ${bySlot.length}'] = log; // pass through unmerged
+      continue;
+    }
+    final slot = '$date $meal';
+    final acc = bySlot[slot];
+    if (acc == null) {
+      bySlot[slot] = {
+        'date': date,
+        'meal_type': meal,
+        'total_calories': (log['total_calories'] as num?) ?? 0,
+        'total_protein': (log['total_protein'] as num?) ?? 0,
+        'total_carbs': (log['total_carbs'] as num?) ?? 0,
+        'total_fat': (log['total_fat'] as num?) ?? 0,
+        'total_fiber': (log['total_fiber'] as num?) ?? 0,
+        'items': [...((log['items'] as List?) ?? const [])],
+        if (log['created_at'] != null) 'created_at': log['created_at'],
+      };
+    } else {
+      acc['total_calories'] = (acc['total_calories'] as num) +
+          ((log['total_calories'] as num?) ?? 0);
+      acc['total_protein'] = (acc['total_protein'] as num) +
+          ((log['total_protein'] as num?) ?? 0);
+      acc['total_carbs'] =
+          (acc['total_carbs'] as num) + ((log['total_carbs'] as num?) ?? 0);
+      acc['total_fat'] =
+          (acc['total_fat'] as num) + ((log['total_fat'] as num?) ?? 0);
+      acc['total_fiber'] =
+          (acc['total_fiber'] as num) + ((log['total_fiber'] as num?) ?? 0);
+      (acc['items'] as List).addAll((log['items'] as List?) ?? const []);
+      final accCreated = acc['created_at'] as String?;
+      final logCreated = log['created_at'] as String?;
+      if (logCreated != null &&
+          (accCreated == null || logCreated.compareTo(accCreated) < 0)) {
+        acc['created_at'] = logCreated;
+      }
+    }
+  }
+  return bySlot.values.toList();
+}
+
+/// audit-fixwave B-pass — signature of a nutrition item for the restore union:
+/// `<lowercased-trimmed-name>|<qty.toFixed(1)>`. Empty when unnameable.
+String nutritionItemSig(dynamic it) {
+  if (it is! Map) return '';
+  final n =
+      (it['name'] ?? it['food_name'] ?? '').toString().toLowerCase().trim();
+  final q = it['quantity_g'] ?? it['serving_g'];
+  final qd = (q is num) ? q.toDouble() : 0.0;
+  return n.isEmpty ? '' : '$n|${qd.toStringAsFixed(1)}';
+}
+
+/// audit-fixwave B-pass — true when [localItems] already holds at least as many
+/// of EVERY cloud item (by signature MULTISET count) — i.e. local is a superset,
+/// so the restore can skip (local-wins). Counting, not set-membership, so a
+/// genuine duplicate serving that only cloud has is not falsely "already local".
+bool nutritionLocalSlotIsSuperset(List<dynamic> localItems, List<dynamic> cloudItems) {
+  if (cloudItems.isEmpty) return false;
+  final lc = <String, int>{};
+  for (final it in localItems) {
+    final s = nutritionItemSig(it);
+    if (s.isNotEmpty) lc[s] = (lc[s] ?? 0) + 1;
+  }
+  final cc = <String, int>{};
+  for (final it in cloudItems) {
+    final s = nutritionItemSig(it);
+    if (s.isNotEmpty) cc[s] = (cc[s] ?? 0) + 1;
+  }
+  return cc.entries.every((e) => (lc[e.key] ?? 0) >= e.value);
+}
+
+/// audit-fixwave B-pass — MULTISET union of local + cloud items: for each
+/// signature keep max(localCount, cloudCount) item objects. This PRESERVES a
+/// genuine duplicate serving (a food logged twice) while NOT double-counting an
+/// already-synced item that appears in both local and cloud. (The earlier
+/// set-dedup silently dropped the second identical serving — a Hermes P1.)
+List<dynamic> nutritionSlotUnion(List<dynamic> localItems, List<dynamic> cloudItems) {
+  final localBySig = <String, List<dynamic>>{};
+  for (final it in localItems) {
+    final s = nutritionItemSig(it);
+    if (s.isNotEmpty) (localBySig[s] ??= <dynamic>[]).add(it);
+  }
+  final cloudBySig = <String, List<dynamic>>{};
+  for (final it in cloudItems) {
+    final s = nutritionItemSig(it);
+    if (s.isNotEmpty) (cloudBySig[s] ??= <dynamic>[]).add(it);
+  }
+  final sigs = <String>{...localBySig.keys, ...cloudBySig.keys}.toList()..sort();
+  final out = <dynamic>[];
+  for (final s in sigs) {
+    final local = localBySig[s] ?? const [];
+    final cloud = cloudBySig[s] ?? const [];
+    out.addAll(local);
+    if (cloud.length > local.length) {
+      out.addAll(cloud.sublist(local.length)); // the extra cloud servings only
+    }
+  }
+  return out;
+}
+
 /// Sync + restore for nutrition domain: nutrition_logs (+ per-item items),
 /// water_logs, user_saved_meals.
 ///
@@ -86,12 +199,20 @@ extension SyncServiceNutrition on SyncService {
   // ── Push helpers ────────────────────────────────────────────
 
   Future<void> _syncNutritionLogs(String userId) async {
-    final nutritionBox = _hive.nutritionBox;
-    for (final key in nutritionBox.keys) {
-      if (key is! String || !key.startsWith("nlog_")) continue;
-      final raw = nutritionBox.get(key);
-      if (raw == null) continue;
-      final log = Map<String, dynamic>.from(raw as Map);
+    // audit-fixwave 2026-07-02 / F5 (NUT-02) — merge same-slot logs BEFORE the
+    // natural-key upsert. The cloud arbiter is (user_id,date,meal_type), so two
+    // local `nlog_<date>_<meal>_<hash>` logs for the SAME slot+day would collapse
+    // to one cloud row (the second overwrites the first → the first meal is lost
+    // on reinstall/restore — the NUT-02 data-loss). Grouping all same-slot logs
+    // into ONE payload (union items + summed totals) makes the upsert carry BOTH
+    // meals' items, so nothing is dropped. Kill-switch
+    // `disable_nutrition_slot_merge` reverts to the legacy per-key push.
+    final mergeEnabled =
+        _hive.configBox.get('disable_nutrition_slot_merge') != true;
+    final logsToSync = mergeEnabled
+        ? _nutritionLogsMergedBySlot()
+        : _nutritionLogsRaw();
+    for (final log in logsToSync) {
       try {
         // Diagnosed 2026-04-18: the parent-table payload used to spread
         // the full Hive map into the upsert, which included the Hive
@@ -120,7 +241,7 @@ extension SyncServiceNutrition on SyncService {
           unawaited(ErrorTelemetry.logEvent(
             'sync_skipped_null_natural_key',
             message:
-                'table=nutrition_logs key=$key date_null=${nlogDate == null || nlogDate.isEmpty} meal_type_null=${nlogMeal == null || nlogMeal.isEmpty}',
+                'table=nutrition_logs date_null=${nlogDate == null || nlogDate.isEmpty} meal_type_null=${nlogMeal == null || nlogMeal.isEmpty}',
           ));
           continue;
         }
@@ -271,6 +392,25 @@ extension SyncServiceNutrition on SyncService {
             }
           }
         }
+        // audit-fixwave B-pass — item tail-vacuum. After upserting the (possibly
+        // merged) slot's items at indices 0..N-1, delete any orphaned tail rows
+        // (item_index >= N) left when the slot SHRANK — e.g. a same-slot meal was
+        // deleted so the merged union has fewer items. Without this the deleted
+        // meal's items resurrect on restore + the parent totals diverge from the
+        // item list (Hermes P1). Mirrors the template_exercises tail-vacuum.
+        if (items is List) {
+          try {
+            await _supabase.client
+                .from('nutrition_log_items')
+                .delete()
+                .eq('log_id', logCloudId)
+                .gte('item_index', items.length);
+          } catch (vErr, vSt) {
+            debugPrint('[SyncService._syncNutritionLogs] item vacuum: $vErr');
+            unawaited(ErrorTelemetry.recordNonFatal(vErr, vSt,
+                reason: 'sync_service_nlog_item_vacuum'));
+          }
+        }
       } catch (e, st) {
         debugPrint('[SyncService._syncNutritionLogs] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -282,6 +422,29 @@ extension SyncServiceNutrition on SyncService {
       }
     }
   }
+
+  /// audit-fixwave / F5 — the raw per-key nlog list (legacy push path, used
+  /// when slot-merge is disabled).
+  List<Map<String, dynamic>> _nutritionLogsRaw() {
+    final nutritionBox = _hive.nutritionBox;
+    final out = <Map<String, dynamic>>[];
+    for (final key in nutritionBox.keys) {
+      if (key is! String || !key.startsWith('nlog_')) continue;
+      final raw = nutritionBox.get(key);
+      if (raw == null) continue;
+      out.add(Map<String, dynamic>.from(raw as Map));
+    }
+    return out;
+  }
+
+  /// audit-fixwave / F5 (NUT-02) — coalesce all same-slot (date, meal_type)
+  /// nlog logs into ONE payload: union of items + summed totals + earliest
+  /// created_at. One entry per slot so the (user_id,date,meal_type) upsert never
+  /// drops a second same-slot meal. Logs with a null/empty natural key are
+  /// passed through unmerged so the loop's existing null-key telemetry guard
+  /// still fires.
+  List<Map<String, dynamic>> _nutritionLogsMergedBySlot() =>
+      mergeNutritionLogsBySlot(_nutritionLogsRaw());
 
   Future<void> _syncWaterLogs(String userId) async {
     final healthBox = _hive.healthBox;
@@ -297,6 +460,10 @@ extension SyncServiceNutrition on SyncService {
           'user_id': userId,
           'date': date,
           'total_ml': raw,
+          // audit-fixwave 2026-07-02 / F18 — populate `glasses` (derived from
+          // total_ml at the 250 ml glass size) so the column is not a
+          // misleading stale 0. total_ml stays the hydration SoT.
+          'glasses': (raw / 250).round(),
           'updated_at': DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,date');
       } catch (e, st) {
@@ -409,6 +576,39 @@ extension SyncServiceNutrition on SyncService {
         rows = preFetched as List? ?? const [];
       }
 
+      // audit-fixwave 2026-07-02 / F5 (NUT-02) + B-pass — 3-WAY restore merge.
+      // Cloud holds ONE merged row per (date,meal). Precompute each local slot's
+      // item signatures + keys so, per cloud row, we can:
+      //   - SKIP when the local slot already contains every cloud item (local-
+      //     wins; local has >= cloud, including any unsynced local items), OR
+      //   - UNION local+cloud items (dedup), delete the local slot's old keys,
+      //     and write ONE merged row — restoring cloud items the local slot
+      //     LACKED (no silent loss) without leaving stale rows that would
+      //     re-duplicate on the next sync. The pre-B-pass per-slot-occupancy
+      //     skip dropped cloud items whenever the local slot was partial
+      //     (Hermes P1 data-loss).
+      final mergeEnabled =
+          _hive.configBox.get('disable_nutrition_slot_merge') != true;
+      // Precompute each local slot's keys + ALL its items (with multiplicity —
+      // a food logged twice stays twice). The multiset union below preserves
+      // genuine duplicate servings (Hermes P1 fix).
+      final localSlotKeys = <String, List<String>>{};
+      final localSlotItems = <String, List<dynamic>>{};
+      if (mergeEnabled) {
+        for (final k in _hive.nutritionBox.keys) {
+          if (k is! String || !k.startsWith('nlog_')) continue;
+          final v = _hive.nutritionBox.get(k);
+          if (v is! Map) continue;
+          final d = (v['date'] as String?)?.trim();
+          final m = (v['meal_type'] as String?)?.trim();
+          if (d == null || d.isEmpty || m == null || m.isEmpty) continue;
+          final slot = '$d $m';
+          (localSlotKeys[slot] ??= <String>[]).add(k);
+          (localSlotItems[slot] ??= <dynamic>[])
+              .addAll((v['items'] as List? ?? const []));
+        }
+      }
+
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
         final cloudId = map['id'] as String? ?? '';
@@ -435,6 +635,7 @@ extension SyncServiceNutrition on SyncService {
               'protein': m['protein'],
               'carbs': m['carbs'],
               'fat': m['fat'],
+              'fiber': m['fiber'], // audit-fixwave B-pass — was dropped on restore
             };
           }).toList();
           map['items'] = items;
@@ -463,11 +664,46 @@ extension SyncServiceNutrition on SyncService {
         );
         map['id'] = localKey;
         map['log_key'] = localKey;
-        // Local-wins / additive restore (slow-boot guard 4e8b1d): never
-        // overwrite a local meal the user just logged during the background
-        // restore (it may not have synced yet). closes-diagnose: e4a8b1.
-        if (_hive.nutritionBox.get(localKey) == null) {
-          await _hive.nutritionBox.put(localKey, map);
+        // Local-wins / additive restore (slow-boot guard 4e8b1d) + audit-fixwave
+        // B-pass 3-way merge (see the precompute above). closes-diagnose: e4a8b1.
+        if (mergeEnabled) {
+          final slotId = '$dateForKey $mealType';
+          final cloudItems = (map['items'] as List?) ?? const [];
+          final localItems = localSlotItems[slotId] ?? const [];
+          // Local-wins: local already holds >= every cloud item (multiset).
+          if (nutritionLocalSlotIsSuperset(localItems, cloudItems)) continue;
+          // MULTISET union — keeps genuine duplicate servings, no over-count.
+          final unionItems = nutritionSlotUnion(localItems, cloudItems);
+          if (unionItems.isEmpty) continue; // defensive
+          num sumF(String f) => unionItems.fold<num>(
+              0, (a, it) => a + (((it as Map)[f] as num?) ?? 0));
+          final mergedKey = SyncService._nlogKeyForRestore(
+              dateStr: dateForKey, mealType: mealType, items: unionItems);
+          final mergedRow = <String, dynamic>{
+            ...map,
+            'id': mergedKey,
+            'log_key': mergedKey,
+            'items': unionItems,
+            'total_calories': sumF('calories').round(),
+            'total_protein': sumF('protein').round(),
+            'total_carbs': sumF('carbs').round(),
+            'total_fat': sumF('fat').round(),
+            'total_fiber': sumF('fiber').round(),
+          };
+          // Replace the local slot's old keys with the single merged row — no
+          // loss (union includes any unsynced local items), no duplicate rows.
+          for (final oldKey in (localSlotKeys[slotId] ?? const <String>[])) {
+            if (oldKey != mergedKey) await _hive.nutritionBox.delete(oldKey);
+          }
+          await _hive.nutritionBox.put(mergedKey, mergedRow);
+          // Update intra-pass state (cloud has one row per slot, but be safe).
+          localSlotKeys[slotId] = [mergedKey];
+          localSlotItems[slotId] = unionItems;
+        } else {
+          // Legacy per-key local-wins (merge disabled).
+          if (_hive.nutritionBox.get(localKey) == null) {
+            await _hive.nutritionBox.put(localKey, map);
+          }
         }
       }
     } catch (e, st) {
