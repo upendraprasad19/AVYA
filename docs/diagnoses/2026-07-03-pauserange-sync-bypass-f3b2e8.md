@@ -111,3 +111,11 @@ the aliased `box` name hid the extra put from the source-grep gate.
 Route each paused day through `upsertScheduled(source: schedSwap)`; broaden the
 gate to resolve `_hive.workoutBox` aliases so a future aliased put fails
 (gates-before-refactor: F4 flips the gate fail, F3 flips it back green).
+
+## Live-verified on test7 (2026-07-03)
+Coach `pause_plan` (5 days from 2026-07-03) → APPLY/Confirm → **all 5 days flip to
+`status='paused'` in cloud `scheduled_workouts`** that tick (baseline: zero paused
+days), proving the `upsertScheduled` cloud fan-out fired. The Train week-list
+renders paused days by their workout name — grep-confirmed there is no distinct
+'paused' case in the list widget (by design; the pause surfaces on Home), so that
+is not a stale-UI bug. Cleanup reverted the 5 days to baseline (rest/planned).

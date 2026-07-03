@@ -227,6 +227,11 @@ not burn shared prod quota.
 - Leave temp-PRO or test rows behind — cleanup + verify 0 residual is part of
   "done", not optional.
 - Trust UI timestamps as real time when a sim seam is active — match by content.
+- **Hard-clear the whole IndexedDB on a DEBUG (`flutter run`) web build to force a
+  restore** — it wedges the fresh-install boot (Hive `box_impl` init race + a
+  Riverpod ref-after-unmount; the 12s offline-first fallback can't recover). Delete
+  ONLY the user-data boxes (`nutritionbox`/`workoutbox`/`schedulebox`), rely on the
+  login-restore (it runs every login), or use a release build. See §12 (2026-07-02).
 
 ---
 
@@ -238,3 +243,10 @@ not burn shared prod quota.
   fallback), and the `user_custom_exercises` table-name gotcha (§7). Surfaced
   diagnose c9f2a7 (nutrition FK-on-PK 23503) + d4f1c2 (coach no-backoff-retry)
   via this venue.
+- **2026-07-02 (audit-fixwave live-verify)** — Drove F1 coach double-log, F2
+  food-log honoring, NUT-02 same-slot merge, F3 pause on test7 vs prod cloud; all
+  PASS (cloud MCP authoritative, paced coach, UI food-search fallback when Gemini
+  throttled, founder-only login, cleanup 0 residual). Added the §11 anti-pattern:
+  never hard-clear the whole IndexedDB on a debug web build to test restore — it
+  wedged the fresh-install boot and blocked the round-trip (covered by construction
+  instead). Ref memory `feedback_live_restore_test_indexeddb_clear`.
