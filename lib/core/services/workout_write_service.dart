@@ -447,7 +447,12 @@ class WorkoutWriteService {
         'date': dateStr,
         'duration_seconds': durationSec,
         if (rpe != null) 'rpe': rpe,
-        'completed_at': completedAt.toIso8601String(),
+        // audit-fixwave 2026-07-02 / F19 — stamp completed_at in UTC. Pre-fix
+        // this serialized device-local (IST) wall-clock into the timestamptz
+        // column (a +5:30 skew vs the exercises' UTC created_at). The `date`
+        // date-key stays IST (istDateStr, §4.5); only the audit timestamp is
+        // normalized. completed_at_ms is epoch (already UTC-based) — unchanged.
+        'completed_at': completedAt.toUtc().toIso8601String(),
         'completed_at_ms': completedAt.millisecondsSinceEpoch,
       };
       await box.put(wKey, wlog);

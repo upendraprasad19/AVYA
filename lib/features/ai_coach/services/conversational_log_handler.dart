@@ -92,12 +92,20 @@ class ConversationalLogHandler {
       foodMap = _buildEstimatedFood(data, quantityG);
     }
 
-    await ref.read(foodLogProvider.notifier).logFood(
+    // audit-fixwave 2026-07-02 / F2 — HONOR the write result. Pre-fix this
+    // returned bare `true` regardless of whether the log actually persisted,
+    // so a failed food write (e.g. logFood returns success:false without
+    // throwing) still flipped LogConfirmCard to the green "LOGGED ✓" state — a
+    // false-success card contradicting a 0-row write. Sibling handlers
+    // (_logSleep/_logMeasurement) already return result.success; food now does
+    // too. foodLogProvider.logFood returns ({bool success, String? error,
+    // String? logKey}) (nutrition_provider.dart).
+    final r = await ref.read(foodLogProvider.notifier).logFood(
           food: foodMap,
           mealType: mealType,
           quantityG: quantityG,
         );
-    return true;
+    return r.success;
   }
 
   // ── Sleep ───────────────────────────────────────────────────────

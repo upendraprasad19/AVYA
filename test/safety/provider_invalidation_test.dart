@@ -137,7 +137,7 @@ void main() {
       'lib/features/auth/screens/sign_in_screen.dart',
       'lib/features/ai_coach/repositories/ai_coach_repository.dart',
       'lib/shared/repositories/plan_engine/progression_resolver.dart',
-      'lib/features/auth/widgets/terms_modal.dart',
+      // audit-fixwave 2026-07-02 / F15 — terms_modal.dart deleted (dead code).
     ]) {
       test('$filePath has no raw Hive.box() calls', () {
         final src = _src(filePath);

@@ -1268,11 +1268,19 @@ extension SyncServiceWorkout on SyncService {
               'exercise_name': ex['exercise_name'] ?? ex['name'] ?? '',
               'order_index': i,
               'logging_type': ex['logging_type'] ?? 'weight_reps',
-              if (ex['sets'] != null)
-                'prescribed_sets': ex['sets'] is int
-                    ? ex['sets']
-                    : int.tryParse(ex['sets'].toString()),
-              if (ex['reps'] != null) 'prescribed_reps': ex['reps'].toString(),
+              // audit-fixwave 2026-07-02 / F17 — fall back to the exercise's
+              // default_sets/default_reps when the builder's saved map omits
+              // sets/reps, so the cloud template_exercises row is self-describing
+              // (prescribed_* was persisting NULL — benign at read time because
+              // the schedule/active-workout readers already fall back to
+              // default_sets, but a later custom-exercise edit/delete would then
+              // strand the template with no prescription).
+              if ((ex['sets'] ?? ex['default_sets']) != null)
+                'prescribed_sets': (ex['sets'] ?? ex['default_sets']) is int
+                    ? (ex['sets'] ?? ex['default_sets'])
+                    : int.tryParse((ex['sets'] ?? ex['default_sets']).toString()),
+              if ((ex['reps'] ?? ex['default_reps']) != null)
+                'prescribed_reps': (ex['reps'] ?? ex['default_reps']).toString(),
             }, onConflict: 'template_id,order_index');
           } catch (exErr, st) {
             debugPrint('[SyncService._syncWorkoutTemplates] exercise $i: $exErr');

@@ -388,55 +388,11 @@ class NutritionWriteService {
   Map<String, dynamic>? _lastDeletedPayload;
   String? _lastDeletedKey;
 
-  /// Atomic water log write.
-  Future<WriteResult> logWater({
-    required DateTime date,
-    required int ml,
-    int? urineColor,
-  }) async {
-    if (ml <= 0) {
-      return WriteResult.fail('logWater: ml must be > 0');
-    }
-    final dateStr = istDateStr(date);
-    final key = 'water_$dateStr';
-
-    final box = HiveService.instance.nutritionBox;
-    final existing = box.get(key);
-    final current = existing == null
-        ? <String, dynamic>{
-            'date': dateStr,
-            'ml': 0,
-            'urine_color': null,
-          }
-        : Map<String, dynamic>.from(existing as Map);
-
-    current['ml'] = ((current['ml'] as num?)?.toInt() ?? 0) + ml;
-    if (urineColor != null) current['urine_color'] = urineColor;
-    current['logged_at'] = DateTime.now().toUtc().toIso8601String();
-
-    try {
-      await box.put(key, current);
-    } catch (e, st) {
-      // audit-2026-05-11 H-42 — telemetry pair.
-      debugPrint('[NutritionWriteService] logWater put failed: $e\n$st');
-      unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'nutrition_write_service_log_water_put'));
-      return WriteResult.fail('Hive write failed: $e');
-    }
-
-    _invalidateNutritionProviders();
-    try {
-      unawaited(SyncService.instance.syncNutritionData());
-      unawaited(SyncService.instance.pushSnapshot());
-    } catch (e, st) {
-      // audit-2026-05-11 H-42 — telemetry pair.
-      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
-      unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'nutrition_write_service_sync_skipped'));
-    }
-
-    return WriteResult.ok(key);
-  }
+  // audit-fixwave 2026-07-02 / F14 — removed dead `logWater`. It wrote a
+  // `water_<date>` key to nutritionBox that NO sync helper reads (a latent
+  // trap: a future caller would create water rows that never reach cloud). The
+  // canonical water writer is HealthWriteService.setWaterMl → `water_ml_<istDate>`
+  // → water_logs (synced by _syncWaterLogs). See diagnose d8a6f2.
 
   /// Re-log of an existing saved meal template.
   Future<WriteResult> relogSavedMeal({

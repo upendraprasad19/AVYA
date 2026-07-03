@@ -80,8 +80,23 @@ class AiCoachScreen extends ConsumerStatefulWidget {
         if (coachBox.get('intent_${i.id}_dismissed_at') != null) return false;
         return true;
       }
-      return i.status == ToolIntentStatus.executed ||
-          i.status == ToolIntentStatus.rejected ||
+      // audit-fixwave 2026-07-02 / F2 (+ B-pass fix) — a lingering green
+      // "✓ Logged" pill must not sit beside a fresh attempt and read as a false
+      // success. Key the EXECUTED pill's staleness on the SETTLE time (the
+      // `intent_<id>_dispatched_at` marker written when the dispatcher ran), NOT
+      // createdAt (the AI-reply time). Pre-B-pass this used createdAt, which hid
+      // the ✓ for any user who confirmed >2 min after reading the reply — a
+      // legitimate log then showed NO success feedback. If the marker is
+      // missing/unparseable, keep the pill (never hide a real success). rejected
+      // / expired are explicit terminal pills (never false success) and always
+      // render until prune() drops them from STATE (5 min).
+      if (i.status == ToolIntentStatus.executed) {
+        final raw = coachBox.get('intent_${i.id}_dispatched_at');
+        final settledAt = raw is String ? DateTime.tryParse(raw) : null;
+        if (settledAt == null) return true;
+        return DateTime.now().difference(settledAt) < const Duration(minutes: 2);
+      }
+      return i.status == ToolIntentStatus.rejected ||
           i.status == ToolIntentStatus.expired;
     }).toList();
   }

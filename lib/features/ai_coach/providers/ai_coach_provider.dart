@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import '../repositories/ai_coach_repository.dart';
 import 'pending_tool_intents_provider.dart';
+import '../models/tool_intent.dart';
 
 // ── Chat Message Model ───────────────────────────────────────────
 
@@ -394,6 +395,9 @@ class SendMessageNotifier extends Notifier<bool> {
         ref.read(pendingLogActionsProvider.notifier).addActions(
               aiResponse.actions,
               ref,
+              // F1 — suppress a legacy log card covered by a typed intent.
+              coverage:
+                  typedLogCoverage(aiResponse.toolIntents),
             );
       }
 
@@ -592,6 +596,10 @@ class SendMessageNotifier extends Notifier<bool> {
         ref.read(pendingLogActionsProvider.notifier).addActions(
               aiResponse.actions,
               ref,
+              // F1 — drop a legacy log card when the same response also carries
+              // its typed tool intent (one confirm affordance, not two).
+              coverage:
+                  typedLogCoverage(aiResponse.toolIntents),
             );
       }
 
@@ -646,7 +654,13 @@ class SendMessageNotifier extends Notifier<bool> {
           ref.invalidate(coachInsightProvider);
           limitNotifier.increment();
           if (retryResponse.actions.isNotEmpty) {
-            ref.read(pendingLogActionsProvider.notifier).addActions(retryResponse.actions, ref);
+            ref.read(pendingLogActionsProvider.notifier).addActions(
+                  retryResponse.actions,
+                  ref,
+                  // F1 — suppress a legacy log card covered by a typed intent.
+                  coverage:
+                      typedLogCoverage(retryResponse.toolIntents),
+                );
           }
           // NEW: typed tool intents dispatch (Phase A — runs alongside legacy actions[])
           if (retryResponse.toolIntents.isNotEmpty) {
@@ -1032,13 +1046,60 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
 
   /// Parse raw actions from AI response and add to pending list.
   /// Routes `confirm_workout_log` to [WorkoutDraftNotifier] instead.
-  void addActions(List<Map<String, dynamic>> rawActions, Ref ref) {
+  ///
+  /// audit-fixwave 2026-07-02 / F1 (+ B-pass fix) — [coverage] describes which
+  /// legacy `actions[]` entries are already covered by a typed tool intent in
+  /// the SAME response, so exactly ONE confirm affordance renders (the guarded
+  /// typed ToolConfirmCard) instead of two that both write the same log — the
+  /// coach double-log P1 (a "log 3 sets bench" response emitted both a
+  /// `confirm_workout_log` legacy action AND a `log_set` typed intent; tapping
+  /// both wrote 6 sets).
+  ///
+  /// WORKOUT is exercise-NAME aware (B-pass): `confirm_workout_log` carries an
+  /// exercises[] ARRAY while `log_set` covers ONE exercise. The draft is
+  /// suppressed ONLY when EVERY one of its exercises is covered by a log_set
+  /// intent — a partially-covered multi-exercise draft is KEPT, because dropping
+  /// it would silently LOSE the uncovered exercises (a double-log of the covered
+  /// overlap is recoverable; loss is not). When an exercise can't be resolved we
+  /// treat it as NOT covered → keep the draft (never suppress on uncertainty).
+  /// Food (`log_meal_by_text`) has no array asymmetry (server emits one meal tag
+  /// max), so a boolean suffices. Non-overlapping kinds (water/weight/sleep/
+  /// measurement — no typed twin) are never suppressed. Kill-switch
+  /// `disable_coach_log_dedup` reverts to the legacy dual-path.
+  void addActions(
+    List<Map<String, dynamic>> rawActions,
+    Ref ref, {
+    TypedLogCoverage coverage = TypedLogCoverage.empty,
+  }) {
+    var dedupOff = false;
+    try {
+      dedupOff =
+          HiveService.instance.configBox.get('disable_coach_log_dedup') == true;
+    } catch (_) {
+      // configBox unavailable (e.g. unit tests) — dedup stays ON (fix-active).
+    }
+    final cov = dedupOff ? TypedLogCoverage.empty : coverage;
     for (final raw in rawActions) {
       if (raw['action'] == 'confirm_workout_log') {
         final data = raw['data'];
         if (data is Map<String, dynamic>) {
+          final exs = (data['exercises'] as List?) ?? const [];
+          final draftNames = exs
+              .whereType<Map>()
+              .map((e) => (e['name'] ?? '').toString().toLowerCase().trim())
+              .where((s) => s.isNotEmpty)
+              .toSet();
+          // Suppress ONLY when EVERY draft exercise is covered by a log_set
+          // intent; else KEEP the draft (no exercise is lost).
+          final fullyCovered = draftNames.isNotEmpty &&
+              draftNames.every(cov.workoutExerciseNames.contains);
+          if (fullyCovered) continue;
           ref.read(workoutDraftProvider.notifier).setDraft(data);
         }
+        continue;
+      }
+      // Typed `log_meal_by_text` intent covers this food log — skip the legacy action.
+      if (raw['action'] == 'log_food' && cov.foodCovered) {
         continue;
       }
       final action = _parse(raw);
@@ -1129,6 +1190,55 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
         return null;
     }
   }
+}
+
+/// audit-fixwave 2026-07-02 / F1 (+ B-pass) — coverage of legacy `actions[]`
+/// entries by typed tool intents in the SAME AI response. Workout is
+/// exercise-NAME aware: [workoutExerciseNames] holds the lowercased names of the
+/// exercises the `log_set` intents cover (resolved from their `exerciseId` via
+/// the local exercise library). A `confirm_workout_log` draft is suppressed by
+/// [PendingLogActionsNotifier.addActions] ONLY when EVERY draft exercise is in
+/// this set — a partially-covered multi-exercise draft is kept so no exercise is
+/// lost. [foodCovered] is true when a `log_meal_by_text` intent is present (food
+/// has no array asymmetry). Every other legacy action (water/weight/sleep/
+/// measurement) has no typed twin and is never suppressed.
+class TypedLogCoverage {
+  final Set<String> workoutExerciseNames;
+  final bool foodCovered;
+  const TypedLogCoverage(this.workoutExerciseNames, this.foodCovered);
+  static const TypedLogCoverage empty = TypedLogCoverage(<String>{}, false);
+}
+
+TypedLogCoverage typedLogCoverage(List<ToolIntent> intents) {
+  final names = <String>{};
+  var food = false;
+  for (final i in intents) {
+    if (i.type == 'log_set') {
+      final id = (i.payload['exerciseId'] ?? '').toString();
+      final n = _resolveExerciseNameForDedup(id);
+      if (n != null && n.trim().isNotEmpty) names.add(n.toLowerCase().trim());
+    } else if (i.type == 'log_meal_by_text') {
+      food = true;
+    }
+  }
+  return TypedLogCoverage(names, food);
+}
+
+/// Resolve a `log_set` exerciseId → exercise name via the local library (mirrors
+/// ToolDispatcher._resolveExerciseName). Returns null when unresolved — the
+/// caller then treats the exercise as NOT covered and KEEPS the draft (never
+/// suppress on uncertainty).
+String? _resolveExerciseNameForDedup(String exerciseId) {
+  if (exerciseId.isEmpty) return null;
+  try {
+    final lib = HiveService.instance.exerciseBox.get(exerciseId);
+    if (lib is Map && lib['name'] is String) return lib['name'] as String;
+    final custom = HiveService.instance.customBox.get(exerciseId);
+    if (custom is Map && custom['name'] is String) return custom['name'] as String;
+  } catch (_) {
+    // Hive unavailable (tests) — unresolved → keep the draft.
+  }
+  return null;
 }
 
 final pendingLogActionsProvider =

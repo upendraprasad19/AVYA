@@ -301,4 +301,12 @@ const _alwaysOk = <String>{
   // mis-attributes it because the same file also reads `schedule_*` keys
   // (B-pass b7c8040 / diagnose a4f7e1).
   'goal',
+  // Exercise-library / template-exercise canonical prescription DEFAULTS —
+  // read on the `ex` exercise sub-object in _syncWorkoutTemplates (F17,
+  // audit-fixwave) as a fallback when the builder's saved map omits sets/reps,
+  // so the cloud `template_exercises` row carries prescribed_* instead of NULL.
+  // NOT fields of the schedule_*/exlog_* Hive maps (those emit `sets`/`reps`,
+  // never `default_*`); the prefix heuristic mis-attributes them because
+  // sync_workout.dart also walks those prefixes for the schedule/log sync.
+  'default_sets', 'default_reps',
 };

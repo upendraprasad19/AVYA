@@ -621,3 +621,28 @@ lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_*
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: reps_completed
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: volume_kg
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: weight_kg
+
+# audit-fixwave 2026-07-02 (NUT-02) — sync_nutrition.dart newly trips the whole-file
+# prefix heuristic because the F5 slot-merge code added an 'nlog_' key literal. Every
+# entry below is a PRE-EXISTING, vetted-safe read that main already performs (cloud-row
+# projection totals, item fields, water/saved-meal fields, and the tail-vacuum's cloud
+# table/column identifiers) — NOT Hive nlog_ writer drift. Live-verified against
+# dedsavbjuwgarrhphgnl: nutrition_logs.total_*, water_logs.total_ml/urine_*,
+# nutrition_log_items.item_index all exist. Behaviorally covered by
+# test/contracts/nutrition_slot_merge_test.dart (union totals read the real map shape).
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: food_id
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: is_saved_meal
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: item_index
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: log_key
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: nutrition_log_items
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: quantity_g
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: serving_g
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: times_used
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: total_calories
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: total_carbs
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: total_fat
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: total_fiber
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: total_ml
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: total_protein
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: urine_color
+lib/core/services/sync/sync_nutrition.dart :: nlog_* :: urine_status

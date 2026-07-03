@@ -1,0 +1,162 @@
+# Closure ledger — audit-fixwave batch (2026-07-02 comprehensive audit findings)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: audit-fixwave-2026-07-02 (uncommitted at authoring —
+# no commit/push/merge without explicit founder go). closed_in_commit entries
+# reference the labelled branch state until the batch is committed.
+
+batch: audit-fixwave-2026-07-02
+source_audit: docs/audit/2026-07-02-comprehensive-app-audit.md
+plan_review_record: docs/plan-reviews/audit-fixwave-2026-07-02.md
+bpass_review: docs/reviews/audit-fixwave-bpass-review.md
+hermes_report: docs/audit/audit-fixwave-hermes.md
+# The self-B-pass + Hermes over the diff caught 5 CONFIRMED defects (2×P1
+# data-loss in the NUT-02 fix itself + F1 over-suppress + F2 stale-drop +
+# presence_only) plus a re-Hermes residual (duplicate-serving drop) — ALL fixed
+# in-batch with regression tests (no deferrals). See the review artifacts above.
+total_findings: 22
+closed_count: 22
+
+findings:
+  - id: F1
+    title: "coach dual-path double-log (P1)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-coach-dual-path-log-a1d7c3.md
+    verification: test/features/ai_coach/coach_single_confirm_per_log_intent_test.dart
+
+  - id: F2
+    title: "coach food-log false '✓ Logged' on failure (P2) + stale-card prune"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-coach-dual-path-log-a1d7c3.md
+    verification: test/contracts/coach_no_dual_log_path_test.dart
+    notes: "_logFood now returns r.success; stale settled cards drop after 2 min. Live re-test on test7 (F-retest) is the founder-gated runtime confirmation."
+
+  - id: F3
+    title: "pauseRange bypasses sync fan-out + invalidation (P1)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-pauserange-sync-bypass-f3b2e8.md
+    verification: test/contracts/pause_range_routes_through_write_service_test.dart
+
+  - id: F4
+    title: "schedule-put gate blind to aliased box.put"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-pauserange-sync-bypass-f3b2e8.md
+    verification: test/contracts/workout_schedule_service_uses_write_service_test.dart
+
+  - id: F5
+    title: "NUT-02 same-slot meal overwrite / data-loss (P2, Hermes)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-nutrition-slot-merge-e5c4b9.md
+    verification: test/contracts/nutrition_slot_merge_test.dart
+    notes: "Design pivot (documented in diagnose): merge-at-sync + per-slot restore local-wins, not write-time re-key. No migration."
+
+  - id: F6
+    title: "custom_food had no SoT concept + test (founder priority)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    verification: test/contracts/custom_food_mutations_writer_to_reader_test.dart
+
+  - id: F7
+    title: "notifications_inbox had no standalone SoT concept"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    verification: test/contracts/notifications_inbox_writer_to_reader_test.dart
+
+  - id: F8
+    title: "daily_steps had no SoT concept (import-only)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    verification: test/contracts/daily_steps_writer_to_reader_test.dart
+
+  - id: F9
+    title: "custom_exercise SoT names wrong canonical (direct sheet is primary UI)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    verification: "docs/sot_registry.yaml custom_exercises_mutations (note added) + test/contracts/check_sot_registry_parity"
+
+  - id: F10
+    title: "stale exlog_ key formula (hashCode vs UUID-v5) in SoT + train/CLAUDE.md"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    verification: "docs/sot_registry.yaml (2 occurrences corrected)"
+
+  - id: F11
+    title: "stale line-refs in workout_schedule routing concept"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    verification: "docs/sot_registry.yaml workout_schedule_service_routes_through_write_service notes"
+
+  - id: F12
+    title: "nonexistent method names in charter + nested CLAUDE.md"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    verification: "lib/features/nutrition/CLAUDE.md + lib/core/services/CLAUDE.md corrected"
+
+  - id: F13
+    title: "stale adjust_caloric_target comment (tool_dispatcher)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    verification: "lib/features/ai_coach/services/tool_dispatcher.dart comment corrected"
+
+  - id: F14
+    title: "dead NutritionWriteService.logWater (latent trap)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-deadcode-small-fixes-d8a6f2.md
+    verification: test/contracts/water_logs_writer_to_reader_test.dart
+
+  - id: F15
+    title: "dead TermsModal + terms_acceptance had no SoT concept"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-deadcode-small-fixes-d8a6f2.md
+    verification: test/contracts/terms_acceptance_writer_to_reader_test.dart
+
+  - id: F16
+    title: "health_sync_enabled scoping (shared configBox)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-deadcode-small-fixes-d8a6f2.md
+    verification: "lib/core/services/user_config_migrator.dart _intentionallyShared (documented device-level decision)"
+
+  - id: F17
+    title: "template_exercises.prescribed_sets/reps persisted NULL"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-deadcode-small-fixes-d8a6f2.md
+    verification: "lib/core/services/sync/sync_workout.dart (default_sets/reps fallback)"
+
+  - id: F18
+    title: "water_logs.glasses not populated (P3)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-nutrition-slot-merge-e5c4b9.md
+    verification: test/contracts/nutrition_slot_merge_test.dart
+
+  - id: F19
+    title: "completed_at IST-as-UTC (P3)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-deadcode-small-fixes-d8a6f2.md
+    verification: "lib/core/services/workout_write_service.dart markCompleted (.toUtc())"
+
+  - id: F20
+    title: "settings_screen registered but unlinked from Profile tab (P2)"
+    terminal_state: closed_in_commit
+    commit: "audit-fixwave-2026-07-02 (uncommitted)"
+    diagnose: docs/diagnoses/2026-07-03-deadcode-small-fixes-d8a6f2.md
+    verification: "lib/features/profile/screens/settings_screen.dart (documented unlinked-state decision)"
+
+  - id: KNOWN-phone-otp
+    title: "Phone-OTP non-functional in prod (Twilio not wired to Supabase Auth)"
+    terminal_state: blocked_on_user
+    reason: "Wiring Twilio credentials into Supabase Auth is a founder dashboard action (see project_pending_twilio_setup); it cannot be done in a client code batch. Code path is fully wired."
+
+  - id: KNOWN-native-web
+    title: "native-only surfaces degrade on web (health sync / camera scan / native share)"
+    terminal_state: verified_clean
+    evidence: "By design (XC-15, kIsWeb seams). Web uses gated dead-ends / file-picker fallbacks; Android behaviour is verified in the APK/device pass. Not a defect."

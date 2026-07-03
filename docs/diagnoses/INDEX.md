@@ -6,6 +6,18 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### coach_log_confirm_routing (1 bugs)
+- 2026-07-03 a1d7c3 — >
+
+### audit_fixwave_small_fixes (1 bugs)
+- 2026-07-03 d8a6f2 — >
+
+### nutrition_slot_merge (1 bugs)
+- 2026-07-03 e5c4b9 — >
+
+### workout_schedule_write_path (1 bugs)
+- 2026-07-03 f3b2e8 — >
+
 ### auth_hive_owner_agreement (2 bugs)
 - 2026-07-02 a7f2e1 — >
 - 2026-06-21 b8e3f1 — >
@@ -742,6 +754,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-03 | a1d7c3 | > | coach_log_confirm_routing | test/features/ai_coach/coach_single_confirm_per_log_intent_test.dart |
+| 2026-07-03 | d8a6f2 | > | audit_fixwave_small_fixes | test/contracts/terms_acceptance_writer_to_reader_test.dart |
+| 2026-07-03 | e5c4b9 | > | nutrition_slot_merge | test/contracts/nutrition_slot_merge_test.dart |
+| 2026-07-03 | f3b2e8 | > | workout_schedule_write_path | test/contracts/pause_range_routes_through_write_service_test.dart |
 | 2026-07-02 | a7f2e1 | > | auth_hive_owner_agreement | test/contracts/session_token_stale_authuid_recovery_test.dart |
 | 2026-06-28 | b6d3f9 | > | urine_color_logs | test/contracts/log_urine_sync_routing_test.dart |
 | 2026-06-28 | c4d8a2 | > | onboarding_completed_at | test/contracts/onboarding_completed_at_durable_writer_test.dart |
