@@ -80,16 +80,35 @@ void main() {
       // Total still 4. Any NEW direct put across the 5 files requires
       // updating this whitelist AND adding explicit
       // `unawaited(SyncService.instance...)` fan-out at the callsite.
-      final puts = RegExp(r'\b(?:_hive\.)?workoutBox\.put\(').allMatches(src);
-      expect(puts.length, equals(4),
+      // audit-fixwave 2026-07-02 / F4 — broaden the direct-put detector to
+      // catch ALIASED workoutBox puts. The old regex only matched
+      // `workoutBox.put(` / `_hive.workoutBox.put(`, so `pauseRange`'s
+      // `final box = _hive.workoutBox; ... box.put(key, map)` (an alias named
+      // `box`) slipped past the ==4 bound — the schedule-bypass P1. Now we
+      // also resolve every local alias assigned from `_hive.workoutBox` and
+      // count `<alias>.put(` for each.
+      var putCount =
+          RegExp(r'\b(?:_hive\.)?workoutBox\.put\(').allMatches(src).length;
+      final aliasNames = RegExp(r'final\s+(\w+)\s*=\s*_hive\.workoutBox\s*;')
+          .allMatches(src)
+          .map((m) => m.group(1)!)
+          .where((n) => n != 'workoutBox') // already counted by the base regex
+          .toSet();
+      for (final alias in aliasNames) {
+        putCount +=
+            RegExp('\\b${RegExp.escape(alias)}\\.put\\(').allMatches(src).length;
+      }
+      expect(putCount, equals(4),
           reason:
               'Schedule services must have exactly 4 direct workoutBox.put '
               'callsites across the 5-file split: 2 _planKey + 1 '
-              'displacedKey + 1 templateId. Adding a NEW direct put means '
-              'the new site MUST route through '
+              'displacedKey + 1 templateId (all named `workoutBox`). Adding a '
+              'NEW direct put — including via a `final x = _hive.workoutBox` '
+              'alias — means the new site MUST route through '
               'WorkoutWriteService.upsertScheduled (preferred) OR add '
               'explicit `unawaited(SyncService.instance.syncWorkoutData())` '
-              'fan-out at the callsite. Found ${puts.length} direct puts.');
+              'fan-out at the callsite. Found $putCount direct puts '
+              '(aliases checked: $aliasNames).');
     });
 
     test('all schedule mutations route through WorkoutWriteService.upsertScheduled', () {

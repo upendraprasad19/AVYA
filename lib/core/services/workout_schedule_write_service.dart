@@ -137,7 +137,22 @@ class WorkoutScheduleWriteService {
       if (reason != null && reason.trim().isNotEmpty) {
         map['pause_reason'] = reason.trim();
       }
-      await box.put(key, map);
+      // audit-fixwave 2026-07-02 / F3 — route through the canonical writer
+      // (like markCompleted / markSkipped) instead of a bare `box.put`. Pre-fix
+      // a coach "pause my plan" wrote local Hive only: no cloud fan-out that
+      // tick, no calendar/today/plan provider invalidation, no per-date mutex —
+      // the Train UI stayed stale until a later rebuild and the pause was lost
+      // on reinstall-before-next-sync. upsertScheduled fans out
+      // `syncWorkoutData`, invalidates the readers, and takes the mutex.
+      // `status='paused'` reaches cloud (scheduled_workouts has NO status CHECK,
+      // verified live); `paused_via/paused_at/pause_reason` are local-only
+      // annotations (no cloud columns, never synced by any path) and survive in
+      // Hive via upsertScheduled's `...entry` spread.
+      await WorkoutWriteService.instance.upsertScheduled(
+        date: d,
+        entry: map,
+        source: WriteSource.schedSwap,
+      );
       pausedDates.add(dateStr);
     }
 
