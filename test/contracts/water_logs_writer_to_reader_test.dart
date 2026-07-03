@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// from docs/sot_registry.yaml.
 ///
 /// Writers: nutrition_provider.WaterNotifier.addWater + increment + decrement,
-///          nutrition_write_service.logWater
+///          health_write_service.setWaterMl (canonical water_logs writer)
 /// Readers: nutrition_repository.getWaterForDate,
 ///          ai_coach_repository._getTodayNutrition (water_ml field)
 ///
@@ -74,12 +74,16 @@ void main() {
           reason: 'WaterNotifier must define decrement');
     });
 
-    test('NutritionWriteService.logWater exists', () {
-      final nwsf = File('lib/core/services/nutrition_write_service.dart');
-      expect(nwsf.existsSync(), isTrue);
-      final src = nwsf.readAsStringSync();
-      expect(src.contains('logWater'), isTrue,
-          reason: 'nutrition_write_service must define logWater method');
+    test('canonical water writer HealthWriteService.setWaterMl exists', () {
+      // audit-fixwave 2026-07-02 / F14 — the real water writer is
+      // HealthWriteService.setWaterMl (water_ml_<istDate> → water_logs). The
+      // dead NutritionWriteService.logWater (water_<date>, zero callers, never
+      // synced) was removed; this contract now pins the writer that actually runs.
+      final hf = File('lib/core/services/health_write_service.dart');
+      expect(hf.existsSync(), isTrue);
+      final src = hf.readAsStringSync();
+      expect(src.contains('setWaterMl'), isTrue,
+          reason: 'HealthWriteService must define setWaterMl (canonical water writer)');
     });
   });
 }

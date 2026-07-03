@@ -21,6 +21,15 @@ import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 ///   visual shell is presentation-only.
 /// * Sign out outline button.
 /// * Mono 9 ghost build-info footer.
+///
+/// audit-fixwave 2026-07-02 / F20 — this screen (route `/profile/settings`) is
+/// FUNCTIONAL (its rows route to the real surfaces) but is NOT currently linked
+/// from the Profile tab: the Profile tab surfaces its most-used sub-items (Edit
+/// Profile, Notifications) directly, so `/profile/settings` is reachable only by
+/// its route (e.g. deep-link), not by a tap in-app. This is a known, documented
+/// state — retained (not deleted) so a future product decision can either
+/// surface a "Settings" entry in the Profile tab or drop the route. No behaviour
+/// change was made in the audit-fixwave batch.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 

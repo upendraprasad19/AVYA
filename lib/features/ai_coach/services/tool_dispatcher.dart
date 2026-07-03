@@ -1250,9 +1250,11 @@ class ToolDispatcher {
     } catch (e, st) {
       debugPrint('[tool_dispatcher] invalidate recentFoodLogsProvider failed: $e\n$st');
     }
-    // adjust_caloric_target writes a target_override_<date> key; the
-    // macro-target readers (profile MY TARGETS card, diet plan screen) need
-    // to re-read the override-aware target.
+    // audit-fixwave 2026-07-02 / F13 — the adjust_caloric_target tool (which
+    // wrote a target_override_<date> key) was REMOVED 2026-05-31 (derive-only
+    // surface, ADR-0012). This macro-target invalidation is retained defensively
+    // so the override-aware readers (profile MY TARGETS card, diet plan screen)
+    // re-read after a nutrition change; harmless when no override exists.
     try {
       ref.invalidate(macroTargetsProvider);
     } catch (e, st) {

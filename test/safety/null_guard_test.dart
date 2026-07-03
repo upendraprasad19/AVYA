@@ -32,11 +32,8 @@ void main() {
       expect(src, contains('HiveService.instance.workoutBox'));
     });
 
-    test('terms_modal.dart has no raw Hive.box() calls', () {
-      final src = _src('lib/features/auth/widgets/terms_modal.dart');
-      expect(src, isNot(contains("Hive.box(")));
-      expect(src, contains('HiveService.instance.userBox'));
-    });
+    // audit-fixwave 2026-07-02 / F15 — terms_modal.dart deleted (dead widget,
+    // zero call sites); its raw-Hive.box guard test was removed with it.
   });
 
   // ── Task 2: exercise_type List.first guards ─────────────────────────────────

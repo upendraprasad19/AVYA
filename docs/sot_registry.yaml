@@ -136,7 +136,7 @@ concepts:
     hive:
       box: workoutBox
       key_prefix: "exlog_"
-      key_formula: "'exlog_${istDateStr(date)}_${exerciseName.hashCode.toUnsigned(32).toRadixString(16)}'"
+      key_formula: "'exlog_' + istDateStr(date) + '_' + v5(exlogNamespace, exerciseName.toLowerCase().trim)[:8]  # workout_write_service.exlogKey — UUID-v5 first-8-hex (H-16, cross-platform stable). audit-fixwave F10: was exerciseName.hashCode, which is Dart-VM/platform-unstable."
     cloud:
       table: workout_log_exercises
       # Audit 2026-05-12 P3-G — `volume_kg` does NOT exist on workout_log_exercises
@@ -1273,7 +1273,7 @@ concepts:
     hive:
       box: workoutBox
       key_prefix: "exlog_"
-      key_formula: "'exlog_${istDateStr(date)}_${exerciseName.hashCode.toUnsigned(32).toRadixString(16)}'"
+      key_formula: "'exlog_' + istDateStr(date) + '_' + v5(exlogNamespace, exerciseName.toLowerCase().trim)[:8]  # workout_write_service.exlogKey — UUID-v5 first-8-hex (H-16, cross-platform stable). audit-fixwave F10: was exerciseName.hashCode, which is Dart-VM/platform-unstable."
     cloud:
       table: workout_log_exercises
       # Audit 2026-05-12 P3-G — `volume_kg` does NOT exist on workout_log_exercises
@@ -1462,6 +1462,140 @@ concepts:
       Source-grep enforcement: scripts/check_nlog_key_canonical.dart
       (Gate 23) fails the build if any non-canonical writer constructs
       an nlog_* key directly. Shipped 2026-05-24 drift-fix batch / F2.
+
+  # audit-fixwave 2026-07-02 / F6 — custom_food was previously unregistered
+  # (it appeared only inside community_review_queue as a cross-user READ). The
+  # write path is correct but had no drift-detection contract. Registered here.
+  - concept: custom_food_mutations
+    domain: nutrition
+    behavioral_test_path: test/contracts/custom_food_mutations_writer_to_reader_test.dart
+    presence_only: true  # audit-fixwave B-pass — source-grep drift detector, NOT a Hive round-trip (rule 21 honesty)
+    description: |
+      User-created custom foods. Written to customBox under `custom_food_<ms>`
+      (plus a foodBox entry keyed by v5 id) and synced immediately to
+      user_custom_foods (onConflict `id`). Read by the custom-food list +
+      food-search (custom foods appear alongside the bundled DB).
+    writers:
+      - file: lib/features/nutrition/providers/nutrition_provider.dart
+        line_range: 1249-1315
+        method: addCustomFood
+        semantic: hive-write + immediate sync
+        notes: |
+          CustomFoodNotifier.addCustomFood writes customBox['custom_food_<ms>']
+          + foodBox[<v5>], then unawaited(SyncService.instance.syncCustomItemsNow()).
+    readers:
+      - file: lib/features/nutrition/providers/nutrition_provider.dart
+        line_range: 1318-1319
+        method: customFoodProvider
+        semantic: hive-read
+        notes: |
+          Custom foods surface via customFoodProvider + the food-search merge.
+    hive:
+      box: customBox
+      key_prefix: "custom_food_"
+      key_formula: "'custom_food_' + DateTime.now().millisecondsSinceEpoch"
+    cloud:
+      table: user_custom_foods
+      columns: [id, user_id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, fiber_per_100g, serving_size_g, submitted_to_db, approved]
+    sync_methods: [syncCustomItemsNow]
+
+  # audit-fixwave 2026-07-02 / F7 — notifications_inbox had a real WriteService-
+  # shaped write path but no standalone concept (only referenced inside
+  # restore_completeness). Registered here.
+  - concept: notifications_inbox
+    domain: cross_domain
+    behavioral_test_path: test/contracts/notifications_inbox_writer_to_reader_test.dart
+    presence_only: true  # audit-fixwave B-pass — source-grep drift detector, NOT a Hive round-trip
+    description: |
+      OneSignal push events captured into notificationsBox and synced to the
+      cloud notifications_inbox table, so the in-app inbox survives reinstall.
+    writers:
+      - file: lib/features/profile/services/notification_inbox_service.dart
+        line_range: 69-90
+        method: record
+        semantic: hive-write + sync
+        notes: |
+          NotificationInboxService.record writes notificationsBox, then
+          unawaited(SyncService.instance.syncNotificationsInboxEntry(...)).
+    readers:
+      - file: lib/features/profile/providers/notifications_inbox_provider.dart
+        line_range: 15-20
+        method: build
+        semantic: hive-read
+        notes: |
+          NotificationInboxNotifier.build reads NotificationInboxService.readAll().
+    hive:
+      box: notificationsBox
+      key_prefix: "notif_"
+    cloud:
+      table: notifications_inbox
+      columns: [id, user_id, title, body, type, created_at, read_at]
+    sync_methods: [syncNotificationsInboxEntry]
+
+  # audit-fixwave 2026-07-02 / F8 — daily_steps is synced + restored but had no
+  # standalone concept (only a footnote in restore_completeness). Import-only
+  # (Health Connect / Fit / Samsung Health), so writer/reader drift is unlikely,
+  # but it is registered so the drift audit can see it.
+  - concept: daily_steps
+    domain: health
+    behavioral_test_path: test/contracts/daily_steps_writer_to_reader_test.dart
+    presence_only: true  # audit-fixwave B-pass — source-grep drift detector; daily_steps is import-only
+    description: |
+      Daily step totals imported from the native health source and pushed to
+      the cloud daily_steps table; restored on reinstall. Import-only — no
+      manual UI writer.
+    writers:
+      - file: lib/core/services/sync/sync_health.dart
+        line_range: 222-260
+        method: _syncStepsLogs (push) — source is the native health import
+        semantic: cloud-upsert
+    readers:
+      - file: lib/core/services/sync/sync_health.dart
+        line_range: 380-420
+        method: _restoreStepsLogs
+        semantic: cloud-restore
+    hive:
+      box: healthBox
+      key_prefix: "steps_"
+    cloud:
+      table: daily_steps
+      columns: [id, user_id, date, steps, source]
+    sync_methods: [_syncStepsLogs]
+    restore_methods: [_restoreStepsLogs]
+
+  # audit-fixwave 2026-07-02 / F15 — terms acceptance (DPDP) had no SoT concept
+  # (and the dead TermsModal that once stamped it was deleted). The live write
+  # is the email sign-in flow; the bootstrapper projects it to cloud.
+  - concept: terms_acceptance
+    domain: auth_profile
+    behavioral_test_path: test/contracts/terms_acceptance_writer_to_reader_test.dart
+    presence_only: true  # audit-fixwave B-pass — source-grep drift detector, NOT a Hive round-trip
+    description: |
+      DPDP ToS/Privacy acceptance. The email sign-in flow stamps
+      userBox['terms_accepted_at'] + ['terms_version']; auth_session_bootstrapper
+      projects them to the users cloud row and re-hydrates on returning-user restore.
+    writers:
+      - file: lib/features/auth/screens/sign_in_screen.dart
+        line_range: 449-640
+        method: _buildEmailView
+        semantic: hive-write
+        notes: |
+          Stamps userBox terms_accepted_at (UTC ISO) + terms_version
+          (AppConstants.termsVersion) on accept.
+    readers:
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        line_range: 195-260
+        method: hydrateFromCloud
+        semantic: cloud-projection + restore
+        notes: |
+          Projects userBox terms fields → users.terms_accepted_at / terms_version
+          and re-hydrates from cloud on returning-user restore.
+    hive:
+      box: userBox
+      key_prefix: "terms_"
+    cloud:
+      table: users
+      columns: [terms_accepted_at, terms_version]
 
   - concept: sync_fanout_workout_domain
     domain: workout
@@ -2605,15 +2739,9 @@ concepts:
           Sole canonical writer. Per-(date,water) mutex; IST baked into
           key via istDateStr; fires syncNutritionData + pushSnapshot
           fire-and-forget.
-      - file: lib/core/services/nutrition_write_service.dart
-        line_range: 387-410
-        method: logWater
-        notes: |
-          Pre-audit-2026-05-16-E.7 entry point. Still present in
-          nutrition_write_service.dart but UI mutations now route
-          through HealthWriteService.setWaterMl. Kept as registered
-          writer so gate 7 doesn't flag it; functionally a thin
-          forwarder for legacy callsites.
+      # audit-fixwave 2026-07-02 / F14 — the legacy NutritionWriteService.logWater
+      # writer was DELETED (dead code: it wrote a `water_<date>` key that no sync
+      # helper read — a latent trap). setWaterMl (above) is the sole canonical writer.
     # audit-2026-05-16 reader-side — full enumeration of every
     # callsite that reads water_ml_<istDate> from healthBox.
     reader_manifest_complete: true
@@ -2690,7 +2818,7 @@ concepts:
         fields_read: [via waterIntakeProvider.notifier.addWater]
     reader_allow_files:
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for water_ml_* (water_7d + today_nutrition) split out of ai_coach_repository.dart" }
-    regression_test: test/nutrition_write_service/logWater_test.dart
+    regression_test: test/contracts/water_logs_writer_to_reader_test.dart
     hive:
       box: healthBox
       key_prefix: "water_ml_"
@@ -4406,12 +4534,19 @@ concepts:
                 unscheduleTemplateFromDate
         notes: |
           9 schedule writes all delegate to WorkoutWriteService.upsertScheduled
-          with `source: WriteSource.schedSwap`. Routing callsites verified at
-          :279, :310, :454, :517, :545, :730, :863, :879, :1015, :1020, :1190,
-          :1338, :1471, :1642, :1725, :1911 (some methods route at multiple
-          callsites). The 3 non-schedule writes are at
-          `workout_schedule_service.dart:249` + `:419` (_planKey) + `:1656`
-          (templateId last_used_at), plus `:1560` displacedKey backup.
+          with `source: WriteSource.schedSwap`.
+          audit-fixwave F11: the old monolith line citations (:279/:310/... and
+          the _planKey/displacedKey/templateId lines) are STALE — the tech-debt
+          audit 2026-05-20 / A2 split the 1970-LOC workout_schedule_service.dart
+          into a ~270-line @Deprecated shim + four services. The real routing
+          callsites now live in workout_schedule_write_service.dart
+          (markCompleted/markSkipped/redoWeek4/copyWeek — and pauseRange as of
+          audit-fixwave F3), swap_service.dart (swapExerciseInDay/shortenDay),
+          and template_service.dart (assignTemplateToDate/unschedule). The 4
+          bounded direct puts (2 _planKey in read_service + displacedKey +
+          templateId in template_service) are pinned by
+          workout_schedule_service_uses_write_service_test.dart (broadened in F4
+          to catch aliased puts).
     reader_manifest_complete: true
     readers:
       # "Readers" here are the 9 schedule mutation entry points exposed
@@ -4745,6 +4880,14 @@ concepts:
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,
           fans out to syncCustomItemsNow + pushSnapshot, telemetry pair.
+          audit-fixwave F9: this is the CANONICAL writer, but the primary UI
+          path (the template-builder "+ CREATE CUSTOM" sheet,
+          create_custom_exercise_sheet.dart) still does a DIRECT
+          customBox.put('custom_exercise_<ms>') + syncCustomItemsNow() (no
+          mutex / no telemetry pair) and is pinned by
+          custom_exercise_writer_to_reader_test. Correct box + table; the two
+          write paths coexist. Prefer routing the sheet through upsertCustomExercise
+          in a future cleanup.
       - file: lib/core/services/sync/sync_community.dart
         line_range: 290-360
         method: _restoreCustomExercises

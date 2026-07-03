@@ -189,26 +189,9 @@ void main() {
     });
   });
 
-  // ── Source assertions: TermsModal gate in terms_modal.dart ───
-  group('terms_modal: _alreadyAccepted guard', () {
-    late String src;
-    setUpAll(() {
-      src = _src('lib/features/auth/widgets/terms_modal.dart');
-    });
-
-    test('checks terms_accepted_at in Hive', () {
-      expect(src, contains("'terms_accepted_at'"),
-          reason: 'Modal gate must read terms_accepted_at from Hive');
-    });
-
-    test('checks terms_version matches AppConstants.termsVersion', () {
-      expect(src, contains('AppConstants.termsVersion'),
-          reason: 'Modal gate must compare stored version to current constant');
-    });
-
-    test('barrierDismissible is false (blocking)', () {
-      expect(src, contains('barrierDismissible: false'),
-          reason: 'Modal must be non-dismissible until accepted');
-    });
-  });
+  // audit-fixwave 2026-07-02 / F15 — the TermsModal source-assertion group was
+  // removed with the dead TermsModal widget (zero call sites; the sign-in
+  // trigger was removed in the Test #4 / OBS-A batch). The live terms-acceptance
+  // write lives in sign_in_screen.dart (asserted above) and is now pinned by the
+  // `terms_acceptance` SoT concept + terms_acceptance_writer_to_reader_test.
 }

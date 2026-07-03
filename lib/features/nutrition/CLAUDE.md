@@ -33,9 +33,9 @@ for `nlog_*` Hive rows + `nutrition_logs` cloud) + `nutrition_read_service.dart`
 | Concept | Writer | Reader |
 |---|---|---|
 | `nutrition_total_calories` | `nutrition_write_service.dart` `logMeal` | `nutrition_read_service.dart` + home `TodayMacrosCard` + nutrition screen. **Hive key:** `nlog_${istDateStr(date)}_${hashCode}` (`hive_field_name_nlog` SoT). |
-| `food_log_delete_with_undo` | `nutrition_write_service.dart` `deleteWithUndo` (soft-delete with 5s timer + restore-on-tap) | `food_log_list_section.dart`. |
-| `saved_meals` | `nutrition_write_service.dart` `saveMeal` | `saved_meals_section.dart` quick-log. |
-| `water_logs` | `health_write_service.dart` `logWater` (water is a health/nutrition cross-feature concept) | `water_section.dart` `WardGlassGrid`. |
+| `food_log_delete_with_undo` | `nutrition_write_service.dart` `deleteLog(allowUndo:)` + `restoreLastDeleted` (soft-delete + restore-on-tap; audit-fixwave F12 — was mis-named `deleteWithUndo`) | the nutrition meal-list dismissible (`TodaysMealsCard`). |
+| `saved_meals` | `nutrition_write_service.dart` `saveMealAsTemplate` (audit-fixwave F12 — was mis-named `saveMeal`) | `saved_meals_section.dart` quick-log. |
+| `water_logs` | `health_write_service.dart` `setWaterMl` (audit-fixwave F12 — was mis-named `logWater`, now deleted) | `water_section.dart` `WardGlassGrid`. |
 | `water_target` | `water_target_service.dart` (Hive `configBox['water_target_ml']`) | `waterTargetProvider`. |
 | `diet_plan_saved_loaded` | `diet_plan_screen.dart` `_savePlan` → `configBox['saved_diet_plan']` + `ref.invalidate(dietPlanProvider)` | `TodaysMealsCard` renders "FROM YOUR DIET PLAN" hints on empty slots. |
 | `food_text_analysis` daily cap | server-side trigger `trg_food_text_rate_limit` (migration 024) — 50/day free, 200/day PRO. Insert-first pattern: `ai-proxy` inserts placeholder row BEFORE Gemini. | client error mapping returns 429 → "limit reached". |

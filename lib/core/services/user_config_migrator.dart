@@ -112,6 +112,18 @@ class UserConfigMigrator {
     // Unit 3 obs 6 — per-device/browser PWA-install-banner dismiss preference
     // (web only; not user data). Documentation-only list; no gate reads it.
     'pwa_banner_dismissed',
+    // audit-fixwave 2026-07-02 / F16 — health-sync enablement is a DEVICE
+    // capability, not user data: Health Connect / Google Fit is bound to the
+    // physical device, and whatever it exposes syncs to the currently-logged-in
+    // account regardless of who toggled it (health rows are written into the
+    // user-scoped healthBox via wrapUserScopedBox and pushed under the live
+    // auth token — no cross-user data leak). A stale "enabled" flag after an
+    // account switch at worst means User B re-toggles; it never routes A's data
+    // to B. So `health_sync_enabled` deliberately stays device-scoped rather
+    // than being added to userScopedKeys (which, without also moving the reader,
+    // would be a half-migration). This is the explicit maintainer decision the
+    // audit asked for. Reviewer C (R2) independently confirmed no cross-account leak.
+    'health_sync_enabled',
   ];
 
   /// Runs the migration once per device. Idempotent.
