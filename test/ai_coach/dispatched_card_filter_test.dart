@@ -74,4 +74,40 @@ void main() {
     final visible = AiCoachScreen.filterVisibleIntents(intents);
     expect(visible.length, 3);
   });
+
+  // audit-fixwave B-pass fix — the executed pill's staleness keys on the SETTLE
+  // marker (intent_<id>_dispatched_at), NOT createdAt. Both intents below were
+  // CREATED 10 min ago; only the one whose SETTLE marker is old is dropped —
+  // proving a slow-to-confirm user (old createdAt, fresh settle) keeps their ✓.
+  ToolIntent _executed(String id) => ToolIntent(
+        id: id,
+        type: 'log_set',
+        payload: const {},
+        confirmationClass: ConfirmationClass.reviewable,
+        previewSummary: 'Log',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 10)),
+        status: ToolIntentStatus.executed,
+      );
+
+  test('executed pill drops when its SETTLE marker is >2min old (not createdAt)',
+      () async {
+    await HiveService.instance.coachBox.put('intent_stale_dispatched_at',
+        DateTime.now().subtract(const Duration(minutes: 10)).toIso8601String());
+    await HiveService.instance.coachBox.put('intent_fresh_dispatched_at',
+        DateTime.now().toIso8601String());
+
+    final visible = AiCoachScreen
+        .filterVisibleIntents([_executed('stale'), _executed('fresh')]);
+    expect(visible.map((i) => i.id).toList(), ['fresh'],
+        reason: 'stale SETTLE → dropped; fresh SETTLE → visible, even though '
+            'BOTH were created 10 min ago (staleness keys on settle time, not '
+            'the AI-reply time — a slow confirm must still show its ✓ Logged)');
+  });
+
+  test('executed pill with NO settle marker is kept (never hide a real success)',
+      () async {
+    // createdAt 10 min ago, but no dispatched_at marker → keep the ✓.
+    final visible = AiCoachScreen.filterVisibleIntents([_executed('nomarker')]);
+    expect(visible.map((i) => i.id).toList(), ['nomarker']);
+  });
 }
