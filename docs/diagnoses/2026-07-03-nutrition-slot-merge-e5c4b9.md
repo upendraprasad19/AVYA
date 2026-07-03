@@ -177,3 +177,14 @@ columns; the union totals are behaviorally exercised by the merge test). Resolve
 append-only in `backups/gate19_drift_baseline.txt` (a `file::prefix::field`-scoped
 grandfather, more precise than a global `_alwaysOk` field suppression) — zero
 removals, no un-protection of future drift detection.
+
+## Live-verified on test7 (2026-07-03)
+Two different meals into the SAME lunch slot — Roti (coach `logMealByText`) +
+Paneer (Nutrition UI search) → after sync, **ONE merged cloud `nutrition_logs` row
+for lunch with BOTH items** (item_index 0 + 1, 440 kcal / 24g protein). Pre-fix the
+2nd same-slot write overwrote the 1st (Roti lost). The live item_index also confirms
+the tail-vacuum column against the live schema. The sign-out/in restore round-trip
+was NOT completed — a full IndexedDB clear wedged the debug build's fresh-install
+boot (dev-harness only, not a product bug); covered by construction (cloud merge
+correct + C3 restore live-proven W-A/W-B + the 3-way merge unit-tested). See memory
+`feedback_live_restore_test_indexeddb_clear`. Cleanup verified 0 residual.

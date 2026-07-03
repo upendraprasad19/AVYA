@@ -13,6 +13,14 @@ hermes_report: docs/audit/audit-fixwave-hermes.md
 # data-loss in the NUT-02 fix itself + F1 over-suppress + F2 stale-drop +
 # presence_only) plus a re-Hermes residual (duplicate-serving drop) — ALL fixed
 # in-batch with regression tests (no deferrals). See the review artifacts above.
+# LIVE-VERIFIED on test7 (2026-07-03, prod cloud dedsavbjuwgarrhphgnl): F1 (exactly
+# 3 sets, not 6), F2 (✓ = real write), F5/NUT-02 (two same-slot meals → ONE merged
+# cloud row, both items), F3 (5 days paused reach cloud that tick) all PASS. Cleanup
+# 0 residual. The sign-out/in restore round-trip was NOT completed (a debug-build
+# IndexedDB-clear boot glitch — dev-harness only); covered by construction (cloud
+# merge correct + C3 restore live-proven W-A/W-B + 3-way merge unit-tested). See the
+# diagnoses' "Live-verified on test7" sections + memory
+# feedback_live_restore_test_indexeddb_clear.
 total_findings: 22
 closed_count: 22
 
@@ -30,7 +38,7 @@ findings:
     commit: "audit-fixwave-2026-07-02 (uncommitted)"
     diagnose: docs/diagnoses/2026-07-03-coach-dual-path-log-a1d7c3.md
     verification: test/contracts/coach_no_dual_log_path_test.dart
-    notes: "_logFood now returns r.success; stale settled cards drop after 2 min. Live re-test on test7 (F-retest) is the founder-gated runtime confirmation."
+    notes: "_logFood now returns r.success; stale settled cards drop after 2 min. LIVE-VERIFIED on test7 2026-07-03 — success-path ✓ mapped to a real cloud write; the failure-path false-✓ can't be forced live and is unit-tested."
 
   - id: F3
     title: "pauseRange bypasses sync fan-out + invalidation (P1)"

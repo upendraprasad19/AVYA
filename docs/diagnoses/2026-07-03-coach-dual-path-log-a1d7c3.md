@@ -148,3 +148,11 @@ The adversarial B-pass caught two defects in the first cut; both fixed here:
    (`intent_<id>_dispatched_at`), keeping the ✓ for 2 min after it settles;
    missing marker → keep (never hide a real success); rejected/expired always
    render.
+
+## Live-verified on test7 (2026-07-03)
+Drove the coach on the branch build vs prod cloud (`dedsavbjuwgarrhphgnl`):
+"log 3 sets bench 60kg" → **ONE** "LOG SET" card (legacy draft suppressed) → APPLY
+→ **exactly 3 `workout_log_sets` + 1 `workout_log_exercises`** (baseline 0 — NOT 6).
+F1 confirmed live. Coach "log 2 rotis" → "✓ Logged" mapped to a REAL lunch
+`nutrition_log` (F2 success-path; `_logFood` returns r.success). The F2 failure-path
+(false ✓ on a failed write) can't be forced live — unit-tested. Cleanup 0 residual.
