@@ -66,6 +66,15 @@ export interface GeminiOptions {
    * when fallback wouldn't add value.
    */
   fallbackToLite?: boolean;
+  /**
+   * FC3 (diagnose 7fbe21): EXTRA passes over the whole [primary, Flash-Lite]
+   * attempt list on a null (transient empty / quota) result, each spaced by a
+   * short backoff. Default 0 = current single-pass behavior. Opt in ONLY where
+   * a one-shot empty is user-visible (e.g. parseFoodText) — the tool loop has
+   * its own retry; the ~17 other geminiChat callers keep 0 (no latency/quota
+   * regression for the cron generators).
+   */
+  retries?: number;
 }
 
 export interface GeminiResult {
@@ -96,6 +105,7 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
     imageMimeType = "image/jpeg",
     jsonMode = false,
     fallbackToLite = true,
+    retries = 0,
   } = options;
 
   if (!GEMINI_API_KEY) {
@@ -109,36 +119,60 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
     attempts.push(MODEL_FLASH_LITE);
   }
 
-  for (const attemptModel of attempts) {
-    const result = await _callOnce({
-      model: attemptModel,
-      systemPrompt,
-      userPrompt,
-      maxTokens,
-      temperature,
-      timeoutMs,
-      imageBase64,
-      imageMimeType,
-      jsonMode,
-    });
+  // FC3 (diagnose 7fbe21): optional EXTRA passes over the attempt list on a
+  // transient null, spaced by a short backoff. retries=0 → single pass (the
+  // default for every caller except parseFoodText).
+  //
+  // B-pass P2: bound total retry latency. One pass can spend timeoutMs ×
+  // attempts (~30s for the food parser); without a wall-clock deadline,
+  // retries=2 could stack to ~90s on the meal-log write path during a genuine
+  // Gemini outage. Cap it (mirrors geminiChatWithTools' TOOLS_RETRY_DEADLINE_MS):
+  // fast transient failures still get their retries; a slow outage stops after
+  // roughly one full attempt list.
+  const retryStartedAt = Date.now();
+  const retryDeadlineMs = 20_000;
+  for (let pass = 0; pass <= retries; pass++) {
+    for (const attemptModel of attempts) {
+      const result = await _callOnce({
+        model: attemptModel,
+        systemPrompt,
+        userPrompt,
+        maxTokens,
+        temperature,
+        timeoutMs,
+        imageBase64,
+        imageMimeType,
+        jsonMode,
+      });
 
-    if (result.content !== null) {
-      // Success on the first attempt is the common path; log the
-      // fallback case so we can monitor Flash quota health in prod.
-      if (attemptModel !== model) {
-        console.warn(
-          `[geminiChat] fallback succeeded (${model} → ${attemptModel})`,
-        );
+      if (result.content !== null) {
+        // Success on the first attempt is the common path; log the
+        // fallback / retry case so we can monitor Flash quota health in prod.
+        if (attemptModel !== model || pass > 0) {
+          console.warn(
+            `[geminiChat] recovered (${model} → ${attemptModel}, pass ${pass})`,
+          );
+        }
+        return result;
       }
-      return result;
+      console.warn(
+        `[geminiChat] ${attemptModel} returned null — ${attempts.indexOf(attemptModel) < attempts.length - 1 ? "trying fallback" : "attempt list exhausted"}`,
+      );
     }
-    console.warn(
-      `[geminiChat] ${attemptModel} returned null — ${attempts.indexOf(attemptModel) < attempts.length - 1 ? "trying fallback" : "all attempts exhausted"}`,
-    );
+    // Space the next pass so a transient quota/empty blip can clear — but only
+    // if we're still inside the retry wall-clock budget (B-pass P2).
+    if (pass >= retries) break;
+    if (Date.now() - retryStartedAt >= retryDeadlineMs) {
+      console.warn(
+        `[geminiChat] retry budget (${retryDeadlineMs}ms) exhausted for primary=${model}`,
+      );
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 700));
   }
 
   console.error(
-    `[geminiChat] All ${attempts.length} attempts failed for primary=${model}`,
+    `[geminiChat] All attempts failed for primary=${model} (retries=${retries})`,
   );
   return { content: null, modelUsed: null, tokensUsed: 0 };
 }
@@ -193,6 +227,21 @@ async function _callOnce(opts: {
     if (opts.jsonMode) {
       (body.generationConfig as Record<string, unknown>).responseMimeType =
         "application/json";
+    }
+
+    // FC1 (diagnose 7fbe21): Gemini 2.5 Flash runs "thinking" ON by default,
+    // and thinking tokens count against maxOutputTokens. With our low output
+    // caps (120–2048) the model can spend the whole budget thinking and return
+    // an EMPTY candidate (finishReason=MAX_TOKENS) — which the caller then
+    // degrades to Flash-Lite (Lite has thinking OFF by default, so it answers).
+    // Disable thinking for every NON-Pro attempt (Flash + its Lite fallback);
+    // MODEL_PRO (weekly-report) keeps dynamic thinking. Keyed on the ATTEMPT
+    // model (opts.model here is the attempt model — see the geminiChat attempt
+    // loop) so Lite never receives a Pro budget (Lite's floor is 512).
+    if (opts.model !== MODEL_PRO) {
+      (body.generationConfig as Record<string, unknown>).thinkingConfig = {
+        thinkingBudget: 0,
+      };
     }
 
     const response = await fetch(url, {
@@ -506,6 +555,16 @@ async function _callOnceWithTools(
         maxOutputTokens: opts.maxTokens,
       },
     };
+
+    // FC1 (diagnose 7fbe21): disable Gemini 2.5 "thinking" for non-Pro attempts
+    // so the low maxOutputTokens budget isn't consumed by hidden reasoning
+    // (which returns an empty candidate → silent Flash-Lite degradation). Keyed
+    // on the attempt model; MODEL_PRO keeps dynamic thinking. See _callOnce.
+    if (opts.model !== MODEL_PRO) {
+      (body.generationConfig as Record<string, unknown>).thinkingConfig = {
+        thinkingBudget: 0,
+      };
+    }
 
     if (opts.tools.length > 0) {
       body.tools = [{ functionDeclarations: opts.tools }];

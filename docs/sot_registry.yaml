@@ -4072,9 +4072,9 @@ concepts:
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 247-290
+        line_range: 351-428
         method: deleteLog
-        notes: removes nlog_* entry from nutritionBox + fires cloud delete
+        notes: removes nlog_* entry from nutritionBox + fires cloud delete (shifted +~56 lines by the FC6 _clampMealPayload helper, diagnose 4e8f1b)
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/screens/delete_account_screen.dart
