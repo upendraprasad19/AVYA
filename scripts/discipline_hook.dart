@@ -11,7 +11,9 @@
 //                         matcher "Skill" in settings.json.
 //   • SessionStart(compact) → context was just compacted → re-inject the hot-set
 //                         so discipline survives the summarization. Registered
-//                         with matcher "compact".
+//                         with matcher "compact". ALSO appends a MEMORY.md
+//                         size nudge (→ /consolidate-memory) when the per-session
+//                         memory index has grown past its soft cap.
 //
 // Injection is ALWAYS via structured JSON hookSpecificOutput.additionalContext —
 // for PreToolUse, plain stdout goes to the debug log only, so the JSON field is
@@ -100,7 +102,17 @@ void main() async {
         // Matcher "compact" scopes this; re-check defensively so a mis-config
         // can't make us inject on every startup (where check_alerts runs).
         final source = (input['source'] as String?) ?? '';
-        if (source == 'compact') _emit('SessionStart', _compactReinject);
+        final memNudge = _memoryIndexNudge();
+        if (source == 'compact') {
+          // Post-compaction: re-inject the hot-set; append the memory-size nudge
+          // if MEMORY.md is over its soft cap.
+          _emit('SessionStart',
+              memNudge.isEmpty ? _compactReinject : '$_compactReinject\n\n$memNudge');
+        } else if (memNudge.isNotEmpty) {
+          // If the matcher is ever broadened to non-compact SessionStart sources,
+          // still surface the memory-size nudge (never the compact re-inject here).
+          _emit('SessionStart', memNudge);
+        }
         break;
 
       case 'UserPromptSubmit':
@@ -112,6 +124,45 @@ void main() async {
   } catch (_) {
     // Never break the session — swallow everything, exit 0.
     return;
+  }
+}
+
+// Best-effort MEMORY.md size nudge. MEMORY.md (the per-session loaded memory index)
+// lives OUTSIDE the repo, under ~/.claude/projects/<mangled-project-path>/memory/.
+// The harness mangles the project path into that dir name by replacing each of
+// : \ / and space with '-' (so "C:\Upendra\Claude Code\Fitness App" →
+// "C--Upendra-Claude-Code-Fitness-App"). If the index is over the soft cap, suggest
+// /consolidate-memory. Fail-silent: any resolution / IO error returns '' so the
+// session is never affected (honours the top-of-file NEVER-break-the-session contract).
+// A DISCIPLINE_HOOK_MEMORY_PATH env override is honoured for testing.
+String _memoryIndexNudge() {
+  try {
+    const softBytes = 18000; // ~500B of hysteresis above the 17,510 soft target
+    const softLines = 150;
+    final override = Platform.environment['DISCIPLINE_HOOK_MEMORY_PATH'];
+    final String path;
+    if (override != null && override.isNotEmpty) {
+      path = override;
+    } else {
+      final home = Platform.environment['USERPROFILE'] ??
+          Platform.environment['HOME'] ??
+          '';
+      if (home.isEmpty) return '';
+      final mangled = Directory.current.path.replaceAll(RegExp(r'[:\\/ ]'), '-');
+      path = '$home/.claude/projects/$mangled/memory/MEMORY.md';
+    }
+    final memFile = File(path);
+    if (!memFile.existsSync()) return '';
+    final bytes = memFile.lengthSync();
+    final lines = memFile.readAsLinesSync().length;
+    if (bytes <= softBytes && lines <= softLines) return '';
+    final kb = (bytes / 1024).toStringAsFixed(1);
+    return '⚠️ MEMORY.md (the per-session memory index) is ${kb}KB / $lines lines — '
+        'over the soft cap. Run /consolidate-memory when convenient: it merges '
+        'overlapping feedback/project files + archives shipped batches, without '
+        'losing content or breaking a repo citation.';
+  } catch (_) {
+    return '';
   }
 }
 
