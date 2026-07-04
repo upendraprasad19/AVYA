@@ -695,6 +695,10 @@ extension SyncServiceNutrition on SyncService {
           for (final oldKey in (localSlotKeys[slotId] ?? const <String>[])) {
             if (oldKey != mergedKey) await _hive.nutritionBox.delete(oldKey);
           }
+          // FC6 / Hermes P2-FC6-1 — bound absurd calorie/macro values on the
+          // restore path too (mutates mergedRow in place; null-guards missing
+          // keys). mergedRow is already Map<String, dynamic>.
+          NutritionWriteService.clampRestoredNutritionRow(mergedRow);
           await _hive.nutritionBox.put(mergedKey, mergedRow);
           // Update intra-pass state (cloud has one row per slot, but be safe).
           localSlotKeys[slotId] = [mergedKey];
@@ -702,6 +706,9 @@ extension SyncServiceNutrition on SyncService {
         } else {
           // Legacy per-key local-wins (merge disabled).
           if (_hive.nutritionBox.get(localKey) == null) {
+            // FC6 / Hermes P2-FC6-1 — clamp absurd calorie/macro values on the
+            // restore path here too. `map` is already Map<String, dynamic>.
+            NutritionWriteService.clampRestoredNutritionRow(map);
             await _hive.nutritionBox.put(localKey, map);
           }
         }

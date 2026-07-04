@@ -86,6 +86,11 @@ export async function parseFoodText(description: string): Promise<ParsedMeal> {
     temperature: 0.3,
     timeoutMs: 15_000,
     jsonMode: true,
+    // FC3 (diagnose 7fbe21): a one-shot empty here fails the whole meal log
+    // (there is no tool-loop retry on this path). Two extra backoff passes
+    // absorb a transient quota/empty blip. FC1's thinkingBudget:0 removes the
+    // dominant empty cause; this is defense-in-depth.
+    retries: 2,
   });
 
   if (!content) {

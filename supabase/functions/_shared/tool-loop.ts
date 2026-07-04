@@ -122,6 +122,10 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         systemPrompt: opts.systemPrompt,
         messages,
         tools: visibleTools,
+        // FC1 (diagnose 7fbe21): headroom for the visible answer now that
+        // thinkingBudget:0 stops hidden reasoning from consuming the cap.
+        // 1024 default → 2048 at the call site (coach is the only caller).
+        maxTokens: 2048,
         requestId: opts.ctx.requestId,
       });
     } catch (e) {
@@ -131,7 +135,12 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         `[tool-loop] gemini call failed round=${round} request_id=${opts.ctx.requestId}`,
         e,
       );
-      if (!finalText) {
+      // FC2 (diagnose 7fbe21): only apologize when NOTHING was queued. If an
+      // earlier round already produced a write intent (queued for the APPLY
+      // card), a failure of the SUMMARIZATION round must NOT surface as "I had
+      // trouble reaching the model" over a working "Logged" card — the
+      // loop-exit confirmation below handles the intents.length>0 case.
+      if (!finalText && intents.length === 0) {
         finalText = "I had trouble reaching the model. Try again in a moment.";
       }
       break;
@@ -362,9 +371,18 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   // Root cause is usually a PRESENT/TODAY query that hit tool-calling
   // instead of reading the snapshot directly (see Manual §8 fix).
   if (!finalText) {
-    console.log(`[tool-loop] max rounds (${maxRounds}) exhausted without terminal response`);
-    finalText =
-      "Recruit — I had trouble pinning that down. Try asking again with a bit more specificity. If you want today's workout or your current plan, ask plainly: \"what's my workout today\" or \"what's my plan\" — I'll read the manifest directly.";
+    // FC2 (diagnose 7fbe21): if write intents were queued but no terminal text
+    // came back (summarization round threw, or rounds exhausted), acknowledge
+    // the queued action POSITIVELY — never leak an apology / "ran out of steps"
+    // message over the confirmation card the user is looking at.
+    if (intents.length > 0) {
+      finalText =
+        "Copy that, Recruit — I've queued that below. Review the details and tap APPLY to confirm.";
+    } else {
+      console.log(`[tool-loop] max rounds (${maxRounds}) exhausted without terminal response`);
+      finalText =
+        "Recruit — I had trouble pinning that down. Try asking again with a bit more specificity. If you want today's workout or your current plan, ask plainly: \"what's my workout today\" or \"what's my plan\" — I'll read the manifest directly.";
+    }
   }
 
   return {

@@ -108,7 +108,8 @@ class NutritionWriteService {
       'created_at': DateTime.now().toUtc().toIso8601String(),
     };
 
-    // 4. Hive write
+    // 4. Hive write (FC6: clamp absurd calorie/macro values first)
+    _clampMealPayload(payload);
     try {
       await HiveService.instance.nutritionBox.put(key, payload);
     } catch (e, st) {
@@ -147,6 +148,91 @@ class NutritionWriteService {
     return WriteResult.ok(key);
   }
 
+  // FC6 (diagnose 4e8f1b) — absurd-value clamp ceilings. Set FAR above any real
+  // meal so no legitimate entry is corrupted; anything above is garbage /
+  // injection (e.g. a coach `log_meal_by_text` override of 1,000,000 kcal —
+  // there is NO upstream numeric bound). A full day is ~2500–4000 kcal.
+  static const int _kMaxMealCalories = 15000;
+  static const int _kMaxItemCalories = 10000;
+  static const int _kMaxMacroGrams = 2000; // protein/carbs/fat; real meal <~300g
+  static const int _kMaxFiberGrams = 500;
+
+  /// Clamp absurd calorie/macro values in a meal payload IN PLACE before it is
+  /// persisted. Applied at EVERY nutrition write path (logMeal / appendItemsToMeal
+  /// / editLog) because per-item values resurface on re-edit (those paths
+  /// recompute totals from `items[].kcalWithFallback`), so both the TOTAL and
+  /// each ITEM must be bounded. Clamp-and-telemetry, NEVER reject — offline-first
+  /// must not silently drop a fat-fingered-but-real entry.
+  void _clampMealPayload(Map<String, dynamic> m) {
+    // Pure mutation is extracted into [clampMealPayloadValues] (@visibleForTesting)
+    // so the clamp behavior can be asserted without Hive. This wrapper only owns
+    // the side-effect: fire clamp telemetry when the pure step actually clamped.
+    if (clampMealPayloadValues(m)) {
+      unawaited(ErrorTelemetry.recordNonFatal(
+        Exception('nutrition value exceeded sane ceiling — clamped'),
+        StackTrace.current,
+        reason: 'nutrition_absurd_value_clamped',
+      ));
+    }
+  }
+
+  /// FC6 / Hermes P2-FC6-1 — public restore-path entry point. The nutrition
+  /// restore writer ([SyncService._restoreNutritionLogs]) is production code in
+  /// a different library, so it cannot call the `@visibleForTesting`
+  /// [clampMealPayloadValues] directly. This thin static wrapper bounds absurd
+  /// calorie/macro values on a restored row IN PLACE (delegates to the same
+  /// pure clamp) so a garbage cloud row can't reintroduce the value the local
+  /// write path already clamps. Null-guards missing keys (safe on any nutrition
+  /// row map). Returns whether anything was clamped.
+  static bool clampRestoredNutritionRow(Map<String, dynamic> m) =>
+      clampMealPayloadValues(m);
+
+  /// Pure clamp of absurd calorie/macro values in a meal payload IN PLACE.
+  ///
+  /// Mutates [m] (both the TOTAL fields and each `items[]` entry) and RETURNS
+  /// whether anything was clamped. NO side effects — the telemetry fire lives
+  /// in [_clampMealPayload]. Exposed for the FC6 regression test
+  /// (`test/contracts/nutrition_calorie_clamp_test.dart`) so the clamp can be
+  /// asserted without a Hive box. Behavior is identical to the prior inline
+  /// implementation (diagnose 4e8f1b).
+  @visibleForTesting
+  static bool clampMealPayloadValues(Map<String, dynamic> m) {
+    var clamped = false;
+    num clampNum(dynamic v, int ceiling) {
+      final n = v is num ? v : 0;
+      if (n > ceiling) {
+        clamped = true;
+        return ceiling;
+      }
+      if (n < 0) {
+        clamped = true;
+        return 0;
+      }
+      return n;
+    }
+
+    m['total_calories'] = clampNum(m['total_calories'], _kMaxMealCalories).round();
+    m['total_protein'] = clampNum(m['total_protein'], _kMaxMacroGrams).round();
+    m['total_carbs'] = clampNum(m['total_carbs'], _kMaxMacroGrams).round();
+    m['total_fat'] = clampNum(m['total_fat'], _kMaxMacroGrams).round();
+    m['total_fiber'] = clampNum(m['total_fiber'], _kMaxFiberGrams).round();
+
+    final items = m['items'];
+    if (items is List) {
+      for (final it in items) {
+        if (it is Map) {
+          it['calories'] = clampNum(it['calories'], _kMaxItemCalories).toDouble();
+          it['protein'] = clampNum(it['protein'], _kMaxMacroGrams).toDouble();
+          it['carbs'] = clampNum(it['carbs'], _kMaxMacroGrams).toDouble();
+          it['fat'] = clampNum(it['fat'], _kMaxMacroGrams).toDouble();
+          it['fiber'] = clampNum(it['fiber'], _kMaxFiberGrams).toDouble();
+        }
+      }
+    }
+
+    return clamped;
+  }
+
   /// Appends items to an existing meal log; recomputes totals.
   Future<WriteResult> appendItemsToMeal({
     required String existingLogKey,
@@ -176,6 +262,7 @@ class NutritionWriteService {
     m['total_fat'] = union.fold<double>(0, (a, i) => a + i.fat).round();
     m['total_fiber'] = union.fold<double>(0, (a, i) => a + i.fiber).round();
     m['logged_at'] = DateTime.now().toUtc().toIso8601String();
+    _clampMealPayload(m); // FC6
 
     try {
       await box.put(existingLogKey, m);
@@ -238,6 +325,7 @@ class NutritionWriteService {
     }
 
     m['logged_at'] = DateTime.now().toUtc().toIso8601String();
+    _clampMealPayload(m); // FC6
 
     try {
       await box.put(logKey, m);

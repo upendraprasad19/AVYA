@@ -6,6 +6,15 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### gemini_flash_reliability (1 bugs)
+- 2026-07-04 7fbe21 — >
+
+### coach_system_prompt_safety (1 bugs)
+- 2026-07-04 9c2d4a — >
+
+### nutrition_total_calories (1 bugs)
+- 2026-07-04 4e8f1b — >
+
 ### coach_log_confirm_routing (1 bugs)
 - 2026-07-03 a1d7c3 — >
 
@@ -754,6 +763,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-04 | 7fbe21 | > | gemini_flash_reliability | supabase/functions/_shared/gemini_thinking_config_test.ts |
+| 2026-07-04 | 9c2d4a | > | coach_system_prompt_safety | test/contracts/edge_function_safety_test.dart |
+| 2026-07-04 | 4e8f1b | > | nutrition_total_calories | test/contracts/nutrition_calorie_clamp_test.dart |
 | 2026-07-03 | a1d7c3 | > | coach_log_confirm_routing | test/features/ai_coach/coach_single_confirm_per_log_intent_test.dart |
 | 2026-07-03 | d8a6f2 | > | audit_fixwave_small_fixes | test/contracts/terms_acceptance_writer_to_reader_test.dart |
 | 2026-07-03 | e5c4b9 | > | nutrition_slot_merge | test/contracts/nutrition_slot_merge_test.dart |
