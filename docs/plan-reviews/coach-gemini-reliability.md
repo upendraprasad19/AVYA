@@ -6,7 +6,9 @@ review_rounds: 2
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
+bpass_review: docs/reviews/coach-gemini-reliability-bpass.md
 hermes: accepted
+hermes_report: docs/reviews/coach-gemini-reliability-hermes.md
 ---
 
 # Plan-review record — coach-gemini-reliability (Unit B of the coach-reliability fix-wave)

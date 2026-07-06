@@ -1,3 +1,8 @@
+---
+staged_against: ff82b5c
+verdict: accepted
+---
+
 # B-pass code review — coach-gemini-reliability (HEAD `ff82b5c`)
 
 - **Reviewer role:** fresh, context-blind adversarial B-pass (find bugs, not validate).

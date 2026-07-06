@@ -1,3 +1,8 @@
+---
+staged_against: dd51ae7
+verdict: accepted
+---
+
 # Hermes-pass — coach-gemini-reliability (Unit B)
 
 - **Commit under review:** `dd51ae7` — `fix(coach): revive Flash coach (thinkingBudget:0) + error-surface, food-retry, prompt-safety, calorie clamp`

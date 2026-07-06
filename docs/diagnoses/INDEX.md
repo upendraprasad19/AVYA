@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### plan_review_record_verdict_format (1 bugs)
+- 2026-07-06 c6a9e2 — >
+
 ### gemini_flash_reliability (1 bugs)
 - 2026-07-04 7fbe21 — >
 
@@ -763,6 +766,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-06 | c6a9e2 | > | plan_review_record_verdict_format | > |
 | 2026-07-04 | 7fbe21 | > | gemini_flash_reliability | supabase/functions/_shared/gemini_thinking_config_test.ts |
 | 2026-07-04 | 9c2d4a | > | coach_system_prompt_safety | test/contracts/edge_function_safety_test.dart |
 | 2026-07-04 | 4e8f1b | > | nutrition_total_calories | test/contracts/nutrition_calorie_clamp_test.dart |
