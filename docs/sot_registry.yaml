@@ -4188,11 +4188,11 @@ concepts:
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
-        line_range: 511-538
+        line_range: 509-536
         method: upsertScheduled
         notes: upserts a scheduled workout entry to workoutBox under schedule_ key
       - file: lib/core/services/workout_write_service.dart
-        line_range: 856-883
+        line_range: 854-881
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart

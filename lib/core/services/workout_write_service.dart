@@ -418,18 +418,16 @@ class WorkoutWriteService {
       final sKey = scheduleKey(date);
       final wKey = wlogKey(date);
 
-      // Idempotency re-check UNDER the lock (Unit 1): a double markCompleted
-      // (e.g. the all-logged auto-backstop racing the user's [Complete
-      // workout] tap) must not rewrite completed_at / completed_via and re-
-      // stamp a fresh timestamp over the first completion. If the schedule
-      // row already reads 'completed', return success WITHOUT rewriting —
-      // the first completion stands. (The rest-day / not-completed gate at
-      // the caller filters most calls; this is the belt-and-braces final
-      // check inside the mutex so the two racers agree on one completion.)
-      final existing = box.get(sKey);
-      if (existing is Map && existing['status'] == 'completed') {
-        return WriteResult.ok(wKey);
-      }
+      // NOTE (Unit 1 follow-up, 280c4d): markCompleted stays a pure idempotent
+      // WRITER — it UPSERTS the single wlog_<date> row (no duplicate) and UPDATES
+      // fields on a re-call (e.g. a re-finish with a longer duration — pinned by
+      // mark_completed_test 'second call updates'). Re-completion of an already-
+      // 'completed' day is filtered at the CALLERS (completeWorkoutFromPrompt +
+      // _maybeCompleteScheduledDay both skip a 'completed'/'rest' day), so no
+      // internal early-return is needed. An earlier draft added one to avoid a
+      // tap-vs-backstop double-stamp, but it over-reached and broke the update
+      // contract; the per-date lock + caller gates already make double-completion
+      // a benign rare race that simply re-stamps the same 'completed' state.
 
       // 1. Update schedule entry status='completed' (preserve other fields)
       final sched = box.get(sKey);
