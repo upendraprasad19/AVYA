@@ -52,19 +52,32 @@ void main(List<String> args) {
   final tag = warnOnly ? '[worktree-guard WARN]' : '[worktree-guard]';
   final env = Platform.environment;
 
-  final gitDir = _git(['rev-parse', '--git-dir']);
-  final commonDir = _git(['rev-parse', '--git-common-dir']);
+  // Resolve BOTH dirs as absolute (--path-format=absolute, git 2.31+) so the
+  // primary-vs-linked compare is correct from ANY cwd, including a SUBDIRECTORY
+  // of the primary (where plain `--git-common-dir` returns a relative "../.git").
+  final gitDir = _git(['rev-parse', '--path-format=absolute', '--git-dir']);
+  final commonDir =
+      _git(['rev-parse', '--path-format=absolute', '--git-common-dir']);
   if (gitDir.isEmpty || commonDir.isEmpty) {
-    // Not a git repo / introspection hiccup — fail OPEN (never wedge a commit).
+    // Not a git repo / too-old git / introspection hiccup — fail OPEN (never
+    // wedge a commit on a git problem).
     stdout.writeln('$tag PASS: could not resolve git dirs (fail-open).');
     exit(0);
   }
 
   final result = evaluateWorktreeGuard(
-    isCi: env['CI'] == 'true' || env['GITHUB_ACTIONS'] == 'true',
+    // Only GITHUB_ACTIONS (NOT a generic local `CI=true`, which some dev tools
+    // export) — and CI has no staged diff anyway, so the no-staged exemption
+    // already covers a CI run.
+    isCi: env['GITHUB_ACTIONS'] == 'true',
     allowOverride: env['ALLOW_MAIN_COMMIT'] == '1',
     hasStaged: _git(['diff', '--cached', '--name-only']).isNotEmpty,
-    mergeInProgress: _gitOk(['rev-parse', '-q', '--verify', 'MERGE_HEAD']),
+    // ANY integration op in progress (merge / cherry-pick / revert) is exempt —
+    // these are the legitimate ways to land a change onto main in the primary
+    // worktree, and they each set their own *_HEAD ref during the commit.
+    mergeInProgress: _gitOk(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) ||
+        _gitOk(['rev-parse', '-q', '--verify', 'CHERRY_PICK_HEAD']) ||
+        _gitOk(['rev-parse', '-q', '--verify', 'REVERT_HEAD']),
     isLinkedWorktree: _norm(gitDir) != _norm(commonDir),
   );
 

@@ -29,9 +29,11 @@ session could work directly in the shared main folder and collide.
 - **The shared main folder is INTEGRATION-ONLY:** reads, `git merge <branch>` +
   `git push`, and `/build-apk`. Never `git add`/commit feature work there.
 - **A pre-commit gate blocks it:** `scripts/check_commit_from_worktree.dart` fails a
-  non-merge commit made in the primary worktree (primary = `git rev-parse --git-dir`
-  == `--git-common-dir`). Exempt: merges, linked worktrees, CI, nothing-staged, and
-  `ALLOW_MAIN_COMMIT=1` (rare, deliberate solo). Never `--no-verify` around it.
+  non-integration commit made in the primary worktree (primary = `git rev-parse
+  --git-dir` == `--git-common-dir`, both resolved absolute so it holds from a
+  subdirectory too). Exempt: integration ops into main (merge/cherry-pick/revert),
+  linked worktrees, CI (`GITHUB_ACTIONS`), nothing-staged, and `ALLOW_MAIN_COMMIT=1`
+  (rare, deliberate solo). Never `--no-verify` around it.
 - **A SessionStart warning** (`scripts/discipline_hook.dart`) fires when a session
   starts in the shared main folder.
 - **Even a solo session should use a worktree** — it is always safe, and "is another

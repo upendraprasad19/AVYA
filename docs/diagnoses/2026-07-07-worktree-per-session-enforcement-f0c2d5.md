@@ -48,8 +48,11 @@ cross_account_guard: >
 forbidden_patterns_checked: >
   The gate must FAIL OPEN on any git-introspection hiccup (never wedge a commit
   on a git error); the hook must NEVER break the session (swallow all errors →
-  emit nothing). Merges into main (MERGE_HEAD present) are EXEMPT so integration
-  still works. CI is exempt (no staged diff there anyway). Escape hatch
+  emit nothing). Integration ops into main (merge / cherry-pick / revert — their
+  MERGE_HEAD / CHERRY_PICK_HEAD / REVERT_HEAD ref present) are EXEMPT so
+  integration still works. CI (GITHUB_ACTIONS) is exempt (no staged diff there
+  anyway). Both git dirs are resolved absolute (--path-format=absolute) so the
+  primary-vs-linked compare holds from a subdirectory. Escape hatch
   ALLOW_MAIN_COMMIT=1 for a deliberate solo commit — NOT `--no-verify`.
 proposed_fix: >
   Four layers: (1) pre-commit gate `check_commit_from_worktree.dart` (+ pure
@@ -93,8 +96,9 @@ session could (and did) work directly in the shared folder and collide.
 ## Fix (4 layers, defense in depth)
 1. **Pre-commit gate** `scripts/check_commit_from_worktree.dart` (+ pure
    `scripts/worktree_guard_lib.dart`) — BLOCKS a non-merge commit made in the
-   PRIMARY worktree (detected via `git rev-parse --git-dir` == `--git-common-dir`).
-   Exempt: merges, linked worktrees, CI, nothing-staged, `ALLOW_MAIN_COMMIT=1`.
+   PRIMARY worktree (detected via `git rev-parse --git-dir` == `--git-common-dir`,
+   both absolute). Exempt: integration ops (merge/cherry-pick/revert), linked
+   worktrees, CI (GITHUB_ACTIONS), nothing-staged, `ALLOW_MAIN_COMMIT=1`.
    Fail-open on git errors. Auto-wired via the `check_*.dart` pre-commit loop.
 2. **CLAUDE.md §4.13** invariant + §7 pointer row.
 3. **SessionStart warning** in `scripts/discipline_hook.dart` (the settings.json

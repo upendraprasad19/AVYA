@@ -9,11 +9,15 @@
 //   • PreToolUse(Skill) → about to fire a skill → inject "load discipline first"
 //                         (§4.12 discipline-before-skill). Registered with
 //                         matcher "Skill" in settings.json.
-//   • SessionStart(compact) → context was just compacted → re-inject the hot-set
-//                         so discipline survives the summarization. Registered
-//                         with matcher "compact". ALSO appends a MEMORY.md
-//                         size nudge (→ /consolidate-memory) when the per-session
-//                         memory index has grown past its soft cap.
+//   • SessionStart      → fires on EVERY source (startup/resume/compact; the
+//                         "compact" matcher was REMOVED in settings.json so the
+//                         worktree warning can surface at session start). Emits
+//                         up to three self-guarded pieces: the hot-set
+//                         re-injection (compact source ONLY, so discipline
+//                         survives summarization); a worktree-per-session warning
+//                         when in the shared main worktree (§4.13); and a
+//                         MEMORY.md size nudge (→ /consolidate-memory) when the
+//                         per-session memory index has grown past its soft cap.
 //
 // Injection is ALWAYS via structured JSON hookSpecificOutput.additionalContext —
 // for PreToolUse, plain stdout goes to the debug log only, so the JSON field is
@@ -171,10 +175,16 @@ String _memoryIndexNudge() {
 // (2 incidents 2026-07-07). In a linked worktree (`--git-dir` != `--git-common-dir`)
 // the index is isolated → no warning. Fail-silent: any git/IO error returns '' so
 // the session is never broken (honours the top-of-file NEVER-break contract).
+// Both dirs are resolved ABSOLUTE (--path-format=absolute, git 2.31+) so the
+// compare is correct even when the session cwd is a SUBDIRECTORY of the primary
+// (where plain `--git-common-dir` returns a relative "../.git" that would spuriously
+// differ from the absolute `--git-dir` and suppress the warning).
 String _worktreeWarning() {
   try {
-    final gd = Process.runSync('git', ['rev-parse', '--git-dir']);
-    final cd = Process.runSync('git', ['rev-parse', '--git-common-dir']);
+    final gd =
+        Process.runSync('git', ['rev-parse', '--path-format=absolute', '--git-dir']);
+    final cd = Process.runSync(
+        'git', ['rev-parse', '--path-format=absolute', '--git-common-dir']);
     if (gd.exitCode != 0 || cd.exitCode != 0) return '';
     String norm(String s) => s
         .trim()
