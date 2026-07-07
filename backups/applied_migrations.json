@@ -647,5 +647,13 @@
     "hash": "sha256:87096601f5835d27f12bc72ff1097927b83886844146c54126edc02633716fc3",
     "applier": "claude",
     "slug": "drop_dup_water_logs_user_date_index"
+  },
+  {
+    "migration": "100",
+    "applied_at": "2026-07-07T04:17:07+05:30",
+    "hash": "sha256:febba64cb6095e01d400a7cb652f03d530e1339d078a7df5ab18d4a1b8a07eb7",
+    "applier": "claude",
+    "slug": "rls_initplan_select_wrap",
+    "diagnose": "e6b1a4"
   }
 ]
