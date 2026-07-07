@@ -79,6 +79,14 @@ extension SyncServiceCoach on SyncService {
       final raw = coachBox.get(key);
       if (raw is! Map) continue;
       final entry = Map<String, dynamic>.from(raw);
+      // Unit 1 (coach-completion-tap-card) — kind-tagged LOCAL-ONLY action
+      // rows (the 'completion_prompt' card) are NOT ai_coach_interactions and
+      // must NEVER be pushed to the cloud table — they carry no
+      // user_message / ai_response and would corrupt interaction analytics.
+      // (They're already keyed `completion_prompt_<date>`, not `coach_*`, so
+      // the prefix guard above skips them; this is the belt-and-braces
+      // semantic guard in case a future writer changes the key shape.)
+      if (entry['kind'] != null) continue;
 
       try {
         final rawId = entry['id'];

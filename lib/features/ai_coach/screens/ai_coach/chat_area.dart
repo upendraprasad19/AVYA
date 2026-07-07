@@ -42,6 +42,24 @@ extension _ChatArea on _AiCoachScreenState {
         // Chat messages first
         if (index < messages.length) {
           final message = messages[index];
+
+          // Unit 1 (coach-completion-tap-card) — a completion-prompt row
+          // renders a dedicated two-button coach tile, NOT a chat bubble.
+          if (message.kind == 'completion_prompt' &&
+              message.promptData != null) {
+            final data = message.promptData!;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: CompletionPromptCard(
+                planned: data.planned,
+                logged: data.logged,
+                isBusy: _completingPromptDate == data.date,
+                onComplete: () => _onCompleteWorkoutFromPrompt(data.date),
+                onLogMore: () => _onLogMoreFromPrompt(data.date),
+              ),
+            );
+          }
+
           final time =
               '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
 

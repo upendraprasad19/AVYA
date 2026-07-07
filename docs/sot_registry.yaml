@@ -309,7 +309,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1040, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1068, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -387,7 +387,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1043, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1071, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -2560,7 +2560,7 @@ concepts:
         line_range: 920-960
         method: createCustomTemplate tool
       - file: lib/core/services/workout_write_service.dart
-        line_range: 907-935
+        line_range: 940-968
         method: upsertTemplate
         notes: |
           Canonical writer scaffolded 2026-05-21 / audit A3. Routes
@@ -3704,7 +3704,7 @@ concepts:
           Forwarder retained for back-compat with existing callers
           in main.dart / ai_coach_provider.dart / sync_service.dart.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 316-340
+        line_range: 476-500
         method: SendMessageNotifier._sendMessage
     reader_manifest_complete: true
     readers:
@@ -3777,6 +3777,130 @@ concepts:
       'coaching_notes' is a singleton key in coachBox (NOT a coach_* row).
       AiCoachHistoryProvider must skip it. Cloud id is deterministic
       uuid_v5 from (user_id, created_at) for idempotent upsert.
+
+  - concept: coach_derived_completion
+    domain: ai_coach
+    behavioral_test_path: test/contracts/coach_completion_prompt_test.dart
+    description: |
+      Completion of a scheduled workout day DERIVES from logging — the coach
+      never asserts it (ADR-0012 derive-only). Unit 1 (coach-completion-tap-card,
+      2026-07-06, diagnose 280c4d) REDESIGNED the derivation after the founder
+      bug where ONE coach logSet flipped the whole day to 'completed'. Post-fix
+      completion derives via TWO paths, both routing the canonical
+      WorkoutWriteService.markCompleted:
+        (1) ALL-LOGGED AUTO BACKSTOP — auto-markCompleted(completedVia:'auto')
+            ONLY when plannedCount > 0 AND EVERY planned exercise in
+            schedule_<date>['exercises'] has a log today. Counts exercises[] ONLY
+            (warmup/cooldown/finisher optional). Swap-tolerant: a log under
+            exercise_name OR swapped_from counts. finding-4: an EMPTY exercises[]
+            (plan-less / legacy / restored ad-hoc day) is NOT auto-completed — it
+            falls through to the tap-card (an explicit tap is the only path that
+            completes it), else ONE ad-hoc coach log resurrects the founder bug.
+            Keeps the rest-day + already-completed guards.
+        (2) USER-TAPPED CARD — a genuine partial stays 'planned' and writes a
+            date-scoped completion_prompt_<date> coachBox action row
+            (kind:'completion_prompt', planned_count/logged_count,
+            resolved_at:null; UPDATE-not-INSERT). ChatHistoryNotifier renders it
+            as a two-button tile; [Complete workout] → markCompleted(
+            completedVia:'tap'); [Log more] → resolve + focus composer.
+      The completion_prompt row is LOCAL-ONLY: excluded from the
+      _syncCoachInteractions cloud push (kind != null skip) and from restore, so
+      it can never corrupt ai_coach_interactions. markCompleted gained an
+      idempotent under-lock status re-check so the auto-backstop racing a tap
+      cannot double-stamp completed_at/completed_via.
+    writers:
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        line_range: 381-462
+        method: _maybeCompleteScheduledDay
+        notes: |
+          Derived-completion decision after a coach logSet. All-logged →
+          markCompleted(completedVia:'auto') + resolve any earlier prompt;
+          partial → _writeCompletionPrompt. KEEPS the method + markCompleted
+          call + rest-guard so derive_only_tool_surface_test stays green.
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 399-509
+        method: markCompleted
+        notes: |
+          Canonical completion writer. Unit 1 added completedVia (default 'app';
+          'auto' backstop / 'tap' card) + an under-lock status re-check
+          (returns success WITHOUT rewriting when already 'completed') + stamps
+          completed_via on the schedule + wlog rows.
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 254-337
+        method: completeWorkoutFromPrompt
+        notes: |
+          [Complete workout] re-reads schedule_<date>; if not completed/rest →
+          markCompleted(completedVia:'tap'), then resolveCompletionPrompt stamps
+          resolved_at (also the [Log more] path). Both live on ChatHistoryNotifier.
+          finding-2: passes DateTime.utc(y,m,d) (split from the IST date-key via
+          _utcDateFromIstDateStr) — NOT DateTime.parse(date) (device-local
+          midnight) — so markCompleted's internal istDateStr round-trips to the
+          same schedule_<date> key on any host timezone (no east-of-IST shift).
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 114-175
+        method: build
+        semantic: flag-check
+        fields_read: [kind, resolved_at, date, planned_count, logged_count]
+        notes: |
+          ChatHistoryNotifier.build (declared ~114). The completion_prompt
+          handling is the tight sub-branch: the entry-collection filter ~136-139
+          skips a resolved row (resolved_at != null); the render branch ~158-173
+          emits a kind:'completion_prompt' ChatMessage(promptData) for unresolved
+          ones — never misreads them as user/ai turns (they carry no
+          user_message / ai_response).
+      - file: lib/features/ai_coach/screens/ai_coach/chat_area.dart
+        line_range: 46-61
+        method: _buildChatArea completion-prompt branch
+        semantic: display-only
+        fields_read: [kind, planned, logged]
+        notes: Renders CompletionPromptCard (two WardButton tile) for a completion_prompt message.
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 1050-1095
+        method: _buildWorkoutSnapshotForDate (today_workout_completion)
+        semantic: aggregated
+        fields_read: [exercises, exercise_name, swapped_from]
+        notes: |
+          Emits today_workout_completion:{total_planned,total_logged,all_logged}
+          into today_workout so the coach narrates "3 of 5 down" and never nags a
+          genuinely in-progress day. finding-4: all_logged is FALSE for an empty
+          plan-less day (total_planned == 0) — consistent with the dispatcher no
+          longer vacuously auto-completing a plan-less day.
+      - file: lib/features/home/providers/home_provider.dart
+        line_range: 132-518
+        method: calendarWeekProvider (~132) + todayWorkoutProvider (~518)
+        semantic: flag-check
+        fields_read: [status, completed_at_ms]
+        notes: |
+          Two downstream providers of the derived schedule_<date>.status:
+          calendarWeekProvider (declared ~132, its notifier reads each day's
+          status) + todayWorkoutProvider (declared ~518). Both flip to
+          'completed' on the all-logged auto path OR the user tap, stay
+          'planned' on a genuine partial. (See workout_completion_status.)
+    reader_allow_files:
+      - { file: lib/features/ai_coach/screens/ai_coach/screen.dart, reason: "hosts the completion-prompt handlers (_onCompleteWorkoutFromPrompt / _onLogMoreFromPrompt) that call the notifier + invalidate the workout/home readers — a controller, not a direct row reader" }
+      - { file: lib/features/ai_coach/widgets/completion_prompt_card.dart, reason: "the two-button tile widget — receives planned/logged as constructor args, does not read Hive" }
+      - { file: lib/core/services/sync/sync_coach.dart, reason: "_syncCoachInteractions skips kind-tagged rows (kind != null) so completion_prompt rows are never pushed to ai_coach_interactions — an exclusion guard, not a reader of the concept" }
+    regression_test: test/contracts/coach_completion_prompt_test.dart
+    hive:
+      box: coachBox
+      key_prefix: "completion_prompt_"
+      key_formula: "'completion_prompt_${istDateStr(date)}'"
+    cloud:
+      table: scheduled_workouts
+      columns: [status]
+      # completion_prompt rows are LOCAL-ONLY — no cloud table. The derived
+      # completion reaches scheduled_workouts.status via markCompleted's existing
+      # syncWorkoutData path (see workout_completion_status concept).
+    sync_methods: []
+    class_constraints: |
+      Completion is DERIVED, never AI-asserted (ADR-0012). Auto-completion fires
+      ONLY when ALL planned exercises[] are logged (swap-tolerant); a partial
+      surfaces the tap-card. The completion_prompt row is LOCAL-ONLY (kind-tagged,
+      excluded from push + restore). markCompleted is idempotent (per-date lock +
+      status re-check). The method + markCompleted call + rest-guard are KEPT so
+      derive_only_tool_surface_test stays green.
 
   - concept: coaching_notes
     domain: ai_coach
@@ -4064,11 +4188,11 @@ concepts:
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
-        line_range: 478-505
+        line_range: 511-538
         method: upsertScheduled
         notes: upserts a scheduled workout entry to workoutBox under schedule_ key
       - file: lib/core/services/workout_write_service.dart
-        line_range: 823-850
+        line_range: 856-883
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
@@ -4875,7 +4999,7 @@ concepts:
           Hive-side: routes through WorkoutWriteService.upsertCustomExercise
           (audit 2026-05-21 / A3). Was a direct customBox.put before A3.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 955-980
+        line_range: 988-1013
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,

@@ -48,6 +48,11 @@ void main() async {
   final result = await Process.run(
     'flutter',
     ['test', ...testPaths],
+    // Windows: Dart's Process.run cannot resolve `flutter.bat` without a shell,
+    // so the merge-commit regression walk threw ProcessException ("cannot find
+    // the file specified") whenever the recent-window test list was non-empty.
+    // runInShell is cross-platform safe (cmd.exe on Windows, /bin/sh on Unix).
+    runInShell: true,
   );
   if (result.exitCode != 0) {
     stderr.writeln('Regression catalog: at least one recent regression test FAILED:');

@@ -278,8 +278,13 @@ keys:
     readers: []
     prompt_passthrough: true
     notes: |
-      {type, status, exercises[]}. Bug a13a01 fix — reads LOGGED rows
-      from exlog_*, not the planned schedule entry.
+      {type, status, exercises[], today_workout_completion}. Bug a13a01 fix —
+      reads LOGGED rows from exlog_*, not the planned schedule entry. Unit 1
+      (280c4d, 2026-07-06) added the nested
+      today_workout_completion:{total_planned,total_logged,all_logged} so the
+      coach can narrate "3 of 5 down" and never nag a genuinely in-progress day
+      (counts planned exercises[] only, swap-tolerant). Nested under today_workout
+      — no new top-level contract key.
 
   - key: yesterday_workout
     type: map

@@ -390,11 +390,18 @@ class WorkoutWriteService {
     }
   }
 
+  /// [completedVia] records HOW this day was completed for completion
+  /// telemetry / coach-memory. Values: 'app' (UI finish button, default),
+  /// 'auto' (derived all-logged backstop after a coach logSet), 'tap' (the
+  /// coach completion-prompt card's [Complete workout] button). Stamped on
+  /// both the schedule row and the wlog row so downstream analytics can
+  /// attribute completions. Unit 1 (coach-completion-tap-card).
   Future<WriteResult> markCompleted({
     required DateTime date,
     required String workoutName,
     required int durationSec,
     int? rpe,
+    String completedVia = 'app',
     WidgetRef? ref,
   }) async {
     if (workoutName.trim().isEmpty) {
@@ -411,12 +418,26 @@ class WorkoutWriteService {
       final sKey = scheduleKey(date);
       final wKey = wlogKey(date);
 
+      // Idempotency re-check UNDER the lock (Unit 1): a double markCompleted
+      // (e.g. the all-logged auto-backstop racing the user's [Complete
+      // workout] tap) must not rewrite completed_at / completed_via and re-
+      // stamp a fresh timestamp over the first completion. If the schedule
+      // row already reads 'completed', return success WITHOUT rewriting —
+      // the first completion stands. (The rest-day / not-completed gate at
+      // the caller filters most calls; this is the belt-and-braces final
+      // check inside the mutex so the two racers agree on one completion.)
+      final existing = box.get(sKey);
+      if (existing is Map && existing['status'] == 'completed') {
+        return WriteResult.ok(wKey);
+      }
+
       // 1. Update schedule entry status='completed' (preserve other fields)
       final sched = box.get(sKey);
       if (sched is Map) {
         final m = Map<String, dynamic>.from(sched);
         m['status'] = 'completed';
         m['completed_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+        m['completed_via'] = completedVia;
         await box.put(sKey, m);
       } else {
         // No prior schedule (e.g. AI-coach-only logging) — synthesize one.
@@ -425,6 +446,7 @@ class WorkoutWriteService {
           'status': 'completed',
           'type': 'logged',
           'completed_at_ms': DateTime.now().millisecondsSinceEpoch,
+          'completed_via': completedVia,
         });
       }
 
@@ -454,6 +476,7 @@ class WorkoutWriteService {
         // normalized. completed_at_ms is epoch (already UTC-based) — unchanged.
         'completed_at': completedAt.toUtc().toIso8601String(),
         'completed_at_ms': completedAt.millisecondsSinceEpoch,
+        'completed_via': completedVia,
       };
       await box.put(wKey, wlog);
 

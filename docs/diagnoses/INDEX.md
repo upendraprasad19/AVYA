@@ -9,6 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### rls_initplan_auth_uid_wrap (1 bugs)
 - 2026-07-07 e6b1a4 — >
 
+### coach_derived_completion (1 bugs)
+- 2026-07-06 280c4d — >
+
 ### plan_review_record_verdict_format (1 bugs)
 - 2026-07-06 c6a9e2 — >
 
@@ -770,6 +773,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-07-07 | e6b1a4 | > | rls_initplan_auth_uid_wrap | > |
+| 2026-07-06 | 280c4d | > | coach_derived_completion | test/contracts/coach_completion_prompt_test.dart |
 | 2026-07-06 | c6a9e2 | > | plan_review_record_verdict_format | > |
 | 2026-07-04 | 7fbe21 | > | gemini_flash_reliability | supabase/functions/_shared/gemini_thinking_config_test.ts |
 | 2026-07-04 | 9c2d4a | > | coach_system_prompt_safety | test/contracts/edge_function_safety_test.dart |
