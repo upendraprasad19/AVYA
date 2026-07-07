@@ -99,20 +99,19 @@ void main() async {
         break;
 
       case 'SessionStart':
-        // Matcher "compact" scopes this; re-check defensively so a mis-config
-        // can't make us inject on every startup (where check_alerts runs).
+        // Fires on EVERY SessionStart source (startup/resume/compact) — the
+        // "compact" matcher was removed from settings.json so the worktree
+        // warning can surface at session start. Each piece self-guards on its
+        // own condition (compact re-inject only on compact; worktree warning
+        // only in the shared main worktree; mem nudge only when over cap).
         final source = (input['source'] as String?) ?? '';
+        final parts = <String>[];
+        if (source == 'compact') parts.add(_compactReinject);
+        final wtWarn = _worktreeWarning();
+        if (wtWarn.isNotEmpty) parts.add(wtWarn);
         final memNudge = _memoryIndexNudge();
-        if (source == 'compact') {
-          // Post-compaction: re-inject the hot-set; append the memory-size nudge
-          // if MEMORY.md is over its soft cap.
-          _emit('SessionStart',
-              memNudge.isEmpty ? _compactReinject : '$_compactReinject\n\n$memNudge');
-        } else if (memNudge.isNotEmpty) {
-          // If the matcher is ever broadened to non-compact SessionStart sources,
-          // still surface the memory-size nudge (never the compact re-inject here).
-          _emit('SessionStart', memNudge);
-        }
+        if (memNudge.isNotEmpty) parts.add(memNudge);
+        if (parts.isNotEmpty) _emit('SessionStart', parts.join('\n\n'));
         break;
 
       case 'UserPromptSubmit':
@@ -161,6 +160,39 @@ String _memoryIndexNudge() {
         'over the soft cap. Run /consolidate-memory when convenient: it merges '
         'overlapping feedback/project files + archives shipped batches, without '
         'losing content or breaking a repo citation.';
+  } catch (_) {
+    return '';
+  }
+}
+
+// Worktree-per-session warning (CLAUDE.md §4.13). Emits ONLY when the session is
+// running in the PRIMARY (shared main) worktree — where the git index is shared
+// with any other session in this folder, so concurrent staging mixes files
+// (2 incidents 2026-07-07). In a linked worktree (`--git-dir` != `--git-common-dir`)
+// the index is isolated → no warning. Fail-silent: any git/IO error returns '' so
+// the session is never broken (honours the top-of-file NEVER-break contract).
+String _worktreeWarning() {
+  try {
+    final gd = Process.runSync('git', ['rev-parse', '--git-dir']);
+    final cd = Process.runSync('git', ['rev-parse', '--git-common-dir']);
+    if (gd.exitCode != 0 || cd.exitCode != 0) return '';
+    String norm(String s) => s
+        .trim()
+        .replaceAll('\\', '/')
+        .replaceAll(RegExp(r'/+$'), '')
+        .toLowerCase();
+    final gitDir = norm(gd.stdout as String);
+    final commonDir = norm(cd.stdout as String);
+    if (gitDir.isEmpty || commonDir.isEmpty) return '';
+    if (gitDir != commonDir) return ''; // linked worktree — isolated index, safe.
+    return '⚠️ WORKTREE: you are in the SHARED main worktree. Its git index is shared '
+        'with any other Claude session working in this folder, so committing here can '
+        'MIX your files with another session\'s work (2 incidents 2026-07-07). Before '
+        'ANY edit/commit, create your own worktree:\n'
+        '    sh scripts/new-worktree.sh <slug>   →   cd .claude/worktrees/<slug>\n'
+        'The main worktree is INTEGRATION-ONLY (git merge + push + /build-apk). A '
+        'pre-commit gate (scripts/check_commit_from_worktree.dart) will BLOCK a '
+        'non-merge commit made here. See CLAUDE.md §4.13.';
   } catch (_) {
     return '';
   }

@@ -346,6 +346,27 @@ Two standing invariants, codified after a 4-round pre-implementation review of t
 
 These bind the planning / `/code-review` / `/hermes-pass` / brainstorming flows.
 
+### 4.13 One worktree per session (NON-NEGOTIABLE — codified 2026-07-07 after 2 cross-session mixing incidents)
+
+Multiple Claude sessions running in the SHARED main folder (`C:/Upendra/Claude Code/Fitness App`)
+share ONE git index (`.git/index`). A `git add` from either session stages into that same index, so
+a commit from one can silently MIX in the other's staged files (2 incidents 2026-07-07). A git
+**worktree** has its OWN index, so working in a dedicated worktree makes the mixing impossible.
+
+1. **EVERY session that will edit/stage/commit MUST work in its OWN worktree.** Create it with
+   `sh scripts/new-worktree.sh <slug>` (branches off the latest `main`, copies `.env`), then
+   `cd .claude/worktrees/<slug>` and do ALL edits/commits there.
+2. **The shared main folder is INTEGRATION-ONLY:** reads, `git merge <branch>` + `git push`, and
+   `/build-apk`. Never `git add`/commit feature work there.
+3. **Enforced** by `scripts/check_commit_from_worktree.dart` (pre-commit): a non-merge commit made in
+   the PRIMARY worktree is BLOCKED (primary detected via `git rev-parse --git-dir` == `--git-common-dir`).
+   Exempt: merges (MERGE_HEAD present), linked worktrees, CI, nothing-staged, and the documented
+   `ALLOW_MAIN_COMMIT=1` escape hatch. Never `--no-verify` around it.
+4. **SessionStart warning:** `scripts/discipline_hook.dart` warns whenever a session starts in the
+   shared main worktree.
+5. Even a solo session should use a worktree — it is always safe, and "is another session active?" is
+   not reliably knowable. Ref: `memory/feedback_worktree_per_session.md`, diagnose `f0c2d5`.
+
 ### 4.9 Common process pitfalls
 
 | Pitfall | How to avoid | Source |
@@ -464,3 +485,4 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Subagent brief preamble | `docs/agent_brief_preamble.md` |
 | End-of-batch maintenance skill | `/update-docs` (`.claude/skills/update-docs/SKILL.md`) |
 | Discipline harness hooks (prompt-time §4 reminders + euphemism gate + MEMORY.md size nudge) | `scripts/discipline_hook.dart` (UserPromptSubmit / PreToolUse:Skill / SessionStart:compact → `.claude/settings.json`; SessionStart:compact also nudges `/consolidate-memory` when the loaded MEMORY.md index exceeds its soft cap — user-level skill `~/.claude/skills/consolidate-memory/`) + `scripts/check_no_deferral_euphemism.dart` (pre-commit gate, §4.2). Audit retrospectives: `memory/project_discipline_harness_hooks_2026_06_27.md`, `memory/project_memory_consolidation_2026_07_04.md`. |
+| Worktree-per-session enforcement (one worktree per session; shared main folder = integration-only; prevents cross-session git-index file-mixing) | **§4.13.** Pre-commit gate `scripts/check_commit_from_worktree.dart` (+ pure `scripts/worktree_guard_lib.dart`, test `test/contracts/check_commit_from_worktree_test.dart`) blocks non-merge commits in the primary worktree; helper `scripts/new-worktree.sh <slug>`; `scripts/discipline_hook.dart` SessionStart warning. Diagnose `f0c2d5`; `memory/feedback_worktree_per_session.md`. |

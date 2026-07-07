@@ -2,6 +2,13 @@
 
 End-to-end checklist for a brand-new checkout of `icanbefitter-app`. Roughly 10 minutes assuming Flutter SDK is already installed. Secret-placement details are centralised in [`docs/operations/SECRET_INVENTORY.md`](../operations/SECRET_INVENTORY.md); this doc only references them.
 
+> ⚠️ **One worktree per session (CLAUDE.md §4.13).** The main clone folder shares a single git
+> index — two Claude/dev sessions committing there can MIX each other's files (2 incidents
+> 2026-07-07). So the main folder is **integration-only** (reads, `git merge` + `git push`,
+> `/build-apk`). Do ALL feature editing/committing in your OWN worktree:
+> `sh scripts/new-worktree.sh <slug>` → `cd .claude/worktrees/<slug>`. A pre-commit gate
+> (`scripts/check_commit_from_worktree.dart`) blocks a non-merge commit made in the main folder.
+
 ---
 
 ## 1. Prerequisites
