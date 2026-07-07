@@ -32,6 +32,7 @@ import '../../profile/providers/profile_provider.dart'
 import '../../train/providers/train_provider.dart'
     show currentPlanProvider, templatesProvider, workoutStatsProvider;
 import '../../train/repositories/workout_repository.dart';
+import '../providers/ai_coach_provider.dart' show chatHistoryProvider;
 import '../models/tool_intent.dart';
 import 'hotel_workout_planner.dart';
 import 'injury_swap_planner.dart';
@@ -169,6 +170,22 @@ class ToolDispatcher {
       } else {
         _invalidateWorkoutProviders(ref);
         unawaited(SyncService.instance.syncWorkoutData());
+        // Unit 1 (coach-completion-tap-card) — a coach `logSet` on a scheduled
+        // day can WRITE a `completion_prompt_<date>` coachBox row (genuine
+        // partial) or RESOLVE an earlier one (all-logged auto-backstop) inside
+        // `_maybeCompleteScheduledDay`. That row is written at APPLY-time, AFTER
+        // the coach's reply already rendered — so unless we rebuild the chat
+        // thread now, the two-button prompt tile stays invisible until the next
+        // message. Rebuild `chatHistoryProvider` from Hive so the card surfaces
+        // (or a superseded/resolved one disappears) immediately.
+        if (intent.type == 'log_set') {
+          try {
+            ref.read(chatHistoryProvider.notifier).refreshFromHive();
+          } catch (e, st) {
+            debugPrint(
+                '[tool_dispatcher] refresh chatHistoryProvider failed: $e\n$st');
+          }
+        }
       }
       // switch_goal also mutates the profile (primary_goal) — refresh the
       // profile readers so MY TARGETS card, header, and any goal-derived
@@ -285,10 +302,21 @@ class ToolDispatcher {
     // with sets[length=N] yields ONE deterministic exlog row, replacing the
     // old per-set logSetWithPrRescan loop that produced N duplicate rows
     // (observation #16 root cause).
+    // Unit 1 — the IST date-key this log belongs to. When the model omits a
+    // date, it's today (IST). Every downstream writer/reader
+    // (WorkoutWriteService.logExercise / markCompleted, exlogKey,
+    // _maybeCompleteScheduledDay's `schedule_<dateStr>` read) re-applies
+    // `istDateStr` (toUtc + 5:30), so we MUST hand them a DateTime that
+    // round-trips to THIS SAME `schedDateStr` on any host timezone. A local
+    // `DateTime.tryParse(dateRaw)` (device-local midnight) does NOT — east of
+    // UTC+5:30 it maps to the previous UTC day and +5:30 lands on the wrong
+    // key, so the write and the schedule-read disagree (the Test #11.1
+    // double-shift trap). `DateTime.utc(y, m, d)` does. Derive `date` FROM
+    // `schedDateStr` so all seams agree on one key.
     final dateRaw = intent.payload['date'] as String?;
-    final date = (dateRaw == null || dateRaw.isEmpty)
-        ? DateTime.now()
-        : (DateTime.tryParse(dateRaw) ?? DateTime.now());
+    final schedDateStr =
+        (dateRaw == null || dateRaw.isEmpty) ? _todayDateString() : dateRaw;
+    final date = _utcDateFromIstDateStr(schedDateStr) ?? DateTime.now();
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final exerciseSets = List<ExerciseSet>.generate(
       sets,
@@ -315,18 +343,41 @@ class ToolDispatcher {
     // completion is no longer AI-assertable; it is DERIVED from raw logging).
     // If this date has a scheduled workout that isn't already complete, mark it
     // done via the canonical writer (same one the UI finish button uses).
-    final schedDateStr =
-        (dateRaw == null || dateRaw.isEmpty) ? _todayDateString() : dateRaw;
+    // `date` (UTC midnight) + `schedDateStr` (the IST key) are aligned above.
     await _maybeCompleteScheduledDay(date, schedDateStr);
 
     return ToolExecutionResult.success(
         data: {'log_id': result.logKey, 'exercise_name': name});
   }
 
-  /// Derived workout completion — see `_executeLogSet`. Idempotent: no-op when
-  /// the date has no schedule or is already `completed`. Reuses the canonical
-  /// `WorkoutWriteService.markCompleted` so streak / deployment / rank advance
-  /// exactly as the UI finish button does. Never throws into the dispatch flow.
+  /// Derived workout completion (Unit 1 — coach-completion-tap-card).
+  ///
+  /// After a coach `logSet`, a single logged exercise NO LONGER flips the
+  /// whole scheduled day to `completed` (the founder-reported bug that
+  /// inflated streak / rank / deployment). Instead:
+  ///
+  ///  • **All-logged backstop:** if EVERY planned exercise in
+  ///    `schedule_<date>['exercises']` now has a log today, auto-complete via
+  ///    the canonical `WorkoutWriteService.markCompleted` (`completed_via:
+  ///    'auto'`) — a fully coach-logged workout still auto-completes, so there
+  ///    is no lost-streak footgun. Counts `exercises[]` ONLY (warmup /
+  ///    cooldown / finisher are optional, mirroring the app's Finish).
+  ///    Swap-tolerant: an exercise with `swapped_from` counts if EITHER its
+  ///    current name OR the swapped-from name has a log. An empty `exercises`
+  ///    list (a plan-less / legacy / restored ad-hoc day, plannedCount == 0)
+  ///    is NOT auto-completed (finding-4) — with nothing planned there is no
+  ///    "done" to derive; it falls through to the tap-card so only an explicit
+  ///    [Complete workout] tap can finish it.
+  ///  • **Partial → tap-card:** if NOT all-logged (a genuine partial), write /
+  ///    update the completion-prompt row so the chat surfaces a
+  ///    [Log more] · [Complete workout] card. The user's explicit tap is the
+  ///    reliable fallback whenever a name mismatch / post-hoc edit makes the
+  ///    auto-check miss.
+  ///
+  /// Idempotent: no-op when the date has no schedule, is already `completed`,
+  /// or is a REST day. Never throws into the dispatch flow. The KEPT method +
+  /// `markCompleted` call + rest-guard keep `derive_only_tool_surface_test`
+  /// green.
   Future<void> _maybeCompleteScheduledDay(DateTime date, String dateStr) async {
     try {
       final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
@@ -335,12 +386,47 @@ class ToolDispatcher {
       // so an ad-hoc coach-logged set shouldn't flip the rest day into a
       // "completed workout" (which would feed streak / deployment wrongly).
       if (raw['type'] == 'rest') return;
+
+      final planned = ((raw['exercises'] as List?) ?? const [])
+          .whereType<Map>()
+          .toList();
+      final plannedCount = planned.length;
+      final loggedCount = planned.where((ex) => _exerciseLogged(date, ex)).length;
+      // Unit 1 / finding-4 — require plannedCount > 0. An EMPTY exercises[] (a
+      // legacy / restored / ad-hoc non-rest schedule row that carries no
+      // planned exercises) must NOT vacuously auto-complete off ONE ad-hoc
+      // coach log — that resurrects the founder bug (a single logSet flipping
+      // the whole day, inflating streak / rank / deployment). With no planned
+      // exercises there is nothing to derive "done" from, so fall through to
+      // the tap-card: the user's explicit [Complete workout] tap is the ONLY
+      // path that completes a plan-less day.
+      final allLogged = plannedCount > 0 && loggedCount >= plannedCount;
+
       final workoutName = (raw['workout_name'] as String?) ?? 'Workout';
-      await WorkoutWriteService.instance.markCompleted(
-        date: date,
-        workoutName: workoutName,
-        durationSec: 0,
-      );
+      if (allLogged) {
+        // Backstop: a full coach-logged workout still auto-completes.
+        await WorkoutWriteService.instance.markCompleted(
+          date: date,
+          workoutName: workoutName,
+          durationSec: 0,
+          completedVia: 'auto',
+        );
+        // The day is done — resolve any earlier partial-state prompt card so
+        // it stops rendering (a coach logSet that completed the last exercise
+        // supersedes the "log more?" ask written by the previous partial log).
+        await _resolveCompletionPromptIfPresent(dateStr);
+      } else {
+        // Genuine partial (or a plan-less day, plannedCount == 0) — surface the
+        // tap-to-complete card instead of silently flipping the day. One
+        // prompt/day (date-scoped key, UPDATE-not-INSERT so the counts
+        // supersede on the next log). For plannedCount == 0 the card's progress
+        // line is suppressed (CompletionPromptCard renders none when planned==0).
+        await _writeCompletionPrompt(
+          dateStr: dateStr,
+          plannedCount: plannedCount,
+          loggedCount: loggedCount,
+        );
+      }
     } catch (e) {
       // Swallow — derived completion is best-effort; the log itself succeeded.
       debugPrint('[ToolDispatcher] derived completion failed: $e');
@@ -349,6 +435,78 @@ class ToolDispatcher {
           message: e.toString()));
     }
   }
+
+  /// True when the planned exercise [ex] has an exercise-log row for [date].
+  /// Swap-tolerant: a swapped exercise counts as logged if EITHER its current
+  /// `exercise_name` OR its `swapped_from` name has a log (the user may have
+  /// logged under either during the swap). Uses the canonical
+  /// `WorkoutWriteService.exlogKey` (the same deterministic key `logExercise`
+  /// writes under) so the check reads exactly what a coach logSet wrote.
+  bool _exerciseLogged(DateTime date, Map ex) {
+    final box = HiveService.instance.workoutBox;
+    bool hasLog(String? name) {
+      if (name == null || name.trim().isEmpty) return false;
+      return box.get(WorkoutWriteService.exlogKey(date, name)) != null;
+    }
+
+    final name = ex['exercise_name'] as String?;
+    final swappedFrom = ex['swapped_from'] as String?;
+    return hasLog(name) || hasLog(swappedFrom);
+  }
+
+  /// Writes (or updates — supersede on next log) the coach completion-prompt
+  /// row under the DATE-SCOPED key `completion_prompt_<dateStr>` in coachBox.
+  /// This is a LOCAL-ONLY action row (`kind:'completion_prompt'`) — it is NOT
+  /// an `ai_coach_interaction` and is excluded from cloud push + restore (see
+  /// `sync_coach.dart`). Rendered by `ChatHistoryNotifier` as a two-button
+  /// tile. `resolved_at:null` on write; a [Complete workout] / [Log more] tap
+  /// stamps `resolved_at` so it's filtered out on the next read.
+  Future<void> _writeCompletionPrompt({
+    required String dateStr,
+    required int plannedCount,
+    required int loggedCount,
+  }) async {
+    final box = HiveService.instance.coachBox;
+    final key = 'completion_prompt_$dateStr';
+    final existing = box.get(key);
+    // Preserve the original created_at across supersede updates so the card
+    // keeps its position in the chat scroll; refresh only the counts.
+    final createdAt = (existing is Map && existing['created_at'] is String)
+        ? existing['created_at'] as String
+        : DateTime.now().toIso8601String();
+    await box.put(key, {
+      'kind': 'completion_prompt',
+      'date': dateStr,
+      'planned_count': plannedCount,
+      'logged_count': loggedCount,
+      'created_at': createdAt,
+      'resolved_at': null,
+    });
+  }
+
+  /// Unit 1 — stamps `resolved_at` on the completion-prompt row for [dateStr]
+  /// if one exists (idempotent no-op otherwise). Called when the day
+  /// auto-completes via the backstop so the earlier "log more?" card, written
+  /// by a previous partial log, stops rendering.
+  Future<void> _resolveCompletionPromptIfPresent(String dateStr) async {
+    final box = HiveService.instance.coachBox;
+    final key = 'completion_prompt_$dateStr';
+    final raw = box.get(key);
+    if (raw is! Map || raw['resolved_at'] != null) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['resolved_at'] = DateTime.now().toIso8601String();
+    await box.put(key, entry);
+  }
+
+  /// Unit 1 — test seam for the derived-completion decision. Runs the exact
+  /// same logic `_executeLogSet` invokes after a coach `logSet` (all-logged
+  /// backstop OR partial → completion-prompt row), without needing a live Ref
+  /// / Supabase sync. [date] MUST be the same DateTime passed to `logExercise`
+  /// so the `exlogKey`s align. Behavioral proof of the founder's bug fix.
+  @visibleForTesting
+  Future<void> maybeCompleteScheduledDayForTest(
+          DateTime date, String dateStr) =>
+      _maybeCompleteScheduledDay(date, dateStr);
 
   Future<ToolExecutionResult> _executeCreateCustomExercise(
       ToolIntent intent) async {
@@ -1318,6 +1476,22 @@ class ToolDispatcher {
   }
 
   String _todayDateString() => istTodayStr();
+
+  /// Unit 1 — parses an IST `yyyy-MM-dd` date-key into a UTC-midnight DateTime
+  /// that every WorkoutWriteService seam's internal `istDateStr` (toUtc + 5:30)
+  /// round-trips back to the SAME calendar day on ANY host timezone. Returns
+  /// null on a malformed string. Mirrors `ai_snapshot_builder`'s split so the
+  /// log write, exlog read, completion write, and schedule read all key off one
+  /// identical `schedule_<dateStr>` — no east-of-IST double-shift drift.
+  DateTime? _utcDateFromIstDateStr(String dateStr) {
+    final parts = dateStr.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime.utc(y, m, d);
+  }
 
   String? _resolveExerciseName(String exerciseId) {
     final libBox = HiveService.instance.exerciseBox;

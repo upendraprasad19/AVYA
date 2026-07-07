@@ -11,6 +11,8 @@ import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import '../repositories/ai_coach_repository.dart';
@@ -18,6 +20,27 @@ import 'pending_tool_intents_provider.dart';
 import '../models/tool_intent.dart';
 
 // ── Chat Message Model ───────────────────────────────────────────
+
+/// Unit 1 (coach-completion-tap-card) — typed payload for a
+/// `completion_prompt` chat row. Carries the counts the card renders ("3 of
+/// 5 down") and the date it acts on. Read from the coachBox
+/// `completion_prompt_<date>` row by [ChatHistoryNotifier].
+class CompletionPromptData {
+  /// IST date-string (`yyyy-MM-dd`) of the scheduled day this card completes.
+  final String date;
+
+  /// Total planned exercises for the day (from `schedule_<date>['exercises']`).
+  final int planned;
+
+  /// How many planned exercises already have a log today.
+  final int logged;
+
+  const CompletionPromptData({
+    required this.date,
+    required this.planned,
+    required this.logged,
+  });
+}
 
 class ChatMessage {
   final String text;
@@ -28,6 +51,17 @@ class ChatMessage {
   final String? mode; // 'quick' or 'deep' for reasoning tab
   final String? mediaUrl; // URL of attached photo (Supabase Storage)
   final String? mediaType; // 'image'
+
+  /// Unit 1 (coach-completion-tap-card) — non-null tags this row as a
+  /// special coach action tile rather than a plain user/AI turn. Currently
+  /// only 'completion_prompt' (the two-button early-finish card). When set,
+  /// [promptData] carries the render data and the chat area switches to the
+  /// completion-prompt tile instead of a [ChatBubble].
+  final String? kind;
+
+  /// Unit 1 — render data for a `kind == 'completion_prompt'` row. Null for
+  /// every ordinary chat message.
+  final CompletionPromptData? promptData;
   /// Bug #19 — Identifies the original user message that produced this error
   /// bubble. When set, the chat UI shows a Retry button that re-sends this
   /// text via [SendMessageNotifier.send].
@@ -55,6 +89,8 @@ class ChatMessage {
     this.retryUserMessage,
     this.coachKey,
     this.mediaFailed = false,
+    this.kind,
+    this.promptData,
   });
 }
 
@@ -90,6 +126,17 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
       // The coaching_notes singleton key is not a chat row.
       if (key.toString() == 'coaching_notes') continue;
       final interaction = Map<String, dynamic>.from(raw);
+      // Unit 1 (coach-completion-tap-card) — kind-tagged action rows
+      // (currently only 'completion_prompt') are NOT ordinary user/AI turns.
+      // They carry no user_message / ai_response and MUST NOT be rendered as
+      // a chat bubble. A collapsed 'completion_prompt' row is still an entry
+      // so it can sort into place — but it's rendered by the dedicated branch
+      // in the render loop below. Skip a RESOLVED prompt entirely (the user
+      // already tapped [Log more] / [Complete workout]).
+      final kind = interaction['kind'] as String?;
+      if (kind == 'completion_prompt' && interaction['resolved_at'] != null) {
+        continue;
+      }
       final createdAt = interaction['created_at'] as String? ?? '';
       entries.add(_CoachEntry(
         key: key.toString(),
@@ -102,6 +149,29 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
 
     for (final entry in entries) {
       final interaction = entry.data;
+
+      // Unit 1 (coach-completion-tap-card) — an UNRESOLVED completion-prompt
+      // row (resolved rows were already filtered out above) renders as a
+      // dedicated two-button coach tile, NOT as a user/AI bubble. Emit a
+      // typed ChatMessage(kind, promptData) and continue — never let its
+      // (absent) user_message / ai_response fall through to the turn parser.
+      if (interaction['kind'] == 'completion_prompt') {
+        final promptCreatedAt =
+            DateTime.tryParse(entry.createdAt) ?? DateTime.now();
+        messages.add(ChatMessage(
+          text: '',
+          isUser: false,
+          timestamp: promptCreatedAt,
+          kind: 'completion_prompt',
+          promptData: CompletionPromptData(
+            date: (interaction['date'] as String?) ?? '',
+            planned: (interaction['planned_count'] as num?)?.toInt() ?? 0,
+            logged: (interaction['logged_count'] as num?)?.toInt() ?? 0,
+          ),
+        ));
+        continue;
+      }
+
       final userMsg = interaction['user_message'] as String?;
       final aiResponse = interaction['ai_response'] as String?;
       final mediaUrl = interaction['media_url'] as String?;
@@ -180,6 +250,107 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   void refreshFromHive() {
     state = build();
   }
+
+  /// Unit 1 (coach-completion-tap-card) — stamps `resolved_at` on the
+  /// completion-prompt row for [date] so it stops rendering (the [Log more]
+  /// handler + the successful [Complete workout] handler both call this),
+  /// then rebuilds the thread. Idempotent: no-op if the row is missing.
+  Future<void> resolveCompletionPrompt(String date) async {
+    final box = HiveService.instance.coachBox;
+    final key = 'completion_prompt_$date';
+    final raw = box.get(key);
+    if (raw is! Map) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['resolved_at'] = DateTime.now().toIso8601String();
+    await box.put(key, entry);
+    refreshFromHive();
+  }
+
+  /// Unit 1 — the [Complete workout] handler. Re-reads `schedule_<date>`;
+  /// if it isn't already `completed` and isn't a REST day, marks it complete
+  /// via the canonical [WorkoutWriteService.markCompleted] (`completed_via:
+  /// 'tap'`, user-initiated). Then resolves the prompt row. Returns the
+  /// [WriteResult] so the caller can surface a snackbar. Provider
+  /// invalidation (workout / home) is the caller's job (it holds the
+  /// WidgetRef). Never throws — a failure returns a failed WriteResult and
+  /// leaves the card in place for a retry.
+  Future<WriteResult> completeWorkoutFromPrompt(String date) async {
+    try {
+      // Unit 1 — `date` is an IST `yyyy-MM-dd` string. `markCompleted` re-applies
+      // `istDateStr` (toUtc + 5:30) internally to build its schedule/wlog keys,
+      // so we must hand it a DateTime that round-trips to the SAME calendar day
+      // regardless of host timezone. `DateTime.parse(date)` yields device-LOCAL
+      // midnight — for a user east of UTC+5:30 (e.g. UTC+13) that local midnight
+      // maps to the PREVIOUS UTC day, and +5:30 can land on the wrong date-key
+      // (the Test #11.1 double-shift trap). `DateTime.utc(y, m, d)` (UTC
+      // midnight) round-trips correctly because +5:30 keeps it on the same day.
+      // Mirrors `ai_snapshot_builder._plannedExerciseHasLog`. Computed FIRST so
+      // the SAME UTC-midnight instant drives BOTH the schedule read and the
+      // completion write (single date-key SoT).
+      final completeDate = _utcDateFromIstDateStr(date);
+      if (completeDate == null) {
+        return WriteResult.fail('Malformed date "$date".');
+      }
+      // Re-read the scheduled day through the canonical read service (repository
+      // pattern, root CLAUDE.md rule 4 — a provider never touches workoutBox
+      // directly). `getScheduleForDate` keys off `istDateStr(completeDate)`, the
+      // same IST date-key the raw `schedule_<date>` row lives under, so this is
+      // a byte-for-byte equivalent read of the same row.
+      final raw = ref
+          .read(workoutScheduleReadServiceProvider)
+          .getScheduleForDate(completeDate);
+      if (raw == null) {
+        // No schedule to complete — just resolve the stale card.
+        await resolveCompletionPrompt(date);
+        return WriteResult.fail('No scheduled workout for $date.');
+      }
+      if (raw['status'] == 'completed' || raw['type'] == 'rest') {
+        // Already done (or a rest day) — resolve the card, report success.
+        await resolveCompletionPrompt(date);
+        return WriteResult.ok(WorkoutWriteService.scheduleKey(completeDate));
+      }
+      final workoutName = (raw['workout_name'] as String?) ?? 'Workout';
+      final result = await WorkoutWriteService.instance.markCompleted(
+        date: completeDate,
+        workoutName: workoutName,
+        durationSec: 0,
+        completedVia: 'tap',
+      );
+      if (result.success) {
+        await resolveCompletionPrompt(date);
+      }
+      return result;
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'chat_history_complete_workout_from_prompt'));
+      return WriteResult.fail(e.toString());
+    }
+  }
+
+  /// Unit 1 — parses an IST `yyyy-MM-dd` date-key into a UTC-midnight DateTime
+  /// that `WorkoutWriteService.markCompleted`'s internal `istDateStr` (toUtc +
+  /// 5:30) round-trips back to the SAME calendar day on ANY host timezone.
+  /// Returns null on a malformed string. Mirrors the split used in
+  /// `ai_snapshot_builder._plannedExerciseHasLog` so completion + the
+  /// coach-snapshot completion-check agree on the date-key.
+  static DateTime? _utcDateFromIstDateStr(String dateStr) {
+    final parts = dateStr.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime.utc(y, m, d);
+  }
+
+  /// Test seam for the finding-2 timezone fix. Exposes the exact date-key
+  /// conversion `completeWorkoutFromPrompt` feeds to `markCompleted`, so a
+  /// host-TZ-independent test can prove it round-trips through `istDateStr`
+  /// back to the SAME `yyyy-MM-dd` (which `DateTime.parse(dateStr)` — device
+  /// LOCAL midnight — does NOT east of UTC+5:30).
+  @visibleForTesting
+  static DateTime? utcDateFromIstDateStrForTest(String dateStr) =>
+      _utcDateFromIstDateStr(dateStr);
 
   void addMessage(ChatMessage message) {
     state = [...state, message];

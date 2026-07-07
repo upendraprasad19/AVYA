@@ -110,6 +110,41 @@ Bad / watch:
 Active. Shipped 2026-05-31. `ai-proxy` redeployed (v68) byte-identical via the
 host-shell flow; smoke 401 (reachable + gated). Account/platform blast radius.
 
+## Amendment — Unit 1 completion tap-card (2026-07-06, diagnose 280c4d)
+
+The derive-only decision above (completion *follows from logging*, never
+AI-asserted) is UNCHANGED and reaffirmed. This amendment refines HOW the
+derivation fires, after the founder found that the original
+`_maybeCompleteScheduledDay` auto-completed the WHOLE scheduled day on the FIRST
+coach `logSet` — no "all exercises logged" check — inflating streak / rank /
+deployment (a single set earned a full day's completion credit).
+
+Post-fix, completion still derives from logging but only in two honest cases:
+
+1. **All-logged auto-backstop** — the day auto-completes via the same canonical
+   `WorkoutWriteService.markCompleted` (`completed_via:'auto'`) ONLY when
+   `plannedCount > 0` AND EVERY planned exercise in `schedule_<date>['exercises']`
+   has a log today (swap-tolerant via `swapped_from`; warmup/cooldown/finisher
+   optional). An empty `exercises[]` plan-less / legacy / restored ad-hoc day is
+   **NOT** auto-completed (finding-4) — with nothing planned there is no "done" to
+   derive, so it falls through to the tap-card and completes only on an explicit
+   tap (auto-completing it off ONE ad-hoc coach log would resurrect the founder
+   bug). A fully coach-logged workout still auto-completes → no lost-streak
+   footgun.
+2. **User-tapped card** — a genuine partial STAYS `planned` and the chat surfaces
+   a two-button completion-prompt tile ("Recruit — log more exercises? [Log more]
+   · [Complete workout]"); the tap derives completion via `markCompleted`
+   (`completed_via:'tap'`). The tap is the reliable fallback whenever a name
+   mismatch / post-hoc edit makes the auto-check miss.
+
+This is still **not** the model asserting completion — both paths route the
+canonical writer off REAL logs / an explicit user action. The method +
+`markCompleted` call + rest-guard are KEPT (so `derive_only_tool_surface_test`
+stays green). The completion-prompt row is a LOCAL-ONLY coachBox action row
+(`kind:'completion_prompt'`, excluded from cloud push + restore — never an
+`ai_coach_interaction`). Client-only; no `ai-proxy` change. Pinned by
+`test/contracts/coach_completion_prompt_test.dart`. See diagnose 280c4d.
+
 ## See also
 
 - `supabase/functions/_shared/tools/registry.ts` (the 20-tool chokepoint)

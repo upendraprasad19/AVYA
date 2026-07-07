@@ -14,6 +14,10 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart'
+    show calendarWeekProvider, streakProvider, todayWorkoutProvider;
+import 'package:icanbefitter/features/train/providers/train_provider.dart'
+    show currentPlanProvider, workoutStatsProvider;
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -21,6 +25,7 @@ import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../providers/ai_coach_provider.dart';
 import '../../widgets/chat_bubble.dart';
+import '../../widgets/completion_prompt_card.dart';
 import '../../widgets/prompt_chip.dart';
 import '../../widgets/log_confirm_card.dart';
 import '../../widgets/workout_log_confirm_card.dart';
@@ -108,6 +113,12 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   final _inputFocusNode = FocusNode();
   bool _isRecording = false;
   bool _localSending = false; // Synchronous debounce flag to prevent double-tap
+
+  // Unit 1 (coach-completion-tap-card) — the date-string of the completion
+  // prompt whose [Complete workout] tap is currently in flight, or null. Used
+  // to disable both buttons + show a spinner while markCompleted runs so a
+  // double-tap can't fire two completions.
+  String? _completingPromptDate;
 
   // F12 · Push-to-talk recording UX state (Test #9 batch)
   Duration _recordingElapsed = Duration.zero;
@@ -287,6 +298,84 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
       if (mounted) setState(() => _localSending = false);
     });
     _scrollToBottom();
+  }
+
+  // ── Unit 1 (coach-completion-tap-card) — completion-prompt handlers ──
+
+  /// [Complete workout] — re-reads `schedule_<date>`; if still not
+  /// completed / rest, marks the day complete via the canonical writer
+  /// (`completed_via:'tap'`), resolves the prompt row, then invalidates the
+  /// workout + home readers so the calendar / today's-workout / streak / plan
+  /// UI reflect the completion immediately.
+  Future<void> _onCompleteWorkoutFromPrompt(String date) async {
+    if (_completingPromptDate != null) return; // one in-flight completion
+    setState(() => _completingPromptDate = date);
+    try {
+      final result = await ref
+          .read(chatHistoryProvider.notifier)
+          .completeWorkoutFromPrompt(date);
+      if (!mounted) return;
+      if (result.success) {
+        // Refresh every reader of schedule_<date>.status. Unrolled + each
+        // independently guarded (Riverpod providers are a sealed family with
+        // no shared upper bound `invalidate` accepts in a list literal —
+        // mirrors ToolDispatcher._invalidateWorkoutProviders).
+        try {
+          ref.invalidate(calendarWeekProvider);
+        } catch (e, st) {
+          debugPrint('[ai_coach] invalidate calendarWeekProvider failed: $e\n$st');
+        }
+        try {
+          ref.invalidate(todayWorkoutProvider);
+        } catch (e, st) {
+          debugPrint('[ai_coach] invalidate todayWorkoutProvider failed: $e\n$st');
+        }
+        try {
+          ref.invalidate(streakProvider);
+        } catch (e, st) {
+          debugPrint('[ai_coach] invalidate streakProvider failed: $e\n$st');
+        }
+        try {
+          ref.invalidate(currentPlanProvider);
+        } catch (e, st) {
+          debugPrint('[ai_coach] invalidate currentPlanProvider failed: $e\n$st');
+        }
+        try {
+          ref.invalidate(workoutStatsProvider);
+        } catch (e, st) {
+          debugPrint('[ai_coach] invalidate workoutStatsProvider failed: $e\n$st');
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Workout marked complete.',
+              style: AppTypography.body.copyWith(color: AppColors.ok),
+            ),
+            backgroundColor: AppColors.card,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Couldn't complete the workout — try again.",
+              style: AppTypography.body.copyWith(color: AppColors.bad),
+            ),
+            backgroundColor: AppColors.card,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _completingPromptDate = null);
+    }
+  }
+
+  /// [Log more] — resolves the prompt row (stops rendering the card) and
+  /// returns focus to the composer so the user can keep logging.
+  Future<void> _onLogMoreFromPrompt(String date) async {
+    await ref.read(chatHistoryProvider.notifier).resolveCompletionPrompt(date);
+    if (!mounted) return;
+    _inputFocusNode.requestFocus();
   }
 
   @override
