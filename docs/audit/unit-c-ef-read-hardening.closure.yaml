@@ -1,0 +1,90 @@
+# Closure ledger — Unit C: Edge-Function unchecked-read hardening (12 sites)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: unit-c-ef-read-hardening (uncommitted at authoring —
+# commit/merge/deploy under explicit founder go 2026-07-08). Diagnose a7e2c4.
+# Class §2.24 (read coerces failure → silently inert). ×4 context-blind plan review
+# converged; each finding is a per-site error-capture fix, all in one commit.
+
+batch: unit-c-ef-read-hardening
+diagnose: docs/diagnoses/2026-07-08-unit-c-ef-read-hardening-a7e2c4.md
+plan_review_record: docs/plan-reviews/unit-c-ef-read-hardening.md
+bpass_review: docs/reviews/unit-c-ef-read-hardening-bpass.md
+total_findings: 12
+closed_count: 12
+
+_verification_test: &vtest supabase/functions/_shared/tools/__tests__/unit_c_read_hardening_test.ts
+_commit: &wip "unit-c-ef-read-hardening (uncommitted)"
+
+findings:
+  - id: C1
+    title: "getProgressSummary.ts:49 Promise.all ×5 — coach reports false 0 workouts on DB error"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "captures 5 errors + throws; tool-loop narrates honestly (never a false zero)."
+  - id: C2
+    title: "workout-window-closing:162 batch users/templates — lost personalization"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "batch capture + throw; outer cron catch closes telemetry failed."
+  - id: C3
+    title: "workout-window-closing:192 per-user snapshot — disabled workout_reminders pushed on error"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: ".maybeSingle capture + skip on genuine error; no-snapshot falls through to send."
+  - id: C4
+    title: "protein-gap-alert:136 snapshots batch — disabled protein_alerts pushed on error"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "snapErr captured + throw (was only profErr caught)."
+  - id: C5
+    title: "proactive-coach-promotion:166 Promise.all ×3 — de-personalized promotion push"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "captures 3 errors + throw (before Gemini/insert/push)."
+  - id: C6
+    title: "expiry-reminder:90 .single — disabled subscription_reminders pushed / paying-user suppression risk"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "PGRST116-aware: no-snapshot → send (paying user), genuine error → skip."
+  - id: C7
+    title: "streak-guardian:129 .single — disabled streak_alerts pushed on error"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "PGRST116-aware guard (same shape as C6)."
+  - id: C8
+    title: "evaluate-rank-promotions:99/105 COUNT + user_progress — wrong rank state"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "per-user capture + skip inline (console.error + continue), not an inert wrap."
+  - id: C9
+    title: "evaluate-rank-promotions:136 existing ranks — duplicate ceremony / mis-grade"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "capture + skip; pre-existing :167 insert-error continue preserved."
+  - id: C10
+    title: "rank_engine:138 completionRate error path — transient error silently blocks a promotion"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "returns -1.0 sentinel (gate fails, keeps earned ranks); windowWeeks<=0 stays 0.0."
+  - id: C11
+    title: "re-engagement:151/159/167 detection loop — active user mis-nudged on read error"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "3 reads capture + skip (continue) so an unverifiable user is not nudged."
+  - id: C12
+    title: "getPromotionStatus.ts:94+ 6 reads — coach reports wrong promotion status on DB error"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: "each read captures error + throw; tool-loop narrates honestly."

@@ -91,21 +91,27 @@ async function handler(
   const { sb, userId } = ctx;
 
   // ── 1. User profile: current rank + plan cadence ──────────────────────────
-  const { data: profile } = await sb
+  // Unit C (§2.24) — every read below captures its error and throws. Pre-fix a
+  // silent DB failure coerced to the `?? "SD2"` / `?? 4` / `?? 0` defaults, so
+  // the coach reported a plausible-but-wrong promotion status. A throw is caught
+  // per-tool by the tool-loop → Gemini narrates honestly, turn not aborted.
+  const { data: profile, error: profErr } = await sb
     .from("user_profile")
     .select("current_rank_code, days_per_week")
     .eq("user_id", userId)
     .maybeSingle();
+  if (profErr) throw profErr;
 
   const currentRankCode = (profile?.current_rank_code as string) ?? "SD2";
   const planTarget = (profile?.days_per_week as number) ?? 4;
 
   // ── 2. Signup date (from public.users.created_at) ─────────────────────────
-  const { data: userRow } = await sb
+  const { data: userRow, error: userErr } = await sb
     .from("users")
     .select("created_at")
     .eq("id", userId)
     .maybeSingle();
+  if (userErr) throw userErr;
 
   const signupDate = userRow
     ? new Date(userRow.created_at as string)
@@ -116,20 +122,22 @@ async function handler(
   );
 
   // ── 3. Total workouts (all-time) ──────────────────────────────────────────
-  const { count: totalWorkoutsCount } = await sb
+  const { count: totalWorkoutsCount, error: totalWErr } = await sb
     .from("workout_logs")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId);
+  if (totalWErr) throw totalWErr;
   const totalWorkouts = totalWorkoutsCount ?? 0;
 
   // ── 4. Actual cadence: workouts in last 28 days → workouts/week ───────────
   // NOTE: workout_logs uses logged_at (completed_at does not exist on this table).
   const cutoff28 = new Date(Date.now() - 28 * 86_400_000).toISOString();
-  const { count: recent28Count } = await sb
+  const { count: recent28Count, error: recent28Err } = await sb
     .from("workout_logs")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
     .gte("logged_at", cutoff28);
+  if (recent28Err) throw recent28Err;
   const actualCadence = Number(((recent28Count ?? 0) / 4).toFixed(2));
 
   // ── 5. Progress row: deployments via current_phase ────────────────────────
@@ -137,11 +145,12 @@ async function handler(
   // longest_gap_days. We derive:
   //   deploymentsComplete = current_phase - 1  (each phase = 1 deployment done)
   // streakDays and longestGapDays are computed inline from workout_logs.date below.
-  const { data: progressRow } = await sb
+  const { data: progressRow, error: progressErr } = await sb
     .from("user_progress")
     .select("current_phase")
     .eq("user_id", userId)
     .maybeSingle();
+  if (progressErr) throw progressErr;
 
   const deploymentsComplete = Math.max(
     0,
@@ -151,17 +160,21 @@ async function handler(
   // ── 5a. Streak + gap: computed inline from workout_logs.date ─────────────
   // Pull distinct workout dates from the last year to compute streak and gap.
   const cutoff365 = istDateStr(new Date(Date.now() - 365 * 86_400_000));
-  const { data: dateLogs } = await sb
+  const { data: dateLogs, error: dateLogsErr } = await sb
     .from("workout_logs")
     .select("date")
     .eq("user_id", userId)
     .gte("date", cutoff365)
     .order("date", { ascending: false });
+  if (dateLogsErr) throw dateLogsErr;
 
-  // Deduplicate dates and sort descending
-  const sortedDates = [
+  // Deduplicate dates and sort descending. Cast `dateLogs` (typed `any` via the
+  // `sb: any` context) to a typed row array so `.map` yields `string[]` — otherwise
+  // the array infers `unknown[]` and the `.sort()`/`new Date(...)` calls below fail
+  // type-checking (Unit C B-pass P2-1).
+  const sortedDates: string[] = [
     ...new Set(
-      (dateLogs ?? []).map((r: { date: string }) => r.date as string),
+      ((dateLogs ?? []) as Array<{ date: string }>).map((r) => r.date),
     ),
   ].sort((a, b) => b.localeCompare(a));
 

@@ -159,15 +159,23 @@ serve(async (req: Request) => {
       ),
     ];
 
-    const [{ data: users }, { data: templates }] = await Promise.all([
-      supabase.from("users").select("id, full_name").in("id", atRiskUserIds),
-      templateIds.length > 0
-        ? supabase
-            .from("workout_templates")
-            .select("id, name")
-            .in("id", templateIds)
-        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    ]);
+    const [{ data: users, error: usersErr }, { data: templates, error: templatesErr }] =
+      await Promise.all([
+        supabase.from("users").select("id, full_name").in("id", atRiskUserIds),
+        templateIds.length > 0
+          ? supabase
+              .from("workout_templates")
+              .select("id, name")
+              .in("id", templateIds)
+          : Promise.resolve(
+              { data: [] as { id: string; name: string }[], error: null },
+            ),
+      ]);
+    // Unit C (§2.24) — batch read: surface a failure instead of coercing to empty
+    // Maps (which silently drops every user's name/template personalization). The
+    // outer try/catch closes cron telemetry as "failed".
+    const batchErr = usersErr ?? templatesErr;
+    if (batchErr) throw batchErr;
 
     const userById = new Map(
       (users ?? []).map((u: Record<string, unknown>) => [
@@ -189,13 +197,21 @@ serve(async (req: Request) => {
 
     for (const [userId, sched] of atRiskByUser) {
       // 4a. Notification preference check.
-      const { data: snapshot } = await supabase
+      const { data: snapshot, error: snapErr } = await supabase
         .from("user_daily_snapshots")
         .select("snapshot_json")
         .eq("user_id", userId)
         .order("snapshot_date", { ascending: false })
         .limit(1)
         .maybeSingle();
+      // Unit C (§2.24) — per-user read: on a GENUINE error skip THIS user (do NOT
+      // send — we can't verify they didn't disable workout_reminders). `.maybeSingle`
+      // returns {data:null,error:null} for a user with no snapshot → that falls
+      // through to the most-permissive send below (unchanged for new users).
+      if (snapErr) {
+        errors++;
+        continue;
+      }
 
       const prefs = snapshot?.snapshot_json?.notification_preferences;
       // Most-permissive default: only skip if explicitly disabled.

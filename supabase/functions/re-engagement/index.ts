@@ -148,28 +148,35 @@ Deno.serve(async (req: Request) => {
       }
 
       // Per-table verification — any activity in the window kicks them out.
-      const { data: anyWorkout } = await supabase
+      // Unit C (§2.24) — on a read error, CONTINUE (skip this user): we cannot
+      // confirm inactivity, so we must NOT push a "we miss you" nudge to a
+      // possibly-active user. Pre-fix a silent failure coerced to []→length 0→
+      // fell through to `fallbackCandidates.push` and mis-nudged active users.
+      const { data: anyWorkout, error: workoutErr } = await supabase
         .from("workout_logs")
         .select("date")
         .eq("user_id", userId)
         .gte("date", cutoffDate)
         .limit(1);
+      if (workoutErr) continue;
       if ((anyWorkout ?? []).length > 0) continue;
 
-      const { data: anyNutrition } = await supabase
+      const { data: anyNutrition, error: nutritionErr } = await supabase
         .from("nutrition_logs")
         .select("date")
         .eq("user_id", userId)
         .gte("date", cutoffDate)
         .limit(1);
+      if (nutritionErr) continue;
       if ((anyNutrition ?? []).length > 0) continue;
 
-      const { data: anyWeight } = await supabase
+      const { data: anyWeight, error: weightErr } = await supabase
         .from("weight_logs")
         .select("date")
         .eq("user_id", userId)
         .gte("date", cutoffDate)
         .limit(1);
+      if (weightErr) continue;
       if ((anyWeight ?? []).length > 0) continue;
 
       fallbackCandidates.push(userId);

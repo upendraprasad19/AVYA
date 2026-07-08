@@ -96,17 +96,31 @@ serve(async (req: Request) => {
       );
 
       // Total workouts done (cloud source of truth).
-      const { count: totalWorkouts } = await supabase
+      // Unit C (§2.24) — per-user reads in this whole-batch cron CAPTURE the error
+      // and SKIP just this user (console.error + continue, matching the insert-error
+      // idiom at the upsert below). Pre-fix a silent failure coerced to `?? 0` / null
+      // → a WRONG rank state (streak/workouts/deployments read as 0) → a generic or
+      // mis-graded promotion ceremony. A top-level throw would zero the WHOLE day's
+      // promotions, so skip-one-user (self-heals next daily run) is correct here.
+      const { count: totalWorkouts, error: totalWErr } = await supabase
         .from("workout_logs")
         .select("*", { count: "exact", head: true })
         .eq("user_id", userId);
+      if (totalWErr) {
+        console.error(`[evaluate-rank-promotions] user=${userId} totalWorkouts err`, totalWErr);
+        continue;
+      }
 
       // Read the per-user progress row for streak + deployments.
-      const { data: progressRow } = await supabase
+      const { data: progressRow, error: progressErr } = await supabase
         .from("user_progress")
         .select("current_streak_days, deployments_complete, longest_gap_days, last_workout_date")
         .eq("user_id", userId)
         .maybeSingle();
+      if (progressErr) {
+        console.error(`[evaluate-rank-promotions] user=${userId} progressRow err`, progressErr);
+        continue;
+      }
 
       // Compute days since last workout for the maxGapDays gate (MCPO).
       let lastWorkoutDaysAgo: number | null = null;
@@ -133,10 +147,17 @@ serve(async (req: Request) => {
       const eligibleCodes = ranksUpTo(winner.code).map((r) => r.code);
 
       // What's already on file?
-      const { data: existing } = await supabase
+      // Unit C (§2.24) — capture + skip: a silent failure here reads as "no ranks on
+      // file" → `toInsert` would re-insert ranks the user already holds and fire
+      // duplicate ceremonies. Skip this user (self-heals next run) rather than mis-grade.
+      const { data: existing, error: existingErr } = await supabase
         .from("rank_promotions")
         .select("rank_code")
         .eq("user_id", userId);
+      if (existingErr) {
+        console.error(`[evaluate-rank-promotions] user=${userId} existing-ranks err`, existingErr);
+        continue;
+      }
       const existingCodes = new Set(
         (existing ?? []).map((e: Record<string, unknown>) => e.rank_code as string),
       );

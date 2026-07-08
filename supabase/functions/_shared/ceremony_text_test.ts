@@ -74,7 +74,7 @@ Deno.test("formatPromotionCeremony — officer-track crossing PO → SubLt", () 
   });
   assertEquals(
     out,
-    "Petty Officer, 100 workouts on the books. " +
+    "Petty Officer, 14 weeks on the line, 100 sessions logged straight. " +
     "You've crossed onto the officer track. " +
     "Promotion: Sub Lieutenant. Carry on.",
   );
@@ -92,7 +92,7 @@ Deno.test("formatPromotionCeremony — officer-track crossing SD2 → SubLt (edg
   });
   assertEquals(
     out,
-    "Recruit, 100 workouts on the books. " +
+    "Recruit, 2 weeks on the line, 100 sessions logged straight. " +
     "You've crossed onto the officer track. " +
     "Promotion: Sub Lieutenant. Carry on.",
   );
@@ -110,8 +110,8 @@ Deno.test("formatPromotionCeremony — LtCdr contract milestone", () => {
   });
   assertEquals(
     out,
-    "Lieutenant, 200 workouts. " +
-    "The contract is met. 200 sessions — done straight, logged honest. " +
+    "Lieutenant, 104 weeks on the line, 200 sessions logged honest. " +
+    "The contract is met. " +
     "Promotion: Lieutenant Commander. " +
     "Address change: Lieutenant Commander. Carry on.",
   );

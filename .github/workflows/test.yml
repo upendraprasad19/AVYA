@@ -53,6 +53,42 @@ jobs:
         # feedback_local_ci_env_divergence.md.
         run: flutter test test/ --exclude-tags golden --reporter expanded
 
+  # ── Deno Edge-Function tests (added Unit C 2026-07-08, diagnose a7e2c4) ──
+  # Until now NO CI job ran the Deno tests under supabase/functions/**, so a red
+  # test (getProgressSummary maxLatencyMs 3500 vs source 6000) sat unnoticed at HEAD.
+  # This job type-checks every Unit-C-edited Edge Function AND runs the shape +
+  # behavioral tests, so the read-hardening regression guard actually gates at merge.
+  deno-edge-functions:
+    name: Deno Edge-Function tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Runs ALL Deno tests (the 18 shape tests + Unit C's behavioral tests) so
+      # the read-hardening regression guard gates + a red test can no longer sit
+      # unnoticed. `--no-check` runs the RUNTIME assertions without the TypeScript
+      # type-check pass: the EFs carry PRE-EXISTING type-annotation debt (cross-module
+      # SupabaseClient generics, Date overloads) unrelated to Unit C's read-hardening;
+      # a full type-check is a separate cross-cutting refactor (tracked distinctly), not
+      # this batch. The behavioral assertions (throw / -1.0 / send-vs-skip) still execute.
+      - name: Deno test (shape + Unit C behavioral)
+        run: deno test --no-check --allow-all --node-modules-dir=auto supabase/functions/
+
+      # Type-check the three Unit-C-edited modules that ARE type-clean (the coach-tool
+      # Promise.all + 6 throws + the rank_engine -1.0 sentinel) so those edits are
+      # compile-verified. The crons carry pre-existing type debt (tracked separately).
+      - name: Deno type-check the type-clean Unit C edits
+        run: >
+          deno check --node-modules-dir=auto
+          supabase/functions/_shared/tools/progress/getProgressSummary.ts
+          supabase/functions/_shared/tools/progress/getPromotionStatus.ts
+          supabase/functions/_shared/rank_engine.ts
+
   # ── Tier 1.5: Tech-debt audit gates (introduced 2026-05-20, finding I2) ──
   # Runs every scripts/check_*.dart gate. Each gate is independent; the job
   # exits non-zero if ANY gate fails. Allow-list (build-only or advisory)

@@ -134,8 +134,17 @@ export async function completionRateOverWindow(
     .eq('user_id', userId)
     .gte('scheduled_date', sinceIso.split('T')[0]);
   if (error) {
+    // Unit C (§2.24) — return a -1.0 SENTINEL (not 0.0) on a transient query error.
+    // The only consumer is the gate `if (rate < gate.completionRateMinimum) return
+    // false` (qualifies, :88): -1.0 < any minimum → the completion-rate gate FAILS →
+    // `highestQualified` breaks at this rung and KEEPS every lower rank the user
+    // already earned. Pre-fix `return 0.0` did the same for THIS gate, but 0.0 is a
+    // legitimate value that a `>=` refactor / an averaging consumer would silently
+    // mistake for "0% completion"; -1.0 is an unambiguous can't-compute marker and
+    // keeps the return a `number`. NB: the `windowWeeks <= 0` guard above stays 0.0
+    // (an invalid window is a caller bug, not a DB failure — do NOT unify them).
     console.error('[rank_engine] completionRate query failed', error);
-    return 0.0;
+    return -1.0;
   }
   let scheduled = 0;
   let completed = 0;

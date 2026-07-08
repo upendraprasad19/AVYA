@@ -87,13 +87,22 @@ serve(async (req: Request) => {
       );
 
       // Check notification preferences.
-      const { data: snapshot } = await supabase
+      const { data: snapshot, error: snapErr } = await supabase
         .from("user_daily_snapshots")
         .select("snapshot_json")
         .eq("user_id", userId)
         .order("snapshot_date", { ascending: false })
         .limit(1)
         .single();
+      // Unit C (§2.24) — `.single()` returns PGRST116 for a user with NO snapshot
+      // row; that is NOT an error — fall through to send (a lapsing PAYING user must
+      // still get their expiry reminder, preserving pre-fix behavior). Only a GENUINE
+      // error (network/permission) skips this user — pre-fix a silent failure coerced
+      // to `snapshot=null` and sent the reminder regardless of a disabled preference.
+      if (snapErr && snapErr.code !== "PGRST116") {
+        skipped++;
+        continue;
+      }
 
       const prefs = snapshot?.snapshot_json?.notification_preferences;
       if (prefs?.subscription_reminders?.enabled === false) {
