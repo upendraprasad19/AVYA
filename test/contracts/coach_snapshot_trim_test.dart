@@ -69,7 +69,8 @@ void main() {
     await HiveService.instance.customBox.clear();
     await HiveService.instance.configBox.clear();
     await HiveService.instance.userBox.put('profile', {
-      'id': 'u1',
+      // Match the session user UUID so the cross-account guard doesn't fire.
+      'id': 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
       'full_name': 'Lt Test',
       'primary_goal': 'muscle_gain',
       'daily_calories': 2200,
@@ -115,24 +116,41 @@ void main() {
     }
   });
 
+  // Start from a base with the 3 series EXPLICITLY removed so the ONLY thing
+  // that can make containsKey pass is the on-demand re-add branch — a strong
+  // regression guard (this would FAIL on pre-Unit-3 code that emitted them in
+  // the base map). B-pass LOW.
+  Map<String, dynamic> strippedBase() {
+    final b = {...AiSnapshotBuilder.instance.buildAiContext()};
+    b.removeWhere((k, _) => AiSnapshotBuilder.proactiveTrimKeys.contains(k));
+    return b;
+  }
+
   test('(b) a historical sleep / steps / water query re-adds the matching series',
       () {
-    final base = AiSnapshotBuilder.instance.buildAiContext();
-
     final sleep = AiSnapshotBuilder.instance
-        .enrichContextForQuery('how has my sleep been this week?', {...base});
+        .enrichContextForQuery('how has my sleep been this week?', strippedBase());
     expect(sleep.containsKey('sleep_7d'), isTrue,
         reason: 'a historical sleep query must re-add sleep_7d on-demand');
 
-    final steps = AiSnapshotBuilder.instance
-        .enrichContextForQuery('how many steps did I walk last week?', {...base});
+    final steps = AiSnapshotBuilder.instance.enrichContextForQuery(
+        'how many steps did I walk last week?', strippedBase());
     expect(steps.containsKey('step_history_7d'), isTrue,
         reason: 'a historical steps query must re-add step_history_7d');
 
     final water = AiSnapshotBuilder.instance
-        .enrichContextForQuery("what's my water intake trend?", {...base});
+        .enrichContextForQuery("what's my water intake trend?", strippedBase());
     expect(water.containsKey('water_7d'), isTrue,
         reason: 'a historical water query must re-add water_7d');
+  });
+
+  test("(b2) the natural contracted phrasing \"how's my sleep this week?\" "
+      'ALSO re-adds sleep_7d (B-pass MED — keyword-gap fix)', () {
+    final enriched = AiSnapshotBuilder.instance
+        .enrichContextForQuery("how's my sleep this week?", strippedBase());
+    expect(enriched.containsKey('sleep_7d'), isTrue,
+        reason: "the contracted 'how's ... this week' phrasing must trigger the "
+            'on-demand re-add — the exact phrasing in the code docstring');
   });
 
   test('(c) a non-historical message does NOT re-add the trimmed series', () {

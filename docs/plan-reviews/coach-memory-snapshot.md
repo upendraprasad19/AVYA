@@ -5,7 +5,8 @@ blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/coach-memory-snapshot-bpass.md
 hermes: pending
 ---
 
@@ -41,7 +42,8 @@ Unit 3 lands). Full plan: `~/.claude/plans/recommended-priority-for-the-snuggly-
 ## Ground truth (main agent — verified in source, not subagent prose)
 Snapshot lives in the system prompt (FC7 delimit-in-place, `ai-proxy/index.ts:729-743`) so history is a
 clean `user→model` chain; `ToolLoopOptions.snapshot` latent/unused; `chat()` has TWO callers
-(`ai_coach_provider.dart:742/810`) + TWO bodies (`ai_service.dart:316-320/423-427`); only `message>5000`
+(`ai_coach_provider.dart:755` primary + `:826` auth-retry, post-implementation) + TWO bodies
+(`ai_service.dart:316-320/423-427`); only `message>5000`
 + `snapshot_json>10000` bounded server-side (history was uncapped); the two budgets (8500/9500) are
 pinned by 6 tests; media rows are `mode:'media'` `'[Photo] …'`. My own R1 note mis-cited `:810` as
 `ai_service.dart` (709 lines) — caught + corrected.

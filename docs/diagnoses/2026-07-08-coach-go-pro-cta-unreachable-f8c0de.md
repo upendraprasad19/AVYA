@@ -23,8 +23,8 @@ sot_registry_entry: >
 writers: >
   n/a — no data write. The only change is which UI affordances are RENDERED +
   tappable in
-  { file: lib/features/ai_coach/screens/ai_coach/input_bar.dart, method: _buildInputBar, line: 182 } (counter-row GO PRO link predicate isWarning) and
-  { file: lib/features/ai_coach/screens/ai_coach/input_bar.dart, method: _buildInputBar, line: 76 } (limit-state composer wrapped in a GestureDetector → showPaywallSheet).
+  { file: lib/features/ai_coach/screens/ai_coach/input_bar.dart, method: _buildInputBar, line: 198 } (counter-row GO PRO link predicate isWarning) and
+  { file: lib/features/ai_coach/screens/ai_coach/input_bar.dart, method: _buildInputBar, line: 111 } (limit-state composer wrapped in a GestureDetector → showPaywallSheet).
 readers: >
   n/a — no data read. Downstream the user reaches the existing
   { file: lib/core/services/subscription_service.dart, method: showPaywallSheet, line: 414 } → PaywallSheet (unchanged) — Razorpay checkout as for every other paywall entry point.

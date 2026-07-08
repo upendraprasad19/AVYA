@@ -416,6 +416,16 @@ class AiSnapshotBuilder {
     return _containsAny(text, [
       'last month',
       'last week',
+      // B-pass MED: the most natural weekly phrasings ("how's my sleep this
+      // week?") were missing, so the Unit-3 on-demand re-add (and the older
+      // weight/nutrition/exercise trends) silently didn't fire for them.
+      'this week',
+      'this month',
+      'this year',
+      "how's",
+      'how is',
+      'lately',
+      'recently',
       'past',
       'history',
       'trend',

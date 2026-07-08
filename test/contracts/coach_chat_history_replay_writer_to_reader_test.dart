@@ -147,7 +147,7 @@ void main() {
     await putRow('coach_140', user: '', ai: 'orphan', createdAt: '2026-07-07T01:40:00.000');
     await putRow('coach_150', user: 'noai', ai: '', createdAt: '2026-07-07T01:50:00.000');
     // A completion_prompt action row (Unit 1) — kind-tagged, must be excluded.
-    await putRow('coach_160', user: 'x', ai: 'y', kind: 'completion_prompt', createdAt: '2026-07-07T01:60:00.000');
+    await putRow('coach_160', user: 'x', ai: 'y', kind: 'completion_prompt', createdAt: '2026-07-07T02:00:00.000');
     // The coach_memory singleton shares the coach_ prefix but has no user_message.
     await HiveService.instance.coachBox.put('coach_memory', {'coach_notes': 'note'});
 

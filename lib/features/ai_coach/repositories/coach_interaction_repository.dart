@@ -273,8 +273,16 @@ class CoachInteractionRepository {
       rows.add(map);
     }
 
-    rows.sort((a, b) =>
-        (a['created_at'] as String).compareTo(b['created_at'] as String));
+    // Stable order: created_at, then the unique monotonic coach_<ms> key as a
+    // tie-breaker (two complete round-trips can't share a millisecond, but
+    // List.sort is not documented stable — B-pass LOW).
+    rows.sort((a, b) {
+      final c =
+          (a['created_at'] as String).compareTo(b['created_at'] as String);
+      return c != 0
+          ? c
+          : ((a['id'] as String?) ?? '').compareTo((b['id'] as String?) ?? '');
+    });
 
     final recent =
         rows.length > limit ? rows.sublist(rows.length - limit) : rows;
