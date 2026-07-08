@@ -112,7 +112,9 @@ void main() {
         'today_nutrition',
         'this_week_workouts',
         'today_steps',
-        'step_history_7d',
+        // NOTE: step_history_7d / sleep_7d / water_7d are Unit-3 proactively
+        // trimmed from the BASE snapshot (re-added on-demand by
+        // enrichContextForQuery) — see coach_snapshot_trim_test.dart.
         'latest_weight',
         'personal_records',
         'coaching_notes',
@@ -122,8 +124,6 @@ void main() {
         'yesterday_workout',
         'week_lookahead',
         'current_plan_summary',
-        'sleep_7d',
-        'water_7d',
         'subscription',
         'current_rank',
         'next_rank',

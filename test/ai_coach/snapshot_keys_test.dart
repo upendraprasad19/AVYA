@@ -294,6 +294,20 @@ void main() {
 
   // ── A6 tests ──────────────────────────────────────────────────────────────
 
+  // Unit 3 (coach-memory-snapshot): sleep_7d / water_7d are proactively trimmed
+  // from the BASE snapshot and re-added on-demand by enrichContextForQuery for a
+  // historical query about them. These groups validate the SERIES SHAPE (the
+  // underlying _getSleep7d/_getWater7d are unchanged), so they now source the
+  // series via the on-demand path with a matching historical query.
+  Map<String, dynamic> ctxWithSleepQuery() =>
+      AiCoachRepository.instance.enrichContextForQuery(
+          'how has my sleep been this week',
+          AiCoachRepository.instance.buildAiContext());
+  Map<String, dynamic> ctxWithWaterQuery() =>
+      AiCoachRepository.instance.enrichContextForQuery(
+          'how has my water intake trend been this week',
+          AiCoachRepository.instance.buildAiContext());
+
   group('sleep_7d', () {
     test('returns list of {date, hours} for last 7 days, ascending by date',
         () async {
@@ -305,7 +319,7 @@ void main() {
           {'date': dateStr, 'sleep_hours': 7.0 + i * 0.1},
         );
       }
-      final ctx = AiCoachRepository.instance.buildAiContext();
+      final ctx = ctxWithSleepQuery();
       expect(ctx['sleep_7d'], isList);
       final s = ctx['sleep_7d'] as List;
       expect(s.length, 5);
@@ -322,7 +336,7 @@ void main() {
         'sleep_log_$dateStr',
         {'date': dateStr, 'sleep_hours': 7.5},
       );
-      final ctx = AiCoachRepository.instance.buildAiContext();
+      final ctx = ctxWithSleepQuery();
       final s = ctx['sleep_7d'] as List;
       final entry = s.first as Map;
       expect(entry['date'], dateStr);
@@ -336,12 +350,12 @@ void main() {
         'sleep_log_$oldStr',
         {'date': oldStr, 'sleep_hours': 8.0},
       );
-      final ctx = AiCoachRepository.instance.buildAiContext();
+      final ctx = ctxWithSleepQuery();
       expect(ctx['sleep_7d'], isEmpty);
     });
 
     test('returns empty list when no sleep logs exist', () {
-      final ctx = AiCoachRepository.instance.buildAiContext();
+      final ctx = ctxWithSleepQuery();
       expect(ctx['sleep_7d'], isEmpty);
     });
   });
@@ -354,7 +368,7 @@ void main() {
         final dateStr = d.toIso8601String().substring(0, 10);
         await HiveService.instance.healthBox.put('water_ml_$dateStr', 2000 + i * 100);
       }
-      final ctx = AiCoachRepository.instance.buildAiContext();
+      final ctx = ctxWithWaterQuery();
       expect(ctx['water_7d'], isList);
       final w = ctx['water_7d'] as List;
       expect(w.length, 3);
@@ -367,7 +381,7 @@ void main() {
       final old = DateTime.now().subtract(const Duration(days: 10));
       final oldStr = old.toIso8601String().substring(0, 10);
       await HiveService.instance.healthBox.put('water_ml_$oldStr', 1500);
-      final ctx = AiCoachRepository.instance.buildAiContext();
+      final ctx = ctxWithWaterQuery();
       expect(ctx['water_7d'], isEmpty);
     });
   });

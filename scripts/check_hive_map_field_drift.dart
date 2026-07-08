@@ -309,6 +309,13 @@ const _alwaysOk = <String>{
   // never `default_*`); the prefix heuristic mis-attributes them because
   // sync_workout.dart also walks those prefixes for the schedule/log sync.
   'default_sets', 'default_reps',
+  // Unit 3 (coach-memory-snapshot) — snapshot OUTPUT key names in
+  // ai_snapshot_builder.proactiveTrimKeys + the enrich re-add branches. These
+  // are health-domain SERIES keys of the snapshot MAP (populated by _getSleep7d
+  // / _getStepHistory / _getWater7d), NOT fields of the exlog_/nlog_/wlog_ Hive
+  // maps. The prefix heuristic mis-attributes them because the same file also
+  // reads those log prefixes for PRs / meals / logs.
+  'sleep_7d', 'step_history_7d', 'water_7d',
   // Unit 1 (coach-completion-tap-card) — `swapped_from` is a field of the
   // PER-EXERCISE sub-map inside `schedule_<date>['exercises']` (it IS in the
   // `schedule` emit set, line ~103). ai_snapshot_builder._plannedExerciseHasLog

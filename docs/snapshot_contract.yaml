@@ -134,6 +134,10 @@ keys:
     prompt_passthrough: true
     notes: |
       List<{date, steps}>. First to drop in _compactContext trimSteps.
+      Unit 3 (2026-07-07): buildAiContext still EMITS it (proactiveTrimKeys),
+      then proactively trims it from the BASE map; re-added on-demand by
+      enrichContextForQuery for a historical steps query. Kill-switch
+      configBox['disable_snapshot_trim'].
 
   - key: latest_weight
     type: map
@@ -315,6 +319,10 @@ keys:
     writer_line: 132
     readers: []
     prompt_passthrough: true
+    notes: |
+      Unit 3 (2026-07-07): emitted then proactively trimmed from the BASE map
+      (proactiveTrimKeys); re-added on-demand by enrichContextForQuery for a
+      historical sleep query. Kill-switch configBox['disable_snapshot_trim'].
 
   - key: water_7d
     type: list
@@ -322,7 +330,10 @@ keys:
     readers: []
     prompt_passthrough: true
     notes: |
-      Dropped in _compactContext step 2.
+      Dropped in _compactContext step 2. Unit 3 (2026-07-07): emitted then
+      proactively trimmed from the BASE map (proactiveTrimKeys); re-added
+      on-demand by enrichContextForQuery for a historical water query.
+      Kill-switch configBox['disable_snapshot_trim'].
 
   - key: streak_freezes_available
     type: scalar

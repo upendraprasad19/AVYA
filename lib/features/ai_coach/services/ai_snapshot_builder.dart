@@ -180,8 +180,35 @@ class AiSnapshotBuilder {
       'phase_transitions': _getPhaseTransitions(),
       'recent_meal_deletes': _getRecentMealDeletes(),
     };
+    _proactiveTrimLowSignalSeries(snapshot);
     return trimSnapshotToBudget(snapshot);
   }
+
+  /// Unit 3 — proactively drop the pure 7-day daily-series ([proactiveTrimKeys])
+  /// from the BASE snapshot so each turn is leaner (latency + total-context
+  /// headroom for the Unit-2 conversation history). Today's value is already
+  /// covered by `today_steps` / `today_nutrition.water_ml` / `sleep_logs_count_7d`,
+  /// and a historical "how's my sleep/steps/water this week?" query re-adds the
+  /// full series on-demand via [enrichContextForQuery] (lean base + rich
+  /// on-demand — no regression). All 3 were already in the reactive drop lists,
+  /// so this is COMPLEMENTARY to (not a replacement for) the >8500/>9500 caps,
+  /// which stay as the power-user backstop. Kill-switch:
+  /// configBox['disable_snapshot_trim'].
+  void _proactiveTrimLowSignalSeries(Map<String, dynamic> snapshot) {
+    if (_hive.configBox.get('disable_snapshot_trim') == true) return;
+    for (final k in proactiveTrimKeys) {
+      snapshot.remove(k);
+    }
+  }
+
+  /// Base-snapshot keys dropped by [_proactiveTrimLowSignalSeries] and re-added
+  /// on-demand by [enrichContextForQuery] for a historical query about them.
+  @visibleForTesting
+  static const List<String> proactiveTrimKeys = <String>[
+    'step_history_7d', // pedometer 7-day series — today_steps covers per-turn
+    'water_7d', // hydration 7-day series — today_nutrition.water_ml covers per-turn
+    'sleep_7d', // sleep 7-day series — sleep_logs_count_7d grounds it
+  ];
 
   /// Caps the serialized snapshot under the server's 10K-char limit
   /// (CLAUDE.md §4.4 rule 18). A power user with a long history (many PRs,
@@ -302,6 +329,37 @@ class AiSnapshotBuilder {
           }
         } catch (e) {
           debugPrint('[AiSnapshotBuilder.enrichContextForQuery] weightTrend: $e');
+        }
+      }
+
+      // Unit 3 — the base snapshot drops the step / water / sleep 7-day series
+      // (see [proactiveTrimKeys]) to stay lean. Re-add the full series on-demand
+      // for a HISTORICAL query about them, so "how's my sleep this week?" still
+      // has the data (lean base + rich on-demand — no regression).
+      if (_containsAny(lower, ['step', 'steps', 'walk', 'walking', 'active']) &&
+          _isHistoricalQuery(lower)) {
+        try {
+          context['step_history_7d'] = _getStepHistory(days: 7);
+        } catch (e) {
+          debugPrint('[AiSnapshotBuilder.enrichContextForQuery] stepHistory: $e');
+        }
+      }
+
+      if (_containsAny(lower, ['sleep', 'slept', 'rest', 'bed']) &&
+          _isHistoricalQuery(lower)) {
+        try {
+          context['sleep_7d'] = _getSleep7d();
+        } catch (e) {
+          debugPrint('[AiSnapshotBuilder.enrichContextForQuery] sleep7d: $e');
+        }
+      }
+
+      if (_containsAny(lower, ['water', 'hydration', 'hydrated', 'drink']) &&
+          _isHistoricalQuery(lower)) {
+        try {
+          context['water_7d'] = _getWater7d();
+        } catch (e) {
+          debugPrint('[AiSnapshotBuilder.enrichContextForQuery] water7d: $e');
         }
       }
 
