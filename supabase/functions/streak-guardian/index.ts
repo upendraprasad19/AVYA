@@ -126,13 +126,22 @@ serve(async (req: Request) => {
 
       // Check if user has streak_alerts enabled via configBox sync.
       // We store notification_preferences in snapshot_json for server access.
-      const { data: snapshot } = await supabase
+      const { data: snapshot, error: snapErr } = await supabase
         .from("user_daily_snapshots")
         .select("snapshot_json")
         .eq("user_id", userId)
         .order("snapshot_date", { ascending: false })
         .limit(1)
         .single();
+      // Unit C (§2.24) — `.single()` returns PGRST116 for a user with NO snapshot
+      // row; that is NOT an error — fall through to send (a user whose streak is on
+      // the line must still get the guard nudge, preserving pre-fix behavior). Only a
+      // GENUINE error (network/permission) skips — pre-fix a silent failure coerced to
+      // `snapshot=null` and pushed regardless of a disabled streak_alerts preference.
+      if (snapErr && snapErr.code !== "PGRST116") {
+        skipped++;
+        continue;
+      }
 
       const prefs = snapshot?.snapshot_json?.notification_preferences;
       if (prefs?.streak_alerts?.enabled === false) {

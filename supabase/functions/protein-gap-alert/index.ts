@@ -133,7 +133,7 @@ serve(async (req: Request) => {
     //    Primary: user_profile.protein_grams (the canonical column).
     //    Defensive: snapshot_json.daily_targets.protein (not currently
     //    populated by the snapshot writer — kept for forward compat).
-    const [{ data: profiles, error: profErr }, { data: snapshots }] =
+    const [{ data: profiles, error: profErr }, { data: snapshots, error: snapErr }] =
       await Promise.all([
         supabase
           .from("user_profile")
@@ -146,6 +146,11 @@ serve(async (req: Request) => {
           .in("user_id", proUserIds),
       ]);
     if (profErr) throw profErr;
+    // Unit C (§2.24) — the snapshots batch feeds the per-user notification-preference
+    // check below; a silent failure here would coerce EVERY snapshot to empty and
+    // push protein alerts to users who DISABLED them (most-permissive default). Throw
+    // → the outer catch closes cron telemetry "failed"; next tick retries.
+    if (snapErr) throw snapErr;
 
     const profileByUser = new Map<string, Record<string, unknown>>(
       (profiles ?? []).map((p: Record<string, unknown>) => [

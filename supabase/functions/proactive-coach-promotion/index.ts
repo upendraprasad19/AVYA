@@ -172,6 +172,12 @@ async function loadUserContext(
       .select("current_streak_weeks, total_workouts_done")
       .eq("user_id", user_id).maybeSingle(),
   ]);
+  // Unit C (§2.24) — surface a query failure instead of coercing to a null/0
+  // context (which sends a de-personalized "Congratulations, soldier" push). This
+  // runs first in the per-invocation flow, so a throw here happens BEFORE the
+  // Gemini compose + the ai_coach_interactions insert + the OneSignal push.
+  const ctxErr = userRes.error ?? profileRes.error ?? progressRes.error;
+  if (ctxErr) throw ctxErr;
   return {
     full_name: userRes.data?.full_name ?? null,
     primary_goal: profileRes.data?.primary_goal ?? null,

@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### edge_function_unchecked_read_hardening (1 bugs)
+- 2026-07-08 a7e2c4 — >
+
 ### rls_initplan_auth_uid_wrap (1 bugs)
 - 2026-07-07 e6b1a4 — >
 
@@ -775,6 +778,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-08 | a7e2c4 | > | edge_function_unchecked_read_hardening | supabase/functions/_shared/tools/__tests__/unit_c_read_hardening_test.ts |
 | 2026-07-07 | e6b1a4 | > | rls_initplan_auth_uid_wrap | > |
 | 2026-07-07 | f0c2d5 | > | worktree_per_session_isolation | test/contracts/check_commit_from_worktree_test.dart |
 | 2026-07-06 | 280c4d | > | coach_derived_completion | test/contracts/coach_completion_prompt_test.dart |

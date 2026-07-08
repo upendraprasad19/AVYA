@@ -47,11 +47,11 @@ async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
   // for cold-Postgres-cache resilience. Pinned by
   // test/contracts/get_progress_summary_parallel_queries_test.dart.
   const [
-    { data: exRows },
-    { data: scheduled },
-    { data: weights },
-    { data: nutrition },
-    { data: prs },
+    { data: exRows, error: exErr },
+    { data: scheduled, error: schedErr },
+    { data: weights, error: weightErr },
+    { data: nutrition, error: nutErr },
+    { data: prs, error: prErr },
   ] = await Promise.all([
     // 1. Workouts completed + total volume (per-exercise summary table).
     //    Schema deviation from spec: `workout_logs.total_volume_kg` does NOT exist in prod.
@@ -89,6 +89,18 @@ async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
       .gte("completed_at", sinceTs)
       .eq("is_pr", true),
   ]);
+
+  // Unit C (§2.24) — surface a query failure instead of coercing it to empty
+  // arrays. Pre-fix a silent DB error made the coach report "0 workouts / no
+  // progress" as if it were true. A throw is caught per-tool by the tool-loop
+  // (tool-loop.ts:270-291) → Gemini gets {error:"execution_failed"} and narrates
+  // honestly; the turn is NOT aborted. Parallel dispatch above is preserved.
+  const progressErr = exErr ?? schedErr ?? weightErr ?? nutErr ?? prErr;
+  if (progressErr) {
+    throw new Error(
+      `getProgressSummary query failed: ${progressErr.message ?? progressErr}`,
+    );
+  }
 
   // 1. Workouts completed + total volume.
   const workoutDates = new Set<string>();

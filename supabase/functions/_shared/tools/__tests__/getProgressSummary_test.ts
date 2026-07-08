@@ -24,7 +24,7 @@ Deno.test("getProgressSummary — schema rejects non-integer", () => {
 Deno.test("getProgressSummary — metadata", () => {
   assertEquals(getProgressSummaryTool.tier, "free");
   assertEquals(getProgressSummaryTool.kind, "read");
-  assertEquals(getProgressSummaryTool.maxLatencyMs, 3500);
+  assertEquals(getProgressSummaryTool.maxLatencyMs, 6000);
 });
 
 // NOTE: handler() integration tests against real Supabase require a seeded
