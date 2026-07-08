@@ -43,7 +43,7 @@ import {
   fetchCoachMemory,
   renderCoachMemoryBlock,
 } from "../_shared/coach_memory.ts";
-import { runToolLoop } from "../_shared/tool-loop.ts";
+import { capCoachHistory, runToolLoop } from "../_shared/tool-loop.ts";
 import type { ToolContext } from "../_shared/tools/index.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 import { istDateStr, istDayStartIso } from "../_shared/ist_date.ts";
@@ -177,7 +177,8 @@ serve(async (req: Request) => {
 
     // ── Body ──
     const body = await req.json();
-    const { message, snapshot_json, type, text, context, image_base64 } = body;
+    const { message, snapshot_json, type, text, context, image_base64, history } =
+      body;
 
     // ── Food text analysis ────────────────────────────────────────
     // Free: 50/day  ·  PRO: 200/day. Enforced atomically by Postgres
@@ -808,11 +809,19 @@ yet" — never make up a number.
       requestId: chatRequestId,
     };
 
+    // Unit 2 — coach short-term memory. `history` (last N coach exchanges) is
+    // CLIENT-CONTROLLED, so bound it server-side BEFORE it reaches the model
+    // (§4.4 rule 18, mirroring the message/snapshot caps above): ≤16 entries
+    // (8 exchanges) · ≤2000 chars/entry · ≤12000 chars total, dropping OLDEST
+    // first. tool-loop then repairs role alternation (shrink-only).
+    const cappedHistory = capCoachHistory(history);
+
     let loop;
     try {
       loop = await runToolLoop({
         systemPrompt,
         userMessage: message,
+        history: cappedHistory,
         ctx: toolCtx,
         model: MODEL_FLASH,
       });

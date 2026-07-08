@@ -233,6 +233,84 @@ class CoachInteractionRepository {
     return count;
   }
 
+  /// Unit 2 — coach short-term memory. Returns the last [limit] COMPLETE coach
+  /// exchanges (a user turn + its AI reply), oldest→newest, as a flat alternating
+  /// list of `{role: 'user'|'model', text: ...}` maps for the ai-proxy `history`
+  /// field. [limit] counts EXCHANGES (coachBox rows), so the result holds up to
+  /// `2 * limit` entries — NOT 8 flat entries.
+  ///
+  /// Excludes rows that cannot be safely replayed:
+  ///  - `kind`-tagged action rows (e.g. `completion_prompt` tap-cards),
+  ///  - `pending`/`failed` rows (incl. the CURRENT turn's just-written pending
+  ///    row — so a message never leaks into its own history),
+  ///  - media rows (`mode == 'media'` — their `user_message` is a `[Photo] …`
+  ///    placeholder, not usable text),
+  ///  - any row missing a non-empty `user_message` OR `ai_response`.
+  ///
+  /// Hive iteration is INSERTION order, not chronological, so rows are SORTED
+  /// ascending by `created_at` (ISO8601, lexicographically == chronologically)
+  /// before the last-[limit] slice — mirrors the render path's sort in
+  /// `ChatHistoryNotifier.build`. SoT concept `coach_chat_history_replay`.
+  /// Coach-CHAT channels. A locally-written coach row has no `channel`; a
+  /// restored row carries its cloud `channel` (see `_restoreCoachInteractions`),
+  /// so a non-chat interaction (`food_text_analysis` / `scan_meal` /
+  /// `cart_auditor` / `verify_payment_attempt` / `weekly_report`) is excluded
+  /// from the replayed history (Hermes P2 — restored non-chat rows must not
+  /// masquerade as prior coach turns).
+  static const Set<String> _coachChatChannels = {'app', 'chat', 'in_app_orphan'};
+
+  List<Map<String, dynamic>> recentHistoryExchanges(
+      {int limit = 8, String? excludeKey}) {
+    final rows = <Map<String, dynamic>>[];
+    for (final entry in _hive.coachBox.toMap().entries) {
+      final key = entry.key;
+      final raw = entry.value;
+      // Interaction rows are keyed `coach_<ms>`; singleton siblings like
+      // `coach_memory` also match the prefix but carry no `user_message`, so
+      // the empty-text guard below drops them.
+      if (key is! String || !key.startsWith('coach_')) continue;
+      // Never replay the CURRENT turn's own row into its own history — closes
+      // the self-leak on the fresh-write AND the 60s-dedup-reuse path (a reused
+      // COMPLETE row would otherwise pass every filter below). Hermes P3.
+      if (excludeKey != null && key == excludeKey) continue;
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      if (map['kind'] != null) continue; // action rows (completion_prompt etc.)
+      if (map['pending'] == true) continue;
+      if (map['failed'] == true) continue;
+      if (map['mode'] == 'media') continue; // '[Photo] …' placeholder text
+      // Only genuine coach-chat rows (null channel = local coach write).
+      final channel = map['channel'] as String?;
+      if (channel != null && !_coachChatChannels.contains(channel)) continue;
+      final user = (map['user_message'] as String?)?.trim() ?? '';
+      final ai = (map['ai_response'] as String?)?.trim() ?? '';
+      if (user.isEmpty || ai.isEmpty) continue;
+      if ((map['created_at'] as String?) == null) continue;
+      rows.add(map);
+    }
+
+    // Stable order: created_at, then the unique monotonic coach_<ms> key as a
+    // tie-breaker (two complete round-trips can't share a millisecond, but
+    // List.sort is not documented stable — B-pass LOW).
+    rows.sort((a, b) {
+      final c =
+          (a['created_at'] as String).compareTo(b['created_at'] as String);
+      return c != 0
+          ? c
+          : ((a['id'] as String?) ?? '').compareTo((b['id'] as String?) ?? '');
+    });
+
+    final recent =
+        rows.length > limit ? rows.sublist(rows.length - limit) : rows;
+
+    final out = <Map<String, dynamic>>[];
+    for (final row in recent) {
+      out.add({'role': 'user', 'text': (row['user_message'] as String).trim()});
+      out.add({'role': 'model', 'text': (row['ai_response'] as String).trim()});
+    }
+    return out;
+  }
+
   /// Gets the latest coaching insight from coaching_notes or last AI response.
   String getLatestInsight() {
     final notes = _hive.coachBox.get('coaching_notes');

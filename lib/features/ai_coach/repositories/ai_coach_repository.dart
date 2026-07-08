@@ -159,6 +159,13 @@ class AiCoachRepository {
   String getLatestInsight() =>
       CoachInteractionRepository.instance.getLatestInsight();
 
+  /// Unit 2 — coach short-term memory. Forwards to
+  /// [CoachInteractionRepository.recentHistoryExchanges].
+  List<Map<String, dynamic>> recentHistoryExchanges(
+          {int limit = 8, String? excludeKey}) =>
+      CoachInteractionRepository.instance
+          .recentHistoryExchanges(limit: limit, excludeKey: excludeKey);
+
   // ── Coach-memory surface (forwards to CoachMemoryService) ──────────
 
   Future<void> detectAndPersistIdentitySignals(String userMessage) =>

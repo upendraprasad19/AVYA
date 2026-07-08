@@ -134,9 +134,10 @@ void main() {
       final start = src.indexOf('enrichContextForQuery(');
       expect(start, greaterThan(0),
           reason: 'enrichContextForQuery must exist in the builder');
-      // Window the method body (it is ~85 lines); assert its return re-trims.
+      // Window the method body (it grew to ~115 lines after Unit 3 added the
+      // on-demand step/sleep/water re-add branches); assert its return re-trims.
       final body =
-          src.substring(start, (start + 4000).clamp(0, src.length));
+          src.substring(start, (start + 6000).clamp(0, src.length));
       expect(body.contains('return trimSnapshotToBudget('), isTrue,
           reason: 'enrichContextForQuery MUST re-trim its output via '
               'trimSnapshotToBudget before returning (a9c3e2 follow-up / Hermes '

@@ -728,6 +728,26 @@ class SendMessageNotifier extends Notifier<bool> {
       ));
     }
 
+    // Unit 2 — coach short-term memory: assemble the last N complete exchanges
+    // ONCE here so BOTH the primary send below AND the auth-retry re-send (in
+    // the catch) carry the same history. Kill-switch:
+    // configBox['disable_coach_history']. `excludeKey: coachKey` drops the
+    // current turn's OWN row on EVERY path (fresh write + 60s-dedup-reuse +
+    // retry) so it can never self-leak (Hermes P3). History is an OPTIONAL
+    // enrichment — its assembly must NEVER abort the current message, so any
+    // failure falls back to null (Hermes P2 failure-mode: the read is OUTSIDE
+    // the send try below).
+    List<Map<String, dynamic>>? coachHistory;
+    try {
+      coachHistory =
+          HiveService.instance.configBox.get('disable_coach_history') == true
+              ? null
+              : repo.recentHistoryExchanges(excludeKey: coachKey);
+    } catch (e) {
+      coachHistory = null;
+      debugPrint('[AiCoachProvider.send] history assembly failed (ignored): $e');
+    }
+
     state = true;
 
     try {
@@ -739,7 +759,9 @@ class SendMessageNotifier extends Notifier<bool> {
       // Single Gemini-backed endpoint (ai-proxy) handles both free + PRO
       // 2026-04-18 onward. Free/PRO differentiation is the 10/day server-side
       // cap (FREE_DAILY_LIMIT, no trial) — the client no longer picks a backend.
-      final aiResponse = await ref.read(aiServiceProvider).chat(message, context);
+      final aiResponse = await ref
+          .read(aiServiceProvider)
+          .chat(message, context, history: coachHistory);
 
       // Replace loading with actual response
       chatNotifier.replaceLastMessage(ChatMessage(
@@ -806,8 +828,11 @@ class SendMessageNotifier extends Notifier<bool> {
           final retryEnriched = repo.enrichContextForQuery(message, retryContext);
 
           // A7 / B5 D9-D10 — canonical provider path.
-          final retryResponse =
-              await ref.read(aiServiceProvider).chat(message, retryEnriched);
+          // Unit 2 — the retry MUST carry the same history as the primary send
+          // (else a token-refresh retry silently drops conversation continuity).
+          final retryResponse = await ref
+              .read(aiServiceProvider)
+              .chat(message, retryEnriched, history: coachHistory);
 
           // Retry succeeded — update UI and return
           chatNotifier.replaceLastMessage(ChatMessage(
