@@ -728,6 +728,17 @@ class SendMessageNotifier extends Notifier<bool> {
       ));
     }
 
+    // Unit 2 — coach short-term memory: assemble the last N complete exchanges
+    // ONCE here so BOTH the primary send below AND the auth-retry re-send (in
+    // the catch) carry the same history. Kill-switch:
+    // configBox['disable_coach_history']. The current turn's row (written
+    // pending above with an empty ai_response) is excluded by
+    // recentHistoryExchanges' pending/empty-text filter — no self-leak.
+    final List<Map<String, dynamic>>? coachHistory =
+        HiveService.instance.configBox.get('disable_coach_history') == true
+            ? null
+            : repo.recentHistoryExchanges();
+
     state = true;
 
     try {
@@ -739,7 +750,9 @@ class SendMessageNotifier extends Notifier<bool> {
       // Single Gemini-backed endpoint (ai-proxy) handles both free + PRO
       // 2026-04-18 onward. Free/PRO differentiation is the 10/day server-side
       // cap (FREE_DAILY_LIMIT, no trial) — the client no longer picks a backend.
-      final aiResponse = await ref.read(aiServiceProvider).chat(message, context);
+      final aiResponse = await ref
+          .read(aiServiceProvider)
+          .chat(message, context, history: coachHistory);
 
       // Replace loading with actual response
       chatNotifier.replaceLastMessage(ChatMessage(
@@ -806,8 +819,11 @@ class SendMessageNotifier extends Notifier<bool> {
           final retryEnriched = repo.enrichContextForQuery(message, retryContext);
 
           // A7 / B5 D9-D10 — canonical provider path.
-          final retryResponse =
-              await ref.read(aiServiceProvider).chat(message, retryEnriched);
+          // Unit 2 — the retry MUST carry the same history as the primary send
+          // (else a token-refresh retry silently drops conversation continuity).
+          final retryResponse = await ref
+              .read(aiServiceProvider)
+              .chat(message, retryEnriched, history: coachHistory);
 
           // Retry succeeded — update UI and return
           chatNotifier.replaceLastMessage(ChatMessage(

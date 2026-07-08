@@ -40,6 +40,7 @@ Pieces:
 | `coach_memory_coach_notes_upward_sync` | `ai_coach_repository.dart` → cloud `coach_memory.coach_notes` (renamed from `coaching_notes`; Hive key preserved) | `ai_snapshot_builder.dart`. APK Test #16.2 / 9th writer/reader drift. |
 | `ai_proxy_placeholder_resolution` | `ai-proxy` Edge Function v66 inserts placeholder row BEFORE Gemini call (rate-limit trigger SoT) | dedup logic checks placeholder before issuing a new request. |
 | `chat_media_signed_url` | `ai-media-proxy` Edge Function (PRO only) — SSRF-allowlisted to `progress-photos` + `chat-attachments` Storage buckets only | `WardroomChatBubble` photo renderer. |
+| `coach_chat_history_replay` (Unit 2, 2026-07-07) | `CoachInteractionRepository.recentHistoryExchanges` — last N COMPLETE exchanges, oldest→newest, sorted by `created_at`; excludes `kind`-tagged / pending / failed / `mode:'media'` / empty rows + the `coach_memory` singleton — sent as a `history` field via `ai_service.chat` (assembled ONCE in `SendMessageNotifier.send`, threaded into BOTH the primary `:755` and auth-retry `:826` call sites AND both request bodies). Kill-switch `configBox['disable_coach_history']`. | `ai-proxy` `capCoachHistory` size-bounds it (§4.4 rule 18: ≤16 entries / ≤2000 chars each / ≤12000 total, oldest-first) → `tool-loop.ts` `repairHistoryAlternation` (shrink-only) seeds `messages[]` BEFORE the current user turn (never 400s Gemini on consecutive same-role turns). Snapshot stays in the system prompt (FC7), so history is a clean `user→model` chain. Complementary to snapshot + `coach_memory` + semantic retrieval. |
 
 ## Tool dispatch contract
 
@@ -76,6 +77,7 @@ When the agent emits a `tool_call`, the dispatcher MUST:
 ## Tests pinning the rules here
 
 - `test/contracts/coach_interactions_writer_to_reader_test.dart`
+- `test/contracts/coach_chat_history_replay_writer_to_reader_test.dart` (behavioral — Unit 2: `recentHistoryExchanges` alternating/sorted/filtered; both `chat()` call sites carry history; server-seam source assertions) + Deno `supabase/functions/_shared/tool-loop.test.ts` (`repairHistoryAlternation` + `capCoachHistory`).
 - `test/contracts/coach_replies_test.dart`
 - `test/contracts/coach_notes_upward_sync_test.dart`
 - `test/contracts/coaching_notes_writer_to_reader_test.dart`

@@ -3680,6 +3680,71 @@ concepts:
       'onboarding_completed_at'. RestoringScreen uses cloud IS NOT NULL
       check for the three-way branch (home / resume / new-user).
 
+  - concept: coach_chat_history_replay
+    domain: ai_coach
+    behavioral_test_path: test/contracts/coach_chat_history_replay_writer_to_reader_test.dart
+    description: |
+      Unit 2 (coach-memory-snapshot, 2026-07-07) — the coach forwards the last
+      N COMPLETE exchanges (a user turn + its AI reply) as a `history` request
+      field so the model has turn-to-turn continuity. Previously the client sent
+      ZERO conversation history (a bare "what?" reset the coach). `history` is
+      CLIENT-CONTROLLED: the server treats it as UNTRUSTED — ai-proxy size-caps
+      it (§4.4 rule 18) and tool-loop repairs role alternation (shrink-only)
+      before seeding messages[], so a malformed history can never 400 Gemini on
+      consecutive same-role contents. Kill-switch: configBox['disable_coach_history'].
+      Complementary to (not a replacement for) the per-request snapshot,
+      long-term coach_memory, and semantic retrieval.
+    writers:
+      - file: lib/features/ai_coach/repositories/coach_interaction_repository.dart
+        line_range: 254-301
+        method: "`recentHistoryExchanges` (CoachInteractionRepository)"
+        notes: |
+          Reads replayable coach_<ms> rows — EXCLUDES kind-tagged (e.g.
+          completion_prompt) / pending / failed / mode:'media' / empty-text
+          rows and the coach_memory singleton — sorts ascending by created_at
+          (Hive iteration is insertion order, not chronological), slices the
+          last `limit` EXCHANGES, expands each to a user turn then a model turn.
+      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
+        line_range: 162-166
+        method: recentHistoryExchanges (shim forwarder)
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 731-826
+        method: |
+          SendMessageNotifier.send — assembles history ONCE (kill-switched) and
+          threads it into BOTH chat() call sites (primary :755 + auth-retry :826).
+      - file: lib/core/services/ai_service.dart
+        line_range: 311-432
+        method: |
+          AiService.chat / _directHttpCall — attach `history` to BOTH request
+          bodies (primary callFunction + dio web-fallback).
+    # The underlying coach_<ms> Hive rows are OWNED by the `coach_interactions`
+    # concept (recentHistoryExchanges lives in coach_interaction_repository.dart,
+    # already allow-listed there). This concept adds the derived REPLAY contract;
+    # its true readers are server-side TS (ai-proxy / tool-loop) which the Dart
+    # reader-manifest scanner can't enumerate — so NOT manifest-complete and it
+    # does NOT re-own the `coach_` key prefix.
+    reader_manifest_complete: false
+    readers:
+      - file: supabase/functions/ai-proxy/index.ts
+        line_range: 180-820
+        method: destructure history → capCoachHistory() → runToolLoop(history)
+        semantic: pass-through
+        fields_read: [role, text]
+        notes: |
+          §4.4 rule 18 — ≤16 entries / ≤2000 chars each / ≤12000 chars total,
+          oldest-first truncation, BEFORE runToolLoop.
+      - file: supabase/functions/_shared/tool-loop.ts
+        line_range: 97-180
+        method: repairHistoryAlternation + messages[] seeding
+        semantic: pass-through
+        fields_read: [role, text]
+        notes: |
+          Shrink-only alternation repair (drop leading model / trailing user /
+          empty / collapse consecutive same-role) runs AFTER the cap, then seeds
+          messages[] with history BEFORE the current user turn. Deno behavioral
+          test: supabase/functions/_shared/tool-loop.test.ts.
+    regression_test: test/contracts/coach_chat_history_replay_writer_to_reader_test.dart
+
   - concept: coach_interactions
     domain: ai_coach
     behavioral_test_path: test/contracts/coach_interactions_behavioral_test.dart
@@ -3704,8 +3769,13 @@ concepts:
           Forwarder retained for back-compat with existing callers
           in main.dart / ai_coach_provider.dart / sync_service.dart.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 476-500
-        method: SendMessageNotifier._sendMessage
+        line_range: 652-860
+        method: "`send` (SendMessageNotifier)"
+        notes: |
+          R3 (2026-07-07): was mislabeled `_sendMessage` (476-500, a method
+          that no longer exists). The two-write orchestration
+          (saveUserMessagePending → chat → updateInteractionWithResponse,
+          incl. the auth-retry path) lives in `send`.
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
@@ -3718,14 +3788,18 @@ concepts:
           (NOT a coach_* row). Sorts by created_at ascending and
           projects into ChatMessage UI objects. Captures the Hive key
           so failed/pending retry hits the right row.
-      - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 38-60
-        method: buildAiContext priorMessages slice
-        semantic: historical-series
-        fields_read: [created_at, user_message, ai_response]
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 61-64
+        method: buildAiContext is_first_ever_message count
+        semantic: aggregated
+        fields_read: [user_message]
         notes: |
-          Reads the last N coach interactions into the snapshot
-          recent_conversations key.
+          R3 (2026-07-07): corrected. The builder only COUNTS prior
+          interactions (any non-empty user_message) to set
+          is_first_ever_message — there is NO recent_conversations key or
+          conversation-series slice; the previously-claimed
+          file/line/fields were stale post-A10 split. Turn-to-turn
+          continuity now lives in the coach_chat_history_replay concept.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 1-9999
         method: extractCoachingNotes + pattern aggregation walks

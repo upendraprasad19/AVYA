@@ -233,6 +233,60 @@ class CoachInteractionRepository {
     return count;
   }
 
+  /// Unit 2 — coach short-term memory. Returns the last [limit] COMPLETE coach
+  /// exchanges (a user turn + its AI reply), oldest→newest, as a flat alternating
+  /// list of `{role: 'user'|'model', text: ...}` maps for the ai-proxy `history`
+  /// field. [limit] counts EXCHANGES (coachBox rows), so the result holds up to
+  /// `2 * limit` entries — NOT 8 flat entries.
+  ///
+  /// Excludes rows that cannot be safely replayed:
+  ///  - `kind`-tagged action rows (e.g. `completion_prompt` tap-cards),
+  ///  - `pending`/`failed` rows (incl. the CURRENT turn's just-written pending
+  ///    row — so a message never leaks into its own history),
+  ///  - media rows (`mode == 'media'` — their `user_message` is a `[Photo] …`
+  ///    placeholder, not usable text),
+  ///  - any row missing a non-empty `user_message` OR `ai_response`.
+  ///
+  /// Hive iteration is INSERTION order, not chronological, so rows are SORTED
+  /// ascending by `created_at` (ISO8601, lexicographically == chronologically)
+  /// before the last-[limit] slice — mirrors the render path's sort in
+  /// `ChatHistoryNotifier.build`. SoT concept `coach_chat_history_replay`.
+  List<Map<String, dynamic>> recentHistoryExchanges({int limit = 8}) {
+    final rows = <Map<String, dynamic>>[];
+    for (final entry in _hive.coachBox.toMap().entries) {
+      final key = entry.key;
+      final raw = entry.value;
+      // Interaction rows are keyed `coach_<ms>`; singleton siblings like
+      // `coach_memory` also match the prefix but carry no `user_message`, so
+      // the empty-text guard below drops them.
+      if (key is! String || !key.startsWith('coach_')) continue;
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      if (map['kind'] != null) continue; // action rows (completion_prompt etc.)
+      if (map['pending'] == true) continue;
+      if (map['failed'] == true) continue;
+      if (map['mode'] == 'media') continue; // '[Photo] …' placeholder text
+      final user = (map['user_message'] as String?)?.trim() ?? '';
+      final ai = (map['ai_response'] as String?)?.trim() ?? '';
+      if (user.isEmpty || ai.isEmpty) continue;
+      if ((map['created_at'] as String?) == null) continue;
+      rows.add(map);
+    }
+
+    rows.sort((a, b) =>
+        (a['created_at'] as String).compareTo(b['created_at'] as String));
+
+    final recent =
+        rows.length > limit ? rows.sublist(rows.length - limit) : rows;
+
+    final out = <Map<String, dynamic>>[];
+    for (final row in recent) {
+      out.add({'role': 'user', 'text': (row['user_message'] as String).trim()});
+      out.add({'role': 'model', 'text': (row['ai_response'] as String).trim()});
+    }
+    return out;
+  }
+
   /// Gets the latest coaching insight from coaching_notes or last AI response.
   String getLatestInsight() {
     final notes = _hive.coachBox.get('coaching_notes');

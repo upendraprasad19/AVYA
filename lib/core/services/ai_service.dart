@@ -308,7 +308,8 @@ class AiService {
   /// Returns an [AiChatResponse] with reply text and any detected
   /// log actions, or throws on failure.
   Future<AiChatResponse> chat(
-      String message, Map<String, dynamic> context) async {
+      String message, Map<String, dynamic> context,
+      {List<Map<String, dynamic>>? history}) async {
     final compact = _compactContext(context);
     try {
       final response = await _supabase.callFunction(
@@ -317,6 +318,8 @@ class AiService {
           'message': message,
           'context': compact,
           'snapshot_json': compact,
+          // Unit 2 — coach short-term memory (optional; omitted when empty/off).
+          if (history != null && history.isNotEmpty) 'history': history,
         },
       );
 
@@ -337,7 +340,7 @@ class AiService {
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.unknown) {
-        return _directHttpCall('ai-proxy', message, compact);
+        return _directHttpCall('ai-proxy', message, compact, history: history);
       }
       rethrow;
     } catch (e) {
@@ -347,7 +350,7 @@ class AiService {
           ErrorTelemetry.logEvent('ai_service_chat_failed', message: clipped));
       // Web fallback: 'Failed to fetch' is thrown by the browser fetch API
       if (errStr.contains('Failed to fetch')) {
-        return _directHttpCall('ai-proxy', message, compact);
+        return _directHttpCall('ai-proxy', message, compact, history: history);
       }
       rethrow;
     }
@@ -395,7 +398,8 @@ class AiService {
   /// so the web/CORS fallback inherits cold-start resilience instead of
   /// surfacing the first 502 to the user.
   Future<AiChatResponse> _directHttpCall(
-      String functionName, String message, Map<String, dynamic> context) async {
+      String functionName, String message, Map<String, dynamic> context,
+      {List<Map<String, dynamic>>? history}) async {
     final url = '${AppConstants.supabaseUrl}/functions/v1/$functionName';
     // BUG-C (d3a1c7): fresh USER token or fail clearly — NEVER fall back to the
     // anon key for an authed Edge Function. ai-proxy validates the Bearer token
@@ -424,6 +428,8 @@ class AiService {
           'message': message,
           'context': compact,
           'snapshot_json': compact,
+          // Unit 2 — coach short-term memory (optional; omitted when empty/off).
+          if (history != null && history.isNotEmpty) 'history': history,
         },
         options: Options(
           headers: {

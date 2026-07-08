@@ -68,6 +68,14 @@ export interface ToolLoopOptions {
    * loop itself; kept on the API surface for telemetry callers.
    */
   snapshot?: Record<string, unknown>;
+  /**
+   * Unit 2 — coach short-term memory. Prior conversation turns (already
+   * size-capped by the caller: ≤16 entries / ≤2000 chars each / ≤12000 total)
+   * seeded into messages[] BEFORE the current user turn. Client-controlled and
+   * therefore UNTRUSTED — alternation is REPAIRED here (see
+   * repairHistoryAlternation) so a malformed history can never 400 Gemini.
+   */
+  history?: Array<{ role: string; text: string }>;
   /** Authentication + Supabase client + tier flag. */
   ctx: ToolContext;
   /** Model — typically MODEL_FLASH from gemini.ts. */
@@ -94,10 +102,115 @@ export interface ToolLoopResult {
   roundsExecuted: number;
 }
 
+/**
+ * Unit 2 — coach short-term memory. Repair a client-supplied conversation
+ * history into a strictly alternating `user→model→…→model` sequence that is
+ * safe to prepend before the current user turn. The client history is
+ * UNTRUSTED (a hole in the client-side filter, a race, or a hand-crafted
+ * request could produce empty turns, a leading model turn, or two same-role
+ * turns in a row — any of which makes Gemini 400 on `contents`).
+ *
+ * SHRINK-ONLY — drops/keeps turns, never adds or reorders — so it preserves the
+ * byte cap the caller already applied (truncation runs BEFORE repair):
+ *  - drop entries with empty/whitespace text;
+ *  - collapse consecutive same-role turns, keeping the LAST (most recent) of a run;
+ *  - drop a leading `model` turn (history must open on a user turn);
+ *  - drop a trailing `user` turn (history must end on a model turn so the
+ *    current user turn that follows keeps the alternation valid).
+ * Exported for the Deno unit test (`tool-loop.test.ts`).
+ */
+export function repairHistoryAlternation(
+  history: Array<{ role: string; text: string }>,
+): Array<{ role: "user" | "model"; text: string }> {
+  const cleaned = (Array.isArray(history) ? history : [])
+    .filter((h) => h && typeof h.text === "string" && h.text.trim().length > 0)
+    .map((h) => ({
+      role: (h.role === "model" ? "model" : "user") as "user" | "model",
+      text: h.text,
+    }));
+
+  // Collapse consecutive same-role turns, keeping the last of each run.
+  const alt: Array<{ role: "user" | "model"; text: string }> = [];
+  for (const turn of cleaned) {
+    if (alt.length > 0 && alt[alt.length - 1].role === turn.role) {
+      alt[alt.length - 1] = turn;
+    } else {
+      alt.push(turn);
+    }
+  }
+
+  // History must open on a user turn and close on a model turn.
+  while (alt.length > 0 && alt[0].role === "model") alt.shift();
+  while (alt.length > 0 && alt[alt.length - 1].role === "user") alt.pop();
+  return alt;
+}
+
+/**
+ * Unit 2 — coach short-term memory. Bound the CLIENT-CONTROLLED `history`
+ * before it reaches the model (§4.4 rule 18, mirroring the message/snapshot
+ * caps in ai-proxy). Normalizes entries to `{role, text}`, drops empties,
+ * clamps each turn to `maxCharsPerEntry`, keeps the most-recent `maxEntries`,
+ * and drops OLDEST-first until the total is ≤ `maxTotalChars`. Runs in the
+ * CALLER, BEFORE runToolLoop; repairHistoryAlternation (shrink-only) then fixes
+ * role alternation, so this cap's oldest-first truncation can never leave an
+ * un-repaired break. Exported for the Deno unit test (`tool-loop.test.ts`).
+ */
+export function capCoachHistory(
+  raw: unknown,
+  opts: {
+    maxEntries?: number;
+    maxCharsPerEntry?: number;
+    maxTotalChars?: number;
+  } = {},
+): Array<{ role: string; text: string }> {
+  const maxEntries = opts.maxEntries ?? 16;
+  const maxCharsPerEntry = opts.maxCharsPerEntry ?? 2000;
+  const maxTotalChars = opts.maxTotalChars ?? 12000;
+  if (!Array.isArray(raw)) return [];
+
+  let entries = raw
+    .filter((e) => e && typeof e === "object")
+    .map((e) => {
+      const rec = e as Record<string, unknown>;
+      return {
+        role: rec.role === "model" ? "model" : "user",
+        text: typeof rec.text === "string" ? rec.text : "",
+      };
+    })
+    .filter((e) => e.text.trim().length > 0)
+    .map((e) => ({
+      role: e.role,
+      text: e.text.length > maxCharsPerEntry
+        ? e.text.slice(0, maxCharsPerEntry)
+        : e.text,
+    }));
+
+  // Keep the most-recent maxEntries.
+  if (entries.length > maxEntries) {
+    entries = entries.slice(entries.length - maxEntries);
+  }
+
+  // Drop OLDEST (front) until the total char budget is met.
+  let total = entries.reduce((n, e) => n + e.text.length, 0);
+  while (total > maxTotalChars && entries.length > 0) {
+    total -= entries[0].text.length;
+    entries.shift();
+  }
+  return entries;
+}
+
 export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult> {
   const maxRounds = opts.maxRounds ?? MAX_ROUNDS;
 
+  // Unit 2 — coach short-term memory. Seed messages[] with the prior turns
+  // (size-capped by the caller) BEFORE the current user turn. Client history is
+  // UNTRUSTED → repair alternation first (shrink-only) so a malformed history
+  // can never produce Gemini's consecutive-user 400.
   const messages: GeminiContent[] = [
+    ...repairHistoryAlternation(opts.history ?? []).map((h) => ({
+      role: h.role,
+      parts: [{ text: h.text }],
+    })),
     { role: "user", parts: [{ text: opts.userMessage }] },
   ];
   const intents: ToolIntent[] = [];
