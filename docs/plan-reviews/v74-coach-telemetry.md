@@ -5,7 +5,8 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/13a91b2f8066-review.md
 ---
 
 # Plan-review record — v74-coach-telemetry (H2: coach-history telemetry)
@@ -23,7 +24,10 @@ shipped client `disable_coach_history` flag + the existing `--rollback ai-proxy 
 Two additive log edits to `supabase/functions/ai-proxy/index.ts` (no other files, no client change,
 no schema change, no change to response shape/status, no change to what's sent to Gemini):
 1. After `const cappedHistory = capCoachHistory(history);` — log `history_len=<N>` on every chat
-   request (same density class as the existing unconditional `system_prompt_size=` log at `:787`).
+   request (same density class as the existing unconditional `system_prompt_size=` log at `:787` —
+   one small fixed-format line per request; unlike that line's origin commit `efba782`, this diff
+   adds no new prompt/behavior content, so it's a volume/format precedent only, not itself precedent
+   for a `feature_flag` exemption — the exemption argument below stands independently of it).
 2. In the existing `catch (loopErr)` block around `runToolLoop()` — extend the existing
    `console.error` to add `had_history=<bool>`, keeping `loopErr` as the last positional arg (preserves
    the `supabase/functions/CLAUDE.md`-pinned `console.error("[fn-name] request_id=X", err)` shape).
@@ -65,8 +69,18 @@ return type (`supabase/functions/_shared/tool-loop.ts:158-169`) is `Array<{role,
 `[]` on non-array input — `.length` access is unconditionally safe. `history` is untyped JSON from
 `req.json()` (`:180`), matching `capCoachHistory(raw: unknown, ...)`'s signature.
 
-## STATUS — implementing
-Edit applied in worktree `v74-coach-telemetry`. Next: commit (`feat(ai-proxy): add coach-history
-telemetry (v74 H2)`), self-triggered B-pass (≥platform, before the `--no-ff` merge) → set
-`bpass: accepted` here, merge to local main. ai-proxy deploy (v73→v74, verify_jwt=false, standard
-host-shell flow) + push = each their own explicit founder go, separate from this plan's approval.
+## B-pass (2026-07-08, fresh context-blind Sonnet, 5 lenses + adversarial digging) → SHIP
+`docs/reviews/13a91b2f8066-review.md`. Lenses 1/2/4/5 (writer_reader_drift, function_exception_swallow,
+secrets_in_tree, unawaited_no_error_sink) clean — no Hive/cloud write, no `.functions.invoke(`, no
+secret-shaped literal, no `unawaited(`. Lens 3 (blast_radius_mismatch) investigated in depth: verified
+(not just trusted) the `regression_test`/`behavioral_test_path`/`feature_flag` exemption claims via
+independent grep + source trace — all confirmed legitimate for this diff shape. Adversarial digging
+beyond the 5 lenses confirmed: no scope/TDZ issue, `capCoachHistory` never throws for any input shape
+(guards non-array to `[]`, caps at 16 entries), the modified `console.error` keeps `loopErr` as a
+distinct final arg, no log-injection surface (only a number + boolean interpolated, never raw history
+text). One P3 finding (precedent-citation precision, not a code defect) — fixed via the phrasing
+tighten above, `status: accepted` in the review doc.
+
+## STATUS — commit `13a91b2f8066871e38aa75d2ab885bf3be3d8847` landed; B-pass accepted; ready to merge
+Next: `--no-ff` merge to local main. ai-proxy deploy (v73→v74, verify_jwt=false, standard host-shell
+flow) + push = each their own explicit founder go, separate from this plan's approval.
