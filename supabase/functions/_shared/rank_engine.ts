@@ -161,3 +161,49 @@ export async function completionRateOverWindow(
   }
   return scheduled === 0 ? 0.0 : completed / scheduled;
 }
+
+// OPT-E — pure grouping helpers for evaluate-rank-promotions' batch pre-fetch
+// (one .in("user_id", allIds) call per table instead of one query per user per
+// cron tick). Kept here rather than in index.ts so they're importable in a Deno
+// test without triggering index.ts's module-level `serve()` (which binds a port
+// on import). Each takes the raw rows from a `.in()` select and groups them by
+// user_id — the actual `.in()` fetch + its error handling stays in index.ts
+// (batch-read-in-a-whole-batch-cron → throw, per Unit C §2.24 precedent).
+
+/** user_progress rows keyed by user_id. UNIQUE(user_id) at the DB level
+ *  (migration 001) guarantees at most one row per key — no last-write-wins risk. */
+export function buildUserProgressMap(
+  rows: Array<Record<string, unknown>>,
+): Map<string, Record<string, unknown>> {
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    map.set(row.user_id as string, row);
+  }
+  return map;
+}
+
+/** Already-earned rank codes per user, from rank_promotions (one row per
+ *  earned (user_id, rank_code) pair — UNIQUE(user_id, rank_code), migration 039). */
+export function buildRankPromotionsMap(
+  rows: Array<Record<string, unknown>>,
+): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const uid = row.user_id as string;
+    if (!map.has(uid)) map.set(uid, new Set());
+    map.get(uid)!.add(row.rank_code as string);
+  }
+  return map;
+}
+
+/** user_profile.current_rank_code per user. UNIQUE(user_id) (migration 001)
+ *  guarantees at most one row per key. */
+export function buildCurrentRankMap(
+  rows: Array<Record<string, unknown>>,
+): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const row of rows) {
+    map.set(row.user_id as string, (row.current_rank_code as string | null) ?? null);
+  }
+  return map;
+}

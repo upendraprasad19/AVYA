@@ -22,6 +22,9 @@ import {
   LADDER,
   ranksUpTo,
   completionRateOverWindow,
+  buildUserProgressMap,
+  buildRankPromotionsMap,
+  buildCurrentRankMap,
 } from "../_shared/rank_engine.ts";
 import {
   formatPromotionCeremony,
@@ -40,6 +43,50 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+// OPT-E — chunk size for the batch pre-fetch .in("user_id", chunk) calls below.
+// Matches the BATCH_SIZE=100 precedent in weekly-recalc/index.ts:267 for the
+// identical query shape (unchunked .in() risks PostgREST querystring-length
+// limits once the user base is large enough — see docs/plan-reviews for the
+// crossover estimate; 7 users today makes this a forward-looking guard, not a
+// live bug, but the codebase already has a proven pattern for it).
+const BATCH_SIZE = 100;
+
+/** Fetches `columns` for every id in `userIds` from `table`, chunked at
+ *  BATCH_SIZE, and returns the concatenated rows. Stops and surfaces the
+ *  error on the first failing chunk (partial rows from earlier chunks are
+ *  discarded by the caller via the error check, matching the all-or-nothing
+ *  semantics of the old single unchunked .in() call).
+ *
+ *  ⚠️ `scripts/check_schema_column_refs.dart` cannot see the 3 call sites
+ *  below — its regex only matches a string LITERAL directly inside
+ *  `.from('...')` (documented as `.from(<variable>)` = "NOT validated —
+ *  partial coverage by design" in that gate's own header). `table` and
+ *  `columns` here are parameters, so a future column rename on
+ *  user_progress/rank_promotions/user_profile won't be caught by that gate
+ *  for these 3 reads — it WILL fail loudly at runtime instead (42703 →
+ *  caught by the error check below → whole-tick abort + failed cron log),
+ *  not silently degrade, but it's an unflagged blind spot worth knowing
+ *  about before trusting a green gate run after a schema change here. */
+async function fetchInChunks(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  table: string,
+  columns: string,
+  userIds: string[],
+): Promise<{ data: Array<Record<string, unknown>>; error: unknown }> {
+  const allRows: Array<Record<string, unknown>> = [];
+  for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+    const chunk = userIds.slice(i, i + BATCH_SIZE);
+    const { data, error } = await supabase.from(table).select(columns).in(
+      "user_id",
+      chunk,
+    );
+    if (error) return { data: allRows, error };
+    allRows.push(...((data ?? []) as Array<Record<string, unknown>>));
+  }
+  return { data: allRows, error: null };
+}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -84,6 +131,46 @@ serve(async (req: Request) => {
       );
     }
 
+    // OPT-E — pre-fetch reads that were previously issued once PER USER
+    // (user_progress, rank_promotions, user_profile.current_rank_code) in a
+    // single .in() call each. Reduces N*3 queries/tick to 3. Read totalWorkouts
+    // (COUNT below) and completionRateOverWindow (via rank_engine, called
+    // conditionally per officer-track gate) stay per-user: COUNT batching needs
+    // a GROUP BY RPC (invisible to check_schema_column_refs + a migration-
+    // sequencing risk if the function deploys before the migration lands), and
+    // completionRateOverWindow is rarely invoked (only for users 1+ year in who
+    // already cleared every lower gate) with a per-rank window — not worth
+    // batching. Batch-read-in-a-whole-batch-cron → throw (Unit C §2.24 precedent,
+    // matches the users-roster-fetch abort above: a failed pre-fetch here is as
+    // fatal as a failed roster fetch, not a per-user condition).
+    const userIds = (users as Array<Record<string, unknown>>).map((u) => u.id as string);
+    const [progressBatch, ranksBatch, profileBatch] = await Promise.all([
+      fetchInChunks(
+        supabase,
+        "user_progress",
+        "user_id, current_streak_days, deployments_complete, longest_gap_days, last_workout_date",
+        userIds,
+      ),
+      fetchInChunks(supabase, "rank_promotions", "user_id, rank_code", userIds),
+      fetchInChunks(supabase, "user_profile", "user_id, current_rank_code", userIds),
+    ]);
+    const prefetchErr = progressBatch.error ?? ranksBatch.error ?? profileBatch.error;
+    if (prefetchErr) {
+      console.error(`[evaluate-rank-promotions] request_id=${requestId} pre-fetch batch err`, prefetchErr);
+      await logCronEnd(logId, "failed", {
+        httpStatus: 500,
+        requestId,
+        errorSummary: String(prefetchErr),
+      });
+      return new Response(
+        JSON.stringify({ error: "Internal server error", request_id: requestId }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const progressMap = buildUserProgressMap(progressBatch.data ?? []);
+    const ranksMap = buildRankPromotionsMap(ranksBatch.data ?? []);
+    const currentRankMap = buildCurrentRankMap(profileBatch.data ?? []);
+
     let evaluated = 0;
     let promoted = 0;
     const now = new Date();
@@ -111,16 +198,11 @@ serve(async (req: Request) => {
         continue;
       }
 
-      // Read the per-user progress row for streak + deployments.
-      const { data: progressRow, error: progressErr } = await supabase
-        .from("user_progress")
-        .select("current_streak_days, deployments_complete, longest_gap_days, last_workout_date")
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (progressErr) {
-        console.error(`[evaluate-rank-promotions] user=${userId} progressRow err`, progressErr);
-        continue;
-      }
+      // OPT-E — progress row comes from the batch pre-fetch above (was a
+      // per-user .maybeSingle() query; absent-from-map = no row for this user,
+      // same as the old query's `data: null` — NOT an error, so `?? 0` below
+      // still carries the same meaning it always did).
+      const progressRow = progressMap.get(userId) ?? null;
 
       // Compute days since last workout for the maxGapDays gate (MCPO).
       let lastWorkoutDaysAgo: number | null = null;
@@ -146,21 +228,10 @@ serve(async (req: Request) => {
       const winner = await highestQualified(state);
       const eligibleCodes = ranksUpTo(winner.code).map((r) => r.code);
 
-      // What's already on file?
-      // Unit C (§2.24) — capture + skip: a silent failure here reads as "no ranks on
-      // file" → `toInsert` would re-insert ranks the user already holds and fire
-      // duplicate ceremonies. Skip this user (self-heals next run) rather than mis-grade.
-      const { data: existing, error: existingErr } = await supabase
-        .from("rank_promotions")
-        .select("rank_code")
-        .eq("user_id", userId);
-      if (existingErr) {
-        console.error(`[evaluate-rank-promotions] user=${userId} existing-ranks err`, existingErr);
-        continue;
-      }
-      const existingCodes = new Set(
-        (existing ?? []).map((e: Record<string, unknown>) => e.rank_code as string),
-      );
+      // OPT-E — what's already on file, from the batch pre-fetch above (was a
+      // per-user .select().eq() query). Absent-from-map = no earned ranks yet
+      // for this user, same as the old query's empty array.
+      const existingCodes = ranksMap.get(userId) ?? new Set<string>();
 
       const toInsert = eligibleCodes
         .filter((c) => !existingCodes.has(c))
@@ -254,12 +325,10 @@ serve(async (req: Request) => {
       // the user was silently demoted. Rank is permanent: `rank_promotions`
       // is the append-only event log; `user_profile.current_rank_code` is
       // its denormalization and must monotonically increase.
-      const { data: currentRow } = await supabase
-        .from("user_profile")
-        .select("current_rank_code")
-        .eq("user_id", userId)
-        .maybeSingle();
-      const currentCode = (currentRow?.current_rank_code as string | null) ?? null;
+      // OPT-E — current_rank_code comes from the batch pre-fetch above (was a
+      // per-user .maybeSingle() query). Absent-from-map = no profile row yet,
+      // same as the old query's `data: null`.
+      const currentCode = currentRankMap.get(userId) ?? null;
       const currentOrdinal = currentCode === null
         ? -1
         : (LADDER.find((r) => r.code === currentCode)?.ordinal ?? -1);
