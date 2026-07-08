@@ -5454,13 +5454,15 @@ concepts:
           qualified))`. Helper at line 61 is the canonical comparator
           and the unit under behavioral test.
       - file: supabase/functions/evaluate-rank-promotions/index.ts
-        line_range: 227-251
+        line_range: 319-340
         method: evaluate-rank-promotions cron sync block
         notes: |
           Mirrors the client guard server-side. Reads existing
           current_rank_code, looks up its ordinal via LADDER, only
           issues the .update() when winner.ordinal > currentOrdinal.
-          Deployed as v7 2026-05-27.
+          Deployed as v7 2026-05-27. Line range shifted from 227-251
+          due to OPT-E's batch pre-fetch + chunking-helper insertions
+          above this block (2026-07-08) — block logic unchanged.
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/rank_service.dart
