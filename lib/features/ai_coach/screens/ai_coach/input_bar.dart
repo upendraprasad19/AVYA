@@ -16,6 +16,28 @@ extension _InputBar on _AiCoachScreenState {
 
     final hasText = _messageController.text.trim().isNotEmpty;
 
+    // FC8 — composer field hoisted so the limit-reached state can wrap it in a
+    // paywall tap target without duplicating the field.
+    final composerField = TextField(
+      controller: _messageController,
+      focusNode: _inputFocusNode,
+      enabled: !isLimitReached && !isSending,
+      decoration: InputDecoration(
+        border: InputBorder.none,
+        hintText: isLimitReached
+            ? 'Daily limit reached — Go PRO'
+            : 'Ask your coach…',
+        hintStyle: AppTypography.body.copyWith(
+          fontSize: 14,
+          color: isLimitReached ? AppColors.proGold : AppColors.textDim,
+        ),
+        contentPadding: EdgeInsets.zero,
+        isCollapsed: true,
+      ),
+      style: AppTypography.body.copyWith(fontSize: 14),
+      onSubmitted: (_) => _maybeSendText(isPro),
+    );
+
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
       decoration: const BoxDecoration(
@@ -74,29 +96,20 @@ extension _InputBar on _AiCoachScreenState {
                     ),
                   ),
                 Expanded(
+                  // FC8: at the daily limit the composer TextField is disabled;
+                  // wrap it so a tap opens the paywall (the gold "Go PRO" hint the
+                  // user actually taps). Below the limit it's the plain field, so
+                  // typing/focus behave exactly as before.
                   child: _isRecording
                       ? _buildRecordingBody()
-                      : TextField(
-                          controller: _messageController,
-                          focusNode: _inputFocusNode,
-                          enabled: !isLimitReached && !isSending,
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            hintText: isLimitReached
-                                ? 'Daily limit reached \u2014 Go PRO'
-                                : 'Ask your coach\u2026',
-                            hintStyle: AppTypography.body.copyWith(
-                              fontSize: 14,
-                              color: isLimitReached
-                                  ? AppColors.proGold
-                                  : AppColors.textDim,
-                            ),
-                            contentPadding: EdgeInsets.zero,
-                            isCollapsed: true,
-                          ),
-                          style: AppTypography.body.copyWith(fontSize: 14),
-                          onSubmitted: (_) => _maybeSendText(isPro),
-                        ),
+                      : isLimitReached
+                          ? GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => showPaywallSheet(context,
+                                  feature: 'Unlimited AI Coach'),
+                              child: composerField,
+                            )
+                          : composerField,
                 ),
                 if (!_isRecording)
                   IconButton(
@@ -179,7 +192,10 @@ extension _InputBar on _AiCoachScreenState {
                     letterSpacing: 1.4,
                   ),
                 ),
-                if (isWarning && !isLimitReached) ...[
+                // FC8: keep the tappable GO PRO link visible AT the limit too
+                // (isLimitReached implies isWarning). Was `isWarning && !isLimitReached`,
+                // which HID the only reachable paywall CTA at the exact upgrade moment.
+                if (isWarning) ...[
                   const SizedBox(width: 6),
                   GestureDetector(
                     onTap: () => showPaywallSheet(context,

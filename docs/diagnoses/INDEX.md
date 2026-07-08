@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### n/a — UI reachability fix (no SoT concept; no writer/reader contract change) (1 bugs)
+- 2026-07-08 f8c0de — >
+
 ### rls_initplan_auth_uid_wrap (1 bugs)
 - 2026-07-07 e6b1a4 — >
 
@@ -775,6 +778,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-08 | f8c0de | > | n/a — UI reachability fix (no SoT concept; no writer/reader contract change) | test/contracts/coach_go_pro_cta_reachable_test.dart |
 | 2026-07-07 | e6b1a4 | > | rls_initplan_auth_uid_wrap | > |
 | 2026-07-07 | f0c2d5 | > | worktree_per_session_isolation | test/contracts/check_commit_from_worktree_test.dart |
 | 2026-07-06 | 280c4d | > | coach_derived_completion | test/contracts/coach_completion_prompt_test.dart |
