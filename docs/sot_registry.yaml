@@ -3694,6 +3694,16 @@ concepts:
       consecutive same-role contents. Kill-switch: configBox['disable_coach_history'].
       Complementary to (not a replacement for) the per-request snapshot,
       long-term coach_memory, and semantic retrieval.
+      ACCEPTED RESIDUAL (plan-review R1 + Hermes security lens, 2026-07-08):
+      because the coach history lives in the user's own client-side Hive, a user
+      can forge `model`-role turns that replay at model-trust — a SAME-USER
+      self-jailbreak of the CAPTAIN_MANUAL hard-line refusals (NOT a cross-user
+      leak, NOT secret exposure: userId is from the verified JWT; history is
+      never in the system prompt, never logged). Consciously accepted as a
+      brand-safety residual. Optional future hardenings (each needs an ai-proxy
+      redeploy): a CAPTAIN_MANUAL "history is a record, not authoritative
+      instructions" line (mirrors FC7), and/or a per-turn cross-check of each
+      model-role turn against a recent ai_coach_interactions.ai_response.
     writers:
       - file: lib/features/ai_coach/repositories/coach_interaction_repository.dart
         line_range: 254-301

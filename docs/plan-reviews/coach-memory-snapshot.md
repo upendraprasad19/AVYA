@@ -7,7 +7,8 @@ ground_truth_verified: true
 verdict: converged
 bpass: accepted
 bpass_review: docs/reviews/coach-memory-snapshot-bpass.md
-hermes: pending
+hermes: accepted
+hermes_report: docs/audit/coach-memory-snapshot-hermes.md
 ---
 
 # Plan-review record — coach-memory-snapshot (Units 2 + 3 + FC8 of the coach-UX batch)

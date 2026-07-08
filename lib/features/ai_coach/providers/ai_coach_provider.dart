@@ -731,13 +731,22 @@ class SendMessageNotifier extends Notifier<bool> {
     // Unit 2 — coach short-term memory: assemble the last N complete exchanges
     // ONCE here so BOTH the primary send below AND the auth-retry re-send (in
     // the catch) carry the same history. Kill-switch:
-    // configBox['disable_coach_history']. The current turn's row (written
-    // pending above with an empty ai_response) is excluded by
-    // recentHistoryExchanges' pending/empty-text filter — no self-leak.
-    final List<Map<String, dynamic>>? coachHistory =
-        HiveService.instance.configBox.get('disable_coach_history') == true
-            ? null
-            : repo.recentHistoryExchanges();
+    // configBox['disable_coach_history']. `excludeKey: coachKey` drops the
+    // current turn's OWN row on EVERY path (fresh write + 60s-dedup-reuse +
+    // retry) so it can never self-leak (Hermes P3). History is an OPTIONAL
+    // enrichment — its assembly must NEVER abort the current message, so any
+    // failure falls back to null (Hermes P2 failure-mode: the read is OUTSIDE
+    // the send try below).
+    List<Map<String, dynamic>>? coachHistory;
+    try {
+      coachHistory =
+          HiveService.instance.configBox.get('disable_coach_history') == true
+              ? null
+              : repo.recentHistoryExchanges(excludeKey: coachKey);
+    } catch (e) {
+      coachHistory = null;
+      debugPrint('[AiCoachProvider.send] history assembly failed (ignored): $e');
+    }
 
     state = true;
 

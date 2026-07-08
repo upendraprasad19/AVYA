@@ -161,9 +161,10 @@ class AiCoachRepository {
 
   /// Unit 2 — coach short-term memory. Forwards to
   /// [CoachInteractionRepository.recentHistoryExchanges].
-  List<Map<String, dynamic>> recentHistoryExchanges({int limit = 8}) =>
+  List<Map<String, dynamic>> recentHistoryExchanges(
+          {int limit = 8, String? excludeKey}) =>
       CoachInteractionRepository.instance
-          .recentHistoryExchanges(limit: limit);
+          .recentHistoryExchanges(limit: limit, excludeKey: excludeKey);
 
   // ── Coach-memory surface (forwards to CoachMemoryService) ──────────
 

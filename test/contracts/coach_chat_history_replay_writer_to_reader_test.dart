@@ -103,6 +103,7 @@ void main() {
     bool? pending,
     bool? failed,
     String? kind,
+    String? channel,
   }) async {
     final box = HiveService.instance.coachBox;
     await box.put(key, {
@@ -116,6 +117,7 @@ void main() {
       'pending': ?pending,
       'failed': ?failed,
       'kind': ?kind,
+      'channel': ?channel,
     });
   }
 
@@ -180,6 +182,36 @@ void main() {
     expect(CoachInteractionRepository.instance.recentHistoryExchanges(), isEmpty);
   });
 
+  test('(Hermes P3) excludeKey drops the current turn own row (dedup-reuse safe)',
+      () async {
+    await putRow('coach_100', user: 'first', ai: 'A1', createdAt: '2026-07-07T01:00:00.000');
+    // A resent identical message reused this COMPLETE row (60s dedup) — it must
+    // NOT be echoed into its own history.
+    await putRow('coach_200', user: 'again', ai: 'A2', createdAt: '2026-07-07T02:00:00.000');
+    final history = CoachInteractionRepository.instance
+        .recentHistoryExchanges(excludeKey: 'coach_200');
+    expect(history, [
+      {'role': 'user', 'text': 'first'},
+      {'role': 'model', 'text': 'A1'},
+    ]);
+  });
+
+  test('(Hermes P2) restored NON-CHAT channels excluded; app + local rows kept',
+      () async {
+    await putRow('coach_100', user: 'coach q', ai: 'coach a', channel: 'app', createdAt: '2026-07-07T01:00:00.000');
+    // A restored food_text_analysis interaction — must not masquerade as a turn.
+    await putRow('coach_110', user: '2 eggs', ai: '140 kcal', channel: 'food_text_analysis', createdAt: '2026-07-07T01:10:00.000');
+    // A locally-written coach row has no channel → kept.
+    await putRow('coach_120', user: 'local q', ai: 'local a', createdAt: '2026-07-07T01:20:00.000');
+    final history = CoachInteractionRepository.instance.recentHistoryExchanges();
+    expect(history, [
+      {'role': 'user', 'text': 'coach q'},
+      {'role': 'model', 'text': 'coach a'},
+      {'role': 'user', 'text': 'local q'},
+      {'role': 'model', 'text': 'local a'},
+    ]);
+  });
+
   // ── Reader-seam source assertions (server side is TS; the runtime repair/cap
   // logic is behaviorally covered by supabase/functions/_shared/tool-loop.test.ts).
   test('server reader seam threads history through all three layers', () {
@@ -218,7 +250,7 @@ void main() {
     // Assembled once, kill-switched.
     expect(provider.contains("configBox.get('disable_coach_history')"), isTrue,
         reason: 'history assembly must honor the disable_coach_history flag');
-    expect(provider.contains('recentHistoryExchanges()'), isTrue);
+    expect(provider.contains('recentHistoryExchanges('), isTrue);
     // Both the primary and the auth-retry chat() calls pass history.
     expect('history: coachHistory'.allMatches(provider).length,
         greaterThanOrEqualTo(2),

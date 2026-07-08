@@ -209,6 +209,10 @@ extension SyncServiceCoach on SyncService {
           'mode': 'quick',
           'is_user_message': true,
           'created_at': map['created_at'],
+          // Preserve the cloud channel so recentHistoryExchanges can exclude
+          // restored NON-CHAT interactions (food_text_analysis / scan_meal /
+          // cart_auditor / …) from the replayed coach history (Hermes P2).
+          'channel': map['channel'],
           'source': 'cloud_restore',
         });
       }
