@@ -815,6 +815,11 @@ yet" — never make up a number.
     // (8 exchanges) · ≤2000 chars/entry · ≤12000 chars total, dropping OLDEST
     // first. tool-loop then repairs role alternation (shrink-only).
     const cappedHistory = capCoachHistory(history);
+    // v74 H2 — history-correlated telemetry: lets a coach-failure spike be
+    // correlated against history presence/size without a redeploy to add it.
+    console.log(
+      `[ai-proxy] history_len=${cappedHistory.length} request_id=${chatRequestId}`,
+    );
 
     let loop;
     try {
@@ -827,7 +832,7 @@ yet" — never make up a number.
       });
     } catch (loopErr) {
       console.error(
-        `[ai-proxy] runToolLoop threw request_id=${chatRequestId}`,
+        `[ai-proxy] runToolLoop threw request_id=${chatRequestId} had_history=${cappedHistory.length > 0}`,
         loopErr,
       );
       return err(502, "AI temporarily unavailable. Please try again.", {
