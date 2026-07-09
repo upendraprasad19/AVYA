@@ -8,7 +8,7 @@
 // round-trips. Acceptable for current scale; revisit when active user
 // count exceeds ~2000.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { upsertCoachMemory } from "../_shared/coach_memory.ts";
 
 const corsHeaders = {
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
 });
 
 async function computeSignalsForUser(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
 ): Promise<{
   dropout_risk_score: number | null;

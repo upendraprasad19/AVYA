@@ -1,0 +1,109 @@
+# Closure ledger — Deno type-debt cleanup (supabase/functions/, 261 errors -> 0)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: deno-type-debt-cleanup (uncommitted at authoring —
+# commit/push/merge under explicit founder go). 4 root-cause classes + 3
+# standalone one-offs, all fixes are TypeScript annotation/import changes with
+# zero runtime behavior change (deno test 244/0 identical before and after).
+# x6 review (x4 pre-execution plan review + post-execution B-pass + Hermes)
+# converged; see docs/plan-reviews/deno-type-debt-cleanup.md.
+
+batch: deno-type-debt-cleanup
+plan_review_record: docs/plan-reviews/deno-type-debt-cleanup.md
+bpass_review: docs/reviews/deno-type-debt-cleanup-bpass.md
+hermes_report: docs/audit/deno-type-debt-cleanup-hermes.md
+total_findings: 7
+closed_count: 7
+
+_commit: &wip "deno-type-debt-cleanup (uncommitted)"
+_fulltree_check: &vcheck "deno check --node-modules-dir=auto supabase/functions/  ->  0 errors, 111/111 files"
+_fulltree_test: &vtest "deno test --allow-all --node-modules-dir=auto supabase/functions/  ->  244 passed, 0 failed (identical before/after)"
+
+findings:
+  - id: class-1
+    title: "12 files — broken ReturnType<typeof createClient> idiom collapses every .from(table) row to never"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vcheck
+    notes: >
+      ai-proxy, proactive-coach-promotion, log-client-error, redeem-referral, verify-payment,
+      razorpay-webhook, weekly-recalc, promote-community-item, daily-snapshot, compute-coach-signals,
+      _shared/cron_telemetry.ts, _shared/coach_memory.ts: added SupabaseClient to the existing
+      createClient import, replaced ReturnType<typeof createClient> with bare SupabaseClient.
+      Includes the coach_memory.ts version-alignment correction (bumped @2.45.4 -> @2.39.3 to match
+      6 real callers) and compute-coach-signals.ts's matching follow-up bump. Hermes L21/L36
+      (post-execution) caught that coach_memory.ts's version bump wasn't actually type-erased
+      (createClient was a dead value import) -- corrected to `import type` in this same commit,
+      genuinely zero-runtime now. compute-coach-signals.ts keeps a real (accepted, documented)
+      version change since it constructs its own client -- see hermes_report Finding 1.
+  - id: class-2
+    title: "2 files, 3 sites — .select() built via runtime string concatenation widens to GenericStringError"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vcheck
+    notes: >
+      weekly-report/index.ts (user_profile 13-col) + restore-user-snapshot/index.ts (coach_memory
+      10-col, user_progress streak-freeze 4-col): collapsed concatenated fragments into one string
+      literal each. Byte-identical to the pre-existing concatenated value -- verified via
+      character-by-character reconstruction (Hermes L1) and programmatic string-equality diff
+      (B-pass).
+  - id: class-3
+    title: "12 test files — intentBuilder called with 1 arg (TS2554), result read without await"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vtest
+    notes: >
+      createCustomExercise_test.ts, createCustomTemplate_test.ts, generateHotelWorkout_test.ts,
+      logSet_test.ts, modifyWorkoutForInjury_test.ts, pausePlan_test.ts, regeneratePlanBlock_test.ts,
+      rescheduleWeek_test.ts, scheduleTemplate_test.ts, shortenWorkout_test.ts, swapExercise_test.ts,
+      switchGoal_test.ts: added a `ctx(): ToolContext` stub helper, changed each intentBuilder!(...)
+      call site to `await ...intentBuilder!(args, ctx())`, added `async` to the enclosing Deno.test
+      callback. Hermes L26 confirmed all 12 corresponding production intentBuilder implementations
+      are synchronous and never reference ctx (inert stub, zero behavior change); confirmed the real
+      production call site (_shared/tool-loop.ts:429) was already a correctly-awaited 2-arg call
+      before this batch -- these 12 tests were the ones out of sync, not the contract.
+  - id: class-4
+    title: "registry.ts — heterogeneous ALL_TOOLS array fails contravariant parameter check (20 errors, 1 per tool)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vcheck
+    notes: >
+      _shared/tools/registry.ts: widened `ALL_TOOLS: ToolDefinition[]` and the allTools()/byName()
+      return types to `ToolDefinition<any, any>[]` / `ToolDefinition<any, any> | undefined`. Hermes
+      L26 + B-pass both confirmed the widening touches only declared types -- the array's contents,
+      filter/find bodies, and every individual tool's own narrow ToolDefinition<Args,Result>
+      declaration are unchanged.
+  - id: oneoff-rank-engine
+    title: "evaluate-rank-promotions <-> rank_engine.ts cross-file SupabaseClient version mismatch"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vcheck
+    notes: >
+      _shared/rank_engine.ts:8 -- bumped the `import type { SupabaseClient }` version specifier from
+      @2.39.0 to @2.39.3 to match its one real caller (evaluate-rank-promotions/index.ts, already on
+      @2.39.3, unmodified). Confirmed `import type` (not a value import) -- fully erased at transpile,
+      zero runtime effect. Hermes L21 independently confirmed this site is clean.
+  - id: oneoff-ai-media-proxy
+    title: "ai-media-proxy HttpError union missing the 'authorization' member an existing throw already uses"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vcheck
+    notes: >
+      ai-media-proxy/index.ts:43,47 -- added "authorization" to HttpError's errorType union (field
+      declaration + constructor parameter). The runtime throw new HttpError(403, "authorization", ...)
+      at line ~233 is pre-existing (OI-28 SSRF fix), confirmed unchanged via `git show HEAD` diff --
+      the type union had simply never been updated to match. Coordinated same-commit update to
+      test/contracts/ai_media_proxy_status_code_classification_test.dart (renamed test, added an
+      assertion for the 5th class). Hermes L21 confirmed the widening permits no other call site to
+      newly type-check (all throw sites use the same pre-existing 4-then-5-literal closed set).
+  - id: oneoff-morning-alert
+    title: "morning-alert implicit-any callback parameter (TS7006) masked 2 further latent implicit-anys"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *vcheck
+    notes: >
+      morning-alert/index.ts ~540-554 -- introduced a named MorningSnapRow type for the chunk.map
+      callback parameter (matching the RPC's actual return shape), plus 2 casts (`alertMsg as string |
+      undefined`, a notification_preferences shape cast) for 2 previously-silent implicit-anys the
+      first annotation surfaced. Hermes L21 confirmed the casts emit no runtime code and the guarded
+      branches (`if (!alertMsg)`, `prefs?.morning_checkin?.enabled === false`) read identical runtime
+      values -- no branch changed.

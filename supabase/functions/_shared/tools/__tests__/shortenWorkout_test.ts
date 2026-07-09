@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { shortenWorkoutTool } from "../workout/shortenWorkout.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 Deno.test("shortenWorkout — schema accepts valid args", () => {
   const result = shortenWorkoutTool.schema.safeParse({ minutes: 30 });
@@ -31,8 +36,8 @@ Deno.test("shortenWorkout — schema rejects malformed date", () => {
   assertEquals(result.success, false);
 });
 
-Deno.test("shortenWorkout — intentBuilder produces correct shape with date", () => {
-  const intent = shortenWorkoutTool.intentBuilder!({ minutes: 25, date: "2026-04-20" });
+Deno.test("shortenWorkout — intentBuilder produces correct shape with date", async () => {
+  const intent = await shortenWorkoutTool.intentBuilder!({ minutes: 25, date: "2026-04-20" }, ctx());
   assertEquals(intent.type, "shorten_workout");
   assertEquals(intent.payload.minutes, 25);
   assertEquals(intent.payload.date, "2026-04-20");
@@ -40,8 +45,8 @@ Deno.test("shortenWorkout — intentBuilder produces correct shape with date", (
   assertEquals(intent.previewSummary, "Shorten 2026-04-20 workout to 25 min");
 });
 
-Deno.test("shortenWorkout — intentBuilder defaults date to null", () => {
-  const intent = shortenWorkoutTool.intentBuilder!({ minutes: 20 });
+Deno.test("shortenWorkout — intentBuilder defaults date to null", async () => {
+  const intent = await shortenWorkoutTool.intentBuilder!({ minutes: 20 }, ctx());
   assertEquals(intent.payload.date, null);
   assertEquals(intent.previewSummary, "Shorten today's workout to 20 min");
 });

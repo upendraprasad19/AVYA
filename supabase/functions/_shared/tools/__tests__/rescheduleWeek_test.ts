@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { rescheduleWeekTool } from "../workout/rescheduleWeek.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 Deno.test("rescheduleWeek — schema accepts valid daysAvailable", () => {
   const result = rescheduleWeekTool.schema.safeParse({ daysAvailable: [1, 3, 5] });
@@ -44,8 +49,8 @@ Deno.test("rescheduleWeek — schema rejects malformed weekStart", () => {
   assertEquals(result.success, false);
 });
 
-Deno.test("rescheduleWeek — intentBuilder sorts days and labels them", () => {
-  const intent = rescheduleWeekTool.intentBuilder!({ daysAvailable: [5, 1, 3] });
+Deno.test("rescheduleWeek — intentBuilder sorts days and labels them", async () => {
+  const intent = await rescheduleWeekTool.intentBuilder!({ daysAvailable: [5, 1, 3] }, ctx());
   assertEquals(intent.type, "reschedule_week");
   assertEquals(intent.payload.daysAvailable, [1, 3, 5]);
   assertEquals(intent.payload.weekStart, null);
@@ -53,16 +58,16 @@ Deno.test("rescheduleWeek — intentBuilder sorts days and labels them", () => {
   assertEquals(intent.previewSummary, "Reshuffle week to 3 days: Mon, Wed, Fri");
 });
 
-Deno.test("rescheduleWeek — intentBuilder handles single day", () => {
-  const intent = rescheduleWeekTool.intentBuilder!({ daysAvailable: [7] });
+Deno.test("rescheduleWeek — intentBuilder handles single day", async () => {
+  const intent = await rescheduleWeekTool.intentBuilder!({ daysAvailable: [7] }, ctx());
   assertEquals(intent.previewSummary, "Reshuffle week to 1 day: Sun");
 });
 
-Deno.test("rescheduleWeek — intentBuilder uses weekStart when supplied", () => {
-  const intent = rescheduleWeekTool.intentBuilder!({
+Deno.test("rescheduleWeek — intentBuilder uses weekStart when supplied", async () => {
+  const intent = await rescheduleWeekTool.intentBuilder!({
     daysAvailable: [2, 4],
     weekStart: "2026-04-20",
-  });
+  }, ctx());
   assertEquals(intent.payload.weekStart, "2026-04-20");
 });
 

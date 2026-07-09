@@ -36,20 +36,24 @@ void main() {
           reason:
               'A typed HttpError class is required so the bottom-of-handler '
               'catch can dispatch on errorType ∈ {validation, upstream, '
-              'internal, storage} instead of returning 500 for every '
-              'thrown error.');
+              'internal, storage, authorization} instead of returning 500 '
+              'for every thrown error.');
       expect(src.contains('readonly status: number'), isTrue);
       expect(src.contains('readonly errorType:'), isTrue);
     });
 
-    test('HttpError errorType union covers all 4 classes', () {
-      // The union literal must enumerate validation | upstream | internal
-      // | storage so future contributors don't quietly add a fifth class
+    test('HttpError errorType union covers all 5 classes', () {
+      // The union literal must enumerate validation | upstream | internal |
+      // storage | authorization (the 5th, `authorization`, was added
+      // 2026-07 to match the OI-28 403 throw at line ~233 that already
+      // shipped this string at runtime — the type union had simply never
+      // been updated) so future contributors don't quietly add a 6th class
       // without thinking through how the client surfaces it.
       expect(src.contains('"validation"'), isTrue);
       expect(src.contains('"upstream"'), isTrue);
       expect(src.contains('"internal"'), isTrue);
       expect(src.contains('"storage"'), isTrue);
+      expect(src.contains('"authorization"'), isTrue);
     });
   });
 

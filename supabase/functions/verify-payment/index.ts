@@ -35,7 +35,7 @@
  * with `razorpay-webhook/index.ts` and `lib/core/constants/app_constants.dart`.
  */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 
 const corsHeaders = {
@@ -66,7 +66,7 @@ const YEARLY_PAISE = 299900; // ₹2,999
 async function derivePlanFromAmount(
   amountPaise: number,
   promoCode: string | undefined,
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
 ): Promise<{
   plan: "monthly" | "yearly";
   promoApplied: boolean;
@@ -129,7 +129,7 @@ async function derivePlanFromAmount(
  * Identical logic in razorpay-webhook/index.ts.
  */
 async function redeemPromo(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   promoCode: string,
   userId: string,
   plan: string,

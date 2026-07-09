@@ -19,7 +19,7 @@
 // service_role_key from Vault. The trigger payload is internal-only.
 
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.42.0";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.42.0";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -154,7 +154,7 @@ serve(async (req: Request): Promise<Response> => {
 });
 
 async function loadUserContext(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   user_id: string,
 ): Promise<UserContext> {
   // Schema split: `full_name` lives on the `users` table (migration 001
@@ -281,7 +281,7 @@ async function sendOneSignalPush(
 }
 
 async function logTelemetry(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   user_id: string, op_type: string, message: string,
 ): Promise<void> {
   try {

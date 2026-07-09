@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { istDateStr } from "../_shared/ist_date.ts";
 import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
 
@@ -116,7 +116,7 @@ function calculateExperienceLevel(
  * Supabase JS client returns max 1000 rows by default; this fetches all pages.
  */
 async function fetchAllRows<T>(
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: SupabaseClient,
   table: string,
   selectCols: string,
   dateColumn: string,

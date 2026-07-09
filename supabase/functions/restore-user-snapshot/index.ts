@@ -250,9 +250,7 @@ serve(async (req: Request) => {
       // scores / private fields off the wire). Mirrors sync_coach.dart:222-230.
       db.from("coach_memory")
         .select(
-          "committed_at, committed_to_lt_cdr, induction_completed_at, why_now, " +
-            "definition_of_winning, known_injuries, typical_wake_time, " +
-            "preferred_workout_time, body_part_priorities, coach_notes",
+          "committed_at, committed_to_lt_cdr, induction_completed_at, why_now, definition_of_winning, known_injuries, typical_wake_time, preferred_workout_time, body_part_priorities, coach_notes",
         )
         .eq("user_id", vUid)
         .maybeSingle(),
@@ -263,8 +261,7 @@ serve(async (req: Request) => {
       "freezes",
       db.from("user_progress")
         .select(
-          "streak_freezes_available, streak_freezes_used_dates, " +
-            "streak_freezes_last_refill, streak_freezes_first_pro_grant_done",
+          "streak_freezes_available, streak_freezes_used_dates, streak_freezes_last_refill, streak_freezes_first_pro_grant_done",
         )
         .eq("user_id", vUid)
         .maybeSingle(),

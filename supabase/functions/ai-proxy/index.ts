@@ -28,7 +28,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEmbedding } from "../_shared/embeddings.ts";
 import {
   type Memory,
@@ -73,7 +73,7 @@ const LABEL_FLASH_LITE = "Gemini 2.5 Flash Lite";
  * leak unlimited chat to a free user).
  */
 async function checkPro(
-  client: ReturnType<typeof createClient>,
+  client: SupabaseClient,
   userId: string,
 ): Promise<boolean> {
   try {

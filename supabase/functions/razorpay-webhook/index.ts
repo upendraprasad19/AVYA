@@ -29,7 +29,7 @@
  * payment hardening history (TDZ bugs OI-26/27/29, audit Hermes Phase A→D).
  */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 
@@ -83,7 +83,7 @@ async function verifySignature(
 async function derivePlanFromAmount(
   amountPaise: number,
   promoCode: string | undefined,
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: SupabaseClient,
 ): Promise<{
   plan: "monthly" | "yearly";
   promoApplied: boolean;
@@ -149,7 +149,7 @@ async function derivePlanFromAmount(
 async function computeExpectedAmount(
   plan: string,
   promoCode: string | undefined,
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: SupabaseClient,
 ): Promise<{ expectedPaise: number; promoApplied: boolean; discountPct: number }> {
   const fullPrice = plan === "monthly" ? MONTHLY_PAISE : YEARLY_PAISE;
 
@@ -197,7 +197,7 @@ async function computeExpectedAmount(
  * Identical logic in verify-payment/index.ts.
  */
 async function redeemPromo(
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: SupabaseClient,
   promoCode: string,
   userId: string,
   plan: string,

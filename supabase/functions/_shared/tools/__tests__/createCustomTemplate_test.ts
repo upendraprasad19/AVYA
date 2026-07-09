@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { createCustomTemplateTool } from "../plan/createCustomTemplate.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 const validExercise = {
   exerciseId: "bench_press",
@@ -133,15 +138,15 @@ Deno.test("createCustomTemplate — schema rejects assignedDays out of range", (
   assertEquals(result.success, false);
 });
 
-Deno.test("createCustomTemplate — intentBuilder counts days and exercises", () => {
-  const intent = createCustomTemplateTool.intentBuilder!({
+Deno.test("createCustomTemplate — intentBuilder counts days and exercises", async () => {
+  const intent = await createCustomTemplateTool.intentBuilder!({
     name: "Hypertrophy Split",
     days: [
       { dayName: "Push", exercises: [validExercise, validExercise] },
       { dayName: "Pull", exercises: [validExercise] },
       { dayName: "Legs", exercises: [validExercise, validExercise, validExercise] },
     ],
-  });
+  }, ctx());
   assertEquals(intent.type, "create_custom_template");
   assertEquals(intent.payload.name, "Hypertrophy Split");
   assertEquals(intent.payload.description, null);
@@ -153,21 +158,21 @@ Deno.test("createCustomTemplate — intentBuilder counts days and exercises", ()
   );
 });
 
-Deno.test("createCustomTemplate — intentBuilder uses singular 'day' for one day", () => {
-  const intent = createCustomTemplateTool.intentBuilder!({
+Deno.test("createCustomTemplate — intentBuilder uses singular 'day' for one day", async () => {
+  const intent = await createCustomTemplateTool.intentBuilder!({
     name: "Single",
     days: [validDay],
-  });
+  }, ctx());
   assertEquals(intent.previewSummary, "Create template: Single (1 day, 1 exercises total)");
 });
 
-Deno.test("createCustomTemplate — intentBuilder passes through assignedDays + description", () => {
-  const intent = createCustomTemplateTool.intentBuilder!({
+Deno.test("createCustomTemplate — intentBuilder passes through assignedDays + description", async () => {
+  const intent = await createCustomTemplateTool.intentBuilder!({
     name: "Template",
     description: "Focus on hypertrophy",
     days: [validDay],
     assignedDays: [1, 4],
-  });
+  }, ctx());
   assertEquals(intent.payload.description, "Focus on hypertrophy");
   assertEquals(intent.payload.assigned_days, [1, 4]);
 });

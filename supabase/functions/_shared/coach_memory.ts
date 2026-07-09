@@ -2,7 +2,7 @@
 // Shared accessors for the coach_memory table. Used by ai-proxy,
 // daily-snapshot, compute-coach-signals, morning-alert.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 export interface CoachMemory {
   user_id: string;
@@ -35,7 +35,7 @@ export interface CoachMemory {
 export type CoachMemoryPatch = Partial<Omit<CoachMemory, "user_id" | "updated_at">>;
 
 export async function fetchCoachMemory(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
 ): Promise<CoachMemory | null> {
   const { data, error } = await supabase
@@ -51,7 +51,7 @@ export async function fetchCoachMemory(
 }
 
 export async function upsertCoachMemory(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
   patch: CoachMemoryPatch,
 ): Promise<void> {

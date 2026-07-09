@@ -124,16 +124,14 @@ serve(async (req: Request) => {
       console.error("Nutrition query error:", nutritionError);
     }
 
-    // 2. User profile for targets
+    // 2. User profile for targets. daily_calories/protein_grams/carbs_grams/
+    // fat_grams are the canonical stored macro targets (the SoT the Nutrition /
+    // Profile / Diet-Plan screens show) — fix 2026-06-02 macro-mismatch: read
+    // these instead of recomputing a divergent target server-side.
     const { data: userProfile, error: profileError } = await supabase
       .from("user_profile")
       .select(
-        "current_weight_kg, target_weight_kg, primary_goal, fitness_experience, " +
-          "days_per_week, activity_level, diet_preference, bmr, tdee, " +
-          // Canonical stored macro targets (the SoT the Nutrition / Profile /
-          // Diet-Plan screens show) — fix 2026-06-02 macro-mismatch: read these
-          // instead of recomputing a divergent target server-side.
-          "daily_calories, protein_grams, carbs_grams, fat_grams",
+        "current_weight_kg, target_weight_kg, primary_goal, fitness_experience, days_per_week, activity_level, diet_preference, bmr, tdee, daily_calories, protein_grams, carbs_grams, fat_grams",
       )
       .eq("user_id", targetUserId)
       .single();

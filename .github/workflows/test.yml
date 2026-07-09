@@ -56,8 +56,9 @@ jobs:
   # ── Deno Edge-Function tests (added Unit C 2026-07-08, diagnose a7e2c4) ──
   # Until now NO CI job ran the Deno tests under supabase/functions/**, so a red
   # test (getProgressSummary maxLatencyMs 3500 vs source 6000) sat unnoticed at HEAD.
-  # This job type-checks every Unit-C-edited Edge Function AND runs the shape +
-  # behavioral tests, so the read-hardening regression guard actually gates at merge.
+  # This job runs the shape + behavioral tests AND (since the 2026-07-09 type-debt
+  # cleanup) type-checks the FULL tree, so the read-hardening regression guard
+  # actually gates at merge and the type system can no longer regrow silently.
   deno-edge-functions:
     name: Deno Edge-Function tests
     runs-on: ubuntu-latest
@@ -72,22 +73,21 @@ jobs:
       # Runs ALL Deno tests (the 18 shape tests + Unit C's behavioral tests) so
       # the read-hardening regression guard gates + a red test can no longer sit
       # unnoticed. `--no-check` runs the RUNTIME assertions without the TypeScript
-      # type-check pass: the EFs carry PRE-EXISTING type-annotation debt (cross-module
-      # SupabaseClient generics, Date overloads) unrelated to Unit C's read-hardening;
-      # a full type-check is a separate cross-cutting refactor (tracked distinctly), not
-      # this batch. The behavioral assertions (throw / -1.0 / send-vs-skip) still execute.
+      # type-check pass — kept `--no-check` here so this step stays a pure runtime/
+      # behavioral gate (throw / -1.0 / send-vs-skip); the separate type-check step
+      # below is the dedicated gate for the type system (see 2026-07-09 type-debt
+      # cleanup note).
       - name: Deno test (shape + Unit C behavioral)
         run: deno test --no-check --allow-all --node-modules-dir=auto supabase/functions/
 
-      # Type-check the three Unit-C-edited modules that ARE type-clean (the coach-tool
-      # Promise.all + 6 throws + the rank_engine -1.0 sentinel) so those edits are
-      # compile-verified. The crons carry pre-existing type debt (tracked separately).
-      - name: Deno type-check the type-clean Unit C edits
-        run: >
-          deno check --node-modules-dir=auto
-          supabase/functions/_shared/tools/progress/getProgressSummary.ts
-          supabase/functions/_shared/tools/progress/getPromotionStatus.ts
-          supabase/functions/_shared/rank_engine.ts
+      # Full-tree type-check. The pre-existing type-annotation debt referenced above
+      # (cross-module SupabaseClient generics, Date overloads, intentBuilder arity,
+      # the heterogeneous tool-registry array) was eliminated tree-wide by the
+      # 2026-07-09 Deno type-debt cleanup (261 errors → 0, zero runtime changes —
+      # verified via a before/after `deno test` pass-count match). This is now a
+      # permanent hard-blocking regression gate against the debt regrowing.
+      - name: Deno type-check (full tree)
+        run: deno check --node-modules-dir=auto supabase/functions/
 
   # ── Tier 1.5: Tech-debt audit gates (introduced 2026-05-20, finding I2) ──
   # Runs every scripts/check_*.dart gate. Each gate is independent; the job
