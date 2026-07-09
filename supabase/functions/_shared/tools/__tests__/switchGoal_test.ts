@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { switchGoalTool } from "../plan/switchGoal.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 Deno.test("switchGoal — schema accepts minimal args (newGoal only)", () => {
   const result = switchGoalTool.schema.safeParse({ newGoal: "build_muscle" });
@@ -72,8 +77,8 @@ Deno.test("switchGoal — schema rejects malformed startDate", () => {
   assertEquals(result.success, false);
 });
 
-Deno.test("switchGoal — intentBuilder defaults weeks to 4 and startDate to null", () => {
-  const intent = switchGoalTool.intentBuilder!({ newGoal: "build_muscle" });
+Deno.test("switchGoal — intentBuilder defaults weeks to 4 and startDate to null", async () => {
+  const intent = await switchGoalTool.intentBuilder!({ newGoal: "build_muscle" }, ctx());
   assertEquals(intent.type, "switch_goal");
   assertEquals(intent.payload.new_goal, "build_muscle");
   assertEquals(intent.payload.weeks, 4);
@@ -85,12 +90,12 @@ Deno.test("switchGoal — intentBuilder defaults weeks to 4 and startDate to nul
   );
 });
 
-Deno.test("switchGoal — intentBuilder uses supplied weeks", () => {
-  const intent = switchGoalTool.intentBuilder!({
+Deno.test("switchGoal — intentBuilder uses supplied weeks", async () => {
+  const intent = await switchGoalTool.intentBuilder!({
     newGoal: "lose_fat",
     weeks: 8,
     startDate: "2026-04-20",
-  });
+  }, ctx());
   assertEquals(intent.payload.weeks, 8);
   assertEquals(intent.payload.start_date, "2026-04-20");
   assertEquals(

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { upsertCoachMemory, fetchCoachMemory } from "../_shared/coach_memory.ts";
 // Audit 2026-05-12 P2-D — daily-snapshot must embed merged coaching_notes
@@ -49,7 +49,7 @@ interface ExtractedFacts {
 }
 
 async function extractCoachingNotes(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
   todayIST: string,
 ): Promise<ExtractedFacts | null> {
@@ -132,7 +132,7 @@ If nothing was found, return: {}`;
 }
 
 async function mergeCoachingNotes(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
   extracted: ExtractedFacts,
 ): Promise<void> {
@@ -208,7 +208,7 @@ async function mergeCoachingNotes(
 }
 
 async function mergeCoachMemoryFields(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
   extracted: ExtractedFacts,
 ): Promise<void> {

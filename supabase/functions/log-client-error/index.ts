@@ -41,7 +41,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
   clientError,
   corsHeaders,
@@ -175,7 +175,7 @@ function isHighPriority(opType: string | null): boolean {
  * default in `error_telemetry.dart`).
  */
 async function nextWindowAt(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
   since: string,
 ): Promise<string | null> {

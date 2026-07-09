@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { modifyWorkoutForInjuryTool } from "../workout/modifyWorkoutForInjury.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 Deno.test("modifyWorkoutForInjury — schema accepts valid args", () => {
   const result = modifyWorkoutForInjuryTool.schema.safeParse({
@@ -52,11 +57,11 @@ Deno.test("modifyWorkoutForInjury — schema rejects daysAhead > 14", () => {
   assertEquals(result.success, false);
 });
 
-Deno.test("modifyWorkoutForInjury — intentBuilder defaults daysAhead to 7", () => {
-  const intent = modifyWorkoutForInjuryTool.intentBuilder!({
+Deno.test("modifyWorkoutForInjury — intentBuilder defaults daysAhead to 7", async () => {
+  const intent = await modifyWorkoutForInjuryTool.intentBuilder!({
     bodyPart: "shoulder",
     severity: "moderate",
-  });
+  }, ctx());
   assertEquals(intent.type, "modify_workout_for_injury");
   assertEquals(intent.payload.bodyPart, "shoulder");
   assertEquals(intent.payload.severity, "moderate");
@@ -65,12 +70,12 @@ Deno.test("modifyWorkoutForInjury — intentBuilder defaults daysAhead to 7", ()
   assertEquals(intent.previewSummary, "Modify next 7 days for moderate shoulder injury");
 });
 
-Deno.test("modifyWorkoutForInjury — intentBuilder uses supplied daysAhead", () => {
-  const intent = modifyWorkoutForInjuryTool.intentBuilder!({
+Deno.test("modifyWorkoutForInjury — intentBuilder uses supplied daysAhead", async () => {
+  const intent = await modifyWorkoutForInjuryTool.intentBuilder!({
     bodyPart: "knee",
     severity: "severe",
     daysAhead: 14,
-  });
+  }, ctx());
   assertEquals(intent.payload.daysAhead, 14);
   assertEquals(intent.previewSummary, "Modify next 14 days for severe knee injury");
 });

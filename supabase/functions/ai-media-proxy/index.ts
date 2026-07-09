@@ -40,11 +40,11 @@ const PRO_IMAGE_DAILY_CAP = 50;
  */
 class HttpError extends Error {
   readonly status: number;
-  readonly errorType: "validation" | "upstream" | "internal" | "storage";
+  readonly errorType: "validation" | "upstream" | "internal" | "storage" | "authorization";
 
   constructor(
     status: number,
-    errorType: "validation" | "upstream" | "internal" | "storage",
+    errorType: "validation" | "upstream" | "internal" | "storage" | "authorization",
     message: string,
   ) {
     super(message);

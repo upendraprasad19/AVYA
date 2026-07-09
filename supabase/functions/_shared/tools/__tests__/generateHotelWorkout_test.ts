@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { generateHotelWorkoutTool } from "../workout/generateHotelWorkout.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 Deno.test("generateHotelWorkout — schema accepts valid days", () => {
   const result = generateHotelWorkoutTool.schema.safeParse({ days: 3 });
@@ -34,8 +39,8 @@ Deno.test("generateHotelWorkout — schema rejects malformed startDate", () => {
   assertEquals(result.success, false);
 });
 
-Deno.test("generateHotelWorkout — intentBuilder produces correct shape without startDate", () => {
-  const intent = generateHotelWorkoutTool.intentBuilder!({ days: 4 });
+Deno.test("generateHotelWorkout — intentBuilder produces correct shape without startDate", async () => {
+  const intent = await generateHotelWorkoutTool.intentBuilder!({ days: 4 }, ctx());
   assertEquals(intent.type, "generate_hotel_workout");
   assertEquals(intent.payload.days, 4);
   assertEquals(intent.payload.startDate, null);
@@ -43,11 +48,11 @@ Deno.test("generateHotelWorkout — intentBuilder produces correct shape without
   assertEquals(intent.previewSummary, "Generate 4-day bodyweight plan");
 });
 
-Deno.test("generateHotelWorkout — intentBuilder includes startDate in preview", () => {
-  const intent = generateHotelWorkoutTool.intentBuilder!({
+Deno.test("generateHotelWorkout — intentBuilder includes startDate in preview", async () => {
+  const intent = await generateHotelWorkoutTool.intentBuilder!({
     days: 2,
     startDate: "2026-04-25",
-  });
+  }, ctx());
   assertEquals(intent.payload.startDate, "2026-04-25");
   assertEquals(intent.previewSummary, "Generate 2-day bodyweight plan starting 2026-04-25");
 });

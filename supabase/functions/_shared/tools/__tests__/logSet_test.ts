@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { logSetTool } from "../workout/logSet.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 Deno.test("logSet — schema accepts valid args", () => {
   const result = logSetTool.schema.safeParse({
@@ -61,13 +66,13 @@ Deno.test("logSet — schema rejects non-integer reps", () => {
   assertEquals(result.success, false);
 });
 
-Deno.test("logSet — intentBuilder produces correct shape", () => {
-  const intent = logSetTool.intentBuilder!({
+Deno.test("logSet — intentBuilder produces correct shape", async () => {
+  const intent = await logSetTool.intentBuilder!({
     exerciseId: "ex_bench",
     weightKg: 80,
     reps: 10,
     sets: 4,
-  });
+  }, ctx());
   assertEquals(intent.type, "log_set");
   assertEquals(intent.payload, {
     exerciseId: "ex_bench",

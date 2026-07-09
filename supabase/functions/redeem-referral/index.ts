@@ -19,7 +19,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,7 +38,7 @@ interface RedeemRequest {
 
 export async function handleRedeemReferral(
   body: RedeemRequest,
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   token: string,
 ): Promise<Response> {
   const requestId = crypto.randomUUID().split("-")[0];

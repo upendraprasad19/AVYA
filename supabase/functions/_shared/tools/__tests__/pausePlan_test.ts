@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { pausePlanTool } from "../plan/pausePlan.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 Deno.test("pausePlan — schema accepts minimal valid args", () => {
   const result = pausePlanTool.schema.safeParse({
@@ -66,11 +71,11 @@ Deno.test("pausePlan — schema requires startDate and days", () => {
   assertEquals(noDays.success, false);
 });
 
-Deno.test("pausePlan — intentBuilder defaults reason to null", () => {
-  const intent = pausePlanTool.intentBuilder!({
+Deno.test("pausePlan — intentBuilder defaults reason to null", async () => {
+  const intent = await pausePlanTool.intentBuilder!({
     startDate: "2026-04-20",
     days: 5,
-  });
+  }, ctx());
   assertEquals(intent.type, "pause_plan");
   assertEquals(intent.payload.start_date, "2026-04-20");
   assertEquals(intent.payload.days, 5);
@@ -79,21 +84,21 @@ Deno.test("pausePlan — intentBuilder defaults reason to null", () => {
   assertEquals(intent.previewSummary, "Pause 5 days from 2026-04-20");
 });
 
-Deno.test("pausePlan — intentBuilder includes reason in summary", () => {
-  const intent = pausePlanTool.intentBuilder!({
+Deno.test("pausePlan — intentBuilder includes reason in summary", async () => {
+  const intent = await pausePlanTool.intentBuilder!({
     startDate: "2026-04-20",
     days: 7,
     reason: "Goa trip",
-  });
+  }, ctx());
   assertEquals(intent.payload.reason, "Goa trip");
   assertEquals(intent.previewSummary, "Pause 7 days from 2026-04-20 (Goa trip)");
 });
 
-Deno.test("pausePlan — intentBuilder uses singular 'day' for days=1", () => {
-  const intent = pausePlanTool.intentBuilder!({
+Deno.test("pausePlan — intentBuilder uses singular 'day' for days=1", async () => {
+  const intent = await pausePlanTool.intentBuilder!({
     startDate: "2026-04-20",
     days: 1,
-  });
+  }, ctx());
   assertEquals(intent.previewSummary, "Pause 1 day from 2026-04-20");
 });
 

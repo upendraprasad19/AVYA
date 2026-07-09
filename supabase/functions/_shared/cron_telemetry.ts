@@ -20,14 +20,14 @@
  * Cron functions MUST NOT 500 because telemetry is broken.
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 type CronLogStatus = "success" | "failed";
 
-let _adminClient: ReturnType<typeof createClient> | null = null;
+let _adminClient: SupabaseClient | null = null;
 
 function adminClient() {
   if (_adminClient) return _adminClient;

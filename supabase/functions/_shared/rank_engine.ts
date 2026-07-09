@@ -5,7 +5,7 @@
 // gates, switches officer track to completionRateMinimum primary,
 // MCPO becomes the transition rank with completion rate + maxGapDays.
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 export interface RankLadderEntry {
   code: string;

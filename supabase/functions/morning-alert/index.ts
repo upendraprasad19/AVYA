@@ -536,13 +536,21 @@ async function deliverAlerts(
     // Deliver with bounded concurrency
     for (let i = 0; i < snapshots.length; i += CONCURRENCY) {
       const chunk = snapshots.slice(i, i + CONCURRENCY);
+      type MorningSnapRow = {
+        user_id: string;
+        snapshot_json: Record<string, unknown> | null;
+      };
       await Promise.allSettled(
-        chunk.map(async (snap) => {
-          const alertMsg = snap.snapshot_json?.morning_alert;
+        chunk.map(async (snap: MorningSnapRow) => {
+          const alertMsg = snap.snapshot_json?.morning_alert as
+            | string
+            | undefined;
           if (!alertMsg) return;
 
           // Check notification preferences for morning_checkin.
-          const prefs = snap.snapshot_json?.notification_preferences;
+          const prefs = snap.snapshot_json?.notification_preferences as
+            | { morning_checkin?: { enabled?: boolean } }
+            | undefined;
           if (prefs?.morning_checkin?.enabled === false) return;
 
           // Proactive dedup: skip if morning_brief already sent today.

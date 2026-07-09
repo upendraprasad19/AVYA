@@ -19,7 +19,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { clientError, corsHeaders, ok, serverError } from "../_shared/error.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
@@ -115,7 +115,7 @@ serve(async (req: Request) => {
 });
 
 async function promoteFoods(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
 ): Promise<number> {
   // Count approve votes per food item and pick those with ≥ threshold.
   const { data: candidates, error: countErr } = await admin.rpc(
@@ -179,7 +179,7 @@ async function promoteFoods(
 }
 
 async function promoteExercises(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
 ): Promise<number> {
   const { data: candidates, error: countErr } = await admin.rpc(
     "community_votes_summary",
@@ -238,7 +238,7 @@ async function promoteExercises(
 
 /** Fallback count query if the RPC helper doesn't exist yet. */
 async function fallbackCount(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   itemType: "food" | "exercise",
 ): Promise<Array<{ item_id: string; approves: number }>> {
   const { data, error } = await admin

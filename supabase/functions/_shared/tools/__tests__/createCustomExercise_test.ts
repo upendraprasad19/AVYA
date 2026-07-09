@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { createCustomExerciseTool } from "../workout/createCustomExercise.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 Deno.test("createCustomExercise — schema accepts minimum valid args", () => {
   const result = createCustomExerciseTool.schema.safeParse({
@@ -96,13 +101,13 @@ Deno.test("createCustomExercise — schema rejects defaultSets > 10", () => {
   assertEquals(result.success, false);
 });
 
-Deno.test("createCustomExercise — intentBuilder fills defaults", () => {
-  const intent = createCustomExerciseTool.intentBuilder!({
+Deno.test("createCustomExercise — intentBuilder fills defaults", async () => {
+  const intent = await createCustomExerciseTool.intentBuilder!({
     name: "Bottle Curl",
     category: "pull",
     equipment: "bodyweight",
     loggingType: "weight_reps",
-  });
+  }, ctx());
   assertEquals(intent.type, "create_custom_exercise");
   assertEquals(intent.payload.name, "Bottle Curl");
   assertEquals(intent.payload.category, "pull");

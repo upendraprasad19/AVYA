@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { scheduleTemplateTool } from "../plan/scheduleTemplate.ts";
+import type { ToolContext } from "../types.ts";
+
+function ctx(): ToolContext {
+  return { userId: "u1", isPro: false, sb: null as any, requestId: "test" };
+}
 
 Deno.test("scheduleTemplate — schema accepts minimal valid args", () => {
   const result = scheduleTemplateTool.schema.safeParse({
@@ -80,11 +85,11 @@ Deno.test("scheduleTemplate — schema requires both templateId and dates", () =
   assertEquals(noDates.success, false);
 });
 
-Deno.test("scheduleTemplate — intentBuilder shape", () => {
-  const intent = scheduleTemplateTool.intentBuilder!({
+Deno.test("scheduleTemplate — intentBuilder shape", async () => {
+  const intent = await scheduleTemplateTool.intentBuilder!({
     templateId: "template_abc",
     dates: ["2026-04-21", "2026-04-23", "2026-04-25"],
-  });
+  }, ctx());
   assertEquals(intent.type, "schedule_template");
   assertEquals(intent.payload.template_id, "template_abc");
   assertEquals(intent.payload.dates, ["2026-04-21", "2026-04-23", "2026-04-25"]);
@@ -92,11 +97,11 @@ Deno.test("scheduleTemplate — intentBuilder shape", () => {
   assertEquals(intent.previewSummary, "Schedule template across 3 dates");
 });
 
-Deno.test("scheduleTemplate — intentBuilder uses singular 'date' for one date", () => {
-  const intent = scheduleTemplateTool.intentBuilder!({
+Deno.test("scheduleTemplate — intentBuilder uses singular 'date' for one date", async () => {
+  const intent = await scheduleTemplateTool.intentBuilder!({
     templateId: "template_abc",
     dates: ["2026-04-21"],
-  });
+  }, ctx());
   assertEquals(intent.previewSummary, "Schedule template across 1 date");
 });
 

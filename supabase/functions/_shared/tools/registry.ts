@@ -28,7 +28,7 @@ import {
 } from "./plan/index.ts";
 import { getFormCuesTool } from "./exercise/index.ts";
 
-const ALL_TOOLS: ToolDefinition[] = [
+const ALL_TOOLS: ToolDefinition<any, any>[] = [
   // Phase A anchor tools — one per confirmation class, one per tool kind.
   swapExerciseTool, // workout / write / reviewable / PRO
   logSetTool, // workout / write / trivial / FREE
@@ -68,7 +68,7 @@ const ALL_TOOLS: ToolDefinition[] = [
  * Returns the subset of tools available to a user given their tier.
  * Free users get only `tier='free'` tools; PRO users get everything.
  */
-export function allTools(isPro: boolean): ToolDefinition[] {
+export function allTools(isPro: boolean): ToolDefinition<any, any>[] {
   return ALL_TOOLS.filter((t) => isPro || t.tier === "free");
 }
 
@@ -76,7 +76,7 @@ export function allTools(isPro: boolean): ToolDefinition[] {
  * Look up a tool by name regardless of tier. The caller (tool-loop) is responsible for tier enforcement.
  * Returns undefined if not found.
  */
-export function byName(name: string): ToolDefinition | undefined {
+export function byName(name: string): ToolDefinition<any, any> | undefined {
   return ALL_TOOLS.find((t) => t.name === name);
 }
 
@@ -84,7 +84,7 @@ export function byName(name: string): ToolDefinition | undefined {
  * Internal: register a tool. Tools should NOT call this directly; instead, they're added to ALL_TOOLS
  * by the family barrel files in this directory tree (workout/, nutrition/, etc.).
  */
-export function _registerToolForTesting(tool: ToolDefinition): void {
+export function _registerToolForTesting(tool: ToolDefinition<any, any>): void {
   ALL_TOOLS.push(tool);
 }
 
