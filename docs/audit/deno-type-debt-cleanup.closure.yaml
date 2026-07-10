@@ -1,22 +1,27 @@
 # Closure ledger — Deno type-debt cleanup (supabase/functions/, 261 errors -> 0)
 # Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
-# `deferred:` key. Branch: deno-type-debt-cleanup (uncommitted at authoring —
-# commit/push/merge under explicit founder go). 4 root-cause classes + 3
-# standalone one-offs, all fixes are TypeScript annotation/import changes with
+# `deferred:` key. Branch: deno-type-debt-cleanup — merged to main as `b2d32a1`
+# (execution commit `bec0f06`, B-pass-doc commit `def145c`). 4 root-cause classes +
+# 3 standalone one-offs, all fixes are TypeScript annotation/import changes with
 # zero runtime behavior change (deno test 244/0 identical before and after).
-# x6 review (x4 pre-execution plan review + post-execution B-pass + Hermes)
-# converged; see docs/plan-reviews/deno-type-debt-cleanup.md.
+# Round 7 (post-merge): CI's floating deno-version pin resolved to a newer
+# Deno/TypeScript than every local verification above had run against, surfacing
+# 5 further pre-existing (not newly-introduced) type errors — see finding
+# `ci-version-drift` below. x7 review (x4 pre-execution plan review +
+# post-execution B-pass + Hermes + round-7 fresh review) converged; see
+# docs/plan-reviews/deno-type-debt-cleanup.md.
 
 batch: deno-type-debt-cleanup
 plan_review_record: docs/plan-reviews/deno-type-debt-cleanup.md
 bpass_review: docs/reviews/deno-type-debt-cleanup-bpass.md
 hermes_report: docs/audit/deno-type-debt-cleanup-hermes.md
-total_findings: 7
-closed_count: 7
+total_findings: 8
+closed_count: 8
 
-_commit: &wip "deno-type-debt-cleanup (uncommitted)"
+_commit: &wip "bec0f06"
 _fulltree_check: &vcheck "deno check --node-modules-dir=auto supabase/functions/  ->  0 errors, 111/111 files"
 _fulltree_test: &vtest "deno test --allow-all --node-modules-dir=auto supabase/functions/  ->  244 passed, 0 failed (identical before/after)"
+_commit_round7: &round7 "deno-type-debt-cleanup (round-7 fix; uncommitted — pending founder go-ahead)"
 
 findings:
   - id: class-1
@@ -107,3 +112,26 @@ findings:
       first annotation surfaced. Hermes L21 confirmed the casts emit no runtime code and the guarded
       branches (`if (!alertMsg)`, `prefs?.morning_checkin?.enabled === false`) read identical runtime
       values -- no branch changed.
+  - id: ci-version-drift
+    title: "Round 7 (post-merge) -- CI's floating deno-version pin resolved newer than every local check in rounds 1-6, surfacing 5 further pre-existing type errors"
+    terminal_state: closed_in_commit
+    commit: *round7
+    verification: >
+      deno upgrade (local 2.1.4 -> 2.9.2, matching CI's resolved denoland/setup-deno@v2 v2.x) then
+      deno check --node-modules-dir=auto supabase/functions/  ->  reproduced CI's exact 5 errors,
+      then 0 errors after fix. deno test --allow-all on the same upgraded binary: 244 passed / 0
+      failed, unchanged.
+    notes: >
+      _shared/tool-loop.ts:355 (timeoutHandle retyped number -> ReturnType<typeof setTimeout>),
+      ai-media-proxy/index.ts:301 (removed redundant Uint8Array wrap around an already-ArrayBuffer
+      argument to base64Encode), create-razorpay-order/index.ts:177 + razorpay-webhook/index.ts:391 +
+      verify-payment/index.ts:304 (removed redundant manual TextEncoder().encode() wrap around each
+      Basic-Auth-header string argument to base64Encode). Confirmed via bec0f06's own diff that none
+      of these 5 sites were touched by the original batch (2 files -- tool-loop.ts,
+      create-razorpay-order/index.ts -- weren't in bec0f06's file list at all; the other 3 were
+      touched only at unrelated lines) -- these are genuinely pre-existing latent errors, invisible
+      under the older local Deno/TypeScript used in rounds 1-6, not regressions this batch introduced.
+      Fresh context-blind review (round 7) read deno.land/std@0.177.0/encoding/base64.ts's actual
+      encode() source directly and confirmed byte-identical behavior before/after at all 4
+      base64Encode sites. diagnose-doc:
+      docs/diagnoses/2026-07-09-deno-ci-version-drift-typed-arrays-c3d8a9.md (bug id c3d8a9).

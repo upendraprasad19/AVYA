@@ -302,7 +302,7 @@ serve(async (req: Request) => {
 
     // ── Call Razorpay API to verify payment ─────────────────────
     const credentials = base64Encode(
-      new TextEncoder().encode(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`),
+      `${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`,
     );
 
     const razorpayResponse = await fetch(
