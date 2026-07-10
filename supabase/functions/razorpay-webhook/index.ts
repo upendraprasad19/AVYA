@@ -389,9 +389,7 @@ serve(async (req: Request) => {
       }
       try {
         const credentials = base64Encode(
-          new TextEncoder().encode(
-            `${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`,
-          ),
+          `${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`,
         );
         const captureResp = await fetch(
           `https://api.razorpay.com/v1/payments/${razorpayPaymentId}/capture`,

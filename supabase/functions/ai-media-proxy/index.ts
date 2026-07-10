@@ -298,8 +298,7 @@ async function fetchImageAsBase64(
       `Image too large (${arrayBuffer.byteLength} bytes)`,
     );
   }
-  const uint8Array = new Uint8Array(arrayBuffer);
-  const base64 = base64Encode(uint8Array);
+  const base64 = base64Encode(arrayBuffer);
 
   // Determine MIME type from response headers or URL
   const contentType = response.headers.get("content-type") || "image/jpeg";

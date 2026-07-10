@@ -175,7 +175,7 @@ serve(async (req: Request) => {
 
     // ── Create Razorpay order ──
     const credentials = base64Encode(
-      new TextEncoder().encode(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`),
+      `${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`,
     );
 
     // `payment_capture: 1` → Razorpay auto-captures the moment the bank

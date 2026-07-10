@@ -1,8 +1,8 @@
 ---
 branch: deno-type-debt-cleanup
-date: 2026-07-09
+date: 2026-07-10
 blast_radius: catastrophic
-review_rounds: 6
+review_rounds: 7
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
@@ -83,7 +83,7 @@ genuinely constructs its own client) — see the Hermes report's Finding 1 for t
 same major version; non-payment, non-user-facing cron function; follow-up: smoke-test after next
 redeploy).
 
-## Convergence + outcome
+## Convergence + outcome (as of round 6, merged to main as `b2d32a1`)
 All review findings folded in (no deferrals). This is the ONE correction to the batch's own blanket
 "no EF redeploy required — every bundle byte-for-byte unaffected" claim: `compute-coach-signals/index.ts`
 is the sole exception (its bundled supabase-js dependency genuinely changes version). Every other
@@ -91,3 +91,62 @@ touched file, including both catastrophic-tier payment files, is confirmed trans
 behavior-identical by 2 independent post-execution review passes (B-pass + 4-lens Hermes) on top of
 the 4 pre-execution plan-review rounds. `git diff --stat` file list: 32 files (30 `.ts`/`.yml` + 1
 `.dart` companion test), matching the plan's own diff-review checklist exactly — no scope creep.
+
+## Round 7 — post-merge CI failure, root-caused and fixed (2026-07-10)
+
+**What happened:** immediately after `b2d32a1` merged to `main` and was pushed, CI's
+`deno-edge-functions` job — running the exact full-tree `deno check` this batch's own CI-gate-widening
+(§ above) had just made a hard blocker — failed with **5 NEW type errors**, never seen in rounds 1-6's
+repeated live `deno check` runs.
+
+**Root cause (confirmed, not assumed):** CI's `denoland/setup-deno@v2` step pins a FLOATING
+`deno-version: v2.x`, resolved at CI run time to 2.9.2 (TypeScript 6.0.3). Every local verification in
+rounds 1-6 ran on the author's local Deno 2.1.4 (TypeScript 5.6.2) — 8 minor versions behind. TypeScript
+5.7 tightened typed-array generics (`Uint8Array` became generic over its backing-buffer type), which
+broke structural compatibility at 4 `base64Encode(...)` call sites that passed a manually-constructed
+`Uint8Array`/pre-encoded value instead of the plain `ArrayBuffer`/`string` the function's signature
+already accepts; a 5th site's `setTimeout`-handle variable, hardcoded as `number`, hit a similar
+ambient-lib version-sensitivity gap. **This means rounds 1-6's repeated "0 errors" ground-truth
+verification was true and reproducible — but only against the older local toolchain, not against CI's
+actual resolved one.** Confirmed by `deno upgrade`-ing the local install to 2.9.2 (matching CI) and
+reproducing CI's exact 5 errors, byte-for-byte, before applying any fix.
+
+**Scope of the 5 errors relative to this batch's own 32-file diff:** independently verified via
+`git diff bec0f06^..bec0f06 -- <each file>` — `bec0f06` (this batch's execution commit) touched
+`ai-media-proxy/index.ts` only at its `HttpError` union (unrelated line), and `razorpay-webhook/index.ts`
++ `verify-payment/index.ts` only at their `ReturnType<typeof createClient>` → `SupabaseClient`
+substitution (also unrelated lines) — it never touched the `base64Encode`/`TextEncoder` lines now being
+fixed. `_shared/tool-loop.ts` and `create-razorpay-order/index.ts` don't appear in `bec0f06`'s file list
+at all. **All 5 errors are genuinely pre-existing latent bugs, invisible under the old local toolchain,
+not regressions introduced by this batch's own edits.**
+
+**Fix:** 5 files —
+- `_shared/tool-loop.ts:355`: `number | undefined` → `ReturnType<typeof setTimeout> | undefined` for the
+  timeout-handle variable (the same idiom already in live use, unmodified, at `memory_retrieval.ts:67`).
+- `ai-media-proxy/index.ts:301`: removed a redundant `new Uint8Array(arrayBuffer)` wrap —
+  `base64Encode` already performs this exact internal normalization for a plain `ArrayBuffer` input.
+- `create-razorpay-order/index.ts:177`, `razorpay-webhook/index.ts:391`, `verify-payment/index.ts:304`:
+  removed a redundant manual `new TextEncoder().encode(...)` wrap on each Basic-Auth-header string —
+  `base64Encode` already performs this exact internal UTF-8 encoding for a plain `string` input.
+
+**Verification (fresh, independent, context-blind review dispatched specifically for this round, given
+3 of 5 files are Razorpay-payment-critical):** fetched and read `deno.land/std@0.177.0/encoding/base64.ts`'s
+actual `encode()` source directly (not assumed from memory) — confirmed its internal normalization branch
+is `typeof data === "string" ? new TextEncoder().encode(data) : data instanceof Uint8Array ? data : new
+Uint8Array(data)`, i.e. byte-for-byte the same operation the removed manual wraps were doing, one line
+earlier, at each of the 4 sites — provably behavior-preserving, not just plausible. Confirmed
+`ReturnType<typeof setTimeout>` doesn't change either `clearTimeout` call site's behavior (both already
+guarded `!== undefined`) and matches a pre-existing, unmodified idiom elsewhere in this codebase.
+Grepped tree-wide for any other `base64Encode(new (TextEncoder|Uint8Array)` or bare-`number`-typed
+timeout-handle pattern — zero additional sites missed. `deno check` on the CI-matching upgraded Deno:
+5 errors → 0. `deno test --allow-all`: 244 passed / 0 failed, unchanged before and after.
+
+**Process note (raised independently by the round-7 reviewer, addressed here):** these 5 fixes land as
+their own `fix:`-prefixed commit with a dedicated diagnose-doc
+(`docs/diagnoses/2026-07-09-deno-ci-version-drift-typed-arrays-c3d8a9.md`, bug id `c3d8a9`) — NOT folded
+silently into the already-merged `bec0f06`/`b2d32a1` history. Rounds 1-6's "converged" verdict stands as
+an accurate description of what was verified at the time; this round documents the environment-version
+gap those rounds could not have caught without upgrading Deno first, and closes it.
+
+**Verdict: converged.** The fix is correct and behavior-preserving on independent, source-verified review;
+CI-gate-widening from this same batch is exactly what caught the gap it left open — working as intended.

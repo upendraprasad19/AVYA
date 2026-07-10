@@ -352,7 +352,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         }
 
         const maxLatency = tool.maxLatencyMs ?? 3000;
-        let timeoutHandle: number | undefined;
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
         try {
           const data = await Promise.race<unknown>([
