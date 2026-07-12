@@ -4,23 +4,23 @@
     "total_exercises": 19308,
     "mean_scores": {
       "coverage": "88.6",
-      "balance": "67.6",
+      "balance": "67.5",
       "volume": "70.4",
       "progression": "100.0",
-      "personalization": "99.7",
-      "safety": "99.7",
+      "personalization": "100.0",
+      "safety": "100.0",
       "realism": "94.1",
-      "overall": "86.5"
+      "overall": "86.8"
     },
-    "unsafe_plan_count": 2,
+    "unsafe_plan_count": 0,
     "equipment_violation_plan_count": 286,
     "plans_with_fallback_pick": 363,
-    "total_fallback_picks": 1156,
+    "total_fallback_picks": 1154,
     "fallback_by_tier": {
       "bodyweight": 617,
       "home_dumbbells": 379,
       "basic_gym": 119,
-      "full_gym": 41
+      "full_gym": 39
     }
   },
   "personas": [
@@ -9259,16 +9259,14 @@
     {
       "id": "build_muscle | full_gym | 4d | advanced | p1 | inj:shoulder",
       "coverage": 90.0,
-      "balance": 60.0,
-      "volume": 75.5,
+      "balance": 51.7,
+      "volume": 76.0,
       "progression": 100.0,
-      "personalization": 0.0,
-      "safety": 0.0,
-      "realism": 80.6,
-      "overall": 0.0,
-      "violations": [
-        "Pike Push Up contraindicated for shoulder"
-      ]
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 82.9,
+      "overall": 83.4,
+      "violations": []
     },
     {
       "id": "build_muscle | full_gym | 4d | advanced | p1 | inj:wrist",
@@ -9309,16 +9307,14 @@
     {
       "id": "build_muscle | full_gym | 4d | advanced | p1 | inj:shoulder+knee",
       "coverage": 90.0,
-      "balance": 60.0,
-      "volume": 74.0,
+      "balance": 51.7,
+      "volume": 74.5,
       "progression": 100.0,
-      "personalization": 0.0,
-      "safety": 0.0,
-      "realism": 80.6,
-      "overall": 0.0,
-      "violations": [
-        "Pike Push Up contraindicated for shoulder"
-      ]
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 82.9,
+      "overall": 83.2,
+      "violations": []
     }
   ]
 }

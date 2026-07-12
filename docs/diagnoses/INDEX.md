@@ -9,6 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### coach_plan_generation_phase_stamp (1 bugs)
 - 2026-07-12 9c3e7a — >
 
+### injury_contraindication_filter (1 bugs)
+- 2026-07-12 a1f6c3 — >
+
 ### deno_ci_environment_version_drift (1 bugs)
 - 2026-07-09 c3d8a9 — >
 
@@ -788,6 +791,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-07-12 | 9c3e7a | > | coach_plan_generation_phase_stamp | test/contracts/coach_regen_phase_stamp_behavioral_test.dart |
+| 2026-07-12 | a1f6c3 | > | injury_contraindication_filter | test/contracts/injury_filter_behavioral_test.dart |
 | 2026-07-09 | c3d8a9 | > | deno_ci_environment_version_drift | > |
 | 2026-07-08 | f8c0de | > | n/a — UI reachability fix (no SoT concept; no writer/reader contract change) | test/contracts/coach_go_pro_cta_reachable_test.dart |
 | 2026-07-08 | a7e2c4 | > | edge_function_unchecked_read_hardening | supabase/functions/_shared/tools/__tests__/unit_c_read_hardening_test.ts |

@@ -457,6 +457,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         startDate: startDate,
         experienceLevel: fitnessExperience,
         phase: 1,
+        injuries: injuries, // U4: thread collected injuries (normalized in generateV4)
       );
 
       // Guard: if the plan generated with zero workout days, the exercise

@@ -7,18 +7,18 @@
 | Dimension | Mean |
 |---|---|
 | coverage | 88.6 |
-| balance | 67.6 |
+| balance | 67.5 |
 | volume | 70.4 |
 | progression | 100.0 |
-| personalization | 99.7 |
-| safety | 99.7 |
+| personalization | 100.0 |
+| safety | 100.0 |
 | realism | 94.1 |
-| overall | 86.5 |
+| overall | 86.8 |
 
-- **Unsafe plans (contraindicated exercise present): 2** (HARD invariant — must be 0)
+- **Unsafe plans (contraindicated exercise present): 0** (HARD invariant — must be 0)
 - **Equipment-violating plans: 286** (HARD invariant — must be 0)
-- Plans with ≥1 fallback pick: 363 / total fallback picks: 1156
-- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 617, home_dumbbells: 379, basic_gym: 119, full_gym: 41}`
+- Plans with ≥1 fallback pick: 363 / total fallback picks: 1154
+- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 617, home_dumbbells: 379, basic_gym: 119, full_gym: 39}`
 
 ## Curated plans (human face-validity)
 ---
@@ -301,9 +301,7 @@
 
 ---
 ### build_muscle | full_gym | 4d | advanced | p1 | inj:shoulder+knee
-`coverage 90.0 · balance 60.0 · volume 74.0 · progression 100.0 · personalization 0.0 · safety 0.0 · realism 80.6 · **overall 0.0**`
-
-**⚠ violations:** Pike Push Up contraindicated for shoulder
+`coverage 90.0 · balance 51.7 · volume 74.5 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 82.9 · **overall 83.2**`
 
 **Push** (Chest, shoulders, triceps)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -328,7 +326,7 @@
 | Biceps/elbow_flexion | Barbell Curl | attempt1Exact | Biceps | Barbell |
 | Biceps/elbow_flexion | Dumbbell Curl | attempt2DropSubFocus | Biceps | Dumbbells |
 | Mid Back/horizontal_pull | Barbell Bent Over Row | attempt1Exact | Lats, Rhomboids | Barbell |
-| Rear Delts/shoulder_isolation | Pike Push Up | universalPool ⚠ | Front Deltoid, Upper Chest | Bodyweight |
+| Rear Delts/shoulder_isolation | Arm Circles | universalPool ⚠ | Shoulders | Bodyweight |
 | Biceps/elbow_flexion | Hammer Curl | attempt2DropSubFocus | Biceps (brachialis), Forearms | Dumbbells |
 
 **Legs** (Quads, hams, glutes)
@@ -349,7 +347,7 @@
 |---|---|---|---|---|
 | Shoulders/vertical_push | Front Raise | attempt3DropTypeAndTarget ⚠ | Front Deltoid | Dumbbells |
 | Lats/horizontal_pull | Chest Supported Row | attempt1Exact | Rhomboids, Lats | Incline Bench, Dumbbells |
-| Lateral Delts/shoulder_isolation | Arm Circles | universalPool ⚠ | Shoulders | Bodyweight |
+| Lateral Delts/shoulder_isolation | (safely omitted) | safelyOmitted |  |  |
 | Biceps/elbow_flexion | Concentration Curl | attempt1Exact | Biceps | Dumbbell |
 | Triceps/elbow_extension | Overhead Tricep Extension | attempt1Exact | Triceps (long head) | Dumbbell |
 | Lats/horizontal_pull | Inverted Row | attempt1Exact | Rhomboids, Lats | Barbell on Rack or TRX |

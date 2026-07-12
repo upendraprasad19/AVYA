@@ -516,6 +516,11 @@ class ExerciseSelector {
     required int phase,
     required String goal,
     List<String> injuries = const [],
+    // U2 kill-switch (§4.6, platform tier): when true (default), attempt-5
+    // universal-pool picks are injury-filtered like attempts 1-4. false =
+    // verbatim pre-U2 behavior (pool bypasses the injury filter). Default ON is
+    // fail-safe — a caller that forgets the flag still gets the safe path.
+    bool applyInjuryUniversalFilter = true,
   }) {
     final result = <PopulatedDay>[];
 
@@ -538,6 +543,7 @@ class ExerciseSelector {
       var exercisesA = _fillSlots(
         day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,
         injuries: injuries, excludeNames: {},
+        applyInjuryUniversalFilter: applyInjuryUniversalFilter,
       );
 
       // Fill variant B: use slotsB if defined, exclude A names for variety
@@ -547,6 +553,7 @@ class ExerciseSelector {
         exercisesB = _fillSlots(
           day.slotsB!, exerciseRepo, equipmentTier, effectiveExp, phase,
           injuries: injuries, excludeNames: goal == 'strength' ? {} : aNames,
+          applyInjuryUniversalFilter: applyInjuryUniversalFilter,
         );
       } else {
         exercisesB = exercisesA;
@@ -748,6 +755,7 @@ class ExerciseSelector {
     int phase, {
     required List<String> injuries,
     required Set<String> excludeNames,
+    bool applyInjuryUniversalFilter = true,
   }) {
     final exercises = <PlannedExercise>[];
     final pickedNames = Set<String>.from(excludeNames);
@@ -757,6 +765,7 @@ class ExerciseSelector {
         final exercise = _cascadeFill(
           slot, repo, equipmentTier, effectiveExp, phase,
           injuries: injuries, pickedNames: pickedNames,
+          applyInjuryUniversalFilter: applyInjuryUniversalFilter,
         );
         if (exercise != null) {
           exercises.add(exercise);
@@ -777,6 +786,7 @@ class ExerciseSelector {
     int phase, {
     required List<String> injuries,
     required Set<String> pickedNames,
+    bool applyInjuryUniversalFilter = true,
   }) {
     // Attempt 1: Exact target + subFocus + equipment + type + experience
     var candidates = repo.queryV4(
@@ -825,17 +835,66 @@ class ExerciseSelector {
     );
     if (candidates.isNotEmpty) return _buildExercise(candidates.first);
 
-    // Attempt 5: Universal bodyweight pool
+    // Attempt 5: Universal bodyweight pool.
+    // U2 (injury safety): the pool bypasses queryV4, so — unlike attempts 1-4 —
+    // it must apply the injury-contraindication exclusion itself, or a
+    // contraindicated bodyweight move (e.g. Pike Push Up for a shoulder injury)
+    // can still be handed to an injured user here. If EVERY pool move for this
+    // pattern is contraindicated, the slot is SAFELY OMITTED (return null) —
+    // fewer-but-safe beats injuring the user. The Batch-0 measurement harness
+    // (cascade_tracer + scorecard) mirrors this filter and distinguishes a safe
+    // omission from a bug-`(none)`.
     final pool = universalPoolV4[slot.movementPattern] ?? [];
     for (final name in pool) {
       if (pickedNames.contains(name)) continue;
-      final match = repo.search(name);
-      if (match.isNotEmpty) return _buildExercise(match.first);
-      // If exercise not in library, create a minimal placeholder
+      final matches = repo.search(name);
+      if (matches.isNotEmpty) {
+        // repo.search is a SUBSTRING match, so a pool name like "Push Up" also
+        // matches "Pike Push Up" / "Incline Push Up". Resolve to the EXACT-name
+        // record so the injury check AND the built exercise are the intended
+        // pool move — not an accidental superstring (which could otherwise flip
+        // the safety verdict or build the wrong exercise). Falls back to the
+        // first substring match when the pool name has no exact library row.
+        final resolved = matches.firstWhere(
+          (m) => (m['name'] as String?)?.toLowerCase() == name.toLowerCase(),
+          orElse: () => matches.first,
+        );
+        if (applyInjuryUniversalFilter &&
+            _isContraindicated(resolved, injuries)) {
+          continue; // skip contraindicated pool pick, try the next
+        }
+        return _buildExercise(resolved);
+      }
+      // Not in the library: a hardcoded placeholder move whose contraindications
+      // we cannot inspect. When the user has injuries and the filter is on, skip
+      // the un-vettable placeholder rather than risk an unsafe move.
+      if (applyInjuryUniversalFilter && injuries.isNotEmpty) continue;
       return _buildUniversalFallback(name, 'A');
     }
 
-    return null; // Should never happen if universal pool is complete
+    // No on-target OR injury-safe universal pick — slot safely omitted (a null
+    // cascade result is skipped by the caller, shortening that day). Reachable
+    // ONLY when applyInjuryUniversalFilter is on AND the whole pool is
+    // contraindicated; with an empty injury list this stays "should never happen".
+    return null;
+  }
+
+  /// True when [ex]'s `injury_contraindications` intersects [injuries].
+  /// Mirrors the queryV4 injury match (exercise_repository.dart:288-294): exact
+  /// lowercase equality on canonical tokens. Callers pass an already-canonical
+  /// injury list (InjuryVocab.normalize upstream).
+  static bool _isContraindicated(
+    Map<String, dynamic> ex,
+    List<String> injuries,
+  ) {
+    if (injuries.isEmpty) return false;
+    final contra = ex['injury_contraindications'];
+    if (contra is! List || contra.isEmpty) return false;
+    for (final injury in injuries) {
+      final inj = injury.toLowerCase();
+      if (contra.any((c) => c.toString().toLowerCase() == inj)) return true;
+    }
+    return false;
   }
 
   /// Build a PlannedExercise from an exercise map.

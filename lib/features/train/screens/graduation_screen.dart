@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
@@ -592,6 +593,9 @@ class _GenerateNextPhaseButtonState
         daysPerWeek: (profile['days_per_week'] as num?)?.toInt() ?? 4,
         startDate: startDate,
         phase: nextPhase,
+        // U4: thread injuries so the graduated next-phase plan excludes
+        // contraindicated exercises (vocab canonicalized in generateV4).
+        injuries: InjuryVocab.fromProfile(profile['injuries']),
         experienceLevel:
             profile['fitness_experience'] as String? ?? 'beginner',
         preferredDays: preferredDays,

@@ -113,10 +113,13 @@ void main() {
       final stored = (profile!['injuries'] as List?)?.cast<String>();
       expect(stored, isNotNull,
           reason: 'profile["injuries"] must be present after bridge');
-      expect(stored, equals(injuries),
+      // U1 (a1f6c3): _bridgeToProfile now CANONICALIZES injuries via InjuryVocab
+      // so the plan engine's exact-match filter can use them — 'right_knee' →
+      // 'knee' (the library does not distinguish sides), 'lower_back' passes
+      // through. The raw coachBox['known_injuries'] value stays verbatim.
+      expect(stored, equals(['lower_back', 'knee']),
           reason:
-              'profile["injuries"] must equal the list passed to '
-              'recordMusterAnswer("known_injuries", ...)');
+              'profile["injuries"] must be the CANONICALIZED muster answer');
     },
   );
 
@@ -138,10 +141,11 @@ void main() {
           reason: 'UserRepository.getProfile() must return the profile');
 
       final stored = (profile!['injuries'] as List?)?.cast<String>();
-      expect(stored, equals(injuries),
+      // U1 (a1f6c3): 'left_shoulder' canonicalizes to 'shoulder'.
+      expect(stored, equals(['shoulder']),
           reason:
-              'UserRepository.getProfile()["injuries"] must reflect the '
-              'muster answer written via recordMusterAnswer');
+              'UserRepository.getProfile()["injuries"] reflects the '
+              'CANONICALIZED muster answer');
     },
   );
 

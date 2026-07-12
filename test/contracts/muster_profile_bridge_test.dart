@@ -74,10 +74,14 @@ void main() {
     await InductionService.instance
         .recordMusterAnswer('known_injuries', ['shoulders', 'lower back']);
 
+    // Raw muster answer is stored verbatim in coachBox.
     expect(HiveService.instance.coachBox.get('known_injuries'),
         ['shoulders', 'lower back']);
+    // U1 (a1f6c3): the profile (engine-facing) value is CANONICALIZED via
+    // InjuryVocab so the plan engine's exact-match filter matches it
+    // ('shoulders' → shoulder, 'lower back' → lower_back).
     final profile = UserRepository.instance.getProfile()!;
-    expect(profile['injuries'], ['shoulders', 'lower back']);
+    expect(profile['injuries'], ['shoulder', 'lower_back']);
   });
 
   test('typical_wake_time -> profile.wake_up_time', () async {
