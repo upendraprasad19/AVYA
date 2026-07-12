@@ -178,6 +178,7 @@ class PlanGenerator {
       weekPlans,
       effectiveExp,
       equipmentList,
+      injuries: normalizedInjuries, // U3: injury-filter warmup/cooldown moves
     );
 
     // Build Phase output

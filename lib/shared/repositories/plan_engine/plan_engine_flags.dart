@@ -22,4 +22,18 @@ class PlanEngineFlags {
       return true; // no Hive (pure unit test) → safe default: filter ON
     }
   }
+
+  /// U3 warmup/cooldown injury filter (Ship 2). Default ON (contraindicated
+  /// warmup/cooldown/cardio moves are dropped for an injured user). Set
+  /// `configBox['disable_warmup_injury_filter'] = true` to revert to the
+  /// verbatim pre-U3 behavior (warmup/cooldown built from the raw dayType lists).
+  static bool get warmupInjuryFilterEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_warmup_injury_filter') !=
+          true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: filter ON
+    }
+  }
 }

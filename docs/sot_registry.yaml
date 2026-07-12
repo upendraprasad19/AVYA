@@ -6111,6 +6111,10 @@ concepts:
         line_range: 828-895
         method: _cascadeFill attempt-5 + _isContraindicated
         notes: U2 universal-pool injury filter + safe omission; kill-switch plan_engine_flags.dart
+      - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
+        line_range: 90-200
+        method: attach (_moveInjuries + _moveIsContra)
+        notes: U3 (d3f8a1) drop-not-substitute warmup/cooldown injury filter + non-empty floor; main-selectable moves defer to library tags; kill-switch warmupInjuryFilterEnabled. Threaded from plan_generator generateV4 + template_service. Behavioral test warmup_injury_filter_behavioral_test.dart.
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
