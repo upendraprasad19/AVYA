@@ -17,6 +17,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/utils/name_format.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
@@ -170,7 +171,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _fitnessExperience = (profile['fitness_experience'] as String?) ?? 'intermediate';
     final rawInjuries = profile['injuries'];
     if (rawInjuries is List && rawInjuries.isNotEmpty) {
-      _injuries = rawInjuries.map((e) => e.toString()).toList();
+      // U1 read-side alias: canonicalize legacy/stored values (e.g. `back` →
+      // `lower_back`) so the renamed chips render SELECTED and a save re-writes
+      // the canonical token. Unmappable/`none` normalize away → ['none'].
+      final normalized =
+          InjuryVocab.normalize(rawInjuries.map((e) => e.toString()));
+      _injuries = normalized.isEmpty ? ['none'] : normalized;
     } else {
       _injuries = ['none'];
     }
@@ -1203,17 +1209,27 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   // ── Injuries / Areas to Avoid ────────────────────────────────────
 
   Widget _buildInjuriesChips() {
+    // Tokens MUST be the canonical library vocabulary (InjuryVocab.canonicalTokens
+    // / exercise_library injury_contraindications) so the plan engine's exact-match
+    // filter actually excludes them. `lower_back` (was the drift-buggy `back` — UI
+    // stored `back`, library tags `lower_back`, so a back injury excluded ZERO
+    // exercises); elbow/neck/hamstring were library tokens with no chip to select
+    // them. Pinned by injury_vocab_library_contract_test.dart.
     const options = [
-      'none', 'knee', 'back', 'shoulder', 'hip', 'wrist', 'ankle'
+      'none', 'knee', 'lower_back', 'shoulder', 'hip', 'wrist', 'ankle',
+      'elbow', 'neck', 'hamstring',
     ];
     const labels = {
       'none': 'No injuries',
       'knee': 'Knee',
-      'back': 'Back',
+      'lower_back': 'Lower Back',
       'shoulder': 'Shoulder',
       'hip': 'Hip',
       'wrist': 'Wrist',
       'ankle': 'Ankle',
+      'elbow': 'Elbow',
+      'neck': 'Neck',
+      'hamstring': 'Hamstring',
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1800,6 +1816,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             experienceLevel: experience,
             phase: currentPhase,
             preferredDays: preferredDays,
+            injuries: _injuries, // U4: editing injuries now re-plans around them
           );
         }
       }

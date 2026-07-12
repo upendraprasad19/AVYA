@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
@@ -444,6 +445,9 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
     final experience = profile['fitness_experience'] as String? ?? 'beginner';
     final phase = (progress?['current_phase'] as int?) ?? 1;
+    // U4: thread injuries so the auto-regenerated plan excludes contraindicated
+    // exercises (vocab canonicalized centrally in generateV4).
+    final injuries = InjuryVocab.fromProfile(profile['injuries']);
 
     // Fire-and-forget async: generation writes to Hive, then invalidateSelf
     // triggers build() to re-run with the newly written plan data.
@@ -471,6 +475,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
           experienceLevel: experience,
           phase: phase,
           preferredDays: preferredDays,
+          injuries: injuries, // U4
         );
 
         // KEY FIX: Invalidate self AFTER generation completes so build()

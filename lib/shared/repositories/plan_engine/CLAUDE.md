@@ -78,7 +78,9 @@ Inverse pattern: fewer training days → more exercises per session. More experi
 2. `attempt2DropSubFocus` — drop subFocus
 3. `attempt3DropTypeAndTarget` — drop target_focus + exercise_type (keep movement_pattern only)
 4. `attempt4DropEquipment` — drop equipment_tier
-5. `universalPool` — hardcoded bodyweight fallback (`exercise_selector.dart:493-505`, mirrored in `cascade_tracer.dart`)
+5. `universalPool` — hardcoded bodyweight fallback (`exercise_selector.dart:493-505`, mirrored in `cascade_tracer.dart`). **Injury-filtered (U2, a1f6c3):** unlike attempts 1-4 (which exclude contraindications via `queryV4 injuryExclusions`), attempt-5 bypassed the injury filter until Ship 1 — it now skips a contraindicated pool pick, resolves each pool name to its EXACT-name library record (`repo.search` is substring, so "Push Up" also matches "Pike Push Up"), and — if the whole pool is contraindicated — SAFELY OMITS the slot (returns null → fewer-but-safe). Kill-switch `configBox['disable_injury_universal_filter']` (default ON).
+
+**Injury vocabulary (U1/U4, a1f6c3):** injuries must be the canonical library tokens (`InjuryVocab.canonicalTokens` in `lib/core/utils/injury_vocab.dart` — ankle/elbow/hamstring/hip/knee/lower_back/neck/shoulder/wrist), NOT the legacy UI vocab (`back` never matched `lower_back`). Every writer (Edit-Profile chips, muster) normalizes via `InjuryVocab.normalize`; `generateV4` normalizes CENTRALLY so every generation caller is covered by one seam; each entry point reads via crash-safe `InjuryVocab.fromProfile`. SoT concept `injury_vocabulary_contract`.
 
 **Slot capacity rule:** No muscle/pattern/type triple should appear in more slots per week than its exercise library pool depth supports. E.g., Rear Delts/shoulder_isolation/isolation has 3 library exercises → max 3 slots/week. Over-allocation → `universalPool` picks (Pike Push Up for rear delt slots) or `(none)` failures.
 

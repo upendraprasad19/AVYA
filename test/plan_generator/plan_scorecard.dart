@@ -124,6 +124,7 @@ double _coverage(GeneratedPlan plan) {
 double _balance(GeneratedPlan plan) {
   var hPush = 0, vPush = 0, hPull = 0, vPull = 0, knee = 0, hip = 0;
   for (final ex in plan.allExercises) {
+    if (ex.isSafelyOmitted) continue; // no exercise occupies this slot (U2)
     final pats = ex.record != null
         ? _asStrings(ex.record!['movement_pattern'])
         : [ex.slot.movementPattern];
@@ -219,7 +220,9 @@ List<String> _safetyViolations(GeneratedPlan plan) {
 
 /// Realism: fraction of exercises that are on-target (non-fallback, present).
 double _realism(GeneratedPlan plan) {
-  final all = plan.allExercises.toList();
+  // A safely-omitted slot (U2) is not a pick at all — exclude it from BOTH
+  // numerator and denominator so it neither rewards nor penalizes realism.
+  final all = plan.allExercises.where((e) => !e.isSafelyOmitted).toList();
   if (all.isEmpty) return 0;
   final good = all.where((e) => !e.isFallback && !e.isMissing).length;
   return 100.0 * good / all.length;

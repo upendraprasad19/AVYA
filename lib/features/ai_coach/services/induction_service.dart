@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Single source for induction state. Idempotency lives here — [hasCommitted]
@@ -90,7 +91,14 @@ class InductionService {
     final Map<String, dynamic> fields;
     switch (musterKey) {
       case 'known_injuries':
-        fields = {'injuries': (value as List).cast<String>()};
+        // U1 (CRIT-2): muster/induction writes FREE-TEXT injuries ("lower back",
+        // "bad knee") straight into profile['injuries'] — the engine's exact-match
+        // filter never matched them. Canonicalize at the SoT write so every caller
+        // is covered. Preserve the ['none'] sentinel when nothing maps (keeps the
+        // completeness-nudge convention intact).
+        final normalized =
+            InjuryVocab.normalize((value as List).map((e) => e.toString()));
+        fields = {'injuries': normalized.isEmpty ? const ['none'] : normalized};
       case 'typical_wake_time':
         fields = {'wake_up_time': value as String};
       case 'preferred_workout_time':

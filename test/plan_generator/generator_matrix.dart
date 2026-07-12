@@ -65,6 +65,14 @@ class PlanExercise {
 
   bool get isMissing =>
       name == '(none)' || source == CascadePickSource.universalPoolPlaceholder.name;
+
+  /// U2: the slot was intentionally left empty because every universal-pool move
+  /// for its pattern was contraindicated for the persona's injuries. This is a
+  /// SAFE omission (fewer-but-safe), NOT a bug — so it is neither `isMissing`
+  /// (a hard failure) nor `isFallback` (a target-fidelity miss). The scorecard
+  /// excludes it from the realism denominator and the balance ratios; safety /
+  /// coverage / volume already skip it (its library record is null).
+  bool get isSafelyOmitted => source == CascadePickSource.safelyOmitted.name;
 }
 
 class PlanDay {

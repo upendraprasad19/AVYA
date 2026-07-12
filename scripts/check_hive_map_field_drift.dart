@@ -289,6 +289,12 @@ const _alwaysOk = <String>{
   // wlog rows. The prefix heuristic mis-attributes them because ai_snapshot_builder
   // also reads those prefixes for PRs / meals / logs.
   'daily_calories', 'protein_grams', 'carb_grams', 'carbs_grams', 'fat_grams',
+  // Profile injuries field (U4 a1f6c3) — read via InjuryVocab.fromProfile(
+  // profile['injuries']) / merged['injuries'] in the generation entry points to
+  // thread contraindications into the plan engine. NOT a schedule_*/exlog_*
+  // field; the prefix heuristic mis-attributes it because train_provider +
+  // hotel_workout_planner also handle those Hive maps.
+  'injuries',
   // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +
   // PlanIntegrityReconciler from `user_progress.plan_json`, NOT from a
   // `schedule_*` entry. The prefix heuristic mis-attributes them because both

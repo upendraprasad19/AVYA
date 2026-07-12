@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 
@@ -363,6 +364,9 @@ class AuthSessionBootstrapper {
               final phase = progressRows.isNotEmpty
                   ? ((progressRows.first['current_phase'] as int?) ?? 1)
                   : 1;
+              // U4: thread injuries so the login-restore plan regen excludes
+              // contraindicated exercises (vocab canonicalized in generateV4).
+              final injuries = InjuryVocab.fromProfile(merged['injuries']);
 
               DateTime startDate;
               if (progressRows.isNotEmpty) {
@@ -383,6 +387,7 @@ class AuthSessionBootstrapper {
                   startDate: startDate,
                   experienceLevel: experience,
                   phase: phase,
+                  injuries: injuries, // U4
                 );
               } catch (genErr, genSt) {
                 debugPrint(

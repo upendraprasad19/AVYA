@@ -1,4 +1,6 @@
 import 'package:icanbefitter/core/constants/fitness_goals.dart';
+import 'package:icanbefitter/core/utils/injury_vocab.dart';
+import 'plan_engine_flags.dart';
 
 import '../exercise_repository.dart';
 import 'cardio_finisher.dart';
@@ -76,6 +78,17 @@ class PlanGenerator {
     final equipmentList = _getEquipmentList(equipment);
     final effectiveExp = effectiveLevel(experienceLevel, phase);
 
+    // U4 (injury vocabulary — CENTRAL normalization). Every generation path
+    // (the 2 scheduling callers + the coach regen/hotel planners + any direct
+    // generateV4 caller) funnels through here, so normalizing ONCE at the engine
+    // seam makes the injury filter canonical for all of them — instead of
+    // sprinkling normalize() at each caller, which re-creates the fan-out-drop
+    // bug this fixes (a legacy chip value `back` or muster free-text `lower back`
+    // never matched the library token `lower_back`, so the filter silently
+    // excluded ZERO exercises). InjuryVocab.normalize is a pure read-side alias
+    // — no cloud migration, heals local/legacy/restored/free-text uniformly.
+    final normalizedInjuries = InjuryVocab.normalize(injuries);
+
     // F19 / recompose: the plan engine (split + exercise selection) only knows
     // build_muscle / lose_fat / strength / general_fitness. Map the goal to its
     // plan archetype (FitnessGoals.planGoal) so a token like 'recompose'
@@ -103,7 +116,8 @@ class PlanGenerator {
       effectiveExp: effectiveExp,
       phase: phase,
       goal: planGoal,
-      injuries: injuries,
+      injuries: normalizedInjuries,
+      applyInjuryUniversalFilter: PlanEngineFlags.injuryUniversalFilterEnabled,
     );
 
     // Stage 0: Progression (Phase 2+ weight suggestions)

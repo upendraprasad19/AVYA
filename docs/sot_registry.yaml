@@ -6074,3 +6074,55 @@ concepts:
       backups). LoggingTypeResolver is the shared lookup utility — also
       consumed by SwapService.
     contract_test_path: test/contracts/workout_schedule_split_invariant_test.dart
+
+  - concept: injury_vocabulary_contract
+    domain: workout
+    behavioral_test_path: test/contracts/injury_filter_behavioral_test.dart
+    description: |
+      Canonical injury vocabulary shared by every injury WRITER (Edit-Profile
+      chips, AI-coach muster/induction) and the plan engine's contraindication
+      READER (queryV4 exact-match + the U2 universal-pool filter).
+      InjuryVocab.canonicalTokens MUST equal the exercise library's distinct
+      injury_contraindications tokens; every value reaching the engine is
+      normalized to that vocabulary (read-side alias), and generateV4 normalizes
+      CENTRALLY so all generation paths are covered by one seam. Prevents the
+      vocab-drift bug (UI back never matched library lower_back, so a back injury
+      excluded 0 exercises), the threading drops (7 entry points passed no
+      injuries), and the universal-pool bypass (attempt-5 handed out
+      contraindicated bodyweight moves). Diagnose a1f6c3.
+    writers:
+      - file: lib/core/utils/injury_vocab.dart
+        line_range: 1-130
+        method: InjuryVocab.normalize / canonicalTokens
+        notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token)
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        line_range: 1200-1290
+        method: _buildInjuriesChips + profile reader
+        notes: chips emit canonical tokens; reader normalizes legacy stored values
+      - file: lib/features/ai_coach/services/induction_service.dart
+        line_range: 89-100
+        method: _bridgeToProfile known_injuries case
+        notes: normalizes muster free-text before writing profile injuries
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        line_range: 62-120
+        method: generateV4
+        notes: CENTRAL normalize - canonicalizes injuries once for every generation caller
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        line_range: 828-895
+        method: _cascadeFill attempt-5 + _isContraindicated
+        notes: U2 universal-pool injury filter + safe omission; kill-switch plan_engine_flags.dart
+    reader_manifest_complete: true
+    readers:
+      - file: lib/shared/repositories/exercise_repository.dart
+        line_range: 285-296
+        method: queryV4 injury match
+        semantic: flag-check
+        fields_read: [injury_contraindications]
+        notes: exact lowercase equality (attempts 1-4) - unchanged, already correct
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        line_range: 828-895
+        method: _cascadeFill attempt-5 _isContraindicated
+        semantic: flag-check
+        fields_read: [injury_contraindications]
+        notes: U2 - the universal pool now applies the same match (was bypassed pre-fix)
+    contract_test_path: test/contracts/injury_vocab_library_contract_test.dart

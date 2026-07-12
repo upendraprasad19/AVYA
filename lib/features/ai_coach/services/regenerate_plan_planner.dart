@@ -1,4 +1,5 @@
 import '../../../core/services/hive_service.dart';
+import '../../../core/utils/injury_vocab.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../core/services/seed_service.dart';
 import '../../../shared/repositories/plan_generator.dart';
@@ -157,6 +158,10 @@ class RegeneratePlanPlanner {
         ((profile['days_per_week'] as num?)?.toInt() ?? 4);
     final experience =
         (profile['fitness_experience'] as String?) ?? 'beginner';
+    // U4 (HIGH-3): the coach "regenerate my plan" / "switch goal" path dropped
+    // injuries — a knee-injured user's coach regen included knee-contraindicated
+    // exercises. Thread them (vocab canonicalized centrally in generateV4).
+    final resolvedInjuries = InjuryVocab.fromProfile(profile['injuries']);
 
     // Item ② / G8 fix: a coach "regenerate my plan" / "switch goal" must NOT
     // demote the user to Foundation (phase 1). Thread the REAL current_phase
@@ -187,6 +192,7 @@ class RegeneratePlanPlanner {
       daysPerWeek: resolvedDays,
       experienceLevel: experience,
       phase: resolvedPhase,
+      injuries: resolvedInjuries, // U4 (HIGH-3): coach regen respects injuries
     );
 
     if (phase.weekPlans.isEmpty) {

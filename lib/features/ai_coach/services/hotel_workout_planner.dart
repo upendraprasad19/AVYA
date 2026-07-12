@@ -1,4 +1,5 @@
 import '../../../core/services/hive_service.dart';
+import '../../../core/utils/injury_vocab.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../shared/repositories/plan_generator.dart';
 
@@ -93,6 +94,10 @@ class HotelWorkoutPlanner {
         (profile['primary_goal'] as String?) ?? 'general_fitness';
     final experience =
         (profile['fitness_experience'] as String?) ?? 'beginner';
+    // U4 (HIGH-3): a hotel/travel plan must still exclude a user's
+    // contraindicated bodyweight moves (e.g. Pike Push Up for a shoulder
+    // injury). Vocab canonicalized centrally in generateV4.
+    final injuries = InjuryVocab.fromProfile(profile['injuries']);
 
     // COACH-1: stamp the schedule-row `phase` with the user's REAL current
     // phase (scheduling identity — which phase block these travel days belong
@@ -113,6 +118,7 @@ class HotelWorkoutPlanner {
       equipment: 'bodyweight',
       daysPerWeek: n,
       experienceLevel: experience,
+      injuries: injuries, // U4 (HIGH-3): hotel plan respects injuries
       // phase=1 (foundation) — hotel plans aren't progression cycles.
     );
 

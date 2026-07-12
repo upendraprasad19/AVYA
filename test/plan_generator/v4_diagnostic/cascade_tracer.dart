@@ -8,6 +8,10 @@ enum CascadePickSource {
   attempt4DropEquipment,
   universalPool,
   universalPoolPlaceholder,
+  // U2: the whole universal pool for this slot's pattern was contraindicated
+  // for the user's injuries → the slot is SAFELY OMITTED (not a bug-`(none)`).
+  // Mirrors production `_cascadeFill` returning null after the injury filter.
+  safelyOmitted,
 }
 
 class CascadeAttempt {
@@ -197,6 +201,10 @@ class CascadeTracer {
       sampleNames: pool.take(5).toList(),
     ));
     if (pick == null) {
+      // U2 mirror of exercise_selector `_cascadeFill` attempt-5: skip a
+      // contraindicated pool pick; if the whole pool is contraindicated, the
+      // slot is safely omitted (distinct from a bug-`(none)`).
+      var poolHadContra = false;
       for (final name in pool) {
         if (pickedNames.contains(name)) continue;
         // Mirror of ExerciseRepository.search (exercise_repository.dart:43-58):
@@ -210,17 +218,53 @@ class CascadeTracer {
             return aliases.any((a) => a.toString().toLowerCase().contains(q));
           }
           return false;
-        });
+        }).toList();
         if (libraryMatch.isNotEmpty) {
+          // Mirror production: resolve to the EXACT-name record (substring
+          // search also matches superstrings), matching the scorecard's
+          // exact-name enrichment (generator_matrix byName[name]).
+          final resolved = libraryMatch.firstWhere(
+            (e) => (e['name'] as String?)?.toLowerCase() == q,
+            orElse: () => libraryMatch.first,
+          );
+          if (_isContraindicated(resolved, injuries)) {
+            poolHadContra = true;
+            continue;
+          }
           pick = CascadePick(name, CascadePickSource.universalPool);
         } else {
+          // Un-vettable placeholder — production skips it when injured.
+          if (injuries.isNotEmpty) {
+            poolHadContra = true;
+            continue;
+          }
           pick = CascadePick(name, CascadePickSource.universalPoolPlaceholder);
         }
         break;
       }
+      if (pick == null && poolHadContra) {
+        pick = const CascadePick('(safely omitted)', CascadePickSource.safelyOmitted);
+      }
     }
 
     return CascadeTrace(slot: slot, attempts: attempts, finalPick: pick);
+  }
+
+  /// Mirror of exercise_selector `_isContraindicated` / queryV4 injury match:
+  /// exact lowercase equality between the exercise's `injury_contraindications`
+  /// and the user's (already-canonical) injuries.
+  static bool _isContraindicated(
+    Map<String, dynamic> ex,
+    List<String> injuries,
+  ) {
+    if (injuries.isEmpty) return false;
+    final contra = ex['injury_contraindications'];
+    if (contra is! List || contra.isEmpty) return false;
+    for (final injury in injuries) {
+      final inj = injury.toLowerCase();
+      if (contra.any((c) => c.toString().toLowerCase() == inj)) return true;
+    }
+    return false;
   }
 
   static CascadeAttempt _attempt(
