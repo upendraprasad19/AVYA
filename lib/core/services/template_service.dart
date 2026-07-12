@@ -25,6 +25,7 @@ import 'workout_schedule_read_service.dart';
 import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
+import '../utils/injury_vocab.dart';
 import '../../shared/repositories/plan_engine/warmup_cooldown.dart';
 import '../../shared/repositories/plan_generator.dart';
 
@@ -146,6 +147,10 @@ class TemplateService {
           (profileMap['equipment_access'] as String?) ?? 'full_gym';
 
       final equipmentList = [equipmentStr];
+      // U3: the custom-template auto-warmup was UNFILTERED — thread the user's
+      // injuries so it drops contraindicated warmup/cooldown moves too.
+      final injuries = InjuryVocab.normalize(
+          InjuryVocab.fromProfile(profileMap['injuries']));
 
       final tempDay = WorkoutDay(
         dayNumber: 1,
@@ -165,6 +170,7 @@ class TemplateService {
         [tempWeek],
         experience,
         equipmentList,
+        injuries: injuries,
       );
 
       final enrichedDay = withWarmup.first.workoutDays.first;

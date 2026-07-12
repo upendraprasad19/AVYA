@@ -59,7 +59,7 @@ Pipeline stages:
 5. **Periodization Engine** → Uses exercise-specific `rep_range` + archetype-based wave
 6. **Superset Pairer** → Unchanged
 7. **Cardio Finisher** → Unchanged
-8. **Warmup/Cooldown** → Now also auto-injects for custom templates
+8. **Warmup/Cooldown** → Now also auto-injects for custom templates. **Injury-filtered (U3, d3f8a1):** `WarmupCooldownSelector.attach(injuries:)` DROPS a hardcoded warmup/cooldown/cardio move whose `_moveInjuries` tag intersects the user's injuries (drop-not-substitute), with a guaranteed non-empty FLOOR (safe Slow Walking cardio fallback + Deep Breathing anchor). Main-cascade-selectable moves (Push Up/Band Pull Apart/Baithak) use their LIBRARY `injury_contraindications` so main+warmup agree; warmup-only moves use conservative tags (the library under-tags them). Threaded from `generateV4` + `template_service`; kill-switch `disable_warmup_injury_filter`. ⚠ The Batch-0 scorecard CANNOT prove this (warmup isn't in `plan.allExercises`) — `warmup_injury_filter_behavioral_test.dart` is the sole proof. The library's MAIN-move under-tagging (Push Up not shoulder-tagged) is a separate founder-directed audit batch.
 
 **Exercise count targets (per day):**
 
