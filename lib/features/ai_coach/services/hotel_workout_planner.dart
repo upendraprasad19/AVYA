@@ -94,6 +94,19 @@ class HotelWorkoutPlanner {
     final experience =
         (profile['fitness_experience'] as String?) ?? 'beginner';
 
+    // COACH-1: stamp the schedule-row `phase` with the user's REAL current
+    // phase (scheduling identity — which phase block these travel days belong
+    // to). generate() below intentionally stays phase=1 (a hotel plan is a
+    // foundation bodyweight substitute, NOT a progression cycle) — CONTENT
+    // difficulty and scheduling identity are different concerns. Stamping
+    // phase=1 on the row would mint a phantom phase-1 block for a phase-6 user
+    // in bucketPastRows / PhaseProgressReconciler.
+    final rawProgress = HiveService.instance.userBox.get('progress');
+    final resolvedPhase = (rawProgress is Map
+            ? (rawProgress['current_phase'] as int?)
+            : null) ??
+        1;
+
     // Call the existing PlanGenerator with bodyweight equipment.
     final phase = PlanGenerator.instance.generate(
       goal: goal,
@@ -159,6 +172,7 @@ class HotelWorkoutPlanner {
       if (!isCompleted) {
         rawSchedules.add({
           'date': dateStr,
+          'phase': resolvedPhase,
           'week': 1,
           'day_of_week': d.weekday,
           'type': 'workout',
