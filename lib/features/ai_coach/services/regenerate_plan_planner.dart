@@ -158,6 +158,20 @@ class RegeneratePlanPlanner {
     final experience =
         (profile['fitness_experience'] as String?) ?? 'beginner';
 
+    // Item ② / G8 fix: a coach "regenerate my plan" / "switch goal" must NOT
+    // demote the user to Foundation (phase 1). Thread the REAL current_phase
+    // (the progress map — the same source graduation / splash / RankService
+    // read) so a phase-6 user's regen produces phase-6 content, not a fresh
+    // foundation block. resolvedPhase ALSO stamps the schedule-row `phase` key
+    // below (COACH-1): these rows were unstamped and relied on bucketPastRows
+    // carry-forward; a wrong stamp (e.g. literal 1 for a phase-6 user) would
+    // mint a phantom phase block that mis-drives PhaseProgressReconciler.
+    final rawProgress = HiveService.instance.userBox.get('progress');
+    final resolvedPhase = (rawProgress is Map
+            ? (rawProgress['current_phase'] as int?)
+            : null) ??
+        1;
+
     // Defensive: PlanGenerator silently produces empty workouts if the
     // exercise box is empty. Seed it on demand (mirrors
     // [WorkoutScheduleService.generateAndScheduleFromDate]).
@@ -172,8 +186,7 @@ class RegeneratePlanPlanner {
       equipment: resolvedEquipment,
       daysPerWeek: resolvedDays,
       experienceLevel: experience,
-      // phase=1 — a regenerated block starts a fresh foundation. Future
-      // versions could thread a higher phase number from coach memory.
+      phase: resolvedPhase,
     );
 
     if (phase.weekPlans.isEmpty) {
@@ -254,6 +267,7 @@ class RegeneratePlanPlanner {
           if (!isCompleted) {
             rawSchedules.add({
               'date': dateStr,
+              'phase': resolvedPhase,
               'week': weekIdx + 1,
               'day_of_week': dayOfWeek,
               'type': 'workout',
@@ -285,6 +299,7 @@ class RegeneratePlanPlanner {
           if (!isCompleted) {
             rawSchedules.add(_restEntry(
               dateStr,
+              resolvedPhase,
               weekIdx + 1,
               dayOfWeek,
               weekPlan.weekCharacter,
@@ -295,6 +310,7 @@ class RegeneratePlanPlanner {
           if (!isCompleted) {
             rawSchedules.add(_restEntry(
               dateStr,
+              resolvedPhase,
               weekIdx + 1,
               dayOfWeek,
               weekPlan.weekCharacter,
@@ -318,12 +334,14 @@ class RegeneratePlanPlanner {
 
   Map<String, dynamic> _restEntry(
     String dateStr,
+    int phase,
     int week,
     int dayOfWeek,
     String weekCharacter,
   ) {
     return {
       'date': dateStr,
+      'phase': phase,
       'week': week,
       'day_of_week': dayOfWeek,
       'type': 'rest',
