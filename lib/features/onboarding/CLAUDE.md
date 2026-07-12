@@ -68,7 +68,8 @@ Stats         (/onboarding/stats)      → current_weight_kg, target_weight_kg,
                                          activity_level                    (03 · 05)
    ↓
 Details       (/onboarding/details)    → fitness_experience, pace_preference,
-                                         days_per_week, equipment_access   (04 · 05)
+                                         days_per_week, equipment_access,
+                                         injuries                          (04 · 05)
    ↓
 Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
                                          OnboardingNotifier.completeOnboarding()
@@ -106,13 +107,23 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
 - **Age dropped entirely.** `date_of_birth` (captured on Identity via date picker, min age
   13) is the canonical field. `plan_screen` computes `age` on the fly for `BmrCalculator`;
   `age` is never stored to Hive or Supabase.
+- **`injuries` is now COLLECTED at onboarding** (Ship 3 / U5, 2026-07-12 — injury-safety
+  batch): the Details screen has an injuries chip row (multi-select, pre-selected "No injuries"
+  like its other rows so CONTINUE always works). `details_screen` seeds `_injuries` from the
+  incoming route extras in `initState` (so the plan→details "ADJUST PLAN" round-trip preserves
+  a real selection) and writes `'injuries'` into the outgoing extras; `plan_screen._onReportForDuty`
+  reads `widget.data['injuries']` for `setAnswer('injuries', …)` — it was previously HARD-CODED to
+  `['none']` (plan_screen ~:531), so an injured user's generated plan was never injury-filtered
+  because the data was never captured. The chip vocabulary is the shared `InjuryVocab.chipTokens`
+  (== `{none} ∪ canonicalTokens`) + `InjuryVocab.toggleChip`, identical to Edit-Profile — SoT
+  `injury_vocabulary_contract`. Founder-accepted tradeoff (Option B): a silent-injured user who
+  leaves the default isn't later nagged by the completeness nudge.
 - **Fields still defaulted by the stepped flow** (user can edit via Profile → Edit Profile):
   - `lifestyle_activity` — inferred from `activity_level` (1:1 mapping).
   - `diet_preference` — defaults to `'veg'` (Indian-first default).
-  - `injuries` — defaults to `['none']` (matches `edit_profile_screen` convention).
   - `start_date` — hardcoded to `'this_monday'`.
   - `city` — optional, not collected during onboarding.
-  These four **are now persisted** to Hive by `completeOnboarding` (pre-2026-04-24 bug: they
+  These **are persisted** to Hive by `completeOnboarding` (pre-2026-04-24 bug: they
   were set via `setAnswer` in plan_screen but never copied into the final profile map → home
   completeness nudge falsely flagged "Injuries" for every new user).
 - **Legacy chat fallback:** the pre-PR-Y chat-based flow is still reachable at
@@ -153,10 +164,12 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
   plan calibration doesn't happen until REPORT FOR DUTY on step 05. Renamed to `CONTINUE →`;
   behavior unchanged.
 - **Details screen is now ALL chip rows** (APK-test-2-batch / Q8, supersedes APK-test-1-batch
-  fade-row layout). All 4 sections render as horizontal chip rows: Experience (3 chips:
-  Beginner / Intermediate / Advanced), Pace (3 chips: Steady / Balanced / Aggressive),
-  Days/Week (4 chips: 3 / 4 / 5 / 6), Equipment (2×2 grid: Bodyweight / Dumbbells / Basic Gym
-  / Full Gym — labels too long for single row at 360 dp). Selected chip = gold-fill + black
+  fade-row layout; Ship 3 / U5 added the 5th row). Sections render as horizontal chip rows:
+  Experience (3 chips: Beginner / Intermediate / Advanced), Pace (3 chips: Steady / Balanced /
+  Aggressive), Days/Week (4 chips: 3 / 4 / 5 / 6), Equipment (2×2 grid: Bodyweight / Dumbbells /
+  Basic Gym / Full Gym — labels too long for single row at 360 dp), and **Injuries** (multi-select
+  `Wrap`: No injuries + the 9 canonical tokens from `InjuryVocab.chipTokens`, pre-selected "No
+  injuries"). Selected chip = gold-fill + black
   w700 + opacity 1.0. Unselected = transparent + textGhost border + textDim text + opacity
   0.55. Cross-fades 150 ms on tap. Description line below each row updates on selection.
   Defaults pre-selected (Intermediate / Balanced / 4 / Basic Gym) so CONTINUE always works.
@@ -183,6 +196,10 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
 - `test/contracts/muster_to_profile_bridge_test.dart`
 - `test/contracts/full_name_backfill_test.dart`
 - `test/contracts/plan_screen_targets_match_completeOnboarding_test.dart`
+- `test/contracts/onboarding_injuries_chip_wiring_test.dart` — Ship 3: plan_screen reads the
+  collected injuries (no re-hardcode to `['none']`), details writes + seeds them.
+- `test/contracts/injury_chip_vocab_contract_test.dart` — Ship 3: the shared chip vocab
+  (`InjuryVocab.chipTokens` == `{none} ∪ canonicalTokens`) + `toggleChip` invariants.
 
 ## See also
 

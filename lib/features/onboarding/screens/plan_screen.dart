@@ -522,7 +522,19 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       notifier.setAnswer(
           'body_fat_percent',
           (widget.data['body_fat_pct'] as num?)?.toDouble());
-      notifier.setAnswer('injuries', <String>['none']);
+      // U5 (Ship 3): read the injuries the user selected on the Details chip
+      // (via route extras) instead of a hardcoded ['none']. Type-check (not
+      // `as List`) survives a legacy String; PRESERVE the ['none'] sentinel — do
+      // NOT InjuryVocab-normalize here (the profile/nudge/Edit-Profile convention
+      // is ['none'] for "no injuries"; the generator normalizes centrally, Ship
+      // 1). Legacy chat / deep-link users (no chip) fall back to ['none'].
+      final selectedInjuries = widget.data['injuries'];
+      notifier.setAnswer(
+        'injuries',
+        selectedInjuries is List
+            ? selectedInjuries.map((e) => e.toString()).toList()
+            : <String>['none'],
+      );
       notifier.setAnswer('start_date', 'this_monday');
 
       final phase = await notifier.completeOnboarding();

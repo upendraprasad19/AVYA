@@ -37,6 +37,58 @@ class InjuryVocab {
     'wrist',
   };
 
+  /// The SINGLE source for the injury multi-select CHIP UI — consumed by BOTH
+  /// the Edit-Profile chips AND the onboarding Details chip so the two can never
+  /// drift from each other or from [canonicalTokens] (Ship 1's anti-drift
+  /// guarantee). Curated frequency order (not alphabetical); `none` first is the
+  /// "No injuries" sentinel. Pinned by `injury_chip_vocab_contract_test.dart`:
+  /// `chipTokens.toSet() == {'none'} ∪ canonicalTokens`.
+  static const chipTokens = <String>[
+    'none',
+    'knee',
+    'lower_back',
+    'shoulder',
+    'hip',
+    'wrist',
+    'ankle',
+    'elbow',
+    'neck',
+    'hamstring',
+  ];
+
+  static const _chipLabels = <String, String>{
+    'none': 'No injuries',
+    'knee': 'Knee',
+    'lower_back': 'Lower Back',
+    'shoulder': 'Shoulder',
+    'hip': 'Hip',
+    'wrist': 'Wrist',
+    'ankle': 'Ankle',
+    'elbow': 'Elbow',
+    'neck': 'Neck',
+    'hamstring': 'Hamstring',
+  };
+
+  /// Display label for an injury chip token (e.g. `lower_back` → "Lower Back").
+  static String chipLabel(String token) => _chipLabels[token] ?? token;
+
+  /// Pure `none`-toggle for the injury multi-select chip — shared by BOTH Edit
+  /// Profile and onboarding's Details chip. Tapping `none` → `['none']`; tapping
+  /// a real injury clears `none` and toggles it; deselecting the last real injury
+  /// → `['none']`. Returns a fresh GROWABLE list. Invariants (pinned by
+  /// injury_chip_vocab_contract_test.dart): `none` is never co-present with a
+  /// real injury, and the result is never empty.
+  static List<String> toggleChip(Iterable<String> current, String token) {
+    if (token == 'none') return <String>['none'];
+    final next = current.where((t) => t != 'none').toList();
+    if (next.contains(token)) {
+      next.remove(token);
+    } else {
+      next.add(token);
+    }
+    return next.isEmpty ? <String>['none'] : next;
+  }
+
   /// Legacy / free-text synonyms → canonical token. Matched after lowercasing +
   /// trimming. Covers the legacy Edit-Profile chip value (`back`), plurals, and
   /// the common muster/induction free-text phrasings ("lower back", "bad knee").

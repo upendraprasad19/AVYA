@@ -1209,28 +1209,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   // ── Injuries / Areas to Avoid ────────────────────────────────────
 
   Widget _buildInjuriesChips() {
-    // Tokens MUST be the canonical library vocabulary (InjuryVocab.canonicalTokens
-    // / exercise_library injury_contraindications) so the plan engine's exact-match
-    // filter actually excludes them. `lower_back` (was the drift-buggy `back` — UI
-    // stored `back`, library tags `lower_back`, so a back injury excluded ZERO
-    // exercises); elbow/neck/hamstring were library tokens with no chip to select
-    // them. Pinned by injury_vocab_library_contract_test.dart.
-    const options = [
-      'none', 'knee', 'lower_back', 'shoulder', 'hip', 'wrist', 'ankle',
-      'elbow', 'neck', 'hamstring',
-    ];
-    const labels = {
-      'none': 'No injuries',
-      'knee': 'Knee',
-      'lower_back': 'Lower Back',
-      'shoulder': 'Shoulder',
-      'hip': 'Hip',
-      'wrist': 'Wrist',
-      'ankle': 'Ankle',
-      'elbow': 'Elbow',
-      'neck': 'Neck',
-      'hamstring': 'Hamstring',
-    };
+    // SHARED chip vocabulary (Ship 3 / U5): `InjuryVocab.chipTokens` + `chipLabel`
+    // is the SINGLE source for the injury chips on BOTH this screen AND
+    // onboarding's Details chip — pinned to canonicalTokens (the library vocab)
+    // so the two UIs can never drift from each other or the engine (Ship 1's
+    // anti-drift guarantee). Was a hardcoded copy here.
+    final options = InjuryVocab.chipTokens;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1246,18 +1230,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             final isSelected = _injuries.contains(option);
             return GestureDetector(
               onTap: () {
+                // Shared none-toggle (Ship 3 / U5) — same logic as onboarding's
+                // Details chip, so the two can't diverge.
                 setState(() {
-                  if (option == 'none') {
-                    _injuries = ['none'];
-                  } else {
-                    _injuries.remove('none');
-                    if (isSelected) {
-                      _injuries.remove(option);
-                      if (_injuries.isEmpty) _injuries = ['none'];
-                    } else {
-                      _injuries.add(option);
-                    }
-                  }
+                  _injuries = InjuryVocab.toggleChip(_injuries, option);
                 });
               },
               child: AnimatedContainer(
@@ -1283,7 +1259,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   ),
                 ),
                 child: Text(
-                  labels[option]!,
+                  InjuryVocab.chipLabel(option),
                   style: AppTypography.body.copyWith(fontSize: 13, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400, color: isSelected
                         ? (option == 'none'
                             ? AppColors.accent

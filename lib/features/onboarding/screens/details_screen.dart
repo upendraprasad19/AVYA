@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Step 04 · 05 of the stepped onboarding flow — training details capture.
@@ -48,6 +49,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
   late String _pace;
   late int _daysPerWeek;
   late String _equipment;
+  late List<String> _injuries;
 
   // ── Experience ────────────────────────────────────────────────────────
   static const _experiences = <_ChipOption<String>>[
@@ -113,6 +115,22 @@ class _DetailsScreenState extends State<DetailsScreen> {
     _pace        = (widget.data['pace_preference']    as String?) ?? 'balanced';
     _daysPerWeek = (widget.data['days_per_week']      as int?)    ?? 4;
     _equipment   = (widget.data['equipment_access']   as String?) ?? 'basic_gym';
+    // Seed injuries from the incoming extras (GROWABLE — the toggle mutates it in
+    // place). MUST seed here or the plan→details "ADJUST PLAN" round-trip resets
+    // a real selection to ['none'] before generation (×2 review P1-A). Type-check
+    // (not `as List`) survives a legacy String value; a fresh list (not a cast
+    // view) avoids mutating the shared extras map (P1-B).
+    final rawInjuries = widget.data['injuries'];
+    _injuries = rawInjuries is List
+        ? rawInjuries.map((e) => e.toString()).toList()
+        : <String>['none'];
+    if (_injuries.isEmpty) _injuries = <String>['none'];
+  }
+
+  /// Shared none-toggle (pinned by injury_chip_vocab_contract_test.dart) — same
+  /// logic Edit Profile uses, so the two chips can't diverge.
+  void _toggleInjury(String token) {
+    setState(() => _injuries = InjuryVocab.toggleChip(_injuries, token));
   }
 
   // ── Navigation ────────────────────────────────────────────────────────
@@ -124,6 +142,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
       'pace_preference':    _pace,
       'days_per_week':      _daysPerWeek,
       'equipment_access':   _equipment,
+      'injuries':           _injuries,
     };
     context.go('/onboarding/plan', extra: enriched);
   }
@@ -183,6 +202,11 @@ class _DetailsScreenState extends State<DetailsScreen> {
                           selected: _equipment,
                           description: _equipmentDescriptions[_equipment] ?? '',
                           onSelect: (v) => setState(() => _equipment = v),
+                        ),
+                        const SizedBox(height: 18),
+                        _InjuriesSection(
+                          selected: _injuries,
+                          onToggle: _toggleInjury,
                         ),
                       ],
                     ),
@@ -442,6 +466,104 @@ class _EquipmentSection extends StatelessWidget {
           style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
         ),
       ],
+    );
+  }
+}
+
+// ── Injuries section (multi-select Wrap) ──────────────────────────────────
+
+/// MULTI-select injury chips (Ship 3 / U5). Unlike the single-select rows above
+/// a user can have several injuries, so this is a Wrap of toggle chips built
+/// from the SHARED `InjuryVocab.chipTokens` + `chipLabel` (one vocab with Edit
+/// Profile, pinned to the library — no drift). Pre-selected "No injuries" keeps
+/// CONTINUE frictionless (founder Option B). Same visual as [_Chip].
+class _InjuriesSection extends StatelessWidget {
+  const _InjuriesSection({required this.selected, required this.onToggle});
+
+  final List<String> selected;
+  final ValueChanged<String> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8, left: 2),
+          child: Text(
+            'INJURIES / AREAS TO AVOID',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.accent,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final token in InjuryVocab.chipTokens)
+              _InjuryChip(
+                label: InjuryVocab.chipLabel(token),
+                selected: selected.contains(token),
+                onTap: () => onToggle(token),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Tap any that apply — your plan avoids loading them.',
+          style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
+        ),
+      ],
+    );
+  }
+}
+
+/// Content-sized toggle chip for the injuries Wrap. Mirrors [_Chip]'s visual
+/// (gold-fill selected / ghost-border unselected, 150 ms cross-fade) but sizes
+/// to its label instead of Expanded.
+class _InjuryChip extends StatelessWidget {
+  const _InjuryChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 150),
+        opacity: selected ? 1.0 : 0.55,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.accent : Colors.transparent,
+            border: Border.all(
+              color: selected ? AppColors.accent : AppColors.textGhost,
+            ),
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+          ),
+          child: Text(
+            label,
+            style: AppTypography.body.copyWith(
+              fontSize: 13,
+              color: selected ? AppColors.bgDeep : AppColors.textDim,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

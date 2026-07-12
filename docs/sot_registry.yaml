@@ -3389,7 +3389,7 @@ concepts:
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1514-1540
+        line_range: 1512-1538
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
@@ -6079,26 +6079,40 @@ concepts:
     domain: workout
     behavioral_test_path: test/contracts/injury_filter_behavioral_test.dart
     description: |
-      Canonical injury vocabulary shared by every injury WRITER (Edit-Profile
-      chips, AI-coach muster/induction) and the plan engine's contraindication
-      READER (queryV4 exact-match + the U2 universal-pool filter).
+      Canonical injury vocabulary shared by every injury WRITER (onboarding
+      Details chip, Edit-Profile chips, AI-coach muster/induction) and the plan
+      engine's contraindication READER (queryV4 exact-match + the U2
+      universal-pool filter).
       InjuryVocab.canonicalTokens MUST equal the exercise library's distinct
-      injury_contraindications tokens; every value reaching the engine is
+      injury_contraindications tokens; InjuryVocab.chipTokens is the SINGLE chip
+      UI source (== {none} ∪ canonicalTokens) consumed by BOTH chip screens so
+      they can never drift. Every value reaching the engine is
       normalized to that vocabulary (read-side alias), and generateV4 normalizes
       CENTRALLY so all generation paths are covered by one seam. Prevents the
       vocab-drift bug (UI back never matched library lower_back, so a back injury
       excluded 0 exercises), the threading drops (7 entry points passed no
-      injuries), and the universal-pool bypass (attempt-5 handed out
-      contraindicated bodyweight moves). Diagnose a1f6c3.
+      injuries), the universal-pool bypass (attempt-5 handed out
+      contraindicated bodyweight moves), and — Ship 3 (U5) — the collection gap
+      where onboarding hard-coded injuries to ['none'] so an injured user's plan
+      was never injury-filtered because the data was never captured. Diagnose
+      a1f6c3.
     writers:
       - file: lib/core/utils/injury_vocab.dart
-        line_range: 1-130
-        method: InjuryVocab.normalize / canonicalTokens
-        notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token)
+        line_range: 1-187
+        method: InjuryVocab.normalize / canonicalTokens / chipTokens / toggleChip
+        notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token); Ship 3 added chipTokens (single chip-UI source == none ∪ canonicalTokens) + chipLabel + pure toggleChip shared by both chip screens
       - file: lib/features/profile/screens/edit_profile_screen.dart
         line_range: 1200-1290
         method: _buildInjuriesChips + profile reader
-        notes: chips emit canonical tokens; reader normalizes legacy stored values
+        notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
+      - file: lib/features/onboarding/screens/details_screen.dart
+        line_range: 52-500
+        method: _InjuriesSection chip + _toggleInjury + initState seed + _onContinue extras
+        notes: Ship 3 (U5) - onboarding Details collects injuries via the shared InjuryVocab.chipTokens/toggleChip chip (pre-selected 'No injuries' default); initState seeds _injuries from widget.data so the plan→details ADJUST-PLAN round-trip preserves the selection; writes 'injuries' into the plan route extras
+      - file: lib/features/onboarding/screens/plan_screen.dart
+        line_range: 520-535
+        method: _onReportForDuty setAnswer('injuries', ...)
+        notes: Ship 3 (U5) - reads the collected injuries from widget.data['injuries'] (was hard-coded ['none']); preserves the ['none'] sentinel; generateV4 normalizes centrally
       - file: lib/features/ai_coach/services/induction_service.dart
         line_range: 89-100
         method: _bridgeToProfile known_injuries case
