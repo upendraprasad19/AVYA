@@ -174,12 +174,14 @@ class PeriodizationEngine {
     //   hypertrophy → midpoint
     //   metabolic  → upper end (more reps, lighter weight)
     //   deload     → midpoint (same range, reduced sets & load)
-    final exRepRange = ex.repRange;
+    // Shared parser (W2.1 F2) — one `parseRepRange` for both this wave and the
+    // ProgressionResolver banding, so a 2nd hand-rolled split can't drift. Null
+    // (no/invalid range) → the legacy baseReps path, byte-identical on real data
+    // (pinned by periodization_wave_reps_invariant_test.dart).
+    final parsed = parseRepRange(ex.repRange);
     int reps;
-    if (exRepRange != null && exRepRange.contains('-')) {
-      final parts = exRepRange.split('-');
-      final minReps = int.tryParse(parts[0].trim()) ?? baseReps;
-      final maxReps = int.tryParse(parts[1].trim()) ?? baseReps;
+    if (parsed != null) {
+      final (minReps, maxReps) = parsed;
       final midReps = ((minReps + maxReps) / 2).round();
 
       reps = switch (archetype) {
@@ -194,7 +196,7 @@ class PeriodizationEngine {
       // Clamp to keep within library-defined bounds (wave can nudge but not escape)
       reps = reps.clamp(minReps, maxReps);
     } else {
-      // Fallback: legacy DUP baseReps path (no rep_range in library)
+      // Fallback: legacy DUP baseReps path (no/invalid rep_range in library)
       reps = _waveReps(baseReps, weekIdx, intensity);
     }
 

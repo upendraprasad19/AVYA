@@ -121,16 +121,21 @@ class PlanGenerator {
     );
 
     // Stage 0: Progression (Phase 2+ weight suggestions)
-    final allNames = populated
+    final allExercises = populated
         .expand((d) => [...d.exercisesA, ...d.exercisesB])
-        .map((e) => e.exerciseName)
-        .toSet()
         .toList();
+    final allNames = allExercises.map((e) => e.exerciseName).toSet().toList();
+    // W2.1: per-exercise rep-range (from the library, carried on PlannedExercise)
+    // for the graded rule's band gate.
+    final repRanges = <String, String?>{
+      for (final e in allExercises) e.exerciseName: e.repRange,
+    };
     Map<String, double>? weights = previousWeights;
     if (weights == null && phase >= 2) {
       weights = ProgressionResolver.resolve(
         phase: phase,
         exerciseNames: allNames,
+        repRanges: repRanges,
       );
     }
 

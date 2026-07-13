@@ -6359,3 +6359,43 @@ concepts:
         semantic: pass-through
         notes: consumes the (decayed) suggested weight as the phase's starting load — contract unchanged (name→weight map)
     contract_test_path: test/contracts/progression_resolver_decay_test.dart
+
+  - concept: graded_progression
+    domain: workout
+    behavioral_test_path: test/contracts/progression_resolver_graded_test.dart
+    description: |
+      W2.1 (Batch 3b-ii) — ProgressionResolver.resolve()'s progress/hold/back-off
+      rule becomes REP-RANGE-aware (from the ⑦a base): reps ≥ hi → progress, within
+      → hold, below lo → back off ONLY on the top-2 most-recent DISTINCT calendar
+      days BOTH below lo (2-consecutive gate; de-dupe by (y,m,d) so a same-day re-log
+      can't trip it). Beginner auto-linear window (RAW fitness_experience=='beginner'
+      AND training-age from onboarding_completed_at < 120 days → always progress).
+      Rep-ranges are threaded via a new `repRanges` param (name→PlannedExercise.repRange
+      from the call site). **Kill-switch `enable_graded_progression` (default OFF,
+      ship-dark §4.6 — W2.1 can INCREASE load, not the safe direction)** → resolve()
+      uses the verbatim fixed-10/5 rule (byte-identical, incl. the shipped ⑦a decay
+      which is INDEPENDENT: base/est1rm stay on the single-most-recent lastSession,
+      unchanged). Shared `parseRepRange` (models.dart) used by BOTH resolve() AND
+      PeriodizationEngine._applyWave (no 2nd parser — #1 bug class; inertness pinned by
+      periodization_wave_reps_invariant_test.dart). training-age via DateTime.tryParse
+      (null onboarding_completed_at ⇒ not-linear, never throws).
+    writers:
+      - file: lib/shared/repositories/plan_engine/progression_resolver.dart
+        method: resolve (graded branch) + _gradedSuggestion + _top2DistinctDays + _backOff
+        notes: ON-branch rep-range banding + 2-consecutive gate + beginner-linear; OFF = verbatim fixed-10/5; top-2 is ADDITIVE (never feeds base/est1rm)
+      - file: lib/shared/repositories/plan_engine/models.dart
+        method: parseRepRange
+        notes: shared "lo-hi" → (int,int)? parser (both positive, lo≤hi, else null); one parser for resolve + periodization
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: gradedProgressionEnabled
+        notes: kill-switch enable_graded_progression, default OFF (ship dark), own try/catch → false
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (Stage 0 repRanges map)
+        notes: builds name→repRange from populated + threads it into resolve()
+    reader_manifest_complete: true
+    readers:
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method: apply (previousWeights) + _applyWave (parseRepRange)
+        semantic: pass-through
+        notes: consumes the graded suggested weight; _applyWave now uses the shared parseRepRange (behavior-preserving on real data)
+    contract_test_path: test/contracts/progression_resolver_graded_test.dart

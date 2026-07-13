@@ -37,6 +37,22 @@ class PlanEngineFlags {
     }
   }
 
+  /// W2.1 (Batch 3b-ii) graded double progression in ProgressionResolver.
+  /// **Default OFF (ship dark, §4.6)** — unlike the reduce-only ⑦a decay, W2.1
+  /// can INCREASE prescribed load (progress at the top of the rep-range;
+  /// beginner auto-linear), so it is NOT the safe direction: it ships inert and
+  /// is flipped ON after APK verification. When OFF, resolve() uses the verbatim
+  /// fixed-10/5 rule (+ independent ⑦a decay). Set
+  /// `configBox['enable_graded_progression'] = true` to enable.
+  static bool get gradedProgressionEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_graded_progression') ==
+          true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → safe default: OFF (verbatim)
+    }
+  }
+
   /// ⑦(a) (Batch 3b-i) detraining WEIGHT decay in ProgressionResolver. Default
   /// ON: when a Phase-2+ user resumes after a training gap, their suggested
   /// starting weights are decayed by the gap (8–21d −7.5%, 22–35d −17.5%, >35d
