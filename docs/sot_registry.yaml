@@ -2570,7 +2570,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1609-1630
+        line_range: 1643-1660
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -6352,6 +6352,9 @@ concepts:
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
         method: detrainingDecayEnabled
         notes: kill-switch disable_detraining_decay, safe-default ON when Hive absent
+      - file: lib/core/utils/detraining.dart
+        method: detrainingFactorForGap
+        notes: shared band table — ⑦a's _detrainingFactor now DELEGATES here (⑦b reuses it from an int gap); one copy, #1 bug class (⑦b B-batch)
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/plan_engine/periodization_engine.dart
@@ -6399,3 +6402,53 @@ concepts:
         semantic: pass-through
         notes: consumes the graded suggested weight; _applyWave now uses the shared parseRepRange (behavior-preserving on real data)
     contract_test_path: test/contracts/progression_resolver_graded_test.dart
+
+  - concept: session_detraining_cut
+    domain: workout
+    behavioral_test_path: test/contracts/session_detraining_cut_test.dart
+    description: |
+      ⑦(b) (Batch 3, remaining half) — on STARTING a workout after a training gap,
+      the active-workout last-logged-weight PREFILL is scaled by
+      detrainingFactorForGap(WorkoutRepository.getDaysSinceLastWorkout()) for that
+      SESSION only (never persisted, no plan regen), and a non-shaming "welcome
+      back" banner shows. Applies ONLY to the lastWeight prefill branch — NOT the
+      prescribed exercise.weight branch, which already carries ⑦a decay (disjoint
+      inputs → no double-count). The factor lives on ActiveWorkoutData and MUST be
+      threaded through copyWith (else the 1×/sec elapsed-timer copyWith reverts it
+      to 1.0 within a frame — round-2 F1). The overload indicator compares the
+      entered weight against the CUT TARGET (last×factor) so an unedited reduced
+      prefill reads neutral → not red ↓; the progressive-overload "TRY:" hint is
+      suppressed while the cut is active ("never shame"; the factual "LAST:" line
+      stays). Trigger gap uses local DateTime.now() (getDaysSinceLastWorkout),
+      unlike ⑦a's IST-string gap — day-granularity tolerates the sub-day skew; a
+      gap ≤7d (incl. -1 no-history / 0 logged-today) → factor 1.0 → no cut, no
+      banner. Kill-switch configBox['enable_session_detraining_cut'] DEFAULT OFF
+      (ship dark §4.6 — changes the interactive logging UI). NOTE: the _metaText
+      subtitle prints the ⑦a-decayed PRESCRIPTION (exercise.weight) which can
+      exceed the cut prefill — a static prescription, pre-existing prefill-vs-
+      prescription split, NOT a shame directive (round-2 F3).
+    writers:
+      - file: lib/features/train/providers/train_provider.dart
+        method: ActiveWorkoutNotifier.startWorkout + ActiveWorkoutData.copyWith
+        notes: startWorkout sets sessionDetrainingFactor = detrainingFactorForGap(getDaysSinceLastWorkout()) when sessionDetrainingCutEnabled; copyWith threads the field (F1) or the 1×/sec timer reverts it to 1.0
+      - file: lib/core/utils/detraining.dart
+        method: detrainingFactorForGap
+        notes: shared reduce-only band table (also ⑦a); ≤7→1.0 / 8-21→0.925 / 22-35→0.825 / >35→0.5
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: sessionDetrainingCutEnabled
+        notes: kill-switch enable_session_detraining_cut, DEFAULT OFF (ship dark), own try/catch → false
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/train/screens/active_workout/exercise_card.dart
+        method: _ExerciseCardState._initControllers (prefill) + the LAST/TRY hint Builder
+        semantic: scale-and-suppress
+        notes: lastWeight prefill × widget.data.sessionDetrainingFactor (lastWeight branch ONLY); "TRY:" line hidden when factor < 1.0; "LAST:" kept
+      - file: lib/features/train/screens/active_workout/overload_indicator.dart
+        method: _OverloadIndicator.build
+        semantic: compare-vs-target
+        notes: target = lastWeight × sessionDetrainingFactor (parse/toString round-trip → == exactly); factor 1.0 → byte-identical to pre-⑦b
+      - file: lib/features/train/screens/active_workout/screen.dart
+        method: build (resume banner)
+        semantic: visibility
+        notes: non-shaming resume banner shown iff sessionDetrainingFactor < 1.0
+    contract_test_path: test/contracts/session_detraining_cut_test.dart

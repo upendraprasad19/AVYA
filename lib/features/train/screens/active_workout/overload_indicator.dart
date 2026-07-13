@@ -6,10 +6,15 @@ part of 'screen.dart';
 class _OverloadIndicator extends ConsumerWidget {
   final String exerciseName;
   final double currentWeight;
+  // ⑦(b): the active session's detraining factor (1.0 = no cut). The indicator
+  // compares against the CUT TARGET (last × factor) so an unedited reduced
+  // prefill reads neutral → instead of red ↓ ("never shame").
+  final double sessionDetrainingFactor;
 
   const _OverloadIndicator({
     required this.exerciseName,
     required this.currentWeight,
+    this.sessionDetrainingFactor = 1.0,
   });
 
   @override
@@ -22,13 +27,20 @@ class _OverloadIndicator extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
+    // ⑦(b): compare against the session target = last × cut factor, computed the
+    // SAME way as the prefill (exercise_card `w = lastWeight * factor`). Dart
+    // guarantees double.parse(d.toString()) == d, so an unedited reduced prefill
+    // equals this target exactly → reads → (neutral), never red ↓. factor 1.0
+    // (no cut) → target == lastWeight → byte-identical to pre-⑦b.
+    final target = lastWeight * sessionDetrainingFactor;
+
     final Color color;
     final String icon;
 
-    if (currentWeight > lastWeight) {
+    if (currentWeight > target) {
       color = AppColors.ok;
       icon = '↑'; // up arrow
-    } else if (currentWeight == lastWeight) {
+    } else if (currentWeight == target) {
       color = AppColors.warn;
       icon = '→'; // right arrow
     } else {

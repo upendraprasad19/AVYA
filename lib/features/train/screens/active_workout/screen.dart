@@ -194,6 +194,33 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
               // Progress bar
               _buildProgressBar(data.progressPercent, pctInt),
 
+              // ⑦(b) session detraining resume banner — shown when a gap cut is
+              // active (sessionDetrainingFactor < 1.0). Non-shaming re-entry copy:
+              // explains the lighter prefill without quantifying the break.
+              if (data.sessionDetrainingFactor < 1.0)
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: AppColors.accentSoft,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.restart_alt,
+                          size: 14, color: AppColors.accent),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'WELCOME BACK — TODAY\'S WEIGHTS EASED SO YOU RAMP BACK UP SAFELY',
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.accent,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Superset group mode floating chip
               if (data.isSupersetGroupMode)
                 Container(

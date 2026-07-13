@@ -19,6 +19,8 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/exercise_display.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/utils/detraining.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import '../repositories/workout_repository.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
@@ -763,6 +765,11 @@ class ActiveWorkoutData {
   // Superset manual grouping (session-only override, not persisted)
   final int? supersetGroupingSourceIndex; // exercise index being grouped
   final bool isSupersetGroupMode; // true when user is picking a partner
+  // ⑦(b) session-time detraining resume cut (session-only, NOT persisted).
+  // 1.0 = no cut; <1.0 scales the last-logged-weight prefill for a user
+  // resuming after a training gap. MUST be threaded through copyWith or the
+  // 1×/sec timer's copyWith(elapsedSeconds:) resets it to 1.0 within a frame.
+  final double sessionDetrainingFactor;
 
   const ActiveWorkoutData({
     this.workoutDay,
@@ -776,6 +783,7 @@ class ActiveWorkoutData {
     this.detectedPRs = const [],
     this.supersetGroupingSourceIndex,
     this.isSupersetGroupMode = false,
+    this.sessionDetrainingFactor = 1.0,
   });
 
   ActiveWorkoutData copyWith({
@@ -790,6 +798,7 @@ class ActiveWorkoutData {
     List<String>? detectedPRs,
     int? Function()? supersetGroupingSourceIndex,
     bool? isSupersetGroupMode,
+    double? sessionDetrainingFactor,
   }) {
     return ActiveWorkoutData(
       workoutDay: workoutDay ?? this.workoutDay,
@@ -805,6 +814,8 @@ class ActiveWorkoutData {
           ? supersetGroupingSourceIndex()
           : this.supersetGroupingSourceIndex,
       isSupersetGroupMode: isSupersetGroupMode ?? this.isSupersetGroupMode,
+      sessionDetrainingFactor:
+          sessionDetrainingFactor ?? this.sessionDetrainingFactor,
     );
   }
 
@@ -898,12 +909,23 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
     _workoutStartTime = DateTime.now();
 
+    // ⑦(b) session-time detraining cut: a user resuming after a training gap
+    // restarts lighter. Compute ONE session factor from the global days-since-
+    // last-workout; ship-dark behind enable_session_detraining_cut. Applied ONLY
+    // to the last-logged-weight prefill (never the ⑦a-decayed prescription).
+    double sessionFactor = 1.0;
+    if (PlanEngineFlags.sessionDetrainingCutEnabled) {
+      sessionFactor = detrainingFactorForGap(
+          WorkoutRepository.instance.getDaysSinceLastWorkout());
+    }
+
     state = ActiveWorkoutData(
       workoutDay: day,
       exercises: List.from(day.exercises),
       elapsedSeconds: 0,
       checkedSets: {},
       warmUpSets: const {},
+      sessionDetrainingFactor: sessionFactor,
     );
 
     // Use wall-clock elapsed time so the timer survives phone lock / app pause.

@@ -76,13 +76,17 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
       repsValue = _parseRepsMidpoint(exercise.reps).toString();
     }
 
-    // Weight: prefer last session's weight for weight-based exercises
+    // Weight: prefer last session's weight for weight-based exercises.
+    // ⑦(b): scale the LAST-LOGGED weight by the session detraining factor (1.0
+    // when the cut is off or gap ≤7d). ONLY this branch — the prescribed
+    // `exercise.weight` fallback below already carries ⑦a decay (disjoint inputs,
+    // no double-count). Idempotent (immutable lastWeight × session-constant).
     final String weightValue;
     if (['weight_reps', 'weighted_bodyweight'].contains(exercise.loggingType) &&
         lastPerf.lastWeight != null &&
         lastPerf.lastWeight! > 0) {
       // Show clean number: strip trailing .0
-      final w = lastPerf.lastWeight!;
+      final w = lastPerf.lastWeight! * widget.data.sessionDetrainingFactor;
       weightValue = w == w.roundToDouble() ? w.toInt().toString() : w.toString();
     } else {
       final raw = exercise.weight.replaceAll('kg', '').replaceAll('BW', '').trim();
@@ -556,8 +560,14 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                             ));
                           }
 
-                          // "Try: 52.5kg × 10" suggestion line
-                          if (lastPerf.suggestedWeight != null && lastPerf.suggestedWeight! > 0) {
+                          // "Try: 52.5kg × 10" suggestion line — ⑦(b): SUPPRESS
+                          // when a session cut is active. A "TRY: +2.5kg" directive
+                          // would contradict the reduced prefill for a returning
+                          // user (the banner explains the lighter load) = "never
+                          // shame". The factual "LAST:" line above is kept.
+                          if (lastPerf.suggestedWeight != null &&
+                              lastPerf.suggestedWeight! > 0 &&
+                              widget.data.sessionDetrainingFactor >= 1.0) {
                             children.add(Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Row(
@@ -672,6 +682,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                     child: _OverloadIndicator(
                                       exerciseName: widget.exercise.name,
                                       currentWeight: double.tryParse(_weightControllers[setIdx].text) ?? 0,
+                                      sessionDetrainingFactor: widget.data.sessionDetrainingFactor,
                                     ),
                                   ),
                                 if (!isChecked)
