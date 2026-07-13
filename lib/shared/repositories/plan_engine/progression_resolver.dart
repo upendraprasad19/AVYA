@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/detraining.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
 import '../user_repository.dart';
@@ -320,10 +321,8 @@ class ProgressionResolver {
     final today = DateTime.tryParse(istTodayStr());
     if (last == null || today == null) return 1.0;
     final gapDays = today.difference(last).inDays;
-    if (gapDays <= 7) return 1.0;
-    if (gapDays <= 21) return 0.925;
-    if (gapDays <= 35) return 0.825;
-    return 0.50;
+    // Shared band table (⑦b reuses it from an int gap) — one copy, #1 bug class.
+    return detrainingFactorForGap(gapDays);
   }
 
   /// Check if exercise targets lower body (for +5 kg vs +2.5 kg increment).

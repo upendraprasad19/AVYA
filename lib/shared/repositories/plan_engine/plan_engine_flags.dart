@@ -83,4 +83,22 @@ class PlanEngineFlags {
       return true; // no Hive (pure unit test) → safe default: goal-aware ON
     }
   }
+
+  /// ⑦(b) session-time detraining resume cut. **Default OFF (ship dark, §4.6)** —
+  /// like W2.1 (and unlike ⑦a's gen-time number) it changes the interactive
+  /// active-workout UI (a resume banner + a reduced weight prefill + the overload
+  /// indicator / "TRY:" hint), so it ships inert and is flipped ON after APK
+  /// verification. When ON, `ActiveWorkoutNotifier.startWorkout` scales ONLY the
+  /// last-logged-weight prefill by `detrainingFactorForGap(getDaysSinceLastWorkout())`
+  /// for that session (never persisted; never the ⑦a-decayed prescription).
+  /// Set `configBox['enable_session_detraining_cut'] = true` to enable.
+  static bool get sessionDetrainingCutEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('enable_session_detraining_cut') ==
+          true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → safe default: OFF (no cut)
+    }
+  }
 }

@@ -1171,7 +1171,11 @@ class WorkoutRepository {
   ///
   /// Returns -1 if no workouts have been logged.
   int getDaysSinceLastWorkout() {
-    final now = DateTime.now();
+    // Seam-aware (dev time-travel / year-sim), matching this file's other date
+    // reads (:287/:418/:468) — missed in the earlier seam sweep. ⑦(b)'s session
+    // resume cut triggers off this gap, so its behavioral test drives it via
+    // setTestClockTo; release-identical to DateTime.now().
+    final now = nowWall();
     DateTime? lastDate;
 
     for (final raw in _hive.workoutBox.values) {
