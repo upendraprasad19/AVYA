@@ -5103,7 +5103,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 315-340
+        line_range: 357-382
         method: getCustomExercises
         semantic: filter
         fields_read: [name, category, logging_type, type]
@@ -6144,3 +6144,33 @@ concepts:
         fields_read: [injury_contraindications]
         notes: U2 - the universal pool now applies the same match (was bypassed pre-fix)
     contract_test_path: test/contracts/injury_vocab_library_contract_test.dart
+
+  - concept: bodyweight_trend_nudge
+    domain: cross_domain
+    behavioral_test_path: test/contracts/bodyweight_trend_nudge_test.dart
+    description: |
+      W2.6 — the previously-dead TrainingHistoryAnalyzer.bodyweightTrendSignal()
+      (28d-vs-prior-28d MEAN bodyweight delta) surfaced as a LOW-severity
+      PatternDetector CoachingInsight. Deduped ON THE OUTCOME of _weightTrendAlert
+      (calls it, returns null if it fired — never two weight cards, since the
+      14-day alert and the 28d-mean nudge use divergent metrics). Goal-aware,
+      never-shame copy for all 5 FitnessGoals tokens + an empty-goal fallback;
+      it is the ONLY weight signal for strength/general_fitness/recompose (the
+      alert fires only for lose_fat/build_muscle). severity:low is LOAD-BEARING:
+      ai_snapshot_builder._getCoachNotices drops low insights before the AI
+      prompt, so the nudge never pollutes the coach snapshot. Kill-switch
+      configBox['disable_bodyweight_trend_nudge'] (default-ON).
+    writers:
+      - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
+        method: bodyweightTrendSignal
+        notes: computes the signed 28d-vs-prior-28d mean bodyweight delta from healthBox weight_* rows (was dead — zero callers until W2.6)
+      - file: lib/features/ai_coach/services/pattern_detector.dart
+        method: _bodyweightTrendNudge + _bodyweightTrendMessage (analyze list)
+        notes: kill-switch + dedup-on-outcome(_weightTrendAlert) + abs(signal)>=0.8 gate + goal-aware copy; emits low-severity CoachingInsight bodyweight_trend_up/down
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/home/widgets/insight_card.dart
+        method: build (via topInsightProvider -> AiCoachRepository.getTopInsight)
+        semantic: pass-through
+        notes: renders insight.userMessage; a low nudge only surfaces as insights.first when it is the highest-severity insight
+    contract_test_path: test/contracts/bodyweight_trend_nudge_test.dart

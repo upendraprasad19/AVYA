@@ -61,6 +61,7 @@ through the WriteService — APK Test #16.2 / E).
 | `exercise_personal_records` | **DERIVED — no dedicated writer.** `WorkoutWriteService.logExercise` → `_rescanPrFor` stamps `is_pr` on `exlog_*` rows (strict `>`); `WorkoutRepository.loadAllExercisePRs` (workout_repository.dart:632) computes best-per-set from `exlog_*`. The AI `logPR` tool was **removed 2026-05-31** (derive-only surface, ADR-0012) — PRs are never AI-asserted, only computed from logged sets. | home `PRSnapshot`, profile `rank_ladder` (PR-derived rank promotions). |
 | `custom_exercises_mutations` | `WorkoutWriteService.upsertCustomExercise` | `swap_picker_sheet`, exercise pickers. |
 | `hive_field_name_exlog` | `WorkoutWriteService` field names: `exercise_name`, `set_number`, `reps_completed`, `weight_kg`, `volume_kg`, `is_pr`, `logging_type`, `workout_log_id`, `duration_seconds`, `distance_km` | `EditLogExerciseRow.fromLog` accepts dual names (canonical `sets[]` OR legacy `sets_detail`; per-set `duration_sec` OR `duration_seconds`) for restore back-compat. |
+| `exercise_coaching_content` (W3.6) | **Read-only display** — the seeded library (`exerciseBox`) carries `coaching_cues`/`common_mistakes` (arrays, 258/258), `breathing_cue` (string, 258/258), `warmup_protocol` (string, 213/258). `ExerciseRepository.getByExactName(name)` fetches the full row by EXACT name (NOT `search`, which is substring — "Push Up"→"Pike Push Up"). | `CoachingContentPanel` (`active_workout/coaching_content_panel.dart`, a `part of screen.dart`) — collapsible/collapsed-by-default "FORM & CUES" panel in the expanded exercise card. Resolves the map in `initState`/`didUpdateWidget` (the card rebuilds ~1×/sec from the workout timer — never in `build()`); hides empty sections (null-or-empty-STRING for `warmup_protocol`); casts arrays via `List<dynamic>`→`toString()` (never `as List<String>` — red-screens). Null map (swap/custom) → renders nothing. FREE. |
 
 ## Common pitfalls
 
@@ -89,6 +90,7 @@ through the WriteService — APK Test #16.2 / E).
 - `test/contracts/workout_completion_status_test.dart`
 - `test/contracts/workout_templates_writer_to_reader_test.dart`
 - `test/contracts/duration_seconds_aggregate_populated_test.dart`
+- `test/contracts/coaching_content_test.dart` (W3.6 — `getByExactName` exact-not-substring + library coaching-field population).
 
 ## See also
 

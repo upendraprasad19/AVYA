@@ -29,6 +29,26 @@ class ExerciseRepository {
     return Map<String, dynamic>.from(raw as Map);
   }
 
+  /// Returns the library exercise whose `name` matches [name] EXACTLY
+  /// (case-insensitive), or null if none.
+  ///
+  /// Unlike [search] (pure substring — "Push Up" would resolve to
+  /// "Pike Push Up"), this is an exact-equality lookup, so callers that hold
+  /// only a display name (e.g. the Active Workout `ExerciseData`, which carries
+  /// no id) can safely fetch the full library map — coaching cues, common
+  /// mistakes, breathing/warm-up, etc. Returns null for swapped/custom
+  /// exercises absent from the library (caller renders nothing).
+  Map<String, dynamic>? getByExactName(String name) {
+    final target = name.trim().toLowerCase();
+    if (target.isEmpty) return null;
+    for (final raw in _hive.exerciseBox.values) {
+      if (raw is! Map) continue;
+      final n = (raw['name'] as String?)?.trim().toLowerCase();
+      if (n == target) return Map<String, dynamic>.from(raw);
+    }
+    return null;
+  }
+
   /// Returns exercises filtered by [category].
   ///
   /// Categories: Push, Pull, Legs, Core, Cardio, Flexibility,

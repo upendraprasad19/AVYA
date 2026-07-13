@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
@@ -39,11 +41,9 @@ class CoachingInsight {
   String toString() => 'CoachingInsight($patternId, $severity)';
 }
 
-/// Detects 12 coaching patterns from local Hive data.
+/// Detects 13 coaching patterns from local Hive data.
 ///
 /// All patterns read from Hive only — zero network cost.
-/// Results are cached in configBox with a date stamp so they are
-/// only recomputed once per day.
 class PatternDetector {
   PatternDetector._();
   static final PatternDetector _instance = PatternDetector._();
@@ -53,7 +53,7 @@ class PatternDetector {
   final NutritionRepository _nutrition = NutritionRepository.instance;
   final UserRepository _user = UserRepository.instance;
 
-  /// Run all 12 patterns and return detected insights.
+  /// Run all 13 patterns and return detected insights.
   ///
   /// Each pattern catches its own errors silently — partial data is OK.
   /// Results are cached in userBox['pattern_insights'] with today's date
@@ -73,6 +73,7 @@ class PatternDetector {
     _tryAdd(insights, _dayOfWeekPattern);
     _tryAdd(insights, _milestoneCountdown);
     _tryAdd(insights, _weekendNutrition);
+    _tryAdd(insights, _bodyweightTrendNudge);
 
     // Sort by severity: high first, then medium, then low.
     insights.sort((a, b) => a.severity.index.compareTo(b.severity.index));
@@ -481,6 +482,80 @@ class PatternDetector {
       userMessage: 'Weekend eating is $pct% higher than weekdays '
           '(${weekendAvg.round()} vs ${weekdayAvg.round()} cal).',
     );
+  }
+
+  // ── 13. Bodyweight-Trend Nudge (W2.6) ────────────────────────── LOW
+
+  /// Surfaces the 28d-vs-prior-28d MEAN bodyweight trend as a gentle,
+  /// informational insight — the one weight signal for the 3 goals the
+  /// high-severity [_weightTrendAlert] never fires for (strength /
+  /// general_fitness / recompose).
+  ///
+  /// `severity: low` is LOAD-BEARING: `_getCoachNotices`
+  /// (ai_snapshot_builder.dart) drops `low` insights before the AI prompt, so
+  /// this never pollutes the coach snapshot. A future bump to `medium` would
+  /// silently start feeding it into the prompt — a conscious decision, not a
+  /// tweak.
+  CoachingInsight? _bodyweightTrendNudge() {
+    // Kill-switch (§4.6). Missing flag ⇒ enabled (the `disable_*` convention).
+    if (HiveService.instance.configBox.get('disable_bodyweight_trend_nudge') ==
+        true) {
+      return null;
+    }
+
+    // Dedup ON THE OUTCOME, not a re-derived threshold: the high-severity
+    // goal-conflict alert (14-day, 2-point) and this nudge (28d mean) use
+    // different metrics, so re-deriving its condition here would both
+    // double-fire and leave gaps. If the alert fires it already owns the
+    // weight card. `_weightTrendAlert` is pure-read, so this extra call is
+    // side-effect-free.
+    if (_weightTrendAlert() != null) return null;
+
+    final signal = TrainingHistoryAnalyzer.bodyweightTrendSignal();
+    // 0.0 = insufficient data (a 28-day window was empty);
+    // < 0.8kg over 4 weeks = not a meaningful trend.
+    if (signal == 0.0 || signal.abs() < 0.8) return null;
+
+    final profile = _user.getProfile();
+    final goal = (profile?['primary_goal'] as String?) ?? '';
+    final up = signal > 0;
+    final mag = signal.abs().toStringAsFixed(1);
+
+    return CoachingInsight(
+      patternId: up ? 'bodyweight_trend_up' : 'bodyweight_trend_down',
+      severity: InsightSeverity.low,
+      coachNotice: 'Bodyweight ${up ? 'up' : 'down'} ~${mag}kg over the last '
+          '4 weeks (28-day mean vs the prior 28).',
+      userMessage: _bodyweightTrendMessage(goal, up: up, mag: mag),
+    );
+  }
+
+  /// Goal-aware, never-shame copy for every `FitnessGoals` token
+  /// (build_muscle / lose_fat / strength / general_fitness / recompose) plus a
+  /// goal-neutral fallback for an empty/unknown goal.
+  String _bodyweightTrendMessage(String goal,
+      {required bool up, required String mag}) {
+    final dir = up ? 'up' : 'down';
+    switch (goal) {
+      // Surplus goals: gaining is on-track, losing means eat more.
+      case 'build_muscle':
+      case 'strength':
+        return up
+            ? 'Weight up ~${mag}kg this month — on track for building. Keep the surplus steady.'
+            : 'Weight down ~${mag}kg this month — for building, you may need to eat a bit more.';
+      // Deficit goals: losing is on-track, gaining means review calories.
+      case 'lose_fat':
+      case 'recompose':
+        return up
+            ? 'Weight up ~${mag}kg this month — worth a look at calories to stay on target.'
+            : 'Weight down ~${mag}kg this month — on track. Keep it steady and protein high.';
+      // Neutral: informational either direction.
+      case 'general_fitness':
+        return "Weight $dir ~${mag}kg this month — worth a look at calories if this wasn't the plan.";
+      // Empty / unknown goal — factual, non-alarming.
+      default:
+        return 'Weight $dir ~${mag}kg this month (4-week trend).';
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────
