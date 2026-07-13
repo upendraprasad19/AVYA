@@ -1,12 +1,15 @@
 import 'package:icanbefitter/core/constants/fitness_goals.dart';
 
 import 'models.dart';
+import 'plan_engine_flags.dart';
 
 /// Stage 6: Appends HIIT cardio finishers to 2 workout days per week.
 ///
 /// Only activates for goals whose FitnessGoals spec has `cardio == true`
 /// (lose_fat / general_fitness / recompose). Finisher shape is driven by
-/// `cardioPreference`, not the goal.
+/// `cardioPreference`; when unset (always today — there is no preference UI)
+/// it defaults to the GOAL via `_defaultForGoal` (④, Batch 3a), or the mildest
+/// mini-HIIT when the `disable_cardio_goal_default` kill-switch is off.
 /// Finisher goes between main exercises and cooldown.
 class CardioFinisher {
   /// Attach cardio finishers to 2 non-consecutive days per week.
@@ -18,7 +21,10 @@ class CardioFinisher {
   }) {
     if (!FitnessGoals.of(goal).cardio) return weeks;
 
-    final preference = cardioPreference ?? 'hate_cardio';
+    // ④ (Batch 3a): with no stored cardioPreference (always, today — there is
+    // no preference UI), default the finisher SHAPE to the goal instead of the
+    // blanket mildest mini-HIIT. Kill-switch reverts to the verbatim old default.
+    final preference = cardioPreference ?? _defaultForGoal(goal);
     final hasGymEquipment = equipmentList.any(
       (e) => e.toLowerCase().contains('gym') || e.toLowerCase().contains('full'),
     );
@@ -55,6 +61,26 @@ class CardioFinisher {
         workoutDays: days,
       );
     }).toList();
+  }
+
+  /// Goal-keyed default finisher shape (④, Batch 3a) — the fix for the blanket
+  /// `hate_cardio` fallback that gave EVERY cardio-goal user the mildest ~5-min
+  /// mini-HIIT regardless of intent. Only reached for the 3 cardio-enabled goals
+  /// (guarded by `FitnessGoals.of(goal).cardio` in [attach]); every token below
+  /// is an existing `_buildFinisher` case with a bodyweight fallback. Kill-switch
+  /// off → verbatim pre-④ behavior (`hate_cardio` for all).
+  static String _defaultForGoal(String goal) {
+    if (!PlanEngineFlags.cardioGoalDefaultEnabled) return 'hate_cardio';
+    switch (goal) {
+      case 'lose_fat':
+        return 'hiit'; // fullest ~10-min finisher — the goal most wanting burn
+      case 'general_fitness':
+        return 'cycling'; // ~8-min balanced
+      case 'recompose':
+        return 'jump_rope'; // ~7.5-min moderate
+      default:
+        return 'hate_cardio'; // build_muscle/strength never reach here (cardio==false)
+    }
   }
 
   /// Pick 2 non-consecutive day indices from a day count.
