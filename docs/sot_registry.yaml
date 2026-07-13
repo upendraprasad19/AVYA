@@ -6144,3 +6144,131 @@ concepts:
         fields_read: [injury_contraindications]
         notes: U2 - the universal pool now applies the same match (was bypassed pre-fix)
     contract_test_path: test/contracts/injury_vocab_library_contract_test.dart
+
+  # ── Admin business-metrics dashboard (2026-07) ────────────────────
+  # Founder-only /admin screen on the web build. New concept: reads are a
+  # cross-domain aggregate (workout/nutrition/subscription/ops counts),
+  # not one existing domain's data. Deliberate, documented exception to
+  # the Hive-first rule (lib/features/admin/CLAUDE.md) - there is no
+  # meaningful per-device copy of cross-user aggregate business data, so
+  # this is the one provider that talks directly to a Supabase Edge
+  # Function instead of Hive.
+
+  - concept: admin_dashboard_metrics_snapshot
+    domain: cross_domain
+    behavioral_test_path: test/contracts/admin_dashboard_data_parsing_test.dart
+    description: |
+      Live current-state metrics + daily-snapshot trend data, assembled by
+      the `admin-dashboard-data` Edge Function and rendered across the 4
+      tabs of the founder-only `/admin` screen (Growth, Engagement,
+      Revenue, Ops Health).
+      SPLIT (Hermes L1-F1): `current` is LIVE — the read EF calls ALL THREE
+      `public.founder_metrics_*()` functions (growth + engagement + ops)
+      per request and merges them into one `current` object, so every
+      current-value stat tile is genuinely live. The snapshot table
+      (`public.admin_metrics_daily`, written nightly by the cron) backs ONLY
+      the `trend` series - a live query can't show "how PRO count moved over
+      30 days." Expiring-subscription emails come from a live `users` query
+      BOUNDED to [now-30d, now+30d] (Hermes L1/L37/L40 - was unbounded).
+
+      Architecture note (private -> public schema correction, caught during
+      plan review): the existing `private.founder_metrics()` (migration 093)
+      is NOT callable via `.rpc()` from an Edge Function - PostgREST only
+      routes to schemas listed in `supabase/config.toml`'s
+      `[api] schemas = ["public", "graphql_public"]`. Migration 101 adds
+      `public.founder_metrics_engagement()`, `public.founder_metrics_ops()`,
+      and a thin `public.founder_metrics_for_admin_api()` wrapper around the
+      untouched existing private function - all three SECURITY DEFINER +
+      REVOKE ALL FROM PUBLIC + GRANT EXECUTE TO service_role, same lockdown
+      as 093, just in the schema PostgREST actually serves.
+
+      Upstream source-of-truth for each aggregated count (workout_logs,
+      nutrition_logs, subscriptions, client_errors, alerts, cron_call_log)
+      is registered under its own existing SoT concept - this entry covers
+      only the NEW snapshot table + the new read surface built on top of it.
+    writers:
+      - file: supabase/functions/compute-admin-metrics-daily/index.ts
+        line_range: 1-183
+        method: handler (cron-dispatched) + buildSnapshotRow (pure)
+        notes: |
+          Cron-dispatched once daily at 23:45 IST (18:15 UTC) by
+          `compute_admin_metrics_daily` (migration 102) - deliberately late
+          in the day, not just-after-midnight, since the `*_today` fields
+          are cumulative-since-midnight-IST and an early run would snapshot
+          near-zero. Calls the 3 public.founder_metrics_* functions via
+          Promise.all, upserts one row per day via
+          `onConflict: "snapshot_date"` (pg_cron has no exactly-once
+          guarantee - a retried run corrects the row instead of duplicating
+          it and corrupting every trend chart).
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/admin/repositories/admin_dashboard_repository.dart
+        line_range: 1-38
+        method: AdminDashboardRepository.fetch
+        semantic: pass-through
+        fields_read: [full admin-dashboard-data response body]
+        notes: thin wrapper around SupabaseService.callFunction('admin-dashboard-data'); throws AdminNotAuthorizedException on 403
+      - file: lib/features/admin/providers/admin_dashboard_provider.dart
+        line_range: 1-17
+        method: adminDashboardProvider (FutureProvider)
+        semantic: pass-through
+        fields_read: [via AdminDashboardRepository.fetch()]
+        notes: watches authUserIdTokenProvider to rebuild on auth change; no cross-provider invalidation - this concept writes nothing another provider reads
+      - file: lib/features/admin/widgets/growth_tab.dart
+        line_range: 1-116
+        method: GrowthTab.build
+        semantic: aggregated
+        fields_read: [current.totalUsers, current.signupsTodayIst, current.signups7d, current.signups30d, current.proActive, current.freeUsers, trend.totalUsers, trend.signupsTodayIst]
+      - file: lib/features/admin/widgets/engagement_tab.dart
+        line_range: 1-114
+        method: EngagementTab.build
+        semantic: aggregated
+        fields_read: [current.workoutsLoggedToday, current.aiMessagesToday, current.streakMaintainedCurrentWeek, current.activeLast7d, trend.workoutsLoggedToday, trend.foodLogsToday, trend.aiMessagesToday, trend.streakMaintainedCurrentWeek]
+        notes: current.* tiles are LIVE (Hermes L1-F1 fix — admin-dashboard-data merges founder_metrics_engagement into `current`); trend.* feed the 30d sparklines
+      - file: lib/features/admin/widgets/revenue_tab.dart
+        line_range: 1-174
+        method: RevenueTab.build
+        semantic: aggregated
+        fields_read: [current.activeSubscriptions, current.freeUsers, current.proExpired, revenue.monthlyActive, revenue.yearlyActive, revenue.trialActive, revenue.otherActive, revenue.derivedMrrInr, revenue.currentMonthlyPriceInr, revenue.currentYearlyPriceInr, subscriptionsExpiring.expired, subscriptionsExpiring.expiring7d, subscriptionsExpiring.expiring30d]
+        notes: |
+          derivedMrrInr is computed (monthly x price + yearly x price/12), NOT a stored figure -
+          accurate only while promo_code_uses has 0 rows; current price shown read-only (out of scope
+          of this batch, see plan's "explicitly out of scope" section). trialActive (referral_trial)
+          + otherActive (catch-all) were added after live-data verification (2026-07-13) showed 6 of 7
+          active subs are referral_trial - without them the plan split showed "1 monthly, 0 yearly"
+          against 7 active subs with 6 unexplained. monthly+yearly+trial+other reconciles to active.
+      - file: lib/features/admin/widgets/ops_health_tab.dart
+        line_range: 1-210
+        method: OpsHealthTab.build
+        semantic: aggregated
+        fields_read: [current.clientErrorsToday, current.clientErrors7d, current.openAlertsCount, current.cronFailures24h, trend.clientErrorsToday, trend.openAlertsCount, trend.cronFailures24h, openAlerts.id, openAlerts.detectedAt, openAlerts.source, openAlerts.severity, openAlerts.summary, openAlerts.suggestedAction]
+        notes: |
+          current.* stat tiles are LIVE (Hermes L1-F1 — founder_metrics_ops merged into `current`);
+          trend.* feed the 30d sparklines. The open-alerts stat tile + card chip use the UNCAPPED
+          current.openAlertsCount (Hermes L1-F3), while the alert FEED lists openAlerts.* (the read
+          EF caps that list at 20) with a "showing latest N of M" note when truncated.
+    regression_test: test/contracts/admin_dashboard_data_parsing_test.dart
+    hive:
+      box: null
+      key_prefix: ""
+      key_formula: ""
+    cloud:
+      table: admin_metrics_daily
+      columns: [id, snapshot_date, total_users, signups_today_ist, signups_7d, signups_30d, pro_active, pro_expired, free_users, active_subscriptions, active_last_7d, workouts_logged_today, food_logs_today, ai_messages_today, streak_maintained_current_week, client_errors_today, client_errors_7d, open_alerts_count, cron_failures_24h, computed_at]
+    sync_methods: []
+    restore_methods: []
+    provider_invalidation_set: []
+    telemetry:
+      failure_op_types: []
+    forbidden_legacy_patterns: []
+    class_constraints: |
+      Deliberate Hive-first exception (root CLAUDE.md rule #1;
+      lib/features/admin/CLAUDE.md records it locally) - there is no
+      meaningful per-device copy of cross-user aggregate business data, so
+      `adminDashboardProvider` is the one provider in the app that calls a
+      Supabase Edge Function directly instead of reading Hive first.
+
+      Security is server-side only (ADMIN_USER_IDS allowlist, same pattern
+      as promote-community-item / diagnose 7ad0c5) - the client's kIsWeb
+      router guard (lib/core/router/app_router.dart) and any client-side
+      "is this the founder" check are UX only, never the actual gate.

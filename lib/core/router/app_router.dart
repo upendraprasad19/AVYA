@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show kDebugMode, kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -44,6 +45,7 @@ import 'package:icanbefitter/features/onboarding/screens/plan_generation_screen.
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/features/dev/dev_panel_screen.dart';
+import 'package:icanbefitter/features/admin/screens/admin_dashboard_screen.dart';
 
 /// GoRouter configuration with auth redirect logic.
 ///
@@ -300,6 +302,20 @@ class AppRouter {
           builder: (context, state) => const DevPanelScreen(),
         ),
 
+      // ── Founder-only admin dashboard — reachable in PRODUCTION, web only ──
+      // Unlike /dev (kDebugMode-gated, compiled out of release), this route
+      // is registered unconditionally so it's live on app.icanbefitter.com.
+      // No bottom-nav entry, no in-app link anywhere. Real access control is
+      // server-side (admin-dashboard-data's ADMIN_USER_IDS allowlist) — the
+      // _authRedirect kIsWeb check below is a client-side platform guard
+      // only, closing off the (unlikely but not worth relying on "unlikely")
+      // path where this URL is somehow reached on the Android build.
+      GoRoute(
+        path: '/admin',
+        name: 'admin',
+        builder: (context, state) => const AdminDashboardScreen(),
+      ),
+
       // ── Main shell with 5 tabs ────────────────────────────
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -548,6 +564,12 @@ class AppRouter {
     // Dev panel (debug only) — always reachable, no auth/onboarding gate,
     // so it works on a fresh web build for time-travel verification.
     if (kDebugMode && state.matchedLocation == '/dev') return null;
+
+    // Admin dashboard is web-only, unconditionally — /admin is registered
+    // in every build (see routes above), so on a non-web platform (Android)
+    // bounce to /home before it ever renders. Real access control is
+    // server-side; this is a platform guard, not the security boundary.
+    if (!kIsWeb && state.matchedLocation == '/admin') return '/home';
 
     // Let splash screen handle its own navigation.
     if (isOnSplash) return null;

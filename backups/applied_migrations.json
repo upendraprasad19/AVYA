@@ -655,5 +655,27 @@
     "applier": "claude",
     "slug": "rls_initplan_select_wrap",
     "diagnose": "e6b1a4"
+  },
+  {
+    "migration": "101",
+    "applied_at": "2026-07-13T09:52:07+05:30",
+    "hash": "sha256:c68c5e770ef66d7d7ba104c996ee079f057877e611507bdac21ad858b7abefa0",
+    "applier": "claude",
+    "slug": "admin_dashboard_metrics_functions"
+  },
+  {
+    "migration": "102",
+    "applied_at": "2026-07-13T09:52:07+05:30",
+    "hash": "sha256:e38cb3bf2afe8a9396e4d85c7fd38295fba868abfb29180aed4d4053b99e5c3a",
+    "applier": "claude",
+    "slug": "admin_metrics_daily_snapshot"
+  },
+  {
+    "migration": "103",
+    "applied_at": "2026-07-13T09:52:07+05:30",
+    "hash": "sha256:b8f1a23583068cae73a834d021ebd0e3897bcc20431d930597de27b217f57cf5",
+    "applier": "claude",
+    "slug": "admin_metrics_revoke_from_roles",
+    "diagnose": "a9d3f1"
   }
 ]

@@ -40,6 +40,7 @@
 | 047 | `clean_orphan_media_daily` | 03:00 IST daily | `clean-orphan-media` | founder | `service_role_key` | Sweeps unreferenced Storage objects (entry rename: registry initially used weekly cadence — actual migration is daily) |
 | 065 | `pr-detection` (jobid 9) | every 15 min | `pr-detection` | founder | `service_role_key` | Fixed env-vs-vault drift on 2026-05-15 (operational fix) |
 | 068 | cron_call_log housekeeping | hourly | (intra-DB function) | founder | n/a | Cleans `cron_call_log` rows older than 7d |
+| 102 | `compute_admin_metrics_daily` | 23:45 IST daily (18:15 UTC) | `compute-admin-metrics-daily` | founder | `service_role_key` | Populates `public.admin_metrics_daily` (one row/day) for the founder-only `/admin` dashboard's trend charts. Deliberately late in the day (not just-after-midnight) — the `*_today` fields are cumulative-since-midnight-IST, so an early-morning run would snapshot near-zero for every "today" metric. |
 
 ## Deprecated / unscheduled
 

@@ -8,6 +8,7 @@
   "storage_buckets": ["chat-media", "progress-photos", "exercise-images"],
   "tables": {
     "account_deletion_log": ["id", "deleted_user_id", "deleted_at", "request_id", "razorpay_cancel_status", "storage_purge_status"],
+    "admin_metrics_daily": ["id", "snapshot_date", "total_users", "signups_today_ist", "signups_7d", "signups_30d", "pro_active", "pro_expired", "free_users", "active_subscriptions", "active_last_7d", "workouts_logged_today", "food_logs_today", "ai_messages_today", "streak_maintained_current_week", "client_errors_today", "client_errors_7d", "open_alerts_count", "cron_failures_24h", "computed_at"],
     "ai_coach_interactions": ["id", "user_id", "snapshot_id", "channel", "user_message", "ai_response", "model_used", "tokens_used", "was_helpful", "created_at", "summarized", "tool_calls"],
     "alerts": ["id", "detected_at", "source", "severity", "summary", "context_json", "suggested_action", "acknowledged", "acknowledged_at", "resolved_at"],
     "body_measurements": ["id", "user_id", "date", "chest", "waist", "hips", "arms", "notes", "created_at"],
