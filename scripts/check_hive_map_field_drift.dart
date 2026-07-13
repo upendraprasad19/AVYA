@@ -295,6 +295,13 @@ const _alwaysOk = <String>{
   // field; the prefix heuristic mis-attributes it because train_provider +
   // hotel_workout_planner also handle those Hive maps.
   'injuries',
+  // W2.1 (graded_progression, Batch 3b-ii) — `fitness_experience` +
+  // `onboarding_completed_at` are canonical userBox['profile'] fields, read by
+  // ProgressionResolver.resolve() via UserRepository.getProfile() for the beginner
+  // auto-linear window. NOT exlog_* fields (no exlog writer emits them); the prefix
+  // heuristic mis-attributes them because progression_resolver also reads exlog_*
+  // rows for the weight scan.
+  'fitness_experience', 'onboarding_completed_at',
   // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +
   // PlanIntegrityReconciler from `user_progress.plan_json`, NOT from a
   // `schedule_*` entry. The prefix heuristic mis-attributes them because both

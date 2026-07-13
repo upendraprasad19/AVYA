@@ -2,6 +2,25 @@
 // PUBLIC DATA CLASSES — Plan Generator V3
 // ══════════════════════════════════════════════════════════════════
 
+/// Parse a library `rep_range` string ("lo-hi", e.g. "8-12") → `(lo, hi)` with
+/// BOTH positive ints and `lo <= hi`; null/malformed/reversed/single/timed →
+/// null (callers fall back to their default). The SINGLE shared parser for the
+/// plan engine — used by `PeriodizationEngine._applyWave` (wave reps) and
+/// `ProgressionResolver` (W2.1 rep-range banding) so a second hand-rolled
+/// `split('-')` can't drift (the #1 recurring bug class). On real library data
+/// every rep-based `rep_range` is a clean "N-M" with lo<hi, so this is
+/// behavior-preserving vs the old per-part parse (pinned by
+/// `periodization_wave_reps_invariant_test.dart`).
+(int, int)? parseRepRange(String? range) {
+  if (range == null || !range.contains('-')) return null;
+  final parts = range.split('-');
+  if (parts.length != 2) return null;
+  final lo = int.tryParse(parts[0].trim());
+  final hi = int.tryParse(parts[1].trim());
+  if (lo == null || hi == null || lo <= 0 || hi <= 0 || lo > hi) return null;
+  return (lo, hi);
+}
+
 class Phase {
   final int phase;
   final String name;
