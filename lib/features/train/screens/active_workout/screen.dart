@@ -18,6 +18,7 @@ import '../../widgets/set_input_row.dart';
 import '../../widgets/workout_receipt_card.dart';
 import '../../widgets/workout_receipt_sheet.dart';
 
+part 'coaching_content_panel.dart';
 part 'completion_sheet.dart';
 part 'exercise_card.dart';
 part 'exercise_picker_sheet.dart';

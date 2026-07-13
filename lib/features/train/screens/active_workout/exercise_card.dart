@@ -743,6 +743,15 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                             ),
                           ],
                         ),
+
+                        // ── Per-exercise coaching content (W3.6) ─────
+                        // Collapsed by default; renders nothing when the
+                        // exercise has no library match (swap/custom).
+                        CoachingContentPanel(
+                          key: ValueKey(
+                              'coaching_${widget.exercise.name}'),
+                          exerciseName: widget.exercise.name,
+                        ),
                         ], // close `if (widget.isExpanded) ...[` (Bug #15b)
                       ],
                     ),
