@@ -145,10 +145,15 @@ class PlanGenerator {
     // it from training history: the laggard muscle groups (lowest recent volume
     // share) become bodyFocus tokens, which PeriodizationEngine turns into +1 set
     // on matching exercises. No-ops to empty for Phase 1 / sparse history.
-    var effectiveBodyFocus = bodyFocus;
-    if (bodyFocus.isEmpty && phase >= 2) {
-      effectiveBodyFocus = TrainingHistoryAnalyzer.weakMuscles();
-    }
+    // ⑤ (Batch 4): resolve the effective body-focus — explicit `physique_focus`
+    // bring-up (ship-dark, precedes the auto weakMuscles() laggard signal). Flag
+    // OFF → byte-identical to the prior `bodyFocus.isEmpty && phase >= 2 ?
+    // weakMuscles() : bodyFocus`. The flag-gate + precedence glue lives in the
+    // tested `TrainingHistoryAnalyzer.resolveBodyFocus` (B-pass P2).
+    final effectiveBodyFocus = TrainingHistoryAnalyzer.resolveBodyFocus(
+      explicitBodyFocus: bodyFocus,
+      phase: phase,
+    );
 
     // Stage 4: Periodization → WeekPlan[]
     var weekPlans = PeriodizationEngine.apply(

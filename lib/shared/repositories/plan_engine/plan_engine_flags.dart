@@ -101,4 +101,21 @@ class PlanEngineFlags {
       return false; // no Hive (pure unit test) → safe default: OFF (no cut)
     }
   }
+
+  /// ⑤ (Batch 4) physique-focus bring-up. **Default OFF (ship dark, §4.6)** — the
+  /// user's self-selected `physique_focus` translates to muscle tokens that
+  /// PeriodizationEngine turns into +1 set on matching exercises (INCREASES
+  /// prescribed volume), so it ships inert and is flipped ON after APK
+  /// verification. When OFF, the `effectiveBodyFocus` seam is byte-identical to
+  /// today (explicit focus ignored; the auto weakMuscles() path is unchanged).
+  /// Set `configBox['enable_physique_focus_bringup'] = true` to enable.
+  static bool get physiqueFocusBringupEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('enable_physique_focus_bringup') ==
+          true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → safe default: OFF (no bring-up)
+    }
+  }
 }

@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 
 import '../exercise_repository.dart';
+import 'plan_engine_flags.dart';
 
 /// Stage 0 (companion to [ProgressionResolver]) — reads Hive to produce
 /// PHASE 2+ personalization signals for the plan engine.
@@ -90,6 +91,67 @@ class TrainingHistoryAnalyzer {
           reason: 'training_history_analyzer_weak_muscles'));
       return const [];
     }
+  }
+
+  /// LEVER 8 (⑤ Batch 4, explicit body-focus bring-up): translates the user's
+  /// self-selected `physique_focus` profile token into the lowercased muscle-
+  /// substring tokens that [PeriodizationEngine] turns into +1 set on matching
+  /// exercises — the SAME downstream path as [weakMuscles]. Returns `[]` for
+  /// `balanced` / `strength` / absent (no explicit bring-up → the caller falls
+  /// back to [weakMuscles]). try/catch → `[]` like [weakMuscles] so a null /
+  /// corrupt / unopened `userBox['profile']` never throws into the generator.
+  /// The caller gates on `PlanEngineFlags.physiqueFocusBringupEnabled` (ship-dark).
+  static List<String> physiqueFocusMuscles() {
+    try {
+      final profile = HiveService.instance.userBox.get('profile');
+      if (profile is! Map) return const [];
+      final token = (profile['physique_focus'] as String?)?.trim();
+      return physiqueFocusToBodyFocus(token);
+    } catch (e, st) {
+      debugPrint('[TrainingHistoryAnalyzer.physiqueFocusMuscles] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'training_history_analyzer_physique_focus'));
+      return const [];
+    }
+  }
+
+  /// Pure translation (Hive-free, testable in isolation): a `physique_focus`
+  /// token → the lowercased muscle-substring tokens PeriodizationEngine matches
+  /// via `primaryMuscles.any((m) => m.contains(token))`. Verified against the
+  /// library `primary_muscles`: `delt` catches Deltoid + Delts, `shoulder`
+  /// catches Shoulders + Shoulder Stabilisers (which `delt` misses). `balanced`
+  /// / `strength` / null → `[]` (no bring-up). See docs/plans/body-focus-batch.md.
+  @visibleForTesting
+  static List<String> physiqueFocusToBodyFocus(String? token) {
+    switch (token) {
+      case 'glutes_legs':
+        return const ['glutes', 'quads', 'hamstrings', 'calves'];
+      case 'chest_shoulders_arms':
+        return const ['chest', 'delt', 'shoulder', 'triceps', 'biceps'];
+      default:
+        return const []; // balanced / strength / null → fall back to weakMuscles
+    }
+  }
+
+  /// ⑤ (Batch 4) — resolves the effective bodyFocus for the periodization +1-set
+  /// nudge, in PRECEDENCE order: an explicit [explicitBodyFocus] (rarely passed) >
+  /// the user's `physique_focus` bring-up ([physiqueFocusMuscles], ship-dark
+  /// behind `enable_physique_focus_bringup`, applies at ALL phases) > the auto
+  /// laggard signal ([weakMuscles], phase≥2 only). When the flag is OFF this is
+  /// BYTE-IDENTICAL to the pre-⑤ seam (`explicitBodyFocus.isEmpty && phase>=2 ?
+  /// weakMuscles() : explicitBodyFocus`). Extracted from `plan_generator`'s inline
+  /// seam so the flag-gate + precedence glue is DIRECTLY behavior-tested (B-pass P2).
+  static List<String> resolveBodyFocus({
+    required List<String> explicitBodyFocus,
+    required int phase,
+  }) {
+    if (explicitBodyFocus.isNotEmpty) return explicitBodyFocus;
+    final focus = PlanEngineFlags.physiqueFocusBringupEnabled
+        ? physiqueFocusMuscles()
+        : const <String>[];
+    if (focus.isNotEmpty) return focus;
+    if (phase >= 2) return weakMuscles();
+    return const [];
   }
 
   /// LEVER 6 (demote swapped-out exercises): the set of ORIGINAL exercise names
