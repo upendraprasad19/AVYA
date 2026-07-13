@@ -36,4 +36,20 @@ class PlanEngineFlags {
       return true; // no Hive (pure unit test) → safe default: filter ON
     }
   }
+
+  /// ④ (Batch 3a) goal-aware cardio finisher default. Default ON: when no
+  /// `cardioPreference` is stored (always, today — there is no preference UI),
+  /// the finisher shape is keyed to the goal (lose_fat→hiit, general_fitness→
+  /// cycling, recompose→jump_rope) instead of the blanket mildest mini-HIIT.
+  /// Set `configBox['disable_cardio_goal_default'] = true` to revert to the
+  /// verbatim pre-④ behavior (every cardio-goal user gets `hate_cardio`).
+  static bool get cardioGoalDefaultEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_cardio_goal_default') !=
+          true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: goal-aware ON
+    }
+  }
 }

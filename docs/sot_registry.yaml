@@ -6174,3 +6174,30 @@ concepts:
         semantic: pass-through
         notes: renders insight.userMessage; a low nudge only surfaces as insights.first when it is the highest-severity insight
     contract_test_path: test/contracts/bodyweight_trend_nudge_test.dart
+
+  - concept: cardio_goal_default
+    domain: workout
+    behavioral_test_path: test/contracts/cardio_goal_default_test.dart
+    description: |
+      ④ (Batch 3a) — the cardio FINISHER shape defaults to the goal when no
+      cardioPreference is stored (always, today — there is no preference UI),
+      instead of the blanket mildest mini-HIIT. Only the 3 cardio-enabled goals
+      reach it (FitnessGoals.of(goal).cardio == true): lose_fat -> hiit,
+      general_fitness -> cycling, recompose -> jump_rope; every token is an
+      existing _buildFinisher case with a bodyweight fallback. Kill-switch
+      configBox['disable_cardio_goal_default'] (default ON) reverts to the
+      verbatim pre-④ 'hate_cardio' default.
+    writers:
+      - file: lib/shared/repositories/plan_engine/cardio_finisher.dart
+        method: attach (cardioPreference ?? _defaultForGoal) + _defaultForGoal
+        notes: goal-keyed default finisher token; only for cardio:true goals; default arm defensive (build_muscle/strength never reach it)
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: cardioGoalDefaultEnabled
+        notes: kill-switch disable_cardio_goal_default, safe-default ON when Hive absent
+    reader_manifest_complete: true
+    readers:
+      - file: lib/shared/repositories/plan_engine/cardio_finisher.dart
+        method: _buildFinisher
+        semantic: dispatch
+        notes: maps the resolved preference token to the finisher exercise list
+    contract_test_path: test/contracts/cardio_goal_default_test.dart
