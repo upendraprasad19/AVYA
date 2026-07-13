@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
+
+import 'plan_engine_flags.dart';
 
 /// Stage 0: Reads exercise logs from Hive for Phase 2+ to suggest starting weights.
 ///
@@ -74,8 +77,11 @@ class ProgressionResolver {
 
         final existing = lastSession[name];
         if (existing == null || date.isAfter(existing.date)) {
-          lastSession[name] =
-              _SessionTop(date: date, weight: top.weight, reps: top.reps);
+          lastSession[name] = _SessionTop(
+              date: date,
+              dateStr: dateStr,
+              weight: top.weight,
+              reps: top.reps);
         }
       }
 
@@ -84,27 +90,36 @@ class ProgressionResolver {
         final top = lastSession[exerciseName];
         if (top == null) continue;
 
-        // est-1RM (Epley) — safety ceiling so we never prescribe above the
-        // user's estimated single-rep max.
+        // est-1RM (Epley) — safety ceiling on the LAST-DEMONSTRATED top set,
+        // computed from the ORIGINAL (pre-decay) weight: detraining decay lowers
+        // the STARTING weight, never the true single-rep-max cap.
         final est1rm =
             top.reps > 0 ? top.weight * (1 + top.reps / 30.0) : top.weight;
+
+        // ⑦(a) detraining decay (Batch 3b-i): a user resuming after a training
+        // gap restarts lighter. The decayed `base` REPLACES top.weight in EVERY
+        // branch below — INCLUDING the <=0 floor — so decay only ever reduces
+        // (a floor reset to the ORIGINAL weight would invert "reduce-only").
+        final base = PlanEngineFlags.detrainingDecayEnabled
+            ? top.weight * _detrainingFactor(top.dateStr)
+            : top.weight;
 
         double suggested;
         if (top.reps >= 10) {
           // Strong session → progress.
           final increment = _isLowerBody(exerciseName) ? 5.0 : 2.5;
-          suggested = top.weight + increment;
+          suggested = base + increment;
         } else if (top.reps >= 5) {
           // Moderate → hold (consolidate before adding load).
-          suggested = top.weight;
+          suggested = base;
         } else {
           // Struggled (<5 reps) → small back-off to rebuild movement quality.
           final backoff = _isLowerBody(exerciseName) ? 2.5 : 1.25;
-          suggested = top.weight - backoff;
-          if (suggested <= 0) suggested = top.weight;
+          suggested = base - backoff;
+          if (suggested <= 0) suggested = base;
         }
 
-        // Never exceed est-1RM.
+        // Never exceed est-1RM (the pre-decay demonstrated max).
         if (est1rm > 0 && suggested > est1rm) suggested = est1rm;
 
         weights[exerciseName] =
@@ -180,6 +195,25 @@ class ProgressionResolver {
     return null;
   }
 
+  /// ⑦(a) detraining decay factor by the IST day-gap since [dateStr] (the raw
+  /// `exlog_*` date-only string, already written via `istDateStr`). Reduce-only:
+  /// ≤7d → 1.0 · 8–21d → 0.925 (−7.5%) · 22–35d → 0.825 (−17.5%) · >35d → 0.5.
+  /// Returns 1.0 (no decay) when the date is missing/unparseable (safe default).
+  static double _detrainingFactor(String? dateStr) {
+    if (dateStr == null) return 1.0;
+    final last = DateTime.tryParse(dateStr);
+    // istTodayStr() is a date-only IST string; parsing both date-only makes the
+    // device time-zone cancel — do NOT re-zone `dateStr` (it is ALREADY IST;
+    // re-zoning double-shifts east-of-IST devices — Test #11.1 class).
+    final today = DateTime.tryParse(istTodayStr());
+    if (last == null || today == null) return 1.0;
+    final gapDays = today.difference(last).inDays;
+    if (gapDays <= 7) return 1.0;
+    if (gapDays <= 21) return 0.925;
+    if (gapDays <= 35) return 0.825;
+    return 0.50;
+  }
+
   /// Check if exercise targets lower body (for +5 kg vs +2.5 kg increment).
   static bool _isLowerBody(String exerciseName) {
     final lower = exerciseName.toLowerCase();
@@ -190,10 +224,16 @@ class ProgressionResolver {
 /// The top (heaviest) set of an exercise's most recent logged session.
 class _SessionTop {
   final DateTime date;
+
+  /// The RAW `exlog_*` `date` string (already an IST date-only value written via
+  /// `istDateStr`). Used for the ⑦(a) gap so we NEVER re-zone an already-IST
+  /// date (which would double-shift east-of-IST devices — Test #11.1 class).
+  final String? dateStr;
   final double weight;
   final int reps;
   const _SessionTop({
     required this.date,
+    this.dateStr,
     required this.weight,
     required this.reps,
   });

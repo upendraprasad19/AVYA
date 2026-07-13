@@ -37,6 +37,21 @@ class PlanEngineFlags {
     }
   }
 
+  /// ⑦(a) (Batch 3b-i) detraining WEIGHT decay in ProgressionResolver. Default
+  /// ON: when a Phase-2+ user resumes after a training gap, their suggested
+  /// starting weights are decayed by the gap (8–21d −7.5%, 22–35d −17.5%, >35d
+  /// −50%) BEFORE the reps-rule. Reduce-only + Epley-capped (never over-loads).
+  /// Set `configBox['disable_detraining_decay'] = true` to revert to the
+  /// verbatim pre-⑦a weights (no gap decay).
+  static bool get detrainingDecayEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_detraining_decay') !=
+          true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: decay ON
+    }
+  }
+
   /// ④ (Batch 3a) goal-aware cardio finisher default. Default ON: when no
   /// `cardioPreference` is stored (always, today — there is no preference UI),
   /// the finisher shape is keyed to the goal (lose_fat→hiit, general_fitness→

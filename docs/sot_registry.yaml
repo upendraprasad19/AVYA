@@ -6329,3 +6329,33 @@ concepts:
       as promote-community-item / diagnose 7ad0c5) - the client's kIsWeb
       router guard (lib/core/router/app_router.dart) and any client-side
       "is this the founder" check are UX only, never the actual gate.
+
+  - concept: detraining_decay
+    domain: workout
+    behavioral_test_path: test/contracts/progression_resolver_decay_test.dart
+    description: |
+      ⑦(a) (Batch 3b-i) — ProgressionResolver.resolve() decays a resuming user's
+      Phase-2+ suggested starting weight by the training gap since their last
+      logged session (≤7d none · 8–21d −7.5% · 22–35d −17.5% · >35d −50%), applied
+      to the baseline BEFORE the reps-rule. The decayed `base` replaces the
+      original weight in ALL FOUR reps-rule branches (progress/hold/back-off AND
+      the <=0 floor — so decay is reduce-ONLY; a floor reset to the original would
+      invert it). Epley 1RM ceiling stays on the PRE-decay demonstrated max. Gap
+      is a zone-canceling day-diff of two date-only IST strings (raw exlog `date`
+      + `istTodayStr()`) — never re-zones an already-IST value (Test #11.1 class).
+      Kill-switch configBox['disable_detraining_decay'] (default ON) → verbatim
+      pre-⑦a weights. W2.1 graded progression = Batch 3b-ii (separate).
+    writers:
+      - file: lib/shared/repositories/plan_engine/progression_resolver.dart
+        method: resolve (decay seam) + _detrainingFactor
+        notes: base = top.weight × _detrainingFactor(top.dateStr); replaces top.weight in all 4 reps-rule refs; Epley from original; behind detrainingDecayEnabled
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: detrainingDecayEnabled
+        notes: kill-switch disable_detraining_decay, safe-default ON when Hive absent
+    reader_manifest_complete: true
+    readers:
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method: apply (previousWeights)
+        semantic: pass-through
+        notes: consumes the (decayed) suggested weight as the phase's starting load — contract unchanged (name→weight map)
+    contract_test_path: test/contracts/progression_resolver_decay_test.dart

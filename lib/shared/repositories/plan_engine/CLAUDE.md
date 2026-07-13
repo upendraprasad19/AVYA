@@ -52,6 +52,7 @@ Phase {
 **Key change:** CSpec (category-based) replaced by MuscleSlot (muscle-level targeting).
 
 Pipeline stages:
+0. **Progression (pre-pipeline, phase≥2)** → `ProgressionResolver.resolve()` scans `exlog_*` for each exercise's most-recent top set → suggested starting weight (3-band reps-rule + Epley 1RM ceiling), fed to Periodization via `previousWeights`. **⑦(a) (Batch 3b-i): detraining WEIGHT decay** — a user resuming after a training gap restarts lighter: the baseline is decayed by the IST day-gap since their last logged session (≤7d none · 8–21d −7.5% · 22–35d −17.5% · >35d −50%) BEFORE the reps-rule; the decayed `base` replaces the original weight in ALL FOUR reps-rule branches incl. the `<=0` floor (reduce-ONLY), Epley cap stays on the pre-decay 1RM, gap is a zone-canceling date-only diff (never re-zones the already-IST exlog date — Test #11.1 class). Kill-switch `disable_detraining_decay` (default ON). SoT `detraining_decay`; behavioral test `progression_resolver_decay_test.dart` (the Batch-0 scorecard CANNOT measure resolve() — it never invokes it + seeds no logs). W2.1 graded progression = Batch 3b-ii (separate).
 1. **Split Resolver** → `MuscleSlotDay[]` with granular muscle slots per day (8-10 P1-P5 slots per day, ordered by priority)
 2. **Volume Filter** → Trims slots to `targetCount(experience, daysPerWeek)` by `slots.take(N)` — depends on split_resolver ordering
 3. **Exercise Selector** → 5-attempt cascade within movement patterns (NEVER crosses boundaries)
