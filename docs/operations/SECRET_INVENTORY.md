@@ -34,6 +34,7 @@ Project `dedsavbjuwgarrhphgnl` → Edge Functions → Secrets.
 | `CEREBRAS_API_KEY_1`, `_2`, `_3` | Legacy fallback (now disused; safe to retain) | 2026-05-20 |
 | `RAZORPAY_KEY_SECRET` | `verify-payment`, `razorpay-webhook` | 2026-05-20 |
 | `service_role_key` (Vault row, NOT env var) | All cron-dispatched functions via `private.morning_alert_get_service_key()` | 2026-05-20 (drift-fixed 2026-05-15 — see `supabase/functions/CLAUDE.md`) |
+| `ADMIN_USER_IDS` | `promote-community-item` (since 2026-05-11), `admin-dashboard-data` (2026-07) | Comma-separated Supabase `auth.users.id` UUIDs. Was live in production for `promote-community-item` since diagnose `7ad0c5` but never inventoried until the admin-dashboard batch found it during reuse — **retroactive addition, not a new secret.** Fail-secure: unset or caller not listed → 403 on every request. |
 
 ## Firebase / OneSignal / Razorpay credentials
 
