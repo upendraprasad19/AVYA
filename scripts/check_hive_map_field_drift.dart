@@ -302,6 +302,12 @@ const _alwaysOk = <String>{
   // heuristic mis-attributes them because progression_resolver also reads exlog_*
   // rows for the weight scan.
   'fitness_experience', 'onboarding_completed_at',
+  // ⑤ (physique_focus_bringup, Batch 4) — `physique_focus` is a canonical
+  // userBox['profile'] field, read by TrainingHistoryAnalyzer.physiqueFocusMuscles()
+  // for the body-focus +1-set bring-up. NOT an exlog_*/schedule_* field (no such
+  // writer emits it); the prefix heuristic mis-attributes it because
+  // training_history_analyzer also reads exlog_* rows (weakMuscles).
+  'physique_focus',
   // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +
   // PlanIntegrityReconciler from `user_progress.plan_json`, NOT from a
   // `schedule_*` entry. The prefix heuristic mis-attributes them because both

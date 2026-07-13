@@ -73,9 +73,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   // Track original plan-affecting values for rescheduling detection.
   // V4 pipeline plan-driving inputs (per CLAUDE.md §12 + plan_engine/):
   //   daysPerWeek + goal + equipment + fitness_experience drive the split
-  //   resolver + volume filter + exercise selector. session_duration_minutes
-  //   + physique_focus + injuries drive sequencing + warmup/cooldown +
-  //   exclusion masks. ALL must trigger reschedule on change.
+  //   resolver + volume filter + exercise selector. injuries drive the
+  //   exercise-selector exclusion masks. physique_focus drives +1 set on
+  //   matching exercises via PeriodizationEngine (⑤ Batch 4, ship-dark behind
+  //   enable_physique_focus_bringup). session_duration_minutes is collected but
+  //   NOT yet consumed by the engine (③ deferred). ALL must trigger reschedule
+  //   on change.
   late int _originalDaysPerWeek;
   late String _originalGoal;
   late String _originalEquipment;
@@ -1653,11 +1656,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       // bumping intermediate→advanced wouldn't trigger reschedule and today's
       // plan would keep showing the old 4-7 exercises forever.
       //
-      // session_duration_minutes drives split count + cardio finisher length;
-      // physique_focus drives muscle slot weighting (e.g. glutes_legs adds
-      // posterior chain priority); injuries drive exclusion masks in the
-      // exercise selector. ALL must trigger reschedule on change to keep
-      // today's schedule consistent with the saved profile.
+      // physique_focus drives +1 set on matching exercises via PeriodizationEngine
+      // (⑤ Batch 4, ship-dark behind enable_physique_focus_bringup); injuries
+      // drive exclusion masks in the exercise selector. session_duration_minutes
+      // is collected but NOT yet consumed by the engine (③ deferred). ALL must
+      // trigger reschedule on change to keep today's schedule consistent with the
+      // saved profile.
       final planChanged = computePlanChanged(
         daysPerWeek: _daysPerWeek,
         originalDaysPerWeek: _originalDaysPerWeek,

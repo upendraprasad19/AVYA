@@ -3473,6 +3473,7 @@ concepts:
       - { file: lib/features/train/repositories/workout_repository.dart, reason: "reads goal/experience for plan generation calls" }
       - { file: lib/shared/repositories/user_repository.dart, reason: "canonical profile read path — getUserProfile(); not a full_name-specific reader" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — reads profile fields (days_per_week, primary_goal, height_cm, current_weight_kg, etc.) for the AI snapshot; not a full_name reader. Split out of ai_coach_repository.dart." }
+      - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "⑤ Batch 4 — physiqueFocusMuscles() reads profile.physique_focus for the body-focus bring-up +1-set; not a full_name reader" }
     regression_test: test/sync/restore_field_canonical_test.dart
     hive:
       box: userBox
@@ -6452,3 +6453,46 @@ concepts:
         semantic: visibility
         notes: non-shaming resume banner shown iff sessionDetrainingFactor < 1.0
     contract_test_path: test/contracts/session_detraining_cut_test.dart
+
+  - concept: physique_focus_bringup
+    domain: workout
+    behavioral_test_path: test/contracts/physique_focus_bringup_test.dart
+    description: |
+      ⑤ (Batch 4, Option 1) — the user's self-selected `physique_focus`
+      (userBox['profile'], tokens balanced/glutes_legs/chest_shoulders_arms/
+      strength) now shapes the plan: CENTRALLY translated to lowercased
+      muscle-substring tokens and fed to `effectiveBodyFocus`
+      (via TrainingHistoryAnalyzer.resolveBodyFocus at the plan_generator.dart:148-155
+      seam), which PeriodizationEngine turns into +1 SET
+      per matching exercise (primaryMuscles.any(contains); break → max +1/ex).
+      Explicit focus takes PRECEDENCE over the auto weakMuscles() laggard signal
+      and applies at ALL phases; balanced/strength/absent → [] → falls back to
+      weakMuscles() (phase≥2) exactly as before. Read via a try/catch
+      TrainingHistoryAnalyzer.physiqueFocusMuscles() helper (degrades to [] on
+      null/corrupt/unopened profile, mirroring weakMuscles) so NO Hive coupling
+      enters plan_generator. Kill-switch `enable_physique_focus_bringup` DEFAULT
+      OFF (ship dark §4.6 — +1-set INCREASES prescribed volume) → seam
+      byte-identical to pre-⑤ (focus=[] → verbatim `bodyFocus.isEmpty && phase>=2
+      ? weakMuscles() : bodyFocus`). The DEDICATED isolation SLOT is a
+      founder-deferred future advancement (2026-07-13) — the trade-not-add slot
+      mechanic was proven infeasible (VolumeFilter is POSITIONAL take(N), not
+      priority-sorted; focus muscle already kept on its theme day). Upstream
+      physique_focus writers: edit_profile_screen.dart:1616 +
+      induction_service.dart:209 (muster bridge).
+    writers:
+      - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
+        method: physiqueFocusMuscles + physiqueFocusToBodyFocus + resolveBodyFocus
+        notes: try/catch Hive read → pure token→muscle-substrings translation (→ [] on null/corrupt like weakMuscles); resolveBodyFocus is the flag-gate + precedence GLUE (explicit > physique_focus > weakMuscles), directly behavior-tested (B-pass P2)
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (effectiveBodyFocus seam)
+        notes: seam is a one-liner calling TrainingHistoryAnalyzer.resolveBodyFocus(explicitBodyFocus, phase); flag OFF → byte-identical
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: physiqueFocusBringupEnabled
+        notes: kill-switch enable_physique_focus_bringup, DEFAULT OFF (ship dark), own try/catch → false
+    reader_manifest_complete: true
+    readers:
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method: apply (bodyFocus +1 set)
+        semantic: pass-through
+        notes: existing mechanism — +1 set per exercise whose primaryMuscles contains a focus token (unchanged; ⑤ just feeds it translated tokens)
+    contract_test_path: test/contracts/physique_focus_bringup_test.dart
