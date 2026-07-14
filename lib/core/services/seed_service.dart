@@ -78,7 +78,8 @@ class SeedService {
   /// stored version is less than this, exercises are re-seeded. putAll() is
   /// idempotent — existing entries are overwritten with the same data while
   /// new entries are added.
-  static const int _exerciseLibraryVersion = 6;
+  // v7 (⑥ slice A): equipment_needed normalized to EquipmentVocab.canonicalTokens.
+  static const int _exerciseLibraryVersion = 7;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

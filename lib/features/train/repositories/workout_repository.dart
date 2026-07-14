@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:uuid/uuid.dart';
@@ -1367,7 +1368,11 @@ class WorkoutRepository {
       'default_reps': ?defaultReps?.toString(),
       'default_duration_seconds': ?defaultDurationSeconds,
       'primary_muscles': primaryMuscles ?? <String>[],
-      'equipment_needed': <String>[equipment],
+      // ⑥ slice A: normalize the caller-supplied (AI/free-text) equipment to the
+      // canonical vocab so a custom exercise's equipment_needed matches the
+      // library's (and slice B's item-filter can read it). May be [] if the
+      // token is unmappable — [] = no equipment requirement (never over-excludes).
+      'equipment_needed': EquipmentVocab.normalize(<String>[equipment]),
       'is_custom': true,
       'type': 'exercise',
       'submitted_to_library': submittedToLibrary,

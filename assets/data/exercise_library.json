@@ -17,8 +17,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Bench"
+      "barbell",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -84,8 +84,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Dumbbells",
-      "Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -150,8 +150,8 @@
       "Triceps"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Incline Bench"
+      "barbell",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -218,8 +218,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Decline Bench"
+      "barbell",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -286,7 +286,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -353,8 +353,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Dumbbells",
-      "Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -419,7 +419,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -483,7 +483,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Parallel Bars"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -547,7 +547,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -612,7 +612,7 @@
       "Triceps"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -684,7 +684,7 @@
       "Traps"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -751,7 +751,7 @@
       "Triceps"
     ],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -819,7 +819,7 @@
       "Traps"
     ],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -887,8 +887,7 @@
       "Rotator Cuff"
     ],
     "equipment_needed": [
-      "Cable Machine",
-      "Rope"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -952,7 +951,7 @@
       "Side Deltoid"
     ],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -1017,8 +1016,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Bench"
+      "barbell",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -1081,7 +1080,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -1142,8 +1141,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "EZ Bar",
-      "Bench"
+      "ez-bar",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -1205,7 +1204,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbell"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -1273,7 +1272,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -1345,7 +1344,7 @@
       "Forearms"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -1414,7 +1413,7 @@
       "Rhomboids"
     ],
     "equipment_needed": [
-      "Pull-Up Bar"
+      "pull-up bar"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -1482,7 +1481,7 @@
       "Lower Back"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -1549,8 +1548,8 @@
       "Rear Deltoid"
     ],
     "equipment_needed": [
-      "Dumbbell",
-      "Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -1617,7 +1616,7 @@
       "Rear Deltoid"
     ],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -1684,7 +1683,7 @@
       "Rear Deltoid"
     ],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -1751,7 +1750,7 @@
       "Lower Back"
     ],
     "equipment_needed": [
-      "T-Bar"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -1817,7 +1816,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Hyperextension Bench"
+      "bench"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -1883,8 +1882,8 @@
       "Rear Deltoid"
     ],
     "equipment_needed": [
-      "Incline Bench",
-      "Dumbbells"
+      "bench",
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -1949,7 +1948,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2015,7 +2014,7 @@
       "Forearms"
     ],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2078,7 +2077,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2141,7 +2140,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbell"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2205,7 +2204,7 @@
       "Forearms"
     ],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2271,8 +2270,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Squat Rack"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -2340,8 +2338,7 @@
       "Upper Back"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Squat Rack"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -2409,7 +2406,7 @@
       "Upper Back"
     ],
     "equipment_needed": [
-      "Kettlebell or Dumbbell"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2476,7 +2473,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Leg Press Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2540,7 +2537,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Hack Squat Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -2606,8 +2603,8 @@
       "Core"
     ],
     "equipment_needed": [
-      "Dumbbells or Barbell",
-      "Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -2674,7 +2671,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight or Dumbbells"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -2739,7 +2736,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Leg Extension Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2804,8 +2801,8 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Dumbbell",
-      "Box or Bench"
+      "dumbbells",
+      "bodyweight"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2872,7 +2869,7 @@
       "Lower Back"
     ],
     "equipment_needed": [
-      "Barbell or Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -2932,7 +2929,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Partner or Nordic Attachment"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -2993,8 +2990,8 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Bench"
+      "barbell",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -3058,7 +3055,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Bodyweight or Barbell"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -3119,7 +3116,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Leg Curl Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -3185,7 +3182,7 @@
       "Lower Back"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -3251,7 +3248,7 @@
       "Soleus"
     ],
     "equipment_needed": [
-      "Machine or Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -3316,7 +3313,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Seated Calf Raise Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -3379,7 +3376,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight (bent over position)"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -3448,7 +3445,7 @@
       "full body"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -3514,7 +3511,7 @@
       "Hip Flexors"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -3577,8 +3574,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Cable Machine",
-      "Rope"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -3644,7 +3640,7 @@
       "Obliques"
     ],
     "equipment_needed": [
-      "Pull-Up Bar"
+      "pull-up bar"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -3712,7 +3708,7 @@
       "core"
     ],
     "equipment_needed": [
-      "Ab Wheel"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -3775,7 +3771,7 @@
       "Abs"
     ],
     "equipment_needed": [
-      "Bodyweight or Plate"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -3836,8 +3832,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Flat Bench"
+      "bodyweight",
+      "bench"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -3901,7 +3897,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Treadmill"
+      "cardio machine"
     ],
     "logging_type": "cardio",
     "difficulty_level": "beginner",
@@ -3969,7 +3965,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Stationary Bike"
+      "cardio machine"
     ],
     "logging_type": "cardio",
     "difficulty_level": "beginner",
@@ -4034,7 +4030,7 @@
       "Calves"
     ],
     "equipment_needed": [
-      "Jump Rope"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -4102,7 +4098,7 @@
       "full back"
     ],
     "equipment_needed": [
-      "Rowing Machine"
+      "cardio machine"
     ],
     "logging_type": "cardio",
     "difficulty_level": "beginner",
@@ -4170,7 +4166,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -4240,7 +4236,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Box (30-60cm)"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -4310,7 +4306,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -4376,7 +4372,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Assault Bike"
+      "cardio machine"
     ],
     "logging_type": "cardio",
     "difficulty_level": "intermediate",
@@ -4440,7 +4436,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Pull-Up Bar"
+      "pull-up bar"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -4511,7 +4507,7 @@
       "Biceps"
     ],
     "equipment_needed": [
-      "Pull-Up Bar"
+      "pull-up bar"
     ],
     "logging_type": "timed",
     "difficulty_level": "advanced",
@@ -4579,7 +4575,7 @@
       "triceps"
     ],
     "equipment_needed": [
-      "Parallel Bars or Floor"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "advanced",
@@ -4640,7 +4636,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Wall or Freestanding"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "advanced",
@@ -4707,7 +4703,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -4779,7 +4775,7 @@
       "Obliques"
     ],
     "equipment_needed": [
-      "Flat Bench or Pole"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -4842,7 +4838,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Parallel Bars"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -4914,7 +4910,7 @@
       "Lower Back"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -4988,7 +4984,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -5059,8 +5055,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -5123,8 +5118,7 @@
       "Quads"
     ],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -5186,8 +5180,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -5249,7 +5242,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Foam Roller"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -5314,7 +5307,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -5379,7 +5372,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -5444,8 +5437,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -5508,7 +5500,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -5576,7 +5568,7 @@
       "Lats"
     ],
     "equipment_needed": [
-      "Trap Bar"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -5645,7 +5637,7 @@
       "Biceps"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -5714,7 +5706,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Dumbbells or Kettlebells"
+      "dumbbells"
     ],
     "logging_type": "distance",
     "difficulty_level": "beginner",
@@ -5781,7 +5773,7 @@
       "Legs"
     ],
     "equipment_needed": [
-      "Dumbbell or Kettlebell"
+      "dumbbells"
     ],
     "logging_type": "distance",
     "difficulty_level": "beginner",
@@ -5845,7 +5837,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Dumbbell"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -5909,7 +5901,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -5976,7 +5968,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Resistance Band"
+      "resistance band"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -6040,8 +6032,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbells",
-      "Incline Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -6101,8 +6093,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "EZ Bar",
-      "Preacher Bench"
+      "ez-bar",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -6163,7 +6155,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -6224,8 +6216,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Cable Machine",
-      "Rope"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -6291,7 +6282,7 @@
       "Traps"
     ],
     "equipment_needed": [
-      "Dumbbells or Cable Machine"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -6352,7 +6343,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbell or Barbell"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -6414,7 +6405,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbell or Barbell"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -6480,7 +6471,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Pull-Up Bar"
+      "pull-up bar"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -6544,8 +6535,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Bodyweight",
-      "Elevated Surface"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -6612,8 +6602,8 @@
       "Triceps"
     ],
     "equipment_needed": [
-      "Bodyweight",
-      "Bench"
+      "bodyweight",
+      "bench"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -6683,7 +6673,7 @@
       "Rotator Cuff"
     ],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -6751,7 +6741,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Barbell or Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -6812,7 +6802,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Barbell or Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -6874,7 +6864,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Hip Abduction Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -6935,7 +6925,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Hip Adduction Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -6997,8 +6987,8 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Cable Machine",
-      "Ankle Strap"
+      "cables",
+      "bodyweight"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -7059,7 +7049,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Resistance Band"
+      "resistance band"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -7121,7 +7111,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight or Sissy Squat Bench"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -7187,8 +7177,8 @@
       "Lower Back"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Box"
+      "barbell",
+      "bodyweight"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -7257,8 +7247,8 @@
       "Core"
     ],
     "equipment_needed": [
-      "Dumbbell",
-      "Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -7324,8 +7314,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Landmine Attachment"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -7391,7 +7380,7 @@
       "Triceps"
     ],
     "equipment_needed": [
-      "Barbell or Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -7456,8 +7445,7 @@
       "Rear Deltoid"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Landmine"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -7520,7 +7508,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -7583,7 +7571,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Pec Deck Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -7645,8 +7633,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbells",
-      "Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -7708,7 +7696,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Weight Plate"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -7772,7 +7760,7 @@
       "Biceps"
     ],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -7835,8 +7823,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Incline Bench",
-      "Dumbbells"
+      "bench",
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -7901,7 +7889,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Pull-Up Bar"
+      "pull-up bar"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -7970,7 +7958,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Barbell on Rack or TRX"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -8035,8 +8023,8 @@
       "Biceps"
     ],
     "equipment_needed": [
-      "Elevated Bench",
-      "Barbell"
+      "bench",
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -8099,8 +8087,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Bench"
+      "barbell",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -8166,7 +8154,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Reverse Hyper Machine or Bench"
+      "bench"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -8232,7 +8220,7 @@
       "Quads"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -8301,8 +8289,7 @@
       "Lats"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Power Rack"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -8368,7 +8355,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Light Barbell or Weight"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -8429,7 +8416,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -8491,7 +8478,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -8557,8 +8544,7 @@
       "Hips"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Landmine"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -8623,7 +8609,7 @@
       "obliques"
     ],
     "equipment_needed": [
-      "Bench or Box"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "advanced",
@@ -8687,7 +8673,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -8761,7 +8747,7 @@
       "full body"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -8826,7 +8812,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Tire (100-200kg)"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -8892,7 +8878,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Sled"
+      "machines"
     ],
     "logging_type": "cardio",
     "difficulty_level": "intermediate",
@@ -8960,7 +8946,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Battle Ropes"
+      "cardio machine"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -9029,7 +9015,7 @@
       "Shoulders"
     ],
     "equipment_needed": [
-      "Kettlebell"
+      "kettlebell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -9097,7 +9083,7 @@
       "shoulders"
     ],
     "equipment_needed": [
-      "Kettlebell"
+      "kettlebell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -9160,7 +9146,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Medicine Ball"
+      "bodyweight"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -9225,7 +9211,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -9296,7 +9282,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight or Dumbbells"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -9367,7 +9353,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight or Dumbbells"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -9436,7 +9422,7 @@
       "Adductors"
     ],
     "equipment_needed": [
-      "Bodyweight or Dumbbells"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -9506,7 +9492,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Bodyweight or Dumbbells"
+      "bodyweight"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -9573,8 +9559,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Partner or Nordic Attachment"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -9639,7 +9624,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "advanced",
@@ -9704,8 +9689,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Foam Roller"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -9770,7 +9754,7 @@
       "Shoulders"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -9837,7 +9821,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -9901,8 +9885,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Wall"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -9964,7 +9947,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Pull-Up Bar or Rack"
+      "pull-up bar"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10027,7 +10010,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight or Band"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10092,7 +10075,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Broomstick or Band"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -10157,8 +10140,8 @@
       "Core"
     ],
     "equipment_needed": [
-      "Resistance Band",
-      "Lying"
+      "resistance band",
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -10220,7 +10203,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "advanced",
@@ -10284,8 +10267,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10349,8 +10331,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10413,8 +10394,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Wall"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10476,8 +10456,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10538,7 +10517,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Foam Roller"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "intermediate",
@@ -10599,7 +10578,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Foam Roller"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10661,7 +10640,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10724,7 +10703,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10788,7 +10767,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10854,7 +10833,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Doorway"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10918,7 +10897,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Chair"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10981,8 +10960,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Wall",
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -11046,8 +11024,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbell",
-      "Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -11113,7 +11091,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbell"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -11177,7 +11155,7 @@
       "Hip Flexors"
     ],
     "equipment_needed": [
-      "Decline Bench"
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -11237,8 +11215,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -11300,8 +11277,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -11364,8 +11340,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight",
-      "Yoga Mat"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -11427,7 +11402,7 @@
       "core"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "intermediate",
@@ -11495,7 +11470,7 @@
       "lower back"
     ],
     "equipment_needed": [
-      "GHD Machine"
+      "machines"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -11560,7 +11535,7 @@
       "lats"
     ],
     "equipment_needed": [
-      "Pull-Up Bar"
+      "pull-up bar"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -11625,7 +11600,7 @@
       "obliques"
     ],
     "equipment_needed": [
-      "Pull-Up Bar"
+      "pull-up bar"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -11688,7 +11663,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Barbell or Sandbag"
+      "dumbbells"
     ],
     "logging_type": "distance",
     "difficulty_level": "advanced",
@@ -11748,7 +11723,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Yoke Frame"
+      "machines"
     ],
     "logging_type": "distance",
     "difficulty_level": "advanced",
@@ -11814,7 +11789,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Prowler Sled"
+      "machines"
     ],
     "logging_type": "cardio",
     "difficulty_level": "intermediate",
@@ -11876,7 +11851,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Sandbag"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -11939,7 +11914,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Kettlebell"
+      "kettlebell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -12006,7 +11981,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Kettlebell"
+      "kettlebell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -12072,7 +12047,7 @@
       "Biceps"
     ],
     "equipment_needed": [
-      "Kettlebell"
+      "kettlebell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -12139,7 +12114,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Resistance Band"
+      "resistance band"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -12208,8 +12183,8 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Resistance Band",
-      "Bench"
+      "resistance band",
+      "bench"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -12277,7 +12252,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "TRX Suspension Trainer"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -12342,7 +12317,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "TRX Suspension Trainer"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -12406,7 +12381,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Battle Ropes"
+      "cardio machine"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -12473,7 +12448,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -12541,7 +12516,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Box (30-45cm)"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -12606,7 +12581,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -12677,7 +12652,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -12748,8 +12723,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Box",
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -12816,7 +12790,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight or Medicine Ball"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -12883,7 +12857,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Kettlebell or Dumbbell"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -12943,7 +12917,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -13006,7 +12980,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13074,7 +13048,7 @@
       "Calves"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13141,7 +13115,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13208,7 +13182,7 @@
       "Glutes"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13273,7 +13247,7 @@
       "Upper Back"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13338,7 +13312,7 @@
       "Upper Back"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13406,7 +13380,7 @@
       "Obliques"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13472,7 +13446,7 @@
       "Lower Back"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13539,7 +13513,7 @@
       "Quads"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13603,7 +13577,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13666,7 +13640,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13732,7 +13706,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -13797,7 +13771,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Pull-Up Bar"
+      "pull-up bar"
     ],
     "logging_type": "timed",
     "difficulty_level": "intermediate",
@@ -13861,7 +13835,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13928,7 +13902,7 @@
       "legs"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -13995,7 +13969,7 @@
       "legs"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -14062,7 +14036,7 @@
       "Triceps"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -14128,7 +14102,7 @@
       "Lower Back"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -14194,7 +14168,7 @@
       "back"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -14262,7 +14236,7 @@
       "Chest"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -14329,7 +14303,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -14394,7 +14368,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -14466,7 +14440,7 @@
       "Erector Spinae"
     ],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -14537,7 +14511,7 @@
       "Erector Spinae"
     ],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -14607,7 +14581,7 @@
       "Hip Abductors"
     ],
     "equipment_needed": [
-      "Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -14675,7 +14649,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -14747,7 +14721,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -14820,7 +14794,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -14892,7 +14866,7 @@
       "Erector Spinae"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -14959,7 +14933,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -15029,8 +15003,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Dumbbells",
-      "Decline Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -15098,8 +15072,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Dumbbells",
-      "Incline Bench"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -15169,7 +15143,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -15241,7 +15215,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -15307,7 +15281,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -15376,7 +15350,7 @@
       "Lateral Delts"
     ],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -15443,7 +15417,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -15514,7 +15488,7 @@
       "Chest"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -15582,7 +15556,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Dumbbells"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -15650,7 +15624,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -15721,8 +15695,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "Barbell",
-      "Bench"
+      "barbell",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -15792,7 +15766,7 @@
       "Brachioradialis"
     ],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -15860,7 +15834,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -15931,7 +15905,7 @@
       "Erector Spinae"
     ],
     "equipment_needed": [
-      "Barbell"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -16000,7 +15974,7 @@
       "Rear Delts"
     ],
     "equipment_needed": [
-      "Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -16069,7 +16043,7 @@
       "Rear Delts"
     ],
     "equipment_needed": [
-      "Machine"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -16137,7 +16111,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "Cable Machine"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -16207,7 +16181,7 @@
       "Hip Flexors"
     ],
     "equipment_needed": [
-      "Machine"
+      "machines"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -16277,7 +16251,7 @@
       "Hip Flexors"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -16347,7 +16321,7 @@
       "Hip Flexors"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -16421,7 +16395,7 @@
       "Hip Abductors"
     ],
     "equipment_needed": [
-      "Bodyweight"
+      "bodyweight"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -16493,7 +16467,9 @@
     "sub_focus": [
       "Quads (Teardrop)"
     ],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "bodyweight"
+    ],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16563,7 +16539,9 @@
       "Hamstrings (Bicep Femoris)",
       "Glutes (Lower)"
     ],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "bodyweight"
+    ],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16633,7 +16611,9 @@
     "sub_focus": [
       "Biceps (Long Head)"
     ],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "bodyweight"
+    ],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16704,7 +16684,9 @@
       "Rear Delts",
       "Biceps"
     ],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "bodyweight"
+    ],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16775,7 +16757,9 @@
       "Biceps",
       "Mid Back"
     ],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "bodyweight"
+    ],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16848,7 +16832,9 @@
       "Glutes (Lower)",
       "Hamstrings"
     ],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "bodyweight"
+    ],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16917,7 +16903,9 @@
     "sub_focus": [
       "Calves (Gastrocnemius)"
     ],
-    "equipment_needed": ["Dumbbells"],
+    "equipment_needed": [
+      "dumbbells"
+    ],
     "equipment_tier": [
       "home_dumbbells",
       "basic_gym",
@@ -16985,7 +16973,9 @@
     "sub_focus": [
       "Hamstrings"
     ],
-    "equipment_needed": ["Bodyweight"],
+    "equipment_needed": [
+      "bodyweight"
+    ],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -17056,7 +17046,9 @@
     "sub_focus": [
       "Triceps"
     ],
-    "equipment_needed": ["Dumbbells"],
+    "equipment_needed": [
+      "dumbbells"
+    ],
     "equipment_tier": [
       "home_dumbbells",
       "basic_gym",
