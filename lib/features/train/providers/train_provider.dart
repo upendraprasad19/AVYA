@@ -158,6 +158,17 @@ class ExerciseData {
     this.muscleLabel,
   });
 
+  /// Shape-tolerant parse of a raw library `equipment_needed` value. It is a List
+  /// on 249/258 rows but was a bare String on 9 (E252–E260 — fixed to Lists in the
+  /// library + seed v6). A naive `as List?` cast THREW on the String, crashing the
+  /// swap / add-exercise picker (swap_sheets). Never crashes: List → stringified
+  /// list; non-empty String → single-element list; null/empty → const [].
+  static List<String> parseEquipmentNeeded(dynamic raw) {
+    if (raw is List) return raw.map((e) => e.toString()).toList();
+    if (raw is String && raw.trim().isNotEmpty) return [raw];
+    return const [];
+  }
+
   ExerciseData copyWith({
     String? name,
     String? sets,
@@ -310,10 +321,7 @@ List<ExerciseData> _parseExerciseMaps(List? raw) {
   if (raw == null || raw.isEmpty) return const [];
   return raw.map((e) {
     final m = e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{};
-    final equipRaw = m['equipment_needed'];
-    final equipList = equipRaw is List
-        ? equipRaw.map((e) => e.toString()).toList()
-        : <String>[];
+    final equipList = ExerciseData.parseEquipmentNeeded(m['equipment_needed']);
 
     String? category = m['category'] as String?;
     if (category == null || category.isEmpty) {

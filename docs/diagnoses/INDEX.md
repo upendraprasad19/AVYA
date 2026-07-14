@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### equipment_needed_shape (1 bugs)
+- 2026-07-14 e9d1c7 — >
+
 ### admin_dashboard_metrics_snapshot (1 bugs)
 - 2026-07-13 a9d3f1 — >
 
@@ -796,6 +799,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-14 | e9d1c7 | > | equipment_needed_shape | test/contracts/equipment_needed_shape_test.dart |
 | 2026-07-13 | a9d3f1 | > | admin_dashboard_metrics_snapshot | test/contracts/admin_metrics_functions_role_revoke_test.dart |
 | 2026-07-12 | 9c3e7a | > | coach_plan_generation_phase_stamp | test/contracts/coach_regen_phase_stamp_behavioral_test.dart |
 | 2026-07-12 | a1f6c3 | > | injury_contraindication_filter | test/contracts/injury_filter_behavioral_test.dart |

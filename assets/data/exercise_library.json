@@ -16493,7 +16493,7 @@
     "sub_focus": [
       "Quads (Teardrop)"
     ],
-    "equipment_needed": "Bodyweight",
+    "equipment_needed": ["Bodyweight"],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16563,7 +16563,7 @@
       "Hamstrings (Bicep Femoris)",
       "Glutes (Lower)"
     ],
-    "equipment_needed": "Bodyweight",
+    "equipment_needed": ["Bodyweight"],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16633,7 +16633,7 @@
     "sub_focus": [
       "Biceps (Long Head)"
     ],
-    "equipment_needed": "Bodyweight",
+    "equipment_needed": ["Bodyweight"],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16704,7 +16704,7 @@
       "Rear Delts",
       "Biceps"
     ],
-    "equipment_needed": "Bodyweight",
+    "equipment_needed": ["Bodyweight"],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16775,7 +16775,7 @@
       "Biceps",
       "Mid Back"
     ],
-    "equipment_needed": "Bodyweight",
+    "equipment_needed": ["Bodyweight"],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16848,7 +16848,7 @@
       "Glutes (Lower)",
       "Hamstrings"
     ],
-    "equipment_needed": "Bodyweight",
+    "equipment_needed": ["Bodyweight"],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -16917,7 +16917,7 @@
     "sub_focus": [
       "Calves (Gastrocnemius)"
     ],
-    "equipment_needed": "Dumbbells",
+    "equipment_needed": ["Dumbbells"],
     "equipment_tier": [
       "home_dumbbells",
       "basic_gym",
@@ -16985,7 +16985,7 @@
     "sub_focus": [
       "Hamstrings"
     ],
-    "equipment_needed": "Bodyweight",
+    "equipment_needed": ["Bodyweight"],
     "equipment_tier": [
       "bodyweight",
       "home_dumbbells",
@@ -17056,7 +17056,7 @@
     "sub_focus": [
       "Triceps"
     ],
-    "equipment_needed": "Dumbbells",
+    "equipment_needed": ["Dumbbells"],
     "equipment_tier": [
       "home_dumbbells",
       "basic_gym",
