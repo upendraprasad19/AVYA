@@ -6530,3 +6530,45 @@ concepts:
         semantic: shape-tolerant
         notes: routes through ExerciseData.parseEquipmentNeeded (was `as List?` → _CastError crash)
     contract_test_path: test/contracts/equipment_needed_shape_test.dart
+
+  - concept: equipment_vocab
+    domain: workout
+    behavioral_test_path: test/contracts/equipment_vocab_library_contract_test.dart
+    description: |
+      ⑥ slice A — the exercise library's free-text `equipment_needed` (was ~87
+      distinct tokens: "Cable Machine", "Dumbbells", OR-compounds like "Barbell
+      or Dumbbells", niche/strongman implements) is normalized to a CLOSED
+      controlled vocabulary of 12 canonical tokens (`EquipmentVocab.canonicalTokens`
+      in lib/core/utils/equipment_vocab.dart — the 11 non-`none` tier item tokens +
+      `cardio machine`). Data-quality PREREQUISITE for slice B's item-level queryV4
+      exclusion filter; changes NO live plan generation (the live V4 filter reads
+      the separate clean `equipment_tier`, exercise_repository.dart:270 — NOT
+      `equipment_needed`). `EquipmentVocab.normalize` maps each list element as ONE
+      whole-string token (NEVER a whitespace split — that would explode "cable
+      machine"→cable+machine), collapses an OR-compound to its most-accessible
+      alternative by a fixed precedence, and DROPS unmappable tokens (→ [] =
+      most-permissive; the dead V3 filter's `.every` is vacuously true on []).
+      The contract gate asserts the seeded library is a SUBSET of canonicalTokens
+      (not equality — `smith machine` is canonical with 0 library rows). Related:
+      equipment_needed_shape (crash-fix e9d1c7).
+    writers:
+      - file: assets/data/exercise_library.json
+        method: equipment_needed field (normalized List<String> per row)
+        notes: normalized via scripts/normalize_equipment_library.dart (idempotent, uses EquipmentVocab.normalize); SeedService _exerciseLibraryVersion 6→7 re-seeds by id
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (6→7)
+        notes: re-seeds the normalized library into existing installs on next boot
+      - file: lib/features/train/repositories/workout_repository.dart
+        method: createCustomExercise (:1375)
+        semantic: EquipmentVocab.normalize([equipment])
+        notes: the OWNED custom-exercise write (AI createCustomExercise tool sink, tool_dispatcher.dart:527) — caller free-text → canonical; may be [] (no requirement)
+    readers:
+      - file: lib/shared/repositories/exercise_repository.dart
+        method: query() item-level equipment_needed filter (:129)
+        semantic: canonical-token set membership
+        notes: DEAD in the live path today (V3 pick() has 0 callers) — revived by slice B's queryV4 item filter; normalization makes its lowercase set-membership correct
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        method: custom-exercise snapshot (:518, reads customBox)
+        semantic: display / AI payload
+        notes: a custom exercise's normalized equipment_needed reaches the Gemini snapshot as a canonical token (benign)
+    contract_test_path: test/contracts/equipment_vocab_library_contract_test.dart
