@@ -25,9 +25,8 @@ void _showExercisePickerSheet(BuildContext context, WidgetRef ref) {
                             : null)
                         : exerciseData['exercise_type'] as String?) ?? 'isolation',
                 category: exerciseData['category'] as String? ?? '',
-                equipmentNeeded: (exerciseData['equipment_needed'] as List?)
-                        ?.cast<String>() ??
-                    [],
+                equipmentNeeded: ExerciseData.parseEquipmentNeeded(
+                    exerciseData['equipment_needed']),
               ),
             );
         Navigator.of(ctx).pop();
@@ -127,9 +126,10 @@ void _openCreateAndAutoSwap(
         final defaultSets = newExercise['default_sets'];
         final defaultReps = newExercise['default_reps'];
         final defaultRest = newExercise['default_rest_secs'];
-        final equipment = (newExercise['equipment_needed'] as List?)
-                ?.cast<String>() ??
-            original.equipmentNeeded;
+        final equipRaw = newExercise['equipment_needed'];
+        final equipment = equipRaw == null
+            ? original.equipmentNeeded
+            : ExerciseData.parseEquipmentNeeded(equipRaw);
 
         // Compose the swap target. Prefer the form's defaults (user
         // just typed them) and fall back to the original slot's

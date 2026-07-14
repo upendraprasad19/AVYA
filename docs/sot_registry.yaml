@@ -6496,3 +6496,37 @@ concepts:
         semantic: pass-through
         notes: existing mechanism — +1 set per exercise whose primaryMuscles contains a focus token (unchanged; ⑤ just feeds it translated tokens)
     contract_test_path: test/contracts/physique_focus_bringup_test.dart
+
+  - concept: equipment_needed_shape
+    domain: workout
+    behavioral_test_path: test/contracts/equipment_needed_shape_test.dart
+    description: |
+      Each exercise's library `equipment_needed` is a List<String> (249/258 rows).
+      9 rows (E252–E260) stored a bare STRING ("Bodyweight"/"Dumbbells") — a naive
+      `as List?` cast on it threw _CastError, CRASHING the swap / add-exercise
+      picker when any of those 9 (Incline Dumbbell Press, Split Squat, Wall Sit, …)
+      was selected. Batch 5 crash fix: the 9 rows corrected to Lists in
+      assets/data/exercise_library.json + SeedService `_exerciseLibraryVersion`
+      bumped 5→6 to re-seed; readers route through the shape-tolerant
+      `ExerciseData.parseEquipmentNeeded` (List → stringified; non-empty String →
+      [String]; else const []) so a bad shape (legacy/restored) never crashes. The
+      free-text vocab normalization (~89 tokens) + item-level queryV4 exclusion
+      filtering are the later Batch-5 A/B slices (queryV4 today filters on
+      `equipment_tier`, not `equipment_needed`).
+    writers:
+      - file: assets/data/exercise_library.json
+        method: equipment_needed field (List<String> per row)
+        notes: 9 bare-String rows (E252–E260) corrected to Lists; seeded verbatim into exerciseBox by SeedService
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (5→6)
+        notes: seedIfNeeded re-seeds when storedVersion < constant; _seedExercises putAll overwrites by id
+    readers:
+      - file: lib/features/train/providers/train_provider.dart
+        method: ExerciseData.parseEquipmentNeeded (+ _parseExerciseMaps)
+        semantic: shape-tolerant
+        notes: List→stringified / non-empty String→[String] / else const [] — never throws
+      - file: lib/features/train/screens/active_workout/swap_sheets.dart
+        method: swap + add-exercise ExerciseData construction (:28, :130)
+        semantic: shape-tolerant
+        notes: routes through ExerciseData.parseEquipmentNeeded (was `as List?` → _CastError crash)
+    contract_test_path: test/contracts/equipment_needed_shape_test.dart
