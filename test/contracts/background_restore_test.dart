@@ -110,7 +110,11 @@ void main() {
         () {
       final body = goHomeBody();
       final ownIdx = body.indexOf('await HiveUserSession.openForUser(userId)');
-      final goIdx = body.indexOf("context.go('/home')");
+      // b3f9a1: the nav target is now the allowlisted destination
+      // (resolveRestoreDestination(widget.next), default /home) instead of a
+      // literal '/home' — the openForUser-BEFORE-navigation ORDER is unchanged.
+      final goIdx = body
+          .indexOf('context.go(RestoringScreen.resolveRestoreDestination(widget.next))');
       expect(ownIdx, greaterThan(-1), reason: 'bg path must await openForUser');
       expect(goIdx, greaterThan(ownIdx),
           reason: 'ownership gate MUST complete before navigation '
@@ -127,7 +131,10 @@ void main() {
       final body = goHomeBody();
       final r = body.lastIndexOf('await restoreFuture');
       final e = body.lastIndexOf('_ensureOwnershipBeforeHome(userId)');
-      final g = body.lastIndexOf("context.go('/home')");
+      // b3f9a1: nav target is now resolveRestoreDestination(widget.next)
+      // (default /home) — the restore→ownership→go ORDER is unchanged.
+      final g = body
+          .lastIndexOf('context.go(RestoringScreen.resolveRestoreDestination(widget.next))');
       expect(r > -1 && r < e && e < g, isTrue,
           reason: 'default/fresh-install path keeps the proven order');
     });

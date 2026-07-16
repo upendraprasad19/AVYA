@@ -106,7 +106,10 @@ class AppRouter {
         name: 'restoring',
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: const RestoringScreen(),
+          // `next` carries an allowlisted post-restore destination (e.g. /admin
+          // on a cold-tab bookmark) so RestoringScreen returns there instead of
+          // always /home. RestoringScreen.resolveRestoreDestination guards it.
+          child: RestoringScreen(next: state.uri.queryParameters['next']),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
@@ -539,6 +542,18 @@ class AppRouter {
     return true;
   }
 
+  /// The `/restoring` redirect target for a session-gated cold load (b3f9a1).
+  /// Threads an allowlisted post-restore destination as a `next` query param
+  /// so a fresh-tab bookmark of `/admin` returns to the dashboard instead of
+  /// the default `/home`; every other gated route gets the bare `/restoring`.
+  /// Pure + unit-tested (restoring_next_destination_test.dart): the `%2Fadmin`
+  /// encoding MUST round-trip back to `/admin` so
+  /// `RestoringScreen.resolveRestoreDestination` allowlists it — the writer
+  /// (this) and reader (that) are pinned together to prevent encoding drift.
+  @visibleForTesting
+  static String restoringRedirectFor(String matchedLocation) =>
+      matchedLocation == '/admin' ? '/restoring?next=%2Fadmin' : '/restoring';
+
   /// Auth redirect logic.
   ///
   /// Gracefully handles the case where Supabase is not yet initialized
@@ -617,7 +632,12 @@ class AppRouter {
       ownerOpen: HiveUserSession.currentOwnerFullId != null,
       isOnOnboarding: isOnOnboarding,
     )) {
-      return '/restoring';
+      // Preserve an allowlisted cold-load destination through the session-open
+      // gate so a fresh-tab bookmark of /admin returns to the dashboard after
+      // /restoring instead of the default /home (RestoringScreen honors it via
+      // resolveRestoreDestination). Only /admin is threaded — every other gated
+      // route still lands on /home, unchanged.
+      return restoringRedirectFor(state.matchedLocation);
     }
 
     // Signed in but not onboarded -> go to onboarding.

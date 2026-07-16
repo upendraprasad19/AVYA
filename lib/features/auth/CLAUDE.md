@@ -21,7 +21,11 @@ sequence. Three screens:
 - `restoring_screen.dart` — The post-auth branded gate added in APK Test #2. Waits
   for `AuthSessionBootstrapper.hydrateFromCloud()` + `SyncService.restoreFromCloud()`
   in parallel, then routes to home / resume-onboarding / mission-brief based on
-  the user_profile row classification.
+  the user_profile row classification. **2026-07-16 (b3f9a1):** also accepts an
+  allowlisted `next` query param (`/restoring?next=…`, currently only `/admin`)
+  so a cold-tab bookmark of the founder dashboard returns there instead of
+  `/home`; `RestoringScreen.resolveRestoreDestination` guards the allowlist
+  (any other/external value → `/home`) at all three terminal `context.go` sites.
 
 The core service-layer pieces that this feature wires through:
 

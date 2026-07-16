@@ -37,7 +37,24 @@ import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.
 /// 15-second safety net: if restore is still running, shows an escape CTA
 /// that lets the user skip straight to /home.
 class RestoringScreen extends ConsumerStatefulWidget {
-  const RestoringScreen({super.key});
+  const RestoringScreen({super.key, this.next});
+
+  /// Optional post-restore destination, carried via `/restoring?next=...` by
+  /// `_authRedirect` when a session-gated route is cold-loaded (currently only
+  /// `/admin` — a fresh-tab bookmark of the founder dashboard). Null for the
+  /// ordinary sign-in / splash → `/restoring` flow, which keeps defaulting to
+  /// `/home`. See [resolveRestoreDestination].
+  final String? next;
+
+  /// Allowlist guard for the post-restore destination. Returns [next] ONLY
+  /// when it is a known-safe in-app route (currently just `/admin`), else
+  /// `/home`. This keeps the `next` query param from being abused as a general
+  /// in-app open-redirect vector and defaults every ordinary returning user to
+  /// `/home`. Pure — pinned by `test/contracts/restoring_next_destination_test.dart`.
+  static const _allowedNextRoutes = {'/admin'};
+  @visibleForTesting
+  static String resolveRestoreDestination(String? next) =>
+      _allowedNextRoutes.contains(next) ? next! : '/home';
 
   @override
   ConsumerState<RestoringScreen> createState() => _RestoringScreenState();
@@ -203,7 +220,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         } catch (_) {}
       }
       if (!mounted) return;
-      context.go('/home');
+      context.go(RestoringScreen.resolveRestoreDestination(widget.next));
       // The cloud restore started in _kickoffRestore keeps running; when it
       // SUCCEEDS, run the post-restore key migrators + reconciler + refill
       // (ref-free) and bump the tick so the mounted home refreshes. Guard on
@@ -220,7 +237,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     if (!mounted) return;
     await _ensureOwnershipBeforeHome(userId);
     if (!mounted) return;
-    context.go('/home');
+    context.go(RestoringScreen.resolveRestoreDestination(widget.next));
   }
 
   /// B5 + Plan A: Ownership guard — before navigating to /home, verify
@@ -485,7 +502,9 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
             reason: 'restoring_continue_openforuser_failed'));
       }
     }
-    if (mounted) context.go('/home');
+    if (mounted) {
+      context.go(RestoringScreen.resolveRestoreDestination(widget.next));
+    }
   }
 
   @override
