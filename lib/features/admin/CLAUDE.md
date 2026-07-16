@@ -111,7 +111,8 @@ Hive?". SoT registry concept: `admin_dashboard_metrics_snapshot`.
 | Registering `/admin` inside `if (kDebugMode)` | It must be reachable in the PRODUCTION web build. `/dev` is debug-only; `/admin` is not. Access control is the server allowlist, not the build mode. | `lib/core/router/app_router.dart` |
 | Treating a 403 as a crash / generic error | `AdminNotAuthorizedException` renders a clean "Not authorized" `EmptyState`; only non-auth errors get the retry `ErrorState`. | `admin_dashboard_screen.dart` |
 | Reading a snapshot `*_today` field as a live current value | The snapshot is up to 1 day stale. Current-state stat tiles (e.g. open-alerts count) read the LIVE list length, not the trend's snapshot field, so the tile and the list below it never disagree. | `ops_health_tab.dart` |
-| Bookmarked `/admin` in a fresh tab lands on `/home`, not `/admin` | KNOWN LIMITATION (B-pass Finding 4). A cold tab / hard refresh has no open Hive session, so `_authRedirect`'s `shouldGateOnSessionOpen` routes through `/restoring`, which always lands a founder on `/home`. Just navigate to `/admin` again — the session is open by then and it renders. NOT worth threading `?next=` through the account-tier auth/restoring flow (FIX-1 / OBS-6 territory) for a founder-only convenience. | `lib/core/router/app_router.dart` `_authRedirect` |
+| Expecting the bare `/admin` *path* to reach the dashboard | The app uses Flutter's default **HashUrlStrategy** (no `setUrlStrategy` anywhere), so the `/admin` GoRoute is reachable only via the fragment `#/admin`. `app.icanbefitter.com/admin` works because `vercel.json` redirects `/admin` (+ `/admin/`) → `/#/admin`. Don't remove that redirect, and don't assume path routing. Diagnose `b3f9a1`. | `vercel.json` redirects + `app_router.dart` |
+| Cold-tab `/admin` bounces to `/home` | FIXED (diagnose `b3f9a1`, was B-pass Finding 4). `_authRedirect` now returns `/restoring?next=%2Fadmin` for a cold `/admin`, and `RestoringScreen.resolveRestoreDestination` (allowlist `{'/admin'}`, default `/home`) honors it at the three `context.go` sites. The `next` param is allowlisted so it can't be a general open-redirect. Only `/admin` is threaded — every other gated route still lands on `/home`. | `app_router.dart` `_authRedirect` + `restoring_screen.dart` |
 | Using `warning`/`high`/`medium` as an `alerts.severity` value | The live vocabulary is `info`/`warn`/`critical` (migration 076 CHECK). `warn` (not `warning`) is what every alert cron writes — map it explicitly or warnings render as neutral (B-pass Finding 2). | `ops_health_tab.dart` `_severityTone` |
 
 ## Tests pinning the rules here
@@ -122,6 +123,9 @@ Hive?". SoT registry concept: `admin_dashboard_metrics_snapshot`.
   fail-secure truth table, `bucketSubscriptionsByExpiry`, `computeDerivedMrr` (Deno).
 - `supabase/functions/compute-admin-metrics-daily/index_test.ts` — `buildSnapshotRow`
   merge/purity (Deno).
+- `test/contracts/restoring_next_destination_test.dart` — `RestoringScreen.resolveRestoreDestination`
+  allowlist (`/admin`→`/admin`; every other/external value → `/home`). Pins the cold-load
+  `/admin`-reachability fix (diagnose `b3f9a1`).
 
 ## See also
 

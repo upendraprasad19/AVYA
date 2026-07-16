@@ -3,5 +3,9 @@
   "buildCommand": "bash scripts/vercel_build.sh",
   "outputDirectory": "build/web",
   "installCommand": "echo no-install",
+  "redirects": [
+    { "source": "/admin", "destination": "/#/admin", "permanent": false },
+    { "source": "/admin/", "destination": "/#/admin", "permanent": false }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
