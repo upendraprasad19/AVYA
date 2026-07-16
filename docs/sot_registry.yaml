@@ -6572,3 +6572,48 @@ concepts:
         semantic: display / AI payload
         notes: a custom exercise's normalized equipment_needed reaches the Gemini snapshot as a canonical token (benign)
     contract_test_path: test/contracts/equipment_vocab_library_contract_test.dart
+
+  - concept: equipment_exclusion_filter
+    domain: workout
+    behavioral_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart
+    description: |
+      ⑥ slice B1 — an item-level equipment EXCLUSION filter across the V4 main
+      exercise selection (PURE EXCLUSION: drop an exercise IFF its
+      `equipment_needed` intersects the user's excluded equipment; the
+      `equipment_tier` filter is UNTOUCHED, so the intersection design's
+      41-exercise regression is avoided; no-op at empty exclusions). Derived ONCE
+      in generateV4 (mirroring the injury seam plan_generator.dart:90): flag-gated
+      (`PlanEngineFlags.equipmentExclusionsEnabled`, ship-dark default OFF §4.6) +
+      `EquipmentVocab.floorSanitizedExclusions` (normalize to canonical + STRIP
+      none/bodyweight so the bodyweight floor is never excludable). Threaded as a
+      `Set<String>` to EVERY pick path: queryV4 att1-4 (the drop is BEFORE the
+      :268 tier short-circuit + KEPT at att4 since exclusion is a HARD constraint
+      unlike the soft tier), the att5 universal-pool skip (mirrors U2's injury
+      skip; the per-pattern bodyweight floor keeps the slot non-empty), the L2
+      custom-append, and the L6 demote-swap. Reads every equipment_needed
+      crash-safe + normalizing via `EquipmentVocab.fromProfile`, so B1 is correct
+      for un-normalized community rows independent of B2. The queryV4 `exclusions`
+      param is REQUIRED (compile-time thread enforcement). Scope boundary: the
+      cardio finisher + warmup/cooldown are NOT exclusion-filtered (→ slice C's
+      WU-2). Related: equipment_vocab (⑥ A), injury_vocabulary_contract (U2/U4).
+    writers:
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 equipmentExclusions param + equipmentExclusionSet compute (:90 seam)
+        semantic: flag-gated + floorSanitizedExclusions; threaded to pickV4
+        notes: OFF/empty → {} → every downstream drop inert → byte-identical (the ship-dark no-op)
+      - file: lib/shared/repositories/exercise_repository.dart
+        method: queryV4 pre-tier exclusion drop (~:282, before the :288 equipment_tier block) — REQUIRED Set<String> exclusions param
+        semantic: drop iff EquipmentVocab.fromProfile(equipment_needed).any(exclusions.contains)
+        notes: BEFORE the no-tier :291 return-true short-circuit so community rows are subject; crash-safe read
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: pickV4/_fillSlots/_cascadeFill (att1-4 + att5 skip) + _applyHistoryAdjustments (L6 + L2 custom filter)
+        semantic: exclusions threaded to every pick path; att5 mirrors U2 injury skip
+        notes: att4 KEEPS exclusions (hard constraint); att5 floor-sanitize keeps the slot non-empty
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: equipmentExclusionsEnabled (ship-dark, == true default OFF)
+    readers:
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: the generated Phase (selection reflects the exclusions)
+        semantic: no exercise requires an excluded item
+        notes: consumed by Train screen / active workout; slice C wires the equipment_exclusions profile-read into the callers
+    contract_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart

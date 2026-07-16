@@ -1,4 +1,5 @@
 import 'package:icanbefitter/core/constants/fitness_goals.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'plan_engine_flags.dart';
 
@@ -74,6 +75,7 @@ class PlanGenerator {
     int? sessionDuration,
     String? cardioPreference,
     Map<String, double>? previousWeights,
+    List<String> equipmentExclusions = const [], // ⑥ B1 (default → no-op)
   }) {
     final equipmentList = _getEquipmentList(equipment);
     final effectiveExp = effectiveLevel(experienceLevel, phase);
@@ -88,6 +90,16 @@ class PlanGenerator {
     // excluded ZERO exercises). InjuryVocab.normalize is a pure read-side alias
     // — no cloud migration, heals local/legacy/restored/free-text uniformly.
     final normalizedInjuries = InjuryVocab.normalize(injuries);
+
+    // ⑥ slice B1 (mirror the injury seam above): derive the equipment-EXCLUSIONS
+    // Set ONCE — flag-gated + normalized to canonical + floor-sanitized
+    // (none/bodyweight can never be excluded, so the bodyweight floor always
+    // survives). OFF or empty ⇒ `{}` ⇒ every downstream drop (queryV4 att1-4 /
+    // att5 pool / L2 custom-append / L6 swap) is `.isNotEmpty`-inert ⇒
+    // byte-identical to pre-B1. Threaded to pickV4 like normalizedInjuries.
+    final equipmentExclusionSet = PlanEngineFlags.equipmentExclusionsEnabled
+        ? EquipmentVocab.floorSanitizedExclusions(equipmentExclusions)
+        : const <String>{};
 
     // F19 / recompose: the plan engine (split + exercise selection) only knows
     // build_muscle / lose_fat / strength / general_fitness. Map the goal to its
@@ -118,6 +130,7 @@ class PlanGenerator {
       goal: planGoal,
       injuries: normalizedInjuries,
       applyInjuryUniversalFilter: PlanEngineFlags.injuryUniversalFilterEnabled,
+      exclusions: equipmentExclusionSet,
     );
 
     // Stage 0: Progression (Phase 2+ weight suggestions)

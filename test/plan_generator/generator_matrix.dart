@@ -11,6 +11,7 @@
 // NOT a rewrite of the engine — a measurement harness OVER it. Touches zero
 // lib/ files. Run: `dart run test/plan_generator/generator_matrix.dart`.
 
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/split_resolver.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/volume_filter.dart';
@@ -25,6 +26,7 @@ class Persona {
   final String experience; // beginner | intermediate | advanced
   final int phase; // 1, 2, 6
   final List<String> injuries; // library tokens, e.g. ['lower_back']
+  final List<String> equipmentExclusions; // ⑥ B1 — canonical tokens excluded
 
   const Persona({
     required this.goal,
@@ -33,12 +35,16 @@ class Persona {
     required this.experience,
     required this.phase,
     this.injuries = const [],
+    this.equipmentExclusions = const [],
   });
 
   String get injuryLabel => injuries.isEmpty ? 'none' : injuries.join('+');
+  String get exclusionLabel =>
+      equipmentExclusions.isEmpty ? 'none' : equipmentExclusions.join('+');
 
   String get id =>
-      '$goal | $equipment | ${days}d | $experience | p$phase | inj:$injuryLabel';
+      '$goal | $equipment | ${days}d | $experience | p$phase | inj:$injuryLabel'
+      '${equipmentExclusions.isEmpty ? '' : ' | excl:$exclusionLabel'}';
 }
 
 /// One selected exercise in a generated plan, enriched with its library record.
@@ -156,6 +162,11 @@ GeneratedPlan generatePlan(
 
   final pickedNames = <String>{};
   final days = <PlanDay>[];
+  // ⑥ B1: floor-sanitized exclusion set (same derivation as generateV4; the
+  // persona explicitly opts in, so no flag-gate here). Empty for all
+  // non-exclusion personas → their trace is byte-identical to pre-B1.
+  final exclusions =
+      EquipmentVocab.floorSanitizedExclusions(persona.equipmentExclusions);
 
   for (final day in filteredDays) {
     final exercises = <PlanExercise>[];
@@ -168,6 +179,7 @@ GeneratedPlan generatePlan(
         phase: persona.phase,
         injuries: persona.injuries,
         pickedNames: pickedNames,
+        exclusions: exclusions,
       );
       final pick = trace.finalPick;
       final name = pick?.name ?? '(none)';
@@ -191,9 +203,11 @@ GeneratedPlan generatePlan(
 /// exercises coverage/balance/volume/progression, and an injury sub-sweep that
 /// exercises the safety dimension across every library injury token.
 ///
-/// Deferred (NOT silently dropped — the owning feature does not exist yet):
-///  - equipment-EXCLUSION personas → Batch 5 (⑥ exclusions).
-///  - body-focus / cardio-preference personas → Batches 4 / 1.
+/// Sub-sweeps: the core grid (no injuries), an injury sub-sweep, and — ⑥ B1 — an
+/// equipment-EXCLUSION sub-sweep (mild, realistic subtractions at basic_gym /
+/// home_dumbbells; the att5 bodyweight floor keeps `missing==0`).
+/// Still deferred (owning feature not built): body-focus / cardio-preference
+/// personas → later slices.
 List<Persona> personaMatrix() {
   const goals = ['build_muscle', 'lose_fat', 'general_fitness', 'strength'];
   const equipment = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
@@ -235,6 +249,31 @@ List<Persona> personaMatrix() {
       goal: 'build_muscle', equipment: 'full_gym', days: 4,
       experience: exp, phase: 1, injuries: const ['shoulder', 'knee'],
     ));
+  }
+
+  // ⑥ B1 exclusion sub-sweep — mild, realistic "I have most of a tier but not X"
+  // subtractions, at basic_gym / home_dumbbells so the fullGymEquipViolations
+  // hard gate (which only counts full_gym personas) is never touched. The att5
+  // bodyweight floor guarantees every slot still fills → the missing==0 hard
+  // gate holds; a raised fallback count is expected and absorbed by the re-frozen
+  // baseline. Aggressive exclude-everything is proven in the direct behavioral
+  // test, NOT here. build_muscle, 4-day, phase 1 (shallowest pool).
+  const exclusionCombos = <List<Object>>[
+    ['basic_gym', <String>['cables']],
+    ['basic_gym', <String>['barbell']],
+    ['home_dumbbells', <String>['resistance band']],
+  ];
+  for (final exp in experiences) {
+    for (final combo in exclusionCombos) {
+      personas.add(Persona(
+        goal: 'build_muscle',
+        equipment: combo[0] as String,
+        days: 4,
+        experience: exp,
+        phase: 1,
+        equipmentExclusions: combo[1] as List<String>,
+      ));
+    }
   }
 
   return personas;

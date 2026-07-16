@@ -1,25 +1,25 @@
 {
   "aggregate": {
-    "persona_count": 597,
-    "total_exercises": 19308,
+    "persona_count": 606,
+    "total_exercises": 19560,
     "mean_scores": {
       "coverage": "88.6",
-      "balance": "67.5",
+      "balance": "67.4",
       "volume": "70.4",
       "progression": "100.0",
       "personalization": "100.0",
       "safety": "100.0",
       "realism": "94.1",
-      "overall": "86.8"
+      "overall": "86.7"
     },
     "unsafe_plan_count": 0,
-    "equipment_violation_plan_count": 286,
-    "plans_with_fallback_pick": 363,
-    "total_fallback_picks": 1154,
+    "equipment_violation_plan_count": 290,
+    "plans_with_fallback_pick": 370,
+    "total_fallback_picks": 1178,
     "fallback_by_tier": {
       "bodyweight": 617,
-      "home_dumbbells": 379,
-      "basic_gym": 119,
+      "home_dumbbells": 387,
+      "basic_gym": 135,
       "full_gym": 39
     }
   },
@@ -9315,6 +9315,130 @@
       "realism": 82.9,
       "overall": 83.2,
       "violations": []
+    },
+    {
+      "id": "build_muscle | basic_gym | 4d | beginner | p1 | inj:none | excl:cables",
+      "coverage": 70.0,
+      "balance": 62.5,
+      "volume": 76.4,
+      "progression": 100.0,
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 70.0,
+      "overall": 79.8,
+      "violations": []
+    },
+    {
+      "id": "build_muscle | basic_gym | 4d | beginner | p1 | inj:none | excl:barbell",
+      "coverage": 80.0,
+      "balance": 62.5,
+      "volume": 65.6,
+      "progression": 100.0,
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 80.0,
+      "overall": 81.3,
+      "violations": []
+    },
+    {
+      "id": "build_muscle | home_dumbbells | 4d | beginner | p1 | inj:none | excl:resistance band",
+      "coverage": 80.0,
+      "balance": 62.5,
+      "volume": 66.0,
+      "progression": 100.0,
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 65.0,
+      "overall": 78.9,
+      "violations": [
+        "EQUIPMENT: Seated Cable Row equipment_tier={basic_gym, full_gym} excludes home_dumbbells"
+      ]
+    },
+    {
+      "id": "build_muscle | basic_gym | 4d | intermediate | p1 | inj:none | excl:cables",
+      "coverage": 90.0,
+      "balance": 54.2,
+      "volume": 80.0,
+      "progression": 100.0,
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 96.4,
+      "overall": 86.8,
+      "violations": []
+    },
+    {
+      "id": "build_muscle | basic_gym | 4d | intermediate | p1 | inj:none | excl:barbell",
+      "coverage": 90.0,
+      "balance": 54.2,
+      "volume": 68.5,
+      "progression": 100.0,
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 100.0,
+      "overall": 85.4,
+      "violations": []
+    },
+    {
+      "id": "build_muscle | home_dumbbells | 4d | intermediate | p1 | inj:none | excl:resistance band",
+      "coverage": 90.0,
+      "balance": 54.2,
+      "volume": 66.5,
+      "progression": 100.0,
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 100.0,
+      "overall": 85.1,
+      "violations": [
+        "EQUIPMENT: Face Pull equipment_tier={basic_gym, full_gym} excludes home_dumbbells",
+        "EQUIPMENT: Shrug equipment_tier={full_gym} excludes home_dumbbells"
+      ]
+    },
+    {
+      "id": "build_muscle | basic_gym | 4d | advanced | p1 | inj:none | excl:cables",
+      "coverage": 90.0,
+      "balance": 51.7,
+      "volume": 78.5,
+      "progression": 100.0,
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 88.9,
+      "overall": 84.8,
+      "violations": [
+        "EQUIPMENT: Shrug equipment_tier={full_gym} excludes basic_gym",
+        "EQUIPMENT: Reverse Fly equipment_tier={full_gym} excludes basic_gym"
+      ]
+    },
+    {
+      "id": "build_muscle | basic_gym | 4d | advanced | p1 | inj:none | excl:barbell",
+      "coverage": 90.0,
+      "balance": 51.7,
+      "volume": 67.0,
+      "progression": 100.0,
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 97.2,
+      "overall": 84.3,
+      "violations": []
+    },
+    {
+      "id": "build_muscle | home_dumbbells | 4d | advanced | p1 | inj:none | excl:resistance band",
+      "coverage": 90.0,
+      "balance": 51.7,
+      "volume": 70.0,
+      "progression": 100.0,
+      "personalization": 100.0,
+      "safety": 100.0,
+      "realism": 97.2,
+      "overall": 84.8,
+      "violations": [
+        "EQUIPMENT: Face Pull equipment_tier={basic_gym, full_gym} excludes home_dumbbells",
+        "EQUIPMENT: Shrug equipment_tier={full_gym} excludes home_dumbbells",
+        "EQUIPMENT: Machine Lateral Raise equipment_tier={basic_gym, full_gym} excludes home_dumbbells",
+        "EQUIPMENT: Egyptian Lateral Raise equipment_tier={basic_gym, full_gym} excludes home_dumbbells",
+        "EQUIPMENT: Reverse Fly equipment_tier={full_gym} excludes home_dumbbells",
+        "EQUIPMENT: Barbell Curl equipment_tier={basic_gym, full_gym} excludes home_dumbbells",
+        "EQUIPMENT: Close-Grip Bench Press equipment_tier={basic_gym, full_gym} excludes home_dumbbells"
+      ]
     }
   ]
 }

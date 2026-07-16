@@ -142,6 +142,31 @@ void main() {
     });
   });
 
+  group('floorSanitizedExclusions (⑥ B1 seam — normalize + strip the floor)', () {
+    test('normalizes to canonical + returns a Set', () {
+      expect(EquipmentVocab.floorSanitizedExclusions(['Cable Machine', 'Dumbbells']),
+          {'cables', 'dumbbells'});
+    });
+    test('STRIPS none/bodyweight — the floor is never excludable', () {
+      // A user can never exclude the bodyweight floor, so a pure-bodyweight
+      // exercise is never droppable + the att5 pool floor always survives.
+      expect(EquipmentVocab.floorSanitizedExclusions(['bodyweight', 'cables']),
+          {'cables'});
+      expect(EquipmentVocab.floorSanitizedExclusions(['none', 'bodyweight']),
+          isEmpty);
+      expect(EquipmentVocab.floorSanitizedExclusions(['Bodyweight']), isEmpty);
+    });
+    test('null / empty / all-unmappable → empty Set (the no-op input)', () {
+      expect(EquipmentVocab.floorSanitizedExclusions(null), isEmpty);
+      expect(EquipmentVocab.floorSanitizedExclusions(const []), isEmpty);
+      expect(EquipmentVocab.floorSanitizedExclusions(['Spaceship']), isEmpty);
+    });
+    test('de-dupes via the Set (Cable Machine + Rope → one cables)', () {
+      expect(EquipmentVocab.floorSanitizedExclusions(['Cable Machine', 'Rope']),
+          {'cables'});
+    });
+  });
+
   group('Behavioral: owned custom-exercise write normalizes equipment_needed', () {
     Directory? tempDir;
 
