@@ -501,7 +501,19 @@ extension SyncServiceCommunity on SyncService {
           final id = map['id']?.toString();
           if (id != null && id.isNotEmpty && exerciseBox.get(id) == null) {
             map['source'] = 'community';
-            await exerciseBox.put(id, map);
+            // ⑥ slice B2 — normalize equipment_needed to the canonical vocab at
+            // this write seam so STORED community rows match the seed (slice A).
+            // Kill-switch `disable_community_equipment_normalize` (default ON →
+            // normalize; == true → verbatim raw store = prior behavior).
+            await exerciseBox.put(
+              id,
+              EquipmentVocab.normalizedEquipmentRow(
+                map,
+                enabled: _hive.configBox
+                        .get('disable_community_equipment_normalize') !=
+                    true,
+              ),
+            );
           }
         }
         if (exercises.length < pageSize) break;

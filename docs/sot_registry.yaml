@@ -6542,7 +6542,7 @@ concepts:
       in lib/core/utils/equipment_vocab.dart — the 11 non-`none` tier item tokens +
       `cardio machine`). Data-quality PREREQUISITE for slice B's item-level queryV4
       exclusion filter; changes NO live plan generation (the live V4 filter reads
-      the separate clean `equipment_tier`, exercise_repository.dart:270 — NOT
+      the separate clean `equipment_tier`, exercise_repository.dart:287 — NOT
       `equipment_needed`). `EquipmentVocab.normalize` maps each list element as ONE
       whole-string token (NEVER a whitespace split — that would explode "cable
       machine"→cable+machine), collapses an OR-compound to its most-accessible
@@ -6562,11 +6562,37 @@ concepts:
         method: createCustomExercise (:1375)
         semantic: EquipmentVocab.normalize([equipment])
         notes: the OWNED custom-exercise write (AI createCustomExercise tool sink, tool_dispatcher.dart:527) — caller free-text → canonical; may be [] (no requirement)
+      - file: lib/core/services/sync/sync_community.dart
+        method: syncCommunityItems download loop → EquipmentVocab.normalizedEquipmentRow (⑥ slice B2, :510; put :508)
+        semantic: flag-gated write-normalize (fromProfile) at the community-download seam
+        notes: |
+          ⑥ slice B2 — approved `user_custom_exercises` rows downloaded into
+          exerciseBox get `equipment_needed` normalized to canonical so STORED
+          community data matches the seed (slice A). Behavioral test:
+          test/contracts/community_equipment_normalize_behavioral_test.dart
+          (the pure public helper, both flag branches × every shape) + a
+          comment-stripped seam source-grep. Kill-switch
+          `disable_community_equipment_normalize` (default ON → normalize;
+          == true → verbatim raw store = pre-B2 behavior). CONSISTENCY / defense-
+          in-depth only: the sole LIVE selection reader (queryV4) already
+          fromProfile-normalizes on read (⑥ B1), and community rows lack
+          `movement_pattern` so queryV4 never selects them (swap/display only).
+          P2-3: `normalize` DROPS unmappable tokens → an unmappable community
+          equipment string stores as [] (lossy on that one field; consistent
+          with the seed's slice-A behavior + B1's read-side drop — accepted).
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
         method: query() item-level equipment_needed filter (:129)
         semantic: canonical-token set membership
-        notes: DEAD in the live path today (V3 pick() has 0 callers) — revived by slice B's queryV4 item filter; normalization makes its lowercase set-membership correct
+        notes: |
+          DEAD in production — query() is reached only via ExerciseSelector.pick()
+          (exercise_selector.dart:265/:345/:442, all inside pick():61), and pick()
+          has 0 callers (`.pick(` grep empty; the live path is
+          plan_generator.dart:124 → pickV4 → queryV4). The LIVE consumer of the
+          normalized vocab is queryV4's ⑥ B1 EXCLUSION filter (a DIFFERENT method;
+          registered under the equipment_exclusion_filter concept), NOT this
+          query(). Normalization keeps query()'s lowercase set-membership correct
+          IF it is ever revived.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
         method: custom-exercise snapshot (:518, reads customBox)
         semantic: display / AI payload

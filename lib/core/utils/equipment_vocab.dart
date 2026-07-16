@@ -214,4 +214,28 @@ class EquipmentVocab {
   static Set<String> floorSanitizedExclusions(Iterable<String>? raw) {
     return normalize(raw).toSet()..removeAll(const {'none', 'bodyweight'});
   }
+
+  /// Normalizes [map]'s `equipment_needed` to canonical vocab at the
+  /// community-download write seam (⑥ slice B2 — the WRITE-side completion of
+  /// slice A's owned-custom normalize, so STORED community rows are canonical
+  /// like the seed, not the RAW cloud text). Mutates and returns the SAME map
+  /// for call-site chaining. Crash-safe (delegates to [fromProfile]) and
+  /// idempotent (canonical in → canonical out). When [enabled] is false
+  /// (kill-switch `disable_community_equipment_normalize`), returns the map
+  /// UNCHANGED — a verbatim raw store, today's exact behavior.
+  ///
+  /// Public + static so the seam is behaviorally testable without a live
+  /// SyncService (rule 21 — a private helper in a `part of` file would force a
+  /// source-grep-only test). Consistency/defense-in-depth: the sole live
+  /// selection reader (queryV4) already `fromProfile`-normalizes on read, so
+  /// this changes only the stored representation, never plan selection.
+  static Map<String, dynamic> normalizedEquipmentRow(
+    Map<String, dynamic> map, {
+    bool enabled = true,
+  }) {
+    if (enabled) {
+      map['equipment_needed'] = fromProfile(map['equipment_needed']);
+    }
+    return map;
+  }
 }
