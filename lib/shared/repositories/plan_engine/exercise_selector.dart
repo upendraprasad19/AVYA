@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
 import 'models.dart';
@@ -521,6 +522,10 @@ class ExerciseSelector {
     // verbatim pre-U2 behavior (pool bypasses the injury filter). Default ON is
     // fail-safe — a caller that forgets the flag still gets the safe path.
     bool applyInjuryUniversalFilter = true,
+    // ⑥ slice B1: user-excluded equipment (canonical, floor-sanitized). Default
+    // `const {}` (unset caller / flag OFF) → every downstream drop inert →
+    // byte-identical. A HARD constraint threaded to every pick path.
+    Set<String> exclusions = const {},
   }) {
     final result = <PopulatedDay>[];
 
@@ -544,6 +549,7 @@ class ExerciseSelector {
         day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,
         injuries: injuries, excludeNames: {},
         applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+        exclusions: exclusions,
       );
 
       // Fill variant B: use slotsB if defined, exclude A names for variety
@@ -554,6 +560,7 @@ class ExerciseSelector {
           day.slotsB!, exerciseRepo, equipmentTier, effectiveExp, phase,
           injuries: injuries, excludeNames: goal == 'strength' ? {} : aNames,
           applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+          exclusions: exclusions,
         );
       } else {
         exercisesB = exercisesA;
@@ -564,11 +571,13 @@ class ExerciseSelector {
         exercisesA = _applyHistoryAdjustments(
           exercisesA, day.slotsA, exerciseRepo, equipmentTier, effectiveExp,
           phase, injuries, demoted, customs,
+          exclusions: exclusions,
         );
         if (!identical(exercisesB, exercisesA) && day.slotsB != null) {
           exercisesB = _applyHistoryAdjustments(
             exercisesB, day.slotsB!, exerciseRepo, equipmentTier, effectiveExp,
             phase, injuries, demoted, customs,
+            exclusions: exclusions,
           );
         } else {
           exercisesB = exercisesA;
@@ -614,8 +623,9 @@ class ExerciseSelector {
     int phase,
     List<String> injuries,
     Set<String> demoted,
-    List<Map<String, dynamic>> customs,
-  ) {
+    List<Map<String, dynamic>> customs, {
+    required Set<String> exclusions, // ⑥ B1 (compile-enforced thread)
+  }) {
     final result = List<PlannedExercise>.from(picked);
     final pickedNames = result.map((e) => e.exerciseName).toSet();
 
@@ -636,6 +646,7 @@ class ExerciseSelector {
           suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
           excludeNames: pickedNames,
           injuryExclusions: injuries.isEmpty ? null : injuries,
+          exclusions: exclusions,
         );
         for (final c in alternatives) {
           final name = c['name'] as String? ?? '';
@@ -665,6 +676,14 @@ class ExerciseSelector {
           (m) => dayMuscles.any((d) => d.contains(m) || m.contains(d)),
         );
         if (!matches) continue;
+        // ⑥ B1: don't auto-append a custom exercise requiring excluded equipment
+        // — a user who excluded 'barbell' shouldn't get their barbell custom
+        // appended (consistency with "I don't have this now"). Empty set → inert.
+        if (exclusions.isNotEmpty &&
+            EquipmentVocab.fromProfile(custom['equipment_needed'])
+                .any(exclusions.contains)) {
+          continue;
+        }
         result.add(_buildCustomExercise(custom, result.first.variant));
         pickedNames.add(name);
       }
@@ -756,6 +775,7 @@ class ExerciseSelector {
     required List<String> injuries,
     required Set<String> excludeNames,
     bool applyInjuryUniversalFilter = true,
+    required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
   }) {
     final exercises = <PlannedExercise>[];
     final pickedNames = Set<String>.from(excludeNames);
@@ -766,6 +786,7 @@ class ExerciseSelector {
           slot, repo, equipmentTier, effectiveExp, phase,
           injuries: injuries, pickedNames: pickedNames,
           applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+          exclusions: exclusions,
         );
         if (exercise != null) {
           exercises.add(exercise);
@@ -787,6 +808,7 @@ class ExerciseSelector {
     required List<String> injuries,
     required Set<String> pickedNames,
     bool applyInjuryUniversalFilter = true,
+    required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
   }) {
     // Attempt 1: Exact target + subFocus + equipment + type + experience
     var candidates = repo.queryV4(
@@ -801,6 +823,7 @@ class ExerciseSelector {
       foundationalOnly: phase == 1,
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
+      exclusions: exclusions,
     );
     if (candidates.isNotEmpty) return _buildExercise(candidates.first);
 
@@ -813,6 +836,7 @@ class ExerciseSelector {
       suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
+      exclusions: exclusions,
     );
     if (candidates.isNotEmpty) return _buildExercise(candidates.first);
 
@@ -823,15 +847,20 @@ class ExerciseSelector {
       suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
+      exclusions: exclusions,
     );
     if (candidates.isNotEmpty) return _buildExercise(candidates.first);
 
-    // Attempt 4: Drop equipment (allow any equipment in the movement pattern)
+    // Attempt 4: Drop equipment TIER (allow any tier in the movement pattern).
+    // ⑥ B1: the exclusion filter is KEPT here — a dropped TIER is a soft
+    // curation heuristic, but an EXCLUDED item is a hard "user lacks it"
+    // constraint. att5's floor-sanitized bodyweight pool is the safe catch.
     candidates = repo.queryV4(
       movementPattern: slot.movementPattern,
       suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
+      exclusions: exclusions,
     );
     if (candidates.isNotEmpty) return _buildExercise(candidates.first);
 
@@ -859,6 +888,18 @@ class ExerciseSelector {
           (m) => (m['name'] as String?)?.toLowerCase() == name.toLowerCase(),
           orElse: () => matches.first,
         );
+        // ⑥ B1 (mirror the U2 injury skip): the att5 pool bypasses queryV4, so
+        // it must apply the equipment-exclusion drop itself — else a pool move
+        // requiring excluded equipment (e.g. Pull Up ['pull-up bar'] for a
+        // pull-up-bar-excluding user) leaks. Floor-sanitize guarantees ≥1
+        // pure-bodyweight move per movement_pattern, so a skip NEVER empties the
+        // slot — it just prefers the bodyweight fallback (Inverted Row over Pull
+        // Up). Empty set → inert.
+        if (exclusions.isNotEmpty &&
+            EquipmentVocab.fromProfile(resolved['equipment_needed'])
+                .any(exclusions.contains)) {
+          continue; // skip an excluded-equipment pool pick, try the next
+        }
         if (applyInjuryUniversalFilter &&
             _isContraindicated(resolved, injuries)) {
           continue; // skip contraindicated pool pick, try the next

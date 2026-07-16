@@ -1,3 +1,5 @@
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+
 /// Pure-Dart mirror of `ExerciseRepository.queryV4`.
 ///
 /// Operates on an in-memory list of exercise maps (loaded via LibraryLoader).
@@ -6,7 +8,9 @@
 ///
 /// The filter order and semantics MUST stay in sync with
 /// lib/shared/repositories/exercise_repository.dart:177-295 — any change there
-/// requires an equivalent change here + an updated spot-check test.
+/// requires an equivalent change here + an updated spot-check test. (⑥ B1 added
+/// filter 2c: the equipment-exclusion drop, BEFORE the tier filter, exactly as
+/// prod — `EquipmentVocab` is Hive-free so it is safe in this pure-Dart mirror.)
 class QueryV4Mirror {
   /// Returns true if [field] (String or List of String) contains [value] (case-insensitive exact).
   static bool _fieldContains(dynamic field, String value) {
@@ -33,6 +37,7 @@ class QueryV4Mirror {
     bool foundationalOnly = false,
     Set<String>? excludeNames,
     List<String>? injuryExclusions,
+    Set<String> exclusions = const {}, // ⑥ B1 (mirror; default {} → no-op)
     int? limit,
   }) {
     var results = List<Map<String, dynamic>>.from(source);
@@ -57,6 +62,16 @@ class QueryV4Mirror {
           return muscles.any((m) => m.toString().toLowerCase().contains(tm));
         }
         return false;
+      }).toList();
+    }
+
+    // 2c. Equipment EXCLUSIONS (⑥ B1 — mirror of the prod pre-tier drop). BEFORE
+    // the tier filter (so a no-tier row is also subject), crash-safe +
+    // normalizing via EquipmentVocab.fromProfile. Empty → no-op.
+    if (exclusions.isNotEmpty) {
+      results = results.where((e) {
+        final needed = EquipmentVocab.fromProfile(e['equipment_needed']);
+        return !needed.any(exclusions.contains);
       }).toList();
     }
 

@@ -118,4 +118,22 @@ class PlanEngineFlags {
       return false; // no Hive (pure unit test) → safe default: OFF (no bring-up)
     }
   }
+
+  /// ⑥ slice B1 equipment item-level EXCLUSION filter. **Default OFF (ship dark,
+  /// §4.6)** — it SHRINKS the selectable pool (a user subtracts equipment they
+  /// don't have), which changes exercise selection, so it ships inert and is
+  /// flipped ON after APK verification (and once slice C's Customize UI writes
+  /// the `equipment_exclusions` profile field it reads). When OFF, `generateV4`
+  /// threads an EMPTY exclusions set → every `.isNotEmpty`-guarded drop in
+  /// queryV4 / the att5 pool / the L2 custom-append is inert → byte-identical to
+  /// today. Set `configBox['enable_equipment_exclusions'] = true` to enable.
+  static bool get equipmentExclusionsEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('enable_equipment_exclusions') ==
+          true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → safe default: OFF (no exclusions)
+    }
+  }
 }

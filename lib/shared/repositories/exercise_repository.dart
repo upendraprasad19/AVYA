@@ -1,4 +1,5 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 /// Queries the exerciseBox (seeded from bundled JSON).
 ///
@@ -228,6 +229,11 @@ class ExerciseRepository {
     bool foundationalOnly = false,
     Set<String>? excludeNames,
     List<String>? injuryExclusions,
+    // ⑥ slice B1: user-excluded equipment (canonical, floor-sanitized tokens).
+    // REQUIRED (not optional) so a missed cascade call site fails to COMPILE
+    // rather than silently skip the drop — equipment exclusion is a HARD
+    // constraint that must reach every pick path. Empty set → inert.
+    required Set<String> exclusions,
     int? limit,
   }) {
     // Precompute normalized values for filter predicates
@@ -263,6 +269,19 @@ class ExerciseRepository {
             return false;
           }
         }
+      }
+
+      // 2c. Equipment EXCLUSIONS (⑥ slice B1 — pure-exclusion filter). A HARD
+      // constraint: drop the exercise iff any item it REQUIRES is one the user
+      // excluded. Placed BEFORE the tier block so a no-tier community row (which
+      // the tier block passes at the `return true` below) is also subject.
+      // Reads crash-safe + normalizing via EquipmentVocab.fromProfile (a
+      // bare-String / community / mixed-case equipment_needed can't crash [the
+      // e9d1c7 class] and is compared as canonical). Empty set → inert →
+      // byte-identical to pre-B1.
+      if (exclusions.isNotEmpty) {
+        final needed = EquipmentVocab.fromProfile(e['equipment_needed']);
+        if (needed.any(exclusions.contains)) return false;
       }
 
       // 3. Equipment tier (exercise must include user's tier in its equipment_tier list)

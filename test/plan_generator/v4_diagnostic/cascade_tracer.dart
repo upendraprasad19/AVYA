@@ -1,3 +1,4 @@
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'query_v4_mirror.dart';
 
@@ -75,6 +76,7 @@ class CascadeTracer {
     required int phase,
     required List<String> injuries,
     required Set<String> pickedNames,
+    Set<String> exclusions = const {}, // ⑥ B1 (mirror; default {} → no-op)
   }) {
     final attempts = <CascadeAttempt>[];
     CascadePick? pick;
@@ -106,6 +108,7 @@ class CascadeTracer {
       foundationalOnly: phase == 1,
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
+      exclusions: exclusions,
     );
     attempts.add(_attempt(1, a1Sig, a1Results));
     // pick is always null on attempt 1 (declared at top of method); the
@@ -137,6 +140,7 @@ class CascadeTracer {
       suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
+      exclusions: exclusions,
     );
     attempts.add(_attempt(2, a2Sig, a2Results));
     if (a2Results.isNotEmpty && pick == null) {
@@ -161,6 +165,7 @@ class CascadeTracer {
       suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
+      exclusions: exclusions,
     );
     attempts.add(_attempt(3, a3Sig, a3Results));
     if (a3Results.isNotEmpty && pick == null) {
@@ -183,6 +188,7 @@ class CascadeTracer {
       suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
+      exclusions: exclusions,
     );
     attempts.add(_attempt(4, a4Sig, a4Results));
     if (a4Results.isNotEmpty && pick == null) {
@@ -227,6 +233,15 @@ class CascadeTracer {
             (e) => (e['name'] as String?)?.toLowerCase() == q,
             orElse: () => libraryMatch.first,
           );
+          // ⑥ B1 mirror (of exercise_selector att5): skip a pool move requiring
+          // excluded equipment. Floor-sanitize guarantees a pure-bodyweight move
+          // survives per pattern, so a valid pick always follows — NOT a safety
+          // omission, so do not set poolHadContra.
+          if (exclusions.isNotEmpty &&
+              EquipmentVocab.fromProfile(resolved['equipment_needed'])
+                  .any(exclusions.contains)) {
+            continue;
+          }
           if (_isContraindicated(resolved, injuries)) {
             poolHadContra = true;
             continue;
