@@ -175,6 +175,10 @@ class WorkoutScheduleService {
   bool isPhaseExpired() =>
       read.WorkoutScheduleReadService.instance.isPhaseExpired();
 
+  /// ⑥ Batch 7-A (W3.2): read-only phase-arc wave characters (see read service).
+  List<String> currentWaveCharacters() =>
+      read.WorkoutScheduleReadService.instance.currentWaveCharacters();
+
   DateTime? getPlanStartDate() =>
       read.WorkoutScheduleReadService.instance.getPlanStartDate();
 
