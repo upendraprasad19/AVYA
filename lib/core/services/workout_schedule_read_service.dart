@@ -28,6 +28,7 @@ import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
 import '../utils/ist_date.dart';
+import '../utils/phase_completion.dart';
 import '../../features/profile/services/profile_write_service.dart';
 import '../../shared/repositories/plan_generator.dart';
 import '../../shared/repositories/user_repository.dart';
@@ -529,6 +530,46 @@ class WorkoutScheduleReadService {
       }
     }
     return days;
+  }
+
+  /// ⑧ Batch 8 (W2.5 adherence gate) — the current phase's completion rate:
+  /// completed / total NON-REST scheduled days across the phase's materialized
+  /// weeks. Byte-identical to the Train phase-unlock card's
+  /// `_computePhaseCompletionRate` (both feed the shared `phaseCompletionRate`
+  /// the SAME rule: `type ∈ {workout, custom_template}` counts, `status ==
+  /// 'completed'` is done) — reads via [getWeek] → [getScheduleForDate], so the
+  /// completed→planned demotion the card also reads through is inherited. The
+  /// `totalWeeks` span MIRRORS the card EXACTLY (`train_provider.dart:582-592`):
+  /// `phase<=1 ? 4 : scan(weeks 5-12)`, with `phase` from the SAME source
+  /// (`current_phase`). This matters — a mid-phase Edit-Profile regen
+  /// (`generateAndScheduleFromDate`, which does NOT move `plan_start` when
+  /// `!isFirstGeneration`) can leave a `current_phase==1` plan with week-5/6 rows,
+  /// so a bare scan would over-count vs the card's 4-week cap (B-pass P2). INERT —
+  /// ⑧ 8-B's advance seam is the only production reader (wired later).
+  double currentPhaseCompletionRate() {
+    final progress = UserRepository.instance.getProgress();
+    final phase = (progress?['current_phase'] as int?) ?? 1;
+    final int totalWeeks;
+    if (phase <= 1) {
+      totalWeeks = 4;
+    } else {
+      var scanned = 4;
+      for (int w = 5; w <= 12; w++) {
+        if (getWeek(w).isEmpty) break;
+        scanned = w;
+      }
+      totalWeeks = scanned;
+    }
+    final days = <({bool isRest, bool isDone})>[];
+    for (int w = 1; w <= totalWeeks; w++) {
+      for (final day in getWeek(w)) {
+        final type = (day['type'] as String?) ?? 'rest';
+        final isRest = type != 'workout' && type != 'custom_template';
+        final status = (day['status'] as String?) ?? 'planned';
+        days.add((isRest: isRest, isDone: status == 'completed'));
+      }
+    }
+    return phaseCompletionRate(days);
   }
 
   /// Current week number (1-4) based on today.
