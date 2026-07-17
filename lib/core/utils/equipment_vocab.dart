@@ -238,4 +238,73 @@ class EquipmentVocab {
     }
     return map;
   }
+
+  /// ⑥ slice C1 — the equipment TIER → its canonical item list. The SINGLE source
+  /// `_getEquipmentList` (plan_generator) delegates to, so the tier→items map can
+  /// never drift from the generator. Each list begins with `none` (the
+  /// no-requirement sentinel, NOT a canonical token) then the tier's canonical
+  /// items. Invariant (pinned by equipment_chip_vocab_contract_test):
+  /// `tierItems[t] ⊆ canonicalTokens ∪ {'none'}`.
+  static const Map<String, List<String>> tierItems = <String, List<String>>{
+    'bodyweight': ['none', 'bodyweight'],
+    'home_dumbbells': ['none', 'bodyweight', 'dumbbells', 'resistance band'],
+    'basic_gym': [
+      'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
+      'pull-up bar', 'cables', 'resistance band',
+    ],
+    'full_gym': [
+      'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
+      'pull-up bar', 'cables', 'machines', 'smith machine',
+      'resistance band', 'kettlebell', 'ez-bar',
+    ],
+  };
+
+  /// The items a user of [tier] can EXCLUDE in the Customize UI — the tier's items
+  /// minus the bodyweight floor (`none`/`bodyweight` are never excludable, so the
+  /// floor always survives — mirrors [floorSanitizedExclusions]). A `bodyweight`
+  /// tier → `[]` (nothing to customize → the UI hides the section). Invariant
+  /// (pinned): the result ⊆ [canonicalTokens].
+  static List<String> tierExcludableItems(String tier) {
+    return (tierItems[tier] ?? const ['none', 'bodyweight'])
+        .where((t) => t != 'none' && t != 'bodyweight')
+        .toList();
+  }
+
+  static const Map<String, String> _chipLabels = <String, String>{
+    'dumbbells': 'Dumbbells',
+    'barbell': 'Barbell',
+    'bench': 'Bench',
+    'pull-up bar': 'Pull-up Bar',
+    'cables': 'Cables',
+    'machines': 'Machines',
+    'smith machine': 'Smith Machine',
+    'resistance band': 'Resistance Band',
+    'kettlebell': 'Kettlebell',
+    'ez-bar': 'EZ-Bar',
+    'cardio machine': 'Cardio Machine',
+  };
+
+  /// Display label for an equipment chip token (e.g. `pull-up bar` → "Pull-up Bar").
+  static String chipLabel(String token) => _chipLabels[token] ?? token;
+
+  /// Pure add/remove toggle for the equipment-exclusion multi-select — NO `none`
+  /// sentinel (an empty list = "exclude nothing", the default). Returns a fresh
+  /// GROWABLE list.
+  static List<String> toggleExclusion(Iterable<String> current, String token) {
+    final next = current.toList();
+    if (next.contains(token)) {
+      next.remove(token);
+    } else {
+      next.add(token);
+    }
+    return next;
+  }
+
+  /// Drop any exclusion not valid for [tier] — a tier DOWNGRADE (full_gym →
+  /// basic_gym) must not leave a stale `machines` exclusion. Returns a growable,
+  /// order-preserving subset of the CURRENT tier's excludable items.
+  static List<String> pruneToTier(Iterable<String> current, String tier) {
+    final valid = tierExcludableItems(tier).toSet();
+    return current.where(valid.contains).toList();
+  }
 }

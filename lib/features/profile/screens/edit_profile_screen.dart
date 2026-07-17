@@ -17,6 +17,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/utils/name_format.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -48,6 +49,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String _gender = 'male';
   String _goal = 'general_fitness';
   String _equipment = 'full_gym';
+  List<String> _equipmentExclusions = <String>[]; // ⑥ C1 — items excluded from the tier
   int _daysPerWeek = 4;
   String _lifestyleActivity = 'desk_job';
   String _dietPreference = 'non_veg';
@@ -82,6 +84,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late int _originalDaysPerWeek;
   late String _originalGoal;
   late String _originalEquipment;
+  late List<String> _originalEquipmentExclusions; // ⑥ C1
   late String _originalFitnessExperience;
   late int? _originalSessionDuration;
   late String _originalPhysiqueFocus;
@@ -159,6 +162,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _gender = (profile['gender'] as String?) ?? 'male';
     _goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
     _equipment = (profile['equipment_access'] as String?) ?? 'full_gym';
+    // ⑥ C1 — crash-safe seed (fromProfile handles List / bare-String / null →
+    // canonical List; never `as List`). The tier-change onChanged prunes stale.
+    _equipmentExclusions =
+        EquipmentVocab.fromProfile(profile['equipment_exclusions']);
     _daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
     _lifestyleActivity =
         (profile['lifestyle_activity'] as String?) ?? 'desk_job';
@@ -228,6 +235,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _originalDaysPerWeek = _daysPerWeek;
     _originalGoal = _goal;
     _originalEquipment = _equipment;
+    _originalEquipmentExclusions = List<String>.of(_equipmentExclusions); // ⑥ C1
     _originalFitnessExperience = _fitnessExperience;
     _originalSessionDuration = _sessionDuration;
     _originalPhysiqueFocus = _physiqueFocus;
@@ -403,8 +411,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 label: 'Equipment',
                 value: _equipment,
                 options: _equipmentOptions,
-                onChanged: (v) => setState(() => _equipment = v!),
+                onChanged: (v) => setState(() {
+                  _equipment = v!;
+                  // ⑥ C1 — a tier downgrade must drop now-invalid exclusions.
+                  _equipmentExclusions =
+                      EquipmentVocab.pruneToTier(_equipmentExclusions, v);
+                }),
               ),
+              _buildEquipmentCustomizeChips(),
               const SizedBox(height: AppSpacing.gridGap),
               _buildDaysSelector(),
               const SizedBox(height: AppSpacing.gridGap),
@@ -1278,6 +1292,69 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
+  // ── Customize equipment (⑥ C1) ──────────────────────────────────
+
+  /// Multi-select to SUBTRACT items the user lacks from their tier (mirrors
+  /// [_buildInjuriesChips]; selected = excluded). Hidden when the tier has no
+  /// excludable items (bodyweight → the floor is never excludable). Ship-dark:
+  /// the exclusions only shape the plan once `enable_equipment_exclusions` flips.
+  Widget _buildEquipmentCustomizeChips() {
+    final options = EquipmentVocab.tierExcludableItems(_equipment);
+    if (options.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.gridGap),
+        Text(
+          "Customize — tap the equipment you DON'T have",
+          style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((option) {
+            final isExcluded = _equipmentExclusions.contains(option);
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _equipmentExclusions =
+                      EquipmentVocab.toggleExclusion(_equipmentExclusions, option);
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isExcluded
+                      ? AppColors.red.withValues(alpha: 0.12)
+                      : AppColors.input,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: isExcluded
+                        ? AppColors.red.withValues(alpha: 0.4)
+                        : AppColors.border,
+                    width: isExcluded ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  EquipmentVocab.chipLabel(option),
+                  style: AppTypography.body.copyWith(
+                    fontSize: 13,
+                    fontWeight: isExcluded ? FontWeight.w700 : FontWeight.w400,
+                    color:
+                        isExcluded ? AppColors.bad : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   // ── Body Fat % ───────────────────────────────────────────────────
 
   Widget _buildBodyFatField() {
@@ -1599,6 +1676,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'target_weight_kg': targetWeight,
         'primary_goal': _goal,
         'equipment_access': _equipment,
+        'equipment_exclusions': _equipmentExclusions, // ⑥ C1
         'lifestyle_activity': _lifestyleActivity,
         'pace_preference': _pacePreference, // Bug #24
         'activity_level': derivedActivityLevel,
@@ -1677,6 +1755,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         originalPhysiqueFocus: _originalPhysiqueFocus,
         injuries: _injuries,
         originalInjuries: _originalInjuries,
+        equipmentExclusions: _equipmentExclusions,
+        originalEquipmentExclusions: _originalEquipmentExclusions,
       );
 
       if (planChanged && WorkoutScheduleService.instance.hasPlan() && mounted) {
@@ -1689,6 +1769,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         }
         if (_equipment != _originalEquipment) {
           changes.add('Equipment: ${_equipmentOptions[_originalEquipment]} → ${_equipmentOptions[_equipment]}');
+        }
+        if (!listEquals(_equipmentExclusions, _originalEquipmentExclusions)) {
+          changes.add('Equipment customized: ${_originalEquipmentExclusions.length} → ${_equipmentExclusions.length} excluded');
         }
         if (_fitnessExperience != _originalFitnessExperience) {
           String label(String e) => e[0].toUpperCase() + e.substring(1);
@@ -1889,6 +1972,8 @@ bool computePlanChanged({
   required String originalPhysiqueFocus,
   required List<String> injuries,
   required List<String> originalInjuries,
+  required List<String> equipmentExclusions,
+  required List<String> originalEquipmentExclusions,
 }) {
   return daysPerWeek != originalDaysPerWeek ||
       goal != originalGoal ||
@@ -1896,5 +1981,6 @@ bool computePlanChanged({
       fitnessExperience != originalFitnessExperience ||
       sessionDuration != originalSessionDuration ||
       physiqueFocus != originalPhysiqueFocus ||
-      !listEquals(injuries, originalInjuries);
+      !listEquals(injuries, originalInjuries) ||
+      !listEquals(equipmentExclusions, originalEquipmentExclusions);
 }

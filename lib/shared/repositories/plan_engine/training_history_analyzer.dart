@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
 import 'plan_engine_flags.dart';
@@ -152,6 +153,36 @@ class TrainingHistoryAnalyzer {
     if (focus.isNotEmpty) return focus;
     if (phase >= 2) return weakMuscles();
     return const [];
+  }
+
+  /// ⑥ slice C1 — resolves the effective equipment-EXCLUSION set for generateV4,
+  /// flag-gated (ship-dark behind `enable_equipment_exclusions`). Mirrors
+  /// [resolveBodyFocus]/[physiqueFocusMuscles]: flag OFF → `const {}` WITHOUT
+  /// reading Hive (byte-identical to B1's inert seam). Flag ON: an explicit [param]
+  /// (tests / direct callers) takes precedence; else the user's `equipment_exclusions`
+  /// profile field is read (crash-safe) and floor-sanitized
+  /// ([EquipmentVocab.floorSanitizedExclusions] strips none/bodyweight so the
+  /// bodyweight floor is never excludable). try/catch → `{}` so a null / corrupt /
+  /// unopened `userBox['profile']` never throws into the generator.
+  static Set<String> resolveEquipmentExclusions(
+    List<String> param, {
+    required bool flagEnabled,
+  }) {
+    if (!flagEnabled) return const <String>{};
+    if (param.isNotEmpty) {
+      return EquipmentVocab.floorSanitizedExclusions(param);
+    }
+    try {
+      final profile = HiveService.instance.userBox.get('profile');
+      if (profile is! Map) return const <String>{};
+      return EquipmentVocab.floorSanitizedExclusions(
+          EquipmentVocab.fromProfile(profile['equipment_exclusions']));
+    } catch (e, st) {
+      debugPrint('[TrainingHistoryAnalyzer.resolveEquipmentExclusions] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'training_history_analyzer_equipment_exclusions'));
+      return const <String>{};
+    }
   }
 
   /// LEVER 6 (demote swapped-out exercises): the set of ORIGINAL exercise names

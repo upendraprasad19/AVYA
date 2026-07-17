@@ -97,9 +97,14 @@ class PlanGenerator {
     // survives). OFF or empty ⇒ `{}` ⇒ every downstream drop (queryV4 att1-4 /
     // att5 pool / L2 custom-append / L6 swap) is `.isNotEmpty`-inert ⇒
     // byte-identical to pre-B1. Threaded to pickV4 like normalizedInjuries.
-    final equipmentExclusionSet = PlanEngineFlags.equipmentExclusionsEnabled
-        ? EquipmentVocab.floorSanitizedExclusions(equipmentExclusions)
-        : const <String>{};
+    // ⑥ slice C1 — the central-read ACTIVATION: source the exclusions from the
+    // user's `equipment_exclusions` profile field (Customize UI) via the flag-gated
+    // plan-engine helper (mirrors resolveBodyFocus). The `equipmentExclusions`
+    // param stays a test/direct-caller override; production callers pass nothing →
+    // the profile read drives it. Flag OFF → `{}` (no Hive read) → byte-identical.
+    final equipmentExclusionSet = TrainingHistoryAnalyzer.resolveEquipmentExclusions(
+        equipmentExclusions,
+        flagEnabled: PlanEngineFlags.equipmentExclusionsEnabled);
 
     // F19 / recompose: the plan engine (split + exercise selection) only knows
     // build_muscle / lose_fat / strength / general_fitness. Map the goal to its
@@ -238,27 +243,11 @@ class PlanGenerator {
 
   // ── Equipment mapping ──────────────────────────────────────────
 
-  List<String> _getEquipmentList(String equipment) {
-    switch (equipment) {
-      case 'bodyweight':
-        return ['none', 'bodyweight'];
-      case 'home_dumbbells':
-        return ['none', 'bodyweight', 'dumbbells', 'resistance band'];
-      case 'basic_gym':
-        return [
-          'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
-          'pull-up bar', 'cables', 'resistance band',
-        ];
-      case 'full_gym':
-        return [
-          'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
-          'pull-up bar', 'cables', 'machines', 'smith machine',
-          'resistance band', 'kettlebell', 'ez-bar',
-        ];
-      default:
-        return ['none', 'bodyweight'];
-    }
-  }
+  // ⑥ slice C1 — delegates to the single-source `EquipmentVocab.tierItems` so the
+  // tier→items map (also read by the Customize UI) can never drift from the
+  // generator. Preserves the pre-C1 unknown-tier fallback `['none','bodyweight']`.
+  List<String> _getEquipmentList(String equipment) =>
+      EquipmentVocab.tierItems[equipment] ?? const ['none', 'bodyweight'];
 
   // ── Phase metadata ─────────────────────────────────────────────
 

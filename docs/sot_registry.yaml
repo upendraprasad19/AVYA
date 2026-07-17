@@ -3389,7 +3389,7 @@ concepts:
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1512-1538
+        line_range: 1592-1620
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
@@ -4436,6 +4436,7 @@ concepts:
       - wake_up_time (text)
       - preferred_workout_time (text, migration 063 — 2026-05-13)
       - physique_focus (text)
+      - equipment_exclusions (text[], migration 104 — 2026-07-17, ⑥ C1)
     sync_methods:
       - syncProfileNow
       - pushSnapshot
@@ -6608,7 +6609,7 @@ concepts:
       `equipment_needed` intersects the user's excluded equipment; the
       `equipment_tier` filter is UNTOUCHED, so the intersection design's
       41-exercise regression is avoided; no-op at empty exclusions). Derived ONCE
-      in generateV4 (mirroring the injury seam plan_generator.dart:90): flag-gated
+      in generateV4 (:100-102, mirroring the injury seam plan_generator.dart:92): flag-gated
       (`PlanEngineFlags.equipmentExclusionsEnabled`, ship-dark default OFF §4.6) +
       `EquipmentVocab.floorSanitizedExclusions` (normalize to canonical + STRIP
       none/bodyweight so the bodyweight floor is never excludable). Threaded as a
@@ -6624,8 +6625,8 @@ concepts:
       WU-2). Related: equipment_vocab (⑥ A), injury_vocabulary_contract (U2/U4).
     writers:
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
-        method: generateV4 equipmentExclusions param + equipmentExclusionSet compute (:90 seam)
-        semantic: flag-gated + floorSanitizedExclusions; threaded to pickV4
+        method: generateV4 equipmentExclusionSet compute (:100-102) via TrainingHistoryAnalyzer.resolveEquipmentExclusions (⑥ C1 central-read)
+        semantic: flag-gated; threaded to pickV4. B1 `equipmentExclusions` param stays a test/direct override
         notes: OFF/empty → {} → every downstream drop inert → byte-identical (the ship-dark no-op)
       - file: lib/shared/repositories/exercise_repository.dart
         method: queryV4 pre-tier exclusion drop (~:282, before the :288 equipment_tier block) — REQUIRED Set<String> exclusions param
@@ -6637,9 +6638,25 @@ concepts:
         notes: att4 KEEPS exclusions (hard constraint); att5 floor-sanitize keeps the slot non-empty
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
         method: equipmentExclusionsEnabled (ship-dark, == true default OFF)
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        method: Customize multi-select → 'equipment_exclusions' in the updates map (⑥ C1)
+        semantic: writes userBox['profile']['equipment_exclusions'] (List<String>); computePlanChanged re-plans on change
+        notes: |
+          ⑥ C1 — the user-facing ACTIVATION. Tap items to SUBTRACT from the tier
+          (EquipmentVocab.tierExcludableItems); dual crash-safe initState seed
+          (fromProfile) + _originalEquipmentExclusions; tier-change pruneToTier;
+          empty-state hide at bodyweight tier. FREE. Cloud: a NEW
+          user_profile.equipment_exclusions `text[] DEFAULT '{}'` column syncs it
+          (sync_profile.dart; the migration is applied BEFORE the push line lands —
+          check_schema_column_refs is BLIND to the variable-payload upsert, so the
+          ordering is discipline-enforced); restore is AUTO (blob-select).
+      - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
+        method: resolveEquipmentExclusions(param, {flagEnabled}) (⑥ C1 central-read)
+        semantic: flag OFF → const {} (NO Hive read, byte-identical); ON → param override else userBox['profile']['equipment_exclusions'] crash-safe → floorSanitizedExclusions
+        notes: mirrors resolveBodyFocus/physiqueFocusMuscles; the pure vocab helpers stay in EquipmentVocab (import-free). Gate-19 _alwaysOk += equipment_exclusions.
     readers:
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: the generated Phase (selection reflects the exclusions)
         semantic: no exercise requires an excluded item
-        notes: consumed by Train screen / active workout; slice C wires the equipment_exclusions profile-read into the callers
+        notes: consumed by Train screen / active workout; ⑥ C1 wired the equipment_exclusions profile central-read (TrainingHistoryAnalyzer.resolveEquipmentExclusions @ generateV4 :100)
     contract_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart

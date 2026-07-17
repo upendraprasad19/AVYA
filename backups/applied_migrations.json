@@ -677,5 +677,12 @@
     "applier": "claude",
     "slug": "admin_metrics_revoke_from_roles",
     "diagnose": "a9d3f1"
+  },
+  {
+    "migration": "104",
+    "applied_at": "2026-07-17T06:32:16+05:30",
+    "hash": "sha256:4c6ebb529f1f893fed7ab53275f54360af9bca8465f08f7e74b44c946455bff3",
+    "applier": "claude",
+    "slug": "add_equipment_exclusions_to_user_profile"
   }
 ]

@@ -308,6 +308,12 @@ const _alwaysOk = <String>{
   // writer emits it); the prefix heuristic mis-attributes it because
   // training_history_analyzer also reads exlog_* rows (weakMuscles).
   'physique_focus',
+  // ⑥ slice C1 (equipment_exclusions activation) — a canonical userBox['profile']
+  // field read by TrainingHistoryAnalyzer.resolveEquipmentExclusions() for the
+  // item-level equipment exclusion filter. NOT an exlog_*/schedule_* field (no such
+  // writer emits it); the prefix heuristic mis-attributes it because
+  // training_history_analyzer also reads exlog_* rows (weakMuscles).
+  'equipment_exclusions',
   // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +
   // PlanIntegrityReconciler from `user_progress.plan_json`, NOT from a
   // `schedule_*` entry. The prefix heuristic mis-attributes them because both
