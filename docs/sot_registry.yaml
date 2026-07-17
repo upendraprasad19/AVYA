@@ -132,6 +132,7 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks ExlogKeyMigrator flag (config.get('exlog_key_migration_v8')) — not an exlog_* row reader" }
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service — exposes exerciseLogsForIstDate + per-set MAX primitives delegated to by every other reader" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — buildAiContext + helpers moved out of ai_coach_repository.dart into the dedicated snapshot builder; reads exlog_* rows for personal_records + today_workout snapshot keys" }
+      - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
     regression_test: test/contracts/receipt_scoping_test.dart
     hive:
       box: workoutBox
@@ -242,6 +243,7 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks migrator config flag — not an exlog_* row reader" }
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service for exlog_* rows" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for exlog_* (PR / today_workout) split out of ai_coach_repository.dart" }
+      - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
     regression_test: test/contracts/edit_log_field_normalization_test.dart
     hive:
       box: workoutBox
@@ -1269,6 +1271,7 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "config flag read for ExlogKeyMigrator state — not a row reader" }
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service for exlog_* rows" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for exlog_* prefix (this_week_workouts, personal_records, today_workout) split out of ai_coach_repository.dart" }
+      - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
     regression_test: test/contracts/workout_write_to_read_contract_test.dart
     hive:
       box: workoutBox
@@ -2701,6 +2704,7 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "config flag read for migrator state — not a row reader" }
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service — bestPerSet primitives + exerciseLogsForIstDate delegated to by loadAllExercisePRs and train_screen" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot personal_records + PR timeline reader split out of ai_coach_repository.dart" }
+      - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
     regression_test: test/contracts/load_all_exercise_prs_per_set_semantic_test.dart
     hive:
       box: workoutBox
@@ -6480,6 +6484,53 @@ concepts:
         method_or_widget: reads working_sets/working_reps off generated wk-4 exercises
         semantic: verify-only — the PRODUCTION reader (7-B-2 un-deload) is pending
     contract_test_path: test/contracts/deload_working_base_stash_behavioral_test.dart
+
+  - concept: triggered_deload_eval
+    domain: workout
+    behavioral_test_path: test/contracts/deload_eval_behavioral_test.dart
+    description: >
+      ⑥ Batch 7-B-2 (W2.4) — the triggered-deload EVAL + un-deload, the PRODUCTION reader of
+      the 7-B-1 stash. At the week-3→4 rollover DeloadEvaluator.maybeEvaluate() decides KEEP
+      (the SAFE default) vs LIFT week 4 to a working week. SAFE polarity: shouldLift =
+      notBackstop && notDeloadPhase && readinessGood && e1rmNoFatigue — EVERY clause requires
+      POSITIVE evidence; any false/unknown/missing → KEEP (recovery is the safe failure mode).
+      On LIFT it rewrites the today-or-future PLANNED wk4 schedule_* rows (per-exercise:
+      sets←working_sets, reps←working_reps, weight_cue←generic; week_character 'deload'→
+      'working') + the current_plan blob week_plans[3] in place, then fires durability
+      UNAWAITED (upsertScheduled's own sync + the local-wins reconciler cover it). State is
+      user-scoped workoutBox, LOCAL-ONLY (never synced — reinstall-reset is safe under the
+      keep-default polarity): last_actual_deload_phase (backstop marker) + deload_evaluated_
+      for_phase_<N> (idempotency, SET only on a firm decision). Ship-dark: gated on
+      enable_triggered_deload AND enable_readiness → OFF returns immediately (byte-identical).
+    writers:
+      - file: lib/core/services/deload_evaluator.dart
+        method: DeloadEvaluator.maybeEvaluate / _liftWeekFour / _liftExercise / _readinessGood
+        notes: >
+          7 guards (flags · user-scoped idempotency · !isPhaseExpired · week>=4 · COACH-2
+          generated_via skip · still-'deload' char · stash-presence); readinessGood requires
+          ≥3 entries in 14 IST days AND majority green; backstop notBackstop = marker!=null &&
+          marker<=phase && (phase-marker)<2; un-deload is a FULL-row read-modify-write via
+          WorkoutWriteService.upsertScheduled(planGenerator) + a blob dual-write; firm-keep
+          seeds the marker, pure insufficient-data keep sets NEITHER (restore-race re-eval).
+      - file: lib/core/services/deload_e1rm_scan.dart
+        method: DeloadE1rmScan.scan
+        notes: >
+          per-exercise e1RM decline over the top-2 DATED sessions; per-session representative =
+          MAX Epley w*(1+reps/30) over the sets (NOT heaviest-by-weight — a high-rep set can
+          out-e1RM the heaviest set → would mask a decline). Compound = library exercise_type
+          EXACT 'compound' via ExerciseRepository.getByExactName. noFatigue needs ≥1 compound
+          with ≥2 sessions AND none declining.
+      - file: lib/core/services/day_rollover_service.dart
+        method: _doRolloverWithRef (invokes maybeEvaluate before the provider-invalidation block)
+        notes: awaited so the rewrite lands before the rollover repaints; try/catch + recordNonFatal.
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method_or_widget: getWeek / getScheduleForDate / currentWaveCharacters
+        semantic: Train screen + 7-A phase-arc read the lifted wk4 rows + 'working' char after the eval
+      - file: test/contracts/deload_eval_behavioral_test.dart
+        method_or_widget: drives maybeEvaluate() against seeded Hive
+        semantic: proves flag-off byte-identical, LIFT, every polarity keep, restore-race, per-exercise + row gates
+    contract_test_path: test/contracts/deload_eval_behavioral_test.dart
 
   - concept: graded_progression
     domain: workout
