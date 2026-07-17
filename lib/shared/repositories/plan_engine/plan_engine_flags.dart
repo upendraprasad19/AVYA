@@ -136,4 +136,19 @@ class PlanEngineFlags {
       return false; // no Hive (pure unit test) → safe default: OFF (no exclusions)
     }
   }
+
+  /// ⑥ Batch 6 (W2.3) readiness check-in + session adjustment + PRO trends.
+  /// Ship-dark DEFAULT OFF (§4.6 — a new active-workout sheet + a session load/
+  /// set adjustment). When OFF: no sheet shown, no `readiness_*` read/write, no
+  /// session adjustment → byte-identical to today. Home is a domain stretch
+  /// (readiness is active-workout/health, not the generator) but mirrors ⑦b's
+  /// `sessionDetrainingCutEnabled` precedent. Set
+  /// `configBox['enable_readiness'] = true` to enable.
+  static bool get readinessEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_readiness') == true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → safe default: OFF
+    }
+  }
 }

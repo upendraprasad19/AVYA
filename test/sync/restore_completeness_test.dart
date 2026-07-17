@@ -43,6 +43,20 @@ void main() {
     ).readAsString();
   });
 
+  group('⑥ 6-C readiness_daily restore — wired on ALL paths (R2a P0-A)', () {
+    test('_restoreReadiness is called (synced-but-never-restored guard)', () {
+      // Readiness is NOT in the fail-closed single-call bundle, so it MUST run
+      // standalone on all 3 restore paths (legacy ×2 + the fast path before its
+      // success return) — else it is synced but never restored on reinstall.
+      // Two occurrences = the two legacy lists; the third is the fast-path
+      // insertion inside _attemptSingleCallRestore. Assert ≥3 call sites.
+      final calls = '_restoreReadiness('.allMatches(syncSrc).length;
+      expect(calls >= 3, isTrue,
+          reason: 'readiness restore must be wired on legacy ×2 + the C3 '
+              'fast-path (before its success return) — found $calls');
+    });
+  });
+
   group('restoreFromCloudForUser — 5 restore surfaces wired', () {
     test('calls _restoreFreezes', () {
       expect(

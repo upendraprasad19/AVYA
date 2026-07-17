@@ -122,9 +122,10 @@ extension _HeroCards on _TrainScreenState {
             label: 'START WORKOUT',
             trailing: const Icon(Icons.arrow_forward,
                 size: 14, color: AppColors.bgDeep),
-            onPressed: () {
-              ref.read(activeWorkoutProvider.notifier).startWorkout(workout);
-              context.go('/train/active-workout');
+            onPressed: () async {
+              // ⑥ Batch 6 (W2.3) — readiness check-in (flag-gated) before start.
+              await beginWorkoutWithReadiness(context, ref, workout);
+              if (context.mounted) context.go('/train/active-workout');
             },
           ),
         ],

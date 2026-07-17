@@ -1551,7 +1551,7 @@ concepts:
         semantic: cloud-upsert
     readers:
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 380-420
+        line_range: 471-511
         method: _restoreStepsLogs
         semantic: cloud-restore
     hive:
@@ -2570,7 +2570,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1643-1660
+        line_range: 1724-1741
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -2733,7 +2733,7 @@ concepts:
         method: WaterIntakeNotifier.addWater + increment + decrement
         notes: Routes through HealthWriteService.setWaterMl (audit-2026-05-16 E.7).
       - file: lib/core/services/health_write_service.dart
-        line_range: 206-243
+        line_range: 261-298
         method: setWaterMl
         notes: |
           Sole canonical writer. Per-(date,water) mutex; IST baked into
@@ -2953,7 +2953,7 @@ concepts:
       # the source of truth — it just calls HealthWriteService.instance.logWeight
       # (plus a companion profile current_weight_kg write).
       - file: lib/core/services/health_write_service.dart
-        line_range: 114-150
+        line_range: 163-199
         method: HealthWriteService.logWeight
         canonical: true
       - file: lib/features/home/providers/home_provider.dart
@@ -3029,7 +3029,7 @@ concepts:
     ist_sites:
       # F12 (2026-06-07): the IST key is built in the canonical writer, not the
       # home_provider delegate.
-      - { file: lib/core/services/health_write_service.dart, line: 122, fn: logWeight }
+      - { file: lib/core/services/health_write_service.dart, line: 171, fn: logWeight }
     telemetry:
       failure_op_types: [upsert_weight_log, realtime_handler_weight_logs, realtime_stream_weight_logs]
     class_constraints: |
@@ -6365,6 +6365,51 @@ concepts:
         notes: consumes the (decayed) suggested weight as the phase's starting load — contract unchanged (name→weight map)
     contract_test_path: test/contracts/progression_resolver_decay_test.dart
 
+  - concept: readiness_daily
+    domain: workout
+    behavioral_test_path: test/contracts/readiness_checkin_behavioral_test.dart
+    description: |
+      ⑥ Batch 6 (W2.3) — the daily readiness check-in (Sleep/Soreness/Energy,
+      each 0=best/1=mid/2=worst) → a deterministic Green/Yellow/Red level (flag
+      count: 0→green · 1-2→yellow · 3→red, `readinessLevelFor`). Stored ONE row
+      per day at healthBox `readiness_<istDate>`. On starting a workout (flag ON)
+      the level drives a Red-day isolation SET-DROP (the 0-set floor is automatic
+      via removeLastSet ≥1); the level is stamped on ActiveWorkoutData (copyWith-
+      threaded — ⑦b F1). Re-entry re-applies today's STORED level via nowWall()
+      (never re-prompt / re-derive — the healthBox row is the single source).
+      Kill-switch enable_readiness (default OFF, ship-dark) → no sheet / no read /
+      no adjust → byte-identical. LOAD cut = 6-B (exercise_card.dart:89); cloud
+      sync + restore + migration = 6-C.
+    writers:
+      - file: lib/core/services/health_write_service.dart
+        method: logReadiness
+        notes: healthBox readiness_<istDate> {date,sleep,soreness,energy,level,source}; istDateStr key; pushSnapshot (readiness cloud sync = 6-C)
+      - file: lib/features/train/widgets/readiness_sheet.dart
+        method: showReadinessSheet + beginWorkoutWithReadiness
+        notes: the 3×3 sheet writes via logReadiness on START; the callsite helper (both START buttons) resolves flag + stored-vs-sheet, then startWorkout(readiness:)
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/health_read_service.dart
+        method: readinessForDate + readinessHistory
+        semantic: row-by-day + full-history
+        notes: readinessForDate(nowWall) drives re-entry + the session adjustment; readinessHistory feeds the W3.7 PRO trend
+      - file: lib/features/train/providers/train_provider.dart
+        method: startWorkout + _applyReadinessSetDrop + effectiveLoadFactor
+        semantic: flag-gated session adjustment
+        notes: Red → drop 1 isolation set (floor auto, 6-A) + −%-compound LOAD via effectiveLoadFactor = larger-cut-wins(⑦b, readiness) (6-B); ActiveWorkoutData.readinessLevel copyWith-threaded (⑦b F1)
+      - file: lib/features/train/screens/active_workout/exercise_card.dart
+        method: _initControllers (weight prefill)
+        semantic: single load multiplication
+        notes: 6-B — lastWeight × data.effectiveLoadFactor(ex) at the ⑦b prefill site (one multiplication, larger-cut-wins, no double-dip)
+    cloud:
+      table: readiness_daily
+      # migration 105; RLS own-rows (users_own_readiness_daily); PK(user_id,date)
+      # is the onConflict arbiter; created_at is the restore order/since column.
+      columns: [user_id, date, sleep, soreness, energy, level, created_at]
+    sync_methods: [syncReadinessNow, _syncReadiness, pushReadinessForSyncDomain]
+    restore_methods: [_restoreReadiness]
+    contract_test_path: test/contracts/readiness_checkin_behavioral_test.dart
+
   - concept: graded_progression
     domain: workout
     behavioral_test_path: test/contracts/progression_resolver_graded_test.dart
@@ -6444,11 +6489,11 @@ concepts:
       - file: lib/features/train/screens/active_workout/exercise_card.dart
         method: _ExerciseCardState._initControllers (prefill) + the LAST/TRY hint Builder
         semantic: scale-and-suppress
-        notes: lastWeight prefill × widget.data.sessionDetrainingFactor (lastWeight branch ONLY); "TRY:" line hidden when factor < 1.0; "LAST:" kept
+        notes: lastWeight prefill × widget.data.effectiveLoadFactor(ex) (lastWeight branch ONLY; ⑥ 6-B — min of ⑦b gap-cut ∧ readiness deload, == sessionDetrainingFactor when readiness null); "TRY:" line hidden when effectiveLoadFactor(ex) < 1.0 (⑥ 6 B-pass P2-1); "LAST:" kept
       - file: lib/features/train/screens/active_workout/overload_indicator.dart
         method: _OverloadIndicator.build
         semantic: compare-vs-target
-        notes: target = lastWeight × sessionDetrainingFactor (parse/toString round-trip → == exactly); factor 1.0 → byte-identical to pre-⑦b
+        notes: target = lastWeight × loadFactor (fed widget.data.effectiveLoadFactor(ex), ⑥ 6 B-pass P2-1; parse/toString round-trip → == exactly); factor 1.0 → byte-identical to pre-⑦b
       - file: lib/features/train/screens/active_workout/screen.dart
         method: build (resume banner)
         semantic: visibility

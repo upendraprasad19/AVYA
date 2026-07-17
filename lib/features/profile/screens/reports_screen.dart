@@ -15,6 +15,8 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/health_read_service.dart';
+import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
@@ -357,6 +359,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         _buildWeightTrend(),
         const SizedBox(height: AppSpacing.sectionGap),
 
+        // ⑥ Batch 6 (W3.7) readiness trend (PRO). Hidden until there is data.
+        _buildReadinessTrend(),
+
         // Nutrition compliance
         _buildNutritionCompliance(),
         const SizedBox(height: AppSpacing.sectionGap),
@@ -491,6 +496,97 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         ),
       ],
     );
+  }
+
+  // ⑥ Batch 6 (W3.7) — PRO readiness trend. A parallel colored-day strip (NOT
+  // _buildLineChart, which hardcodes weight_kg). Hidden entirely until there is
+  // ≥1 check-in. Free users see a locked teaser → paywall.
+  Widget _buildReadinessTrend() {
+    final history = HealthReadService.instance.readinessHistory();
+    if (history.isEmpty) return const SizedBox.shrink();
+    // Rule 5: gate via the provider, not an inline SubscriptionService.isPro() —
+    // reactive (upgrade reveals the strip without a manual rebuild). The trend is
+    // a synchronous teaser render, so the provider is correct here (the async
+    // callback gate() is for the video-render ACTION below, not a build-time pick).
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
+    // history is newest-first; show the last 14 oldest→newest for the strip.
+    final strip = history.take(14).toList().reversed.toList();
+    final last30 = history.take(30).toList();
+    final green =
+        last30.where((c) => c.level == ReadinessLevel.green).length;
+    final red = last30.where((c) => c.level == ReadinessLevel.red).length;
+
+    final card = Container(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.cardM),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Readiness', style: AppTypography.titleS),
+              const Spacer(),
+              if (!isPro)
+                const Icon(Icons.lock_outline,
+                    size: 14, color: AppColors.accent),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (isPro) ...[
+            Wrap(
+              spacing: 5,
+              runSpacing: 5,
+              children: [
+                for (final c in strip)
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: _readinessColor(c.level),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${last30.length} check-ins · $green green · $red red (last 30 days)',
+              style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
+            ),
+          ] else
+            GestureDetector(
+              onTap: () =>
+                  showPaywallSheet(context, feature: 'Readiness Trends'),
+              child: Text(
+                'Unlock readiness trends with PRO — see how sleep, soreness and '
+                'energy track alongside your training.',
+                style:
+                    AppTypography.bodyS.copyWith(color: AppColors.textDim, height: 1.4),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    return Column(children: [
+      card,
+      const SizedBox(height: AppSpacing.sectionGap),
+    ]);
+  }
+
+  Color _readinessColor(ReadinessLevel level) {
+    switch (level) {
+      case ReadinessLevel.green:
+        return AppColors.ok;
+      case ReadinessLevel.yellow:
+        return AppColors.warn;
+      case ReadinessLevel.red:
+        return AppColors.bad;
+    }
   }
 
   Widget _buildWeightTrend() {

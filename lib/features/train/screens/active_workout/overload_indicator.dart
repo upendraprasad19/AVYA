@@ -6,15 +6,17 @@ part of 'screen.dart';
 class _OverloadIndicator extends ConsumerWidget {
   final String exerciseName;
   final double currentWeight;
-  // ⑦(b): the active session's detraining factor (1.0 = no cut). The indicator
-  // compares against the CUT TARGET (last × factor) so an unedited reduced
-  // prefill reads neutral → instead of red ↓ ("never shame").
-  final double sessionDetrainingFactor;
+  // ⑦(b) + ⑥ 6-B: the active session's EFFECTIVE load factor (1.0 = no cut) —
+  // the LARGER of the ⑦b detraining gap-cut and the ⑥ readiness deload (min
+  // factor, from ActiveWorkoutData.effectiveLoadFactor). The indicator compares
+  // against the CUT TARGET (last × factor) so an unedited reduced prefill reads
+  // neutral → instead of red ↓ ("never shame") — for a readiness deload too.
+  final double loadFactor;
 
   const _OverloadIndicator({
     required this.exerciseName,
     required this.currentWeight,
-    this.sessionDetrainingFactor = 1.0,
+    this.loadFactor = 1.0,
   });
 
   @override
@@ -27,12 +29,13 @@ class _OverloadIndicator extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    // ⑦(b): compare against the session target = last × cut factor, computed the
-    // SAME way as the prefill (exercise_card `w = lastWeight * factor`). Dart
-    // guarantees double.parse(d.toString()) == d, so an unedited reduced prefill
-    // equals this target exactly → reads → (neutral), never red ↓. factor 1.0
-    // (no cut) → target == lastWeight → byte-identical to pre-⑦b.
-    final target = lastWeight * sessionDetrainingFactor;
+    // ⑦(b)/⑥: compare against the session target = last × effective cut factor,
+    // computed the SAME way as the prefill (exercise_card
+    // `w = lastWeight * effectiveLoadFactor(ex)`). Dart guarantees
+    // double.parse(d.toString()) == d, so an unedited reduced prefill equals this
+    // target exactly → reads → (neutral), never red ↓. factor 1.0 (no cut) →
+    // target == lastWeight → byte-identical to pre-⑦b.
+    final target = lastWeight * loadFactor;
 
     final Color color;
     final String icon;

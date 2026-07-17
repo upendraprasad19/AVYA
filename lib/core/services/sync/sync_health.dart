@@ -32,6 +32,97 @@ extension SyncServiceHealth on SyncService {
     }
   }
 
+  // ── ⑥ Batch 6 (6-C) readiness_daily sync + restore ─────────────
+  // Cloud durability for the W2.3 check-in. Push = a `.from('readiness_daily')`
+  // LITERAL (gated by check_schema_column_refs → committed only AFTER the
+  // migration + live_schema_columns regen). Restore = `_fetchAllRows` (VARIABLE
+  // `.from` → gate-exempt); readiness is deliberately NOT in the fail-closed
+  // single-call bundle, so `_restoreReadiness` runs standalone on ALL 3 restore
+  // paths (a one-off extra read; avoids collapsing the C3 fast-path platform-wide).
+
+  /// Immediately pushes Hive `readiness_<date>` rows to `readiness_daily`.
+  /// Fire-and-forget; fired by HealthWriteService.logReadiness.
+  Future<void> syncReadinessNow() async {
+    if (SyncService.pausedForSimulation) return;
+    try {
+      final userId = _supabase.currentUser?.id;
+      if (userId == null) return;
+      await _syncReadiness(userId);
+    } catch (e, st) {
+      debugPrint('[SyncService.syncReadinessNow] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_readiness_now'));
+      try {
+        await _reportSyncFailure(opType: 'sync_readiness_now', error: e);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _syncReadiness(String userId) async {
+    final healthBox = _hive.healthBox;
+    for (final entry in healthBox.toMap().entries) {
+      if (!entry.key.toString().startsWith('readiness_')) continue;
+      final raw = entry.value;
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      final dateStr = log['date'] as String?;
+      if (dateStr == null) continue;
+      try {
+        await _supabase.client.from('readiness_daily').upsert({
+          'user_id': userId,
+          'date': dateStr,
+          'sleep': log['sleep'],
+          'soreness': log['soreness'],
+          'energy': log['energy'],
+          'level': log['level'],
+          'created_at':
+              log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'user_id,date');
+      } catch (e, st) {
+        debugPrint('[SyncService._syncReadiness] $dateStr: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_sync_readiness'));
+        try {
+          await _reportSyncFailure(
+              opType: 'upsert_readiness_daily', error: e);
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Restores `readiness_daily` → healthBox `readiness_<date>` keys. Additive /
+  /// local-wins (never overwrites a locally-logged row). Paginated via
+  /// `_fetchAllRows` (variable `.from` → schema-gate-exempt). Runs on every
+  /// restore path (NOT via the single-call bundle — see the block comment).
+  Future<void> _restoreReadiness(String userId, String since,
+      {Object? preFetched = _kNoInject}) async {
+    try {
+      final rows = identical(preFetched, _kNoInject)
+          ? await _fetchAllRows(
+              'readiness_daily', userId,
+              dateColumn: 'created_at', since: since, orderBy: 'created_at',
+            )
+          : (preFetched as List? ?? const []);
+      if (rows.isEmpty) return;
+      final healthBox = _hive.healthBox;
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final date = map['date'] as String?;
+        if (date == null) continue;
+        final key = 'readiness_$date';
+        if (healthBox.get(key) != null) continue; // local-wins (additive)
+        await healthBox.put(key, {...map, 'source': 'cloud_restore'});
+      }
+    } catch (e, st) {
+      debugPrint('[SyncService._restoreReadiness] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_readiness'));
+      try {
+        await _reportSyncFailure(opType: 'restore_readiness', error: e);
+      } catch (_) {}
+    }
+  }
+
   /// Pushes recent sleep entries to Supabase `sleep_logs`. Fire-and-forget per
   /// CLAUDE.md §15. Handles two Hive storage patterns:
   ///   • Per-day keys  `sleep_log_YYYY-MM-DD`  (standard log path)
@@ -485,6 +576,20 @@ extension SyncServiceHealth on SyncService {
     final userId = await _ensureSessionOpen();
     if (userId == null) return;
     await _restoreSleepLogs(userId, since ?? _kSyncDomainRestoreSinceHealth);
+  }
+
+  // ⑥ 6-C — readiness fan-out (periodic full-sync retry for a failed/offline
+  // immediate push; restore backstop on the health domain).
+  Future<void> pushReadinessForSyncDomain() async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _syncReadiness(userId);
+  }
+
+  Future<void> restoreReadinessForSyncDomain({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _restoreReadiness(userId, since ?? _kSyncDomainRestoreSinceHealth);
   }
 
   Future<void> pushStepsLogsForSyncDomain() async {

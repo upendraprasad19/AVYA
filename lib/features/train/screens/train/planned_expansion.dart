@@ -61,9 +61,10 @@ extension _PlannedExpansion on _TrainScreenState {
               label: 'START WORKOUT',
               leading: const Icon(Icons.play_arrow_rounded,
                   size: 16, color: AppColors.bgDeep),
-              onPressed: () {
-                ref.read(activeWorkoutProvider.notifier).startWorkout(day);
-                context.go('/train/active-workout');
+              onPressed: () async {
+                // ⑥ Batch 6 (W2.3) — readiness check-in (flag-gated) before start.
+                await beginWorkoutWithReadiness(context, ref, day);
+                if (context.mounted) context.go('/train/active-workout');
               },
             ),
           ],

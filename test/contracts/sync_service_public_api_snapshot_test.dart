@@ -50,6 +50,9 @@ void main() {
         'syncSavedDietPlan',
         'syncSavedMealsNow',
         'syncSleepNow',
+        'syncReadinessNow', // ⑥ 6-C
+        'pushReadinessForSyncDomain', // ⑥ 6-C
+        'restoreReadinessForSyncDomain', // ⑥ 6-C
         'syncWeightNow',
         'syncWorkoutData',
         // H1a (Unit H) — non-coalesced variant for awaited callers.

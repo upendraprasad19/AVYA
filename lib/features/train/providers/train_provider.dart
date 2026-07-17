@@ -20,6 +20,8 @@ import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/exercise_display.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/detraining.dart';
+import 'package:icanbefitter/core/utils/readiness.dart';
+import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import '../repositories/workout_repository.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
@@ -778,6 +780,12 @@ class ActiveWorkoutData {
   // resuming after a training gap. MUST be threaded through copyWith or the
   // 1×/sec timer's copyWith(elapsedSeconds:) resets it to 1.0 within a frame.
   final double sessionDetrainingFactor;
+  // ⑥ Batch 6 (W2.3) today's readiness level (Green/Yellow/Red) or null
+  // (flag OFF / no check-in). Set once at startWorkout; MUST be threaded
+  // through copyWith or the 1×/sec elapsed-timer reverts it (⑦b F1 footgun).
+  // The Red isolation SET-DROP is baked into `exercises` at startWorkout (6-A);
+  // this field drives the merged session banner. The Yellow/Red LOAD cut is 6-B.
+  final ReadinessLevel? readinessLevel;
 
   const ActiveWorkoutData({
     this.workoutDay,
@@ -792,6 +800,7 @@ class ActiveWorkoutData {
     this.supersetGroupingSourceIndex,
     this.isSupersetGroupMode = false,
     this.sessionDetrainingFactor = 1.0,
+    this.readinessLevel,
   });
 
   ActiveWorkoutData copyWith({
@@ -807,6 +816,7 @@ class ActiveWorkoutData {
     int? Function()? supersetGroupingSourceIndex,
     bool? isSupersetGroupMode,
     double? sessionDetrainingFactor,
+    ReadinessLevel? readinessLevel,
   }) {
     return ActiveWorkoutData(
       workoutDay: workoutDay ?? this.workoutDay,
@@ -824,7 +834,38 @@ class ActiveWorkoutData {
       isSupersetGroupMode: isSupersetGroupMode ?? this.isSupersetGroupMode,
       sessionDetrainingFactor:
           sessionDetrainingFactor ?? this.sessionDetrainingFactor,
+      readinessLevel: readinessLevel ?? this.readinessLevel,
     );
+  }
+
+  // ⑥ Batch 6 (W2.3 / 6-B) — the effective load-prefill factor for [ex],
+  // combining ⑦b's session detraining cut with the readiness cut via
+  // LARGER-CUT-WINS (min factor): never double-dips, never applies a SMALLER cut
+  // than either mechanism alone. The readiness cut is COMPOUND-only (isolation
+  // gets the Red set-drop instead, 6-A). Flag OFF / green / no check-in →
+  // readinessLevel is null → returns sessionDetrainingFactor verbatim (⑦b,
+  // byte-identical). Applied at the SINGLE load multiplication (exercise_card).
+  // Semantics of the log→next-session baseline: a deload day logs at the cut
+  // (correct — the day WAS lighter, no false PR); the next session's prefill
+  // then starts from that log and RECOVERS the moment the user logs their real
+  // weight — identical to ⑦b's accepted gap-cut behaviour (a conservative
+  // one-session suggestion, not a permanent re-anchor).
+  double effectiveLoadFactor(ExerciseData ex) {
+    final rf = _readinessLoadFactor(ex);
+    return rf < sessionDetrainingFactor ? rf : sessionDetrainingFactor;
+  }
+
+  double _readinessLoadFactor(ExerciseData ex) {
+    final isCompound = ex.exerciseType == 'compound';
+    switch (readinessLevel) {
+      case ReadinessLevel.red:
+        return isCompound ? 0.90 : 1.0; // −10% compound loads
+      case ReadinessLevel.yellow:
+        return isCompound ? 0.93 : 1.0; // −7% compound loads
+      case ReadinessLevel.green:
+      case null:
+        return 1.0;
+    }
   }
 
   int get totalSets =>
@@ -912,7 +953,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     return const ActiveWorkoutData();
   }
 
-  void startWorkout(WorkoutDayData day) {
+  void startWorkout(WorkoutDayData day, {ReadinessLevel? readiness}) {
     _timer?.cancel();
 
     _workoutStartTime = DateTime.now();
@@ -927,13 +968,28 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
           WorkoutRepository.instance.getDaysSinceLastWorkout());
     }
 
+    // ⑥ Batch 6 (W2.3) readiness. Prefer the passed level (a fresh check-in);
+    // else re-apply today's STORED check-in (app-kill re-entry → never re-prompt
+    // / re-derive — read the single source: the healthBox row). Flag OFF →
+    // always null → no adjustment → byte-identical to today.
+    ReadinessLevel? level;
+    if (PlanEngineFlags.readinessEnabled) {
+      level = readiness ??
+          HealthReadService.instance.readinessForDate(nowWall())?.level;
+    }
+    var exercises = List<ExerciseData>.from(day.exercises);
+    if (level == ReadinessLevel.red) {
+      exercises = _applyReadinessSetDrop(exercises);
+    }
+
     state = ActiveWorkoutData(
       workoutDay: day,
-      exercises: List.from(day.exercises),
+      exercises: exercises,
       elapsedSeconds: 0,
       checkedSets: {},
       warmUpSets: const {},
       sessionDetrainingFactor: sessionFactor,
+      readinessLevel: level,
     );
 
     // Use wall-clock elapsed time so the timer survives phone lock / app pause.
@@ -944,6 +1000,23 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         state = state.copyWith(elapsedSeconds: elapsed);
       }
     });
+  }
+
+  /// ⑥ Batch 6 (W2.3) Red-day adjustment: trim ONE set from the FIRST isolation
+  /// exercise that has >1 set (compounds untouched). Floored at 1 set — a muscle
+  /// never drops to 0 sets/day (the "never drop a muscle to 0 sets" guard is
+  /// automatic, mirroring `removeLastSet`). Returns a NEW list; never mutates.
+  List<ExerciseData> _applyReadinessSetDrop(List<ExerciseData> exercises) {
+    final out = List<ExerciseData>.from(exercises);
+    for (var i = 0; i < out.length; i++) {
+      final ex = out[i];
+      if (ex.exerciseType != 'isolation') continue;
+      final sets = int.tryParse(ex.sets) ?? 3;
+      if (sets <= 1) continue;
+      out[i] = ex.copyWith(sets: '${sets - 1}');
+      break; // drop ONE set total across the session
+    }
+    return out;
   }
 
   /// Allow manual override of elapsed seconds (e.g. user edits duration on finish).

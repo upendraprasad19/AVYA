@@ -239,6 +239,8 @@ void main() {
         'CommunityItems',
         'WeightNow',
         'SleepNow',
+        'ReadinessNow', // ⑥ 6-C — syncReadinessNow is a fire-and-forget push (restore is _restoreReadiness / restoreReadinessForSyncDomain)
+
         'MeasurementsNow',
         'SavedMealsNow',
         'ProfileNow',
