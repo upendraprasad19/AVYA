@@ -6564,6 +6564,60 @@ concepts:
         semantic: rest/workout/custom_template · paused · cross-date demotion · >4-week dynamic span
     contract_test_path: test/contracts/phase_adherence_rate_test.dart
 
+  - concept: repeat_phase_pinned_selection
+    domain: workout
+    behavioral_test_path: test/contracts/repeat_phase_pinned_selection_behavioral_test.dart
+    description: >
+      ⑧ Batch 8 (W2.5 repeat-content) — UNIT 2-cap: the "repeat the last phase"
+      GENERATION capability. ExerciseSelector.buildPinnedDays slots the prior phase's
+      exercise NAMES into the CURRENT-profile split frames (SplitResolver+VolumeFilter,
+      reused from generateV4) instead of running the pickV4 cascade, then the generateV4
+      TAIL runs UNCHANGED — so Stage-0 resolve() re-decays the ACTUAL last-logged weight
+      BY NAME and periodization re-applies the wave (a raw plan-blob copy would
+      double-decay an already-cooked suggested_weight AND bypass the in-cascade filters).
+      Each pinned name resolves via getByExactName else the user's custom_exercise_* rows
+      (else DROP). Re-applies ONLY the HARD constraints the cascade bypassed —
+      equipment-EXCLUSION + UNGATED injury (att1-4 semantics, NOT att-5's kill-switched
+      skip: a newly-injured user never gets the old contraindicated lift repeated) — but
+      NOT the SOFT equipment-tier (att4 relaxes it; re-filtering would silently drop a
+      same-tier att4 pick from a faithful repeat). An all-dropped day FRESH-FILLS via
+      pickV4([frame]) (MF-1: degrades to at worst a fresh generation's safe slot-omission,
+      never a bespoke (none)). Each day pins BOTH variant-A names (weeks 1&3) AND variant-B
+      names (weeks 2&4) — periodization reads exercisesB for the B-weeks, so a single-list
+      B=A would DUPLICATE weeks 1/3; B-absent derives a fresh B-variant (never a collapse).
+      SHIP-DARK: generateV4/generate gain a
+      `Map<int,({List<String> a, List<String> b})>? pinnedExercisesByDay` param; null (no
+      production caller in 2-cap) → verbatim pickV4 → byte-identical. Faithful only when the
+      prior phase's goal+daysPerWeek+equipment-TIER match the current profile (intensity/
+      dayType come from the current frame; tier is NOT re-filtered here) — the caller (UNIT
+      2-int, pending) gates on all three + owns the kill-switch enable_adherence_gate.
+    writers:
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: ExerciseSelector.buildPinnedDays
+        notes: >
+          per frame-INDEX: resolve pinned names (getByExactName → getCustomExercises → drop);
+          re-apply equip-exclusion (:282-285 mirror) + UNGATED _isContraindicated (:324-334
+          mirror, NOT att-5 gated); tier NOT re-applied (soft/att4-relaxed; caller gates
+          same-tier); per-variant resolve(a)→exercisesA, resolve(b)→exercisesB via
+          _buildExercise/_buildCustomExercise; empty variant → pickV4([frame]) fresh-fill (A)
+          / fresh B-variant (B when slotsB≠null, else B=A); customs scanned once (lazy);
+          PopulatedDay(name/focus/dayType/intensity FROM frame).
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 / generate (pinnedExercisesByDay param + Stage-2 branch)
+        notes: >
+          generateV4 branches at Stage 2: pins!=null → buildPinnedDays(frames: filteredDays,
+          …) else pickV4; tail (:142+) unchanged. generate() forwards pinnedExercisesByDay AND
+          equipmentExclusions (facade previously dropped the latter). null → byte-identical.
+    readers:
+      - file: test/contracts/repeat_phase_pinned_selection_behavioral_test.dart
+        method_or_widget: drives generateV4(pinnedExercisesByDay:) against the seeded library
+        semantic: >
+          facade parity (null inert) · faithful reproduce week-1 (A) AND week-2 (B) · A/B
+          distinct (a≠b) · injury UNGATED drop + MF-1 fresh-fill · tier KEPT · absent-name
+          drop · custom resolve · cardinality. PRODUCTION reader (generateAndSchedule
+          repeatContent) is UNIT 2-int (pending).
+    contract_test_path: test/contracts/repeat_phase_pinned_selection_behavioral_test.dart
+
   - concept: graded_progression
     domain: workout
     behavioral_test_path: test/contracts/progression_resolver_graded_test.dart
