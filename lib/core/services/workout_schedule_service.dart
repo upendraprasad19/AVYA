@@ -140,6 +140,7 @@ class WorkoutScheduleService {
     List<String> bodyFocus = const [],
     int? sessionDuration,
     String? cardioPreference,
+    bool repeatContent = false, // ⑧ 2-int (W2.5): forward to the read-service
   }) =>
       read.WorkoutScheduleReadService.instance.autoGenerateNextPhaseIfNeeded(
         goal: goal,
@@ -152,6 +153,7 @@ class WorkoutScheduleService {
         bodyFocus: bodyFocus,
         sessionDuration: sessionDuration,
         cardioPreference: cardioPreference,
+        repeatContent: repeatContent,
       );
 
   Map<String, dynamic>? getScheduleForDate(DateTime date) =>

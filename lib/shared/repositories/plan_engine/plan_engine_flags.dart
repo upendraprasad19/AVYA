@@ -183,4 +183,22 @@ class PlanEngineFlags {
       return false;
     }
   }
+
+  /// ⑧ Batch 8 (W2.5 adherence gate): the "repeat the last phase's content"
+  /// advance. When ON, a phase advance that passes `repeatContent:true`
+  /// (UNIT 3's low-adherence choice, not yet wired) PINS the just-finished
+  /// phase's exercises into the new phase (via generateV4's pinnedExercisesByDay)
+  /// instead of a fresh selection, gated on the prior phase's
+  /// {planGoal, equipment, daysPerWeek, effectiveExp} being UNCHANGED. Ship-dark
+  /// DEFAULT OFF (§4.6 — changes generated content + adds a `last_phase_profile`
+  /// config write). OFF → no extraction, no gate, no config write, `repeatContent`
+  /// inert → byte-identical to today. Set `configBox['enable_adherence_gate'] =
+  /// true` to enable.
+  static bool get adherenceGateEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_adherence_gate') == true;
+    } catch (_) {
+      return false;
+    }
+  }
 }
