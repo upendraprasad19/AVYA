@@ -136,10 +136,16 @@ class WarmupCooldownSelector {
     String effectiveExp,
     List<String> equipmentList, {
     List<String> injuries = const [],
+    bool? hasGymEquipmentOverride, // ⑥ C2 (WU-2) — generateV4 passes the flag-gated signal; null → old predicate
   }) {
     final isAdvanced = effectiveExp != 'beginner';
-    final hasGymEquipment = equipmentList.any(
-        (e) => e.toLowerCase().contains('gym') || e.toLowerCase().contains('full'));
+    // ⑥ C2 — on the GENERATED path `equipmentList` is item tokens (never 'gym'/'full')
+    // so the old predicate is always-false; generateV4 passes the resolved override.
+    // A null override (template_service + tier-string test callers) keeps the old
+    // predicate → byte-identical.
+    final hasGymEquipment = hasGymEquipmentOverride ??
+        equipmentList.any(
+            (e) => e.toLowerCase().contains('gym') || e.toLowerCase().contains('full'));
 
     // U3: DROP warmup/cooldown/cardio moves that load a user's injury (canonical
     // InjuryVocab tokens; drop-not-substitute). injuries arrive already normalized

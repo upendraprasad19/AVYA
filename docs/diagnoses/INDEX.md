@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### equipment_exclusion_filter (1 bugs)
+- 2026-07-17 b7a4e2 — >
+
 ### admin_route_reachability (1 bugs)
 - 2026-07-16 b3f9a1 — |
 
@@ -802,6 +805,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-17 | b7a4e2 | > | equipment_exclusion_filter | test/contracts/wu2_gym_cardio_gate_behavioral_test.dart |
 | 2026-07-16 | b3f9a1 | \| | admin_route_reachability | test/contracts/restoring_next_destination_test.dart |
 | 2026-07-14 | e9d1c7 | > | equipment_needed_shape | test/contracts/equipment_needed_shape_test.dart |
 | 2026-07-13 | a9d3f1 | > | admin_dashboard_metrics_snapshot | test/contracts/admin_metrics_functions_role_revoke_test.dart |

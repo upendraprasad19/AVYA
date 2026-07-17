@@ -42,8 +42,10 @@ void main() {
       expect(EquipmentVocab.tierExcludableItems('bodyweight'), isEmpty);
       // an unknown tier → the safe default (['none','bodyweight']) → empty excludable
       expect(EquipmentVocab.tierExcludableItems('nonsense'), isEmpty);
-      // full_gym → 10 excludable (12 items minus none+bodyweight)
-      expect(EquipmentVocab.tierExcludableItems('full_gym').length, 10);
+      // full_gym → 11 excludable (13 items minus none+bodyweight; ⑥ C2 added `cardio machine`)
+      expect(EquipmentVocab.tierExcludableItems('full_gym').length, 11);
+      // basic_gym → 7 excludable (9 items minus none+bodyweight; ⑥ C2 added `cardio machine`)
+      expect(EquipmentVocab.tierExcludableItems('basic_gym').length, 7);
     });
 
     test('chipLabel is a proper (non-fallback) label for every EXCLUDABLE canonical token',

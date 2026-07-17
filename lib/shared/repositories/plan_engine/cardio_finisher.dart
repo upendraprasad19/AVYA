@@ -18,6 +18,7 @@ class CardioFinisher {
     required String goal,
     required String? cardioPreference,
     required List<String> equipmentList,
+    bool? hasGymEquipmentOverride, // ⑥ C2 (WU-2) — null → old predicate
   }) {
     if (!FitnessGoals.of(goal).cardio) return weeks;
 
@@ -25,9 +26,12 @@ class CardioFinisher {
     // no preference UI), default the finisher SHAPE to the goal instead of the
     // blanket mildest mini-HIIT. Kill-switch reverts to the verbatim old default.
     final preference = cardioPreference ?? _defaultForGoal(goal);
-    final hasGymEquipment = equipmentList.any(
-      (e) => e.toLowerCase().contains('gym') || e.toLowerCase().contains('full'),
-    );
+    // ⑥ C2 — generated-path override (item tokens make the old predicate always-false);
+    // null (tier-string callers) → old predicate → byte-identical.
+    final hasGymEquipment = hasGymEquipmentOverride ??
+        equipmentList.any(
+          (e) => e.toLowerCase().contains('gym') || e.toLowerCase().contains('full'),
+        );
 
     return weeks.map((week) {
       final dayCount = week.workoutDays.length;

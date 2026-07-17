@@ -77,6 +77,29 @@ void main() {
 
   String encode(Phase p) => jsonEncode(p.toMap());
 
+  /// ⑥ C2: the WU-2 gym-cardio gate rides the SAME `enable_equipment_exclusions`
+  /// flag, so flipping it ON intentionally adds gym cardio to the gym-tier warmup +
+  /// finisher (covered by wu2_gym_cardio_gate_behavioral_test). The exclusion
+  /// ACTIVATION's no-op is asserted on the whole plan MINUS those two WU-2-owned
+  /// fields — main selection + cooldown + structure stay byte-identical.
+  String encodeSansWu2(Phase p) {
+    final m = p.toMap();
+    void strip(Map day) => day
+      ..remove('warmup')
+      ..remove('finisher');
+    // Phase.toMap carries the days TWICE: the week-1 `workouts` compat list AND
+    // the full `week_plans[].workout_days[]` — strip both.
+    for (final w in (m['workouts'] as List)) {
+      strip(w as Map);
+    }
+    for (final wk in (m['week_plans'] as List)) {
+      for (final d in ((wk as Map)['workout_days'] as List)) {
+        strip(d as Map);
+      }
+    }
+    return jsonEncode(m);
+  }
+
   test('ACTIVATION: profile equipment_exclusions (flag ON, NO param) drops the excluded item',
       () async {
     await setFlag(true);
@@ -108,15 +131,19 @@ void main() {
       () async {
     await setFlag(true);
     await setProfileExclusions(const []);
-    final onEmpty = encode(gen());
+    final onEmptyPlan = gen();
     await setProfileExclusions(null); // absent key entirely
-    final onAbsent = encode(gen());
+    final onAbsentPlan = gen();
     await setFlag(false);
     await setProfileExclusions(const []);
-    final off = encode(gen());
-    expect(onEmpty, off);
-    expect(onAbsent, off,
-        reason: 'flag ON + empty/absent exclusions → {} → byte-identical to OFF.');
+    final offPlan = gen();
+    // ⑥ C2: flag ON also fires the WU-2 gym-cardio gate (shared flag) → the gym-tier
+    // warmup/finisher legitimately differ from OFF. The exclusion ACTIVATION's no-op
+    // is asserted on the plan sans those two WU-2-owned fields (encodeSansWu2).
+    expect(encodeSansWu2(onEmptyPlan), encodeSansWu2(offPlan));
+    expect(encodeSansWu2(onAbsentPlan), encodeSansWu2(offPlan),
+        reason: 'flag ON + empty/absent exclusions → {} → main selection '
+            'byte-identical to OFF.');
     await setProfileExclusions(null);
   });
 }
