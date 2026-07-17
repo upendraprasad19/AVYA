@@ -75,6 +75,26 @@ the `current_plan` blob week_plans[3] (`week_character` 'deload'→'working'). L
 state (`last_actual_deload_phase` backstop + `deload_evaluated_for_phase_N`), NO migration. SoT
 `triggered_deload_eval`; behavioral `deload_eval_behavioral_test.dart`.
 
+**Repeat-content generation (W2.5 — pin the prior phase's selection).** ⑧ 8-A/2-cap adds a
+SHIP-DARK capability: `generateV4`/`generate` accept
+`Map<int,({List<String> a, List<String> b})>? pinnedExercisesByDay` (per day: variant-A names for
+weeks 1/3, variant-B names for weeks 2/4 — a single-list `B=A` would DUPLICATE weeks 1/3 because
+periodization reads `exercisesB` for the B-weeks; B-absent derives a fresh B-variant, never a
+collapse); when non-null, Stage 2 calls `ExerciseSelector.buildPinnedDays(frames: filteredDays, …)`
+instead of `pickV4` — slotting the prior phase's exercise NAMES into the CURRENT split frames, then the tail
+(Stage 0 decay + periodization, `:142+`) runs UNCHANGED (so the ACTUAL last-logged weight re-decays
+BY NAME; a plan-blob copy would double-decay an already-cooked `suggested_weight` + bypass the
+in-cascade filters). A pin resolves via `getByExactName` else the user's `custom_exercise_*` rows
+(else drop). It re-applies ONLY the HARD constraints the cascade bypassed — equipment-EXCLUSION +
+UNGATED injury `_isContraindicated` (att1-4 semantics, NOT att-5's kill-switched skip: a newly-injured
+user never gets the old contraindicated lift repeated) — but NOT the SOFT equipment-tier (att4
+relaxes it; re-filtering would drop a same-tier att4 pick — the CALLER gates same-tier). An
+all-dropped variant FRESH-FILLS via `pickV4([frame])` (MF-1: degrades to at worst a fresh
+generation's safe slot-omission, never a bespoke `(none)`). `null` → verbatim `pickV4` →
+byte-identical. The production caller (`generateAndSchedule` repeatContent) + kill-switch
+`enable_adherence_gate` land in UNIT 2-int. SoT `repeat_phase_pinned_selection`; behavioral
+`repeat_phase_pinned_selection_behavioral_test.dart`.
+
 **Exercise count targets (per day):**
 
 | Experience | 3-day | 4-day | 5-day | 6-day |

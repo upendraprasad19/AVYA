@@ -593,6 +593,171 @@ class ExerciseSelector {
     return result;
   }
 
+  /// ⑧ 8-A / UNIT 2-cap (W2.5 repeat-content) — build [PopulatedDay]s from a
+  /// PINNED exercise SELECTION instead of the [pickV4] cascade.
+  ///
+  /// "Repeat the last phase" is implemented as: reuse the prior phase's exercise
+  /// NAMES, slotted into the CURRENT-profile split [frames], then let the normal
+  /// generateV4 tail run — so stage-0 [ProgressionResolver.resolve] re-decays the
+  /// ACTUAL last-logged weight BY NAME and periodization re-applies the wave. A
+  /// raw plan-blob copy would instead re-decay an already-cooked `suggested_weight`
+  /// (double-decay) AND bypass the injury/equipment filters that live INSIDE the
+  /// cascade. Pinning only the SELECTION avoids both.
+  ///
+  /// Each day carries BOTH variant-A names (weeks 1 & 3) AND variant-B names
+  /// (weeks 2 & 4): the split alternates anterior/posterior emphasis across weeks
+  /// and [PeriodizationEngine] reads `exercisesB` for the B-weeks
+  /// (`useB = !is6Day && weekIdx∈{1,3}`), so a naive single-list `B == A` would make
+  /// a repeat's weeks 2/4 DUPLICATE weeks 1/3. When a day supplies no B names, B is
+  /// derived the way [pickV4] does — a fresh B-variant fill when `slotsB != null`,
+  /// else `B == A` (:557-566) — never a collapse.
+  ///
+  /// Because this bypasses [pickV4], it re-applies the two HARD constraints
+  /// (safety + explicit-lack) queryV4 attempts 1-4 enforce — but NOT the soft
+  /// equipment-TIER match:
+  ///  - equipment-exclusion    (exercise_repository.dart:282-285) — the user's
+  ///    explicit `equipment_exclusions` (items they lack); a HARD constraint the
+  ///    cascade keeps even at att4.
+  ///  - injury contraindication (exercise_repository.dart:324-334) — applied
+  ///    UNGATED. att1-4 always drops a contraindicated pick when injuries are
+  ///    present; the `applyInjuryUniversalFilter` kill-switch governs ONLY the
+  ///    att-5 universal pool, not this primary-path filter. A user who added an
+  ///    injury since the prior phase must never get the old contraindicated lift
+  ///    repeated. (This deviates from the pre-implementation plan note, which
+  ///    mirrored att-5's gated skip — the wrong reference for a pin.)
+  ///  - equipment-TIER is deliberately NOT re-applied: it is a SOFT selection
+  ///    heuristic the cascade itself RELAXES at attempt-4 (a shallow slot can be
+  ///    filled by an off-tier move), so re-filtering would silently DROP a
+  ///    same-tier att4 pick from a faithful repeat. Cross-tier faithfulness is the
+  ///    CALLER's contract: UNIT 2-int gates the repeat on the prior phase's
+  ///    equipment-tier being UNCHANGED (alongside goal + daysPerWeek), so a
+  ///    tier-inappropriate pin never reaches here. Mirrors ⑥ B1's "equipment_tier
+  ///    filter UNTOUCHED" exclusion contract.
+  ///
+  /// A pinned name is resolved to its EXACT library row
+  /// ([ExerciseRepository.getByExactName]) or, failing that, the user's matching
+  /// custom exercise; a name absent from BOTH is DROPPED. If a variant ends up
+  /// empty (every pin dropped), it FRESH-FILLS via the normal [pickV4] cascade for
+  /// that single frame — so a repeat day degrades to at worst the SAME safe
+  /// slot-omission a fresh generation would produce, never a bespoke `(none)`.
+  ///
+  /// Day-cardinality: [frames] come from the CURRENT profile's daysPerWeek; pinned
+  /// entries map BY INDEX. A frame with no pinned entry (days↑) fresh-fills; pinned
+  /// entries beyond `frames.length` (days↓) are dropped.
+  ///
+  /// SHIP-DARK: reached only when a caller passes `pinnedExercisesByDay` to
+  /// generateV4 (none does in 8-A — inert; the `null` branch is byte-identical).
+  /// The repeat is faithful only when the prior phase's goal + daysPerWeek + tier
+  /// match the current profile (`intensity`/`dayType` come from the current frame)
+  /// — the caller (UNIT 2-int) gates on that.
+  static List<PopulatedDay> buildPinnedDays({
+    required List<MuscleSlotDay> frames,
+    required Map<int, ({List<String> a, List<String> b})> pinnedByDay,
+    required ExerciseRepository exerciseRepo,
+    required String equipmentTier,
+    required String effectiveExp,
+    required int phase,
+    required String goal,
+    List<String> injuries = const [],
+    bool applyInjuryUniversalFilter = true,
+    Set<String> exclusions = const {},
+  }) {
+    final result = <PopulatedDay>[];
+    // Custom exercises are scanned at most ONCE (lazily, on the first library miss).
+    List<Map<String, dynamic>>? customsCache;
+    List<Map<String, dynamic>> customs() =>
+        customsCache ??= exerciseRepo.getCustomExercises();
+
+    // Resolve a pinned NAME list → built exercises, re-applying the HARD filters the
+    // cascade (queryV4 att1-4) enforces: equipment-EXCLUSION + UNGATED injury. Tier
+    // is NOT re-applied (soft/att4-relaxed; the caller guarantees same-tier). A name
+    // absent from BOTH the library and the user's customs is dropped.
+    List<PlannedExercise> resolve(List<String> names) {
+      final picked = <PlannedExercise>[];
+      final seen = <String>{}; // per-variant dedupe
+      for (final name in names) {
+        final lower = name.trim().toLowerCase();
+        if (lower.isEmpty || !seen.add(lower)) continue;
+        Map<String, dynamic>? row = exerciseRepo.getByExactName(name);
+        var isCustom = false;
+        if (row == null) {
+          for (final c in customs()) {
+            if ((c['name'] as String?)?.trim().toLowerCase() == lower) {
+              row = c;
+              isCustom = true;
+              break;
+            }
+          }
+        }
+        if (row == null) continue; // absent library + custom → drop the pin.
+        // 1. equipment-exclusion (exercise_repository.dart:282-285).
+        if (exclusions.isNotEmpty &&
+            EquipmentVocab.fromProfile(row['equipment_needed'])
+                .any(exclusions.contains)) {
+          continue;
+        }
+        // 2. injury (exercise_repository.dart:324-334) — UNGATED (see docstring).
+        if (_isContraindicated(row, injuries)) continue;
+        picked.add(
+          isCustom ? _buildCustomExercise(row, 'A') : _buildExercise(row),
+        );
+      }
+      return picked;
+    }
+
+    for (var i = 0; i < frames.length; i++) {
+      final frame = frames[i];
+      final pins = pinnedByDay[i];
+
+      // A fresh single-frame cascade, computed at most once per frame — for the MF-1
+      // empty-variant fill AND the B-variant fallback (so weeks 2/4 never collapse
+      // onto weeks 1/3). pickV4 emits exactly one PopulatedDay per slotDay.
+      PopulatedDay? freshCache;
+      PopulatedDay fresh() => freshCache ??= pickV4(
+            slotDays: [frame],
+            exerciseRepo: exerciseRepo,
+            equipmentTier: equipmentTier,
+            effectiveExp: effectiveExp,
+            phase: phase,
+            goal: goal,
+            injuries: injuries,
+            applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+            exclusions: exclusions,
+          ).first;
+
+      // Variant A (weeks 1 & 3). Empty (all pins dropped) → fresh-fill (MF-1).
+      var exercisesA = resolve(pins?.a ?? const []);
+      if (exercisesA.isEmpty) exercisesA = fresh().exercisesA;
+
+      // Variant B (weeks 2 & 4). Prefer the pinned B; else derive it the way pickV4
+      // does — a fresh B-variant when slotsB≠null (NEVER `B = A`, which would
+      // duplicate weeks 1/3), or B==A when the split has no B-slots (:557-566).
+      final bNames = pins?.b ?? const <String>[];
+      List<PlannedExercise> exercisesB;
+      if (bNames.isNotEmpty) {
+        exercisesB = resolve(bNames);
+        if (exercisesB.isEmpty) {
+          exercisesB = frame.slotsB != null ? fresh().exercisesB : exercisesA;
+        }
+      } else if (frame.slotsB == null) {
+        exercisesB = exercisesA;
+      } else {
+        exercisesB = fresh().exercisesB;
+      }
+
+      result.add(PopulatedDay(
+        name: frame.name,
+        focus: frame.focus,
+        dayType: frame.dayType,
+        intensity: frame.intensity,
+        exercisesA: exercisesA,
+        exercisesB: exercisesB,
+      ));
+    }
+
+    return result;
+  }
+
   // ── 2026-05-31 personalization levers L2 + L6 ─────────────────────
 
   /// Supplementary post-selection adjustment (runs AFTER the cascade has fully

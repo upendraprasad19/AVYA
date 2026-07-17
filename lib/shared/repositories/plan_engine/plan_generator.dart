@@ -46,6 +46,9 @@ class PlanGenerator {
     int? sessionDuration,
     String? cardioPreference,
     Map<String, double>? previousWeights,
+    List<String> equipmentExclusions = const [], // ⑥ B1 forward (facade omitted it)
+    Map<int, ({List<String> a, List<String> b})>?
+        pinnedExercisesByDay, // ⑧ 8-A/2-cap forward
   }) {
     return generateV4(
       goal: goal,
@@ -59,6 +62,8 @@ class PlanGenerator {
       sessionDuration: sessionDuration,
       cardioPreference: cardioPreference,
       previousWeights: previousWeights,
+      equipmentExclusions: equipmentExclusions,
+      pinnedExercisesByDay: pinnedExercisesByDay,
     );
   }
 
@@ -76,6 +81,13 @@ class PlanGenerator {
     String? cardioPreference,
     Map<String, double>? previousWeights,
     List<String> equipmentExclusions = const [], // ⑥ B1 (default → no-op)
+    // ⑧ 8-A / UNIT 2-cap (W2.5 repeat-content): day-INDEX → prior-phase exercise
+    // NAMES to PIN into the current split frames instead of running the cascade
+    // (SHIP-DARK; null → the normal pickV4 cascade → byte-identical). Faithful
+    // only when the prior phase's goal+daysPerWeek match the current profile —
+    // the caller (UNIT 2-int) gates on that. Value = per-day (variant-A names for
+    // weeks 1/3, variant-B names for weeks 2/4) — see buildPinnedDays.
+    Map<int, ({List<String> a, List<String> b})>? pinnedExercisesByDay,
   }) {
     final equipmentList = _getEquipmentList(equipment);
     final effectiveExp = effectiveLevel(experienceLevel, phase);
@@ -125,18 +137,36 @@ class PlanGenerator {
       weekCharacter: 'baseline', // first-pass uses baseline
     );
 
-    // Stage 2: Exercise selection with filtered slots
-    final populated = ExerciseSelector.pickV4(
-      slotDays: filteredDays,
-      exerciseRepo: ExerciseRepository.instance,
-      equipmentTier: equipment,
-      effectiveExp: effectiveExp,
-      phase: phase,
-      goal: planGoal,
-      injuries: normalizedInjuries,
-      applyInjuryUniversalFilter: PlanEngineFlags.injuryUniversalFilterEnabled,
-      exclusions: equipmentExclusionSet,
-    );
+    // Stage 2: Exercise selection with filtered slots. ⑧ 8-A/2-cap: when a pinned
+    // selection is supplied (repeat-content), slot those exercise NAMES into the
+    // SAME frames instead of running the cascade — the tail (Stage 0 decay +
+    // periodization) then runs UNCHANGED. null → verbatim pickV4 → byte-identical.
+    final populated = pinnedExercisesByDay != null
+        ? ExerciseSelector.buildPinnedDays(
+            frames: filteredDays,
+            pinnedByDay: pinnedExercisesByDay,
+            exerciseRepo: ExerciseRepository.instance,
+            equipmentTier: equipment,
+            effectiveExp: effectiveExp,
+            phase: phase,
+            goal: planGoal,
+            injuries: normalizedInjuries,
+            applyInjuryUniversalFilter:
+                PlanEngineFlags.injuryUniversalFilterEnabled,
+            exclusions: equipmentExclusionSet,
+          )
+        : ExerciseSelector.pickV4(
+            slotDays: filteredDays,
+            exerciseRepo: ExerciseRepository.instance,
+            equipmentTier: equipment,
+            effectiveExp: effectiveExp,
+            phase: phase,
+            goal: planGoal,
+            injuries: normalizedInjuries,
+            applyInjuryUniversalFilter:
+                PlanEngineFlags.injuryUniversalFilterEnabled,
+            exclusions: equipmentExclusionSet,
+          );
 
     // Stage 0: Progression (Phase 2+ weight suggestions)
     final allExercises = populated
