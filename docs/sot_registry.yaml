@@ -1551,7 +1551,7 @@ concepts:
         semantic: cloud-upsert
     readers:
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 380-420
+        line_range: 471-511
         method: _restoreStepsLogs
         semantic: cloud-restore
     hive:
@@ -6401,6 +6401,13 @@ concepts:
         method: _initControllers (weight prefill)
         semantic: single load multiplication
         notes: 6-B — lastWeight × data.effectiveLoadFactor(ex) at the ⑦b prefill site (one multiplication, larger-cut-wins, no double-dip)
+    cloud:
+      table: readiness_daily
+      # migration 105; RLS own-rows (users_own_readiness_daily); PK(user_id,date)
+      # is the onConflict arbiter; created_at is the restore order/since column.
+      columns: [user_id, date, sleep, soreness, energy, level, created_at]
+    sync_methods: [syncReadinessNow, _syncReadiness, pushReadinessForSyncDomain]
+    restore_methods: [_restoreReadiness]
     contract_test_path: test/contracts/readiness_checkin_behavioral_test.dart
 
   - concept: graded_progression

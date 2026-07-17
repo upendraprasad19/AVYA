@@ -1202,6 +1202,7 @@ class SyncService {
           _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
           _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
           _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
+          _safeRestoreOp('readiness_daily', _restoreReadiness(userId, since)), // ⑥ 6-C
           _safeRestoreOp('streaks', _restoreStreaks(userId)),
           // ── New restore methods ──
           _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
@@ -1368,6 +1369,7 @@ class SyncService {
           _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
           _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
           _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
+          _safeRestoreOp('readiness_daily', _restoreReadiness(userId, since)), // ⑥ 6-C
           _safeRestoreOp('streaks', _restoreStreaks(userId)),
           _safeRestoreOp('scheduled_workouts', _restoreScheduledWorkouts(userId, since)),
           _safeRestoreOp('saved_meals', _restoreSavedMeals(userId)),
@@ -1566,6 +1568,13 @@ class SyncService {
           _restoreWaterLogs(userId, since, preFetched: row('water_logs')));
       await _safeRestoreOp('sleep_logs',
           _restoreSleepLogs(userId, since, preFetched: row('sleep_logs')));
+      // ⑥ 6-C (R2a P0-A) — readiness is deliberately NOT in the single-call
+      // bundle (a missing bundle key would fail-closed the whole fast path
+      // platform-wide). So it restores via a standalone network read HERE, on the
+      // fast path, before the success return — else readiness is synced-but-never
+      // -restored for most reinstalls. One extra read; the C3 speedup is intact.
+      await _safeRestoreOp(
+          'readiness_daily', _restoreReadiness(userId, since));
       await _safeRestoreOp(
           'streaks', _restoreStreaks(userId, preFetched: row('streaks')));
       await _safeRestoreOp(

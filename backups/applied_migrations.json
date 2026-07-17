@@ -684,5 +684,12 @@
     "hash": "sha256:4c6ebb529f1f893fed7ab53275f54360af9bca8465f08f7e74b44c946455bff3",
     "applier": "claude",
     "slug": "add_equipment_exclusions_to_user_profile"
+  },
+  {
+    "migration": "105",
+    "applied_at": "2026-07-17T10:53:26+05:30",
+    "hash": "sha256:8a2a181ec9e83ad1a5a0900269008750ba681782f23f6bd63c3e6a21fb6e1739",
+    "applier": "claude",
+    "slug": "add_readiness_daily"
   }
 ]

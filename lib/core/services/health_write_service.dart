@@ -140,7 +140,7 @@ class HealthWriteService {
       };
       await box.put(key, payload);
 
-      // 6-C wires: unawaited(SyncService.instance.syncReadinessNow());
+      unawaited(SyncService.instance.syncReadinessNow());
       unawaited(SyncService.instance.pushSnapshot());
 
       return WriteResult.ok(key);
