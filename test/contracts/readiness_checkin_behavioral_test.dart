@@ -15,6 +15,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
@@ -56,6 +57,39 @@ void main() {
         () {
       const data = ActiveWorkoutData(readinessLevel: ReadinessLevel.red);
       expect(data.copyWith(elapsedSeconds: 5).readinessLevel, ReadinessLevel.red);
+    });
+  });
+
+  group('effectiveLoadFactor (6-B) — larger-cut-wins prefill', () {
+    const compound = ExerciseData(name: 'Squat', exerciseType: 'compound');
+    const isolation = ExerciseData(name: 'Curl', exerciseType: 'isolation');
+
+    test('null level + no gap → 1.0 (byte-identical to today)', () {
+      expect(const ActiveWorkoutData().effectiveLoadFactor(compound), 1.0);
+    });
+    test('Red → −10% COMPOUND only; isolation 1.0 (gets the set-drop, not a load cut)',
+        () {
+      const d = ActiveWorkoutData(readinessLevel: ReadinessLevel.red);
+      expect(d.effectiveLoadFactor(compound), 0.90);
+      expect(d.effectiveLoadFactor(isolation), 1.0);
+    });
+    test('Yellow → −7% compound', () {
+      const d = ActiveWorkoutData(readinessLevel: ReadinessLevel.yellow);
+      expect(d.effectiveLoadFactor(compound), closeTo(0.93, 1e-9));
+    });
+    test('Green → 1.0', () {
+      const d = ActiveWorkoutData(readinessLevel: ReadinessLevel.green);
+      expect(d.effectiveLoadFactor(compound), 1.0);
+    });
+    test('larger-cut-wins: Red compound (0.90) + ⑦b gap (0.825) → 0.825 (no double-dip)',
+        () {
+      const d = ActiveWorkoutData(
+          readinessLevel: ReadinessLevel.red, sessionDetrainingFactor: 0.825);
+      expect(d.effectiveLoadFactor(compound), 0.825); // min(0.90, 0.825)
+    });
+    test('gap only (no readiness) → sessionDetrainingFactor (⑦b unchanged)', () {
+      const d = ActiveWorkoutData(sessionDetrainingFactor: 0.825);
+      expect(d.effectiveLoadFactor(compound), 0.825);
     });
   });
 
@@ -176,6 +210,28 @@ void main() {
       final ex = startAndGet();
       expect(setsOf(ex, 'Cable Fly'), '3');
       expect(container.read(activeWorkoutProvider).readinessLevel, isNull);
+    });
+
+    test('readinessHistory (W3.7) → all check-ins NEWEST-FIRST', () async {
+      await HiveService.instance.healthBox.put('readiness_2026-07-15', {
+        'date': '2026-07-15',
+        'sleep': 0,
+        'soreness': 0,
+        'energy': 0,
+        'level': 'green',
+      });
+      await HiveService.instance.healthBox.put('readiness_2026-07-17', {
+        'date': '2026-07-17',
+        'sleep': 2,
+        'soreness': 2,
+        'energy': 2,
+        'level': 'red',
+      });
+      final h = HealthReadService.instance.readinessHistory();
+      expect(h.length, 2);
+      expect(h.first.date, '2026-07-17'); // newest first (lexical desc)
+      expect(h.first.level, ReadinessLevel.red);
+      expect(h.last.date, '2026-07-15');
     });
   });
 }

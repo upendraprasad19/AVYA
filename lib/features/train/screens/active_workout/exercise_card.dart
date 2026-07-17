@@ -77,16 +77,18 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     }
 
     // Weight: prefer last session's weight for weight-based exercises.
-    // ⑦(b): scale the LAST-LOGGED weight by the session detraining factor (1.0
-    // when the cut is off or gap ≤7d). ONLY this branch — the prescribed
-    // `exercise.weight` fallback below already carries ⑦a decay (disjoint inputs,
-    // no double-count). Idempotent (immutable lastWeight × session-constant).
+    // ⑦(b) + ⑥ 6-B: scale the LAST-LOGGED weight by the SINGLE effective load
+    // factor — `effectiveLoadFactor(ex)` = larger-cut-wins(⑦b session-detraining
+    // cut, readiness compound cut). One multiplication → no double-dip; readiness
+    // and ⑦b never stack. 1.0 when both off / green / no gap. ONLY this branch —
+    // the prescribed `exercise.weight` fallback below already carries ⑦a decay
+    // (disjoint inputs). Idempotent (immutable lastWeight × session-constant).
     final String weightValue;
     if (['weight_reps', 'weighted_bodyweight'].contains(exercise.loggingType) &&
         lastPerf.lastWeight != null &&
         lastPerf.lastWeight! > 0) {
       // Show clean number: strip trailing .0
-      final w = lastPerf.lastWeight! * widget.data.sessionDetrainingFactor;
+      final w = lastPerf.lastWeight! * widget.data.effectiveLoadFactor(exercise);
       weightValue = w == w.roundToDouble() ? w.toInt().toString() : w.toString();
     } else {
       final raw = exercise.weight.replaceAll('kg', '').replaceAll('BW', '').trim();

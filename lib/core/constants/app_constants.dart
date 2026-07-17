@@ -49,6 +49,8 @@ class AppConstants {
   // `featureReasoningTab` removed 2026-04-18 — Chat/Reasoning toggle
   // deleted from UI, single AI coach backend, no separate reasoning gate.
   static const String featureWeeklyAiReport = 'weekly_ai_report';
+  static const String featureReadinessTrends =
+      'readiness_trends'; // ⑥ 6-A (W3.7) — PRO readiness-trend section in Weekly Report
   static const String featureProgressPhotos = 'progress_photos';
   static const String featureScanMealPro = 'scan_meal_pro';         // 10/day PRO (free=3/day)
   static const String featureCartAuditorPro = 'cart_auditor_pro';   // 10/day PRO (free=1/day)

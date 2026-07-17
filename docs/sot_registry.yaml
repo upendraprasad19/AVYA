@@ -2570,7 +2570,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1694-1711
+        line_range: 1724-1741
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -6394,9 +6394,13 @@ concepts:
         semantic: row-by-day + full-history
         notes: readinessForDate(nowWall) drives re-entry + the session adjustment; readinessHistory feeds the W3.7 PRO trend
       - file: lib/features/train/providers/train_provider.dart
-        method: startWorkout + _applyReadinessSetDrop
+        method: startWorkout + _applyReadinessSetDrop + effectiveLoadFactor
         semantic: flag-gated session adjustment
-        notes: Red → drop 1 isolation set (floor auto); ActiveWorkoutData.readinessLevel copyWith-threaded (⑦b F1)
+        notes: Red → drop 1 isolation set (floor auto, 6-A) + −%-compound LOAD via effectiveLoadFactor = larger-cut-wins(⑦b, readiness) (6-B); ActiveWorkoutData.readinessLevel copyWith-threaded (⑦b F1)
+      - file: lib/features/train/screens/active_workout/exercise_card.dart
+        method: _initControllers (weight prefill)
+        semantic: single load multiplication
+        notes: 6-B — lastWeight × data.effectiveLoadFactor(ex) at the ⑦b prefill site (one multiplication, larger-cut-wins, no double-dip)
     contract_test_path: test/contracts/readiness_checkin_behavioral_test.dart
 
   - concept: graded_progression

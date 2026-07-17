@@ -838,6 +838,36 @@ class ActiveWorkoutData {
     );
   }
 
+  // ⑥ Batch 6 (W2.3 / 6-B) — the effective load-prefill factor for [ex],
+  // combining ⑦b's session detraining cut with the readiness cut via
+  // LARGER-CUT-WINS (min factor): never double-dips, never applies a SMALLER cut
+  // than either mechanism alone. The readiness cut is COMPOUND-only (isolation
+  // gets the Red set-drop instead, 6-A). Flag OFF / green / no check-in →
+  // readinessLevel is null → returns sessionDetrainingFactor verbatim (⑦b,
+  // byte-identical). Applied at the SINGLE load multiplication (exercise_card).
+  // Semantics of the log→next-session baseline: a deload day logs at the cut
+  // (correct — the day WAS lighter, no false PR); the next session's prefill
+  // then starts from that log and RECOVERS the moment the user logs their real
+  // weight — identical to ⑦b's accepted gap-cut behaviour (a conservative
+  // one-session suggestion, not a permanent re-anchor).
+  double effectiveLoadFactor(ExerciseData ex) {
+    final rf = _readinessLoadFactor(ex);
+    return rf < sessionDetrainingFactor ? rf : sessionDetrainingFactor;
+  }
+
+  double _readinessLoadFactor(ExerciseData ex) {
+    final isCompound = ex.exerciseType == 'compound';
+    switch (readinessLevel) {
+      case ReadinessLevel.red:
+        return isCompound ? 0.90 : 1.0; // −10% compound loads
+      case ReadinessLevel.yellow:
+        return isCompound ? 0.93 : 1.0; // −7% compound loads
+      case ReadinessLevel.green:
+      case null:
+        return 1.0;
+    }
+  }
+
   int get totalSets =>
       exercises.fold<int>(0, (sum, e) => sum + (int.tryParse(e.sets) ?? 3));
 
