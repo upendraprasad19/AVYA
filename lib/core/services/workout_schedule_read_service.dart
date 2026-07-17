@@ -31,6 +31,8 @@ import '../utils/ist_date.dart';
 import '../utils/phase_completion.dart';
 import '../../features/profile/services/profile_write_service.dart';
 import '../../shared/repositories/plan_generator.dart';
+import '../../shared/repositories/plan_engine/plan_engine_flags.dart';
+import '../constants/fitness_goals.dart';
 import '../../shared/repositories/user_repository.dart';
 
 /// A prior (completed or abandoned) 28-day phase block: the `schedule_*` rows
@@ -104,6 +106,11 @@ class WorkoutScheduleReadService {
     List<String> bodyFocus = const [],
     int? sessionDuration,
     String? cardioPreference,
+    // ⑧ 2-int (W2.5): per-day PINNED exercise names (variant A → weeks 1/3,
+    // variant B → weeks 2/4), forwarded to generate() so the new phase repeats
+    // the prior phase's SELECTION at detrained loads. null (every existing
+    // caller) → verbatim fresh generation → byte-identical.
+    Map<int, ({List<String> a, List<String> b})>? pinnedExercisesByDay,
   }) async {
     final exerciseBox = _hive.exerciseBox;
     if (exerciseBox.isEmpty) {
@@ -121,6 +128,7 @@ class WorkoutScheduleReadService {
       bodyFocus: bodyFocus,
       sessionDuration: sessionDuration,
       cardioPreference: cardioPreference,
+      pinnedExercisesByDay: pinnedExercisesByDay,
     );
 
     final dayPattern = preferredDays ?? _getDayPattern(daysPerWeek);
@@ -131,6 +139,24 @@ class WorkoutScheduleReadService {
     await MigratedKey.write(_planStartKey, monday.toIso8601String());
     await MigratedKey.write(_planEndKey, endDate.toIso8601String());
     await workoutBox.put(_planKey, plan.toMap());
+    // ⑧ 2-int (W2.5): stamp the profile THIS phase was generated under, so the
+    // NEXT advance's G5 gate can decide whether a "repeat" is faithful (same
+    // planGoal + equipment + daysPerWeek + effectiveExp ⇒ same split frames).
+    // Stores the GENERATION PARAMS (apples-to-apples with the advance's own args),
+    // NOT profile fields. Flag-gated → ship-dark OFF ⇒ no new write ⇒ byte-identical.
+    if (PlanEngineFlags.adherenceGateEnabled) {
+      // USER-SCOPED (MigratedKey → userBox), NOT the shared configBox — this is
+      // per-user data, and a shared box would let a 2nd account on the same device
+      // read a stale baseline and misjudge the G5 gate (cross-account isolation,
+      // same reason plan_start_date/plan_end_date above use MigratedKey). Registered
+      // in UserConfigMigrator.userScopedKeys.
+      await MigratedKey.write('last_phase_profile', {
+        'plan_goal': FitnessGoals.of(goal).planGoal,
+        'equipment': equipment,
+        'days_per_week': daysPerWeek,
+        'effective_exp': PlanGenerator.effectiveLevel(experienceLevel, phase),
+      });
+    }
     unawaited(SyncService.instance.syncWorkoutData());
     unawaited(SyncService.instance.pushSnapshot());
     if (preferredDays != null) {
@@ -420,6 +446,11 @@ class WorkoutScheduleReadService {
     List<String> bodyFocus = const [],
     int? sessionDuration,
     String? cardioPreference,
+    // ⑧ 2-int (W2.5): when true (UNIT 3's low-adherence "repeat" choice — not yet
+    // wired) AND the adherence-gate flag is ON, the new phase REPEATS the just-
+    // finished phase's exercise selection (at detrained loads) instead of a fresh
+    // pick. Default false + flag-gated → ship-dark inert → byte-identical.
+    bool repeatContent = false,
   }) async {
     if (!isPhaseExpired()) return false;
     // 2026-05-31 (post-12 deployment cycles): the old `currentPhase >= 12`
@@ -431,6 +462,18 @@ class WorkoutScheduleReadService {
     // Theme H fix (diagnose <id>) — was `DateTime.now()` directly. Now
     // computes max(today, currentPhaseEnd + 1) Monday-normalized so the
     // new phase doesn't overwrite the just-completed phase's final week.
+    final newPhase = currentPhase + 1;
+    // ⑧ 2-int: build the repeat pins from the JUST-FINISHED phase's rows BEFORE
+    // generateAndSchedule overwrites plan_start (getWeek reads the current window).
+    final pins = (repeatContent && PlanEngineFlags.adherenceGateEnabled)
+        ? _buildRepeatPins(
+            goal: goal,
+            equipment: equipment,
+            daysPerWeek: daysPerWeek,
+            experienceLevel: experienceLevel,
+            newPhase: newPhase,
+          )
+        : null;
     final startDate = nextPhaseStartDate();
     await generateAndSchedule(
       goal: goal,
@@ -438,14 +481,104 @@ class WorkoutScheduleReadService {
       daysPerWeek: daysPerWeek,
       startDate: startDate,
       experienceLevel: experienceLevel,
-      phase: currentPhase + 1,
+      phase: newPhase,
       preferredDays: preferredDays,
       injuries: injuries,
       bodyFocus: bodyFocus,
       sessionDuration: sessionDuration,
       cardioPreference: cardioPreference,
+      pinnedExercisesByDay: pins,
     );
     return true;
+  }
+
+  /// ⑧ 2-int (W2.5): build the per-day pinned A/B exercise names for a "repeat"
+  /// advance, or null when the repeat isn't faithful/available (→ caller passes
+  /// null → fresh generation). Reads the just-finished phase's week-1 (variant A)
+  /// + week-2 (variant B) workout rows (keyed by `workout_day_index`) — MUST be
+  /// called BEFORE generateAndSchedule overwrites plan_start.
+  ///
+  /// G5 faithfulness gate: the pin is coherent only when the NEW phase's split
+  /// frames match the prior phase's — i.e. the prior generation's
+  /// {planGoal, equipment, daysPerWeek, effectiveExp} (persisted as
+  /// `last_phase_profile`) equals the NEW phase's. `effectiveExp` matters because
+  /// `effectiveLevel(exp, phase)` WIDENS with phase (beginner→intermediate@3,
+  /// →advanced@5) — so a beginner advancing 2→3 gets DIFFERENT frames even with
+  /// goal/equipment/days unchanged, and the pin would slot full-body names into
+  /// Push/Pull/Legs frames. Absent baseline (legacy / first flip-on) → null.
+  Map<int, ({List<String> a, List<String> b})>? _buildRepeatPins({
+    required String goal,
+    required String equipment,
+    required int daysPerWeek,
+    required String experienceLevel,
+    required int newPhase,
+  }) {
+    final stored = MigratedKey.read<Map>('last_phase_profile');
+    return repeatPinsFrom(
+      stored: stored, // user-scoped (userBox); null (absent) → fresh
+      week1: getWeek(1), // just-finished phase, variant A (weeks 1/3)
+      week2: getWeek(2), // variant B (weeks 2/4)
+      currentPlanGoal: FitnessGoals.of(goal).planGoal,
+      equipment: equipment,
+      daysPerWeek: daysPerWeek,
+      newPhaseEffectiveExp:
+          PlanGenerator.effectiveLevel(experienceLevel, newPhase),
+    );
+  }
+
+  /// PURE decision behind [_buildRepeatPins] (visible for testing — no Hive/clock).
+  /// [stored] = the prior generation's `last_phase_profile`; [week1]/[week2] = the
+  /// just-finished phase's variant-A/B workout rows (keyed by `workout_day_index`).
+  /// Returns null (⇒ caller falls back to FRESH generation) when the baseline is
+  /// absent, the frame-shape profile MISMATCHES (planGoal / equipment / daysPerWeek
+  /// / effectiveExp — effectiveExp because `effectiveLevel(exp,phase)` widens with
+  /// phase, so a beginner 2→3 gets different frames), or there's nothing to repeat.
+  /// A gap day-index (a missing/displaced workout row) yields an empty-name entry
+  /// → buildPinnedDays fresh-fills that frame; the union of A+B keys is spanned so
+  /// a B-only index isn't dropped.
+  @visibleForTesting
+  static Map<int, ({List<String> a, List<String> b})>? repeatPinsFrom({
+    required Map? stored,
+    required List<Map<String, dynamic>> week1,
+    required List<Map<String, dynamic>> week2,
+    required String currentPlanGoal,
+    required String equipment,
+    required int daysPerWeek,
+    required String newPhaseEffectiveExp,
+  }) {
+    if (stored == null) return null;
+    final matches = stored['plan_goal'] == currentPlanGoal &&
+        stored['equipment'] == equipment &&
+        stored['days_per_week'] == daysPerWeek &&
+        stored['effective_exp'] == newPhaseEffectiveExp;
+    if (!matches) return null;
+
+    List<String> namesOf(Map<String, dynamic> row) =>
+        ((row['exercises'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => (e['exercise_name'] as String?) ?? '')
+            .where((n) => n.isNotEmpty)
+            .toList();
+    void collect(List<Map<String, dynamic>> week, Map<int, List<String>> into) {
+      for (final row in week) {
+        if (row['type'] != 'workout') continue;
+        final idx = row['workout_day_index'];
+        if (idx is int) into[idx] = namesOf(row);
+      }
+    }
+
+    final aByIdx = <int, List<String>>{};
+    final bByIdx = <int, List<String>>{};
+    collect(week1, aByIdx);
+    collect(week2, bByIdx);
+    if (aByIdx.isEmpty && bByIdx.isEmpty) return null;
+
+    final maxIdx =
+        <int>{...aByIdx.keys, ...bByIdx.keys}.reduce((a, b) => a > b ? a : b);
+    return {
+      for (var i = 0; i <= maxIdx; i++)
+        i: (a: aByIdx[i] ?? const [], b: bByIdx[i] ?? const []),
+    };
   }
 
   // ── Queries ─────────────────────────────────────────────────────

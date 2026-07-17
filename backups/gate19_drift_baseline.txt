@@ -223,6 +223,11 @@ lib/core/services/template_service.dart :: schedule_* :: rest_seconds
 lib/core/services/template_service.dart :: schedule_* :: superset_group
 lib/core/services/template_service.dart :: schedule_* :: template_id
 lib/core/services/workout_read_service.dart :: exlog_* :: reps
+lib/core/services/workout_schedule_read_service.dart :: schedule_* :: days_per_week
+lib/core/services/workout_schedule_read_service.dart :: schedule_* :: effective_exp
+lib/core/services/workout_schedule_read_service.dart :: schedule_* :: equipment
+lib/core/services/workout_schedule_read_service.dart :: schedule_* :: exercise_name
+lib/core/services/workout_schedule_read_service.dart :: schedule_* :: plan_goal
 lib/core/services/workout_schedule_read_service.dart :: schedule_* :: week_plans
 lib/features/ai_coach/services/ai_snapshot_builder.dart :: exlog_* :: activity_level
 lib/features/ai_coach/services/ai_snapshot_builder.dart :: exlog_* :: assigned_days

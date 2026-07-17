@@ -2530,7 +2530,7 @@ concepts:
     restore_methods: [_restoreWorkoutPlan, _restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider, streakProvider]
     ist_sites:
-      - { file: lib/core/services/workout_schedule_read_service.dart, line: 212, fn: generateAndScheduleFromDate }
+      - { file: lib/core/services/workout_schedule_read_service.dart, line: 239, fn: generateAndScheduleFromDate }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.put.*schedule.*status.*planned", reason: "Never overwrite status=completed; check guard first" }
     class_constraints: |
@@ -6617,6 +6617,58 @@ concepts:
           drop · custom resolve · cardinality. PRODUCTION reader (generateAndSchedule
           repeatContent) is UNIT 2-int (pending).
     contract_test_path: test/contracts/repeat_phase_pinned_selection_behavioral_test.dart
+
+  - concept: repeat_content_scheduling
+    domain: workout
+    behavioral_test_path: test/contracts/repeat_content_scheduling_test.dart
+    description: >
+      ⑧ Batch 8 (W2.5 repeat-content) — UNIT 2-int: the PRODUCTION caller of the 2-cap
+      pinned-selection capability. On a phase advance (autoGenerateNextPhaseIfNeeded,
+      N→N+1) with repeatContent:true AND enable_adherence_gate ON, the just-finished
+      phase's exercise SELECTION is pinned into the new phase (variant-A names from
+      week 1 → weeks 1/3, variant-B from week 2 → weeks 2/4) at DETRAINED loads (2-cap's
+      tail decay), stamped phase=N+1. Extraction (repeatPinsFrom) reads getWeek(1)/
+      getWeek(2) BEFORE generateAndSchedule overwrites plan_start; keyed by
+      workout_day_index; union of A+B day indices spanned; a gap index → empty entry →
+      buildPinnedDays fresh-fills. G5 FAITHFULNESS GATE: pin only when the prior
+      generation's last_phase_profile {plan_goal, equipment, days_per_week, effective_exp}
+      equals the NEW phase's — effective_exp because effectiveLevel(exp,phase) WIDENS with
+      phase (a beginner 2→3 gets different frames); mismatch/absent → FRESH.
+      generateAndSchedule stamps last_phase_profile at generation (flag-gated) as the next
+      advance's baseline. SHIP-DARK: no surface passes repeatContent:true (UNIT 3 wires it);
+      flag OFF → no extraction, no gate, no config write, repeatContent inert →
+      byte-identical. Kill-switch PlanEngineFlags.adherenceGateEnabled (enable_adherence_gate).
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: generateAndSchedule (pinnedExercisesByDay param → generate(); last_phase_profile write)
+        notes: >
+          param forwarded to PlanGenerator.generate (null every existing caller →
+          byte-identical); last_phase_profile = {plan_goal: FitnessGoals.of(goal).planGoal,
+          equipment, days_per_week, effective_exp: PlanGenerator.effectiveLevel(exp,phase)}
+          written to configBox iff adherenceGateEnabled.
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: autoGenerateNextPhaseIfNeeded (repeatContent) + _buildRepeatPins / repeatPinsFrom
+        notes: >
+          repeatContent flag; _buildRepeatPins reads configBox last_phase_profile + getWeek(1/2)
+          BEFORE the plan_start overwrite → delegates to the PURE repeatPinsFrom (G5 gate +
+          extraction, @visibleForTesting); pins passed to generateAndSchedule. phase=newPhase.
+      - file: lib/core/services/workout_schedule_service.dart
+        method: autoGenerateNextPhaseIfNeeded facade (repeatContent forward)
+        notes: the REAL production path (splash_screen.dart:262) is the facade → must forward repeatContent.
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: PlanEngineFlags.adherenceGateEnabled
+        notes: enable_adherence_gate, try/catch→false (ship-dark default OFF), mirrors triggeredDeloadEnabled.
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method_or_widget: generateAndSchedule's 4-week row-writer consumes the pinned Phase
+        semantic: the schedule_* rows carry the pinned exercises stamped phase=N+1
+      - file: test/contracts/repeat_content_scheduling_test.dart
+        method_or_widget: pure repeatPinsFrom (G5 + extraction) + Hive generateAndSchedule wiring
+        semantic: >
+          match→A/B pins by index · effectiveExp/planGoal/equipment/days MISMATCH→null ·
+          absent/empty→null (crash-guard) · gap-index→empty-entry+B-only spanned · pins→wk1/wk2
+          rows · last_phase_profile flag-gated. TRIGGER (repeatContent from a surface) is UNIT 3.
+    contract_test_path: test/contracts/repeat_content_scheduling_test.dart
 
   - concept: graded_progression
     domain: workout

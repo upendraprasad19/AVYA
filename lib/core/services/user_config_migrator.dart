@@ -80,6 +80,7 @@ class UserConfigMigrator {
     // Workout plan + travel + swap state (per-user plan window, swap
     // budget, travel suspension)
     'plan_start_date', 'plan_end_date', 'preferred_training_days',
+    'last_phase_profile', // ⑧ 2-int (W2.5) repeat-content G5 baseline (per-user)
     'swap_week_start', 'swaps_this_week', 'travel_start', 'travel_end',
     // Diet plan (per-user saved plan)
     'saved_diet_plan',
