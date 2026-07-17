@@ -189,6 +189,25 @@ class PlanGenerator {
     // Stage 5: Superset pairing
     weekPlans = SupersetPairer.pair(weekPlans);
 
+    // ⑥ C2 (WU-2 gym-cardio gate) — fix the always-false hasGymEquipment on the
+    // GENERATED path (equipmentList is item tokens, not the tier string). When
+    // exclusions are enabled, resolve the gym-cardio signal from the EFFECTIVE
+    // (exclusion-subtracted) equipment: `cardio machine` (in the gym tiers as of
+    // ⑥ C2) gates the gym-cardio pools (Treadmill/Bike). Flag OFF → null → attach
+    // uses the old predicate → byte-identical (template_service + tier-string tests
+    // pass the tier string, where the old predicate is TRUE, untouched).
+    final bool? hasGymOverride;
+    if (PlanEngineFlags.equipmentExclusionsEnabled) {
+      final effectiveEquip = equipmentExclusionSet.isEmpty
+          ? equipmentList
+          : equipmentList
+              .where((e) => !equipmentExclusionSet.contains(e))
+              .toList();
+      hasGymOverride = effectiveEquip.contains('cardio machine');
+    } else {
+      hasGymOverride = null;
+    }
+
     // Stage 6: Cardio finisher — attach per the goal's FitnessGoals spec
     // (recompose now gets a light finisher; was excluded by the old hardcoded
     // lose_fat/general_fitness check).
@@ -198,6 +217,7 @@ class PlanGenerator {
         goal: goal,
         cardioPreference: cardioPreference,
         equipmentList: equipmentList,
+        hasGymEquipmentOverride: hasGymOverride,
       );
     }
 
@@ -207,6 +227,7 @@ class PlanGenerator {
       effectiveExp,
       equipmentList,
       injuries: normalizedInjuries, // U3: injury-filter warmup/cooldown moves
+      hasGymEquipmentOverride: hasGymOverride, // ⑥ C2 (WU-2)
     );
 
     // Build Phase output

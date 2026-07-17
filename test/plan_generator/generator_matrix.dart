@@ -107,8 +107,9 @@ String effectiveLevel(String experience, int phase) {
   return 'beginner';
 }
 
-/// Pure-Dart mirror of `PlanGenerator._getEquipmentList` (plan_generator.dart:203).
-/// Expands a tier to its item tokens — used by the scorecard's equipment check.
+/// Pure-Dart mirror of `PlanGenerator._getEquipmentList`. DEAD CODE (0 call sites —
+/// the scorecard keys off `equipment_tier`, not the item list); intentionally NOT
+/// updated for ⑥ C2's `cardio machine` gym-tier addition (nothing reads it).
 List<String> equipmentItemsForTier(String tier) {
   switch (tier) {
     case 'bodyweight':

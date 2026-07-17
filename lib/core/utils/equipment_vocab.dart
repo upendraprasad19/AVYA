@@ -21,10 +21,11 @@ class EquipmentVocab {
 
   /// The 12 canonical tokens. The contract test pins the live library as a
   /// SUBSET of this set (NOT equality — `smith machine` is canonical but 0
-  /// library rows use it, so an equality assert would fail). The 11 non-`cardio
-  /// machine` tokens are exactly `_getEquipmentList`'s full_gym item tokens
-  /// (minus the `none` sentinel), so the vocab is pre-aligned for slice B's
-  /// tier→items filter.
+  /// library rows use it, so an equality assert would fail). As of ⑥ C2,
+  /// `full_gym`'s item tokens (minus the `none` sentinel) are ALL 12 canonical
+  /// tokens — `cardio machine` was ADDED to the gym tiers so the WU-2 gym-cardio
+  /// gate can detect it (it previously held only the 11 non-`cardio machine`
+  /// tokens; `smith machine` remains a 0-library-row canonical token).
   static const canonicalTokens = <String>{
     'bodyweight',
     'dumbbells',
@@ -250,12 +251,12 @@ class EquipmentVocab {
     'home_dumbbells': ['none', 'bodyweight', 'dumbbells', 'resistance band'],
     'basic_gym': [
       'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
-      'pull-up bar', 'cables', 'resistance band',
+      'pull-up bar', 'cables', 'resistance band', 'cardio machine',
     ],
     'full_gym': [
       'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
       'pull-up bar', 'cables', 'machines', 'smith machine',
-      'resistance band', 'kettlebell', 'ez-bar',
+      'resistance band', 'kettlebell', 'ez-bar', 'cardio machine',
     ],
   };
 

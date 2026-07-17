@@ -98,6 +98,30 @@ void main() {
 
   String encode(Phase p) => jsonEncode(p.toMap());
 
+  /// ⑥ C2: the WU-2 gym-cardio gate rides the SAME `enable_equipment_exclusions`
+  /// flag, so flipping the flag ON intentionally adds gym cardio to the gym-tier
+  /// warmup + finisher (verified by wu2_gym_cardio_gate_behavioral_test). This
+  /// test proves the EXCLUSION FILTER's no-op, so it asserts byte-identity on the
+  /// whole plan MINUS those two WU-2-owned fields (main selection + cooldown +
+  /// structure — everything the exclusion filter can touch — stay byte-identical).
+  String encodeSansWu2(Phase p) {
+    final m = p.toMap();
+    void strip(Map day) => day
+      ..remove('warmup')
+      ..remove('finisher');
+    // Phase.toMap carries the days TWICE: the week-1 `workouts` compat list AND
+    // the full `week_plans[].workout_days[]` — strip both.
+    for (final w in (m['workouts'] as List)) {
+      strip(w as Map);
+    }
+    for (final wk in (m['week_plans'] as List)) {
+      for (final d in ((wk as Map)['workout_days'] as List)) {
+        strip(d as Map);
+      }
+    }
+    return jsonEncode(m);
+  }
+
   /// Every canonical equipment token required by any exercise in the plan.
   Set<String> equipTokensOf(Phase p) {
     final out = <String>{};
@@ -115,17 +139,22 @@ void main() {
   test('NO-OP: flag OFF ignores exclusions; flag ON + empty == baseline (byte-identical)',
       () async {
     await setFlag(false);
-    final baseline = encode(gen(exclusions: const []));
+    final basePlan = gen(exclusions: const []);
+    final baseline = encode(basePlan);
     final offWithExclusions = encode(gen(exclusions: const ['cables', 'barbell']));
     expect(offWithExclusions, baseline,
         reason: 'flag OFF → exclusions threaded as {} → byte-identical to today '
             '(the ship-dark guarantee).');
 
     await setFlag(true);
-    final onEmpty = encode(gen(exclusions: const []));
-    expect(onEmpty, baseline,
-        reason: 'flag ON but nothing excluded → the .isNotEmpty guards keep it '
-            'byte-identical (empty-set is the no-op signal, not just the flag).');
+    final onEmptyPlan = gen(exclusions: const []);
+    // ⑥ C2: flag ON also fires the WU-2 gym-cardio gate (shared flag), which adds
+    // gym cardio to the gym-tier warmup/finisher — so full-plan byte-identity no
+    // longer holds. The EXCLUSION FILTER's no-op is asserted on the plan sans those
+    // two WU-2-owned fields (encodeSansWu2 docstring).
+    expect(encodeSansWu2(onEmptyPlan), encodeSansWu2(basePlan),
+        reason: 'flag ON but nothing excluded → the .isNotEmpty guards keep the main '
+            'selection byte-identical (empty-set is the no-op signal, not the flag).');
     await setFlag(false);
     // (B-pass P2-3) The phase≥2-only L2 custom-append + L6 demote-swap use the
     // SAME `if (exclusions.isNotEmpty)` guard, so their inertness under `{}` is

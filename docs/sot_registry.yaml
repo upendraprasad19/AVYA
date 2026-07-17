@@ -6621,8 +6621,9 @@ concepts:
       crash-safe + normalizing via `EquipmentVocab.fromProfile`, so B1 is correct
       for un-normalized community rows independent of B2. The queryV4 `exclusions`
       param is REQUIRED (compile-time thread enforcement). Scope boundary: the
-      cardio finisher + warmup/cooldown are NOT exclusion-filtered (→ slice C's
-      WU-2). Related: equipment_vocab (⑥ A), injury_vocabulary_contract (U2/U4).
+      cardio finisher + warmup/cooldown are exclusion-filtered + gym-cardio-gated by
+      ⑥ C2 (the WU-2 fix — hasGymEquipment was always-false on the generated path,
+      diagnose b7a4e2). Related: equipment_vocab (⑥ A), injury_vocabulary_contract (U2/U4).
     writers:
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: generateV4 equipmentExclusionSet compute (:100-102) via TrainingHistoryAnalyzer.resolveEquipmentExclusions (⑥ C1 central-read)
@@ -6654,6 +6655,15 @@ concepts:
         method: resolveEquipmentExclusions(param, {flagEnabled}) (⑥ C1 central-read)
         semantic: flag OFF → const {} (NO Hive read, byte-identical); ON → param override else userBox['profile']['equipment_exclusions'] crash-safe → floorSanitizedExclusions
         notes: mirrors resolveBodyFocus/physiqueFocusMuscles; the pure vocab helpers stay in EquipmentVocab (import-free). Gate-19 _alwaysOk += equipment_exclusions.
+      - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart + cardio_finisher.dart + plan_generator.dart
+        method: ⑥ C2 (WU-2 gym-cardio gate, diagnose b7a4e2) — attach() optional hasGymEquipmentOverride + generateV4 flag-gated signal
+        semantic: generateV4 passes hasGymOverride = flagOn ? effective(equipmentList − exclusions).contains('cardio machine') : null; null → old predicate (byte-identical)
+        notes: |
+          Fixes hasGymEquipment always-false (reader expected the tier STRING; generateV4
+          passed the ITEM LIST). `cardio machine` ADDED to basic_gym+full_gym tierItems. null
+          override keeps template_service + tier-string tests (shared_contracts_test:825)
+          byte-identical. Behavioral: test/contracts/wu2_gym_cardio_gate_behavioral_test.dart.
+          No baseline move (scorecard keys off equipment_tier). Ship-dark (enable_equipment_exclusions).
     readers:
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: the generated Phase (selection reflects the exclusions)
