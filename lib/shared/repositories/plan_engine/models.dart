@@ -137,6 +137,13 @@ class PlannedExercise {
   final bool warmupSet; // true for set 1 of compounds (annotation)
   // V4 fields
   final String? repRange; // exercise-specific range from library e.g. "8-12", "5-8", "30-60"
+  // ⑥ 7-B-1 (W2.4): pre-wave working (peak-equivalent) sets/reps stashed at
+  // GENERATION on the deload week (weekIdx 3, flag-ON) so a triggered deload can be
+  // un-deloaded losslessly (the deload cut is non-invertible). Null except on the
+  // flag-ON week-4 exercise; rides plan_json jsonb (no migration). MUST be threaded
+  // through copyWith so the superset pairer (stage 6, AFTER periodization) doesn't wipe it.
+  final int? workingSets;
+  final String? workingReps; // matches `reps` (String; may be a range like "8-12")
 
   const PlannedExercise({
     required this.exerciseId,
@@ -158,6 +165,8 @@ class PlannedExercise {
     this.suggestedWeight,
     this.warmupSet = false,
     this.repRange,
+    this.workingSets,
+    this.workingReps,
   });
 
   PlannedExercise copyWith({
@@ -173,6 +182,8 @@ class PlannedExercise {
     double? suggestedWeight,
     bool? warmupSet,
     String? repRange,
+    int? workingSets,
+    String? workingReps,
   }) {
     return PlannedExercise(
       exerciseId: exerciseId,
@@ -194,6 +205,8 @@ class PlannedExercise {
       suggestedWeight: suggestedWeight ?? this.suggestedWeight,
       warmupSet: warmupSet ?? this.warmupSet,
       repRange: repRange ?? this.repRange,
+      workingSets: workingSets ?? this.workingSets,
+      workingReps: workingReps ?? this.workingReps,
     );
   }
 
@@ -217,6 +230,8 @@ class PlannedExercise {
         if (suggestedWeight != null) 'suggested_weight': suggestedWeight,
         if (warmupSet) 'warmup_set': warmupSet,
         if (repRange != null) 'rep_range': repRange,
+        if (workingSets != null) 'working_sets': workingSets,
+        if (workingReps != null) 'working_reps': workingReps,
       };
 }
 

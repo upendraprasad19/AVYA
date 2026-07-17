@@ -181,6 +181,10 @@ class PlanGenerator {
       effectiveExp: effectiveExp,
       bodyFocus: effectiveBodyFocus,
       previousWeights: weights,
+      // ⑥ 7-B-1 (W2.4): stash peak-equivalent working sets/reps on the deload week
+      // for a lossless triggered-deload lift (ship-dark; flag OFF → no stash →
+      // byte-identical). Consumed by the 7-B-2 eval/un-deload.
+      stashWorkingBase: PlanEngineFlags.triggeredDeloadEnabled,
     );
 
     // Stage 3: Sequencing

@@ -67,6 +67,11 @@ class PeriodizationEngine {
     String effectiveExp = 'intermediate',
     List<String> bodyFocus = const [],
     Map<String, double>? previousWeights,
+    // ⑥ 7-B-1 (W2.4): when true, the deload week (weekIdx 3) ALSO stashes the
+    // peak-equivalent working sets/reps per exercise (for a lossless un-deload).
+    // Resolved upstream from PlanEngineFlags.triggeredDeloadEnabled (ship-dark OFF)
+    // so this stage stays pure (no Hive read).
+    bool stashWorkingBase = false,
   }) {
     final archetype = archetypeForPhase(phase);
     final multiplier = cycleMultiplier(phase);
@@ -109,6 +114,36 @@ class PeriodizationEngine {
               suggestedWeight: previousWeights[exercise.exerciseName],
               weightCue: '${previousWeights[exercise.exerciseName]!.toStringAsFixed(1)} kg (from last phase + progression)',
             );
+          }
+
+          // ⑥ 7-B-1 (W2.4): on the DELOAD week (weekIdx 3), stash the peak-
+          // equivalent (weekIdx 2) working sets/reps so a triggered deload can be
+          // un-deloaded losslessly — the deload cut max(1,(base*0.6).floor()) is
+          // non-invertible. Full _applyWave(...,2,...) reuse (exact multiplier /
+          // min-4 clamp / rep-range path) on the SAME (week-4 variant-B) exercise
+          // `ex`, plus the SAME body-focus +1. Written via copyWith so the superset
+          // pairer (stage 6, after this) preserves it (the `?? this.workingSets` idiom).
+          if (weekIdx == 3 && stashWorkingBase) {
+            final peak = _applyWave(
+              ex, 2, baseSets, baseReps, baseRest, day.intensity,
+              isBeginner: isBeginner,
+              isDeload: isDeload,
+              multiplier: multiplier,
+              archetype: archetype,
+            );
+            var peakSets = peak.sets;
+            if (bodyFocus.isNotEmpty && exercise.primaryMuscles != null) {
+              final muscles =
+                  exercise.primaryMuscles!.map((m) => m.toLowerCase()).toList();
+              for (final focus in bodyFocus) {
+                if (muscles.any((m) => m.contains(focus.toLowerCase()))) {
+                  peakSets += 1;
+                  break;
+                }
+              }
+            }
+            exercise =
+                exercise.copyWith(workingSets: peakSets, workingReps: peak.reps);
           }
 
           return exercise;
