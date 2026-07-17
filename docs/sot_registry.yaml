@@ -6532,6 +6532,38 @@ concepts:
         semantic: proves flag-off byte-identical, LIFT, every polarity keep, restore-race, per-exercise + row gates
     contract_test_path: test/contracts/deload_eval_behavioral_test.dart
 
+  - concept: phase_adherence_rate
+    domain: workout
+    behavioral_test_path: test/contracts/phase_adherence_rate_test.dart
+    description: >
+      ⑧ Batch 8 (W2.5 adherence gate) — UNIT 1 (D1): the current phase's completion
+      rate = completed / total NON-REST scheduled days (a day is non-rest iff its
+      `type ∈ {workout, custom_template}`; done iff `status=='completed'`). Extracted
+      to a pure `phaseCompletionRate` primitive so the Train phase-unlock card AND the
+      (8-B) advance seam share ONE rule — no writer/reader drift. Reads through getWeek
+      → getScheduleForDate → inherits the completed→planned cross-date demotion. INERT
+      in D1 (no production caller of the read-service method yet; 8-B wires it).
+    writers:
+      - file: lib/core/utils/phase_completion.dart
+        method: phaseCompletionRate (pure primitive)
+        notes: completed/total non-rest days; total==0 → 0.0. The single rule both readers feed.
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: currentPhaseCompletionRate (reconstructs {isRest,isDone} from getWeek rows)
+        notes: >
+          totalWeeks MIRRORS the card's `phase<=1?4:scan` EXACTLY (phase from
+          UserRepository.getProgress current_phase, the same source train_provider uses). NOT a bare
+          scan — a mid-phase Edit-Profile regen (generateAndScheduleFromDate keeps plan_start when
+          !isFirstGeneration) can leave a phase-1 plan with week-5/6 rows, so a bare scan would drift
+          (B-pass P2). Pinned by the phase-1-cap + phase≥2 test cases.
+    readers:
+      - file: lib/features/train/screens/train/phase_unlock_card.dart
+        method_or_widget: _computePhaseCompletionRate (byte-identical adapter → phaseCompletionRate)
+        semantic: drives the card's displayed % + canGraduate (>= phaseUnlockCompletionRate 0.8)
+      - file: test/contracts/phase_adherence_rate_test.dart
+        method_or_widget: pins currentPhaseCompletionRate == the card rule across drift axes
+        semantic: rest/workout/custom_template · paused · cross-date demotion · >4-week dynamic span
+    contract_test_path: test/contracts/phase_adherence_rate_test.dart
+
   - concept: graded_progression
     domain: workout
     behavioral_test_path: test/contracts/progression_resolver_graded_test.dart

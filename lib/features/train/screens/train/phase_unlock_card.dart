@@ -91,22 +91,14 @@ extension _PhaseUnlockCard on _TrainScreenState {
     );
   }
 
-  /// Compute Phase 1 completion rate across all 4 weeks.
+  /// Compute Phase 1 completion rate across all 4 weeks. Byte-identical to the
+  /// prior inline loop — delegated to the shared `phaseCompletionRate` primitive
+  /// (⑧ 8-A/D1) so the (8-B) advance seam reads the SAME rule (no drift).
   double _computePhaseCompletionRate(CurrentPlanData plan) {
-    int totalWorkoutDays = 0;
-    int completedDays = 0;
-
-    for (int w = 1; w <= plan.weeks.length; w++) {
-      final weekDays = plan.getWeek(w);
-      for (final day in weekDays) {
-        if (!day.isRest) {
-          totalWorkoutDays++;
-          if (day.isDone) completedDays++;
-        }
-      }
-    }
-
-    if (totalWorkoutDays == 0) return 0.0;
-    return completedDays / totalWorkoutDays;
+    return phaseCompletionRate([
+      for (int w = 1; w <= plan.weeks.length; w++)
+        for (final day in plan.getWeek(w))
+          (isRest: day.isRest, isDone: day.isDone),
+    ]);
   }
 }
