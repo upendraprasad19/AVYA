@@ -165,4 +165,22 @@ class PlanEngineFlags {
       return false;
     }
   }
+
+  /// ⑥ Batch 7-B (W2.4 triggered deload): the whole deload feature flag. 7-B-1
+  /// gates the GENERATION-STASH of peak-equivalent `working_sets`/`working_reps` on
+  /// the deload week (so a later lifted deload is lossless — the deload cut is
+  /// non-invertible). Ship-dark DEFAULT OFF (§4.6 — a plan-engine change). OFF → no
+  /// stash → byte-identical. NOTE: the 7-B-2 eval/trigger that CONSUMES the stash
+  /// additionally requires readiness ON (`&& readinessEnabled` at the eval site —
+  /// flag-ordering safety; the readiness clause is a keep-deload signal, so running
+  /// the eval without it biases toward LIFTING). Set
+  /// `configBox['enable_triggered_deload'] = true` to enable.
+  static bool get triggeredDeloadEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_triggered_deload') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

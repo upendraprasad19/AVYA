@@ -6447,6 +6447,40 @@ concepts:
         semantic: renders the 4-week wave, THIS week highlighted; null → SizedBox.shrink
     contract_test_path: test/contracts/phase_arc_reader_behavioral_test.dart
 
+  - concept: deload_working_base_stash
+    domain: workout
+    behavioral_test_path: test/contracts/deload_working_base_stash_behavioral_test.dart
+    description: >
+      ⑥ Batch 7-B-1 (W2.4) — at GENERATION, the deload week (weekIdx 3) stashes each
+      exercise's PEAK-equivalent working sets/reps as additive `working_sets` (int) +
+      `working_reps` (String) keys on PlannedExercise, so a 7-B-2 triggered deload can
+      un-deload week 4 LOSSLESSLY (the deload cut max(1,(base*0.6).floor()) is
+      non-invertible; wk4 is variant B ≠ wk1's A; generation non-deterministic phase≥2).
+      Rides plan_json jsonb — NO scheduled_workouts migration, NO apply-gate. Kill-switch
+      `enable_triggered_deload` (ship-dark DEFAULT OFF) → no stash → byte-identical.
+      7-B-1 only WRITES the stash; the PRODUCTION reader (un-deload) is 7-B-2 (pending).
+    writers:
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method: apply (weekIdx 3 peak-equiv stash)
+        notes: >
+          full _applyWave(ex, 2, …) on the SAME variant-B exercise + the SAME
+          body-focus +1; written via copyWith so the superset pairer (stage 6, after
+          this) preserves it. Gated on the threaded `stashWorkingBase` param (pure stage).
+      - file: lib/shared/repositories/plan_engine/models.dart
+        method: PlannedExercise fields + copyWith + toMap
+        notes: >
+          workingSets/workingReps threaded through copyWith with the `?? this.workingSets`
+          idiom — THE N1 FIX: the superset pairer's copyWith(supersetGroup:) preserves them.
+          toMap omit-when-null → flag-OFF byte-identical.
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (threads stashWorkingBase = PlanEngineFlags.triggeredDeloadEnabled)
+        notes: flag read stays in generateV4 (matches equipment_exclusions/physique_focus); periodization stays pure.
+    readers:
+      - file: test/contracts/deload_working_base_stash_behavioral_test.dart
+        method_or_widget: reads working_sets/working_reps off generated wk-4 exercises
+        semantic: verify-only — the PRODUCTION reader (7-B-2 un-deload) is pending
+    contract_test_path: test/contracts/deload_working_base_stash_behavioral_test.dart
+
   - concept: graded_progression
     domain: workout
     behavioral_test_path: test/contracts/progression_resolver_graded_test.dart
