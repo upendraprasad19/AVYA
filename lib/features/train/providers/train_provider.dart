@@ -699,6 +699,28 @@ final currentPlanProvider =
     NotifierProvider<CurrentPlanNotifier, CurrentPlanData>(
         CurrentPlanNotifier.new);
 
+// ── ⑥ Batch 7-A (W3.2): Phase Arc ────────────────────────────────
+
+/// Read-only data for the Train-screen phase arc: the current phase's periodization
+/// wave characters (baseline→overreach→peak→deload) + which week is "now". `null`
+/// when the flag is OFF (ship-dark) or there is no materialized plan → the strip
+/// renders nothing. Rebuilds when the plan (re)materializes (watches
+/// [currentPlanProvider]); no engine coupling — pure display of stamped data.
+class PhaseArcData {
+  final List<String> waves; // week_character per week, ordered week 1..N
+  final int currentWeek; // 1-based
+  const PhaseArcData({required this.waves, required this.currentWeek});
+}
+
+final phaseArcProvider = Provider<PhaseArcData?>((ref) {
+  ref.watch(currentPlanProvider); // rebuild on (re)materialize
+  if (!PlanEngineFlags.phaseArcEnabled) return null;
+  final waves = WorkoutScheduleService.instance.currentWaveCharacters();
+  if (waves.length < 2) return null; // no / degenerate plan → render nothing
+  final week = WorkoutScheduleService.instance.getCurrentWeekNumber();
+  return PhaseArcData(waves: waves, currentWeek: week);
+});
+
 // ── Selected Week ────────────────────────────────────────────────
 
 class SelectedWeekNotifier extends Notifier<int> {

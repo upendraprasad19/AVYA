@@ -29,6 +29,7 @@ import '../../widgets/create_custom_exercise_sheet.dart';
 import '../../widgets/edit_workout_log_sheet.dart';
 import '../../widgets/readiness_sheet.dart';
 import '../../widgets/week_selector.dart';
+import '../../widgets/phase_arc_strip.dart';
 import '../../widgets/plan_expired_card.dart';
 import '../../widgets/stats_grid.dart';
 import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
@@ -292,6 +293,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                         },
                     ),
                     const SizedBox(height: 10),
+
+                    // ⑥ Batch 7-A (W3.2): phase wave arc — ship-dark; renders
+                    // nothing when enable_phase_arc is OFF or there's no plan.
+                    const PhaseArcStrip(),
 
                     // Compact week rows
                     if (weekDays.isEmpty)

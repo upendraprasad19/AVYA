@@ -542,6 +542,22 @@ class WorkoutScheduleReadService {
     return (diff ~/ 7 + 1).clamp(1, 4);
   }
 
+  /// ⑥ Batch 7-A (W3.2 phase arc): the periodization wave character per week of
+  /// the CURRENT phase — baseline / overreach / peak / deload — read from the
+  /// materialized `current_plan` blob (`week_plans[i]['week_character']`,
+  /// snake_case per `WeekPlan.toMap`). Read-only DISPLAY source for the
+  /// Train-screen wave strip; no engine coupling. Crash-safe: a missing /
+  /// malformed / short blob returns `const []` (widget then renders nothing).
+  List<String> currentWaveCharacters() {
+    final raw = _hive.workoutBox.get(_planKey);
+    if (raw is! Map) return const [];
+    final weeks = raw['week_plans'];
+    if (weeks is! List) return const [];
+    return weeks
+        .map((w) => (w is Map ? w['week_character'] : null)?.toString() ?? '')
+        .toList();
+  }
+
   /// Canonical phase name for the 3-phase deployment cycle (1-indexed):
   /// Foundation → Strength → Hypertrophy, repeating each deployment. Derived
   /// from the phase NUMBER (not the plan blob's `name`, which can go stale /

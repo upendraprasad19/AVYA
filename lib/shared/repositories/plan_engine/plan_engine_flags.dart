@@ -151,4 +151,18 @@ class PlanEngineFlags {
       return false; // no Hive (pure unit test) → safe default: OFF
     }
   }
+
+  /// ⑥ Batch 7-A (W3.2 phase arc): the Train-screen strip showing the current
+  /// phase's periodization wave (baseline→overreach→peak→deload) with this week
+  /// highlighted, sourced from the already-materialized `week_character` (no engine
+  /// change — pure read-only DISPLAY). Ship-dark DEFAULT OFF (§4.6 — a new visible
+  /// UI element, verify on-device before it ships lit). OFF → the strip renders
+  /// nothing → byte-identical. Set `configBox['enable_phase_arc'] = true` to enable.
+  static bool get phaseArcEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_phase_arc') == true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

@@ -2570,7 +2570,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1724-1741
+        line_range: 1746-1763
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -6409,6 +6409,43 @@ concepts:
     sync_methods: [syncReadinessNow, _syncReadiness, pushReadinessForSyncDomain]
     restore_methods: [_restoreReadiness]
     contract_test_path: test/contracts/readiness_checkin_behavioral_test.dart
+
+  - concept: phase_arc_display
+    domain: workout
+    behavioral_test_path: test/contracts/phase_arc_reader_behavioral_test.dart
+    description: >
+      ⑥ Batch 7-A (W3.2) — read-only Train-screen "phase arc" strip showing the
+      current phase's periodization wave (baseline→overreach→peak→deload) with THIS
+      week highlighted. PURE DISPLAY of the already-stamped `week_character`; NO
+      engine change, NO writer added. Kill-switch `enable_phase_arc` (ship-dark
+      DEFAULT OFF) → the strip renders nothing → byte-identical. Crash-safe on an
+      absent/malformed blob (→ const []).
+    writers:
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method: apply (stamps weekCharacter per week — EXISTING)
+        line: 129
+        notes: >
+          `weekCharacter: _waveNames[weekIdx]` — serialized as snake_case
+          `week_character` via WeekPlan.toMap (models.dart:79). 7-A adds NO writer;
+          it only READS this stamped field.
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: currentWaveCharacters
+        semantic: read week_character[] from the current_plan blob
+        notes: >
+          reads workoutBox['current_plan']['week_plans'][i]['week_character']
+          (snake_case); crash-safe → const [] on absent/non-Map/non-List/malformed.
+      - file: lib/core/services/workout_schedule_service.dart
+        method: currentWaveCharacters (facade passthrough)
+        semantic: delegate to the read service
+      - file: lib/features/train/providers/train_provider.dart
+        method_or_widget: phaseArcProvider
+        semantic: flag-gated (PlanEngineFlags.phaseArcEnabled) → PhaseArcData or null
+        notes: watches currentPlanProvider (rebuild on re-materialize); flag OFF → null.
+      - file: lib/features/train/widgets/phase_arc_strip.dart
+        method_or_widget: PhaseArcStrip.build
+        semantic: renders the 4-week wave, THIS week highlighted; null → SizedBox.shrink
+    contract_test_path: test/contracts/phase_arc_reader_behavioral_test.dart
 
   - concept: graded_progression
     domain: workout
