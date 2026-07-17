@@ -99,6 +99,11 @@ extension SyncServiceProfile on SyncService {
       if (SyncService._hasValue(p['fitness_experience'])) 'fitness_experience': p['fitness_experience'],
       if (SyncService._hasNumber(p['days_per_week'])) 'days_per_week': (p['days_per_week'] as num).round(),
       if (SyncService._hasValue(p['equipment_access'])) 'equipment_access': p['equipment_access'],
+      // ⑥ C1 — the equipment-exclusion preference (List<String>, mirrors injuries'
+      // shape). Column `user_profile.equipment_exclusions text[]` (migration
+      // add_equipment_exclusions_to_user_profile, applied before this line landed).
+      if (SyncService._hasValue(p['equipment_exclusions']))
+        'equipment_exclusions': p['equipment_exclusions'] is List ? p['equipment_exclusions'] : <String>[],
       if (SyncService._hasValue(p['activity_level'])) 'activity_level': p['activity_level'],
       if (SyncService._hasValue(p['lifestyle_activity'])) 'lifestyle_activity': p['lifestyle_activity'],
       if (SyncService._hasValue(p['pace_preference'])) 'pace_preference': p['pace_preference'],

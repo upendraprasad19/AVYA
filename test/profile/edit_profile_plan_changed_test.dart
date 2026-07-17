@@ -19,6 +19,8 @@ void main() {
       String originalPhysiqueFocus = 'balanced',
       List<String> injuries = const ['none'],
       List<String> originalInjuries = const ['none'],
+      List<String> equipmentExclusions = const [],
+      List<String> originalEquipmentExclusions = const [],
     }) {
       return computePlanChanged(
         daysPerWeek: daysPerWeek,
@@ -35,6 +37,8 @@ void main() {
         originalPhysiqueFocus: originalPhysiqueFocus,
         injuries: injuries,
         originalInjuries: originalInjuries,
+        equipmentExclusions: equipmentExclusions,
+        originalEquipmentExclusions: originalEquipmentExclusions,
       );
     }
 
@@ -68,6 +72,10 @@ void main() {
         callWith(injuries: const ['none', 'knee']),
         isTrue,
       );
+    });
+
+    test('only equipment exclusions changed → true (⑥ C1)', () {
+      expect(callWith(equipmentExclusions: const ['cables']), isTrue);
     });
 
     test('injuries list contents reordered but same set → true (order matters)', () {
