@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/deload_evaluator.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
@@ -168,6 +169,21 @@ class DayRolloverObserver with WidgetsBindingObserver {
 
     // 2. Store new date
     await HiveService.instance.configBox.put(_hiveKey, today);
+
+    // ⑥ Batch 7-B-2 (W2.4) — triggered-deload eval. Ship-dark (no-op unless BOTH
+    // enable_triggered_deload + enable_readiness are on). Placed BEFORE the
+    // invalidation block so a lifted week-4 repaints via the currentPlan /
+    // todayWorkout / calendarWeek invalidations below. AWAITED so the rewrite
+    // lands before the repaint; the eval's own durability sync is unawaited so
+    // it never blocks cold-launch home nav. Non-fatal — must never break the
+    // rollover.
+    try {
+      await DeloadEvaluator.instance.maybeEvaluate();
+    } catch (e, st) {
+      debugPrint('[DayRollover] deload eval failed (non-fatal): $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'day_rollover_deload_eval'));
+    }
 
     // 3. Invalidate all daily-scoped providers
     // ── Workout providers ──
