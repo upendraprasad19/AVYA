@@ -234,4 +234,41 @@ void main() {
       expect(h.last.date, '2026-07-15');
     });
   });
+
+  // ⑥ 6 B-pass P2-1 — wiring lock (source-grep, comments stripped). The 6-B load
+  // cut lives ONLY in the exercise_card prefill (effectiveLoadFactor). The overload
+  // indicator AND the "TRY:" hint MUST compare against the SAME effective factor —
+  // else a Red/Yellow day with no ⑦b gap (sessionDetrainingFactor == 1.0) renders a
+  // shaming red ↓ "Recovery" + "TRY: +2.5kg" against a target the prefill
+  // deliberately undercut ("never shame"). Pins the wiring so it can't silently
+  // drift back to the raw sessionDetrainingFactor.
+  group('6 B-pass P2-1 — indicator + TRY hint consume effectiveLoadFactor', () {
+    String stripComments(String src) => src
+        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+        .replaceAll(RegExp(r'//[^\n]*'), '');
+
+    test('exercise_card wires effectiveLoadFactor everywhere; no raw sessionDetrainingFactor',
+        () {
+      final code = stripComments(
+          File('lib/features/train/screens/active_workout/exercise_card.dart')
+              .readAsStringSync());
+      expect(code.contains('sessionDetrainingFactor'), isFalse,
+          reason: 'exercise_card must consume effectiveLoadFactor (prefill + '
+              'overload indicator + TRY gate), never the raw ⑦b factor — a '
+              'readiness deload would otherwise render red ↓ + TRY (shame).');
+      expect('effectiveLoadFactor('.allMatches(code).length,
+          greaterThanOrEqualTo(3),
+          reason: 'prefill + TRY-hint gate + _OverloadIndicator callsite.');
+    });
+
+    test('_OverloadIndicator takes loadFactor (renamed from sessionDetrainingFactor)',
+        () {
+      final code = stripComments(File(
+              'lib/features/train/screens/active_workout/overload_indicator.dart')
+          .readAsStringSync());
+      expect(code.contains('this.loadFactor'), isTrue);
+      expect(code.contains('sessionDetrainingFactor'), isFalse);
+      expect(code.contains('lastWeight * loadFactor'), isTrue);
+    });
+  });
 }

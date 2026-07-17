@@ -6489,11 +6489,11 @@ concepts:
       - file: lib/features/train/screens/active_workout/exercise_card.dart
         method: _ExerciseCardState._initControllers (prefill) + the LAST/TRY hint Builder
         semantic: scale-and-suppress
-        notes: lastWeight prefill × widget.data.sessionDetrainingFactor (lastWeight branch ONLY); "TRY:" line hidden when factor < 1.0; "LAST:" kept
+        notes: lastWeight prefill × widget.data.effectiveLoadFactor(ex) (lastWeight branch ONLY; ⑥ 6-B — min of ⑦b gap-cut ∧ readiness deload, == sessionDetrainingFactor when readiness null); "TRY:" line hidden when effectiveLoadFactor(ex) < 1.0 (⑥ 6 B-pass P2-1); "LAST:" kept
       - file: lib/features/train/screens/active_workout/overload_indicator.dart
         method: _OverloadIndicator.build
         semantic: compare-vs-target
-        notes: target = lastWeight × sessionDetrainingFactor (parse/toString round-trip → == exactly); factor 1.0 → byte-identical to pre-⑦b
+        notes: target = lastWeight × loadFactor (fed widget.data.effectiveLoadFactor(ex), ⑥ 6 B-pass P2-1; parse/toString round-trip → == exactly); factor 1.0 → byte-identical to pre-⑦b
       - file: lib/features/train/screens/active_workout/screen.dart
         method: build (resume banner)
         semantic: visibility

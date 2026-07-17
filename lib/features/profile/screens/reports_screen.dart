@@ -504,7 +504,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Widget _buildReadinessTrend() {
     final history = HealthReadService.instance.readinessHistory();
     if (history.isEmpty) return const SizedBox.shrink();
-    final isPro = SubscriptionService.instance.isPro();
+    // Rule 5: gate via the provider, not an inline SubscriptionService.isPro() —
+    // reactive (upgrade reveals the strip without a manual rebuild). The trend is
+    // a synchronous teaser render, so the provider is correct here (the async
+    // callback gate() is for the video-render ACTION below, not a build-time pick).
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
     // history is newest-first; show the last 14 oldest→newest for the strip.
     final strip = history.take(14).toList().reversed.toList();
     final last30 = history.take(30).toList();

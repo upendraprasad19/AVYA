@@ -984,6 +984,9 @@ class SyncService {
           _safeRestoreOp('sync_saved_meals', _syncSavedMeals(userId)),
           _safeRestoreOp('sync_preferences', _syncUserPreferences(userId)),
           _safeRestoreOp('sync_coach_interactions', _syncCoachInteractions(userId)),
+          // ⑥ 6 B-pass P2-3 — periodic backstop: an offline-failed readiness
+          // check-in push otherwise only retried on the NEXT check-in.
+          _safeRestoreOp('sync_readiness', _syncReadiness(userId)),
         ],
         eagerError: false,
       );

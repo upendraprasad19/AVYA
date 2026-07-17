@@ -49,8 +49,11 @@ class AppConstants {
   // `featureReasoningTab` removed 2026-04-18 — Chat/Reasoning toggle
   // deleted from UI, single AI coach backend, no separate reasoning gate.
   static const String featureWeeklyAiReport = 'weekly_ai_report';
-  static const String featureReadinessTrends =
-      'readiness_trends'; // ⑥ 6-A (W3.7) — PRO readiness-trend section in Weekly Report
+  // ⑥ 6 B-pass P2 — `featureReadinessTrends` feature-KEY constant removed. The
+  // W3.7 readiness trend gates via a synchronous `ref.watch(subscriptionInfoProvider)
+  // .isPro` teaser in reports_screen, NOT a server-verified `gate()` — so the key
+  // had 0 gate() callsites (dead), matching the E.8 featureActiveWorkoutMode /
+  // featureVoiceNotes removals. Re-add a key only if it gains a real gate() site.
   static const String featureProgressPhotos = 'progress_photos';
   static const String featureScanMealPro = 'scan_meal_pro';         // 10/day PRO (free=3/day)
   static const String featureCartAuditorPro = 'cart_auditor_pro';   // 10/day PRO (free=1/day)

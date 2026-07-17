@@ -562,14 +562,17 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                             ));
                           }
 
-                          // "Try: 52.5kg × 10" suggestion line — ⑦(b): SUPPRESS
-                          // when a session cut is active. A "TRY: +2.5kg" directive
-                          // would contradict the reduced prefill for a returning
-                          // user (the banner explains the lighter load) = "never
-                          // shame". The factual "LAST:" line above is kept.
+                          // "Try: 52.5kg × 10" suggestion line — ⑦(b) + ⑥ 6-B:
+                          // SUPPRESS when ANY session cut is active — the ⑦b
+                          // detraining gap-cut OR the ⑥ readiness deload (the
+                          // EFFECTIVE factor < 1.0). A "TRY: +2.5kg" directive
+                          // would contradict the reduced prefill (the banner
+                          // explains the lighter load) = "never shame". The
+                          // factual "LAST:" line above is kept.
                           if (lastPerf.suggestedWeight != null &&
                               lastPerf.suggestedWeight! > 0 &&
-                              widget.data.sessionDetrainingFactor >= 1.0) {
+                              widget.data.effectiveLoadFactor(widget.exercise) >=
+                                  1.0) {
                             children.add(Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Row(
@@ -684,7 +687,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                     child: _OverloadIndicator(
                                       exerciseName: widget.exercise.name,
                                       currentWeight: double.tryParse(_weightControllers[setIdx].text) ?? 0,
-                                      sessionDetrainingFactor: widget.data.sessionDetrainingFactor,
+                                      loadFactor: widget.data.effectiveLoadFactor(widget.exercise),
                                     ),
                                   ),
                                 if (!isChecked)
