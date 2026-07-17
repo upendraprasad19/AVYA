@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../utils/ist_date.dart';
+import '../utils/readiness.dart';
 import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'sync_service.dart';
@@ -99,6 +100,54 @@ class HealthWriteService {
       debugPrint('[HealthWriteService.logSleep] $e\n$st');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'health_write_service_log_sleep'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(lockKey, c);
+    }
+  }
+
+  /// ⑥ Batch 6 (W2.3) — logs the daily readiness check-in for the IST date
+  /// containing [date]. One row per day (`readiness_<istDate>`, overwrite —
+  /// a re-check-in on the same day replaces it). Each axis is 0 (best) /
+  /// 1 (mid) / 2 (worst); `level` is denormalized (Green/Yellow/Red) for cheap
+  /// trend reads. Hive-only in 6-A — the cloud push (`syncReadinessNow`) is
+  /// wired in 6-C (the `readiness_daily` migration + sync). `pushSnapshot`
+  /// gives the AI coach visibility per the health-write pattern.
+  Future<WriteResult> logReadiness({
+    required DateTime date,
+    required int sleep,
+    required int soreness,
+    required int energy,
+    required WriteSource source,
+  }) async {
+    final dateStr = istDateStr(date);
+    final key = 'readiness_$dateStr';
+    final lockKey = '$dateStr::readiness';
+    final c = await _acquireLock(lockKey);
+    try {
+      final box = HiveService.instance.healthBox;
+      final level =
+          readinessLevelFor(sleep: sleep, soreness: soreness, energy: energy);
+      final payload = <String, dynamic>{
+        'date': dateStr,
+        'sleep': sleep,
+        'soreness': soreness,
+        'energy': energy,
+        'level': level.name,
+        'source': source.code,
+        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+        'created_at': DateTime.now().toIso8601String(),
+      };
+      await box.put(key, payload);
+
+      // 6-C wires: unawaited(SyncService.instance.syncReadinessNow());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      return WriteResult.ok(key);
+    } catch (e, st) {
+      debugPrint('[HealthWriteService.logReadiness] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_write_service_log_readiness'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock(lockKey, c);

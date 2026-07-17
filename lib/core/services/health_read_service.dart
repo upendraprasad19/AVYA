@@ -1,4 +1,5 @@
 import '../utils/ist_date.dart';
+import '../utils/readiness.dart';
 import 'hive_service.dart';
 
 /// Canonical READ service for health-domain Hive surfaces.
@@ -78,5 +79,31 @@ class HealthReadService {
     if (raw is int) return raw;
     if (raw is num) return raw.toInt();
     return 0;
+  }
+
+  /// ⑥ Batch 6 (W2.3) — the readiness check-in for the IST date containing
+  /// [date], or null if none logged that day. Drives the active-workout
+  /// re-entry gate (skip the sheet + re-apply the SAME mode on resume — never
+  /// re-prompt) and the session adjustment.
+  ReadinessCheckin? readinessForDate(DateTime date) {
+    final box = HiveService.instance.healthBox;
+    final raw = box.get('readiness_${istDateStr(date)}');
+    if (raw is! Map) return null;
+    return ReadinessCheckin.fromMap(raw);
+  }
+
+  /// ⑥ Batch 6 (W3.7) — every logged readiness check-in, NEWEST FIRST (scans
+  /// `readiness_<istDate>` keys). Feeds the PRO Weekly-Report readiness trend.
+  List<ReadinessCheckin> readinessHistory() {
+    final box = HiveService.instance.healthBox;
+    final out = <ReadinessCheckin>[];
+    for (final entry in box.toMap().entries) {
+      if (!entry.key.toString().startsWith('readiness_')) continue;
+      final raw = entry.value;
+      if (raw is! Map) continue;
+      out.add(ReadinessCheckin.fromMap(raw));
+    }
+    out.sort((a, b) => b.date.compareTo(a.date)); // lexical YYYY-MM-DD desc
+    return out;
   }
 }

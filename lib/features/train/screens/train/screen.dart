@@ -27,6 +27,7 @@ import '../../providers/train_provider.dart';
 import 'package:icanbefitter/features/home/widgets/weight_log_sheet.dart';
 import '../../widgets/create_custom_exercise_sheet.dart';
 import '../../widgets/edit_workout_log_sheet.dart';
+import '../../widgets/readiness_sheet.dart';
 import '../../widgets/week_selector.dart';
 import '../../widgets/plan_expired_card.dart';
 import '../../widgets/stats_grid.dart';
