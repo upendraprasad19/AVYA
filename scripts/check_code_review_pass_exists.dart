@@ -14,6 +14,8 @@
 
 import 'dart:io';
 
+import 'blast_radius_content_rules_lib.dart';
+
 const _registryPath = 'docs/blast_radius.yaml';
 const _reviewsDir = 'docs/reviews';
 
@@ -71,6 +73,24 @@ RegExp globToRegExp(String glob) {
 
 const _tierOrder = ['feature', 'account', 'platform', 'catastrophic'];
 int tierRank(String t) => _tierOrder.indexOf(t);
+
+/// Reads a path's STAGED (index) blob content via `git show :<path>` —
+/// NOT the working-tree file. This gate inspects `git diff --cached`, so it
+/// must judge the content that's actually about to be committed: staging a
+/// SECURITY DEFINER migration then further editing the working copy
+/// (without re-staging) before `git commit` would otherwise let the gate
+/// read the edited-clean working file while the STAGED blob — the one that
+/// actually lands in the commit — still carries the dangerous content.
+bool _stagedFileExists(String path) =>
+    Process.runSync('git', ['cat-file', '-e', ':$path']).exitCode == 0;
+
+String _stagedFileContent(String path) {
+  final r = Process.runSync('git', ['show', ':$path']);
+  if (r.exitCode != 0) {
+    throw StateError('git show :$path failed: ${r.stderr}');
+  }
+  return r.stdout as String;
+}
 
 Future<List<String>> stagedPaths() async {
   final result = await Process.run('git', ['diff', '--cached', '--name-only']);
@@ -132,6 +152,13 @@ Future<void> main(List<String> args) async {
         tier = rule.tier;
         break;
       }
+    }
+    if (tier != 'catastrophic' &&
+        contentForcesCatastrophic(p,
+            fileExists: _stagedFileExists, readFile: _stagedFileContent)) {
+      stdout.writeln('$tag NOTE: $p: SECURITY DEFINER content forces '
+          'catastrophic (path-tier was $tier).');
+      tier = 'catastrophic';
     }
     if (tierRank(tier) > tierRank(maxTier)) maxTier = tier;
   }
