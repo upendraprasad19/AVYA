@@ -543,7 +543,10 @@ class SimulationService {
         ? rawInjuries.map((e) => e.toString()).toList()
         : const <String>[];
 
-    final generated = await read.autoGenerateNextPhaseIfNeeded(
+    // ⑧ 3-a2: the dev sim calls the read-service DIRECTLY (not the shared
+    // advanceProPhaseIfExpired helper), so it intentionally gets neither the
+    // low-adherence repeat-default nor the nudge — it always drives fresh phases.
+    final result = await read.autoGenerateNextPhaseIfNeeded(
       goal: (profile['primary_goal'] as String?) ?? 'general_fitness',
       equipment: (profile['equipment_access'] as String?) ?? 'bodyweight',
       daysPerWeek: (profile['days_per_week'] as num?)?.toInt() ?? 4,
@@ -554,7 +557,7 @@ class SimulationService {
       sessionDuration: (profile['session_duration_minutes'] as num?)?.toInt(),
     );
 
-    if (generated) {
+    if (result.generated) {
       final updated = Map<String, dynamic>.from(progress);
       updated['current_phase'] = currentPhase + 1;
       updated['current_week'] = 1;

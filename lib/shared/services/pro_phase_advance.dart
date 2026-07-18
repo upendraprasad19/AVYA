@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Shared PRO next-phase advance — REG-1 fix (a4e2d9).
@@ -74,7 +77,17 @@ Future<bool> _advanceProPhaseIfExpired(WidgetRef ref) async {
   final sessionDuration =
       (profile['session_duration_minutes'] as num?)?.toInt();
 
-  final generated = await ref
+  // ⑧ 3-a2 (W2.5, ship-dark): when the adherence gate is ON AND the just-
+  // finished phase's completion rate is low, REPEAT its content into the next
+  // phase (at detrained loads) instead of a fresh pick. The `&&` short-circuits
+  // so the ≤12× getWeek loop inside currentPhaseCompletionRate never runs when
+  // the flag is OFF — then `repeatContent` stays false and this is
+  // byte-identical to the fresh-generation path.
+  final repeatContent = PlanEngineFlags.adherenceGateEnabled &&
+      ref.read(workoutScheduleServiceProvider).currentPhaseCompletionRate() <
+          AppConstants.phaseUnlockCompletionRate;
+
+  final result = await ref
       .read(workoutScheduleServiceProvider)
       .autoGenerateNextPhaseIfNeeded(
         goal: goal,
@@ -84,9 +97,10 @@ Future<bool> _advanceProPhaseIfExpired(WidgetRef ref) async {
         currentPhase: currentPhase,
         injuries: injuries,
         sessionDuration: sessionDuration,
+        repeatContent: repeatContent,
       );
 
-  if (generated) {
+  if (result.generated) {
     // Bump user_progress.current_phase + plan_generated_at (monotonic advance).
     final updated = Map<String, dynamic>.from(progress);
     updated['current_phase'] = currentPhase + 1;
@@ -96,6 +110,17 @@ Future<bool> _advanceProPhaseIfExpired(WidgetRef ref) async {
     await UserRepository.instance.saveProgress(updated);
     // Fire-and-forget snapshot push so the AI coach sees the new Phase.
     unawaited(ref.read(syncServiceProvider).pushSnapshot());
+
+    // ⑧ 3-a2: on an ACTUAL repeat (G5 gate passed → pins applied), flag the
+    // low-adherence "you repeated — step it up?" nudge for Home. Cross-account
+    // belt (the codified expiry-banner P0 guard, subscription_service.dart):
+    // only write when the Hive session OWNER is known — a non-null `uid` from
+    // ensureOpenedForCurrentSession does NOT imply the owner opened, and a null
+    // owner makes MigratedKey fall back to the DEVICE-shared configBox, leaking
+    // the nudge to the next account on this device.
+    if (result.repeated && HiveUserSession.currentOwnerFullId != null) {
+      await MigratedKey.write('phase_repeat_nudge_pending', true);
+    }
   }
-  return generated;
+  return result.generated;
 }

@@ -435,7 +435,12 @@ class WorkoutScheduleReadService {
   }
 
   /// PRO-only: if current Phase expired, generate next Phase starting today.
-  Future<bool> autoGenerateNextPhaseIfNeeded({
+  /// Returns `(generated, repeated)` — `generated` is true iff a new phase was
+  /// written; `repeated` is true iff a faithful G5-gated repeat pin was applied
+  /// (⑧ 3-a2 — drives the low-adherence "you repeated" nudge). `pins != null`
+  /// means the G5 gate passed AND a pin map was built (not necessarily that
+  /// every day is identical — an absent variant-B day fresh-fills).
+  Future<({bool generated, bool repeated})> autoGenerateNextPhaseIfNeeded({
     required String goal,
     required String equipment,
     required int daysPerWeek,
@@ -452,7 +457,7 @@ class WorkoutScheduleReadService {
     // pick. Default false + flag-gated → ship-dark inert → byte-identical.
     bool repeatContent = false,
   }) async {
-    if (!isPhaseExpired()) return false;
+    if (!isPhaseExpired()) return (generated: false, repeated: false);
     // 2026-05-31 (post-12 deployment cycles): the old `currentPhase >= 12`
     // dead-end is removed. Phases now generate indefinitely so a graduated user
     // always has the next "Deployment" to train, current_phase increments
@@ -489,7 +494,7 @@ class WorkoutScheduleReadService {
       cardioPreference: cardioPreference,
       pinnedExercisesByDay: pins,
     );
-    return true;
+    return (generated: true, repeated: pins != null);
   }
 
   /// ⑧ 2-int (W2.5): build the per-day pinned A/B exercise names for a "repeat"

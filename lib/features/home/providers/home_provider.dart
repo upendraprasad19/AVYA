@@ -930,3 +930,30 @@ class AllExercisePRsNotifier extends Notifier<List<ExercisePR>> {
 final allExercisePRsProvider =
     NotifierProvider<AllExercisePRsNotifier, List<ExercisePR>>(
         AllExercisePRsNotifier.new);
+
+// ── ⑧ 3-a2 (W2.5) repeat-content nudge ──────────────────────────
+// (declared at EOF so it never shifts the line-ranges of the providers above
+// that the SoT registry pins — check_sot_registry_parity.dart.)
+
+/// The low-adherence "you repeated — step it up?" nudge flag.
+///
+/// SET (`true`) by `advanceProPhaseIfExpired` (`lib/shared/services/
+/// pro_phase_advance.dart`) when a phase advance actually REPEATED last phase's
+/// plan (adherence-gate flag ON + low completion). Local-only + user-scoped
+/// (MigratedKey → userBox). CLEARED only on an explicit [PhaseRepeatNudgeNotifier.dismiss]
+/// (never in build) so the banner SURVIVES Home rebuilds until the user acts.
+/// Ship-dark: with `enable_adherence_gate` OFF the writer never fires ⇒ stays false.
+class PhaseRepeatNudgeNotifier extends Notifier<bool> {
+  @override
+  bool build() =>
+      MigratedKey.read<bool>('phase_repeat_nudge_pending') ?? false;
+
+  void dismiss() {
+    MigratedKey.write('phase_repeat_nudge_pending', false);
+    state = false;
+  }
+}
+
+final phaseRepeatNudgeProvider =
+    NotifierProvider<PhaseRepeatNudgeNotifier, bool>(
+        PhaseRepeatNudgeNotifier.new);
