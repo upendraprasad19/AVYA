@@ -641,6 +641,10 @@ class _GenerateNextPhaseButtonState
             )
           : null;
 
+      // W3.4 (Batch 11-B): variety avoid-names on a fresh advance (reader self-gates on the flag; read before plan_start moves, like pins).
+      final previousPhaseByDay =
+          pins == null ? scheduleSvc.previousPhaseNamesByDay() : null;
+
       await scheduleSvc.generateAndSchedule(
         goal: goal,
         equipment: equipment,
@@ -656,6 +660,7 @@ class _GenerateNextPhaseButtonState
         // W2.7 (Batch 9): titrate ONLY a FRESH advance (pins == null) — a
         // low-adherence "repeat" (pins != null) must not gain volume.
         applyVolumeTitration: pins == null,
+        previousPhaseByDay: previousPhaseByDay,
       );
       unawaited(ErrorTelemetry.logEvent('phase_unlock_plan_generated',
           message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));

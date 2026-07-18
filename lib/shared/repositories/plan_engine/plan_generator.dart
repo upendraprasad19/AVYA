@@ -51,6 +51,8 @@ class PlanGenerator {
     Map<int, ({List<String> a, List<String> b})>?
         pinnedExercisesByDay, // ⑧ 8-A/2-cap forward
     bool applyVolumeTitration = false, // W2.7 Batch 9 (opt-in; fresh advance only)
+    Map<int, ({List<String> a, List<String> b})>?
+        previousPhaseByDay, // W3.4 Batch 11-B (cross-phase variety forward)
   }) {
     return generateV4(
       goal: goal,
@@ -67,6 +69,7 @@ class PlanGenerator {
       equipmentExclusions: equipmentExclusions,
       pinnedExercisesByDay: pinnedExercisesByDay,
       applyVolumeTitration: applyVolumeTitration,
+      previousPhaseByDay: previousPhaseByDay,
     );
   }
 
@@ -96,6 +99,11 @@ class PlanGenerator {
     // false → every other caller (coach-regen / edit-profile / previews / hotel /
     // onboarding) is untouched regardless of `enable_volume_titration`.
     bool applyVolumeTitration = false,
+    // W3.4 (Batch 11-B cross-phase variety): day-INDEX → prior-phase A/B picks
+    // (LOWERCASED) → the cascade avoids repeating them when a same-pattern sibling
+    // exists. null → avoidNames empty → byte-identical. Passed ONLY on a fresh
+    // advance with the flag ON (mutually exclusive with pinnedExercisesByDay).
+    Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
   }) {
     final equipmentList = _getEquipmentList(equipment);
     final effectiveExp = effectiveLevel(experienceLevel, phase);
@@ -178,6 +186,7 @@ class PlanGenerator {
             applyInjurySubstitutePreference:
                 PlanEngineFlags.injurySubstitutePreferenceEnabled,
             exclusions: equipmentExclusionSet,
+            previousPhaseByDay: previousPhaseByDay, // W3.4 (Batch 11-B)
           );
 
     // Stage 0: Progression (Phase 2+ weight suggestions)

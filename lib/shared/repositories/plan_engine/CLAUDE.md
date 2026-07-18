@@ -176,7 +176,25 @@ each verified same-pattern-safe vs `exercise_library.json` (RDL dropped from low
 pick that's in the user's `demoted` set (still injury-filtered → safe). SoT
 `injury_safe_substitute_preference`; behavioral
 `injury_substitute_preference_behavioral_test.dart`. **11-B (W3.4 cross-phase variety)
-extends the SAME `_selectCandidate` with an `avoidNames` tiebreak — own branch.**
+extends the SAME `_selectCandidate` with an `avoidNames` tiebreak (below).**
+
+**Cross-phase variety (W3.4 — Batch 11-B, ship-dark).** On a genuine FRESH phase
+advance (pins==null), `WorkoutScheduleReadService.previousPhaseNamesByDay()` reads the
+just-finished phase's per-day A/B picks (getWeek(1)/getWeek(2), LOWERCASED — the SAME
+rows repeatPinsFrom reads, via the shared `_exerciseNamesOfRow`/`_namesByDayIndex`
+parsers, but WITHOUT the G5 gate) and threads them as `previousPhaseByDay` → generateV4
+→ pickV4 (indexed per-day avoidA/avoidB) → `_fillSlots` → `_cascadeFill` →
+`_selectCandidate._preferNovel`, which PREFERS a same-`movement_pattern` sibling NOT
+used last phase. **SOFT** bias — feeds `_selectCandidate` ONLY, NEVER
+queryV4/pickedNames/excludeNames → can never hard-empty a slot (BOUNDED: falls to
+`pool.first` when only last-phase picks remain). Composes with ①.1d (injury-sub selects
+the pool, variety breaks ties within it). Ship-dark `enable_cross_phase_variety` — the
+service-layer gate is inside `previousPhaseNamesByDay` (OFF → `{}` → no getWeek reads →
+avoidNames empty → byte-identical). The pure-Dart `cascade_tracer.dart` mirrors it
+(`_preferNovelName`); `generator_matrix.dart` NOT wired → frozen D3 baseline unmoved.
+attempt-5 pool is NOT variety-eligible; buildPinnedDays UNCHANGED (variety ⟂ pins). No
+migration (reads existing schedule_* rows). SoT `cross_phase_variety`; behavioral
+`cross_phase_variety_behavioral_test.dart`.
 
 **Exercise count targets (per day):**
 

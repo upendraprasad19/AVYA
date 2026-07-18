@@ -76,18 +76,40 @@ class CascadeTracer {
     List<Map<String, dynamic>> results,
     List<String> injuries,
     bool applyInjurySubstitutePreference,
+    Set<String> avoidNames, // W3.4 (Batch 11-B mirror)
   ) {
-    if (!applyInjurySubstitutePreference) return results.first['name'] as String;
-    final prefs = InjurySubstitutes.preferredFor(injuries);
-    if (prefs.isEmpty) return results.first['name'] as String;
-    final subs = results
-        .where((c) => prefs.contains((c['name'] as String? ?? '').toLowerCase()))
-        .toList();
-    if (subs.isEmpty) return results.first['name'] as String;
-    subs.sort((a, b) => prefs
-        .indexOf((a['name'] as String? ?? '').toLowerCase())
-        .compareTo(prefs.indexOf((b['name'] as String? ?? '').toLowerCase())));
-    return subs.first['name'] as String;
+    var pool = results;
+    if (applyInjurySubstitutePreference) {
+      final prefs = InjurySubstitutes.preferredFor(injuries);
+      if (prefs.isNotEmpty) {
+        final subs = results
+            .where(
+                (c) => prefs.contains((c['name'] as String? ?? '').toLowerCase()))
+            .toList();
+        if (subs.isNotEmpty) {
+          subs.sort((a, b) => prefs
+              .indexOf((a['name'] as String? ?? '').toLowerCase())
+              .compareTo(prefs.indexOf((b['name'] as String? ?? '').toLowerCase())));
+          pool = subs;
+        }
+      }
+    }
+    return _preferNovelName(pool, avoidNames);
+  }
+
+  /// W3.4 (Batch 11-B) mirror of `ExerciseSelector._preferNovel`: first name NOT
+  /// in [avoidNames], else `pool.first` ([avoidNames] empty → `pool.first`).
+  static String _preferNovelName(
+    List<Map<String, dynamic>> pool,
+    Set<String> avoidNames,
+  ) {
+    if (avoidNames.isEmpty) return pool.first['name'] as String;
+    for (final c in pool) {
+      if (!avoidNames.contains((c['name'] as String? ?? '').toLowerCase())) {
+        return c['name'] as String;
+      }
+    }
+    return pool.first['name'] as String;
   }
 
   static CascadeTrace trace(
@@ -99,6 +121,7 @@ class CascadeTracer {
     required List<String> injuries,
     required Set<String> pickedNames,
     bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C mirror)
+    Set<String> avoidNames = const {}, // W3.4 (Batch 11-B mirror; default → no-op)
     Set<String> exclusions = const {}, // ⑥ B1 (mirror; default {} → no-op)
   }) {
     final attempts = <CascadeAttempt>[];
@@ -139,7 +162,7 @@ class CascadeTracer {
     // ignore: unnecessary_null_comparison
     if (a1Results.isNotEmpty && pick == null) {
       pick = CascadePick(
-        _selectCandidateName(a1Results, injuries, applyInjurySubstitutePreference),
+        _selectCandidateName(a1Results, injuries, applyInjurySubstitutePreference, avoidNames),
         CascadePickSource.attempt1Exact,
       );
     }
@@ -168,7 +191,7 @@ class CascadeTracer {
     attempts.add(_attempt(2, a2Sig, a2Results));
     if (a2Results.isNotEmpty && pick == null) {
       pick = CascadePick(
-        _selectCandidateName(a2Results, injuries, applyInjurySubstitutePreference),
+        _selectCandidateName(a2Results, injuries, applyInjurySubstitutePreference, avoidNames),
         CascadePickSource.attempt2DropSubFocus,
       );
     }
@@ -193,7 +216,7 @@ class CascadeTracer {
     attempts.add(_attempt(3, a3Sig, a3Results));
     if (a3Results.isNotEmpty && pick == null) {
       pick = CascadePick(
-        _selectCandidateName(a3Results, injuries, applyInjurySubstitutePreference),
+        _selectCandidateName(a3Results, injuries, applyInjurySubstitutePreference, avoidNames),
         CascadePickSource.attempt3DropTypeAndTarget,
       );
     }
@@ -216,7 +239,7 @@ class CascadeTracer {
     attempts.add(_attempt(4, a4Sig, a4Results));
     if (a4Results.isNotEmpty && pick == null) {
       pick = CascadePick(
-        _selectCandidateName(a4Results, injuries, applyInjurySubstitutePreference),
+        _selectCandidateName(a4Results, injuries, applyInjurySubstitutePreference, avoidNames),
         CascadePickSource.attempt4DropEquipment,
       );
     }
