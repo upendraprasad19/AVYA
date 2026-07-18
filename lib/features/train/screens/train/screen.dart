@@ -32,6 +32,7 @@ import '../../widgets/readiness_sheet.dart';
 import '../../widgets/week_selector.dart';
 import '../../widgets/phase_arc_strip.dart';
 import '../../widgets/plan_expired_card.dart';
+import '../../widgets/phase_generating_card.dart';
 import '../../widgets/stats_grid.dart';
 import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -103,6 +104,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
     final selectedWeek = ref.watch(selectedWeekProvider);
     final weekDays = plan.getWeek(selectedWeek);
     final todayWorkout = plan.todayWorkout;
+    // REG-1 (a4e2d9): PRO users get a one-tap regenerate on expiry instead of
+    // the free PlanExpiredCard. Watched reactively (H-1) so a mid-session
+    // upgrade flips the surface without a manual refresh.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -148,12 +153,19 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                           ? Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: AppSpacing.screenPadding),
-                              child: PlanExpiredCard(
-                                onRedoComplete: () {
-                                  ref.invalidate(currentPlanProvider);
-                                  ref.invalidate(selectedWeekProvider);
-                                },
-                              ),
+                              child: isPro
+                                  ? PhaseGeneratingCard(
+                                      onGenerated: () {
+                                        ref.invalidate(currentPlanProvider);
+                                        ref.invalidate(selectedWeekProvider);
+                                      },
+                                    )
+                                  : PlanExpiredCard(
+                                      onRedoComplete: () {
+                                        ref.invalidate(currentPlanProvider);
+                                        ref.invalidate(selectedWeekProvider);
+                                      },
+                                    ),
                             )
                           : _buildTodayHeroCard(context, plan, todayWorkout))
                     else

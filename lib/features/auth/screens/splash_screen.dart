@@ -9,13 +9,13 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
-import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/scheduled_workouts_resync_migrator.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/features/profile/services/notification_inbox_service.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -191,16 +191,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // A7 / B5 D9-D10 — canonical provider path.
     unawaited(ref.read(subscriptionServiceProvider).refreshFromSupabase());
 
-    // Audit H9 · PRO auto-generate next Phase on expiry.
+    // Audit H9 · PRO auto-generate next Phase on expiry (REG-1 hardened,
+    // a4e2d9).
     //
-    // Free users hit the 3-door PlanExpiredCard on day 29. PRO users
-    // should never see that card — if their Phase has run out, silently
-    // generate the next one so Home + Train just show fresh workouts.
-    // Runs fire-and-forget; the card branch checks `isPhaseExpired()`
-    // again at render time so a race here (card flickers for one frame
-    // on PRO users) can't happen — the generation writes schedule keys
-    // BEFORE we navigate off splash, and PRO's expiry window is caught
-    // by this check.
+    // Free users hit the 3-door PlanExpiredCard on day 29. PRO users should
+    // never see that card — if their Phase has run out, silently generate the
+    // next one so Home + Train just show fresh workouts. This is fire-and-
+    // forget and is NOT awaited, so it CAN fail or still be in flight when
+    // Home/Train build. When it does, those screens now render the PRO
+    // `PhaseGeneratingCard` (a one-tap regenerate) instead of the free
+    // "go PRO" card — so a slow/errored pass no longer strands a paying user.
+    // A failure here is recorded via ErrorTelemetry (never swallowed).
     unawaited(_autoGenerateNextPhaseForPro());
 
     // Drain any persisted sync-queue ops left over from a previous session
@@ -224,65 +225,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
   }
 
-  /// Audit H9 · If user is PRO and the current Phase has expired,
-  /// auto-generate the next Phase (N+1). Reads goal / equipment /
-  /// days_per_week / experience / injuries from the Hive profile +
-  /// progress maps — same inputs the onboarding flow uses for Phase 1.
+  /// Audit H9 · If the user is PRO and the current Phase has expired,
+  /// auto-generate the next Phase (N+1). Delegates to the shared
+  /// [advanceProPhaseIfExpired] (also used by the Home/Train
+  /// `PhaseGeneratingCard` retry CTA), so both surfaces run one code path.
+  /// Fire-and-forget: a failure is recorded via telemetry, never surfaced or
+  /// swallowed (REG-1 a4e2d9 — a swallowed `debugPrint` used to hide the
+  /// failure that stranded a PRO on the free PlanExpiredCard).
   Future<void> _autoGenerateNextPhaseForPro() async {
     try {
-      // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap.
-      // Fires fire-and-forget BEFORE `_ensureLocalUser` has opened the
-      // per-user namespaced boxes; without this the `getProfile()` /
-      // `getProgress()` reads below throw `HiveUserSession not opened`
-      // and PRO users silently miss next-phase auto-generation.
-      final uid = await HiveUserSession.ensureOpenedForCurrentSession();
-      if (uid == null) return;
-
-      // A7 / B5 D9-D10 — canonical provider path.
-      if (!ref.read(subscriptionServiceProvider).isPro()) return;
-      if (!ref.read(workoutScheduleServiceProvider).isPhaseExpired()) return;
-
-      final profile = UserRepository.instance.getProfile() ?? {};
-      final progress = UserRepository.instance.getProgress() ?? {};
-
-      final goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
-      final equipment = (profile['equipment_access'] as String?) ?? 'bodyweight';
-      final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
-      final experience = (profile['fitness_experience'] as String?) ?? 'intermediate';
-      final currentPhase = (progress['current_phase'] as int?) ?? 1;
-      final rawInjuries = profile['injuries'];
-      final injuries = rawInjuries is List
-          ? rawInjuries.map((e) => e.toString()).toList()
-          : const <String>[];
-      final sessionDuration = (profile['session_duration_minutes'] as num?)?.toInt();
-
-      // A7 / B5 D9-D10 — canonical provider path.
-      final generated = await ref
-          .read(workoutScheduleServiceProvider)
-          .autoGenerateNextPhaseIfNeeded(
-        goal: goal,
-        equipment: equipment,
-        daysPerWeek: daysPerWeek,
-        experienceLevel: experience,
-        currentPhase: currentPhase,
-        injuries: injuries,
-        sessionDuration: sessionDuration,
-      );
-
-      if (generated) {
-        // Bump user_progress.current_phase + plan_generated_at.
-        final updated = Map<String, dynamic>.from(progress);
-        updated['current_phase'] = currentPhase + 1;
-        updated['current_week'] = 1;
-        updated['plan_generated_at'] = DateTime.now().toIso8601String();
-        updated['phase_started_at'] = DateTime.now().toIso8601String();
-        await UserRepository.instance.saveProgress(updated);
-        // Fire-and-forget snapshot push so AI coach sees the new Phase.
-        // A7 / B5 D9-D10 — canonical provider path.
-        unawaited(ref.read(syncServiceProvider).pushSnapshot());
-      }
-    } catch (e) {
-      debugPrint('[splash._autoGenerateNextPhaseForPro] $e');
+      await advanceProPhaseIfExpired(ref);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'splash_auto_advance_phase'));
     }
   }
 

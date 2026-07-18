@@ -97,24 +97,40 @@ void main() {
     );
 
     test(
-      'splash_screen._autoGenerateNextPhaseForPro awaits the shared helper',
+      'splash_screen._autoGenerateNextPhaseForPro routes through the shared '
+      'advance helper, which preserves the C-7 session bootstrap',
       () {
-        final src =
+        // ⑧ 3-a1 (a4e2d9): the splash body was extracted into the shared
+        // `advanceProPhaseIfExpired` (also called by the Home/Train retry
+        // CTA). The C-7 bootstrap moved WITH it into the helper — so pin the
+        // full chain: splash routes through the helper AND the helper opens
+        // the session before its user-scoped reads.
+        final splashSrc =
             _src('lib/features/auth/screens/splash_screen.dart');
         final mIdx =
-            src.indexOf('Future<void> _autoGenerateNextPhaseForPro()');
+            splashSrc.indexOf('Future<void> _autoGenerateNextPhaseForPro()');
         expect(mIdx, greaterThan(0));
-        final mEnd = src.indexOf('\n  Future<', mIdx + 10);
-        final body = src.substring(
-            mIdx, mEnd > mIdx ? mEnd : (mIdx + 6000).clamp(0, src.length));
+        final mEnd = splashSrc.indexOf('\n  Future<', mIdx + 10);
+        final body = splashSrc.substring(mIdx,
+            mEnd > mIdx ? mEnd : (mIdx + 6000).clamp(0, splashSrc.length));
         expect(
-          body.contains('HiveUserSession.ensureOpenedForCurrentSession'),
+          body.contains('advanceProPhaseIfExpired'),
           isTrue,
           reason:
-              '_autoGenerateNextPhaseForPro reads user-scoped Hive '
-              'via UserRepository; without the shared helper PRO '
-              'users on cold start with expired Phase silently miss '
-              'auto-generation of the next phase.',
+              '_autoGenerateNextPhaseForPro delegates to the shared '
+              'advanceProPhaseIfExpired helper so the splash auto-path and '
+              'the Home/Train retry CTA run one code path.',
+        );
+        final helperSrc =
+            _src('lib/shared/services/pro_phase_advance.dart');
+        expect(
+          helperSrc.contains('HiveUserSession.ensureOpenedForCurrentSession'),
+          isTrue,
+          reason:
+              'the shared advance helper reads user-scoped Hive via '
+              'UserRepository; without the C-7 bootstrap PRO users on cold '
+              'start with an expired Phase silently miss auto-generation of '
+              'the next phase.',
         );
       },
     );

@@ -31,6 +31,7 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/widgets/plan_expired_card.dart';
+import 'package:icanbefitter/features/train/widgets/phase_generating_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
 import '../widgets/pr_snapshot.dart';
@@ -715,14 +716,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final schedule = ref.watch(todayWorkoutProvider);
     final nutrition = ref.watch(nutritionSummaryProvider);
 
-    // Day-29 dead-end fix (audit H9): if today has no scheduled entry
-    // AND the Phase's plan_end_date has passed, free users see the
-    // 3-door PlanExpiredCard (upgrade / template builder / re-do
-    // Week 4). PRO users never land here — the app-launch bootstrap
-    // auto-generates the next Phase for them before this provider
-    // reads. This branch is free-only by construction.
+    // Day-29 dead-end fix (audit H9): if today has no scheduled entry AND the
+    // Phase's plan_end_date has passed, free users see the 3-door
+    // PlanExpiredCard (upgrade / template builder / re-do Week 4). PRO users
+    // whose splash auto-advance hasn't landed (it is unawaited fire-and-forget,
+    // so it can fail or race) get a one-tap PhaseGeneratingCard instead of the
+    // free "go PRO" card — REG-1 (a4e2d9). isPro is watched REACTIVELY (H-1) so
+    // a mid-session upgrade flips the surface without a manual refresh.
     if (schedule == null &&
         WorkoutScheduleService.instance.isPhaseExpired()) {
+      final isPro = ref.watch(subscriptionInfoProvider).isPro;
+      if (isPro) {
+        return PhaseGeneratingCard(
+          onGenerated: () {
+            ref.invalidate(todayWorkoutProvider);
+            ref.invalidate(currentPlanProvider);
+          },
+        );
+      }
       return PlanExpiredCard(
         onRedoComplete: () {
           ref.invalidate(todayWorkoutProvider);
