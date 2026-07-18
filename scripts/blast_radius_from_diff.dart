@@ -19,6 +19,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'blast_radius_content_rules_lib.dart';
+
 const _registryPath = 'docs/blast_radius.yaml';
 const _tierOrder = ['feature', 'account', 'platform', 'catastrophic'];
 
@@ -153,7 +155,19 @@ void main(List<String> args) async {
 
   var maxTier = 'feature';
   for (final p in paths) {
-    final t = tierFor(p, reg);
+    var t = tierFor(p, reg);
+    if (tierRank('catastrophic') > tierRank(t) && contentForcesCatastrophic(p)) {
+      // Prints to STDOUT rather than stderr (this script is invoked with
+      // `2>/dev/null` by prepare-commit-msg/pre-commit/pre-push). Note those
+      // three sites ALSO pipe stdout through `grep -oE 'Blast-radius: ...'`
+      // to extract just the tier, so this NOTE line is visible in a raw
+      // `dart run` but stripped in the local-hook pipelines — the escalated
+      // TIER itself still propagates correctly either way, which is what
+      // those hooks act on; this line is a diagnostic nicety, not a gate.
+      stdout.writeln('[blast-radius content-rule] $p: SECURITY DEFINER '
+          'content forces catastrophic (path-tier was $t)');
+      t = 'catastrophic';
+    }
     if (tierRank(t) > tierRank(maxTier)) maxTier = t;
   }
   stdout.writeln('Blast-radius: $maxTier');

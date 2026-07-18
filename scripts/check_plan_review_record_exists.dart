@@ -33,6 +33,8 @@
 
 import 'dart:io';
 
+import 'blast_radius_content_rules_lib.dart';
+
 const _registryPath = 'docs/blast_radius.yaml';
 const _recordsDir = 'docs/plan-reviews';
 const _tierOrder = ['feature', 'account', 'platform', 'catastrophic'];
@@ -154,7 +156,12 @@ void main(List<String> args) {
   final paths = diff.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty);
   var maxTier = reg.defaultTier;
   for (final p in paths) {
-    final t = _tierFor(p, reg);
+    var t = _tierFor(p, reg);
+    if (_tierRank('catastrophic') > _tierRank(t) && contentForcesCatastrophic(p)) {
+      stdout.writeln('$tag NOTE: $p: SECURITY DEFINER content forces '
+          'catastrophic (path-tier was $t).');
+      t = 'catastrophic';
+    }
     if (_tierRank(t) > _tierRank(maxTier)) maxTier = t;
   }
 
