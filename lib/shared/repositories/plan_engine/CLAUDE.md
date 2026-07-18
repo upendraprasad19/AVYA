@@ -75,6 +75,20 @@ the `current_plan` blob week_plans[3] (`week_character` 'deload'→'working'). L
 state (`last_actual_deload_phase` backstop + `deload_evaluated_for_phase_N`), NO migration. SoT
 `triggered_deload_eval`; behavioral `deload_eval_behavioral_test.dart`.
 
+**Deload "why" (W3.1 — Batch 10 explainability).** The eval ALSO stamps a per-phase workoutBox
+key `deload_reason_phase_<P>` (via `WorkoutScheduleReadService.deloadReasonKeyPrefix` +
+`deloadPhaseFromWeek4` — the SAME phase source as the flag/marker) with a pure non-shaming
+one-liner (`lib/core/utils/deload_reason.dart` `deloadDecisionReason`: structural-before-evidence
+precedence, each evidence branch had-data-gated, keyed on the ACTUAL outcome `liftedAny` —
+`_liftWeekFour` now returns `bool`, so a `shouldLift`-but-nothing-lifted case shows a matching,
+not contradictory, subtext). `WorkoutScheduleReadService.currentDeloadReason` reads the SAME key
+via the SAME derivation (writer==reader by construction) gated on `triggeredDeloadEnabled`; the
+Train `PhaseArcStrip` renders it only on the deload week (`currentWeek==4`) → null / not-week-4 →
+byte-identical to 7-A. Additive, LOCAL-only, no migration. SoT `deload_decision_reason`;
+behavioral `deload_reason_test.dart` (pure) + a `deload_eval_behavioral_test.dart` round-trip.
+The adherence-gate "why" (W3.1's other half) is a copy-only non-shaming lead-in in
+`advance_choice_sheet.dart` (no completion %, per the codified non-shaming brand soul).
+
 **Repeat-content generation (W2.5 — pin the prior phase's selection).** ⑧ 8-A/2-cap adds a
 SHIP-DARK capability: `generateV4`/`generate` accept
 `Map<int,({List<String> a, List<String> b})>? pinnedExercisesByDay` (per day: variant-A names for

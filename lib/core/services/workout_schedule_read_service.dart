@@ -699,6 +699,40 @@ class WorkoutScheduleReadService {
     return days;
   }
 
+  /// Batch 10 (W3.1 explainability): the Hive key prefix for the per-phase deload
+  /// "why" string (writer: `DeloadEvaluator`; reader: [currentDeloadReason]).
+  static const String deloadReasonKeyPrefix = 'deload_reason_phase_';
+
+  /// The phase a week-4 deload belongs to — the first `phase`-stamped row in the
+  /// week-4 rows. The SINGLE derivation shared by the eval (reason WRITER + its
+  /// flag/marker) and [currentDeloadReason] (reason READER), so the reason key can
+  /// never drift between writer and reader.
+  static int? deloadPhaseFromWeek4(List<Map<String, dynamic>> rows) {
+    for (final r in rows) {
+      final p = r['phase'];
+      if (p is int) return p;
+    }
+    return null;
+  }
+
+  /// Batch 10 (W3.1): the one-line deload "why" for the CURRENT phase's week-4
+  /// decision, or null. Gated on `triggeredDeloadEnabled` for clean kill-switch
+  /// reversibility (a stale reason hides the moment the flag is turned OFF). Reads
+  /// the same `deload_reason_phase_<P>` key the eval wrote, deriving P via
+  /// [deloadPhaseFromWeek4] → writer==reader by construction. Crash-safe.
+  String? currentDeloadReason() {
+    try {
+      if (!PlanEngineFlags.triggeredDeloadEnabled) return null;
+      final phase = deloadPhaseFromWeek4(getWeek(4));
+      if (phase == null) return null;
+      final v =
+          HiveService.instance.workoutBox.get('$deloadReasonKeyPrefix$phase');
+      return (v is String && v.isNotEmpty) ? v : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// ⑧ Batch 8 (W2.5 adherence gate) — the current phase's completion rate:
   /// completed / total NON-REST scheduled days across the phase's materialized
   /// weeks. Byte-identical to the Train phase-unlock card's

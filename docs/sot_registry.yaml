@@ -6540,6 +6540,43 @@ concepts:
         semantic: proves flag-off byte-identical, LIFT, every polarity keep, restore-race, per-exercise + row gates
     contract_test_path: test/contracts/deload_eval_behavioral_test.dart
 
+  - concept: deload_decision_reason
+    domain: workout
+    behavioral_test_path: test/contracts/deload_eval_behavioral_test.dart
+    description: >
+      W3.1 (Batch 10 explainability) — the one-line non-shaming "why" for a week-4 deload
+      decision. DeloadEvaluator stamps a per-phase workoutBox key deload_reason_phase_<P> from
+      the pure deloadDecisionReason() (structural-before-evidence precedence, each evidence
+      branch had-data-gated, copy derived from the ACTUAL outcome liftedAny — a shouldLift with
+      nothing eligible to lift stays a 'deload', so the copy MUST match the wave the strip
+      shows). WorkoutScheduleReadService.currentDeloadReason() reads the SAME key deriving P via
+      the SHARED deloadPhaseFromWeek4() the eval uses → writer==reader by construction; gated on
+      triggeredDeloadEnabled (clean kill-switch reversibility). PhaseArcStrip renders it as a
+      textDim line ONLY on the deload week (currentWeek==4); null / not-week-4 → no line →
+      byte-identical to Batch 7-A. Additive, LOCAL-only, no migration. Rides the parent flags
+      (enable_triggered_deload + enable_readiness for the write; enable_phase_arc for the render).
+    writers:
+      - file: lib/core/services/deload_evaluator.dart
+        method: DeloadEvaluator.maybeEvaluate (stamps deload_reason_phase_<P>)
+        notes: >
+          keyed via WorkoutScheduleReadService.deloadReasonKeyPrefix + deloadPhaseFromWeek4(wk4)
+          (the SAME phase source as the flag/marker); reason from deloadDecisionReason(...,
+          liftedAny: _liftWeekFour now returns bool) on every path (lift / firm-keep / transient).
+      - file: lib/core/utils/deload_reason.dart
+        method: deloadDecisionReason
+        notes: pure + total; structural-before-evidence; had-data-gated; outcome-based (liftedAny).
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method_or_widget: currentDeloadReason (via WorkoutScheduleService facade + deloadReasonProvider)
+        semantic: >
+          same deloadPhaseFromWeek4 derivation → writer==reader; triggeredDeloadEnabled-gated;
+          rendered by PhaseArcStrip only on week 4 (train_provider.dart deloadReasonProvider).
+      - file: test/contracts/deload_eval_behavioral_test.dart
+        method_or_widget: round-trip — real maybeEvaluate() writes → real currentDeloadReason() reads
+        semantic: >
+          LIFT→"Working week", KEEP(decline)→"dipped", flag-OFF→null; + deload_reason_test.dart pure truth-table
+    contract_test_path: test/contracts/deload_eval_behavioral_test.dart
+
   - concept: phase_adherence_rate
     domain: workout
     behavioral_test_path: test/contracts/phase_adherence_rate_test.dart
