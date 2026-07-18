@@ -1,14 +1,20 @@
-# Plan-review record — `workout-plateau-12` (Batch 12-A, W3.5 plateau escalation · rung-2 +sets)
+---
+branch: workout-plateau-12
+plan: docs/plan-reviews/workout-plateau-12.md
+blast_radius: platform
+review_rounds: 2
+ground_truth_verified: true
+verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/83180fe6-review.md
+---
 
-- **Batch:** 12-A of the workout-generator adaptive overhaul (W3.5 plateau detection + escalation, PRO). The **last** batch of the arc (12-B is the sibling follow-on).
+# Plan Review — Batch 12-A (W3.5 plateau escalation · rung-2 +sets)
+
+- **Batch:** 12-A of the workout-generator adaptive overhaul (W3.5 plateau detection + escalation, PRO). The **last** batch of the arc (12-B is the sibling next unit).
 - **Branch:** `workout-plateau-12` (off `544a1bbe`, Batch 11 COMPLETE tip).
 - **Blast radius:** `platform` (`lib/shared/repositories/plan_engine/**` wholesale pin, `docs/blast_radius.yaml:67`). Requires regression_test + behavioral_test_path + code_review_b_pass + feature_flag.
 - **Ship-dark flag:** `enable_plateau_escalation` (DEFAULT OFF → byte-identical inertness). Presupposes `enable_readiness` ON (see §2.1 flag-ordering).
-- **review_rounds:** 2
-- **ground_truth_verified:** true
-- **verdict:** converged
-- **bpass:** accepted
-- **bpass_review:** docs/reviews/<hash>-review.md  <!-- filled at B-pass -->
 
 ---
 

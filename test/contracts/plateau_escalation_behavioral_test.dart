@@ -29,6 +29,7 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plateau_scan.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/volume_titration.dart';
 
@@ -335,6 +336,83 @@ void main() {
       ];
       final out = VolumeTitration.applyToWeeks(weeks, deltas);
       expect(_groupWeeklySets(out.first, compGroup), 20); // unchanged
+    });
+  });
+
+  group('end-to-end: generateV4 entry-point (Stage 4.5 glue)', () {
+    // Seed one flat plateau per distinct major group so whatever the persona
+    // trains, some trained group has plateaued (unique keys per exercise).
+    Future<void> seedManyCompoundPlateaus() async {
+      final exBox = Hive.box(HiveService.exerciseBoxName);
+      final seededGroups = <String>{};
+      var ex = 0;
+      for (final v in exBox.values) {
+        if (v is! Map) continue;
+        final t = v['exercise_type'];
+        final isCompound = t is List
+            ? t.any((e) => e.toString().toLowerCase() == 'compound')
+            : (t as String?)?.toLowerCase() == 'compound';
+        if (isCompound != true) continue;
+        final pm = v['primary_muscles'];
+        if (pm is! List || pm.isEmpty) continue;
+        final g = muscleGroupOf(pm.first.toString());
+        if (g == null || seededGroups.contains(g)) continue;
+        final name = (v['name'] as String?) ?? '';
+        if (name.isEmpty) continue;
+        seededGroups.add(g);
+        const offsets = [35, 20, 5];
+        for (var s = 0; s < 3; s++) {
+          final d = fixedToday.subtract(Duration(days: offsets[s]));
+          await wb.put('exlog_${dk(d)}_ex${ex}_$s', {
+            'exercise_name': name,
+            'date': dk(d),
+            'logging_type': 'weight_reps',
+            'sets': [
+              {'weight_kg': 100, 'reps_completed': 5}
+            ],
+          });
+        }
+        ex++;
+      }
+    }
+
+    int totalSets(Phase p) {
+      var s = 0;
+      for (final w in p.weekPlans) {
+        for (final d in w.workoutDays) {
+          for (final e in d.exercises) {
+            s += e.sets;
+          }
+        }
+      }
+      return s;
+    }
+
+    Phase gen(bool on) => PlanGenerator.instance.generateV4(
+          goal: 'build_muscle',
+          equipment: 'full_gym',
+          daysPerWeek: 4,
+          phase: 2,
+          experienceLevel: 'intermediate',
+          applyPlateauEscalation: on,
+        );
+
+    test('applyPlateauEscalation:true adds volume vs :false (real entry point)',
+        () async {
+      await seedManyCompoundPlateaus();
+      await seedReadiness(3, flagged: false); // not fatigued
+      final off = totalSets(gen(false));
+      final onT = totalSets(gen(true));
+      expect(onT, greaterThan(off),
+          reason: 'plateau +sets must flow through generateV4 Stage 4.5');
+    });
+
+    test('kill-switch OFF → the applyPlateauEscalation param is inert end-to-end',
+        () async {
+      await cb.put('enable_plateau_escalation', false);
+      await seedManyCompoundPlateaus();
+      await seedReadiness(3, flagged: false);
+      expect(totalSets(gen(true)), totalSets(gen(false)));
     });
   });
 }
