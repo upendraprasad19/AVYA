@@ -102,6 +102,35 @@ class AuthNotifier extends Notifier<AuthState2> {
     }
   }
 
+  /// Checks whether [email] already belongs to a registered account, via the
+  /// server-side `email_is_registered` RPC (SECURITY DEFINER — public.users
+  /// RLS is owner-only and there's no auth.uid() yet at this point in the
+  /// flow). Returns true/false, or null on error (the error is also
+  /// surfaced through `state` for the screen's existing SnackBar listener).
+  ///
+  /// Never sets `AuthStatus.success` — the screen's `ref.listen` navigates
+  /// to `/restoring` on success, and this check happens with no real session.
+  Future<bool?> checkEmailRegistered(String email) async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    if (!await _ensureSupabaseReady()) return null;
+    try {
+      final result = await _supabase.client.rpc(
+        'email_is_registered',
+        params: {'p_email': email.trim()},
+      );
+      state = state.copyWith(status: AuthStatus.idle);
+      return result as bool;
+    } catch (e) {
+      unawaited(ErrorTelemetry.logEvent('auth_email_check_failed',
+          message: '[${e.runtimeType}] ${e.toString().split('\n').first}'));
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Could not verify email. Please try again.',
+      );
+      return null;
+    }
+  }
+
   /// Sign in with email + password.
   Future<void> signInWithEmail(String email, String password) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);

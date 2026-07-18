@@ -120,13 +120,18 @@ void main() {
           reason: 'Checkbox row must be shown in sign-up email form');
     });
 
-    test('checkbox gated by _isSignUp', () {
-      expect(src, contains('if (_isSignUp)'),
-          reason: 'Checkbox only shown during sign-up, not sign-in');
+    test('checkbox shown only in the sign-up step builder', () {
+      // Email-first flow (2026-07): the checkbox is no longer gated by a
+      // manual sign-in/sign-up toggle — it lives unconditionally inside the
+      // sign-up-only step builder, reached automatically via the
+      // server-side email-registration check.
+      expect(src, contains('_buildEmailStepSignUp'),
+          reason: 'Sign-up-only fields (checkbox, referral) must live in '
+              'their own step builder, not gated inline by a manual toggle');
     });
 
     test('button enabled field gates on _privacyAccepted', () {
-      expect(src, contains('!_isSignUp || _privacyAccepted'),
+      expect(src, contains('enabled: _privacyAccepted'),
           reason: 'CREATE ACCOUNT button must be disabled when unchecked');
     });
 
