@@ -61,6 +61,14 @@ class ErrorTelemetry {
   @visibleForTesting
   static bool forceTreatAllAsLowPriorityForTest = false;
 
+  /// Test seam — when non-null, `logEvent` invokes this instead of making
+  /// a real network call, so a behavioral test can assert an event fired
+  /// (op_type + message) without a Supabase client. Production code MUST
+  /// leave this null. Reset to null in `setUp`/`tearDown`.
+  @visibleForTesting
+  static void Function(String opType, {String? message})?
+      debugOnLogEventForTests;
+
   /// HIGH-priority op_type matcher — must stay in lock-step with the
   /// server-side `HIGH_PRIORITY_OP_TYPES` set in
   /// `supabase/functions/log-client-error/index.ts`. Drift between
@@ -244,6 +252,10 @@ class ErrorTelemetry {
     String opType, {
     String? message,
   }) async {
+    if (debugOnLogEventForTests != null) {
+      debugOnLogEventForTests!(opType, message: message);
+      return;
+    }
     // Cooldown gate — drop LOW-priority events without the network
     // round-trip. HIGH-priority events fall through and post normally.
     if (!isHighPriorityOpType(opType) && _isCooldownActive()) {
