@@ -6740,6 +6740,44 @@ concepts:
           repeatContent) is UNIT 2-int (pending).
     contract_test_path: test/contracts/repeat_phase_pinned_selection_behavioral_test.dart
 
+  - concept: injury_safe_substitute_preference
+    domain: workout
+    behavioral_test_path: test/contracts/injury_substitute_preference_behavioral_test.dart
+    description: >
+      ①.1d (Batch 11-C) — curated per-injury safe-substitute PREFERENCE. When ON,
+      ExerciseSelector._cascadeFill re-ranks the already-safe (post-injury-filter),
+      same-movement_pattern queryV4 candidate list to PREFER a curated InjurySubstitutes
+      sub (in map/joint-friendlier order, EXACT lowercased name match) over queryV4's
+      compound/priority sort, at all 4 attempt-return sites via the pure _selectCandidate.
+      Runs on the POST-injury-filter list → structurally CANNOT surface a contraindicated
+      exercise; a PREFERENCE (falls through to candidates.first when no curated sub is a
+      candidate). Ship-dark enable_injury_substitute_pref
+      (PlanEngineFlags.injurySubstitutePreferenceEnabled) DEFAULT OFF → verbatim
+      candidates.first (byte-identical). Resolved ONCE in generateV4 →
+      applyInjurySubstitutePreference bool threaded pickV4/buildPinnedDays → _fillSlots →
+      _cascadeFill (mirrors applyInjuryUniversalFilter). Curated map covers 6 of 9
+      InjuryVocab tokens (ankle/neck/hamstring → no subs → fallthrough). NO migration
+      (const map + config flag). NOTE: L6 _applyHistoryAdjustments (phase≥2) can re-swap a
+      curated pick if it is in the user's `demoted` set — NOT a safety issue (L6's
+      replacement stays injuryExclusions-filtered) and arguably correct (explicit user
+      demote beats app suggestion). generator_matrix.dart's CascadeTracer.trace call is
+      intentionally NOT wired (param defaults false) → the frozen D3 baseline is unmoved.
+    writers:
+      - file: lib/shared/repositories/plan_engine/injury_substitutes.dart
+        method: InjurySubstitutes._preferred (curated map) + preferredFor (ordered/deduped/lowercased)
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: _selectCandidate (re-rank at the 4 _cascadeFill attempt sites) + applyInjurySubstitutePreference thread (pickV4 / buildPinnedDays / _fillSlots / _cascadeFill)
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (resolves PlanEngineFlags.injurySubstitutePreferenceEnabled → both pickV4 + buildPinnedDays calls)
+    readers:
+      - file: test/plan_generator/v4_diagnostic/cascade_tracer.dart
+        method_or_widget: _selectCandidateName mirror (keeps the pure-Dart cascade tracer in lockstep; QueryV4Mirror unchanged)
+        semantic: mirror
+      - file: test/contracts/injury_substitute_preference_behavioral_test.dart
+        method_or_widget: drives real generateV4 — ON re-ranks vs OFF, post-filter safety, injury-gated inertness, uncurated fallthrough
+        semantic: behavioral
+    contract_test_path: test/contracts/injury_substitute_preference_behavioral_test.dart
+
   - concept: volume_titration
     domain: workout
     behavioral_test_path: test/contracts/volume_titration_behavioral_test.dart

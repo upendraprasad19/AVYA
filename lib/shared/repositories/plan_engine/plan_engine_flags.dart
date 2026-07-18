@@ -235,4 +235,22 @@ class PlanEngineFlags {
       return false;
     }
   }
+
+  /// ①.1d (Batch 11-C): curated per-injury safe-substitute PREFERENCE. When ON,
+  /// `_cascadeFill` re-ranks the already-safe (post-injury-filter), same-pattern
+  /// candidate list to PREFER a curated `InjurySubstitutes` sub over queryV4's
+  /// generic sort. Ship-dark DEFAULT OFF → verbatim `candidates.first` at every
+  /// attempt (byte-identical). It re-ranks the POST-filter list so it can NEVER
+  /// surface a contraindicated exercise; a PREFERENCE (falls through when no
+  /// curated sub is a candidate). Set `configBox['enable_injury_substitute_pref']
+  /// = true` to enable.
+  static bool get injurySubstitutePreferenceEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('enable_injury_substitute_pref') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
 }
