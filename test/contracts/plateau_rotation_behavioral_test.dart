@@ -172,16 +172,39 @@ void main() {
           reason: 'avoidNames must rotate ≥1 stuck compound to a same-pattern sibling');
     });
 
-    test('independence: variety OFF + plateau ON → still rotates (12-B requirement)',
-        () async {
-      await cb.put('enable_cross_phase_variety', false); // explicit
+    test('composition: variety avoid-names + plateau names BOTH non-empty → both '
+        'avoided, rotation fires, no slot emptied', () async {
+      // generateV4 does NOT read enable_cross_phase_variety (the service layer does);
+      // plateau computes its own avoid-names IN generateV4 → structurally independent
+      // of the variety flag. To EXERCISE the union {variety ∪ plateau} both-non-empty
+      // (B-pass P2), pass a non-null previousPhaseByDay (variety-like) alongside the
+      // plateau seeding, and assert plateau rotation STILL fires + nothing empties.
       final off = gen(false);
       final targets = compoundNames(off);
       await seedPlateausFor(targets);
       await seedReadiness(3, flagged: false);
-      final onNames = allNames(gen(true));
+      final variety = <int, ({List<String> a, List<String> b})>{
+        0: (a: const ['some other lift'], b: const ['another lift']),
+        1: (a: const ['x'], b: const ['y']),
+      };
+      final on = PlanGenerator.instance.generateV4(
+        goal: 'build_muscle',
+        equipment: 'full_gym',
+        daysPerWeek: 4,
+        phase: 2,
+        experienceLevel: 'advanced',
+        previousPhaseByDay: variety,
+        applyPlateauEscalation: true,
+      );
+      final onNames = allNames(on);
+      // plateau names still avoided (rotation fires) even with variety names unioned.
       expect(targets.where(onNames.contains).length, lessThan(targets.length),
-          reason: 'rotation must fire under enable_plateau_escalation alone');
+          reason: 'plateau rotation must fire even when variety avoid-names co-exist');
+      for (final w in on.weekPlans) {
+        for (final d in w.workoutDays) {
+          expect(d.exercises, isNotEmpty); // combined union never empties a slot
+        }
+      }
     });
 
     test('ship-dark: flag OFF → identical exercise set (byte-identical)', () async {
@@ -243,21 +266,24 @@ void main() {
       expect(allNames(gen(true)), allNames(off));
     });
 
-    test('both-coherence: titration + rotation ON → generates, still rotates',
+    test('both-coherence: titration + rotation ON → generates + still rotates',
         () async {
+      // titration (rung-2 +sets) and rotation (rung-3) both fire on the same plateau
+      // without conflict: the plan still generates, rotation still fires, and the plan
+      // is well-formed. (The per-GROUP MRV clamp itself is pinned by 12-A's titration /
+      // plateau-escalation tests — a per-EXERCISE `sets<=20` check here would be
+      // trivially true and prove nothing, per B-pass P2.)
       await cb.put('enable_volume_titration', true);
       final off = gen(false);
       final targets = compoundNames(off);
       await seedPlateausFor(targets);
       await seedReadiness(3, flagged: false);
       final on = gen(true);
-      expect(targets.where(allNames(on).contains).length, lessThan(targets.length));
-      // Group sets stay MRV-bounded (no exercise's sets explode).
+      expect(targets.where(allNames(on).contains).length, lessThan(targets.length),
+          reason: 'rotation must still fire with titration also on');
       for (final w in on.weekPlans) {
         for (final d in w.workoutDays) {
-          for (final e in d.exercises) {
-            expect(e.sets, lessThanOrEqualTo(20));
-          }
+          expect(d.exercises, isNotEmpty); // well-formed under both features
         }
       }
     });
