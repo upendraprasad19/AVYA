@@ -133,6 +133,7 @@ concepts:
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service — exposes exerciseLogsForIstDate + per-set MAX primitives delegated to by every other reader" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — buildAiContext + helpers moved out of ai_coach_repository.dart into the dedicated snapshot builder; reads exlog_* rows for personal_records + today_workout snapshot keys" }
       - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
+      - { file: lib/shared/repositories/plan_engine/volume_titration.dart, reason: "VolumeTitration (W2.7 Batch 9) reads exlog_* set weight_kg/reps_completed READ-ONLY (shared sessionMaxE1rm) for the per-group MAX-Epley e1RM trend that titrates next-phase volume — never edits logs" }
     regression_test: test/contracts/receipt_scoping_test.dart
     hive:
       box: workoutBox
@@ -244,6 +245,7 @@ concepts:
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service for exlog_* rows" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for exlog_* (PR / today_workout) split out of ai_coach_repository.dart" }
       - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
+      - { file: lib/shared/repositories/plan_engine/volume_titration.dart, reason: "VolumeTitration (W2.7 Batch 9) reads exlog_* set weight_kg/reps_completed READ-ONLY (shared sessionMaxE1rm) for the per-group MAX-Epley e1RM trend that titrates next-phase volume — never edits logs" }
     regression_test: test/contracts/edit_log_field_normalization_test.dart
     hive:
       box: workoutBox
@@ -1272,6 +1274,7 @@ concepts:
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service for exlog_* rows" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for exlog_* prefix (this_week_workouts, personal_records, today_workout) split out of ai_coach_repository.dart" }
       - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
+      - { file: lib/shared/repositories/plan_engine/volume_titration.dart, reason: "VolumeTitration (W2.7 Batch 9) reads exlog_* set weight_kg/reps_completed READ-ONLY (shared sessionMaxE1rm) for the per-group MAX-Epley e1RM trend that titrates next-phase volume — never edits logs" }
     regression_test: test/contracts/workout_write_to_read_contract_test.dart
     hive:
       box: workoutBox
@@ -2709,6 +2712,7 @@ concepts:
       - { file: lib/core/services/workout_read_service.dart, reason: "OI-02 canonical READ service — bestPerSet primitives + exerciseLogsForIstDate delegated to by loadAllExercisePRs and train_screen" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot personal_records + PR timeline reader split out of ai_coach_repository.dart" }
       - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
+      - { file: lib/shared/repositories/plan_engine/volume_titration.dart, reason: "VolumeTitration (W2.7 Batch 9) reads exlog_* set weight_kg/reps_completed READ-ONLY (shared sessionMaxE1rm) for the per-group MAX-Epley e1RM trend that titrates next-phase volume — never edits logs" }
     regression_test: test/contracts/load_all_exercise_prs_per_set_semantic_test.dart
     hive:
       box: workoutBox
@@ -6621,6 +6625,68 @@ concepts:
           drop · custom resolve · cardinality. PRODUCTION reader (generateAndSchedule
           repeatContent) is UNIT 2-int (pending).
     contract_test_path: test/contracts/repeat_phase_pinned_selection_behavioral_test.dart
+
+  - concept: volume_titration
+    domain: workout
+    behavioral_test_path: test/contracts/volume_titration_behavioral_test.dart
+    description: >
+      W2.7 (Batch 9) — phase-boundary volume titration. At a genuine FRESH phase
+      advance, each MAJOR MUSCLE GROUP's weekly direct-set volume is nudged ±1, clamped
+      to [MEV=8,MRV=20] sets/group/week, from phase-N evidence: the per-group e1RM trend
+      (VolumeTitration.resolveDeltas, reusing the shared sessionMaxE1rm Epley loop) + a
+      GLOBAL readiness soreness damper (readiness is a single daily axis, NOT per-muscle —
+      governs the +1 direction only). SAFE polarity: −1 (trim) fires on demonstrated
+      e1RM DECLINE alone; +1 (add) requires POSITIVE readiness recovery evidence (≥3
+      check-ins AND not persistently beat-up), so with readiness ship-dark (0 rows)
+      titration only ever TRIMS. Deltas key + clamp on the MAJOR GROUP (shared
+      muscleGroupOf, extracted from the scorecard's _muscleToGroup) so [8,20] is a
+      science-valid per-group band, not a per-fragmented-sub-token one. TWO inert seams:
+      (1) enable_volume_titration DEFAULT OFF → resolveDeltas {}; (2) OPT-IN — the
+      orchestrator applies it only when the caller passes applyVolumeTitration:true, and
+      the two advance callers pass `pins == null` so a REPEAT (low-adherence) advance
+      never gains volume; every other caller (coach-regen / edit-profile / previews /
+      hotel / onboarding) defaults false → untouched. applyToWeeks with {} deltas returns
+      the SAME list reference → byte-identical. Composes with the 7-B-1 deload stash: the
+      deload week's stashed workingSets is titrated symmetrically (workingSets!=null
+      self-gates the deload flag) so a triggered un-deload restores the titrated peak (F1).
+      No migration / no restore entry (Hive-read-only; exlog + readiness already sync+restore).
+    writers:
+      - file: lib/shared/repositories/plan_engine/volume_titration.dart
+        method: VolumeTitration.resolveDeltas / applyToWeeks
+        notes: >
+          resolveDeltas: flag+phase>=2 gate; trailing-35-IST-day exlog e1RM trend (shared
+          sessionMaxE1rm) aggregated exercise→major-group via muscleGroupOf on library
+          primary_muscles; readiness recovery (>=3 rows, <40% beat-up); −1 on any
+          group-declining, +1 only if recovered, else hold; sorted-group deterministic.
+          applyToWeeks: empty→identical ref; per-group ±1 on weeks 0-2 visible sets + the
+          deload wk-3 workingSets, clamped [8,20], one exercise bumped once/week (dedup).
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 / generate (applyVolumeTitration param + post-apply pass)
+        notes: >
+          generateV4 runs the titration post-pass AFTER PeriodizationEngine.apply (before
+          sequencing) gated on `applyVolumeTitration`; generate() forwards the bool. Default
+          false → pass not entered → byte-identical. Threaded through
+          WorkoutScheduleReadService.generateAndSchedule (passed `pins == null` by
+          autoGenerateNextPhaseIfNeeded + graduation_screen._onPro).
+      - file: lib/core/utils/e1rm.dart
+        method: sessionMaxE1rm
+        notes: >
+          shared MAX-Epley helper extracted from DeloadE1rmScan (byte-identical; pinned by
+          deload_eval_behavioral_test) — one Epley loop for both W2.4 deload + W2.7 titration.
+      - file: lib/shared/repositories/plan_engine/muscle_groups.dart
+        method: muscleGroupOf
+        notes: >
+          library-token→major-group map, content byte-identical to the scorecard's
+          _muscleToGroup (which now delegates here); .toLowerCase().trim() parity.
+    readers:
+      - file: test/contracts/volume_titration_behavioral_test.dart
+        method_or_widget: drives applyToWeeks (pure) + resolveDeltas (Hive-seeded)
+        semantic: >
+          applyToWeeks — identical-ref inertness, per-group ±1 clamp [8,20], multi-group
+          dedup, deload workingSets symmetry; resolveDeltas — flag/phase gates, −1 on
+          decline, +1 only with recovery evidence (0/sparse/systemic-sore readiness → hold),
+          deterministic. e1rm_test.dart pins the shared Epley helper.
+    contract_test_path: test/contracts/volume_titration_behavioral_test.dart
 
   - concept: repeat_content_scheduling
     domain: workout

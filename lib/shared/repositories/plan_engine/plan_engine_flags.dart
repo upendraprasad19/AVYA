@@ -201,4 +201,21 @@ class PlanEngineFlags {
       return false;
     }
   }
+
+  /// W2.7 (Batch 9 volume titration): phase-boundary per-major-group ±1 weekly-set
+  /// adjustment from the phase-N e1RM trend (+ readiness recovery evidence for the
+  /// +1 direction), clamped [MEV,MRV]. Ship-dark DEFAULT OFF (§4.6 — changes
+  /// prescribed volume). Applied ONLY when the caller opts in
+  /// (`applyVolumeTitration`, passed `pins == null` by the two fresh-advance
+  /// callers) AND phase>=2. Flag OFF / intent false / phase<2 → resolveDeltas {}
+  /// → applyToWeeks identity → byte-identical. Set
+  /// `configBox['enable_volume_titration'] = true` to enable.
+  static bool get volumeTitrationEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_volume_titration') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

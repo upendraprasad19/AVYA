@@ -95,6 +95,31 @@ byte-identical. The production caller (`generateAndSchedule` repeatContent) + ki
 `enable_adherence_gate` land in UNIT 2-int. SoT `repeat_phase_pinned_selection`; behavioral
 `repeat_phase_pinned_selection_behavioral_test.dart`.
 
+**Volume titration (W2.7 — Batch 9, phase-boundary per-group set nudge).** At a genuine FRESH
+phase advance, `VolumeTitration.applyToWeeks` (a PURE post-pass on the `PeriodizationEngine.apply`
+output in `plan_generator.dart`, right after Stage 4 + before Sequencing) nudges each MAJOR MUSCLE
+GROUP's weekly direct sets by ±1, clamped [MEV=8, MRV=20], from `VolumeTitration.resolveDeltas(phase)`:
+per-group e1RM trend (trailing-35-IST-day `exlog_*`, the shared `lib/core/utils/e1rm.dart`
+`sessionMaxE1rm` — ONE Epley loop for both W2.4 deload + this, byte-identical, pinned by
+`deload_eval_behavioral_test`) aggregated exercise→group via the shared `muscle_groups.dart`
+`muscleGroupOf` (the scorecard's `_muscleToGroup`, now DELEGATED here — content byte-identical so
+the frozen D3 baseline is unmoved) + a GLOBAL readiness soreness damper (soreness is a single daily
+axis, NOT per-muscle). SAFE polarity: −1 on demonstrated e1RM DECLINE alone; +1 ONLY with POSITIVE
+readiness recovery (≥3 rows, <40% beat-up) — so with readiness ship-dark (0 rows) it only ever TRIMS.
+TWO inert seams: kill-switch `enable_volume_titration` (DEFAULT OFF → `resolveDeltas` `{}`) AND opt-in
+`applyVolumeTitration` — the orchestrator applies it ONLY when the caller passes true, and the two
+advance callers (`autoGenerateNextPhaseIfNeeded` `:483` + `graduation_screen._onPro` `:644`) pass
+`pins == null` so a low-adherence REPEAT never gains volume; every other caller (coach-regen /
+edit-profile / previews / hotel / onboarding) defaults false → untouched. `applyToWeeks({})` returns
+the SAME list reference → byte-identical. Per-group ±1 clamps on the weekly aggregate, one exercise
+bumped once/week (dedup), groups processed in sorted order (determinism). Composes with 7-B-1: the
+deload week's stashed `workingSets` is titrated symmetrically (self-gated on `workingSets != null`)
+so a triggered un-deload restores the TITRATED peak (F1). ⚠ ~17 qualifier-tagged isolation lifts +
+8 empty-`primary_muscles` rows map to null → never titrated (conservative; small groups below MEV).
+The Batch-0 scorecard CANNOT measure this (it scores a `default_sets` SELECTION proxy, not periodized
+sets) — the behavioral test is the sole proof. SoT `volume_titration`; behavioral
+`volume_titration_behavioral_test.dart` + `e1rm_test.dart`.
+
 **Exercise count targets (per day):**
 
 | Experience | 3-day | 4-day | 5-day | 6-day |

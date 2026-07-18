@@ -653,6 +653,9 @@ class _GenerateNextPhaseButtonState
         experienceLevel: experienceLevel,
         preferredDays: preferredDays,
         pinnedExercisesByDay: pins,
+        // W2.7 (Batch 9): titrate ONLY a FRESH advance (pins == null) — a
+        // low-adherence "repeat" (pins != null) must not gain volume.
+        applyVolumeTitration: pins == null,
       );
       unawaited(ErrorTelemetry.logEvent('phase_unlock_plan_generated',
           message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));

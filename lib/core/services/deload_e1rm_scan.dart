@@ -15,6 +15,7 @@
 // Evidence=false` → `noFatigue=false` → the caller KEEPS the deload.
 
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/e1rm.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 
@@ -63,7 +64,7 @@ class DeloadE1rmScan {
         if (dateStr.compareTo(cutoff) < 0) continue; // stale → not current evidence
         final name = log['exercise_name'] as String?;
         if (name == null) continue;
-        final e1rm = _sessionMaxE1rm(log);
+        final e1rm = sessionMaxE1rm(log);
         if (e1rm == null) continue;
         final dated = byExercise[name] ??= <String, double>{};
         final prev = dated[dateStr];
@@ -97,33 +98,6 @@ class DeloadE1rmScan {
     }
   }
 
-  /// A session's max estimated 1RM: MAX over the logged sets of Epley
-  /// `w*(1+reps/30)`. NOT the heaviest-weight set (a high-rep set can out-e1RM
-  /// it → heaviest-by-weight would mask a decline → an unsafe lift). Falls back
-  /// to the top-level weight/reps for older rows without a `sets` array. Returns
-  /// null when there is no positive load (bodyweight/timed → not a load lift).
-  static double? _sessionMaxE1rm(Map log) {
-    double best = 0;
-    final setsRaw = log['sets'];
-    if (setsRaw is List) {
-      for (final s in setsRaw) {
-        if (s is! Map) continue;
-        final w = _toDouble(s['weight_kg']);
-        if (w == null || w <= 0) continue;
-        final reps = _toInt(s['reps_completed'] ?? s['reps']) ?? 0;
-        final e = reps > 0 ? w * (1 + reps / 30.0) : w;
-        if (e > best) best = e;
-      }
-    }
-    if (best <= 0) {
-      final w = _toDouble(log['weight_kg']);
-      if (w == null || w <= 0) return null;
-      final reps = _toInt(log['reps_completed']) ?? 0;
-      best = reps > 0 ? w * (1 + reps / 30.0) : w;
-    }
-    return best > 0 ? best : null;
-  }
-
   /// True iff [name] resolves to a library exercise whose `exercise_type` is
   /// EXACTLY 'compound' (mirrors `ExerciseRepository._fieldContains` — the same
   /// exact-match predicate the generator's compounds-first sort uses). Custom /
@@ -137,19 +111,5 @@ class DeloadE1rmScan {
       return t.any((e) => e.toString().toLowerCase() == target);
     }
     return (t as String?)?.toLowerCase() == target;
-  }
-
-  static double? _toDouble(Object? v) {
-    if (v is double) return v;
-    if (v is int) return v.toDouble();
-    if (v is String) return double.tryParse(v);
-    return null;
-  }
-
-  static int? _toInt(Object? v) {
-    if (v is int) return v;
-    if (v is double) return v.toInt();
-    if (v is String) return int.tryParse(v);
-    return null;
   }
 }
