@@ -84,7 +84,12 @@ class AuthNotifier extends Notifier<AuthState2> {
 
   /// Ensures Supabase is initialized, attempting initialization if needed.
   /// Returns false and sets an error state if it cannot be initialized.
-  Future<bool> _ensureSupabaseReady() async {
+  ///
+  /// `@visibleForTesting` non-private so a test subclass can override it to
+  /// short-circuit to `true` (real `_supabase.initialize()` fails in a pure
+  /// VM test) — see `test/contracts/check_email_registered_behavioral_test.dart`.
+  @visibleForTesting
+  Future<bool> ensureSupabaseReady() async {
     if (_supabase.isInitialized) return true;
     try {
       await _supabase.initialize();
@@ -112,14 +117,11 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// to `/restoring` on success, and this check happens with no real session.
   Future<bool?> checkEmailRegistered(String email) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
-    if (!await _ensureSupabaseReady()) return null;
+    if (!await ensureSupabaseReady()) return null;
     try {
-      final result = await _supabase.client.rpc(
-        'email_is_registered',
-        params: {'p_email': email.trim()},
-      );
+      final result = await rpcEmailIsRegistered(email.trim());
       state = state.copyWith(status: AuthStatus.idle);
-      return result as bool;
+      return result;
     } catch (e) {
       unawaited(ErrorTelemetry.logEvent('auth_email_check_failed',
           message: '[${e.runtimeType}] ${e.toString().split('\n').first}'));
@@ -131,10 +133,24 @@ class AuthNotifier extends Notifier<AuthState2> {
     }
   }
 
+  /// The network leaf of [checkEmailRegistered], extracted so a test
+  /// subclass can override just this and inherit the real state-machine
+  /// (loading/idle/error transitions, telemetry on failure) for a genuine
+  /// behavioral test — see
+  /// `test/contracts/check_email_registered_behavioral_test.dart`.
+  @visibleForTesting
+  Future<bool> rpcEmailIsRegistered(String trimmedEmail) async {
+    final result = await _supabase.client.rpc(
+      'email_is_registered',
+      params: {'p_email': trimmedEmail},
+    );
+    return result as bool;
+  }
+
   /// Sign in with email + password.
   Future<void> signInWithEmail(String email, String password) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
-    if (!await _ensureSupabaseReady()) return;
+    if (!await ensureSupabaseReady()) return;
     try {
       final response = await _supabase.client.auth.signInWithPassword(
         email: email,
@@ -173,7 +189,7 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// Create a new account with email + password.
   Future<void> signUpWithEmail(String email, String password) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
-    if (!await _ensureSupabaseReady()) return;
+    if (!await ensureSupabaseReady()) return;
     try {
       final response = await _supabase.client.auth.signUp(
         email: email,
@@ -252,7 +268,7 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// Sign in with Google OAuth.
   Future<void> signInWithGoogle() async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
-    if (!await _ensureSupabaseReady()) return;
+    if (!await ensureSupabaseReady()) return;
     try {
       await _supabase.client.auth.signInWithOAuth(
         OAuthProvider.google,
@@ -278,7 +294,7 @@ class AuthNotifier extends Notifier<AuthState2> {
       errorMessage: null,
       otpSent: false,
     );
-    if (!await _ensureSupabaseReady()) return;
+    if (!await ensureSupabaseReady()) return;
     try {
       await _supabase.client.auth.signInWithOtp(phone: phone);
       state = state.copyWith(status: AuthStatus.idle, otpSent: true);

@@ -60,7 +60,7 @@ void main() {
     final start = providerSrc.indexOf('Future<bool?> checkEmailRegistered(');
     expect(start, isNot(-1), reason: 'checkEmailRegistered must exist on AuthNotifier');
     final end = providerSrc.indexOf(
-      '\n  Future<void> signInWithEmail(',
+      '\n  Future<bool> rpcEmailIsRegistered(',
       start,
     );
     expect(end, isNot(-1));
@@ -75,14 +75,16 @@ void main() {
     );
   });
 
-  test('checkEmailRegistered guards on _ensureSupabaseReady like its siblings', () {
+  test('checkEmailRegistered guards on ensureSupabaseReady and delegates '
+      'the network call to rpcEmailIsRegistered', () {
     final start = providerSrc.indexOf('Future<bool?> checkEmailRegistered(');
     final end = providerSrc.indexOf(
-      '\n  Future<void> signInWithEmail(',
+      '\n  Future<bool> rpcEmailIsRegistered(',
       start,
     );
     final body = providerSrc.substring(start, end);
-    expect(body, contains('_ensureSupabaseReady()'));
+    expect(body, contains('ensureSupabaseReady()'));
+    expect(body, contains('rpcEmailIsRegistered('));
   });
 
   test('"change email" resets auth notifier state', () {
