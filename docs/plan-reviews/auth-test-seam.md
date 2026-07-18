@@ -5,7 +5,8 @@ blast_radius: account
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/da4a7129-review.md
 ---
 
 # Plan-review record — auth-test-seam
