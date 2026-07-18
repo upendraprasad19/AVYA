@@ -22,11 +22,11 @@
 // Empty deltas → `applyToWeeks` returns the SAME list reference → byte-identical.
 
 import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/utils/e1rm.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 
+import 'e1rm_history.dart';
 import 'models.dart';
 import 'muscle_groups.dart';
 import 'plan_engine_flags.dart';
@@ -58,25 +58,12 @@ class VolumeTitration {
       final cutoff =
           istDateStr(nowWall().subtract(const Duration(days: _windowDays)));
 
-      // ── per-EXERCISE e1RM trend over the window (shared Epley) ──
-      // exerciseName -> (istDate -> max Epley e1RM that day)
-      final byExercise = <String, Map<String, double>>{};
+      // ── per-EXERCISE e1RM trend over the window (shared builder) ──
+      // exerciseName -> (istDate -> max Epley e1RM that day). Batch 12-A extracted
+      // this loop to `e1rm_history.dart` (ONE loop for deload + titration + plateau
+      // — the #1 writer/reader-drift class; byte-identical to the old inline loop).
       final wbox = HiveService.instance.workoutBox;
-      for (final key in wbox.keys) {
-        final k = key.toString();
-        if (!k.startsWith('exlog_')) continue;
-        final log = wbox.get(key);
-        if (log is! Map) continue;
-        final dateStr = log['date'] as String?;
-        if (dateStr == null || dateStr.compareTo(cutoff) < 0) continue;
-        final name = log['exercise_name'] as String?;
-        if (name == null) continue;
-        final e = sessionMaxE1rm(log);
-        if (e == null) continue;
-        final dated = byExercise[name] ??= <String, double>{};
-        final prev = dated[dateStr];
-        if (prev == null || e > prev) dated[dateStr] = e;
-      }
+      final byExercise = buildE1rmByDate(wbox, cutoff: cutoff);
 
       // Aggregate exercise → major GROUP trend. A group `dropped` if ANY of its
       // evaluable exercises' latest dated session < its prior; `hasEvidence` if

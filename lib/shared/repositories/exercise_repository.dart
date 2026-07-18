@@ -207,6 +207,17 @@ class ExerciseRepository {
     return (field as String?)?.toLowerCase() == v;
   }
 
+  /// True iff [name] resolves (exact-name) to a library exercise whose
+  /// `exercise_type` is EXACTLY 'compound'. The shared "main lift" predicate for
+  /// the e1RM scans — DeloadE1rmScan (W2.4) + PlateauScan (W3.5) — extracted so
+  /// they don't each hand-roll it (the #1 writer/reader-drift class). Custom /
+  /// swapped names absent from the library → false (not a main lift).
+  bool isCompoundByExactName(String name) {
+    final row = getByExactName(name);
+    if (row == null) return false;
+    return _fieldContains(row['exercise_type'], 'compound');
+  }
+
   /// Returns true if any element in [field] (String or List of String) contains [substring] (case-insensitive).
   static bool _fieldSubstringMatch(dynamic field, String substring) {
     final s = substring.toLowerCase();

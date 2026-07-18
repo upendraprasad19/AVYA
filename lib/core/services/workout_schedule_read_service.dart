@@ -118,6 +118,9 @@ class WorkoutScheduleReadService {
     // W3.4 (Batch 11-B): per-day previous-phase picks (LOWERCASED) for cross-phase
     // variety, forwarded to generate(). null (every existing caller) → inert.
     Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
+    // W3.5 (Batch 12-A): opt-in plateau escalation — the two fresh-advance callers
+    // pass `pins == null`; every other caller defaults false → inert.
+    bool applyPlateauEscalation = false,
   }) async {
     final exerciseBox = _hive.exerciseBox;
     if (exerciseBox.isEmpty) {
@@ -138,6 +141,7 @@ class WorkoutScheduleReadService {
       pinnedExercisesByDay: pinnedExercisesByDay,
       applyVolumeTitration: applyVolumeTitration,
       previousPhaseByDay: previousPhaseByDay,
+      applyPlateauEscalation: applyPlateauEscalation,
     );
 
     final dayPattern = preferredDays ?? _getDayPattern(daysPerWeek);
@@ -512,6 +516,8 @@ class WorkoutScheduleReadService {
       // low-adherence repeat (pins != null) must NOT gain volume.
       applyVolumeTitration: pins == null,
       previousPhaseByDay: previousPhaseByDay,
+      // W3.5 (Batch 12-A): plateau escalation likewise only on a FRESH advance.
+      applyPlateauEscalation: pins == null,
     );
     return (generated: true, repeated: pins != null);
   }

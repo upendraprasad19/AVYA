@@ -8,6 +8,7 @@ import 'cardio_finisher.dart';
 import 'exercise_selector.dart';
 import 'models.dart';
 import 'periodization_engine.dart';
+import 'plateau_scan.dart';
 import 'progression_resolver.dart';
 import 'sequencing_engine.dart';
 import 'split_resolver.dart';
@@ -53,6 +54,7 @@ class PlanGenerator {
     bool applyVolumeTitration = false, // W2.7 Batch 9 (opt-in; fresh advance only)
     Map<int, ({List<String> a, List<String> b})>?
         previousPhaseByDay, // W3.4 Batch 11-B (cross-phase variety forward)
+    bool applyPlateauEscalation = false, // W3.5 Batch 12-A (opt-in; fresh advance only)
   }) {
     return generateV4(
       goal: goal,
@@ -70,6 +72,7 @@ class PlanGenerator {
       pinnedExercisesByDay: pinnedExercisesByDay,
       applyVolumeTitration: applyVolumeTitration,
       previousPhaseByDay: previousPhaseByDay,
+      applyPlateauEscalation: applyPlateauEscalation,
     );
   }
 
@@ -104,6 +107,10 @@ class PlanGenerator {
     // exists. null → avoidNames empty → byte-identical. Passed ONLY on a fresh
     // advance with the flag ON (mutually exclusive with pinnedExercisesByDay).
     Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
+    // W3.5 (Batch 12-A plateau escalation): opt-in intent — applied ONLY on a fresh
+    // phase advance (the two advance callers pass `pins == null`). Default false →
+    // every other caller untouched regardless of `enable_plateau_escalation`.
+    bool applyPlateauEscalation = false,
   }) {
     final equipmentList = _getEquipmentList(equipment);
     final effectiveExp = effectiveLevel(experienceLevel, phase);
@@ -251,11 +258,19 @@ class PlanGenerator {
     // AND phase>=2. Any of those false → applyToWeeks is identity → byte-identical.
     // Placed BEFORE sequencing/superset (neither reads `sets`) so it sees the
     // bodyFocus-adjusted counts and its result flows through unchanged.
-    if (applyVolumeTitration) {
-      weekPlans = VolumeTitration.applyToWeeks(
-        weekPlans,
-        VolumeTitration.resolveDeltas(phase: phase),
-      );
+    if (applyVolumeTitration || applyPlateauEscalation) {
+      // W2.7 titration AND W3.5 plateau +sets BOTH resolve to a per-major-group ±1
+      // map applied via ONE applyToWeeks pass (two passes would double-bump a group
+      // both touch). Each is independently flag + opt-in gated; all-off → {} →
+      // applyToWeeks identity → byte-identical. mergePlateauSetDeltas only ADDS +1
+      // where titration left a group absent (putIfAbsent → an existing −1 wins).
+      final base = applyVolumeTitration
+          ? VolumeTitration.resolveDeltas(phase: phase)
+          : const <String, int>{};
+      final deltas = applyPlateauEscalation
+          ? PlateauScan.mergePlateauSetDeltas(base, phase: phase)
+          : base;
+      weekPlans = VolumeTitration.applyToWeeks(weekPlans, deltas);
     }
 
     // Stage 3: Sequencing

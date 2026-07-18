@@ -270,4 +270,25 @@ class PlanEngineFlags {
       return false;
     }
   }
+
+  /// W3.5 (Batch 12-A) plateau escalation rung-2 (+sets), PRO. When ON, at a
+  /// genuine FRESH phase advance a plateaued major group (a COMPOUND lift with flat
+  /// e1RM across ≥3 sessions spanning ≥28d) that is NOT already titration-bumped and
+  /// NOT under persistent readiness fatigue gains +1 weekly set — merged into the
+  /// W2.7 titration deltas so ONE clamped applyToWeeks pass applies both
+  /// (`PlateauScan.mergePlateauSetDeltas`, `putIfAbsent` → no double-bump / an
+  /// existing −1 wins). Ship-dark DEFAULT OFF (§4.6 — changes prescribed volume) →
+  /// merge returns the input map unchanged → applyToWeeks identity → byte-identical.
+  /// Presupposes `enable_readiness` ON (the fatigue gate needs data; `plateauedGroups`
+  /// self-gates on `readinessEnabled`, mirroring DeloadEvaluator). Set
+  /// `configBox['enable_plateau_escalation'] = true` to enable.
+  static bool get plateauEscalationEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('enable_plateau_escalation') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
 }
