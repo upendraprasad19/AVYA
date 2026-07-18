@@ -530,6 +530,10 @@ class ExerciseSelector {
     // `const {}` (unset caller / flag OFF) → every downstream drop inert →
     // byte-identical. A HARD constraint threaded to every pick path.
     Set<String> exclusions = const {},
+    // W3.4 (Batch 11-B): per-day previous-phase picks (LOWERCASED names) → the
+    // cascade avoids repeating them when a same-pattern sibling exists. null →
+    // avoidNames empty everywhere → inert. Only the fresh-advance caller passes it.
+    Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
   }) {
     final result = <PopulatedDay>[];
 
@@ -547,13 +551,20 @@ class ExerciseSelector {
         ? _eligibleCustomExercises(exerciseRepo)
         : const <Map<String, dynamic>>[];
 
-    for (final day in slotDays) {
+    for (var i = 0; i < slotDays.length; i++) {
+      final day = slotDays[i];
+      // W3.4 (Batch 11-B): the previous phase's A/B picks for THIS day-index — a
+      // SOFT variety bias (feeds _selectCandidate ONLY, never queryV4/excludeNames).
+      // Already lowercased by previousPhaseNamesByDay; empty when the flag/param off.
+      final avoidA = (previousPhaseByDay?[i]?.a ?? const <String>[]).toSet();
+      final avoidB = (previousPhaseByDay?[i]?.b ?? const <String>[]).toSet();
       // Fill variant A
       var exercisesA = _fillSlots(
         day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,
         injuries: injuries, excludeNames: {},
         applyInjuryUniversalFilter: applyInjuryUniversalFilter,
         applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+        avoidNames: avoidA,
         exclusions: exclusions,
       );
 
@@ -566,6 +577,7 @@ class ExerciseSelector {
           injuries: injuries, excludeNames: goal == 'strength' ? {} : aNames,
           applyInjuryUniversalFilter: applyInjuryUniversalFilter,
           applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          avoidNames: avoidB,
           exclusions: exclusions,
         );
       } else {
@@ -949,6 +961,7 @@ class ExerciseSelector {
     required Set<String> excludeNames,
     bool applyInjuryUniversalFilter = true,
     bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C)
+    Set<String> avoidNames = const {}, // W3.4 (Batch 11-B) — SOFT variety bias
     required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
   }) {
     final exercises = <PlannedExercise>[];
@@ -961,6 +974,7 @@ class ExerciseSelector {
           injuries: injuries, pickedNames: pickedNames,
           applyInjuryUniversalFilter: applyInjuryUniversalFilter,
           applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          avoidNames: avoidNames,
           exclusions: exclusions,
         );
         if (exercise != null) {
@@ -972,31 +986,57 @@ class ExerciseSelector {
     return exercises;
   }
 
-  /// 5-attempt cascade for a single MuscleSlot.
-  /// ①.1d (Batch 11-C): pick a candidate from a NON-EMPTY, already-safe (post
-  /// injury-filter), same-pattern `queryV4` result list. Ship-dark OFF → verbatim
-  /// `candidates.first`. When ON, PREFER a curated `InjurySubstitutes` sub (in
-  /// map/joint-friendlier order), else fall through to `candidates.first`. Cannot
-  /// surface a contraindicated exercise (the list is already injury-filtered).
-  /// (11-B adds an `avoidNames` variety tiebreak inside this same helper.)
+  /// Pick a candidate from a NON-EMPTY, already-safe (post injury-filter),
+  /// same-pattern `queryV4` result list.
+  /// ①.1d (Batch 11-C): the injury-substitute preference narrows the POOL to the
+  /// curated, map-order-sorted subs (else the full candidate list).
+  /// W3.4 (Batch 11-B): `_preferNovel` then breaks ties WITHIN that pool toward a
+  /// same-pattern sibling NOT used by the previous phase (`avoidNames`).
+  /// Both OFF (avoidNames empty AND injury-sub off) → `candidates.first` (verbatim).
+  /// Cannot surface a contraindicated exercise (the list is already injury-filtered).
   static Map<String, dynamic> _selectCandidate(
     List<Map<String, dynamic>> candidates, {
     required List<String> injuries,
     required bool applyInjurySubstitutePreference,
+    Set<String> avoidNames = const {}, // W3.4 (Batch 11-B) cross-phase variety
   }) {
-    if (!applyInjurySubstitutePreference) return candidates.first;
-    final prefs = InjurySubstitutes.preferredFor(injuries);
-    if (prefs.isEmpty) return candidates.first;
-    final subs = candidates
-        .where((c) => prefs.contains((c['name'] as String? ?? '').toLowerCase()))
-        .toList();
-    if (subs.isEmpty) return candidates.first;
-    // Honor the curated (foundational/joint-friendlier-first) order — NOT
-    // queryV4's compound/priority sort. Every sub is in prefs → indexOf >= 0.
-    subs.sort((a, b) => prefs
-        .indexOf((a['name'] as String? ?? '').toLowerCase())
-        .compareTo(prefs.indexOf((b['name'] as String? ?? '').toLowerCase())));
-    return subs.first;
+    var pool = candidates;
+    if (applyInjurySubstitutePreference) {
+      final prefs = InjurySubstitutes.preferredFor(injuries);
+      if (prefs.isNotEmpty) {
+        final subs = candidates
+            .where(
+                (c) => prefs.contains((c['name'] as String? ?? '').toLowerCase()))
+            .toList();
+        if (subs.isNotEmpty) {
+          // Honor the curated (foundational/joint-friendlier-first) order — NOT
+          // queryV4's compound/priority sort. Every sub is in prefs → indexOf >= 0.
+          subs.sort((a, b) => prefs
+              .indexOf((a['name'] as String? ?? '').toLowerCase())
+              .compareTo(prefs.indexOf((b['name'] as String? ?? '').toLowerCase())));
+          pool = subs;
+        }
+      }
+    }
+    return _preferNovel(pool, avoidNames);
+  }
+
+  /// W3.4 (Batch 11-B) cross-phase variety tiebreak: within an ALREADY-ordered,
+  /// NON-EMPTY [pool], prefer the first candidate NOT used by the previous phase
+  /// for this slot ([avoidNames], EXACT lowercased); if every remaining option was
+  /// last phase's pick, keep `pool.first` (BOUNDED — never empties, never a wrong
+  /// pattern). [avoidNames] empty → `pool.first` (verbatim, byte-identical).
+  static Map<String, dynamic> _preferNovel(
+    List<Map<String, dynamic>> pool,
+    Set<String> avoidNames,
+  ) {
+    if (avoidNames.isEmpty) return pool.first;
+    for (final c in pool) {
+      if (!avoidNames.contains((c['name'] as String? ?? '').toLowerCase())) {
+        return c;
+      }
+    }
+    return pool.first;
   }
 
   /// movement_pattern is NEVER dropped.
@@ -1010,6 +1050,7 @@ class ExerciseSelector {
     required Set<String> pickedNames,
     bool applyInjuryUniversalFilter = true,
     bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C)
+    Set<String> avoidNames = const {}, // W3.4 (Batch 11-B) — SOFT variety bias ONLY
     required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
   }) {
     // Attempt 1: Exact target + subFocus + equipment + type + experience
@@ -1030,7 +1071,8 @@ class ExerciseSelector {
     if (candidates.isNotEmpty) {
       return _buildExercise(_selectCandidate(candidates,
           injuries: injuries,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference));
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          avoidNames: avoidNames));
     }
 
     // Attempt 2: Drop subFocus (broader target within same muscle)
@@ -1047,7 +1089,8 @@ class ExerciseSelector {
     if (candidates.isNotEmpty) {
       return _buildExercise(_selectCandidate(candidates,
           injuries: injuries,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference));
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          avoidNames: avoidNames));
     }
 
     // Attempt 3: Drop target + exercise type (any exercise in movement pattern with equipment)
@@ -1062,7 +1105,8 @@ class ExerciseSelector {
     if (candidates.isNotEmpty) {
       return _buildExercise(_selectCandidate(candidates,
           injuries: injuries,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference));
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          avoidNames: avoidNames));
     }
 
     // Attempt 4: Drop equipment TIER (allow any tier in the movement pattern).
@@ -1079,7 +1123,8 @@ class ExerciseSelector {
     if (candidates.isNotEmpty) {
       return _buildExercise(_selectCandidate(candidates,
           injuries: injuries,
-          applyInjurySubstitutePreference: applyInjurySubstitutePreference));
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          avoidNames: avoidNames));
     }
 
     // Attempt 5: Universal bodyweight pool.

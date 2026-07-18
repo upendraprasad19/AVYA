@@ -115,6 +115,9 @@ class WorkoutScheduleReadService {
     // pass `pins == null` so a REPEAT advance never gains volume. Threaded to
     // generate(); default false → inert.
     bool applyVolumeTitration = false,
+    // W3.4 (Batch 11-B): per-day previous-phase picks (LOWERCASED) for cross-phase
+    // variety, forwarded to generate(). null (every existing caller) → inert.
+    Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
   }) async {
     final exerciseBox = _hive.exerciseBox;
     if (exerciseBox.isEmpty) {
@@ -134,6 +137,7 @@ class WorkoutScheduleReadService {
       cardioPreference: cardioPreference,
       pinnedExercisesByDay: pinnedExercisesByDay,
       applyVolumeTitration: applyVolumeTitration,
+      previousPhaseByDay: previousPhaseByDay,
     );
 
     final dayPattern = preferredDays ?? _getDayPattern(daysPerWeek);
@@ -484,6 +488,12 @@ class WorkoutScheduleReadService {
             newPhase: newPhase,
           )
         : null;
+    // W3.4 (Batch 11-B): on a FRESH advance (pins == null), feed the just-finished
+    // phase's picks as variety avoid-names (previousPhaseNamesByDay self-gates on
+    // the flag → empty when OFF). Read BEFORE generateAndSchedule overwrites
+    // plan_start (same obligation as pins).
+    final previousPhaseByDay =
+        pins == null ? previousPhaseNamesByDay() : null;
     final startDate = nextPhaseStartDate();
     await generateAndSchedule(
       goal: goal,
@@ -501,6 +511,7 @@ class WorkoutScheduleReadService {
       // W2.7 (Batch 9): titrate ONLY a FRESH advance (pins == null). A
       // low-adherence repeat (pins != null) must NOT gain volume.
       applyVolumeTitration: pins == null,
+      previousPhaseByDay: previousPhaseByDay,
     );
     return (generated: true, repeated: pins != null);
   }
@@ -587,24 +598,8 @@ class WorkoutScheduleReadService {
         stored['effective_exp'] == newPhaseEffectiveExp;
     if (!matches) return null;
 
-    List<String> namesOf(Map<String, dynamic> row) =>
-        ((row['exercises'] as List?) ?? const [])
-            .whereType<Map>()
-            .map((e) => (e['exercise_name'] as String?) ?? '')
-            .where((n) => n.isNotEmpty)
-            .toList();
-    void collect(List<Map<String, dynamic>> week, Map<int, List<String>> into) {
-      for (final row in week) {
-        if (row['type'] != 'workout') continue;
-        final idx = row['workout_day_index'];
-        if (idx is int) into[idx] = namesOf(row);
-      }
-    }
-
-    final aByIdx = <int, List<String>>{};
-    final bByIdx = <int, List<String>>{};
-    collect(week1, aByIdx);
-    collect(week2, bByIdx);
+    final aByIdx = _namesByDayIndex(week1);
+    final bByIdx = _namesByDayIndex(week2);
     if (aByIdx.isEmpty && bByIdx.isEmpty) return null;
 
     final maxIdx =
@@ -612,6 +607,67 @@ class WorkoutScheduleReadService {
     return {
       for (var i = 0; i <= maxIdx; i++)
         i: (a: aByIdx[i] ?? const [], b: bByIdx[i] ?? const []),
+    };
+  }
+
+  /// SHARED parser (Batch 11-B fold): the `exercise_name`s of a workout schedule
+  /// row, order preserved, empties dropped, ORIGINAL case (repeatPinsFrom's
+  /// getByExactName consumer needs original case).
+  static List<String> _exerciseNamesOfRow(Map<String, dynamic> row) =>
+      ((row['exercises'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((e) => (e['exercise_name'] as String?) ?? '')
+          .where((n) => n.isNotEmpty)
+          .toList();
+
+  /// SHARED (Batch 11-B fold): a week's `type=='workout'` rows keyed by
+  /// `workout_day_index` → their exercise names. Used by BOTH repeatPinsFrom AND
+  /// previousPhaseNamesByDay (one parser — #1 drift class).
+  static Map<int, List<String>> _namesByDayIndex(
+      List<Map<String, dynamic>> week) {
+    final out = <int, List<String>>{};
+    for (final row in week) {
+      if (row['type'] != 'workout') continue;
+      final idx = row['workout_day_index'];
+      if (idx is int) out[idx] = _exerciseNamesOfRow(row);
+    }
+    return out;
+  }
+
+  /// W3.4 (Batch 11-B): the just-finished phase's per-day A/B exercise names,
+  /// LOWERCASED, for the cross-phase VARIETY avoid-set. Reads the SAME rows as
+  /// repeatPinsFrom (`getWeek(1)`/`getWeek(2)`) but WITHOUT the G5
+  /// `last_phase_profile` gate — a stale avoid-name that no longer matches a live
+  /// candidate is a HARMLESS no-op (queryV4 candidates are pattern-locked). Empty
+  /// map when there's no prior phase → avoidNames empty → inert. The caller gates
+  /// this call on `crossPhaseVarietyEnabled && pins == null`.
+  Map<int, ({List<String> a, List<String> b})> previousPhaseNamesByDay() {
+    // Ship-dark, service-layer gate: flag OFF → no getWeek reads, empty avoid-set
+    // → the cascade is byte-identical. The callers pass this only when pins==null.
+    if (!PlanEngineFlags.crossPhaseVarietyEnabled) return const {};
+    return previousPhaseNamesFrom(week1: getWeek(1), week2: getWeek(2));
+  }
+
+  /// PURE core of [previousPhaseNamesByDay] (visible for testing — no Hive/clock/
+  /// flag). [week1]/[week2] = the just-finished phase's variant-A/B workout rows.
+  /// Returns per-day A/B exercise names LOWERCASED (variety avoid-set), spanning the
+  /// union of A+B day-indices; empty when there's nothing to avoid. Mirrors
+  /// repeatPinsFrom's pure/instance split.
+  @visibleForTesting
+  static Map<int, ({List<String> a, List<String> b})> previousPhaseNamesFrom({
+    required List<Map<String, dynamic>> week1,
+    required List<Map<String, dynamic>> week2,
+  }) {
+    List<String> lc(List<String> ns) =>
+        ns.map((n) => n.toLowerCase()).toList();
+    final aByIdx = _namesByDayIndex(week1);
+    final bByIdx = _namesByDayIndex(week2);
+    if (aByIdx.isEmpty && bByIdx.isEmpty) return const {};
+    final maxIdx =
+        <int>{...aByIdx.keys, ...bByIdx.keys}.reduce((a, b) => a > b ? a : b);
+    return {
+      for (var i = 0; i <= maxIdx; i++)
+        i: (a: lc(aByIdx[i] ?? const []), b: lc(bByIdx[i] ?? const [])),
     };
   }
 

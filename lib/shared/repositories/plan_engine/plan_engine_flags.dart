@@ -253,4 +253,21 @@ class PlanEngineFlags {
       return false;
     }
   }
+
+  /// W3.4 (Batch 11-B): cross-phase VARIETY. When ON, a fresh phase advance passes
+  /// the PREVIOUS phase's per-slot picks as `avoidNames` to `_cascadeFill`, and the
+  /// pure `_selectCandidate` (`_preferNovel` inner) prefers a same-pattern SIBLING
+  /// not used last phase (bounded — never forces a wrong pattern / empties a slot).
+  /// Read at the SERVICE layer to gate the `previousPhaseNamesByDay()` read; OFF →
+  /// not called → avoidNames empty everywhere → `candidates.first` (byte-identical).
+  /// Set `configBox['enable_cross_phase_variety'] = true` to enable.
+  static bool get crossPhaseVarietyEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('enable_cross_phase_variety') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

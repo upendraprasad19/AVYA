@@ -2614,7 +2614,7 @@ concepts:
     restore_methods: [_restoreWorkoutPlan, _restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider, streakProvider]
     ist_sites:
-      - { file: lib/core/services/workout_schedule_read_service.dart, line: 239, fn: generateAndScheduleFromDate }
+      - { file: lib/core/services/workout_schedule_read_service.dart, line: 248, fn: generateAndScheduleFromDate }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.put.*schedule.*status.*planned", reason: "Never overwrite status=completed; check guard first" }
     class_constraints: |
@@ -6777,6 +6777,51 @@ concepts:
         method_or_widget: drives real generateV4 — ON re-ranks vs OFF, post-filter safety, injury-gated inertness, uncurated fallthrough
         semantic: behavioral
     contract_test_path: test/contracts/injury_substitute_preference_behavioral_test.dart
+
+  - concept: cross_phase_variety
+    domain: workout
+    behavioral_test_path: test/contracts/cross_phase_variety_behavioral_test.dart
+    description: >
+      W3.4 (Batch 11-B) — cross-phase VARIETY. On a genuine FRESH phase advance
+      (pins==null), `WorkoutScheduleReadService.previousPhaseNamesByDay()` reads the
+      just-finished phase's per-day A/B picks (getWeek(1)/getWeek(2), LOWERCASED,
+      the SAME rows repeatPinsFrom reads but WITHOUT the G5 gate) and threads them as
+      `previousPhaseByDay` → generateV4 → pickV4 (indexed per-day avoidA/avoidB) →
+      _fillSlots → _cascadeFill → `_selectCandidate._preferNovel`, which prefers a
+      same-`movement_pattern` sibling NOT used last phase. SOFT bias: feeds
+      _selectCandidate ONLY, NEVER queryV4/pickedNames/excludeNames — so it can never
+      hard-empty a slot (BOUNDED: falls to pool.first when only last-phase picks
+      remain). Composes with ①.1d: injury-sub selects the pool (outer), variety breaks
+      ties WITHIN it (inner "prefer-injury-sub-then-variety"). Ship-dark
+      `enable_cross_phase_variety` (PlanEngineFlags.crossPhaseVarietyEnabled) — the
+      SERVICE-layer gate is inside previousPhaseNamesByDay (OFF → returns {} → no
+      getWeek reads → avoidNames empty → byte-identical). NO migration/restore entry
+      (reads existing schedule_* rows). NOTES: shared `_exerciseNamesOfRow` /
+      `_namesByDayIndex` parsers (extracted from repeatPinsFrom — one parser, #1 drift
+      class). attempt-5 (universal pool) is NOT variety-eligible (never calls
+      _selectCandidate — stays as safe as today). daysPerWeek/split-shape change across
+      advance → day-index misalignment is a HARMLESS no-op (a stale avoid-name that
+      matches no pattern-locked candidate falls to .first). L6 _applyHistoryAdjustments
+      (phase≥2) may re-swap a novel pick toward a demoted exercise (still
+      injury-filtered → safe). buildPinnedDays UNCHANGED (variety ⟂ pins). Covers only
+      the pickV4 branch (mutually-exclusive with the repeat-content buildPinnedDays branch).
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: previousPhaseNamesByDay (flag-gated getWeek reader) + _exerciseNamesOfRow / _namesByDayIndex (shared parsers) + generateAndSchedule/autoGenerateNextPhaseIfNeeded thread
+      - file: lib/features/train/screens/graduation_screen.dart
+        method: _onPro — computes previousPhaseByDay (pins==null) → generateAndSchedule
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generate/generateV4 previousPhaseByDay → pickV4 (NOT buildPinnedDays)
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: pickV4 (indexed loop → avoidA/avoidB) / _fillSlots / _cascadeFill avoidNames thread + _selectCandidate._preferNovel
+    readers:
+      - file: test/plan_generator/v4_diagnostic/cascade_tracer.dart
+        method_or_widget: _selectCandidateName + _preferNovelName mirror (trace gains avoidNames; QueryV4Mirror unchanged)
+        semantic: mirror
+      - file: test/contracts/cross_phase_variety_behavioral_test.dart
+        method_or_widget: drives real generateV4 (full_gym/advanced) — variety changes the SET, null=deterministic, bounded, injury-safe
+        semantic: behavioral
+    contract_test_path: test/contracts/cross_phase_variety_behavioral_test.dart
 
   - concept: volume_titration
     domain: workout
