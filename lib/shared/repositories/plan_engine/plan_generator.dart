@@ -161,6 +161,8 @@ class PlanGenerator {
             injuries: normalizedInjuries,
             applyInjuryUniversalFilter:
                 PlanEngineFlags.injuryUniversalFilterEnabled,
+            applyInjurySubstitutePreference:
+                PlanEngineFlags.injurySubstitutePreferenceEnabled,
             exclusions: equipmentExclusionSet,
           )
         : ExerciseSelector.pickV4(
@@ -173,6 +175,8 @@ class PlanGenerator {
             injuries: normalizedInjuries,
             applyInjuryUniversalFilter:
                 PlanEngineFlags.injuryUniversalFilterEnabled,
+            applyInjurySubstitutePreference:
+                PlanEngineFlags.injurySubstitutePreferenceEnabled,
             exclusions: equipmentExclusionSet,
           );
 

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
+import 'injury_substitutes.dart';
 import 'models.dart';
 import 'training_history_analyzer.dart';
 
@@ -522,6 +523,9 @@ class ExerciseSelector {
     // verbatim pre-U2 behavior (pool bypasses the injury filter). Default ON is
     // fail-safe — a caller that forgets the flag still gets the safe path.
     bool applyInjuryUniversalFilter = true,
+    // ①.1d (Batch 11-C): curated injury-substitute preference. Default false →
+    // inert (verbatim cascade pick). Threaded to every _fillSlots → _cascadeFill.
+    bool applyInjurySubstitutePreference = false,
     // ⑥ slice B1: user-excluded equipment (canonical, floor-sanitized). Default
     // `const {}` (unset caller / flag OFF) → every downstream drop inert →
     // byte-identical. A HARD constraint threaded to every pick path.
@@ -549,6 +553,7 @@ class ExerciseSelector {
         day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,
         injuries: injuries, excludeNames: {},
         applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+        applyInjurySubstitutePreference: applyInjurySubstitutePreference,
         exclusions: exclusions,
       );
 
@@ -560,6 +565,7 @@ class ExerciseSelector {
           day.slotsB!, exerciseRepo, equipmentTier, effectiveExp, phase,
           injuries: injuries, excludeNames: goal == 'strength' ? {} : aNames,
           applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
           exclusions: exclusions,
         );
       } else {
@@ -660,6 +666,7 @@ class ExerciseSelector {
     required String goal,
     List<String> injuries = const [],
     bool applyInjuryUniversalFilter = true,
+    bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C) — fresh-fill only
     Set<String> exclusions = const {},
   }) {
     final result = <PopulatedDay>[];
@@ -722,6 +729,7 @@ class ExerciseSelector {
             goal: goal,
             injuries: injuries,
             applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+            applyInjurySubstitutePreference: applyInjurySubstitutePreference,
             exclusions: exclusions,
           ).first;
 
@@ -940,6 +948,7 @@ class ExerciseSelector {
     required List<String> injuries,
     required Set<String> excludeNames,
     bool applyInjuryUniversalFilter = true,
+    bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C)
     required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
   }) {
     final exercises = <PlannedExercise>[];
@@ -951,6 +960,7 @@ class ExerciseSelector {
           slot, repo, equipmentTier, effectiveExp, phase,
           injuries: injuries, pickedNames: pickedNames,
           applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
           exclusions: exclusions,
         );
         if (exercise != null) {
@@ -963,6 +973,32 @@ class ExerciseSelector {
   }
 
   /// 5-attempt cascade for a single MuscleSlot.
+  /// ①.1d (Batch 11-C): pick a candidate from a NON-EMPTY, already-safe (post
+  /// injury-filter), same-pattern `queryV4` result list. Ship-dark OFF → verbatim
+  /// `candidates.first`. When ON, PREFER a curated `InjurySubstitutes` sub (in
+  /// map/joint-friendlier order), else fall through to `candidates.first`. Cannot
+  /// surface a contraindicated exercise (the list is already injury-filtered).
+  /// (11-B adds an `avoidNames` variety tiebreak inside this same helper.)
+  static Map<String, dynamic> _selectCandidate(
+    List<Map<String, dynamic>> candidates, {
+    required List<String> injuries,
+    required bool applyInjurySubstitutePreference,
+  }) {
+    if (!applyInjurySubstitutePreference) return candidates.first;
+    final prefs = InjurySubstitutes.preferredFor(injuries);
+    if (prefs.isEmpty) return candidates.first;
+    final subs = candidates
+        .where((c) => prefs.contains((c['name'] as String? ?? '').toLowerCase()))
+        .toList();
+    if (subs.isEmpty) return candidates.first;
+    // Honor the curated (foundational/joint-friendlier-first) order — NOT
+    // queryV4's compound/priority sort. Every sub is in prefs → indexOf >= 0.
+    subs.sort((a, b) => prefs
+        .indexOf((a['name'] as String? ?? '').toLowerCase())
+        .compareTo(prefs.indexOf((b['name'] as String? ?? '').toLowerCase())));
+    return subs.first;
+  }
+
   /// movement_pattern is NEVER dropped.
   static PlannedExercise? _cascadeFill(
     MuscleSlot slot,
@@ -973,6 +1009,7 @@ class ExerciseSelector {
     required List<String> injuries,
     required Set<String> pickedNames,
     bool applyInjuryUniversalFilter = true,
+    bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C)
     required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
   }) {
     // Attempt 1: Exact target + subFocus + equipment + type + experience
@@ -990,7 +1027,11 @@ class ExerciseSelector {
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
     );
-    if (candidates.isNotEmpty) return _buildExercise(candidates.first);
+    if (candidates.isNotEmpty) {
+      return _buildExercise(_selectCandidate(candidates,
+          injuries: injuries,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference));
+    }
 
     // Attempt 2: Drop subFocus (broader target within same muscle)
     candidates = repo.queryV4(
@@ -1003,7 +1044,11 @@ class ExerciseSelector {
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
     );
-    if (candidates.isNotEmpty) return _buildExercise(candidates.first);
+    if (candidates.isNotEmpty) {
+      return _buildExercise(_selectCandidate(candidates,
+          injuries: injuries,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference));
+    }
 
     // Attempt 3: Drop target + exercise type (any exercise in movement pattern with equipment)
     candidates = repo.queryV4(
@@ -1014,7 +1059,11 @@ class ExerciseSelector {
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
     );
-    if (candidates.isNotEmpty) return _buildExercise(candidates.first);
+    if (candidates.isNotEmpty) {
+      return _buildExercise(_selectCandidate(candidates,
+          injuries: injuries,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference));
+    }
 
     // Attempt 4: Drop equipment TIER (allow any tier in the movement pattern).
     // ⑥ B1: the exclusion filter is KEPT here — a dropped TIER is a soft
@@ -1027,7 +1076,11 @@ class ExerciseSelector {
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
     );
-    if (candidates.isNotEmpty) return _buildExercise(candidates.first);
+    if (candidates.isNotEmpty) {
+      return _buildExercise(_selectCandidate(candidates,
+          injuries: injuries,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference));
+    }
 
     // Attempt 5: Universal bodyweight pool.
     // U2 (injury safety): the pool bypasses queryV4, so — unlike attempts 1-4 —

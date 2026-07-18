@@ -157,6 +157,27 @@ name-derived onConflict identity; the library id MUST NOT be projected upward
 `exlog_exercise_id_behavioral_test.dart` + absence gate
 `sync_exlog_no_library_id_test.dart`.
 
+**Injury-substitute preference (①.1d — Batch 11-C, ship-dark).** When
+`enable_injury_substitute_pref` is ON, `_cascadeFill` re-ranks the already-safe
+(POST-injury-filter), same-`movement_pattern` `queryV4` candidate list to PREFER a
+curated `InjurySubstitutes` sub (map/joint-friendlier order, EXACT lowercased name
+match) over queryV4's compound/priority sort — at all 4 attempt-return sites via the
+pure `_selectCandidate`. It runs on the post-filter list → can NEVER surface a
+contraindicated exercise; a PREFERENCE (falls through to `candidates.first` when no
+curated sub is a candidate). The flag is resolved ONCE in `generateV4` →
+`applyInjurySubstitutePreference` threaded pickV4/buildPinnedDays → `_fillSlots` →
+`_cascadeFill` (mirrors `applyInjuryUniversalFilter`). DEFAULT OFF → verbatim
+`candidates.first` (byte-identical). The pure-Dart `cascade_tracer.dart` mirrors it
+(`_selectCandidateName`); `query_v4_mirror.dart` UNCHANGED; `generator_matrix.dart`'s
+trace call is NOT wired (param defaults false → frozen D3 baseline unmoved). Curated
+map covers 6 of 9 `InjuryVocab` tokens (ankle/neck/hamstring → no subs → fallthrough),
+each verified same-pattern-safe vs `exercise_library.json` (RDL dropped from lower_back
+— under-tagging gap). ⚠ L6 `_applyHistoryAdjustments` (phase≥2) may re-swap a curated
+pick that's in the user's `demoted` set (still injury-filtered → safe). SoT
+`injury_safe_substitute_preference`; behavioral
+`injury_substitute_preference_behavioral_test.dart`. **11-B (W3.4 cross-phase variety)
+extends the SAME `_selectCandidate` with an `avoidNames` tiebreak — own branch.**
+
 **Exercise count targets (per day):**
 
 | Experience | 3-day | 4-day | 5-day | 6-day |

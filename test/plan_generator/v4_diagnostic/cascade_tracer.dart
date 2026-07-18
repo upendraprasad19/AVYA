@@ -1,4 +1,5 @@
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/injury_substitutes.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'query_v4_mirror.dart';
 
@@ -68,6 +69,27 @@ class CascadeTracer {
   /// Unlike production `_cascadeFill` which early-returns on first non-empty
   /// result, this always records every attempt's signature + count so the
   /// trace shows the full fallback path.
+  /// ①.1d (Batch 11-C) mirror of `ExerciseSelector._selectCandidate`: pick the
+  /// name from a non-empty result list, preferring a curated `InjurySubstitutes`
+  /// sub (in map order) when the flag is ON. OFF → `results.first` (verbatim).
+  static String _selectCandidateName(
+    List<Map<String, dynamic>> results,
+    List<String> injuries,
+    bool applyInjurySubstitutePreference,
+  ) {
+    if (!applyInjurySubstitutePreference) return results.first['name'] as String;
+    final prefs = InjurySubstitutes.preferredFor(injuries);
+    if (prefs.isEmpty) return results.first['name'] as String;
+    final subs = results
+        .where((c) => prefs.contains((c['name'] as String? ?? '').toLowerCase()))
+        .toList();
+    if (subs.isEmpty) return results.first['name'] as String;
+    subs.sort((a, b) => prefs
+        .indexOf((a['name'] as String? ?? '').toLowerCase())
+        .compareTo(prefs.indexOf((b['name'] as String? ?? '').toLowerCase())));
+    return subs.first['name'] as String;
+  }
+
   static CascadeTrace trace(
     List<Map<String, dynamic>> library, {
     required MuscleSlot slot,
@@ -76,6 +98,7 @@ class CascadeTracer {
     required int phase,
     required List<String> injuries,
     required Set<String> pickedNames,
+    bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C mirror)
     Set<String> exclusions = const {}, // ⑥ B1 (mirror; default {} → no-op)
   }) {
     final attempts = <CascadeAttempt>[];
@@ -116,7 +139,7 @@ class CascadeTracer {
     // ignore: unnecessary_null_comparison
     if (a1Results.isNotEmpty && pick == null) {
       pick = CascadePick(
-        a1Results.first['name'] as String,
+        _selectCandidateName(a1Results, injuries, applyInjurySubstitutePreference),
         CascadePickSource.attempt1Exact,
       );
     }
@@ -145,7 +168,7 @@ class CascadeTracer {
     attempts.add(_attempt(2, a2Sig, a2Results));
     if (a2Results.isNotEmpty && pick == null) {
       pick = CascadePick(
-        a2Results.first['name'] as String,
+        _selectCandidateName(a2Results, injuries, applyInjurySubstitutePreference),
         CascadePickSource.attempt2DropSubFocus,
       );
     }
@@ -170,7 +193,7 @@ class CascadeTracer {
     attempts.add(_attempt(3, a3Sig, a3Results));
     if (a3Results.isNotEmpty && pick == null) {
       pick = CascadePick(
-        a3Results.first['name'] as String,
+        _selectCandidateName(a3Results, injuries, applyInjurySubstitutePreference),
         CascadePickSource.attempt3DropTypeAndTarget,
       );
     }
@@ -193,7 +216,7 @@ class CascadeTracer {
     attempts.add(_attempt(4, a4Sig, a4Results));
     if (a4Results.isNotEmpty && pick == null) {
       pick = CascadePick(
-        a4Results.first['name'] as String,
+        _selectCandidateName(a4Results, injuries, applyInjurySubstitutePreference),
         CascadePickSource.attempt4DropEquipment,
       );
     }
