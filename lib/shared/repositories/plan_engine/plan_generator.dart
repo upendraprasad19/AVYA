@@ -164,6 +164,14 @@ class PlanGenerator {
     // selection is supplied (repeat-content), slot those exercise NAMES into the
     // SAME frames instead of running the cascade — the tail (Stage 0 decay +
     // periodization) then runs UNCHANGED. null → verbatim pickV4 → byte-identical.
+    // W3.5 (Batch 12-B plateau rotation): the plateaued compound NAMES to SOFT-avoid
+    // in the cascade so a stuck lift rotates to a same-pattern sibling. Computed as a
+    // STATEMENT (can't live in the ternary else) + guarded `pins == null` so pins ⟂
+    // plateau is STRUCTURAL. {} when off / pins → union no-op → byte-identical.
+    final plateauAvoid =
+        (applyPlateauEscalation && pinnedExercisesByDay == null)
+            ? PlateauScan.plateauedExerciseNames(phase: phase)
+            : const <String>{};
     final populated = pinnedExercisesByDay != null
         ? ExerciseSelector.buildPinnedDays(
             frames: filteredDays,
@@ -194,6 +202,7 @@ class PlanGenerator {
                 PlanEngineFlags.injurySubstitutePreferenceEnabled,
             exclusions: equipmentExclusionSet,
             previousPhaseByDay: previousPhaseByDay, // W3.4 (Batch 11-B)
+            plateauAvoidNames: plateauAvoid, // W3.5 (Batch 12-B rotation)
           );
 
     // Stage 0: Progression (Phase 2+ weight suggestions)

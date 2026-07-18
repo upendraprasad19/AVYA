@@ -534,6 +534,11 @@ class ExerciseSelector {
     // cascade avoids repeating them when a same-pattern sibling exists. null →
     // avoidNames empty everywhere → inert. Only the fresh-advance caller passes it.
     Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
+    // W3.5 (Batch 12-B plateau rotation): plateaued compound NAMES (lowercased) to
+    // SOFT-avoid GLOBALLY (every day/variant) so a stuck lift rotates to a
+    // same-pattern sibling. Unioned into avoidA/avoidB → _preferNovel (soft, bounded).
+    // Default `{}` → union no-op → byte-identical. Only generateV4 passes it.
+    Set<String> plateauAvoidNames = const {},
   }) {
     final result = <PopulatedDay>[];
 
@@ -553,11 +558,19 @@ class ExerciseSelector {
 
     for (var i = 0; i < slotDays.length; i++) {
       final day = slotDays[i];
-      // W3.4 (Batch 11-B): the previous phase's A/B picks for THIS day-index — a
-      // SOFT variety bias (feeds _selectCandidate ONLY, never queryV4/excludeNames).
-      // Already lowercased by previousPhaseNamesByDay; empty when the flag/param off.
-      final avoidA = (previousPhaseByDay?[i]?.a ?? const <String>[]).toSet();
-      final avoidB = (previousPhaseByDay?[i]?.b ?? const <String>[]).toSet();
+      // W3.4 (Batch 11-B) variety + W3.5 (Batch 12-B) plateau rotation: the SOFT
+      // avoid-names for THIS day — the previous phase's per-day A/B picks UNIONED
+      // with the GLOBAL plateaued-compound names (both lowercased; feed
+      // _selectCandidate ONLY, never queryV4/excludeNames). Empty union → same set
+      // as `.toSet()` → byte-identical.
+      final avoidA = {
+        ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
+        ...plateauAvoidNames,
+      };
+      final avoidB = {
+        ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
+        ...plateauAvoidNames,
+      };
       // Fill variant A
       var exercisesA = _fillSlots(
         day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,

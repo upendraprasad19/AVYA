@@ -228,6 +228,33 @@ exlog+readiness already sync+restore); `generator_matrix`/`cascade_tracer` NOT w
 frozen D3 baseline unmoved. SoT `plateau_escalation`; behavioral
 `plateau_escalation_behavioral_test.dart` + pure `plateau_scan_test.dart`.
 
+**Plateau rotation (W3.5 — Batch 12-B, PRO, ship-dark).** rung-3: at a genuine FRESH
+phase advance the plateaued COMPOUND lifts (SAME detector as rung-2 —
+`PlateauScan.plateauedExerciseNames`, the per-exercise sibling of `plateauedGroups`,
+LOWERCASED, SAME gates) are SOFT-avoided in the cascade so each ROTATES to a
+same-`movement_pattern` sibling next phase. Computed in `generateV4` (guarded
+`applyPlateauEscalation && pinnedExercisesByDay == null` → statement before the pins
+ternary) → threaded as `pickV4`'s new `plateauAvoidNames` → UNIONED GLOBALLY into every
+day's `avoidA`/`avoidB` (alongside 11-B's `previousPhaseByDay` names) → the SAME
+`_fillSlots`/`_cascadeFill`/`_selectCandidate._preferNovel` seam. **SOFT + BOUNDED** —
+feeds `_selectCandidate` ONLY (never queryV4/excludeNames) on a guaranteed-non-empty
+pool → never empties a slot / wrong pattern / disturbs the attempt-5 injury floor; on a
+shallow pool `_preferNovel` falls to `pool.first` (the stuck lift RETAINED, no crash).
+**Reuses `enable_plateau_escalation` (NO new flag), INDEPENDENT of
+`enable_cross_phase_variety`** (rotation fires under the plateau flag alone). DEFAULT OFF
+/ opt-in false → `plateauAvoid {}` → the union `{...listA, ...{}}` ≡ `listA.toSet()` →
+byte-identical. Rotation is a SWAP (slot-count-neutral; a rotated-in sibling may carry ±1
+base `default_sets`, bounded — pre-existing 11-B behavior). **rung-2 (+sets) and rung-3
+(rotation) BOTH fire (no cross-gate)** — the +1 lands on the fresh sibling's group,
+MRV-clamped; safe. **rung-1 explainability NOT built** (terminal won't-do: out-of-scope
+for a rotation batch, causally imprecise — deload is fatigue-driven — and re-coupling
+`deload_evaluator→plateau_scan` or a generation-time stash would break pure-compute).
+`cascade_tracer._preferNovelName` + `generator_matrix` UNCHANGED → frozen D3 baseline
+unmoved. ⚠ L6 `_applyHistoryAdjustments` (phase≥2, demoted/customs) may re-add a rotated
+lift — consistent with rung-3 being SOFT (the behavioral test seeds no swap/custom
+history → L6 skipped → deterministic). No migration/restore (Hive-read-only). SoT
+`plateau_rotation`; behavioral `plateau_rotation_behavioral_test.dart`.
+
 **Exercise count targets (per day):**
 
 | Experience | 3-day | 4-day | 5-day | 6-day |

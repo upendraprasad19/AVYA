@@ -114,6 +114,45 @@ class PlateauScan {
     }
   }
 
+  /// The plateaued COMPOUND exercise NAMES (LOWERCASED — `_preferNovel` compares
+  /// lowercased) for rung-3 rotation (Batch 12-B) — the per-exercise sibling of
+  /// [plateauedGroups] (SAME scan, SAME gates). `{}` when the plateau/readiness
+  /// flag is OFF, phase<2, the user is under persistent fatigue (→ deload rung),
+  /// or there is no plateau evidence. Crash-safe: any read failure → `{}` (no
+  /// rotation, the safe direction).
+  static Set<String> plateauedExerciseNames({required int phase}) {
+    try {
+      if (!PlanEngineFlags.plateauEscalationEnabled) return const <String>{};
+      if (!PlanEngineFlags.readinessEnabled) return const <String>{};
+      if (phase < 2) return const <String>{};
+      if (_fatiguePresent()) return const <String>{};
+
+      final box = HiveService.instance.workoutBox;
+      final cutoff =
+          istDateStr(nowWall().subtract(const Duration(days: _windowDays)));
+      final byExercise = buildE1rmByDate(box, cutoff: cutoff);
+      if (byExercise.isEmpty) return const <String>{};
+
+      final repo = ExerciseRepository.instance;
+      final names = <String>{};
+      byExercise.forEach((name, dated) {
+        if (dated.length < _minSessions) return;
+        if (!repo.isCompoundByExactName(name)) return;
+        final dates = dated.keys.toList()..sort();
+        final span = DateTime.parse(dates.last)
+            .difference(DateTime.parse(dates.first))
+            .inDays;
+        if (span < _minSpanDays) return;
+        final values = [for (final d in dates) dated[d]!];
+        if (!isFlat(values)) return;
+        names.add(name.toLowerCase()); // _preferNovel compares lowercased
+      });
+      return names;
+    } catch (_) {
+      return const <String>{};
+    }
+  }
+
   /// (max−min)/max ≤ [_flatRelRange] ⇒ flat (no meaningful progress). Public +
   /// pure so the flatness threshold is unit-testable in isolation. Division-safe:
   /// `sessionMaxE1rm` filters non-positive loads (max > 0) and the ≥[_minSessions]
