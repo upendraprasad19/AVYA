@@ -111,6 +111,10 @@ class WorkoutScheduleReadService {
     // the prior phase's SELECTION at detrained loads. null (every existing
     // caller) → verbatim fresh generation → byte-identical.
     Map<int, ({List<String> a, List<String> b})>? pinnedExercisesByDay,
+    // W2.7 (Batch 9): opt-in volume titration — the two fresh-advance callers
+    // pass `pins == null` so a REPEAT advance never gains volume. Threaded to
+    // generate(); default false → inert.
+    bool applyVolumeTitration = false,
   }) async {
     final exerciseBox = _hive.exerciseBox;
     if (exerciseBox.isEmpty) {
@@ -129,6 +133,7 @@ class WorkoutScheduleReadService {
       sessionDuration: sessionDuration,
       cardioPreference: cardioPreference,
       pinnedExercisesByDay: pinnedExercisesByDay,
+      applyVolumeTitration: applyVolumeTitration,
     );
 
     final dayPattern = preferredDays ?? _getDayPattern(daysPerWeek);
@@ -493,6 +498,9 @@ class WorkoutScheduleReadService {
       sessionDuration: sessionDuration,
       cardioPreference: cardioPreference,
       pinnedExercisesByDay: pins,
+      // W2.7 (Batch 9): titrate ONLY a FRESH advance (pins == null). A
+      // low-adherence repeat (pins != null) must NOT gain volume.
+      applyVolumeTitration: pins == null,
     );
     return (generated: true, repeated: pins != null);
   }

@@ -14,6 +14,7 @@ import 'split_resolver.dart';
 import 'superset_pairer.dart';
 import 'training_history_analyzer.dart';
 import 'volume_filter.dart';
+import 'volume_titration.dart';
 import 'warmup_cooldown.dart';
 
 /// Plan Generator V3 — Orchestrator.
@@ -49,6 +50,7 @@ class PlanGenerator {
     List<String> equipmentExclusions = const [], // ⑥ B1 forward (facade omitted it)
     Map<int, ({List<String> a, List<String> b})>?
         pinnedExercisesByDay, // ⑧ 8-A/2-cap forward
+    bool applyVolumeTitration = false, // W2.7 Batch 9 (opt-in; fresh advance only)
   }) {
     return generateV4(
       goal: goal,
@@ -64,6 +66,7 @@ class PlanGenerator {
       previousWeights: previousWeights,
       equipmentExclusions: equipmentExclusions,
       pinnedExercisesByDay: pinnedExercisesByDay,
+      applyVolumeTitration: applyVolumeTitration,
     );
   }
 
@@ -88,6 +91,11 @@ class PlanGenerator {
     // the caller (UNIT 2-int) gates on that. Value = per-day (variant-A names for
     // weeks 1/3, variant-B names for weeks 2/4) — see buildPinnedDays.
     Map<int, ({List<String> a, List<String> b})>? pinnedExercisesByDay,
+    // W2.7 (Batch 9 volume titration): opt-in intent — applied ONLY on a genuine
+    // FRESH phase advance (the two advance callers pass `pins == null`). Default
+    // false → every other caller (coach-regen / edit-profile / previews / hotel /
+    // onboarding) is untouched regardless of `enable_volume_titration`.
+    bool applyVolumeTitration = false,
   }) {
     final equipmentList = _getEquipmentList(equipment);
     final effectiveExp = effectiveLevel(experienceLevel, phase);
@@ -216,6 +224,20 @@ class PlanGenerator {
       // byte-identical). Consumed by the 7-B-2 eval/un-deload.
       stashWorkingBase: PlanEngineFlags.triggeredDeloadEnabled,
     );
+
+    // Stage 4.5: W2.7 volume titration (Batch 9) — phase-boundary per-major-group
+    // ±1 set adjustment from phase-N evidence. Opt-in + ship-dark: only a genuine
+    // fresh advance passes `applyVolumeTitration:true` (via `pins == null`);
+    // resolveDeltas additionally returns {} unless `enable_volume_titration` is ON
+    // AND phase>=2. Any of those false → applyToWeeks is identity → byte-identical.
+    // Placed BEFORE sequencing/superset (neither reads `sets`) so it sees the
+    // bodyFocus-adjusted counts and its result flows through unchanged.
+    if (applyVolumeTitration) {
+      weekPlans = VolumeTitration.applyToWeeks(
+        weekPlans,
+        VolumeTitration.resolveDeltas(phase: phase),
+      );
+    }
 
     // Stage 3: Sequencing
     weekPlans = SequencingEngine.sequence(weekPlans);

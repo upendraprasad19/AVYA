@@ -16,25 +16,9 @@
 //    features don't exist until Batches 4/1 — hooks are stubbed, scored N/A).
 // Each dimension sharpens as the owning feature lands (NOT deferred silently).
 
-import 'generator_matrix.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/muscle_groups.dart';
 
-/// Maps a library primary/secondary muscle string → a canonical major group.
-/// Anything unmapped is ignored for coverage/volume (e.g. very specific tokens).
-const _muscleToGroup = <String, String>{
-  'chest': 'Chest', 'upper chest': 'Chest', 'lower chest': 'Chest', 'mid chest': 'Chest',
-  'lats': 'Back', 'upper back': 'Back', 'mid back': 'Back', 'lower back': 'Back',
-  'traps': 'Back', 'rhomboids': 'Back', 'full back': 'Back', 'back': 'Back',
-  'front deltoid': 'Shoulders', 'side deltoid': 'Shoulders', 'rear deltoid': 'Shoulders',
-  'deltoids': 'Shoulders', 'shoulders': 'Shoulders',
-  'biceps': 'Biceps', 'brachialis': 'Biceps',
-  'triceps': 'Triceps',
-  'forearms': 'Forearms',
-  'quads': 'Quads', 'quadriceps': 'Quads',
-  'hamstrings': 'Hamstrings',
-  'glutes': 'Glutes', 'hip flexors': 'Glutes',
-  'calves': 'Calves',
-  'abs': 'Core', 'core': 'Core', 'obliques': 'Core', 'erector spinae': 'Core',
-};
+import 'generator_matrix.dart';
 
 /// The major groups a well-rounded weekly plan is expected to train.
 const _expectedGroups = <String>[
@@ -46,7 +30,9 @@ const _expectedGroups = <String>[
 const _mev = 8;
 const _mrv = 20;
 
-String? _groupOf(String muscle) => _muscleToGroup[muscle.toLowerCase().trim()];
+// Delegates to the shared lib map (Batch 9 de-drift) — byte-identical content,
+// same `.toLowerCase().trim()` normalization, so the frozen D3 baseline is unmoved.
+String? _groupOf(String muscle) => muscleGroupOf(muscle);
 
 List<String> _asStrings(dynamic v) {
   if (v is List) return v.map((e) => e.toString()).toList();

@@ -6,7 +6,6 @@
 # Format: <file_path> :: <prefix>_* :: <field_name>
 
 lib/core/services/deload_e1rm_scan.dart :: exlog_* :: exercise_type
-lib/core/services/deload_e1rm_scan.dart :: exlog_* :: reps
 lib/core/services/exlog_key_migrator.dart :: exlog_* :: reps
 lib/core/services/logging_type_repair_migrator.dart :: exlog_* :: logging_type_repaired_at_ms
 lib/core/services/logging_type_repair_migrator.dart :: exlog_* :: reps
@@ -581,3 +580,4 @@ lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_*
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: reps_completed
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: volume_kg
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: weight_kg
+lib/shared/repositories/plan_engine/volume_titration.dart :: exlog_* :: primary_muscles
