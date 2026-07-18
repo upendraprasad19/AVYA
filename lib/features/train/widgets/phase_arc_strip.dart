@@ -28,6 +28,11 @@ class PhaseArcStrip extends ConsumerWidget {
     final arc = ref.watch(phaseArcProvider);
     if (arc == null) return const SizedBox.shrink();
     final waves = arc.waves;
+    // ⑥ Batch 10 (W3.1 explainability): the deload "why" — shown ONLY on the
+    // deload week (week 4), when a reason was stamped (deload feature ON). Null /
+    // not-week-4 → no line → the strip is byte-identical to Batch 7-A.
+    final reason =
+        arc.currentWeek == 4 ? ref.watch(deloadReasonProvider) : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -59,6 +64,14 @@ class PhaseArcStrip extends ConsumerWidget {
                 ),
             ],
           ),
+          if (reason != null && reason.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              reason,
+              style: AppTypography.bodySm
+                  .copyWith(color: AppColors.textDim, height: 1.35),
+            ),
+          ],
         ],
       ),
     );

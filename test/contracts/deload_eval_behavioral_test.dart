@@ -25,6 +25,7 @@ import 'package:icanbefitter/core/services/deload_evaluator.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
 void main() {
@@ -581,6 +582,66 @@ void main() {
       expect((exs[1] as Map)['sets'], 3); // no stash → untouched
       expect((exs[1] as Map)['reps'], '12');
       expect(liftedWorkoutRow()!['week_character'], 'working');
+    });
+  });
+
+  group('W3.1 deload reason (Batch 10) — round-trip through the real reader', () {
+    test('LIFT → "Working week" reason, read back via currentDeloadReason',
+        () async {
+      await seedWk4(phase: 2);
+      await wb.put('last_actual_deload_phase', 1);
+      await seedGoodReadiness();
+      await seedNonDecliningCompound();
+      await enableFlags();
+
+      await DeloadEvaluator.instance.maybeEvaluate();
+
+      final reason = wb.get('deload_reason_phase_2');
+      expect(reason, isA<String>());
+      expect(reason as String, contains('Working week'));
+      // The REAL reader derives the phase the SAME way + reads the SAME key.
+      expect(WorkoutScheduleService.instance.currentDeloadReason(), reason);
+    });
+
+    test('KEEP (declining e1RM) → "dipped" reason (matches the deload node)',
+        () async {
+      await seedWk4(phase: 2);
+      await wb.put('last_actual_deload_phase', 1);
+      await seedGoodReadiness();
+      final dPrior = fixedToday.subtract(const Duration(days: 6));
+      final dLatest = fixedToday.subtract(const Duration(days: 2));
+      await wb.put('exlog_${dk(dPrior)}_c', {
+        'exercise_name': compoundName,
+        'date': dk(dPrior),
+        'logging_type': 'weight_reps',
+        'sets': [
+          {'weight_kg': 100, 'reps_completed': 5}
+        ],
+      });
+      await wb.put('exlog_${dk(dLatest)}_c', {
+        'exercise_name': compoundName,
+        'date': dk(dLatest),
+        'logging_type': 'weight_reps',
+        'sets': [
+          {'weight_kg': 90, 'reps_completed': 5} // declined
+        ],
+      });
+      await enableFlags();
+
+      await DeloadEvaluator.instance.maybeEvaluate();
+
+      expect(liftedWorkoutRow()!['week_character'], 'deload'); // kept
+      final reason = wb.get('deload_reason_phase_2') as String?;
+      expect(reason, contains('dipped'));
+      expect(WorkoutScheduleService.instance.currentDeloadReason(), reason);
+    });
+
+    test('reader gate: flag OFF → null even with a stamped key', () async {
+      await seedWk4(phase: 2);
+      await wb.put('deload_reason_phase_2', 'stale reason string');
+      // triggered_deload OFF (only readiness on) → the reader gate returns null.
+      await cb.put('enable_readiness', true);
+      expect(WorkoutScheduleService.instance.currentDeloadReason(), isNull);
     });
   });
 }

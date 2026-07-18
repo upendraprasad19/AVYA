@@ -186,6 +186,11 @@ class WorkoutScheduleService {
   List<String> currentWaveCharacters() =>
       read.WorkoutScheduleReadService.instance.currentWaveCharacters();
 
+  /// Batch 10 (W3.1): the one-line deload "why" for the current phase's week 4,
+  /// or null (flag OFF / no reason stamped).
+  String? currentDeloadReason() =>
+      read.WorkoutScheduleReadService.instance.currentDeloadReason();
+
   DateTime? getPlanStartDate() =>
       read.WorkoutScheduleReadService.instance.getPlanStartDate();
 

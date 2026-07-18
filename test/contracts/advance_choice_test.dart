@@ -70,6 +70,9 @@ void main() {
         // assert both options are present before dismissing
         expect(find.text('RUN THE SAME DRILLS AGAIN'), findsOneWidget);
         expect(find.text('GIVE ME FRESH ORDERS'), findsOneWidget);
+        // W3.1 (Batch 10): the non-shaming "why" lead-in — explains the trigger
+        // (an unfinished block) with NO completion %.
+        expect(find.textContaining('open sets'), findsOneWidget);
         await tester.tapAt(const Offset(10, 10)); // dismiss via barrier
       });
       expect(r, isNull);

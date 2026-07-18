@@ -26,9 +26,11 @@ import 'package:icanbefitter/core/services/deload_e1rm_scan.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
+import 'package:icanbefitter/core/utils/deload_reason.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/periodization_engine.dart';
@@ -64,15 +66,10 @@ class DeloadEvaluator {
     if (wk4.isEmpty) return;
 
     // Derive the phase from the wk4 rows' own stamp (the phase this deload
-    // belongs to) — read ONCE, threaded to the flag key + archetype + backstop.
-    int? phase;
-    for (final r in wk4) {
-      final p = r['phase'];
-      if (p is int) {
-        phase = p;
-        break;
-      }
-    }
+    // belongs to) — read ONCE, threaded to the flag key + archetype + backstop +
+    // (Batch 10) the reason key. The SAME derivation the reason READER uses
+    // (`WorkoutScheduleReadService.currentDeloadReason`) → writer==reader.
+    final phase = WorkoutScheduleReadService.deloadPhaseFromWeek4(wk4);
     if (phase == null) return;
 
     final box = HiveService.instance.workoutBox;
@@ -123,25 +120,44 @@ class DeloadEvaluator {
     final shouldLift =
         notBackstop && notDeloadPhase && readiness.good && e1rm.noFatigue;
 
+    var liftedAny = false;
     if (shouldLift) {
-      await _liftWeekFour(wk4);
+      liftedAny = await _liftWeekFour(wk4);
       await box.put(flagKey, true); // lifted → lock (no deload taken this phase).
-      return;
+    } else {
+      // KEEP. A FIRM keep (lock + seed the marker) is any keep NOT caused solely
+      // by insufficient data — i.e. an intended deload phase, the backstop forcing
+      // it, OR a clause failing on POSITIVE evidence. A pure insufficient-data keep
+      // (no readiness entries AND no compound evidence — e.g. an in-flight restore)
+      // sets NEITHER → re-evaluates next launch.
+      final firmKeep = !notDeloadPhase ||
+          !notBackstop ||
+          readiness.hadData ||
+          e1rm.hasCompoundEvidence;
+      if (firmKeep) {
+        await box.put(_kMarkerKey, phase); // a deload IS taken this phase.
+        await box.put(flagKey, true);
+      }
     }
 
-    // KEEP. A FIRM keep (lock + seed the marker) is any keep NOT caused solely
-    // by insufficient data — i.e. an intended deload phase, the backstop forcing
-    // it, OR a clause failing on POSITIVE evidence. A pure insufficient-data keep
-    // (no readiness entries AND no compound evidence — e.g. an in-flight restore)
-    // sets NEITHER → re-evaluates next launch.
-    final firmKeep = !notDeloadPhase ||
-        !notBackstop ||
-        readiness.hadData ||
-        e1rm.hasCompoundEvidence;
-    if (firmKeep) {
-      await box.put(_kMarkerKey, phase); // a deload IS taken this phase.
-      await box.put(flagKey, true);
-    }
+    // W3.1 (Batch 10 explainability): stamp the one-line "why", keyed on THIS
+    // deload's phase (the SAME derivation the reader uses → writer==reader), from
+    // the ACTUAL outcome (`liftedAny` — a shouldLift with nothing eligible to lift
+    // leaves the week a `deload`, so the copy must match the wave the strip shows).
+    // Additive + LOCAL-only; only reached under the two flags (Guard 1) → inert off.
+    await box.put(
+      '${WorkoutScheduleReadService.deloadReasonKeyPrefix}$phase',
+      deloadDecisionReason(
+        shouldLift: shouldLift,
+        liftedAny: liftedAny,
+        notDeloadPhase: notDeloadPhase,
+        notBackstop: notBackstop,
+        readinessGood: readiness.good,
+        readinessHadData: readiness.hadData,
+        e1rmNoFatigue: e1rm.noFatigue,
+        e1rmHasEvidence: e1rm.hasCompoundEvidence,
+      ),
+    );
   }
 
   /// readinessGood requires POSITIVE evidence: ≥3 check-ins in the trailing 14
@@ -166,7 +182,7 @@ class DeloadEvaluator {
 
   /// Lift week 4: rewrite each qualifying schedule row + the `current_plan` blob
   /// from the stashed working base, then fire durability UNAWAITED.
-  Future<void> _liftWeekFour(List<Map<String, dynamic>> wk4) async {
+  Future<bool> _liftWeekFour(List<Map<String, dynamic>> wk4) async {
     // Re-fetch the box (the getter re-asserts ownership per fetch).
     final box = HiveService.instance.workoutBox;
     final todayKey = istDateStr(nowWall());
@@ -202,7 +218,7 @@ class DeloadEvaluator {
     // If NO eligible row was lifted (e.g. the week is already all completed /
     // swapped / past), the week WAS effectively a deload → leave the blob's
     // 'deload' char honest + skip the durability sync (nothing changed).
-    if (!liftedAny) return;
+    if (!liftedAny) return false;
 
     // 2. Dual-write the `current_plan` blob's deload week (week_plans[3]).
     final planRaw = box.get(_kPlanKey);
@@ -241,6 +257,7 @@ class DeloadEvaluator {
     // the lifted rows on any later restore. Awaiting here would block cold-launch
     // home navigation (`runRolloverNow` is awaited before `context.go`).
     unawaited(SyncService.instance.pushSnapshot());
+    return true;
   }
 
   /// Rewrite one exercise map from its stash: sets←working_sets, reps←

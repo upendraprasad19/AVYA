@@ -58,8 +58,12 @@ class _AdvanceChoiceSheet extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Run the same drills again to lock them in, or take on fresh '
-              'orders. Either way, the next phase is yours.',
+              // W3.1 (Batch 10): a non-shaming lead-in explaining WHY the choice
+              // appears (an unfinished block) — no completion %, per the codified
+              // non-shaming brand soul (never "you failed / missed / low adherence").
+              "You've still got open sets in this block. Run the same drills "
+              'again to lock them in, or take on fresh orders — either way, the '
+              'next phase is yours.',
               style: AppTypography.monoXs
                   .copyWith(color: AppColors.textDim, height: 1.4),
             ),

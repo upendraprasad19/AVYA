@@ -721,6 +721,16 @@ final phaseArcProvider = Provider<PhaseArcData?>((ref) {
   return PhaseArcData(waves: waves, currentWeek: week);
 });
 
+/// Batch 10 (W3.1 explainability): the one-line deload "why" for the current
+/// phase's week-4 decision, or null. Kept SEPARATE from [phaseArcProvider] so the
+/// arc data shape is untouched. Null unless the deload feature is ON (gated in the
+/// read service on `triggeredDeloadEnabled`) AND a reason was stamped; the strip
+/// renders it only on the deload week (week 4).
+final deloadReasonProvider = Provider<String?>((ref) {
+  ref.watch(currentPlanProvider); // rebuild on (re)materialize / rollover un-deload
+  return WorkoutScheduleService.instance.currentDeloadReason();
+});
+
 // ── Selected Week ────────────────────────────────────────────────
 
 class SelectedWeekNotifier extends Notifier<int> {
