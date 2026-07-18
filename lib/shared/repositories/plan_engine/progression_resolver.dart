@@ -48,6 +48,9 @@ class ProgressionResolver {
     required int phase,
     required List<String> exerciseNames,
     Map<String, String?> repRanges = const {},
+    // W3.3 (Batch 11-A): plan exerciseName → library exercise_id, for the
+    // INCLUSIVE id-OR-name match (flag-gated; empty/OFF → name-only).
+    Map<String, String?> exerciseIds = const {},
   }) {
     if (phase <= 1) return {};
 
@@ -56,16 +59,23 @@ class ProgressionResolver {
     try {
       final workoutBox = HiveService.instance.workoutBox;
       final graded = PlanEngineFlags.gradedProgressionEnabled;
+      // W3.3 (Batch 11-A): the id-keyed inclusive-match READER switch.
+      final idMatch = PlanEngineFlags.exerciseIdHistoryEnabled;
 
       // Per exercise, the MOST RECENT logged session's top set (full history,
       // no 4-week window — an exercise reappearing after a gap still progresses
       // from where the user left off). SOLE source of base/est1rm/⑦a-decay.
       final lastSession = <String, _SessionTop>{};
+      // W3.3 (Batch 11-A): parallel id-keyed index (only non-empty ids) for the
+      // INCLUSIVE id-OR-name match. Null when the flag is OFF → name-only (byte-identical).
+      final lastSessionById = idMatch ? <String, _SessionTop>{} : null;
 
       // W2.1 (graded ON-only, ADDITIVE): all sessions per exercise → the top-2
       // distinct calendar days feed the 2-consecutive back-off gate. NEVER feeds
       // base/est1rm, so flag-OFF stays byte-identical + ⑦a is untouched.
       final allByExercise = graded ? <String, List<_SessionTop>>{} : null;
+      // W3.3: parallel id-keyed graded index (graded ∧ idMatch only).
+      final allById = (graded && idMatch) ? <String, List<_SessionTop>>{} : null;
 
       for (final key in workoutBox.keys) {
         final keyStr = key.toString();
@@ -93,6 +103,17 @@ class ProgressionResolver {
         }
         if (allByExercise != null) {
           (allByExercise[name] ??= <_SessionTop>[]).add(row);
+        }
+        // W3.3 (Batch 11-A): mirror into the id-keyed indices (only non-empty ids).
+        final logId = log['exercise_id'] as String?;
+        if (logId != null && logId.isNotEmpty) {
+          if (lastSessionById != null) {
+            final exId = lastSessionById[logId];
+            if (exId == null || date.isAfter(exId.date)) lastSessionById[logId] = row;
+          }
+          if (allById != null) {
+            (allById[logId] ??= <_SessionTop>[]).add(row);
+          }
         }
       }
 
@@ -129,7 +150,21 @@ class ProgressionResolver {
 
       // Match exercise names from the new plan to logged history + autoregulate.
       for (final exerciseName in exerciseNames) {
-        final top = lastSession[exerciseName];
+        // W3.3 (Batch 11-A): INCLUSIVE id-OR-name match — the MORE-RECENT of the
+        // id-matched + name-matched most-recent session (so a pre-flag name-log +
+        // a post-flag id-log both count, no split-history loss). Flag-OFF →
+        // lastSessionById null → byId null → name-only (byte-identical).
+        final byName = lastSession[exerciseName];
+        final planId = lastSessionById == null ? null : exerciseIds[exerciseName];
+        final byId =
+            (lastSessionById != null && planId != null && planId.isNotEmpty)
+                ? lastSessionById[planId]
+                : null;
+        final top = byId == null
+            ? byName
+            : (byName == null
+                ? byId
+                : (byId.date.isAfter(byName.date) ? byId : byName));
         if (top == null) continue;
 
         // est-1RM (Epley) — safety ceiling on the LAST-DEMONSTRATED top set,
@@ -157,7 +192,13 @@ class ProgressionResolver {
             reps: top.reps,
             repRange: repRanges[exerciseName],
             beginnerLinear: beginnerLinear,
-            sessions: allByExercise?[exerciseName] ?? const [],
+            // W3.3 (Batch 11-A): union name-matched + id-matched sessions (the
+            // graded rule's top-2-DISTINCT-days de-dup collapses any overlap).
+            sessions: [
+              ...(allByExercise?[exerciseName] ?? const <_SessionTop>[]),
+              if (allById != null && planId != null && planId.isNotEmpty)
+                ...(allById[planId] ?? const <_SessionTop>[]),
+            ],
           );
         } else if (top.reps >= 10) {
           // Strong session → progress.

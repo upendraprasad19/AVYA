@@ -65,6 +65,9 @@ const _expectedEmitFields = <String, Set<String>>{
     'volume_kg', 'is_pr', 'logging_type', 'workout_log_id',
     'duration_seconds', 'distance_km', 'sets', 'warm_up_sets',
     'source', 'updated_at_ms', 'created_at', 'id', 'notes',
+    // W3.3 (Batch 11-A): forward-only library exercise id — emitted by
+    // logExercise (STICKY), read by ProgressionResolver for id-keyed history.
+    'exercise_id',
     // Legacy fields accepted in dual-name fallback (Test #6 transition):
     'sets_completed', 'sets_detail',
     // EditLogExerciseRow.fromLog accepts these:

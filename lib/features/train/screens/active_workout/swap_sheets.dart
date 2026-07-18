@@ -27,6 +27,9 @@ void _showExercisePickerSheet(BuildContext context, WidgetRef ref) {
                 category: exerciseData['category'] as String? ?? '',
                 equipmentNeeded: ExerciseData.parseEquipmentNeeded(
                     exerciseData['equipment_needed']),
+                // W3.3 (Batch 11-A): thread the picked exercise's library id so
+                // a manually-added exercise's logs match history by id.
+                exerciseId: exerciseData['id'] as String?,
               ),
             );
         Navigator.of(ctx).pop();
@@ -59,6 +62,9 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex) {
                 loggingType: currentExercise.loggingType,
                 category: currentExercise.category,
                 equipmentNeeded: currentExercise.equipmentNeeded,
+                // W3.3 (Batch 11-A): the swapped-IN exercise's library id (from
+                // the picker row), so its logs match history by id going forward.
+                exerciseId: swapEx.id,
               ),
             );
         // F11 · Ensure Home and Calendar immediately reflect the swap —
@@ -143,6 +149,9 @@ void _openCreateAndAutoSwap(
           loggingType: loggingType,
           category: (newExercise['category'] as String?) ?? original.category,
           equipmentNeeded: equipment,
+          // W3.3 (Batch 11-A): a just-created custom exercise usually has no
+          // library id (null → name fallback, correct); carry one if present.
+          exerciseId: newExercise['id'] as String?,
         );
 
         ref.read(activeWorkoutProvider.notifier).swapExercise(
