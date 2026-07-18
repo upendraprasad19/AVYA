@@ -531,6 +531,27 @@ class WorkoutScheduleReadService {
     );
   }
 
+  /// ⑧ 3-b: public entry to [_buildRepeatPins] for the graduation choice sheet's
+  /// "repeat" branch (graduation calls the read service DIRECTLY, not the
+  /// facade + not autoGenerate). Visibility-only delegate — identical G5 gate +
+  /// A/B extraction. MUST be called BEFORE generateAndSchedule overwrites
+  /// plan_start (same ordering obligation as [_buildRepeatPins] — getWeek reads
+  /// the just-finished window).
+  Map<int, ({List<String> a, List<String> b})>? buildRepeatPinsForAdvance({
+    required String goal,
+    required String equipment,
+    required int daysPerWeek,
+    required String experienceLevel,
+    required int newPhase,
+  }) =>
+      _buildRepeatPins(
+        goal: goal,
+        equipment: equipment,
+        daysPerWeek: daysPerWeek,
+        experienceLevel: experienceLevel,
+        newPhase: newPhase,
+      );
+
   /// PURE decision behind [_buildRepeatPins] (visible for testing — no Hive/clock).
   /// [stored] = the prior generation's `last_phase_profile`; [week1]/[week2] = the
   /// just-finished phase's variant-A/B workout rows (keyed by `workout_day_index`).

@@ -13,12 +13,15 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
+import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import '../providers/train_provider.dart';
+import '../widgets/advance_choice_sheet.dart';
 
 /// Phase 1 Graduation Ceremony — the #1 conversion moment.
 ///
@@ -564,7 +567,6 @@ class _GenerateNextPhaseButtonState
     unawaited(ErrorTelemetry.logEvent('phase_unlock_gate_routed_pro',
         message: 'feature=phases_2_to_12'));
     if (!mounted) return;
-    setState(() => _isGenerating = true);
     final stopwatch = Stopwatch()..start();
     try {
       final profile = UserRepository.instance.getProfile() ?? {};
@@ -576,43 +578,101 @@ class _GenerateNextPhaseButtonState
       // cycle back (the old `9 + ((currentPhase-8) % 4)` froze the counter).
       final nextPhase = currentPhase + 1;
 
-      final savedDays = MigratedKey.read<List>('preferred_training_days');
-      final preferredDays =
-          savedDays is List ? savedDays.cast<int>() : null;
-
-      // Theme H fix — was `DateTime.now()` which normalizeToMonday-ed to
-      // THIS WEEK's Monday, overwriting the current Phase 1 W4 entries.
-      // nextPhaseStartDate computes max(today, currentPhaseEnd + 1 day)
-      // Monday-normalized.
       final scheduleSvc = ref.read(workoutScheduleReadServiceProvider);
+
+      // ⑧ 3-b (W2.5, ship-dark): on a LOW-adherence advance, OFFER a choice —
+      // repeat the just-finished phase's drills (detrained) or take fresh
+      // orders; the phase advances EITHER way (F3). The flag short-circuits so
+      // the ~90-Hive-read currentPhaseCompletionRate() is NEVER evaluated when
+      // OFF → then no sheet, no abort-check, VERBATIM generation.
+      var choice = AdvanceChoice.advance;
+      final offerChoice = PlanEngineFlags.adherenceGateEnabled &&
+          shouldOfferAdvanceChoice(
+            completionRate: scheduleSvc.currentPhaseCompletionRate(),
+            threshold: AppConstants.phaseUnlockCompletionRate,
+          );
+      if (offerChoice) {
+        choice = await showAdvanceChoiceSheet(context) ?? AdvanceChoice.advance;
+        if (!mounted) return;
+        // abort-if-changed: if a concurrent splash/coach advance bumped the
+        // phase while the sheet was open, DON'T recompute nextPhase (that would
+        // SKIP a phase) — the user already advanced, so route to /train.
+        final live =
+            (UserRepository.instance.getProgress()?['current_phase'] as int?) ??
+                1;
+        if (live >= nextPhase) {
+          // The concurrent advancer bumped the phase — refresh the plan views
+          // before routing so /train doesn't briefly show the pre-advance plan.
+          ref.invalidate(currentPlanProvider);
+          ref.invalidate(todayWorkoutProvider);
+          context.go('/train');
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      setState(() => _isGenerating = true);
+
+      // graduation's OWN profile defaults — the SAME values MUST feed both the
+      // pin-build and the generate, or repeatPinsFrom's G5 gate validates a
+      // different frame-shape than the one generated (writer/reader value drift).
+      final goal = profile['primary_goal'] as String? ?? 'general_fitness';
+      final equipment = profile['equipment_access'] as String? ?? 'basic_gym';
+      final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
+      final experienceLevel =
+          profile['fitness_experience'] as String? ?? 'beginner';
+
+      final savedDays = MigratedKey.read<List>('preferred_training_days');
+      final preferredDays = savedDays is List ? savedDays.cast<int>() : null;
+
+      // Theme H fix — nextPhaseStartDate computes max(today, currentPhaseEnd + 1)
+      // Monday-normalized (was DateTime.now() → overwrote the current W4 rows).
       final startDate = scheduleSvc.nextPhaseStartDate();
+
+      // Build repeat pins BEFORE generateAndSchedule overwrites plan_start
+      // (getWeek reads the just-finished window). Only on an explicit "repeat".
+      final pins = choice == AdvanceChoice.repeat
+          ? scheduleSvc.buildRepeatPinsForAdvance(
+              goal: goal,
+              equipment: equipment,
+              daysPerWeek: daysPerWeek,
+              experienceLevel: experienceLevel,
+              newPhase: nextPhase,
+            )
+          : null;
+
       await scheduleSvc.generateAndSchedule(
-        goal: profile['primary_goal'] as String? ?? 'general_fitness',
-        equipment:
-            profile['equipment_access'] as String? ?? 'basic_gym',
-        daysPerWeek: (profile['days_per_week'] as num?)?.toInt() ?? 4,
+        goal: goal,
+        equipment: equipment,
+        daysPerWeek: daysPerWeek,
         startDate: startDate,
         phase: nextPhase,
         // U4: thread injuries so the graduated next-phase plan excludes
         // contraindicated exercises (vocab canonicalized in generateV4).
         injuries: InjuryVocab.fromProfile(profile['injuries']),
-        experienceLevel:
-            profile['fitness_experience'] as String? ?? 'beginner',
+        experienceLevel: experienceLevel,
         preferredDays: preferredDays,
+        pinnedExercisesByDay: pins,
       );
       unawaited(ErrorTelemetry.logEvent('phase_unlock_plan_generated',
           message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));
 
-      // Theme F — stamp plan_generated_at (cloud user_progress column
-      // already accepts it via sync_profile.dart:165). UserRepository
-      // .updateProgress now fires syncProgressNow (F-NEW root cause fix
-      // in user_repository.dart) — so this push lands on cloud.
+      // Theme F — stamp plan_generated_at; UserRepository.updateProgress fires
+      // syncProgressNow so this push lands on cloud.
       await UserRepository.instance.updateProgress({
         'current_phase': nextPhase,
         'current_week': 1,
         'phase_started_at': DateTime.now().toIso8601String(),
         'plan_generated_at': DateTime.now().toIso8601String(),
       });
+
+      // ⑧ 3-b: a chosen "repeat" (pins applied) flags the Home "step it up next
+      // time" nudge (cross-account gated in the shared writer) + invalidates the
+      // provider so it surfaces this session, not only after an app relaunch.
+      if (pins != null) {
+        await markPhaseRepeatNudgePending();
+        ref.invalidate(phaseRepeatNudgeProvider);
+      }
 
       // Theme F — provider invalidation set. Matches the canonical post-
       // workout-completion batch from train_provider.dart:1494-1500. The
