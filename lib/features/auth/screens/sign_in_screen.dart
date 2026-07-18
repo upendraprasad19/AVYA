@@ -21,6 +21,14 @@ import '../widgets/forgot_password_sheet.dart';
 /// Enum for the current sign-in view.
 enum _SignInView { main, email, phone }
 
+// Phone OTP disabled — Twilio not wired to Supabase Auth (AUTH-04). Flip true once wired.
+const bool _kEnablePhoneEnlist = false;
+
+/// Steps within the email sub-view. `enterEmail` gates a server-side
+/// registration check (`AuthNotifier.checkEmailRegistered`) before branching
+/// automatically to `signIn` or `signUp` — no manual toggle.
+enum _EmailStep { enterEmail, signIn, signUp }
+
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
 
@@ -51,7 +59,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   int _resendSecondsRemaining = 0;
   static const int _resendCooldownSeconds = 30;
 
-  bool _isSignUp = false;
+  _EmailStep _emailStep = _EmailStep.enterEmail;
   bool _obscurePassword = true;
   _SignInView _currentView = _SignInView.main;
 
@@ -170,16 +178,34 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: _currentView == _SignInView.main
-            ? _buildRootWithHero(authNotifier, isLoading)
-            : SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.screenPadding,
-                ),
-                child: _currentView == _SignInView.email
-                    ? _buildEmailView(authNotifier, isLoading)
-                    : _buildPhoneView(authState, authNotifier, isLoading),
+        child: switch (_currentView) {
+          _SignInView.main => _buildRootWithHero(authNotifier, isLoading),
+          _SignInView.email => _buildEmailRoot(authNotifier, isLoading),
+          _SignInView.phone => SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding,
               ),
+              child: _buildPhoneView(authState, authNotifier, isLoading),
+            ),
+        },
+      ),
+    );
+  }
+
+  /// Root for the email sub-view — unlike the shared `SingleChildScrollView`
+  /// the phone view still uses, this centers short content vertically while
+  /// still scrolling (not clipping) when the on-screen keyboard opens or the
+  /// form grows past the viewport.
+  Widget _buildEmailRoot(AuthNotifier authNotifier, bool isLoading) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.screenPadding,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(child: _buildEmailView(authNotifier, isLoading)),
+        ),
       ),
     );
   }
@@ -268,17 +294,19 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ),
         const SizedBox(height: 10),
 
-        // ── ENLIST VIA PHONE ────────────────────────────────
-        _buildEnlistButton(
-          label: 'ENLIST VIA PHONE',
-          icon: Icons.phone_outlined,
-          iconSize: 18,
-          onPressed: isLoading
-              ? null
-              : () => setState(() => _currentView = _SignInView.phone),
-          isLoading: false,
-        ),
-        const SizedBox(height: 16),
+        if (_kEnablePhoneEnlist) ...[
+          // ── ENLIST VIA PHONE ────────────────────────────────
+          _buildEnlistButton(
+            label: 'ENLIST VIA PHONE',
+            icon: Icons.phone_outlined,
+            iconSize: 18,
+            onPressed: isLoading
+                ? null
+                : () => setState(() => _currentView = _SignInView.phone),
+            isLoading: false,
+          ),
+          const SizedBox(height: 16),
+        ],
 
         // ── AUX divider (replaces OR) ────────────────────────
         _buildAuxDivider(),
@@ -447,25 +475,172 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   // ── Email Sub-View ─────────────────────────────────────────────
 
   Widget _buildEmailView(AuthNotifier authNotifier, bool isLoading) {
+    switch (_emailStep) {
+      case _EmailStep.enterEmail:
+        return _buildEmailStepEnterEmail(authNotifier, isLoading);
+      case _EmailStep.signIn:
+        return _buildEmailStepSignIn(authNotifier, isLoading);
+      case _EmailStep.signUp:
+        return _buildEmailStepSignUp(authNotifier, isLoading);
+    }
+  }
+
+  /// Returns to the email-entry step, clearing the password and any stale
+  /// auth error — mirrors the same reset `_buildPhoneView`'s back handler
+  /// already does when backing out of OTP entry.
+  void _backToEnterEmail(AuthNotifier authNotifier) {
+    setState(() {
+      _emailStep = _EmailStep.enterEmail;
+      _passwordController.clear();
+    });
+    authNotifier.resetState();
+  }
+
+  /// Read-only display of the already-entered, already-checked email.
+  /// Deliberately not a live TextFormField — editing it here would let a
+  /// user swap emails post-check without re-triggering the registration
+  /// check, bypassing the whole gate. Changing email routes through
+  /// [_backToEnterEmail] instead.
+  Widget _buildEmailDisplay() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.cardPadding,
+        vertical: 14,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.input,
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        border: Border.all(color: AppColors.line2, width: 2),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.email_outlined, color: AppColors.textDim, size: 20),
+          const SizedBox(width: AppSpacing.cardPadding),
+          Expanded(
+            child: Text(
+              _emailController.text.trim(),
+              style: AppTypography.body.copyWith(color: AppColors.textPrimary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChangeEmailLink(AuthNotifier authNotifier, bool isLoading) {
+    return TextButton(
+      onPressed: isLoading ? null : () => _backToEnterEmail(authNotifier),
+      child: Text(
+        'CHANGE EMAIL',
+        style: AppTypography.monoXs.copyWith(
+          color: AppColors.accent,
+          letterSpacing: 1.5,
+        ),
+      ),
+    );
+  }
+
+  /// Centered brand-mark header shared by the three email steps. Echoes
+  /// [_HeroLogoBand]'s centered-logo language (lighter — no radial glow — so
+  /// it stays subordinate to the welcome hero) and shares the form's vertical
+  /// axis, so the title gets full width and never wraps. Replaces the
+  /// bespoke left-aligned [AuthHeader] on the email path only; [AuthHeader]
+  /// stays in use by the (currently hidden) phone view.
+  Widget _buildEmailBrandMark({required String title, VoidCallback? onBack}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Standalone top-left back arrow, in a fixed slot (no layout shift);
+        // non-interactive when onBack == null (i.e. during loading), matching
+        // AuthHeader's isLoading→null gating at the call sites.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Opacity(
+            opacity: onBack == null ? 0.35 : 1,
+            child: GestureDetector(
+              key: const ValueKey('auth-header-back'),
+              onTap: onBack,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Icon(
+                  Icons.arrow_back,
+                  color: AppColors.textPrimary,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Center(
+          child: Column(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.accent, width: 1.5),
+                  color: AppColors.bgDeep,
+                ),
+                alignment: Alignment.center,
+                child: Image.asset(
+                  'assets/avya_icon.png',
+                  width: 32,
+                  height: 32,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'RECRUIT REGISTRY',
+                textAlign: TextAlign.center,
+                style: AppTypography.mono.copyWith(
+                  fontSize: 10,
+                  letterSpacing: 2.0,
+                  color: AppColors.accent,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: 64,
+                height: 1,
+                color: AppColors.accent.withValues(alpha: 0.6),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: AppTypography.h2.copyWith(
+                  fontSize: 24,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.stackXL),
+      ],
+    );
+  }
+
+  /// Step 1 — email only. On CONTINUE, checks registration status
+  /// server-side and branches automatically to sign-in or sign-up; no
+  /// manual toggle. Never shows password/referral/privacy fields here.
+  Widget _buildEmailStepEnterEmail(AuthNotifier authNotifier, bool isLoading) {
     return Column(
       children: [
-        AuthHeader(
-          eyebrow: 'RECRUIT REGISTRY',
-          title: _isSignUp ? 'Sign up' : 'Sign in',
+        _buildEmailBrandMark(
+          title: 'Continue with email',
           onBack: isLoading
               ? null
-              : () => setState(() {
-                    _currentView = _SignInView.main;
-                    _isSignUp = false;
-                  }),
+              : () => setState(() => _currentView = _SignInView.main),
         ),
-
-        // Email form
         Form(
           key: _formKey,
           child: Column(
             children: [
-              // Email field
               _buildTextField(
                 controller: _emailController,
                 hintText: 'Email address',
@@ -482,9 +657,134 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   return null;
                 },
               ),
+              const SizedBox(height: AppSpacing.stackM),
+              Text(
+                "We'll take you to sign-in or enlistment.",
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
+              ),
               const SizedBox(height: AppSpacing.sectionGap),
+              _buildPrimaryButton(
+                label: 'CONTINUE',
+                isLoading: isLoading,
+                onPressed: () async {
+                  if (!_formKey.currentState!.validate()) return;
+                  final email = _emailController.text.trim();
+                  final registered =
+                      await authNotifier.checkEmailRegistered(email);
+                  if (!mounted || registered == null) return;
+                  setState(() {
+                    _emailStep =
+                        registered ? _EmailStep.signIn : _EmailStep.signUp;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 40),
+      ],
+    );
+  }
 
-              // Password field
+  /// Step 2a — password-only sign-in for an already-registered email.
+  Widget _buildEmailStepSignIn(AuthNotifier authNotifier, bool isLoading) {
+    return Column(
+      children: [
+        _buildEmailBrandMark(
+          title: 'Sign in',
+          onBack: isLoading ? null : () => _backToEnterEmail(authNotifier),
+        ),
+        Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _buildEmailDisplay(),
+              const SizedBox(height: AppSpacing.sectionGap),
+              _buildTextField(
+                controller: _passwordController,
+                hintText: 'Password',
+                obscureText: _obscurePassword,
+                prefixIcon: Icons.lock_outline,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() => _obscurePassword = !_obscurePassword);
+                  },
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your password';
+                  }
+                  if (value.length < 6) {
+                    return 'Password must be at least 6 characters';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              _buildPrimaryButton(
+                label: 'SIGN IN WITH EMAIL',
+                isLoading: isLoading,
+                onPressed: () {
+                  if (!_formKey.currentState!.validate()) return;
+                  final email = _emailController.text.trim();
+                  final password = _passwordController.text;
+                  authNotifier.signInWithEmail(email, password);
+                },
+              ),
+
+              // Forgot password — only relevant on the sign-in variant,
+              // never during sign-up. Pre-2026-04-24 the link lived only
+              // on the welcome view (pre-email) where users who already
+              // committed to email couldn't see it.
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap:
+                    isLoading ? null : () => ForgotPasswordSheet.show(context),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    'Forgot password?',
+                    style: AppTypography.bodySm.copyWith(
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildChangeEmailLink(authNotifier, isLoading),
+            ],
+          ),
+        ),
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  /// Step 2b — password + referral + privacy for a not-yet-registered email.
+  Widget _buildEmailStepSignUp(AuthNotifier authNotifier, bool isLoading) {
+    return Column(
+      children: [
+        _buildEmailBrandMark(
+          title: 'Sign up',
+          onBack: isLoading ? null : () => _backToEnterEmail(authNotifier),
+        ),
+        Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _buildEmailDisplay(),
+              const SizedBox(height: AppSpacing.sectionGap),
               _buildTextField(
                 controller: _passwordController,
                 hintText: 'Password',
@@ -514,177 +814,126 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               ),
               const SizedBox(height: 24),
 
-              // U8 fix: Referral code field — shown only during sign-up.
-              // Sign-in users have no business entering a referral code.
-              // The existing redemption flow in the success listener
-              // (_referralController.text.trim()) is already wired up
-              // and reused here — no new handler needed.
-              if (_isSignUp) ...[
-                const SizedBox(height: 16),
-                Text(
-                  'REFERRAL CODE (OPTIONAL)',
-                  style: AppTypography.monoXs.copyWith(
-                    color: AppColors.textDim,
-                    letterSpacing: 1.4,
-                  ),
+              // U8 fix: Referral code field. The existing redemption flow
+              // in the success listener (_referralController.text.trim())
+              // is already wired up and reused here — no new handler needed.
+              const SizedBox(height: 16),
+              Text(
+                'REFERRAL CODE (OPTIONAL)',
+                style: AppTypography.monoXs.copyWith(
+                  color: AppColors.textDim,
+                  letterSpacing: 1.4,
                 ),
-                const SizedBox(height: 6),
-                TextFormField(
-                  controller: _referralController,
-                  style: AppTypography.body.copyWith(
-                    color: AppColors.textPrimary,
+              ),
+              const SizedBox(height: 6),
+              TextFormField(
+                controller: _referralController,
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 15,
+                ),
+                cursorColor: AppColors.accent,
+                maxLength: 20,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  hintText: AppConstants.referralCodeHint,
+                  hintStyle: AppTypography.body.copyWith(
+                    color: AppColors.textMute,
                     fontSize: 15,
                   ),
-                  cursorColor: AppColors.accent,
-                  maxLength: 20,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: InputDecoration(
-                    hintText: AppConstants.referralCodeHint,
-                    hintStyle: AppTypography.body.copyWith(
-                      color: AppColors.textMute,
-                      fontSize: 15,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.card_giftcard_outlined,
-                      color: AppColors.textDim,
-                      size: 18,
-                    ),
-                    counterText: '',
-                    filled: true,
-                    fillColor: AppColors.input,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 14,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.card),
-                      borderSide: BorderSide(
-                        color: AppColors.border,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.card),
-                      borderSide: BorderSide(
-                        color: AppColors.border,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.card),
-                      borderSide: const BorderSide(
-                        color: AppColors.accent,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Have a referral code? Apply for +7 days PRO.',
-                  style: AppTypography.bodySm.copyWith(
-                    fontSize: 12,
+                  prefixIcon: const Icon(
+                    Icons.card_giftcard_outlined,
                     color: AppColors.textDim,
+                    size: 18,
+                  ),
+                  counterText: '',
+                  filled: true,
+                  fillColor: AppColors.input,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    borderSide: BorderSide(
+                      color: AppColors.border,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    borderSide: BorderSide(
+                      color: AppColors.border,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    borderSide: const BorderSide(
+                      color: AppColors.accent,
+                      width: 1.5,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 12),
-              ],
-
-              // Privacy/Terms checkbox — only shown during sign-up.
-              // Pre-checked (true) to reduce friction while still providing
-              // a visible, tickable affordance for DPDP compliance.
-              if (_isSignUp) ...[
-                _PrivacyCheckboxRow(
-                  value: _privacyAccepted,
-                  onChanged: (v) => setState(() => _privacyAccepted = v ?? false),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Have a referral code? Apply for +7 days PRO.',
+                style: AppTypography.bodySm.copyWith(
+                  fontSize: 12,
+                  color: AppColors.textDim,
                 ),
-                const SizedBox(height: 12),
-              ],
+              ),
+              const SizedBox(height: 12),
 
-              // Sign In / Sign Up button
+              // Privacy/Terms checkbox. Pre-checked (true) to reduce
+              // friction while still providing a visible, tickable
+              // affordance for DPDP compliance.
+              _PrivacyCheckboxRow(
+                value: _privacyAccepted,
+                onChanged: (v) => setState(() => _privacyAccepted = v ?? false),
+              ),
+              const SizedBox(height: 12),
+
               _buildPrimaryButton(
-                label: _isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN WITH EMAIL',
+                label: 'CREATE ACCOUNT',
                 isLoading: isLoading,
                 // Gate the CREATE ACCOUNT button on checkbox acceptance.
-                enabled: !_isSignUp || _privacyAccepted,
+                enabled: _privacyAccepted,
                 onPressed: () {
                   if (!_formKey.currentState!.validate()) return;
                   final email = _emailController.text.trim();
                   final password = _passwordController.text;
-                  if (_isSignUp) {
-                    // E.3 fix (audit 2026-05-16, F3-1.2 DPDP gap):
-                    // Stamp ToS/Privacy acceptance to Hive BEFORE signUp.
-                    // The pre-checked checkbox + visible link affordance is
-                    // the affirmative-action signal per DPDP §11; this write
-                    // captures the timestamp + version so `_ensureLocalUser`
-                    // (auth_provider.dart:505-516) can project upward to
-                    // `users.terms_accepted_at` / `users.terms_version`
-                    // on the first post-auth sync. UTC ISO8601 because the
-                    // cloud column is `timestamptz` (IST applies to date-keys
-                    // only, not timestamps — see CLAUDE.md §15 IST contract).
-                    // closes-diagnose: 2026-05-16-terms-accepted-at-dpdp
-                    try {
-                      HiveService.instance.userBox.put(
-                        'terms_accepted_at',
-                        DateTime.now().toUtc().toIso8601String(),
-                      );
-                      HiveService.instance.userBox.put(
-                        'terms_version',
-                        AppConstants.termsVersion,
-                      );
-                    } catch (_) {
-                      // Hive write failure is non-fatal — the upward sync
-                      // is gated on Hive presence, so a failure here just
-                      // means terms_accepted_at stays NULL in cloud (same
-                      // as pre-fix state). The auth flow itself must not
-                      // block on telemetry-side writes.
-                    }
-                    authNotifier.signUpWithEmail(email, password);
-                  } else {
-                    authNotifier.signInWithEmail(email, password);
+                  // E.3 fix (audit 2026-05-16, F3-1.2 DPDP gap):
+                  // Stamp ToS/Privacy acceptance to Hive BEFORE signUp.
+                  // The pre-checked checkbox + visible link affordance is
+                  // the affirmative-action signal per DPDP §11; this write
+                  // captures the timestamp + version so `_ensureLocalUser`
+                  // (auth_provider.dart:505-516) can project upward to
+                  // `users.terms_accepted_at` / `users.terms_version`
+                  // on the first post-auth sync. UTC ISO8601 because the
+                  // cloud column is `timestamptz` (IST applies to date-keys
+                  // only, not timestamps — see CLAUDE.md §15 IST contract).
+                  // closes-diagnose: 2026-05-16-terms-accepted-at-dpdp
+                  try {
+                    HiveService.instance.userBox.put(
+                      'terms_accepted_at',
+                      DateTime.now().toUtc().toIso8601String(),
+                    );
+                    HiveService.instance.userBox.put(
+                      'terms_version',
+                      AppConstants.termsVersion,
+                    );
+                  } catch (_) {
+                    // Hive write failure is non-fatal — the upward sync
+                    // is gated on Hive presence, so a failure here just
+                    // means terms_accepted_at stays NULL in cloud (same
+                    // as pre-fix state). The auth flow itself must not
+                    // block on telemetry-side writes.
                   }
+                  authNotifier.signUpWithEmail(email, password);
                 },
               ),
-
-              // Forgot password — only relevant on the sign-in variant,
-              // never during sign-up. Pre-2026-04-24 the link lived only
-              // on the welcome view (pre-email) where users who already
-              // committed to email couldn't see it.
-              if (!_isSignUp) ...[
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: isLoading
-                      ? null
-                      : () => ForgotPasswordSheet.show(context),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      'Forgot password?',
-                      style: AppTypography.bodySm.copyWith(
-                        color: AppColors.accent,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              ],
               const SizedBox(height: 12),
-
-              // Toggle sign-in / sign-up
-              TextButton(
-                onPressed: isLoading
-                    ? null
-                    : () => setState(() => _isSignUp = !_isSignUp),
-                child: Text(
-                  _isSignUp
-                      ? 'ALREADY HAVE AN ACCOUNT? SIGN IN'
-                      : "DON'T HAVE AN ACCOUNT? SIGN UP",
-                  style: AppTypography.monoXs.copyWith(
-                    color: AppColors.accent,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ),
+              _buildChangeEmailLink(authNotifier, isLoading),
             ],
           ),
         ),

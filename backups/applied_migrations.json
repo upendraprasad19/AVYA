@@ -691,5 +691,12 @@
     "hash": "sha256:8a2a181ec9e83ad1a5a0900269008750ba681782f23f6bd63c3e6a21fb6e1739",
     "applier": "claude",
     "slug": "add_readiness_daily"
+  },
+  {
+    "migration": "106",
+    "applied_at": "2026-07-18T09:31:53+05:30",
+    "hash": "sha256:839546b01c82de28d6994ca275fbfab4b05c21b93e8a99f0e05fc9572afb35ef",
+    "applier": "claude",
+    "slug": "email_is_registered_check"
   }
 ]

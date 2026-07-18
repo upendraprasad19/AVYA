@@ -1579,12 +1579,16 @@ concepts:
       projects them to the users cloud row and re-hydrates on returning-user restore.
     writers:
       - file: lib/features/auth/screens/sign_in_screen.dart
-        line_range: 449-640
-        method: _buildEmailView
+        line_range: 688-857
+        method: _buildEmailStepSignUp
         semantic: hive-write
         notes: |
           Stamps userBox terms_accepted_at (UTC ISO) + terms_version
-          (AppConstants.termsVersion) on accept.
+          (AppConstants.termsVersion) on accept. Relocated 2026-07 when the
+          email view split from one _isSignUp-toggled form (_buildEmailView)
+          into per-step builders (email-first registration-check flow) —
+          this write moved verbatim into the sign-up-only step's submit
+          handler, same lexical position (immediately before signUpWithEmail).
     readers:
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 195-260
