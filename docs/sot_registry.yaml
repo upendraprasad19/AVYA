@@ -6955,6 +6955,61 @@ concepts:
         semantic: pure
     contract_test_path: test/contracts/plateau_escalation_behavioral_test.dart
 
+  - concept: plateau_rotation
+    domain: workout
+    behavioral_test_path: test/contracts/plateau_rotation_behavioral_test.dart
+    description: >
+      W3.5 (Batch 12-B, PRO) — plateau escalation rung-3 EXERCISE ROTATION. At a genuine
+      FRESH phase advance the plateaued COMPOUND lifts (same detector as rung-2 — flat
+      MAX-Epley e1RM ≥3 sessions ≥28d, 63-day window) are SOFT-avoided in the cascade so
+      each rotates to a same-`movement_pattern` sibling next phase.
+      `PlateauScan.plateauedExerciseNames({phase})` (per-exercise sibling of
+      plateauedGroups, LOWERCASED, SAME gates: enable_plateau_escalation +
+      enable_readiness + phase>=2 + !fatigue) → computed in `generateV4` (guarded
+      `applyPlateauEscalation && pins == null`) → `pickV4 plateauAvoidNames` → UNIONED
+      GLOBALLY into every day's avoidA/avoidB → `_fillSlots`/`_cascadeFill`/
+      `_selectCandidate._preferNovel` (the SAME 11-B seam). SOFT + BOUNDED: feeds
+      _selectCandidate ONLY (never queryV4/excludeNames) on a guaranteed-non-empty pool
+      → never empties a slot / wrong pattern / disturbs the attempt-5 injury floor;
+      falls to `pool.first` (the stuck lift RETAINED) on a shallow pool. Ship-dark:
+      reuses `enable_plateau_escalation` (NO new flag), INDEPENDENT of 11-B's
+      `enable_cross_phase_variety`. DEFAULT OFF / opt-in false → plateauAvoid `{}` → the
+      union `{...listA, ...{}}` ≡ `listA.toSet()` → byte-identical. Rotation is a SWAP
+      (slot-count-neutral); a rotated-in sibling may carry ±1 base default_sets (bounded,
+      pre-existing 11-B). rung-2 (+sets) and rung-3 (rotation) BOTH fire (no cross-gate);
+      the +1 lands on the fresh sibling's group, MRV-clamped. rung-1 explainability NOT
+      built (terminal: out-of-scope + causally imprecise + breaks pure-compute). No
+      migration/restore (Hive-read-only). cascade_tracer `_preferNovelName` +
+      generator_matrix UNCHANGED → frozen D3 baseline unmoved. ⚠ L6
+      `_applyHistoryAdjustments` (phase≥2, demoted/customs) may re-add a rotated lift —
+      consistent with rung-3 being SOFT.
+    writers:
+      - file: lib/shared/repositories/plan_engine/plateau_scan.dart
+        method: PlateauScan.plateauedExerciseNames
+        notes: >
+          per-exercise sibling of plateauedGroups — same buildE1rmByDate + isFlat +
+          isCompoundByExactName scan, collects name.toLowerCase(); same gates; crash-safe {}.
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (plateauAvoid compute + pickV4 arg)
+        notes: >
+          `plateauAvoid = (applyPlateauEscalation && pinnedExercisesByDay == null)
+          ? plateauedExerciseNames(phase) : {}` at Stage 2; passed as pickV4
+          plateauAvoidNames. Default false / pins → {} → byte-identical.
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: pickV4 (plateauAvoidNames param + avoidA/avoidB union)
+        notes: >
+          new `Set<String> plateauAvoidNames = const {}`; unioned GLOBALLY into every
+          day's avoidA/avoidB alongside 11-B previousPhaseByDay names → _preferNovel.
+          Empty → same set as .toSet() → byte-identical. Only generateV4 passes it.
+    readers:
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method_or_widget: _preferNovel (soft avoid-names tiebreak on a non-empty pool)
+        semantic: soft-bias
+      - file: test/contracts/plateau_rotation_behavioral_test.dart
+        method_or_widget: seeds exlog_* flat plateaus for the baseline plan's compounds → rotation (non-vacuous) + independence + ship-dark + slot-count-invariance + bounded + injury-safe + fatigued-no-rotation + gates
+        semantic: behavioral
+    contract_test_path: test/contracts/plateau_rotation_behavioral_test.dart
+
   - concept: repeat_content_scheduling
     domain: workout
     behavioral_test_path: test/contracts/repeat_content_scheduling_test.dart
