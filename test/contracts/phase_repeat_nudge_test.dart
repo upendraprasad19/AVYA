@@ -24,6 +24,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
 
 String _strip(String s) {
   final noBlock = s.replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '');
@@ -114,15 +115,30 @@ void main() {
     // REMOVAL (comment-stripped so the explanatory comment naming the accessor
     // cannot satisfy it). Removing the gate re-opens the device-shared configBox
     // leak MigratedKey.write falls back to when the owner is null.
-    test('the nudge write is gated on currentOwnerFullId != null', () {
+    test('the shared nudge writer stays owner-gated (cross-account belt)', () {
+      // ⑧ 3-b moved the write into the SHARED markPhaseRepeatNudgePending()
+      // (called on result.repeated by splash/card AND on pins != null by the
+      // graduation sheet). The cross-account belt (currentOwnerFullId != null)
+      // MUST live inside it — the null-owner runtime state is impractical to
+      // simulate behaviorally, so this pins the belt against SILENT removal
+      // (comment-stripped so the explanatory comment cannot satisfy it).
       final src = _strip(
           File('lib/shared/services/pro_phase_advance.dart').readAsStringSync());
       expect(
-        RegExp(r'result\.repeated\s*&&\s*HiveUserSession\.currentOwnerFullId\s*!=\s*null')
+        RegExp(r'Future<void>\s+markPhaseRepeatNudgePending\(\)[\s\S]*?HiveUserSession\.currentOwnerFullId\s*!=\s*null[\s\S]*?MigratedKey\.write')
             .hasMatch(src),
         isTrue,
-        reason: 'the phase_repeat_nudge_pending write must stay owner-gated',
+        reason: 'the shared nudge writer must guard the write on currentOwnerFullId != null',
       );
+    });
+
+    test('markPhaseRepeatNudgePending writes when the owner is known', () async {
+      // setUp opened userA → owner known → the belt passes → flag set true.
+      await markPhaseRepeatNudgePending();
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      expect(c.read(phaseRepeatNudgeProvider), isTrue,
+          reason: 'the shared writer surfaces the nudge when the owner is known');
     });
   });
 }

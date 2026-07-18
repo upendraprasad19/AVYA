@@ -111,16 +111,30 @@ Future<bool> _advanceProPhaseIfExpired(WidgetRef ref) async {
     // Fire-and-forget snapshot push so the AI coach sees the new Phase.
     unawaited(ref.read(syncServiceProvider).pushSnapshot());
 
-    // ⑧ 3-a2: on an ACTUAL repeat (G5 gate passed → pins applied), flag the
-    // low-adherence "you repeated — step it up?" nudge for Home. Cross-account
-    // belt (the codified expiry-banner P0 guard, subscription_service.dart):
-    // only write when the Hive session OWNER is known — a non-null `uid` from
-    // ensureOpenedForCurrentSession does NOT imply the owner opened, and a null
-    // owner makes MigratedKey fall back to the DEVICE-shared configBox, leaking
-    // the nudge to the next account on this device.
-    if (result.repeated && HiveUserSession.currentOwnerFullId != null) {
-      await MigratedKey.write('phase_repeat_nudge_pending', true);
+    // ⑧ 3-a2/3-b: on an ACTUAL repeat (G5 gate passed → pins applied), flag the
+    // low-adherence "you repeated — step it up?" Home nudge via the SHARED
+    // writer (the cross-account belt lives in markPhaseRepeatNudgePending, so
+    // the graduation choice sheet's repeat branch inherits it too).
+    if (result.repeated) {
+      await markPhaseRepeatNudgePending();
     }
   }
   return result.generated;
+}
+
+/// ⑧ 3-a2/3-b: set the local-only low-adherence "you repeated — step it up?"
+/// Home nudge flag (`phase_repeat_nudge_pending`). SHARED writer used by BOTH
+/// [advanceProPhaseIfExpired] (splash/card auto-repeat, on `result.repeated`)
+/// AND the graduation choice sheet's repeat branch (on `pins != null` — the
+/// same predicate: see `autoGenerateNextPhaseIfNeeded`'s `repeated: pins != null`).
+///
+/// CROSS-ACCOUNT belt (the codified expiry-banner P0 guard,
+/// `subscription_service.dart`): only write when the Hive session OWNER is known
+/// — a non-null uid from `ensureOpenedForCurrentSession` does NOT imply the owner
+/// opened, and a null owner makes `MigratedKey.write` fall back to the
+/// DEVICE-shared configBox, leaking the nudge to the next account on this device.
+Future<void> markPhaseRepeatNudgePending() async {
+  if (HiveUserSession.currentOwnerFullId != null) {
+    await MigratedKey.write('phase_repeat_nudge_pending', true);
+  }
 }

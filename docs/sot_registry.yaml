@@ -6697,8 +6697,12 @@ concepts:
       enable_adherence_gate OFF ⇒ never written ⇒ never surfaces.
     writers:
       - file: lib/shared/services/pro_phase_advance.dart
-        method: advanceProPhaseIfExpired (on result.repeated && HiveUserSession.currentOwnerFullId != null)
-        notes: MigratedKey.write('phase_repeat_nudge_pending', true) — user-scoped, cross-account gated.
+        method: markPhaseRepeatNudgePending (⑧ 3-b — SHARED writer, cross-account gated on currentOwnerFullId != null)
+        notes: >
+          MigratedKey.write('phase_repeat_nudge_pending', true) — user-scoped + cross-account gated
+          (the belt lives INSIDE this shared writer). Called by advanceProPhaseIfExpired (splash/card,
+          on result.repeated) AND the graduation choice sheet's repeat branch
+          (graduation_screen.dart _onPro, on pins != null — same predicate as repeated). ⑧ 3-b.
     readers:
       - file: lib/features/home/providers/home_provider.dart
         method_or_widget: phaseRepeatNudgeProvider (PhaseRepeatNudgeNotifier)
