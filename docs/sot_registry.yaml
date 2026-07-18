@@ -134,6 +134,7 @@ concepts:
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — buildAiContext + helpers moved out of ai_coach_repository.dart into the dedicated snapshot builder; reads exlog_* rows for personal_records + today_workout snapshot keys" }
       - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
       - { file: lib/shared/repositories/plan_engine/volume_titration.dart, reason: "VolumeTitration (W2.7 Batch 9) reads exlog_* set weight_kg/reps_completed READ-ONLY (shared sessionMaxE1rm) for the per-group MAX-Epley e1RM trend that titrates next-phase volume — never edits logs" }
+      - { file: lib/shared/repositories/plan_engine/e1rm_history.dart, reason: "buildE1rmByDate (Batch 12-A) — the SHARED exlog_* → per-exercise MAX-Epley e1RM-by-date builder extracted from DeloadE1rmScan + VolumeTitration (the file that now holds the literal exlog_ scan; consumed by both + PlateauScan); READ-ONLY, never edits logs" }
     regression_test: test/contracts/receipt_scoping_test.dart
     hive:
       box: workoutBox
@@ -246,6 +247,7 @@ concepts:
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for exlog_* (PR / today_workout) split out of ai_coach_repository.dart" }
       - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
       - { file: lib/shared/repositories/plan_engine/volume_titration.dart, reason: "VolumeTitration (W2.7 Batch 9) reads exlog_* set weight_kg/reps_completed READ-ONLY (shared sessionMaxE1rm) for the per-group MAX-Epley e1RM trend that titrates next-phase volume — never edits logs" }
+      - { file: lib/shared/repositories/plan_engine/e1rm_history.dart, reason: "buildE1rmByDate (Batch 12-A) — the SHARED exlog_* → per-exercise MAX-Epley e1RM-by-date builder extracted from DeloadE1rmScan + VolumeTitration (the file that now holds the literal exlog_ scan; consumed by both + PlateauScan); READ-ONLY, never edits logs" }
     regression_test: test/contracts/edit_log_field_normalization_test.dart
     hive:
       box: workoutBox
@@ -1280,6 +1282,7 @@ concepts:
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for exlog_* prefix (this_week_workouts, personal_records, today_workout) split out of ai_coach_repository.dart" }
       - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
       - { file: lib/shared/repositories/plan_engine/volume_titration.dart, reason: "VolumeTitration (W2.7 Batch 9) reads exlog_* set weight_kg/reps_completed READ-ONLY (shared sessionMaxE1rm) for the per-group MAX-Epley e1RM trend that titrates next-phase volume — never edits logs" }
+      - { file: lib/shared/repositories/plan_engine/e1rm_history.dart, reason: "buildE1rmByDate (Batch 12-A) — the SHARED exlog_* → per-exercise MAX-Epley e1RM-by-date builder extracted from DeloadE1rmScan + VolumeTitration (the file that now holds the literal exlog_ scan; consumed by both + PlateauScan); READ-ONLY, never edits logs" }
     regression_test: test/contracts/workout_write_to_read_contract_test.dart
     hive:
       box: workoutBox
@@ -2790,6 +2793,7 @@ concepts:
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot personal_records + PR timeline reader split out of ai_coach_repository.dart" }
       - { file: lib/core/services/deload_e1rm_scan.dart, reason: "DeloadE1rmScan (7-B-2 triggered deload) reads exlog_* set weight_kg/reps_completed READ-ONLY for per-exercise MAX-Epley e1RM decline — never edits logs" }
       - { file: lib/shared/repositories/plan_engine/volume_titration.dart, reason: "VolumeTitration (W2.7 Batch 9) reads exlog_* set weight_kg/reps_completed READ-ONLY (shared sessionMaxE1rm) for the per-group MAX-Epley e1RM trend that titrates next-phase volume — never edits logs" }
+      - { file: lib/shared/repositories/plan_engine/e1rm_history.dart, reason: "buildE1rmByDate (Batch 12-A) — the SHARED exlog_* → per-exercise MAX-Epley e1RM-by-date builder extracted from DeloadE1rmScan + VolumeTitration (the file that now holds the literal exlog_ scan; consumed by both + PlateauScan); READ-ONLY, never edits logs" }
     regression_test: test/contracts/load_all_exercise_prs_per_set_semantic_test.dart
     hive:
       box: workoutBox
@@ -5194,7 +5198,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 357-382
+        line_range: 387-410
         method: getCustomExercises
         semantic: filter
         fields_read: [name, category, logging_type, type]
@@ -6884,6 +6888,72 @@ concepts:
           decline, +1 only with recovery evidence (0/sparse/systemic-sore readiness → hold),
           deterministic. e1rm_test.dart pins the shared Epley helper.
     contract_test_path: test/contracts/volume_titration_behavioral_test.dart
+
+  - concept: plateau_escalation
+    domain: workout
+    behavioral_test_path: test/contracts/plateau_escalation_behavioral_test.dart
+    description: >
+      W3.5 (Batch 12-A, PRO) — plateau escalation rung-2 (+sets). At a genuine FRESH
+      phase advance a plateaued MAJOR MUSCLE GROUP earns +1 weekly direct set, MERGED
+      into the W2.7 titration delta map so ONE clamped `applyToWeeks` pass applies both.
+      A "plateau" = a COMPOUND lift whose MAX-Epley e1RM is FLAT ((max−min)/max ≤ 5%)
+      across ≥3 dated sessions spanning ≥28d within a trailing 63-IST-day window
+      (`PlateauScan.plateauedGroups`, reusing the shared `buildE1rmByDate` +
+      `ExerciseRepository.isCompoundByExactName` + `muscleGroupOf`).
+      `mergePlateauSetDeltas(existing, phase)` `putIfAbsent`s +1 ONLY where titration
+      left a group ABSENT → a declining group's −1 ALWAYS wins (no double-bump; never
+      adds volume to a fatiguing/declining group), and the [MEV=8,MRV=20] clamp inside
+      `applyToWeeks` caps it. rung-1 (deload when plateaued+fatigued) needs NO code — it
+      is ALREADY delivered by W2.4's `readiness.good` keep in `deload_evaluator` (a
+      plateau keep-term there would be provably dead: it can only engage when
+      `readiness.good` is already false). rung-3 (rotation) is Batch 12-B. THREE inert
+      seams: (1) `enable_plateau_escalation` DEFAULT OFF → merge returns the input map
+      unchanged (same ref) → applyToWeeks identity → byte-identical; (2) ALSO gated on
+      `enable_readiness` (mirrors DeloadEvaluator — the fatigue gate needs readiness
+      rows); (3) OPT-IN `applyPlateauEscalation` — the two fresh-advance callers pass
+      `pins == null`; every other caller defaults false. Fatigue = persistent readiness
+      red/yellow (≥3 rows in 14d, strict majority `level != green`) — the SAME
+      data/window/predicate as `deload_evaluator._readinessGood`, so a fatigued plateau
+      routes to the deload rung, not +sets. `phase >= 2` self-gate (PRO — free is phase
+      1; the fresh-advance callers are PRO-gated → inherits the server-verified
+      phases_2_to_12 gate). No migration / no restore entry (Hive-read-only; exlog +
+      readiness already sync+restore). No scorecard/mirror wiring (generator_matrix /
+      cascade_tracer untouched → frozen D3 baseline unmoved).
+    writers:
+      - file: lib/shared/repositories/plan_engine/plateau_scan.dart
+        method: PlateauScan.plateauedGroups / mergePlateauSetDeltas / isFlat
+        notes: >
+          plateauedGroups: flag + readinessEnabled + phase>=2 + !fatiguePresent gates,
+          then buildE1rmByDate(63d) → ≥3 sessions / ≥28d span / isFlat(≤5%) / compound →
+          muscleGroupOf(primary_muscles). mergePlateauSetDeltas: putIfAbsent(+1) into the
+          titration deltas (never overrides ±1). Crash-safe (any read failure → {}).
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 / generate (applyPlateauEscalation param + Stage-4.5 merge)
+        notes: >
+          Stage 4.5 merges mergePlateauSetDeltas into the titration base map then applies
+          ONCE via VolumeTitration.applyToWeeks, gated on the applyPlateauEscalation
+          opt-in (threaded through WorkoutScheduleReadService.generateAndSchedule; passed
+          `pins == null` by autoGenerateNextPhaseIfNeeded + graduation_screen._onPro).
+          Default false → block not entered → byte-identical.
+      - file: lib/shared/repositories/plan_engine/e1rm_history.dart
+        method: buildE1rmByDate
+        notes: >
+          shared exlog_* → per-exercise MAX-Epley e1RM-by-date builder (Batch 12-A),
+          extracted byte-identical from DeloadE1rmScan + VolumeTitration inline loops;
+          the plateau detector reads it with a 63d cutoff.
+      - file: lib/shared/repositories/exercise_repository.dart
+        method: isCompoundByExactName
+        notes: >
+          shared main-lift predicate (getByExactName + _fieldContains('compound')),
+          extracted from DeloadE1rmScan._isCompound; used by the plateau detector.
+    readers:
+      - file: test/contracts/plateau_escalation_behavioral_test.dart
+        method_or_widget: seeds exlog_* + readiness_*, drives plateauedGroups / mergePlateauSetDeltas / applyToWeeks — detector gates, no-double-bump, declining∧flat safety, MRV clamp, byte-identical-off
+        semantic: behavioral
+      - file: test/plan_generator/plateau_scan_test.dart
+        method_or_widget: PlateauScan.isFlat pure flatness-threshold unit test
+        semantic: pure
+    contract_test_path: test/contracts/plateau_escalation_behavioral_test.dart
 
   - concept: repeat_content_scheduling
     domain: workout

@@ -15,9 +15,9 @@
 // Evidence=false` → `noFatigue=false` → the caller KEEPS the deload.
 
 import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/utils/e1rm.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/e1rm_history.dart';
 
 /// Outcome of a [DeloadE1rmScan.scan]: whether there is positive compound
 /// evidence, and whether any compound is declining.
@@ -51,25 +51,11 @@ class DeloadE1rmScan {
       // from a prior phase must not read as "no fatigue now" → drops to fewer recent
       // sessions → the ≥2-session gate keeps the deload (the safe direction).
       final cutoff = istDateStr(nowWall().subtract(const Duration(days: 35)));
-      // exerciseName -> (istDate -> max Epley e1RM that day)
-      final byExercise = <String, Map<String, double>>{};
-
-      for (final key in box.keys) {
-        final k = key.toString();
-        if (!k.startsWith('exlog_')) continue;
-        final log = box.get(key);
-        if (log is! Map) continue;
-        final dateStr = log['date'] as String?;
-        if (dateStr == null) continue;
-        if (dateStr.compareTo(cutoff) < 0) continue; // stale → not current evidence
-        final name = log['exercise_name'] as String?;
-        if (name == null) continue;
-        final e1rm = sessionMaxE1rm(log);
-        if (e1rm == null) continue;
-        final dated = byExercise[name] ??= <String, double>{};
-        final prev = dated[dateStr];
-        if (prev == null || e1rm > prev) dated[dateStr] = e1rm;
-      }
+      // exerciseName -> (istDate -> max Epley e1RM that day). Shared builder
+      // (Batch 12-A `e1rm_history.dart`) — the SAME loop titration + plateau use;
+      // stale (< cutoff) rows are dropped inside → fewer recent sessions → the
+      // ≥2-session gate keeps the deload (the safe direction).
+      final byExercise = buildE1rmByDate(box, cutoff: cutoff);
 
       final repo = ExerciseRepository.instance;
       var hasEvidence = false;
@@ -77,7 +63,7 @@ class DeloadE1rmScan {
 
       byExercise.forEach((name, dated) {
         if (dated.length < 2) return; // need ≥2 dated sessions
-        if (!_isCompound(name, repo)) return; // main lifts only
+        if (!repo.isCompoundByExactName(name)) return; // main lifts only
         hasEvidence = true;
         // top-2 most-recent DISTINCT dates (YYYY-MM-DD lexical desc).
         final dates = dated.keys.toList()..sort((a, b) => b.compareTo(a));
@@ -96,20 +82,5 @@ class DeloadE1rmScan {
         anyCompoundDeclining: false,
       );
     }
-  }
-
-  /// True iff [name] resolves to a library exercise whose `exercise_type` is
-  /// EXACTLY 'compound' (mirrors `ExerciseRepository._fieldContains` — the same
-  /// exact-match predicate the generator's compounds-first sort uses). Custom /
-  /// swapped names absent from the library → false (not a main lift).
-  static bool _isCompound(String name, ExerciseRepository repo) {
-    final row = repo.getByExactName(name);
-    if (row == null) return false;
-    final t = row['exercise_type'];
-    const target = 'compound';
-    if (t is List) {
-      return t.any((e) => e.toString().toLowerCase() == target);
-    }
-    return (t as String?)?.toLowerCase() == target;
   }
 }

@@ -196,6 +196,38 @@ attempt-5 pool is NOT variety-eligible; buildPinnedDays UNCHANGED (variety ⟂ p
 migration (reads existing schedule_* rows). SoT `cross_phase_variety`; behavioral
 `cross_phase_variety_behavioral_test.dart`.
 
+**Plateau escalation (W3.5 — Batch 12-A, PRO, ship-dark).** rung-2 (+sets): at a
+genuine FRESH phase advance a plateaued MAJOR GROUP earns +1 weekly direct set,
+MERGED into the W2.7 titration delta map so ONE clamped `applyToWeeks` pass applies
+both. A "plateau" = a COMPOUND lift whose MAX-Epley e1RM is FLAT ((max−min)/max ≤ 5%)
+across ≥3 dated sessions spanning ≥28d in a trailing 63-IST-day window
+(`PlateauScan.plateauedGroups`, reusing the SHARED `e1rm_history.buildE1rmByDate` +
+`ExerciseRepository.isCompoundByExactName` + `muscleGroupOf`). `mergePlateauSetDeltas`
+`putIfAbsent`s +1 ONLY where titration left a group ABSENT → a declining group's −1
+ALWAYS wins (no double-bump; never +sets a fatiguing/declining group), and the
+[MEV,MRV] clamp caps it. **rung-1 (deload when plateaued+fatigued) needs NO code — it
+is ALREADY delivered by W2.4's `readiness.good` keep in `deload_evaluator`: a plateau
+keep-term wired into `shouldLift` would be PROVABLY DEAD (it can only engage when
+`readiness.good` is already false, since `_fatiguePresent` is that predicate's strict
+complement), so 12-A does NOT touch `deload_evaluator.dart`.** rung-3 (exercise
+rotation) is Batch 12-B. THREE inert seams: `enable_plateau_escalation` DEFAULT OFF
+(merge returns the input map unchanged → applyToWeeks identity → byte-identical); ALSO
+gated on `enable_readiness` (the fatigue gate needs readiness rows — mirrors
+DeloadEvaluator's guard); OPT-IN `applyPlateauEscalation` threaded generate/generateV4
+→ generateAndSchedule → the two `pins == null` advance callers (autoGenerate +
+graduation._onPro). Fatigue = persistent readiness red/yellow (≥3 rows in 14d, strict
+majority `level != green`) — the SAME data/window/predicate as `_readinessGood`.
+`phase >= 2` self-gate (PRO — free is phase 1; advance callers are PRO-gated →
+inherits the server-verified `phases_2_to_12`). ⚠ Drift hygiene (#1 class): the exlog→
+e1RM map-build loop is now the SHARED `e1rm_history.buildE1rmByDate` (extracted
+byte-identical from `DeloadE1rmScan` + `VolumeTitration`; the file now holding the
+literal `exlog_` scan) and the compound predicate is `ExerciseRepository
+.isCompoundByExactName` (from `DeloadE1rmScan._isCompound`) — both refactors pinned by
+the existing deload/titration behavioral tests. NO migration/restore (Hive-read-only;
+exlog+readiness already sync+restore); `generator_matrix`/`cascade_tracer` NOT wired →
+frozen D3 baseline unmoved. SoT `plateau_escalation`; behavioral
+`plateau_escalation_behavioral_test.dart` + pure `plateau_scan_test.dart`.
+
 **Exercise count targets (per day):**
 
 | Experience | 3-day | 4-day | 5-day | 6-day |

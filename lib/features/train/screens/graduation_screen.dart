@@ -661,6 +661,7 @@ class _GenerateNextPhaseButtonState
         // low-adherence "repeat" (pins != null) must not gain volume.
         applyVolumeTitration: pins == null,
         previousPhaseByDay: previousPhaseByDay,
+        applyPlateauEscalation: pins == null, // W3.5 12-A: fresh-advance-only
       );
       unawaited(ErrorTelemetry.logEvent('phase_unlock_plan_generated',
           message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));
