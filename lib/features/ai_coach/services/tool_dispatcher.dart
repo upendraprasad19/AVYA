@@ -296,7 +296,10 @@ class ToolDispatcher {
     }
 
     // Resolve exercise name from local library (Hive exerciseBox or customBox).
-    final name = _resolveExerciseName(exerciseId) ?? exerciseId;
+    // W3.3 (Batch 11-A): only a RESOLVABLE id is a real library id; a name-as-id
+    // fallback must NOT be stored as exercise_id (else the reader spuriously matches).
+    final resolvedName = _resolveExerciseName(exerciseId);
+    final name = resolvedName ?? exerciseId;
 
     // Plan A A-11: route through WorkoutWriteService.logExercise — ONE call
     // with sets[length=N] yields ONE deterministic exlog row, replacing the
@@ -330,6 +333,7 @@ class ToolDispatcher {
     final result = await WorkoutWriteService.instance.logExercise(
       date: date,
       exerciseName: name,
+      exerciseId: resolvedName != null ? exerciseId : null, // W3.3: only a real library id
       sets: exerciseSets,
       source: WriteSource.aiCoach,
       // ref: null — dispatcher's outer flow handles invalidation + sync.

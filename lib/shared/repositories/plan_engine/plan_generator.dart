@@ -186,12 +186,18 @@ class PlanGenerator {
     final repRanges = <String, String?>{
       for (final e in allExercises) e.exerciseName: e.repRange,
     };
+    // W3.3 (Batch 11-A): per-exercise library id for the resolver's INCLUSIVE
+    // id-OR-name history match (flag-gated inside resolve() → OFF = name-only).
+    final exerciseIds = <String, String?>{
+      for (final e in allExercises) e.exerciseName: e.exerciseId,
+    };
     Map<String, double>? weights = previousWeights;
     if (weights == null && phase >= 2) {
       weights = ProgressionResolver.resolve(
         phase: phase,
         exerciseNames: allNames,
         repRanges: repRanges,
+        exerciseIds: exerciseIds,
       );
     }
 

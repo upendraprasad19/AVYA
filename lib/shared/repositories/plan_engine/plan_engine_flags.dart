@@ -218,4 +218,21 @@ class PlanEngineFlags {
       return false;
     }
   }
+
+  /// W3.3 (Batch 11-A ID-keyed history): the READER switch. When ON,
+  /// `ProgressionResolver` matches a logged `exlog_*` row to a plan exercise by
+  /// the library `exercise_id` — INCLUSIVE with name (id-matched ∪ name-matched,
+  /// the more-recent of the two, no split-history loss) — instead of name-only.
+  /// Ship-dark DEFAULT OFF → name-only (byte-identical). The WRITE side (stamping
+  /// `exercise_id` on new exlog rows) is unflagged-additive; only this READ switch
+  /// is gated. The cloud sync onConflict key stays name-derived regardless. Set
+  /// `configBox['enable_exercise_id_history'] = true` to enable.
+  static bool get exerciseIdHistoryEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_exercise_id_history') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

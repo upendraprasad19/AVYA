@@ -145,6 +145,7 @@ class ExerciseData {
   final String? exerciseType; // 'compound' or 'isolation'
   final int? supersetGroup; // null = standalone, 0/1/2... = superset group index
   final String? muscleLabel; // experience-appropriate muscle label (e.g. "Back", "Lats", "Lats (Width)")
+  final String? exerciseId; // W3.3 (Batch 11-A): library exercise id — forward-only, null on legacy/custom.
 
   const ExerciseData({
     required this.name,
@@ -158,6 +159,7 @@ class ExerciseData {
     this.exerciseType,
     this.supersetGroup,
     this.muscleLabel,
+    this.exerciseId,
   });
 
   /// Shape-tolerant parse of a raw library `equipment_needed` value. It is a List
@@ -183,6 +185,7 @@ class ExerciseData {
     String? exerciseType,
     int? Function()? supersetGroup,
     String? Function()? muscleLabel,
+    String? exerciseId,
   }) {
     return ExerciseData(
       name: name ?? this.name,
@@ -196,6 +199,9 @@ class ExerciseData {
       exerciseType: exerciseType ?? this.exerciseType,
       supersetGroup: supersetGroup != null ? supersetGroup() : this.supersetGroup,
       muscleLabel: muscleLabel != null ? muscleLabel() : this.muscleLabel,
+      // W3.3 (Batch 11-A): PRESERVE the id — no copyWith changes `name`, so keeping
+      // the id is always correct; dropping it would ship the WRITE largely inert.
+      exerciseId: exerciseId ?? this.exerciseId,
     );
   }
 
@@ -255,10 +261,16 @@ class SwapExerciseData {
   final String detail;
   final String emoji;
 
+  /// W3.3 (Batch 11-A): the swapped-in exercise's library id, when the picker
+  /// row carries one (`ExerciseRepository` seed rows do — the Hive key == id).
+  /// null → the swap logs match history by name (forward-only fallback).
+  final String? id;
+
   const SwapExerciseData({
     required this.name,
     required this.detail,
     this.emoji = '',
+    this.id,
   });
 }
 
@@ -391,6 +403,8 @@ List<ExerciseData> _parseExerciseMaps(List? raw) {
           : m['exercise_type'] as String?,
       supersetGroup: m['superset_group'] as int?,
       muscleLabel: muscleLabel,
+      // W3.3 (Batch 11-A): thread the library exercise id from the schedule row.
+      exerciseId: m['exercise_id'] as String?,
     );
   }).toList();
 }
@@ -1126,6 +1140,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
             loggingType: resolvedLoggingType,
             category: newExercise.category,
             equipmentNeeded: newExercise.equipmentNeeded,
+            // W3.3 (Batch 11-A): preserve the swap-in's id (or null → name fallback).
+            exerciseId: newExercise.exerciseId,
           );
 
     final newExercises = List<ExerciseData>.from(state.exercises);
@@ -1534,6 +1550,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       final result = await WorkoutWriteService.instance.logExercise(
         date: workoutDate,
         exerciseName: exercise.name,
+        exerciseId: exercise.exerciseId, // W3.3 (Batch 11-A) forward-only id
         sets: exerciseSets,
         source: WriteSource.activeWorkout,
         // Don't pass ref here — we trigger our own provider invalidations

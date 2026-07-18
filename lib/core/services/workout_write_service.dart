@@ -67,6 +67,10 @@ class WorkoutWriteService {
     /// users with multiple sessions per day, the caller should pass an
     /// explicit id (e.g. `'wlog_<date>_<sequence>'`).
     String? workoutLogId,
+    /// W3.3 (Batch 11-A): the library exercise id (forward-only). Written when
+    /// non-null + STICKY (a null-id re-log keeps a prior id). NEVER reaches the
+    /// cloud sync onConflict key (name-derived) — Hive-local id matching only.
+    String? exerciseId,
   }) async {
     // 1. Validate
     if (exerciseName.trim().isEmpty) {
@@ -88,6 +92,10 @@ class WorkoutWriteService {
       final box = HiveService.instance.workoutBox;
       final key = exlogKey(date, exerciseName);
       final existing = box.get(key);
+      // W3.3 (Batch 11-A): STICKY exercise_id — a null-id re-log (coach-conversational
+      // / legacy repo) keeps the id a prior schedule-log wrote for the same key.
+      final resolvedExerciseId = exerciseId ??
+          ((existing is Map) ? existing['exercise_id'] as String? : null);
 
       // 2. Build merged sets[] list with 60s dedup
       final List<ExerciseSet> mergedSets;
@@ -165,6 +173,7 @@ class WorkoutWriteService {
 
       final entry = <String, dynamic>{
         'exercise_name': exerciseName,
+        'exercise_id': ?resolvedExerciseId, // W3.3: omit entry when null
         'date': dateStr,
         'workout_log_id': wid,
         'sets': cleanedSets.map((s) => s.toMap()).toList(),

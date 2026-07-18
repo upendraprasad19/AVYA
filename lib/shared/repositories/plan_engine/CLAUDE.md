@@ -134,6 +134,29 @@ The Batch-0 scorecard CANNOT measure this (it scores a `default_sets` SELECTION 
 sets) — the behavioral test is the sole proof. SoT `volume_titration`; behavioral
 `volume_titration_behavioral_test.dart` + `e1rm_test.dart`.
 
+**ID-keyed history (W3.3 — Batch 11-A, forward-only, Hive-local).** New `exlog_*`
+rows carry the library `exercise_id` (`WorkoutWriteService.logExercise` optional
+`exerciseId`, STICKY — a null-id re-log keeps a prior id; threaded from
+`ExerciseData.exerciseId` on the active-workout path + the manual swap/add/
+create picker paths (`swap_sheets.dart` reads the picked row's `id`;
+`SwapExerciseData` gained an `id` field), and from the coach `_executeLogSet`
+ONLY when the id resolves to a real library exercise). When
+`enable_exercise_id_history` is ON, `ProgressionResolver.resolve` matches a plan
+exercise to logged history by id — **INCLUSIVE** with name (id-matched ∪
+name-matched, the MORE-RECENT wins; graded session-lists unioned) via a parallel
+`lastSessionById`/`allById` index keyed on non-empty ids only — so a rename/swap no
+longer SPLITS an exercise's weight history. `plan_generator` threads each plan
+exercise's `exerciseId` (parallel to `repRanges`). Ship-dark **DEFAULT OFF**
+(`PlanEngineFlags.exerciseIdHistoryEnabled`) → indices null → name-only,
+byte-identical. Forward-only: legacy/restored/no-id rows fall to the name index
+(restore does NOT reconstruct the Hive `exercise_id`). ⚠ The Hive library id is
+**Hive-LOCAL** — the cloud `workout_log_exercises.exercise_id` is a SEPARATE
+name-derived onConflict identity; the library id MUST NOT be projected upward
+(would shift the natural key → duplicate rows). SoT `exercise_id_history` (+ the
+`hive_field_name_exlog` collision note); behavioral
+`exlog_exercise_id_behavioral_test.dart` + absence gate
+`sync_exlog_no_library_id_test.dart`.
+
 **Exercise count targets (per day):**
 
 | Experience | 3-day | 4-day | 5-day | 6-day |
