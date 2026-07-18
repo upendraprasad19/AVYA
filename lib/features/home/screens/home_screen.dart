@@ -23,6 +23,7 @@ import '../widgets/weekly_calendar.dart';
 import '../widgets/day_detail_sheet.dart';
 import '../widgets/quick_action_button.dart';
 import '../widgets/profile_nudge_card.dart';
+import '../widgets/phase_repeat_nudge_banner.dart';
 import '../widgets/quote_card.dart';
 import '../widgets/ai_insight_card.dart';
 import '../widgets/today_workout_card.dart';
@@ -435,6 +436,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }),
         _buildStreakWarning(ref),
         _buildExpiryBanner(ref),
+        _buildRepeatNudge(ref),
         // Unit 3 obs 6 — web-only "Add to Home Screen" prompt (kIsWeb-gated
         // inside the widget; SizedBox.shrink on Android/iOS + when not
         // installable). Below the safety banners, above the calendar.
@@ -553,6 +555,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       onDismiss: () => ref
           .read(subscriptionExpiryBannerProvider.notifier)
           .dismissForToday(),
+    );
+  }
+
+  // -- ⑧ 3-a2 (W2.5) repeat-content nudge ---------------------------
+
+  Widget _buildRepeatNudge(WidgetRef ref) {
+    // Local-only, user-scoped flag set by advanceProPhaseIfExpired on an actual
+    // low-adherence REPEAT advance. Cleared ONLY on the explicit dismiss tap
+    // (never in build) so it survives Home rebuilds. Ship-dark: false unless
+    // the adherence-gate flag drove a repeat.
+    final show = ref.watch(phaseRepeatNudgeProvider);
+    if (!show) return const SizedBox.shrink();
+    return PhaseRepeatNudgeBanner(
+      onDismiss: () => ref.read(phaseRepeatNudgeProvider.notifier).dismiss(),
     );
   }
 

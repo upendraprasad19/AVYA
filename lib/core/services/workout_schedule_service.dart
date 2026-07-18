@@ -129,7 +129,7 @@ class WorkoutScheduleService {
         cardioPreference: cardioPreference,
       );
 
-  Future<bool> autoGenerateNextPhaseIfNeeded({
+  Future<({bool generated, bool repeated})> autoGenerateNextPhaseIfNeeded({
     required String goal,
     required String equipment,
     required int daysPerWeek,
@@ -176,6 +176,11 @@ class WorkoutScheduleService {
 
   bool isPhaseExpired() =>
       read.WorkoutScheduleReadService.instance.isPhaseExpired();
+
+  /// ⑧ 3-a2 (W2.5): completion rate (0-1) of the CURRENT (expiring) phase — the
+  /// low-adherence signal for the repeat-content default. Pass-through.
+  double currentPhaseCompletionRate() =>
+      read.WorkoutScheduleReadService.instance.currentPhaseCompletionRate();
 
   /// ⑥ Batch 7-A (W3.2): read-only phase-arc wave characters (see read service).
   List<String> currentWaveCharacters() =>

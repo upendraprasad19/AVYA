@@ -6653,8 +6653,13 @@ concepts:
           BEFORE the plan_start overwrite → delegates to the PURE repeatPinsFrom (G5 gate +
           extraction, @visibleForTesting); pins passed to generateAndSchedule. phase=newPhase.
       - file: lib/core/services/workout_schedule_service.dart
-        method: autoGenerateNextPhaseIfNeeded facade (repeatContent forward)
-        notes: the REAL production path (splash_screen.dart:262) is the facade → must forward repeatContent.
+        method: autoGenerateNextPhaseIfNeeded facade (repeatContent forward; ⑧ 3-a2 record return)
+        notes: >
+          the REAL production path routes splash + the Home/Train PhaseGeneratingCard through the
+          shared advanceProPhaseIfExpired helper (lib/shared/services/pro_phase_advance.dart). ⑧ 3-a2:
+          the return became a record `({bool generated, bool repeated})` — `repeated == pins != null`
+          (a faithful G5 repeat was applied) — read by the helper to set phase_repeat_nudge_pending;
+          callers updated to `.generated` (the helper + simulation_service.dart:546). OFF → repeated:false.
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
         method: PlanEngineFlags.adherenceGateEnabled
         notes: enable_adherence_gate, try/catch→false (ship-dark default OFF), mirrors triggeredDeloadEnabled.
@@ -6667,8 +6672,43 @@ concepts:
         semantic: >
           match→A/B pins by index · effectiveExp/planGoal/equipment/days MISMATCH→null ·
           absent/empty→null (crash-guard) · gap-index→empty-entry+B-only spanned · pins→wk1/wk2
-          rows · last_phase_profile flag-gated. TRIGGER (repeatContent from a surface) is UNIT 3.
+          rows · last_phase_profile flag-gated. TRIGGER (repeatContent) is WIRED by UNIT 3-a2 (the
+          splash-default `adherenceGateEnabled && currentPhaseCompletionRate() < 0.8` in
+          advanceProPhaseIfExpired); the return became a record read for the repeat nudge.
     contract_test_path: test/contracts/repeat_content_scheduling_test.dart
+
+  - concept: phase_repeat_nudge
+    domain: workout
+    behavioral_test_path: test/contracts/phase_repeat_nudge_test.dart
+    reader_manifest_complete: false  # Gate-18's detector matches .get/.put/.startsWith, NOT
+    # MigratedKey.read/write — a `true` here would pass vacuously (feedback_source_grep_false_confidence).
+    # The writer→reader contract is pinned by the behavioral test instead.
+    description: >
+      ⑧ Batch 8 (W2.5) — UNIT 3-a2: the local-only "you repeated — step it up?" nudge. When a PRO
+      phase advance actually REPEATS last phase's plan (adherence-gate flag ON + low completion),
+      advanceProPhaseIfExpired flags phase_repeat_nudge_pending=true; Home surfaces a dismissible,
+      non-shaming banner and clears the flag ONLY on the explicit dismiss (never in build) so it
+      survives Home rebuilds. User-scoped (MigratedKey → userBox; registered in
+      UserConfigMigrator.userScopedKeys) + cross-account gated — the write requires
+      HiveUserSession.currentOwnerFullId != null (the codified expiry-banner P0 belt: a non-null uid
+      does NOT imply the owner opened, and a null owner makes MigratedKey fall back to the
+      device-shared configBox → cross-account leak). Local-only: never synced/restored (a userBox flag
+      is not walked by any sync fan-out). SHIP-DARK: only ever SET when the gate drove a repeat →
+      enable_adherence_gate OFF ⇒ never written ⇒ never surfaces.
+    writers:
+      - file: lib/shared/services/pro_phase_advance.dart
+        method: advanceProPhaseIfExpired (on result.repeated && HiveUserSession.currentOwnerFullId != null)
+        notes: MigratedKey.write('phase_repeat_nudge_pending', true) — user-scoped, cross-account gated.
+    readers:
+      - file: lib/features/home/providers/home_provider.dart
+        method_or_widget: phaseRepeatNudgeProvider (PhaseRepeatNudgeNotifier)
+        semantic: >
+          build() reads MigratedKey.read<bool>('phase_repeat_nudge_pending') ?? false; dismiss()
+          writes false + state=false — cleared ONLY on dismiss (never in build) so it survives rebuilds.
+      - file: lib/features/home/screens/home_screen.dart
+        method_or_widget: _buildRepeatNudge → PhaseRepeatNudgeBanner (dismissible, non-shaming)
+        semantic: renders iff the flag is true; onDismiss → phaseRepeatNudgeProvider.notifier.dismiss().
+    contract_test_path: test/contracts/phase_repeat_nudge_test.dart
 
   - concept: graded_progression
     domain: workout

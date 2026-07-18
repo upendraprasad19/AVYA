@@ -297,7 +297,11 @@ void main() {
         currentPhase: 2,
         repeatContent: true,
       );
-      expect(advanced, isTrue);
+      // ⑧ 3-a2: autoGenerateNextPhaseIfNeeded now returns a record. This case is
+      // flag-ON + G5-matching → a faithful repeat → both generated AND repeated.
+      expect(advanced.generated, isTrue);
+      expect(advanced.repeated, isTrue,
+          reason: 'flag ON + G5 profile match + prior rows present → pins applied');
 
       // getWeek now reads the NEW phase's window → it must reproduce the prior
       // selection (pin honored end-to-end) stamped phase 3.
