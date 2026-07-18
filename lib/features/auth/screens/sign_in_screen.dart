@@ -63,6 +63,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   bool _obscurePassword = true;
   _SignInView _currentView = _SignInView.main;
 
+  /// Synchronous reentrancy guard for the enterEmail CONTINUE button.
+  /// `isLoading` (derived from provider state) only disables the button on
+  /// the NEXT frame after `checkEmailRegistered` sets AuthStatus.loading, so
+  /// a same-frame double-tap can start the RPC twice. This field is set
+  /// before the first `await` so a second tap in the same frame is rejected
+  /// immediately (B-pass finding 4, 96afd825-review.md).
+  bool _checkingEmail = false;
+
   /// Pre-checked per Q2 decision (DPDP-compliant: visible + tickable
   /// checkbox present; tapping CREATE ACCOUNT with checkbox checked
   /// is the affirmative action). Common Indian fintech pattern
@@ -666,17 +674,23 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               const SizedBox(height: AppSpacing.sectionGap),
               _buildPrimaryButton(
                 label: 'CONTINUE',
-                isLoading: isLoading,
+                isLoading: isLoading || _checkingEmail,
                 onPressed: () async {
+                  if (_checkingEmail) return;
                   if (!_formKey.currentState!.validate()) return;
-                  final email = _emailController.text.trim();
-                  final registered =
-                      await authNotifier.checkEmailRegistered(email);
-                  if (!mounted || registered == null) return;
-                  setState(() {
-                    _emailStep =
-                        registered ? _EmailStep.signIn : _EmailStep.signUp;
-                  });
+                  _checkingEmail = true;
+                  try {
+                    final email = _emailController.text.trim();
+                    final registered =
+                        await authNotifier.checkEmailRegistered(email);
+                    if (!mounted || registered == null) return;
+                    setState(() {
+                      _emailStep =
+                          registered ? _EmailStep.signIn : _EmailStep.signUp;
+                    });
+                  } finally {
+                    if (mounted) setState(() => _checkingEmail = false);
+                  }
                 },
               ),
             ],

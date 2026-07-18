@@ -15,6 +15,20 @@ class _FakeAuthNotifier extends AuthNotifier {
   Future<bool?> checkEmailRegistered(String email) async => _registered;
 }
 
+/// Fake notifier that counts calls and defers its result past a microtask
+/// boundary, so a same-frame double-tap (before `isLoading` flips on the
+/// next build) has a real window to fire the check twice if unguarded.
+class _CountingDelayedAuthNotifier extends AuthNotifier {
+  int callCount = 0;
+
+  @override
+  Future<bool?> checkEmailRegistered(String email) async {
+    callCount++;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    return true;
+  }
+}
+
 Future<void> _openEmailStep(WidgetTester tester, String email) async {
   await tester.tap(find.text('ENLIST VIA EMAIL'));
   await tester.pumpAndSettle();
@@ -117,4 +131,36 @@ void main() {
     expect(find.text('CONTINUE'), findsOneWidget);
     expect(find.text('CREATE ACCOUNT'), findsNothing);
   });
+
+  testWidgets(
+    'a same-frame double-tap on CONTINUE only fires checkEmailRegistered once',
+    (tester) async {
+      final notifier = _CountingDelayedAuthNotifier();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authNotifierProvider.overrideWith(() => notifier),
+          ],
+          child: const MaterialApp(home: SignInScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('ENLIST VIA EMAIL'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byType(TextFormField).first, 'racer@example.com');
+
+      // Two taps before any pump — both land in the same frame, before the
+      // reentrancy guard's setState has a chance to rebuild the button.
+      await tester.tap(find.text('CONTINUE'));
+      await tester.tap(find.text('CONTINUE'));
+      await tester.pumpAndSettle();
+
+      expect(notifier.callCount, 1,
+          reason: 'the synchronous _checkingEmail guard must reject the '
+              'second same-frame tap before it reaches checkEmailRegistered');
+      expect(find.text('SIGN IN WITH EMAIL'), findsOneWidget);
+    },
+  );
 }

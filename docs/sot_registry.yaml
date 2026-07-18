@@ -1579,7 +1579,7 @@ concepts:
       projects them to the users cloud row and re-hydrates on returning-user restore.
     writers:
       - file: lib/features/auth/screens/sign_in_screen.dart
-        line_range: 688-857
+        line_range: 775-943
         method: _buildEmailStepSignUp
         semantic: hive-write
         notes: |
