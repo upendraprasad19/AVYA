@@ -7349,7 +7349,7 @@ concepts:
         method: universalPoolV4 (:497-509)
         notes: deduped + pattern-corrected; shoulder_isolation → E261 Bodyweight Rear Delt Raise
       - file: test/plan_generator/v4_diagnostic/cascade_tracer.dart
-        method: universalPoolV4Mirror (:52, renamed public)
+        method: universalPoolV4Mirror (:53, renamed public)
         notes: edited in lockstep; pinned equal by the mirror test
     readers:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart

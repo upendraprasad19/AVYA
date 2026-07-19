@@ -18,7 +18,7 @@ concept: universal_pool_fallback
 sot_registry_entry: universal_pool_fallback
 writers:
   - { file: lib/shared/repositories/plan_engine/exercise_selector.dart, line: 497, source: "universalPoolV4 (:497-509) — deduped; Dead Bug/Side Plank replaced with real Towel Row/Glute Kickback (now bodyweight library rows); shoulder_isolation -> E261 Bodyweight Rear Delt Raise" }
-  - { file: test/plan_generator/v4_diagnostic/cascade_tracer.dart, line: 52, source: "universalPoolV4Mirror — the tracer copy, edited in lockstep + renamed public for the equality test" }
+  - { file: test/plan_generator/v4_diagnostic/cascade_tracer.dart, line: 53, source: "universalPoolV4Mirror — the tracer copy, edited in lockstep + renamed public for the equality test" }
 readers:
   - { file: lib/shared/repositories/plan_engine/exercise_selector.dart, line: 1152, source: "_cascadeFill attempt-5 — resolves each pool name via repo.search, injury+equipment-filters, else safely omits" }
 hive_key_prefix: n/a

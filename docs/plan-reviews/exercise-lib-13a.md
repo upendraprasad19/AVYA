@@ -1,11 +1,12 @@
 ---
 branch: exercise-lib-13a
-plan: .claude/plans/ok-lock-1a-and-atomic-balloon.md
+plan: docs/plan-reviews/exercise-lib-13a.md
 blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/9a36dcb1-review.md
 ---
 
 # Plan Review — Batch 13-A (exercise-library quality: gains-only tier deepening + stub repair + E261 + universalPool)
