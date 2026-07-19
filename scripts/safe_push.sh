@@ -26,7 +26,11 @@
 set -u
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT"
+if [ -z "$REPO_ROOT" ]; then
+  echo "[safe_push] FAILED: git rev-parse --show-toplevel returned empty (not a git repo?)." >&2
+  exit 1
+fi
+cd "$REPO_ROOT" || { echo "[safe_push] FAILED: cd \"$REPO_ROOT\" failed." >&2; exit 1; }
 
 REMOTE="${1:-origin}"
 BRANCH="${2:-$(git rev-parse --abbrev-ref HEAD)}"

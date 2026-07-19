@@ -26,7 +26,11 @@ if [ -z "$MSG" ]; then
 fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT"
+if [ -z "$REPO_ROOT" ]; then
+  echo "[safe_commit] FAILED: git rev-parse --show-toplevel returned empty (not a git repo?)." >&2
+  exit 1
+fi
+cd "$REPO_ROOT" || { echo "[safe_commit] FAILED: cd \"$REPO_ROOT\" failed." >&2; exit 1; }
 
 LOG="$(mktemp 2>/dev/null || echo "/tmp/safe_commit_$$.log")"
 BEFORE_HEAD="$(git rev-parse HEAD 2>/dev/null || echo "")"

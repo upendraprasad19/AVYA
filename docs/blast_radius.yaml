@@ -66,6 +66,18 @@ paths:
   - { glob: "lib/core/services/hive_service.dart", tier: platform }
   - { glob: "lib/shared/repositories/plan_engine/**", tier: platform }
   - { glob: "CLAUDE.md", tier: platform }
+  # PreToolUse/PreCommit hooks that gate EVERY future git operation platform-
+  # wide are platform-tier on their own merits, not just when a change also
+  # happens to touch CLAUDE.md (B-pass finding #2, discipline-overhead batch
+  # 2026-07-19: these were feature-tier under the scripts/**+.claude/**
+  # catch-alls below, so a change touching ONLY the hook — not CLAUDE.md —
+  # would have cleared zero review gate despite having the power to block
+  # every git commit/push in every future session).
+  - { glob: "scripts/git_safety_hook.dart", tier: platform }
+  - { glob: "scripts/git_safety_lib.dart", tier: platform }
+  - { glob: "scripts/check_commit_from_worktree.dart", tier: platform }
+  - { glob: "scripts/worktree_guard_lib.dart", tier: platform }
+  - { glob: ".claude/settings.json", tier: platform }
 
   # ----- account -----
   - { glob: "lib/features/auth/**", tier: account }

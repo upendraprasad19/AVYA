@@ -67,9 +67,36 @@ void _deny(String message) {
   exit(2);
 }
 
+// Non-blocking advisory: uses the SAME hookSpecificOutput.additionalContext
+// JSON channel as scripts/discipline_hook.dart (B-pass finding #3: a plain
+// stderr.writeln on a non-blocking exit-0 PreToolUse return is debug-log
+// only per that script's own documented channel contract -- it would not
+// actually have been seen).
+void _allowWithContext(String context) {
+  stdout.writeln(jsonEncode({
+    'hookSpecificOutput': {
+      'hookEventName': 'PreToolUse',
+      'additionalContext': context,
+    }
+  }));
+  exit(0);
+}
+
+Future<String> _readStdin() async {
+  // B-pass finding #4: mirror discipline_hook.dart's hasTerminal guard + 3s
+  // timeout. This hook now runs on every Bash call in every session -- an
+  // unresolved read (manual invocation, a harness edge case) must never hang
+  // the whole session; fail open instead.
+  if (stdin.hasTerminal) return '';
+  return utf8.decoder.bind(stdin).join().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => '',
+      );
+}
+
 void main() async {
   try {
-    final input = await stdin.transform(utf8.decoder).join();
+    final input = await _readStdin();
     if (input.trim().isEmpty) exit(0);
     final data = jsonDecode(input) as Map<String, dynamic>;
 
@@ -156,9 +183,12 @@ void main() async {
             workingDirectory: cwd,
           );
           if (result.exitCode != 0) {
-            stderr.writeln(
-              '[git-safety] WARNING: local plan-review-record precheck '
-              'failed (advisory only -- CI will enforce this for real):\n'
+            // additionalContext, not stderr -- see _allowWithContext's
+            // doc comment (B-pass finding #3: stderr on a non-blocking
+            // return is debug-log only, effectively invisible).
+            _allowWithContext(
+              '[git-safety] NOTE: local plan-review-record precheck failed '
+              '(advisory only -- CI will enforce this for real before merge):\n'
               '${result.stdout}${result.stderr}',
             );
           }
