@@ -135,19 +135,36 @@ void main() async {
     }
 
     // Local re-run of the plan-review-record gate, for ANY push-shaped
-    // command (raw or via the safe wrapper) -- unconditional; the gate itself
-    // already no-ops for anything that isn't a >=account merge-to-main.
+    // command (raw or via the safe wrapper) -- ADVISORY ONLY (review round 2,
+    // N1): this precheck is a pure local optimization -- CI re-runs the exact
+    // same gate as the real, authoritative backstop -- so it must never be
+    // able to hard-block a push with no escape hatch. An earlier version
+    // denied on any non-zero exit, which could wedge the ONE path that lands
+    // work on main (the integration push from the shared main folder) with
+    // no override if the precheck itself ever misbehaves (toolchain hiccup,
+    // an edge case in its own branch-recovery logic). Warning-only here loses
+    // no real enforcement -- only visibility timing (before vs. after the
+    // push+CI round-trip) -- and CI still hard-fails a genuinely missing
+    // review regardless of what happens on this local pass.
     if (commandIsPushShaped(command)) {
       final scriptPath = 'scripts/check_plan_review_record_exists.dart';
       if (File('$cwd/$scriptPath').existsSync()) {
-        final result =
-            Process.runSync('dart', ['run', scriptPath], workingDirectory: cwd);
-        if (result.exitCode != 0) {
-          _deny(
-            '[git-safety] BLOCKED: local plan-review-record precheck failed '
-            '(would also fail in CI after the push round-trip):\n'
-            '${result.stdout}${result.stderr}',
+        try {
+          final result = Process.runSync(
+            'dart',
+            ['run', scriptPath],
+            workingDirectory: cwd,
           );
+          if (result.exitCode != 0) {
+            stderr.writeln(
+              '[git-safety] WARNING: local plan-review-record precheck '
+              'failed (advisory only -- CI will enforce this for real):\n'
+              '${result.stdout}${result.stderr}',
+            );
+          }
+        } catch (_) {
+          // A precheck toolchain hiccup must never block the push itself --
+          // CI is the authoritative backstop regardless.
         }
       }
     }

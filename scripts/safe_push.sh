@@ -19,8 +19,9 @@
 # CLAUDE.md §4.3: this is the ONLY sanctioned push path. A PreToolUse hook
 # (scripts/git_safety_hook.dart) blocks a raw `git push` outright, and --
 # separately -- locally re-runs the plan-review-record check before any push
-# that would land a merge on main, so a missing review is caught before the
-# push+CI round-trip instead of after.
+# as an ADVISORY warning (review round 2, N1: never a hard block with no
+# escape hatch on the one path that lands work on main -- CI is the real,
+# authoritative backstop for this check regardless).
 
 set -u
 
