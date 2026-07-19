@@ -497,15 +497,15 @@ class ExerciseSelector {
   static const universalPoolV4 = <String, List<String>>{
     'horizontal_push':    ['Push Up', 'Incline Push Up', 'Wall Push Up', 'Decline Push Up', 'Diamond Push Up'],
     'vertical_push':      ['Pike Push Up', 'Handstand Hold', 'Dand (Hindu Pushup)'],
-    'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Inverted Row', 'Dead Bug'],
+    'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Towel Row'],
     'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row'],
     'knee_dominant':      ['Baithak (Hindu Squat)', 'Reverse Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
     'hip_dominant':       ['Glute Bridge', 'Single Leg Romanian Deadlift', 'Good Morning'],
     'core':               ['Plank', 'Dead Bug', 'Hollow Body Hold', 'Bicycle Crunch', 'Mountain Climber'],
     'elbow_flexion':      ['Chin Up', 'Inverted Row'],
     'elbow_extension':    ['Diamond Push Up', 'Bench Dips', 'Dip (Parallel Bars)'],
-    'shoulder_isolation': ['Pike Push Up', 'Arm Circles', 'Band Pull Apart'],
-    'hip_isolation':      ['Glute Bridge', 'Side Plank', 'Glute Bridge'],
+    'shoulder_isolation': ['Bodyweight Rear Delt Raise', 'Band Pull Apart', 'Arm Circles'],
+    'hip_isolation':      ['Glute Bridge', 'Glute Kickback'],
   };
 
   /// V4: Pick exercises for MuscleSlotDays using 5-attempt cascading fallback.

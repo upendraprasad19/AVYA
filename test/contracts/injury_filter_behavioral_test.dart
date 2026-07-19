@@ -5,11 +5,12 @@
 //   • U1/U4-central: a LEGACY `back` injury (vocab drift) must exclude the
 //     library's `lower_back`-contraindicated exercises — pre-fix `back` never
 //     matched `lower_back`, so ZERO were excluded.
-//   • U2: a `shoulder` injury must exclude Pike Push Up (a universal-pool pick
-//     the attempt-5 fallback used to hand out unfiltered).
-//   • Kill-switch: with `disable_injury_universal_filter=true`, Pike Push Up
-//     REAPPEARS — proving both the revert path AND that the filter (not luck) is
-//     what removes it (test non-vacuity).
+//   • U2 (end-to-end): a `shoulder` injury must remove EVERY shoulder-contra
+//     exercise from the plan; non-vacuity is shown by the same UNINJURED persona
+//     still getting shoulder-loaded exercises. (Batch 13-A moved the
+//     shoulder_isolation universal-pool fallback to the SAFE E261, so the
+//     attempt-5 filter + its `disable_injury_universal_filter` kill-switch are now
+//     proven deterministically in injury_safe_omission_production_test.dart.)
 //   • U4 HIGH-3: the AI-coach "regenerate my plan" path (which DROPPED injuries)
 //     must exclude a knee-injured user's knee-contraindicated exercises.
 
@@ -106,12 +107,6 @@ void main() {
     return hits;
   }
 
-  Set<String> exerciseNames(Phase phase) => {
-        for (final wp in phase.weekPlans)
-          for (final d in wp.workoutDays)
-            for (final ex in d.exercises) ex.exerciseName,
-      };
-
   test('legacy `back` vocab excludes lower_back-contra exercises (U1/U4-central)',
       () {
     final phase = PlanGenerator.instance.generate(
@@ -131,7 +126,15 @@ void main() {
     );
   });
 
-  test('shoulder injury excludes Pike Push Up from the universal pool (U2)', () {
+  test('shoulder injury → NO shoulder-contraindicated exercise in the plan (U1/U2/U4)',
+      () {
+    // End-to-end: the always-on injury filter (queryV4 attempts 1-4 + the attempt-5
+    // universal-pool U2 skip) removes every shoulder-contraindicated exercise from an
+    // injured user's generated plan. (Batch 13-A: the attempt-5 universal-pool filter
+    // + its kill-switch are proven deterministically by
+    // injury_safe_omission_production_test.dart, which seeds an all-contra pool and
+    // asserts safe-omission / kill-switch-revert on the real pickV4 path. This test
+    // pins the property end-to-end through the real library + full generate().)
     final phase = PlanGenerator.instance.generate(
       goal: 'build_muscle',
       equipment: 'full_gym',
@@ -140,30 +143,29 @@ void main() {
       experienceLevel: 'advanced',
       injuries: ['shoulder'],
     );
-    expect(exerciseNames(phase), isNot(contains('Pike Push Up')),
-        reason: 'Pike Push Up is shoulder-contraindicated — the U2 filter must '
-            'skip it in the attempt-5 universal pool');
+    expect(phase.weekPlans, isNotEmpty);
     expect(injuryHits(phase, {'shoulder'}), isEmpty,
-        reason: 'no shoulder-contraindicated exercise anywhere in the plan');
+        reason: 'no shoulder-contraindicated exercise may appear anywhere in an '
+            'injured user\'s plan');
   });
 
-  test('kill-switch reverts U2 → Pike Push Up reappears (non-vacuity)', () async {
-    await HiveService.instance.configBox
-        .put('disable_injury_universal_filter', true);
+  test('non-vacuity: the SAME uninjured persona DOES get shoulder-loaded exercises',
+      () {
+    // Proves the injured-user test above is not vacuous: the identical persona,
+    // uninjured, gets shoulder-contraindicated exercises (overhead presses etc.), so
+    // their ABSENCE for the injured user is the filter's doing — not the library
+    // simply lacking such exercises.
     final phase = PlanGenerator.instance.generate(
       goal: 'build_muscle',
       equipment: 'full_gym',
       daysPerWeek: 4,
       phase: 1,
       experienceLevel: 'advanced',
-      injuries: ['shoulder'],
+      injuries: const [],
     );
-    // With the filter OFF, the attempt-5 pool bypasses the injury check exactly
-    // as pre-U2 — so the shoulder-contraindicated Pike Push Up is handed out
-    // again. This proves (a) the kill-switch reverts and (b) the ON test above
-    // is non-vacuous (the filter, not luck, removes it).
-    expect(exerciseNames(phase), contains('Pike Push Up'),
-        reason: 'filter disabled → the universal pool must revert to unfiltered');
+    expect(injuryHits(phase, {'shoulder'}), isNotEmpty,
+        reason: 'an uninjured full_gym plan must contain ≥1 shoulder-loaded exercise — '
+            'else the injured-user test would pass vacuously');
   });
 
   test('coach regenerate excludes a knee user\'s knee-contra exercises (U4 HIGH-3)',

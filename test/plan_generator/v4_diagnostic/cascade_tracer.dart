@@ -47,20 +47,21 @@ class CascadeTrace {
 }
 
 /// Universal bodyweight pool — mirrored verbatim from
-/// lib/shared/repositories/plan_engine/exercise_selector.dart:493-505.
-/// Any change there must be reflected here.
-const _universalPoolV4 = <String, List<String>>{
+/// `ExerciseSelector.universalPoolV4` in
+/// lib/shared/repositories/plan_engine/exercise_selector.dart. Any change there must be
+/// reflected here — pinned by `universal_pool_mirror_test.dart` (asserts the two are equal).
+const universalPoolV4Mirror = <String, List<String>>{
   'horizontal_push':    ['Push Up', 'Incline Push Up', 'Wall Push Up', 'Decline Push Up', 'Diamond Push Up'],
   'vertical_push':      ['Pike Push Up', 'Handstand Hold', 'Dand (Hindu Pushup)'],
-  'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Inverted Row', 'Dead Bug'],
+  'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Towel Row'],
   'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row'],
   'knee_dominant':      ['Baithak (Hindu Squat)', 'Reverse Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
   'hip_dominant':       ['Glute Bridge', 'Single Leg Romanian Deadlift', 'Good Morning'],
   'core':               ['Plank', 'Dead Bug', 'Hollow Body Hold', 'Bicycle Crunch', 'Mountain Climber'],
   'elbow_flexion':      ['Chin Up', 'Inverted Row'],
   'elbow_extension':    ['Diamond Push Up', 'Bench Dips', 'Dip (Parallel Bars)'],
-  'shoulder_isolation': ['Pike Push Up', 'Arm Circles', 'Band Pull Apart'],
-  'hip_isolation':      ['Glute Bridge', 'Side Plank', 'Glute Bridge'],
+  'shoulder_isolation': ['Bodyweight Rear Delt Raise', 'Band Pull Apart', 'Arm Circles'],
+  'hip_isolation':      ['Glute Bridge', 'Glute Kickback'],
 };
 
 class CascadeTracer {
@@ -245,7 +246,7 @@ class CascadeTracer {
     }
 
     // Attempt 5: universal pool
-    final pool = _universalPoolV4[slot.movementPattern] ?? const <String>[];
+    final pool = universalPoolV4Mirror[slot.movementPattern] ?? const <String>[];
     attempts.add(CascadeAttempt(
       number: 5,
       signature: 'universal_pool[${slot.movementPattern}]',
