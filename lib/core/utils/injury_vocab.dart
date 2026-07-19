@@ -2,11 +2,11 @@
 ///
 /// These are the EXACT tokens the exercise library's `injury_contraindications`
 /// field uses (verified against `assets/data/exercise_library.json`: 9 distinct
-/// tokens across 115 of 258 rows — ankle 13, elbow 12, hamstring 2, hip 26,
-/// knee 30, lower_back 24, neck 1, shoulder 33, wrist 15).
+/// tokens across 150 of 259 rows as of Batch 13-B — the per-token counts drift as
+/// the library grows; `injury_vocab_library_contract_test` pins the live token SET).
 ///
 /// The engine matches injuries by **exact lowercase equality**
-/// (`exercise_repository.dart` queryV4 `:290`; `exercise_selector.dart` the
+/// (`exercise_repository.dart` queryV4 `:335-345`; `exercise_selector.dart` the
 /// universal-pool filter). So every injury value that reaches the engine — from
 /// the Edit-Profile chips, a stored profile map, a restored cloud row, or the
 /// AI-coach muster/induction free-text — MUST be normalized to one of these

@@ -82,7 +82,11 @@ class SeedService {
   // v8 (Batch 13-A): gains-only equipment_tier deepening (90 rows) + 9 stubs E252-E260
   //   normalized to the 38-key schema (incl. injury tags — closes the E252 knee hole) +
   //   E261 Bodyweight Rear Delt Raise added. Re-seed heals the malformed stub rows in Hive.
-  static const int _exerciseLibraryVersion = 8;
+  // v9 (Batch 13-B): comprehensive injury_contraindications tagging — 26 under-tagged rows
+  //   gained tags + 2 existing rows deepened (GHD Sit Up, Good Morning). Closes the empty-[]
+  //   safety holes (hinges/rows/overhead served to injured users). injury_contraindications
+  //   is NOT a cloud column → no migration 074 re-apply.
+  static const int _exerciseLibraryVersion = 9;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

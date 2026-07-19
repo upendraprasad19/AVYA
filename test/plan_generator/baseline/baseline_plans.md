@@ -17,8 +17,8 @@
 
 - **Unsafe plans (contraindicated exercise present): 0** (HARD invariant — must be 0)
 - **Equipment-violating plans: 201** (HARD invariant — must be 0)
-- Plans with ≥1 fallback pick: 281 / total fallback picks: 1181
-- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 868, home_dumbbells: 240, basic_gym: 24, full_gym: 49}`
+- Plans with ≥1 fallback pick: 284 / total fallback picks: 1184
+- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 868, home_dumbbells: 240, basic_gym: 24, full_gym: 52}`
 
 ## Curated plans (human face-validity)
 ---
@@ -251,7 +251,7 @@
 
 ---
 ### build_muscle | full_gym | 4d | intermediate | p1 | inj:shoulder
-`coverage 90.0 · balance 54.2 · volume 80.0 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 82.1 · **overall 84.4**`
+`coverage 90.0 · balance 54.2 · volume 80.3 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 82.1 · **overall 84.4**`
 
 **Push** (Chest, shoulders, triceps)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -283,13 +283,13 @@
 | Quads/knee_dominant | Leg Extension | attempt2DropSubFocus | Quads | machines |
 | Glutes/hip_isolation | Glute Bridge | attempt1Exact | Glutes | bodyweight |
 | Calves/knee_dominant | Standing Calf Raise | attempt1Exact | Calves (Gastrocnemius) | barbell |
-| Core/core | Hanging Leg Raise | attempt1Exact | Core, Obliques | pull-up bar |
+| Core/core | Cable Crunch | attempt1Exact | Abs | cables |
 | Hamstrings/knee_dominant | Leg Curl (Lying) | attempt1Exact | Hamstrings | machines |
 
 **Upper** (Shoulders, back, arms)
 | Slot | Exercise | Source | Muscles | Equip |
 |---|---|---|---|---|
-| Shoulders/vertical_push | Front Raise | attempt3DropTypeAndTarget ⚠ | Front Deltoid | dumbbells |
+| Shoulders/vertical_push | Dand (Hindu Pushup) | universalPool ⚠ | Chest, Shoulders, Triceps, Core | bodyweight |
 | Lats/horizontal_pull | Chest Supported Row | attempt1Exact | Rhomboids, Lats | bench, dumbbells |
 | Lateral Delts/shoulder_isolation | Shrug | attempt3DropTypeAndTarget ⚠ | Traps | dumbbells |
 | Biceps/elbow_flexion | Hammer Curl | attempt1Exact | Biceps (brachialis), Forearms | dumbbells |
@@ -299,7 +299,7 @@
 
 ---
 ### build_muscle | full_gym | 4d | advanced | p1 | inj:shoulder+knee
-`coverage 90.0 · balance 51.7 · volume 75.5 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 77.8 · **overall 82.5**`
+`coverage 90.0 · balance 51.7 · volume 76.0 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 77.8 · **overall 82.6**`
 
 **Push** (Chest, shoulders, triceps)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -335,7 +335,7 @@
 | Quads/knee_dominant | Sumo Deadlift | attempt3DropTypeAndTarget ⚠ | Adductors, Glutes, Hamstrings | barbell |
 | Glutes/hip_isolation | Glute Bridge | attempt1Exact | Glutes | bodyweight |
 | Calves/knee_dominant | Standing Calf Raise | attempt1Exact | Calves (Gastrocnemius) | barbell |
-| Core/core | Hanging Leg Raise | attempt1Exact | Core, Obliques | pull-up bar |
+| Core/core | Cable Crunch | attempt1Exact | Abs | cables |
 | Hamstrings/knee_dominant | Leg Curl (Lying) | attempt1Exact | Hamstrings | machines |
 | Hip/hip_isolation | Hip Abductor Machine | attempt1Exact | Glutes | machines |
 | Calves/knee_dominant | Seated Calf Raise | attempt2DropSubFocus | Calves (Soleus) | machines |
@@ -343,7 +343,7 @@
 **Upper** (Shoulders, back, arms)
 | Slot | Exercise | Source | Muscles | Equip |
 |---|---|---|---|---|
-| Shoulders/vertical_push | Front Raise | attempt3DropTypeAndTarget ⚠ | Front Deltoid | dumbbells |
+| Shoulders/vertical_push | Dand (Hindu Pushup) | universalPool ⚠ | Chest, Shoulders, Triceps, Core | bodyweight |
 | Lats/horizontal_pull | Chest Supported Row | attempt1Exact | Rhomboids, Lats | bench, dumbbells |
 | Lateral Delts/shoulder_isolation | Arm Circles | universalPool ⚠ | Shoulders | bodyweight |
 | Biceps/elbow_flexion | Concentration Curl | attempt1Exact | Biceps | dumbbells |
@@ -351,5 +351,5 @@
 | Lats/horizontal_pull | Inverted Row | attempt1Exact | Rhomboids, Lats | bodyweight |
 | Biceps/elbow_flexion | Cable Curl | attempt2DropSubFocus | Biceps | cables |
 | Triceps/elbow_extension | Dumbbell Kickback | attempt2DropSubFocus | Triceps | dumbbells |
-| Core/core | Cable Crunch | attempt1Exact | Abs | cables |
+| Core/core | Russian Twist | attempt1Exact | Obliques | bodyweight |
 

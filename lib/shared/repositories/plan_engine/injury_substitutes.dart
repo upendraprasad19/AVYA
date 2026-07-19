@@ -12,14 +12,15 @@
 /// Keys = `InjuryVocab` canonical tokens. Values = ordered preferred substitute
 /// EXACT library names (foundational / machine / dumbbell variants first =
 /// joint-friendlier), each VERIFIED present + same-pattern + NOT tagged for the
-/// injury against `assets/data/exercise_library.json` (Batch 11-C, 258 rows).
+/// injury against `assets/data/exercise_library.json` (Batch 11-C; 259 rows as of 13-B).
 /// Hive/Flutter-FREE so the pure-Dart cascade tracer can import it.
 ///
 /// Covers 6 of the 9 `InjuryVocab` tokens — `ankle`/`neck`/`hamstring` have no
 /// curated list (1-2 contraindicated rows each) → safe fallthrough by
-/// construction. `Romanian Deadlift` + variants are intentionally EXCLUDED from
-/// `lower_back` (their empty `injury_contraindications` is an under-tagging gap,
-/// not vetted safety — Round-1 review P1).
+/// construction. `Romanian Deadlift` + variants stay EXCLUDED from `lower_back`
+/// subs — as of 13-B they are properly `[lower_back,hamstring]`-tagged, so the
+/// injury filter already removes them for lower_back users (the exclusion is now
+/// moot-but-correct; the safe lower_back subs are the supported/hip-thrust rows).
 class InjurySubstitutes {
   InjurySubstitutes._();
 
@@ -27,8 +28,9 @@ class InjurySubstitutes {
     'shoulder': [
       // horizontal_push (8 contra / 18 safe)
       'Machine Chest Press', 'Dumbbell Bench Press', 'Push Up',
-      // vertical_push (10 / 2 — thin pool, curation matters most here)
-      'Kettlebell Goblet Press', 'Front Raise',
+      // vertical_push — Front Raise is now shoulder-tagged (13-B) → removed here;
+      // Kettlebell Goblet Press is the sole shoulder-safe overhead press (founder-kept, 13-B)
+      'Kettlebell Goblet Press',
       // shoulder_isolation (4 / 4)
       'Face Pull', 'Band Pull Apart',
       // vertical_pull (4 / 6)
@@ -37,13 +39,15 @@ class InjurySubstitutes {
       'Tricep Pushdown (Cable)',
     ],
     'knee': [
-      // knee_dominant (27 / 10)
-      'Leg Press', 'Leg Curl (Lying)', 'Wall Sit',
+      // knee_dominant — Wall Sit removed (it is itself [knee]-tagged → was a dead sub, 13-B).
+      // Leg Curl (Lying) is now [hamstring]-tagged (13-B) but stays knee-SAFE (hamstring ≠ knee).
+      'Leg Press', 'Leg Curl (Lying)',
       // hip_isolation (2 / 9)
       'Glute Bridge',
     ],
     'lower_back': [
-      // hip_dominant — RDL variants dropped (under-tagging gap, Round-1 P1)
+      // hip_dominant — RDL variants are now [lower_back,hamstring]-tagged (13-B) so
+      // the filter removes them anyway; Hip Thrust is the safe hinge sub
       'Hip Thrust',
       // horizontal_pull (3 / 12 — supported bench = spine unloaded)
       'Chest Supported Row', 'Seal Row',

@@ -987,7 +987,9 @@
     "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -1449,7 +1451,9 @@
     "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=31",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -2915,7 +2919,10 @@
     "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hamstring",
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -2975,7 +2982,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Nordic-Hamstring-Curl_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hamstring",
+      "knee"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -3169,7 +3179,9 @@
     "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hamstring"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -3694,7 +3706,10 @@
     "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -4166,7 +4181,9 @@
     "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -4643,7 +4660,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -4850,7 +4870,9 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dragon-Flag_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -5661,7 +5683,9 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Trap-Bar-Deadlift_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 4,
     "target_focus": [
@@ -5934,7 +5958,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Single-Leg-Romanian-Deadlift_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hamstring",
+      "lower_back"
+    ],
     "is_bilateral": false,
     "cns_demand": 3,
     "target_focus": [
@@ -5999,6 +6026,7 @@
     "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
+      "hamstring",
       "lower_back"
     ],
     "is_bilateral": true,
@@ -6573,7 +6601,9 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-To-Bar-Pull-Up_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 4,
     "target_focus": [
@@ -7561,7 +7591,9 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": false,
     "cns_demand": 3,
     "target_focus": [
@@ -7879,7 +7911,9 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Renegade-Row_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": false,
     "cns_demand": 3,
     "target_focus": [
@@ -8670,7 +8704,9 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -8735,7 +8771,9 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip"
+    ],
     "is_bilateral": false,
     "cns_demand": 1,
     "target_focus": [
@@ -8804,7 +8842,9 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bear-Crawl_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -8878,7 +8918,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -9214,7 +9257,9 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Kettlebell-Turkish-Get-Up_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -9278,7 +9323,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Medicine-Ball-Slam_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -9701,7 +9749,9 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "knee"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -11270,7 +11320,9 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Side-Bend_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -11655,7 +11707,8 @@
     "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
-      "hip"
+      "hip",
+      "lower_back"
     ],
     "is_bilateral": true,
     "cns_demand": 2,
@@ -11719,7 +11772,10 @@
     "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Toes-To-Bar_1.jpg",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -11784,7 +11840,10 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12237,7 +12296,9 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": false,
     "cns_demand": 3,
     "target_focus": [
@@ -13060,7 +13121,9 @@
     "image_end_url": "PENDING",
     "gif_url": "PENDING",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
