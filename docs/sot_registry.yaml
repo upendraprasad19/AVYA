@@ -7332,6 +7332,43 @@ concepts:
         semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch
     contract_test_path: test/contracts/exercise_library_schema_contract_test.dart
 
+  - concept: exercise_injury_tags
+    domain: workout
+    behavioral_test_path: test/contracts/injury_undertag_13b_contract_test.dart
+    description: |
+      Batch 13-B (f4c1e8) — each exercise's library `injury_contraindications` array lists
+      the InjuryVocab tokens the movement is contraindicated for. The always-on queryV4
+      filter (exercise_repository.dart:335-345, exact lowercase match at :340) excludes a
+      row for an injured user iff its list CONTAINS the user's token; an empty/missing list
+      is never excluded. 13-A closed the field-MISSING rows (e1a7c4); 13-B tags the 26
+      empty-[] strength rows (hinges/rows/overhead/loaded-core) + deepens 2 under-tagged
+      rows (GHD Sit Up +lower_back, Good Morning +hamstring), clinically-nuanced (tag the
+      provocative pattern; keep the controlled/machine/rehab variant safe → no injured user
+      loses a whole movement category). Founder carve-outs: carries + crunch/sit-up family +
+      hip machines stay safe; Goblet Press is the one shoulder-safe overhead press. Tokens
+      stay closed to the 9-token InjuryVocab set. NOT a cloud column (excluded from migration
+      074) → no prod re-apply. Recurrence of e1a7c4 / a1f6c3.
+    writers:
+      - file: assets/data/exercise_library.json
+        method: injury_contraindications field (26 rows tagged + 2 deepened, UNION with existing)
+        notes: clinically-nuanced per movement_pattern; re-seeded by SeedService v9
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (8→9)
+        notes: idempotent putAll re-seeds the new tags into exerciseBox
+      - file: lib/shared/repositories/plan_engine/injury_substitutes.dart
+        method: curated-sub coherence — removed Front Raise (now shoulder-tagged) + stale Wall Sit (knee)
+        notes: Goblet Press retained as the sole shoulder-safe overhead-press sub
+    readers:
+      - file: lib/shared/repositories/exercise_repository.dart
+        method: queryV4 injury filter (:335-345, match :340)
+        semantic: a row is excluded for an injured user iff injury_contraindications contains the token
+        notes: empty/missing list = never excluded (the under-tagging hole 13-B closes)
+      - file: lib/shared/repositories/plan_engine/injury_substitutes.dart
+        method: preferredFor re-rank (post-injury-filter)
+        semantic: the curated safe-sub lists stay coherent with the new tags (≥1 shoulder sub stays safe)
+        notes: warmup mirror _moveInjuries value-agreement guarded by warmup_library_injury_mirror_test
+    contract_test_path: test/contracts/injury_undertag_13b_contract_test.dart
+
   - concept: universal_pool_fallback
     domain: workout
     behavioral_test_path: test/contracts/universal_pool_mirror_test.dart

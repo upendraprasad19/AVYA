@@ -86,6 +86,23 @@ class WarmupCooldownSelector {
   @visibleForTesting
   static Set<String> get mappedMoves => _moveInjuries.keys.toSet();
 
+  /// The full move → injury-token map. Exposed for the value-agreement drift test:
+  /// the presence-only [mappedMoves] guard cannot catch a VALUE mismatch between a
+  /// main-cascade-overlap move's hard-coded tags here and its library
+  /// `injury_contraindications` (Batch 13-B — the mirror-drift gap Round-1 flagged).
+  @visibleForTesting
+  static Map<String, Set<String>> get moveInjuries => _moveInjuries;
+
+  /// Moves that exist BOTH here AND as selectable library exercises — their
+  /// [_moveInjuries] tags MUST equal the library `injury_contraindications` for the
+  /// same name, or the warmup filters differently from the main plan.
+  @visibleForTesting
+  static const mainCascadeOverlapMoves = <String>[
+    'Push Up',
+    'Band Pull Apart',
+    'Baithak (Hindu Squat)',
+  ];
+
   /// General cardio options (bodyweight — always available).
   static const _bodyweightCardio = ['Spot Jogging', 'Jumping Jacks'];
 

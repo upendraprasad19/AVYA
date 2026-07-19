@@ -12,6 +12,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### exercise_library_schema (1 bugs)
 - 2026-07-19 e1a7c4 — >
 
+### exercise_injury_tags (1 bugs)
+- 2026-07-19 f4c1e8 — >
+
 ### universal_pool_fallback (1 bugs)
 - 2026-07-19 c3f9b2 — >
 
@@ -817,6 +820,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 |---|---|---|---|---|
 | 2026-07-19 | d4e8a1 | > | exercise_equipment_tier | test/contracts/equipment_tier_consistency_test.dart |
 | 2026-07-19 | e1a7c4 | > | exercise_library_schema | test/contracts/exercise_library_schema_contract_test.dart |
+| 2026-07-19 | f4c1e8 | > | exercise_injury_tags | test/contracts/injury_undertag_13b_contract_test.dart |
 | 2026-07-19 | c3f9b2 | > | universal_pool_fallback | test/contracts/universal_pool_mirror_test.dart |
 | 2026-07-18 | a4e2d9 | > | plan_phase_expiry | test/contracts/pro_phase_expiry_surface_test.dart |
 | 2026-07-17 | b7a4e2 | > | equipment_exclusion_filter | test/contracts/wu2_gym_cardio_gate_behavioral_test.dart |

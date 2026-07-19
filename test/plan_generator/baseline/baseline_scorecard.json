@@ -14,13 +14,13 @@
     },
     "unsafe_plan_count": 0,
     "equipment_violation_plan_count": 201,
-    "plans_with_fallback_pick": 281,
-    "total_fallback_picks": 1181,
+    "plans_with_fallback_pick": 284,
+    "total_fallback_picks": 1184,
     "fallback_by_tier": {
       "bodyweight": 868,
       "home_dumbbells": 240,
       "basic_gym": 24,
-      "full_gym": 49
+      "full_gym": 52
     }
   },
   "personas": [
@@ -8290,14 +8290,14 @@
     },
     {
       "id": "build_muscle | full_gym | 4d | beginner | p1 | inj:lower_back",
-      "coverage": 80.0,
+      "coverage": 70.0,
       "balance": 62.5,
-      "volume": 83.6,
+      "volume": 83.3,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
-      "realism": 100.0,
-      "overall": 87.7,
+      "realism": 95.0,
+      "overall": 85.1,
       "violations": []
     },
     {
@@ -8316,12 +8316,12 @@
       "id": "build_muscle | full_gym | 4d | beginner | p1 | inj:shoulder",
       "coverage": 90.0,
       "balance": 62.5,
-      "volume": 87.2,
+      "volume": 83.9,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
       "realism": 90.0,
-      "overall": 88.3,
+      "overall": 87.7,
       "violations": []
     },
     {
@@ -8364,12 +8364,12 @@
       "id": "build_muscle | full_gym | 4d | beginner | p1 | inj:shoulder+knee",
       "coverage": 90.0,
       "balance": 62.5,
-      "volume": 82.2,
+      "volume": 79.2,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
       "realism": 75.0,
-      "overall": 85.0,
+      "overall": 84.4,
       "violations": []
     },
     {
@@ -8380,8 +8380,8 @@
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
-      "realism": 100.0,
-      "overall": 86.7,
+      "realism": 96.4,
+      "overall": 86.1,
       "violations": []
     },
     {
@@ -8400,7 +8400,7 @@
       "id": "build_muscle | full_gym | 4d | intermediate | p1 | inj:shoulder",
       "coverage": 90.0,
       "balance": 54.2,
-      "volume": 80.0,
+      "volume": 80.3,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
@@ -8448,7 +8448,7 @@
       "id": "build_muscle | full_gym | 4d | intermediate | p1 | inj:shoulder+knee",
       "coverage": 90.0,
       "balance": 54.2,
-      "volume": 80.0,
+      "volume": 80.3,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
@@ -8460,12 +8460,12 @@
       "id": "build_muscle | full_gym | 4d | advanced | p1 | inj:lower_back",
       "coverage": 90.0,
       "balance": 51.7,
-      "volume": 75.5,
+      "volume": 76.5,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
-      "realism": 100.0,
-      "overall": 86.2,
+      "realism": 97.2,
+      "overall": 85.9,
       "violations": []
     },
     {
@@ -8484,12 +8484,12 @@
       "id": "build_muscle | full_gym | 4d | advanced | p1 | inj:shoulder",
       "coverage": 90.0,
       "balance": 51.7,
-      "volume": 74.5,
+      "volume": 75.0,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
       "realism": 80.6,
-      "overall": 82.8,
+      "overall": 82.9,
       "violations": []
     },
     {
@@ -8532,12 +8532,12 @@
       "id": "build_muscle | full_gym | 4d | advanced | p1 | inj:shoulder+knee",
       "coverage": 90.0,
       "balance": 51.7,
-      "volume": 75.5,
+      "volume": 76.0,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
       "realism": 77.8,
-      "overall": 82.5,
+      "overall": 82.6,
       "violations": []
     },
     {
