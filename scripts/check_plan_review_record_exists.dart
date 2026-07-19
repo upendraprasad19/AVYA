@@ -17,6 +17,16 @@
 //                           code-review gate; P1.C "lower threshold to account")
 //   hermes: accepted       (catastrophic only)
 //
+// SHIP-DARK EXCEPTION (CLAUDE.md §4.12.4, discipline-overhead batch
+// 2026-07-19): a record may self-declare `tier: ship_dark_build` to accept
+// `review_rounds: 1` instead of 2 -- but ONLY the round count is relaxed.
+// `bpass: accepted` is still independently required at >= platform exactly as
+// before (checked below, unconditionally on tier) -- a self-declared
+// ship_dark_build tier cannot also skip B-pass. This is a minimal,
+// self-attested opt-in (same trust model as every other field in this
+// gate) -- NOT automatic detection of whether a diff really is default-OFF
+// and byte-identical from the flag; that remains future work.
+//
 // KEYING (R2 P0-2): the record is keyed on the BRANCH NAME, not a diff hash —
 // the file is authored DURING development, so its name must be stable at both
 // author-time and merge-time. `stagedDiffHash` is empty at a merge commit; a
@@ -182,8 +192,12 @@ void main(List<String> args) {
       RegExp('^$k:\\s*(.+)\$', multiLine: true).firstMatch(content)?.group(1)?.trim();
 
   final rounds = int.tryParse(field('review_rounds') ?? '') ?? 0;
-  if (rounds < 2) {
-    exit(die('${recFile.path}: review_rounds=$rounds (need >= 2).'));
+  final shipDarkBuild = field('tier') == 'ship_dark_build';
+  final minRounds = shipDarkBuild ? 1 : 2;
+  if (rounds < minRounds) {
+    exit(die('${recFile.path}: review_rounds=$rounds (need >= $minRounds'
+        '${shipDarkBuild ? ' for tier: ship_dark_build' : ', or tier: ship_dark_build '
+            'for a flag-gated build-only commit -- CLAUDE.md §4.12.4'}).'));
   }
   if (field('ground_truth_verified') != 'true') {
     exit(die('${recFile.path}: ground_truth_verified must be true.'));

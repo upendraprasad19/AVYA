@@ -41,6 +41,15 @@
             "command": "dart run --verbosity=error scripts/discipline_hook.dart"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dart run --verbosity=error scripts/git_safety_hook.dart"
+          }
+        ]
       }
     ]
   }

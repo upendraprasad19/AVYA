@@ -1,0 +1,27 @@
+# docs/ship_dark_pending_review.yaml
+#
+# Tracks every kill-switch flag shipped under the CLAUDE.md §4.12.4 ship-dark
+# lighter review tier (1 review round at build time instead of ×2, since the
+# flag is default-OFF and byte-identical when off — zero live risk until it
+# flips). An entry here means: this flag's BUILD commit only got 1 review
+# round. It must get the full ×2 review + `bpass: accepted` before (or at) its
+# flip-on commit, and only then does the entry move to `resolved:`.
+#
+# This is a manually-maintained ledger, not a gate — it exists so a flag can't
+# quietly go live, or sit forgotten mid-overhaul, having only ever had the
+# lighter build-time review. Update it in the SAME commit as any ship-dark-
+# tiered build, and again in the SAME commit as its flip-on.
+#
+# Schema per entry:
+#   flag:            the kill-switch flag name (e.g. enable_readiness)
+#   branch:          worktree branch the build shipped from
+#   build_commit:    sha of the build-tier commit (review_rounds: 1)
+#   build_date:      YYYY-MM-DD (IST)
+#   flip_reviewed:   false until the flip-on commit's plan-review record shows
+#                    review_rounds >= 2 + bpass: accepted; then true
+#   flip_commit:     sha of the flip-on commit (fill in when flip_reviewed
+#                    flips to true; null until then)
+
+pending: []
+
+resolved: []
