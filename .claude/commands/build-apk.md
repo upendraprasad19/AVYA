@@ -64,7 +64,10 @@ LAST_BUMP=$(git log -1 --format=%H --grep="bump versionCode" -- pubspec.yaml)
 echo "Current versionCode: $CURRENT (last bump commit: $LAST_BUMP)"
 ```
 
-If a bump is needed: `Edit pubspec.yaml → 1.0.0+N → 1.0.0+(N+1)`, commit with `chore: bump versionCode 1.0.0+N → 1.0.0+(N+1) for APK Test #X`, then continue.
+If a bump is needed: `Edit pubspec.yaml → 1.0.0+N → 1.0.0+(N+1)`, then commit via
+`sh scripts/safe_commit.sh "chore: bump versionCode 1.0.0+N → 1.0.0+(N+1) for APK Test #X"`
+(NOT a raw `git commit` — a PreToolUse hook blocks that; `safe_commit.sh` is the sanctioned path,
+see CLAUDE.md §4.3), then continue.
 
 **Why this matters:** Android silently rejects a same-versionCode reinstall as a no-op. Founder hit this on Tests #7, #8, #10, #11, #11.1, #12 — all originally built at `1.0.0+6`.
 

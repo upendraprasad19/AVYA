@@ -255,6 +255,25 @@ After observations captured + before brainstorming:
 - APK builds from `main` ONLY. Feature branch → merge `--no-ff` to main → `/build-apk` from main.
 - For new git worktrees, copy `.env` from main first (it's gitignored, doesn't carry over). Without it `SUPABASE_URL` compiles empty and auth crashes.
 - **Batch commits; push once per logical batch.** Don't commit→push→commit→push — each push re-runs the tiered pre-push + a fresh CI run on the same code. Group related commits and push them together (lean-workflow batch 2026-06-01).
+- **Sequential slices of ONE feature that have no independent user-facing value on their own
+  consolidate into ONE push/CI/APK-gate cycle** — this is the above rule made concrete after the
+  discipline-overhead audit (2026-07-18/19) found it wasn't happening in practice: Batch 5
+  (equipment) shipped 6 separate pushes for one feature (crash-fix → vocab → filter → UI →
+  activation), each paying the full local full-suite + CI + APK-gate cost for a slice with no
+  standalone value. Only split into separate pushes when a review round finds a genuinely
+  separable defect or infeasibility requiring redesign of one piece, or an explicit founder
+  product-scope decision to ship one piece now — not as a default splitting reflex.
+- **Commits and pushes go through `scripts/safe_commit.sh` / `scripts/safe_push.sh`, never raw
+  `git commit` / `git push`.** A PreToolUse hook (`scripts/git_safety_hook.dart`) blocks the raw
+  form outright. Reason: 6 documented incidents (2026-06-05 → the workout-generator batch,
+  `feedback_git_landing_verification.md`) where a backgrounded or piped commit reported success
+  while the pre-commit hook had actually failed (a pipe's exit code is the last stage's, not
+  git's), or a push died SIGPIPE after the pre-push suite idled the SSH channel with no error at
+  all. The wrapper redirects output to a log file (never a pipe) and verifies HEAD/status/
+  ls-remote after, so "it reported success" and "it actually landed" can't silently diverge.
+  Escape hatch for a case the hook mis-detects: `ALLOW_RAW_GIT=1`. `--no-verify` has NO such
+  hatch — it requires explicit founder approval in chat first, then `FOUNDER_APPROVED_NO_VERIFY=1`
+  for that one invocation.
 - **Don't manually re-run the full `flutter test`** when the hooks/CI will run it anyway — run targeted tests during dev; pre-push (≥account) + CI are the full-suite gates. CI is the full-suite source-of-truth.
 - APK build from a CI-green, already-pushed `main` may use `/build-apk --from-green` to skip the redundant gate re-run (keeps the clean build + size + on-main/versionCode/.env gates).
 - **≥account code-review is SELF-INITIATED, before the merge.** For any batch whose blast-radius is ≥`account` and that touches code / schema / Edge Functions, run `/code-review` (B-pass) BEFORE the `--no-ff` merge to `main` — do NOT wait to be asked. The pre-commit echo (§0) is a reminder, not the gate; the discipline is the agent's. (Docs/process-only ≥account changes — e.g. CLAUDE.md edits — take a self-consistency review of the wording instead of an adversarial bug-hunt.) Codified 2026-06-07 after a ≥account alert batch merged to local `main` un-reviewed and a P0 (alert blind to `event`-coded failures) survived until a founder-prompted push-time review caught it.
@@ -343,6 +362,32 @@ Two standing invariants, codified after a 4-round pre-implementation review of t
 2. **Discipline is enforced BEFORE every skill invocation.** Before any Skill call, load + apply the relevant invariants first (CLAUDE.md §4; the Wardroom brand soul for copy work; the bugfix/observation workflow for fixes) — never fire a skill blind. Ref: `feedback_discipline_before_skill.md`.
 
 3. **A plan-review RECORD makes #1+#2 a *forcing function* (P1.A — discipline overhaul 2026-06-18).** The ×2 review + the ground-truth audit PRODUCE `docs/plan-reviews/<branch>.md` (`review_rounds: ≥2`, `ground_truth_verified: true`, `verdict: converged`; `bpass: accepted` ≥platform; `hermes: accepted` catastrophic). The keystone gate `scripts/check_plan_review_record_exists.dart` enforces it at the **merge-to-main commit, in CI** — the only structurally-gateable point (a local pre-commit `MERGE_HEAD` check is `--no-verify`-bypassable; a `--no-ff` merge skips the local hook entirely; CI is per-push). The dedicated CI job uses `actions/checkout` `fetch-depth: 0` so `HEAD^1..HEAD^2` (the merged branch diff → blast-radius) is reachable. A ≥account merged branch with no converged record fails the build. The record is keyed on the **branch name** (recoverable at both author-time and the merge commit's `Merge branch 'X'` subject) — NOT a staged-diff hash, which is empty at a merge commit.
+
+4. **Ship-dark review tiering (discipline-overhead batch, 2026-07-19).** A platform/account-tier
+   change that is (a) gated behind a kill-switch, (b) default OFF, and (c) has a passing
+   behavioral test proving byte-identical output when OFF gets **1 independent review round**
+   (not ×2) at build time — the plan-review record for that commit self-declares `tier:
+   ship_dark_build` and `review_rounds: 1`. Only the *review-round count* drops; `bpass:
+   accepted` is STILL required at ≥platform exactly as before (it's the cheap, self-driven pass —
+   the expensive part being lightened is the second independent context-blind round, not the
+   self-review). The full ×2 review is REQUIRED again, no exceptions, on the commit that flips
+   the flag's default or removes the kill-switch — that is the moment real user risk starts,
+   regardless of how lightly the build step was reviewed. Every
+   flag shipped under the lighter build-tier review is logged in
+   `docs/ship_dark_pending_review.yaml` (flag, branch, build-commit sha, date) and only removed
+   once its flip-on commit's plan-review record shows the full ×2 + `bpass: accepted` — the
+   guardrail against a flag quietly going live, or sitting forgotten, having only ever had 1
+   review round. `scripts/check_plan_review_record_exists.dart` accepts `review_rounds: 1` ONLY
+   paired with a self-declared `tier: ship_dark_build`; every other ≥account merge still requires
+   `review_rounds: >= 2` exactly as before — this is a minimal, self-attested opt-in (same trust
+   model as the rest of that gate), not automatic ship-dark detection from the diff. Automatically
+   *verifying* a commit's flag really is default-OFF and byte-identical from a script is real,
+   separate engineering — deliberately deferred as its own follow-up per §4.11 (gate before
+   refactor), not bundled in here. Born from the workout-generator-overhaul discipline-overhead
+   audit 2026-07-18/19: of the 29 `workout-*` branch merges that shipped the overhaul, at least 14
+   were explicitly tagged `ship-dark` in their own merge subject (a floor — several more were
+   ship-dark in substance without the literal tag), yet every one paid the full ×2-review weight
+   at build time regardless of the zero live risk until flip-on.
 
 These bind the planning / `/code-review` / `/hermes-pass` / brainstorming flows.
 
