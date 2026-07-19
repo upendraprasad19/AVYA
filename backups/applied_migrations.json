@@ -448,10 +448,11 @@
   },
   {
     "migration": "074",
-    "applied_at": "2026-05-27T00:00:00+05:30",
-    "hash": "sha256:8dc62e5b0c358c0ba6111ef837f8388c859ea8ccb53530f2f76156514f5ac04e",
+    "applied_at": "2026-07-19T00:00:00+05:30",
+    "hash": "sha256:4737f384d7216388f6924dbac15b510726a49f3346a9239ad1c076cb0f6a6c87",
     "applier": "claude-via-management-api",
-    "diagnose": "ada3fb"
+    "diagnose": "ada3fb",
+    "reapplied": "Batch 13-A — regenerated from JSON (259 rows: E261 added + 9 stubs normalized to canonical schema, healing the coach's stale NULL primary_muscles). Re-applied to prod (idempotent ON CONFLICT DO UPDATE)."
   },
   {
     "migration": "075",

@@ -79,7 +79,10 @@ class SeedService {
   /// idempotent — existing entries are overwritten with the same data while
   /// new entries are added.
   // v7 (⑥ slice A): equipment_needed normalized to EquipmentVocab.canonicalTokens.
-  static const int _exerciseLibraryVersion = 7;
+  // v8 (Batch 13-A): gains-only equipment_tier deepening (90 rows) + 9 stubs E252-E260
+  //   normalized to the 38-key schema (incl. injury tags — closes the E252 knee hole) +
+  //   E261 Bodyweight Rear Delt Raise added. Re-seed heals the malformed stub rows in Hive.
+  static const int _exerciseLibraryVersion = 8;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

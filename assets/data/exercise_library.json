@@ -258,6 +258,7 @@
       "Lower Chest"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "E003",
@@ -523,6 +524,9 @@
       "Lower Chest"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -1791,6 +1795,7 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -1856,6 +1861,7 @@
       "Lower Back"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "Good Morning",
@@ -2313,6 +2319,7 @@
       "Quads"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "Goblet Squat",
@@ -2381,6 +2388,7 @@
       "Quads"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -2449,6 +2457,8 @@
       "Quads"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "E039",
@@ -2646,6 +2656,7 @@
       "Quads"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -2715,6 +2726,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -2845,6 +2858,8 @@
       "Quads"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -2908,6 +2923,8 @@
       "Hamstrings"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "Dumbbell Romanian Deadlift",
@@ -2966,6 +2983,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3095,6 +3114,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3417,6 +3438,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3748,6 +3771,9 @@
       "Core"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3811,6 +3837,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3873,6 +3901,7 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3939,6 +3968,7 @@
       "full body"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4004,6 +4034,7 @@
       "Legs"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4072,6 +4103,9 @@
       "full body"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4140,6 +4174,7 @@
       "full back"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4279,6 +4314,9 @@
       "Quads"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4409,6 +4447,7 @@
       "full body"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4612,6 +4651,9 @@
       "Triceps"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4677,6 +4719,9 @@
       "Triceps"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4813,6 +4858,9 @@
       "Lower Back"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -4880,6 +4928,9 @@
       "Triceps"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5095,6 +5146,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5158,6 +5211,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5219,6 +5274,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5281,6 +5338,9 @@
       "thoracic spine"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5478,6 +5538,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5609,6 +5671,7 @@
       "Quads"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5746,6 +5809,8 @@
       "Traps"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -5811,6 +5876,8 @@
       "Core"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -6321,6 +6388,8 @@
       "Rear Delts"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -6383,6 +6452,8 @@
       "Forearms"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -6445,6 +6516,8 @@
       "Forearms"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -6577,6 +6650,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -6780,6 +6855,8 @@
       "Traps"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -6842,6 +6919,8 @@
       "Upper Traps"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -7026,6 +7105,7 @@
       "Glutes"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -7151,6 +7231,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -7222,6 +7304,7 @@
       "Quads"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -7354,6 +7437,7 @@
       "Upper Chest"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -7419,6 +7503,8 @@
       "Shoulders"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -7484,6 +7570,7 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -7733,6 +7820,8 @@
       "Mid Chest"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -7998,6 +8087,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8062,6 +8153,7 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8193,6 +8285,7 @@
       "Lower Back"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8331,6 +8424,7 @@
       "Traps"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8394,6 +8488,8 @@
       "Lower Back"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8581,6 +8677,7 @@
       "Core"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8645,6 +8742,9 @@
       "Core"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8988,6 +9088,7 @@
       "full body"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9185,6 +9286,9 @@
       "Shoulders"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9327,6 +9431,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9398,6 +9504,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9466,6 +9574,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9537,6 +9647,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9597,6 +9709,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9728,6 +9842,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9924,6 +10040,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9985,6 +10103,7 @@
       "Lats"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10051,6 +10170,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10116,6 +10237,9 @@
       "Shoulders"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10179,6 +10303,8 @@
       "Hip"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10308,6 +10434,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10372,6 +10500,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10433,6 +10563,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10495,6 +10627,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10555,6 +10689,9 @@
       "Lats"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10617,6 +10754,9 @@
       "thoracic spine"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10874,6 +11014,9 @@
       "Mid Chest"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -10936,6 +11079,9 @@
       "piriformis"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -11000,6 +11146,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -11193,6 +11341,7 @@
       "Core"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -11255,6 +11404,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -11317,6 +11468,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -11378,6 +11531,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -11700,6 +11855,8 @@
       "Core"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -11890,6 +12047,8 @@
       "full body"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12291,6 +12450,9 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12356,6 +12518,9 @@
       "Triceps"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12422,6 +12587,7 @@
       "Shoulders"
     ],
     "equipment_tier": [
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12555,6 +12721,9 @@
       "full body"
     ],
     "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12764,6 +12933,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12832,6 +13003,8 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12894,6 +13067,8 @@
       "Core"
     ],
     "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -16461,33 +16636,29 @@
     "exercise_type": [
       "isolation"
     ],
-    "target_focus": [
+    "primary_muscles": [
       "Quads"
     ],
-    "sub_focus": [
-      "Quads (Teardrop)"
+    "secondary_muscles": [
+      "Glutes"
     ],
     "equipment_needed": [
       "bodyweight"
     ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
       "Intermediate",
       "Advanced"
     ],
-    "difficulty": "beginner",
-    "is_foundational": true,
-    "priority_tier": 2,
-    "rep_range": "30-60s",
-    "logging_type": "timed",
-    "sets_default": 3,
-    "rest_seconds": 60,
+    "default_sets": 3,
+    "default_reps": "30-60s",
+    "default_rest_secs": 60,
+    "tempo": "0-0-0-0",
+    "met_value": 4.0,
+    "cal_per_set_est": 4.0,
+    "breathing_cue": "Breathe normally throughout the hold",
     "coaching_cues": [
       "Feet shoulder-width apart",
       "Back flat against wall",
@@ -16499,27 +16670,33 @@
       "Knees caving inward",
       "Feet too close to wall"
     ],
-    "breathing_cue": "Breathe normally throughout the hold",
-    "pro_tip": "Drive heels into floor to maintain position",
-    "met_value": 4.0,
-    "muscle_primary": [
-      "quadriceps"
-    ],
-    "muscle_secondary": [
-      "glutes"
-    ],
-    "is_compound": false,
-    "image_url": "",
-    "video_url": "",
-    "tags": [
-      "bodyweight",
-      "isometric",
-      "legs"
-    ],
     "warmup_protocol": "Light leg swings and bodyweight squats",
-    "regression": "Partial wall sit",
-    "progression": "Single leg wall sit",
-    "is_custom": false
+    "pro_tip": "Drive heels into floor to maintain position",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Quads"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 2,
+    "rep_range": "30-60s"
   },
   {
     "id": "E253",
@@ -16531,35 +16708,30 @@
     "exercise_type": [
       "compound"
     ],
-    "target_focus": [
+    "primary_muscles": [
       "Hamstrings",
       "Glutes"
     ],
-    "sub_focus": [
-      "Hamstrings (Bicep Femoris)",
-      "Glutes (Lower)"
+    "secondary_muscles": [
+      "Lower Back"
     ],
     "equipment_needed": [
       "bodyweight"
     ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
       "Intermediate",
       "Advanced"
     ],
-    "difficulty": "beginner",
-    "is_foundational": true,
-    "priority_tier": 1,
-    "rep_range": "12-15",
-    "logging_type": "bodyweight_reps",
-    "sets_default": 3,
-    "rest_seconds": 60,
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 60,
+    "tempo": "3-1-2-0",
+    "met_value": 4.5,
+    "cal_per_set_est": 5.0,
+    "breathing_cue": "Inhale as you hinge forward, exhale as you return",
     "coaching_cues": [
       "Hands behind head or on hips",
       "Soft bend in knees",
@@ -16571,28 +16743,35 @@
       "Bending too deep at knees",
       "Moving too fast"
     ],
-    "breathing_cue": "Inhale as you hinge forward, exhale as you return",
-    "pro_tip": "Focus on the hip hinge movement pattern to protect your lower back",
-    "met_value": 4.5,
-    "muscle_primary": [
-      "hamstrings",
-      "glutes"
-    ],
-    "muscle_secondary": [
-      "lower_back"
-    ],
-    "is_compound": true,
-    "image_url": "",
-    "video_url": "",
-    "tags": [
-      "bodyweight",
-      "hip_hinge",
-      "legs"
-    ],
     "warmup_protocol": "Hip circles and dynamic leg swings",
-    "regression": "Seated hamstring stretch",
-    "progression": "Good morning with resistance band",
-    "is_custom": false
+    "pro_tip": "Focus on the hip hinge movement pattern to protect your lower back",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "lower_back",
+      "hamstring"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Romanian Deadlift",
+    "priority_tier": 1,
+    "rep_range": "12-15"
   },
   {
     "id": "E254",
@@ -16604,34 +16783,30 @@
     "exercise_type": [
       "isolation"
     ],
-    "target_focus": [
-      "Biceps",
-      "Biceps (Short Head)"
+    "primary_muscles": [
+      "Biceps"
     ],
-    "sub_focus": [
-      "Biceps (Long Head)"
+    "secondary_muscles": [
+      "Forearms",
+      "Brachialis"
     ],
     "equipment_needed": [
       "bodyweight"
     ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
       "Intermediate",
       "Advanced"
     ],
-    "difficulty": "beginner",
-    "is_foundational": true,
-    "priority_tier": 2,
-    "rep_range": "8-12",
-    "logging_type": "bodyweight_reps",
-    "sets_default": 3,
-    "rest_seconds": 60,
+    "default_sets": 3,
+    "default_reps": "8-12",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 3.5,
+    "breathing_cue": "Exhale as you curl up, inhale as you lower",
     "coaching_cues": [
       "Stand in doorframe",
       "Grip frame at hip height",
@@ -16643,28 +16818,34 @@
       "Not leaning back enough",
       "Gripping too high"
     ],
-    "breathing_cue": "Exhale as you curl up, inhale as you lower",
-    "pro_tip": "Lean further back to increase difficulty",
-    "met_value": 3.5,
-    "muscle_primary": [
-      "biceps"
-    ],
-    "muscle_secondary": [
-      "forearms",
-      "brachialis"
-    ],
-    "is_compound": false,
-    "image_url": "",
-    "video_url": "",
-    "tags": [
-      "bodyweight",
-      "biceps",
-      "home"
-    ],
     "warmup_protocol": "Arm circles and wrist rotations",
-    "regression": "Incline doorframe curl (less lean)",
-    "progression": "Towel curl with more bodyweight",
-    "is_custom": false
+    "pro_tip": "Lean further back to increase difficulty",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Biceps",
+      "Biceps (Short Head)"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Hammer Curl",
+    "priority_tier": 2,
+    "rep_range": "8-12"
   },
   {
     "id": "E255",
@@ -16676,34 +16857,30 @@
     "exercise_type": [
       "compound"
     ],
-    "target_focus": [
+    "primary_muscles": [
       "Lats",
       "Mid Back"
     ],
-    "sub_focus": [
-      "Rear Delts",
-      "Biceps"
+    "secondary_muscles": [
+      "Biceps",
+      "Rear Deltoid"
     ],
     "equipment_needed": [
       "bodyweight"
     ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "intermediate",
     "suitable_for": [
       "Intermediate",
       "Advanced"
     ],
-    "difficulty": "intermediate",
-    "is_foundational": false,
-    "priority_tier": 1,
-    "rep_range": "8-12",
-    "logging_type": "bodyweight_reps",
-    "sets_default": 3,
-    "rest_seconds": 90,
+    "default_sets": 3,
+    "default_reps": "8-12",
+    "default_rest_secs": 90,
+    "tempo": "2-1-2-0",
+    "met_value": 5.0,
+    "cal_per_set_est": 6.0,
+    "breathing_cue": "Exhale as you pull, inhale as you lower",
     "coaching_cues": [
       "Loop towel around a sturdy door handle",
       "Lean back keeping body straight",
@@ -16715,29 +16892,35 @@
       "Using only arms",
       "Leaning too far from door"
     ],
-    "breathing_cue": "Exhale as you pull, inhale as you lower",
-    "pro_tip": "The further your feet are from the door, the harder the row",
-    "met_value": 5.0,
-    "muscle_primary": [
-      "lats",
-      "mid_back"
-    ],
-    "muscle_secondary": [
-      "biceps",
-      "rear_delts"
-    ],
-    "is_compound": true,
-    "image_url": "",
-    "video_url": "",
-    "tags": [
-      "bodyweight",
-      "back",
-      "home"
-    ],
     "warmup_protocol": "Cat-cow stretches and shoulder rolls",
-    "regression": "Stand closer to door for easier angle",
-    "progression": "Elevate feet on chair",
-    "is_custom": false
+    "pro_tip": "The further your feet are from the door, the harder the row",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "lower_back",
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Lats",
+      "Mid Back"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Inverted Row",
+    "priority_tier": 1,
+    "rep_range": "8-12"
   },
   {
     "id": "E256",
@@ -16749,35 +16932,31 @@
     "exercise_type": [
       "compound"
     ],
-    "target_focus": [
+    "primary_muscles": [
       "Lats",
-      "Lats (Width)"
+      "Biceps"
     ],
-    "sub_focus": [
-      "Biceps",
-      "Mid Back"
+    "secondary_muscles": [
+      "Mid Back",
+      "Rear Deltoid"
     ],
     "equipment_needed": [
       "bodyweight"
     ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
       "Intermediate",
       "Advanced"
     ],
-    "difficulty": "beginner",
-    "is_foundational": true,
-    "priority_tier": 1,
-    "rep_range": "5-8",
-    "logging_type": "bodyweight_reps",
-    "sets_default": 3,
-    "rest_seconds": 90,
+    "default_sets": 3,
+    "default_reps": "5-8",
+    "default_rest_secs": 90,
+    "tempo": "5-0-1-0",
+    "met_value": 6.0,
+    "cal_per_set_est": 6.0,
+    "breathing_cue": "Inhale as you lower slowly",
     "coaching_cues": [
       "Jump or step to top position",
       "Start with chin above bar",
@@ -16789,30 +16968,35 @@
       "Not using full range",
       "Not engaging lats"
     ],
-    "breathing_cue": "Inhale as you lower slowly",
-    "pro_tip": "Control the eccentric to build pulling strength for full pull-ups",
-    "met_value": 6.0,
-    "muscle_primary": [
-      "lats",
-      "biceps"
-    ],
-    "muscle_secondary": [
-      "mid_back",
-      "rear_delts"
-    ],
-    "is_compound": true,
-    "image_url": "",
-    "video_url": "",
-    "tags": [
-      "bodyweight",
-      "pull_up",
-      "back",
-      "beginner_friendly"
-    ],
     "warmup_protocol": "Dead hangs and scapular pulls",
-    "regression": "Band-assisted negative",
-    "progression": "Full pull up",
-    "is_custom": false
+    "pro_tip": "Control the eccentric to build pulling strength for full pull-ups",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder",
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Lats",
+      "Lats (Width)"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Pull Up",
+    "priority_tier": 1,
+    "rep_range": "5-8"
   },
   {
     "id": "E257",
@@ -16824,35 +17008,30 @@
     "exercise_type": [
       "isolation"
     ],
-    "target_focus": [
-      "Glutes",
-      "Hip"
+    "primary_muscles": [
+      "Glutes"
     ],
-    "sub_focus": [
-      "Glutes (Lower)",
-      "Hamstrings"
+    "secondary_muscles": [
+      "Hamstrings",
+      "Lower Back"
     ],
     "equipment_needed": [
       "bodyweight"
     ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
       "Intermediate",
       "Advanced"
     ],
-    "difficulty": "beginner",
-    "is_foundational": true,
-    "priority_tier": 2,
-    "rep_range": "12-15",
-    "logging_type": "bodyweight_reps",
-    "sets_default": 3,
-    "rest_seconds": 60,
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 3.5,
+    "breathing_cue": "Exhale as you kick back, inhale as you return",
     "coaching_cues": [
       "On hands and knees",
       "Keep core tight",
@@ -16864,28 +17043,34 @@
       "Arching lower back",
       "Not squeezing at peak"
     ],
-    "breathing_cue": "Exhale as you kick back, inhale as you return",
-    "pro_tip": "Add ankle weight or resistance band to increase difficulty",
-    "met_value": 3.5,
-    "muscle_primary": [
-      "glutes"
-    ],
-    "muscle_secondary": [
-      "hamstrings",
-      "lower_back"
-    ],
-    "is_compound": false,
-    "image_url": "",
-    "video_url": "",
-    "tags": [
-      "bodyweight",
-      "glutes",
-      "home"
-    ],
     "warmup_protocol": "Hip circles and glute bridges",
-    "regression": "Floor glute squeeze",
-    "progression": "Donkey kick with resistance band",
-    "is_custom": false
+    "pro_tip": "Add ankle weight or resistance band to increase difficulty",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 2,
+    "target_focus": [
+      "Glutes",
+      "Hip"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Hip Thrust",
+    "priority_tier": 2,
+    "rep_range": "12-15"
   },
   {
     "id": "E258",
@@ -16897,32 +17082,29 @@
     "exercise_type": [
       "isolation"
     ],
-    "target_focus": [
+    "primary_muscles": [
       "Calves"
     ],
-    "sub_focus": [
-      "Calves (Gastrocnemius)"
+    "secondary_muscles": [
+      "Soleus"
     ],
     "equipment_needed": [
       "dumbbells"
     ],
-    "equipment_tier": [
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
       "Intermediate",
       "Advanced"
     ],
-    "difficulty": "beginner",
-    "is_foundational": true,
-    "priority_tier": 2,
-    "rep_range": "15-20",
-    "logging_type": "weight_reps",
-    "sets_default": 3,
-    "rest_seconds": 60,
+    "default_sets": 3,
+    "default_reps": "15-20",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 3.5,
+    "breathing_cue": "Exhale as you rise, inhale as you lower",
     "coaching_cues": [
       "Hold dumbbells at sides",
       "Rise on balls of feet",
@@ -16934,27 +17116,32 @@
       "Partial range of motion",
       "Leaning forward"
     ],
-    "breathing_cue": "Exhale as you rise, inhale as you lower",
-    "pro_tip": "Stand on a step edge for greater range of motion",
-    "met_value": 3.5,
-    "muscle_primary": [
-      "calves"
-    ],
-    "muscle_secondary": [
-      "soleus"
-    ],
-    "is_compound": false,
-    "image_url": "",
-    "video_url": "",
-    "tags": [
-      "dumbbells",
-      "calves",
-      "legs"
-    ],
     "warmup_protocol": "Ankle rotations and light calf stretches",
-    "regression": "Bodyweight calf raise",
-    "progression": "Single-leg dumbbell calf raise",
-    "is_custom": false
+    "pro_tip": "Stand on a step edge for greater range of motion",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "ankle"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Calves"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Standing Calf Raise",
+    "priority_tier": 2,
+    "rep_range": "15-20"
   },
   {
     "id": "E259",
@@ -16966,34 +17153,31 @@
     "exercise_type": [
       "isolation"
     ],
-    "target_focus": [
+    "primary_muscles": [
       "Quads",
       "Glutes"
     ],
-    "sub_focus": [
-      "Hamstrings"
+    "secondary_muscles": [
+      "Hamstrings",
+      "Calves"
     ],
     "equipment_needed": [
       "bodyweight"
     ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
       "Intermediate",
       "Advanced"
     ],
-    "difficulty": "beginner",
-    "is_foundational": true,
-    "priority_tier": 2,
-    "rep_range": "10-12",
-    "logging_type": "bodyweight_reps",
-    "sets_default": 3,
-    "rest_seconds": 60,
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 60,
+    "tempo": "3-0-1-0",
+    "met_value": 5.0,
+    "cal_per_set_est": 6.0,
+    "breathing_cue": "Inhale as you lower, exhale as you rise",
     "coaching_cues": [
       "Staggered stance, rear foot elevated or flat",
       "Lower back knee toward floor",
@@ -17005,29 +17189,35 @@
       "Leaning too far forward",
       "Rising on toes of front foot"
     ],
-    "breathing_cue": "Inhale as you lower, exhale as you rise",
-    "pro_tip": "Elevate rear foot on a bench to increase range (Bulgarian split squat)",
-    "met_value": 5.0,
-    "muscle_primary": [
-      "quadriceps",
-      "glutes"
-    ],
-    "muscle_secondary": [
-      "hamstrings",
-      "calves"
-    ],
-    "is_compound": false,
-    "image_url": "",
-    "video_url": "",
-    "tags": [
-      "bodyweight",
-      "legs",
-      "unilateral"
-    ],
     "warmup_protocol": "Hip flexor stretches and leg swings",
-    "regression": "Reverse lunge",
-    "progression": "Bulgarian split squat with dumbbells",
-    "is_custom": false
+    "pro_tip": "Elevate rear foot on a bench to increase range (Bulgarian split squat)",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3,
+    "target_focus": [
+      "Quads",
+      "Glutes"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Bulgarian Split Squat",
+    "priority_tier": 2,
+    "rep_range": "10-12"
   },
   {
     "id": "E260",
@@ -17039,33 +17229,30 @@
     "exercise_type": [
       "compound"
     ],
-    "target_focus": [
+    "primary_muscles": [
       "Upper Chest",
-      "Front Delts"
+      "Front Deltoid"
     ],
-    "sub_focus": [
+    "secondary_muscles": [
       "Triceps"
     ],
     "equipment_needed": [
       "dumbbells"
     ],
-    "equipment_tier": [
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "beginner",
     "suitable_for": [
       "Beginner",
       "Intermediate",
       "Advanced"
     ],
-    "difficulty": "beginner",
-    "is_foundational": true,
-    "priority_tier": 1,
-    "rep_range": "8-12",
-    "logging_type": "weight_reps",
-    "sets_default": 3,
-    "rest_seconds": 90,
+    "default_sets": 3,
+    "default_reps": "8-12",
+    "default_rest_secs": 90,
+    "tempo": "3-0-1-0",
+    "met_value": 5.0,
+    "cal_per_set_est": 7.0,
+    "breathing_cue": "Exhale as you press up, inhale as you lower",
     "coaching_cues": [
       "Set bench to 30-45 degree incline",
       "Press dumbbells up and slightly together",
@@ -17077,28 +17264,103 @@
       "Bouncing off chest",
       "Uneven press"
     ],
-    "breathing_cue": "Exhale as you press up, inhale as you lower",
-    "pro_tip": "Keep a slight arch in lower back for shoulder safety",
-    "met_value": 5.0,
-    "muscle_primary": [
-      "upper_chest",
-      "front_delts"
-    ],
-    "muscle_secondary": [
-      "triceps"
-    ],
-    "is_compound": true,
-    "image_url": "",
-    "video_url": "",
-    "tags": [
-      "dumbbells",
-      "chest",
-      "push",
-      "upper_chest"
-    ],
     "warmup_protocol": "Arm circles and light dumbbell presses",
-    "regression": "Incline Push Up",
-    "progression": "Incline Barbell Bench Press",
-    "is_custom": false
+    "pro_tip": "Keep a slight arch in lower back for shoulder safety",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Upper Chest",
+      "Front Delts"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Incline Barbell Bench Press",
+    "priority_tier": 1,
+    "rep_range": "8-12"
+  },
+  {
+    "id": "E261",
+    "name": "Bodyweight Rear Delt Raise",
+    "category": "pull",
+    "movement_pattern": [
+      "shoulder_isolation"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Rear Deltoid"
+    ],
+    "secondary_muscles": [
+      "Traps",
+      "Rhomboids"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "15-20",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you raise, inhale as you lower",
+    "coaching_cues": [
+      "Lie face-down on the floor or a bench",
+      "Arms out to the sides in a T, thumbs up",
+      "Squeeze shoulder blades to lift the arms",
+      "Keep the neck neutral and chin tucked"
+    ],
+    "common_mistakes": [
+      "Shrugging the traps",
+      "Using momentum to swing the arms",
+      "Lifting the chest off the floor"
+    ],
+    "warmup_protocol": "Band pull-aparts and arm circles",
+    "pro_tip": "Go light and slow — the rear delts respond to the squeeze, not the load",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Rear Delts"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Reverse Fly",
+    "priority_tier": 2,
+    "rep_range": "12-15"
   }
 ]

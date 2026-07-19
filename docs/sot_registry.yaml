@@ -7273,6 +7273,91 @@ concepts:
         notes: routes through ExerciseData.parseEquipmentNeeded (was `as List?` → _CastError crash)
     contract_test_path: test/contracts/equipment_needed_shape_test.dart
 
+  - concept: exercise_equipment_tier
+    domain: workout
+    behavioral_test_path: test/contracts/equipment_tier_consistency_test.dart
+    description: |
+      Batch 13-A (d4e8a1) — each exercise's library `equipment_tier` array lists the
+      tiers it is selectable at; queryV4 (exercise_repository.dart:298-307) passes an
+      exercise for a user's tier iff its equipment_tier contains that tier string. The
+      library was UNDER-tagged (Glute Bridge ["bodyweight","full_gym"] skipping the
+      middle tiers; Reverse Fly/Shrug/RDL full_gym-only though dumbbell-only) → shallow
+      pools + over-tier equipment-violation picks (recurrence of 40a426). Gains-only fix:
+      equipment_tier ← current ∪ {T : EquipmentVocab.tierItems[T] ⊇ normalize(equipment_needed)}
+      on 90 rows (ADD-only). Invariant: derive ⊆ equipment_tier (no under-tag); over-tags
+      tolerated (a separate later drop-side pass).
+    writers:
+      - file: assets/data/exercise_library.json
+        method: equipment_tier field (gains-only deepened on 90 rows)
+        notes: derive(equipment_needed) ⊆ equipment_tier; re-seeded by SeedService v8
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (7→8)
+        notes: re-seeds corrected equipment_tier into exerciseBox (idempotent putAll)
+    readers:
+      - file: lib/shared/repositories/exercise_repository.dart
+        method: queryV4 equipment filter (:298-307)
+        semantic: exercise passes tier T iff equipment_tier contains T
+        notes: sole production reader (swap/community/coach/warmup do not read equipment_tier)
+    contract_test_path: test/contracts/equipment_tier_consistency_test.dart
+
+  - concept: exercise_library_schema
+    domain: workout
+    behavioral_test_path: test/contracts/exercise_library_schema_contract_test.dart
+    description: |
+      Batch 13-A (e1a7c4) — every exercise_library row carries EXACTLY the 38 canonical
+      keys. The 9 stubs E252-E260 used a malformed schema (muscle_primary/is_compound/
+      sets_default…) + were MISSING injury_contraindications, so E252 Wall Sit
+      (knee_dominant) was never excluded for knee-injured users (queryV4:338 guards
+      contra.isNotEmpty; a missing field is never excluded) + they were invisible to
+      primary_muscles-based selection. Normalized to the 38-key schema + injury-tagged +
+      E261 added. A missing injury_contraindications field OR a stub-only key re-fails the
+      contract.
+    writers:
+      - file: assets/data/exercise_library.json
+        method: E252-E260 normalized to the 38-key canonical schema + injury tags; E261 added
+        notes: primary_muscles/injury_contraindications now present; 13 stub-only keys dropped
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (7→8)
+        notes: putAll replaces each stub's whole map (no stale keys linger)
+      - file: supabase/migrations/074_seed_exercise_library.sql
+        method: regenerated (259 tuples, ON CONFLICT DO UPDATE)
+        notes: heals cloud stubs' NULL primary_muscles/difficulty_level (getFormCues reads them)
+    readers:
+      - file: lib/shared/repositories/exercise_repository.dart
+        method: queryV4 injury filter (:335-345) + primary_muscles read (:270-282)
+        semantic: a missing injury field = never excluded; muscle_primary was invisible
+        notes: the E252 knee safety hole + muscle-invisibility
+      - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
+        method: reads primary_muscles/secondary_muscles/difficulty_level (:60-61)
+        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch
+    contract_test_path: test/contracts/exercise_library_schema_contract_test.dart
+
+  - concept: universal_pool_fallback
+    domain: workout
+    behavioral_test_path: test/contracts/universal_pool_mirror_test.dart
+    description: |
+      Batch 13-A (c3f9b2) — universalPoolV4 (exercise_selector.dart:497-509) is the
+      attempt-5 last-resort fallback pool keyed by movement_pattern. Had duplicates
+      (Inverted Row/Glute Bridge ×2) + wrong-pattern CORE moves (Dead Bug in
+      horizontal_pull, Side Plank in hip_isolation) + Pike Push Up (a vertical push) as
+      the shoulder_isolation/rear-delt fallback. cascade_tracer.dart holds a MANUAL copy
+      the scorecard runs off — untested for equality (H5 silent-drift). Fixed: deduped +
+      on-pattern bodyweight rows (Towel Row/Glute Kickback/E261) + an equality test
+      pinning the tracer copy == production.
+    writers:
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: universalPoolV4 (:497-509)
+        notes: deduped + pattern-corrected; shoulder_isolation → E261 Bodyweight Rear Delt Raise
+      - file: test/plan_generator/v4_diagnostic/cascade_tracer.dart
+        method: universalPoolV4Mirror (:53, renamed public)
+        notes: edited in lockstep; pinned equal by the mirror test
+    readers:
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: _cascadeFill attempt-5 (:1152)
+        semantic: resolves each pool name via repo.search, injury+equipment-filters, else omits
+        notes: on-pattern bodyweight fallback per movement_pattern
+    contract_test_path: test/contracts/universal_pool_mirror_test.dart
+
   - concept: equipment_vocab
     domain: workout
     behavioral_test_path: test/contracts/equipment_vocab_library_contract_test.dart

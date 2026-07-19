@@ -6,6 +6,15 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### exercise_equipment_tier (1 bugs)
+- 2026-07-19 d4e8a1 — >
+
+### exercise_library_schema (1 bugs)
+- 2026-07-19 e1a7c4 — >
+
+### universal_pool_fallback (1 bugs)
+- 2026-07-19 c3f9b2 — >
+
 ### plan_phase_expiry (3 bugs)
 - 2026-07-18 a4e2d9 — >
 - 2026-06-09 a1d4f9 — >
@@ -806,6 +815,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-19 | d4e8a1 | > | exercise_equipment_tier | test/contracts/equipment_tier_consistency_test.dart |
+| 2026-07-19 | e1a7c4 | > | exercise_library_schema | test/contracts/exercise_library_schema_contract_test.dart |
+| 2026-07-19 | c3f9b2 | > | universal_pool_fallback | test/contracts/universal_pool_mirror_test.dart |
 | 2026-07-18 | a4e2d9 | > | plan_phase_expiry | test/contracts/pro_phase_expiry_surface_test.dart |
 | 2026-07-17 | b7a4e2 | > | equipment_exclusion_filter | test/contracts/wu2_gym_cardio_gate_behavioral_test.dart |
 | 2026-07-16 | b3f9a1 | \| | admin_route_reachability | test/contracts/restoring_next_destination_test.dart |
