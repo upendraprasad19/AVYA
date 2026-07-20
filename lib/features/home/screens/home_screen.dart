@@ -19,6 +19,7 @@ import 'package:icanbefitter/shared/widgets/sync_banner.dart';
 import '../widgets/completeness_nudge.dart';
 import '../providers/home_provider.dart';
 import '../../train/providers/train_provider.dart';
+import '../../train/widgets/readiness_sheet.dart';
 import '../widgets/weekly_calendar.dart';
 import '../widgets/day_detail_sheet.dart';
 import '../widgets/quick_action_button.dart';
@@ -863,7 +864,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       workoutMode: modeLabel,
       durationMin: estDuration,
       exerciseCount: exercises.length,
-      onStart: () => context.go('/train/active-workout'),
+      // Home's START must actually START the workout, not just navigate.
+      // Previously this was a bare `context.go(...)`, so ActiveWorkoutScreen
+      // mounted with a null workoutDay and rendered "No workout in progress"
+      // — a dead end. Route through the SAME canonical path Train uses
+      // (`beginWorkoutWithReadiness` → `startWorkout`, the only two
+      // `startWorkout` callsites), and build the day from the SAME schedule
+      // row this card rendered from, so what starts is what was displayed.
+      onStart: () async {
+        final day = workoutDayForDate(DateTime.now());
+        if (day == null) return;
+        await beginWorkoutWithReadiness(context, ref, day);
+        if (context.mounted) context.go('/train/active-workout');
+      },
       caloriesCurrent: nutrition.calories,
       caloriesTarget: nutrition.calorieTarget,
       proteinCurrent: nutrition.protein,
