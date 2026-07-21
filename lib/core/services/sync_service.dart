@@ -30,6 +30,7 @@ import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -1081,7 +1082,13 @@ class SyncService {
         },
         progressData: {
           'current_phase': pr['current_phase'] ?? 1,
-          'current_week': pr['current_week'] ?? 1,
+          // current_week is a DERIVED projection owned solely by
+          // _syncUserProgress (diagnose c9f4a2). Do NOT replay the frozen Hive
+          // value here — this replay fires every boot while
+          // pending_onboarding_sync is set, and re-writing the frozen `1` would
+          // stomp the projected program week (1..12) in the column. Omitting it
+          // preserves the existing column on update and defaults to 1 on a
+          // fresh insert (schema default), which is correct for a new user.
           'total_workouts_done': pr['total_workouts_done'] ?? 0,
           'current_streak_weeks': pr['current_streak_weeks'] ?? 0,
           'phase_started_at':
