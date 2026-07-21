@@ -53,6 +53,21 @@ class PlanEngineFlags {
     }
   }
 
+  /// Free-tier "Hold the Line" week materialization (`holdWeek` replaces
+  /// `redoWeek4`). **Default OFF (ship dark, §4.6)** — it materializes NEW
+  /// week-5+ schedule rows + extends `plan_end`, so it is NOT the safe
+  /// direction: it ships inert and is flipped ON only after the display slices
+  /// (un-clamp / chip strip / header / roadmap / entry card) land + APK
+  /// verification. When OFF, the plan-expired triggers run the verbatim
+  /// `redoWeek4`. Set `configBox['enable_hold_weeks'] = true` to enable.
+  static bool get holdWeeksEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_hold_weeks') == true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → safe default: OFF (redoWeek4)
+    }
+  }
+
   /// ⑦(a) (Batch 3b-i) detraining WEIGHT decay in ProgressionResolver. Default
   /// ON: when a Phase-2+ user resumes after a training gap, their suggested
   /// starting weights are decayed by the gap (8–21d −7.5%, 22–35d −17.5%, >35d

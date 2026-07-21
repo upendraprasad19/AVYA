@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
+import 'package:icanbefitter/features/train/widgets/keep_training_phase1_action.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
@@ -133,14 +134,7 @@ class GraduationScreen extends ConsumerWidget {
                 // → dead link.
                 Center(
                   child: GestureDetector(
-                    onTap: () async {
-                      try {
-                        await ref
-                            .read(workoutScheduleWriteServiceProvider)
-                            .redoWeek4();
-                      } catch (_) {}
-                      if (context.mounted) context.go('/train');
-                    },
+                    onTap: () => keepTrainingPhase1(context, ref),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(

@@ -5936,7 +5936,11 @@ concepts:
     behavioral_test_path: test/contracts/workout_schedule_write_path_behavioral_test.dart
     description: |
       Schedule mutations not tied to swap or template:
-      markCompleted, markSkipped, pauseRange, redoWeek4, copyWeek.
+      markCompleted, markSkipped, pauseRange, redoWeek4, holdWeek, copyWeek.
+      holdWeek (ship-dark enable_hold_weeks, default OFF) is the free-tier "Hold
+      the Line" replacement for redoWeek4 — sources the Peak/deload week BY DATE,
+      Monday-backdated, FLAT loads, stamps is_hold/hold_ordinal, extends plan_end,
+      and awaits pushWorkoutPlanForSyncDomain for reinstall durability.
       Every Hive write routes through WorkoutWriteService.upsertScheduled.
     writers:
       - file: lib/core/services/workout_schedule_write_service.dart
@@ -6092,15 +6096,15 @@ concepts:
     contract_test_path: test/contracts/weight_trend_chart_gap_connect_test.dart
     readers:
       - file: lib/features/train/widgets/plan_expired_card.dart
-        line_range: 56-90
-        method: _handleRedoWeek4 → redoWeek4
+        line_range: 55-97
+        method: _handleRedoWeek4 → PlanEngineFlags.holdWeeksEnabled ? holdWeek() : redoWeek4()
         semantic: latest
-        fields_read: [schedule_<date>.* (via redoWeek4 copy loop)]
-      - file: lib/features/train/screens/graduation_screen.dart
-        line_range: 125-140
-        method: KEEP TRAINING PHASE 1 button → redoWeek4
+        fields_read: [schedule_<date>.* (via holdWeek/redoWeek4 copy loop)]
+      - file: lib/features/train/widgets/keep_training_phase1_action.dart
+        line_range: 19-43
+        method: keepTrainingPhase1 → flag ? holdWeek() : redoWeek4() (H5 — surfaces failure, no blind /train nav); wired from graduation_screen KEEP TRAINING PHASE 1
         semantic: latest
-        fields_read: [schedule_<date>.* via redoWeek4]
+        fields_read: [schedule_<date>.* via holdWeek/redoWeek4]
     forbidden_legacy_patterns:
       - { pattern: "WorkoutScheduleService\\.instance\\.(markCompleted|markSkipped|pauseRange|redoWeek4|copyWeek)", reason: "Use workoutScheduleWriteServiceProvider after A2 split." }
     class_constraints: |

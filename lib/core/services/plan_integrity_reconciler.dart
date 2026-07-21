@@ -37,6 +37,7 @@ import 'package:flutter/foundation.dart';
 import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'migrated_key.dart';
+import 'plan_window_reanchor.dart';
 import 'supabase_service.dart';
 import 'workout_schedule_read_service.dart';
 
@@ -141,12 +142,24 @@ class PlanIntegrityReconciler {
       if (planJson is! Map) return;
       final bundle = Map<String, dynamic>.from(planJson);
 
-      // Re-anchor plan_start / plan_end from the snapshot (the skip left these
-      // stale, which is what inflated the displayed week number).
+      // Re-anchor plan_start / plan_end from the snapshot, MONOTONICALLY +
+      // phase-gated (free-tier-hold durability #1, PlanWindowReanchor): same
+      // phase keeps the LATER plan_end so a hold extension survives this heal;
+      // a stale-plan_start install takes cloud verbatim (the original a7d3f1
+      // inflated-week fix). Reached only when needsHeal fires — a healthy hold
+      // is a no-op above.
       final pjStart = bundle['plan_start_date'];
       final pjEnd = bundle['plan_end_date'];
-      if (pjStart != null) await MigratedKey.write(_planStartKey, pjStart);
-      if (pjEnd != null) await MigratedKey.write(_planEndKey, pjEnd);
+      final reanchor = PlanWindowReanchor.resolve(
+        localStart: MigratedKey.read<String>(_planStartKey),
+        localEnd: MigratedKey.read<String>(_planEndKey),
+        cloudStart: pjStart is String ? pjStart : null,
+        cloudEnd: pjEnd is String ? pjEnd : null,
+      );
+      final reStart = reanchor.planStart;
+      final reEnd = reanchor.planEnd;
+      if (reStart != null) await MigratedKey.write(_planStartKey, reStart);
+      if (reEnd != null) await MigratedKey.write(_planEndKey, reEnd);
 
       final schedules = bundle['schedules'];
       var healed = 0;

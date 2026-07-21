@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 
 /// Day-29+ free-tier UI shown on Home + Train when Phase 1 has
@@ -57,7 +58,15 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
     setState(() => _redoing = true);
     AppEventsService.instance.log('phase_1_day_29_redo_week_4_tapped');
     try {
-      await ref.read(workoutScheduleWriteServiceProvider).redoWeek4();
+      // Ship-dark: enable_hold_weeks flips the free-tier mechanic from the
+      // verbatim redoWeek4 (trailing-week copy) to the correct holdWeek
+      // (Peak/deload-by-date, Monday-aligned, plan_json-durable). Default OFF.
+      final svc = ref.read(workoutScheduleWriteServiceProvider);
+      if (PlanEngineFlags.holdWeeksEnabled) {
+        await svc.holdWeek();
+      } else {
+        await svc.redoWeek4();
+      }
       AppEventsService.instance.log('phase_1_cycle_repeat_started');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
