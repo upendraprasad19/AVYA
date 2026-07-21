@@ -6,6 +6,25 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### exercise_logs_read_path (7 bugs)
+- 2026-07-20 a3c8e2 — >
+- 2026-06-06 e4a8b1 — >
+- 2026-06-06 d9a4f2 — >
+- 2026-06-05 e7b3c9 — >
+- 2026-05-31 7d3f0a — >
+- 2026-05-22 89d56c — |
+- 2026-05-12 f4c9e1 — After completing today's morning workout via the active-workout flow, the Edit Workout Log sheet shows "No exercise logs for this day" — blank. Cloud workout_log_exercises HAS the 5 rows for the founder on 2026-05-11 (completed_at 05:19 UTC = May 11 10:49 IST). Local Hive also has them at correct keys.
+
+### workout_completion_status (8 bugs)
+- 2026-07-20 b7f30a — >
+- 2026-05-29 7c2a8b — >
+- 2026-05-12 d4e9c1 — |
+- 2026-05-12 a9f3d2 — Home today-card showed "BACK DAY A · DONE" (green DONE pill) for Sat May 9, but the calendar-strip's Sat May 9 cell showed only the gold today-border with NO checkmark, while earlier completed days (Mon May 4) correctly showed a checkmark.
+- 2026-05-10 c8e4a1 — 10 PostgrestException 23503 (scheduled_workouts_template_id_fkey) errors fired in 5 seconds on the founder's account at 2026-05-10 12:45 UTC. Saturday's completed workout never reached cloud and the calendar tick vanished after force-restart.
+- 2026-05-10 d9b2c5 — Saturday's locally-completed workout was overwritten back to 'planned' on every cold-start restore, because cloud still held the older 'planned' row (Bug B.1's FK violation prevented push) and `_restoreScheduledWorkouts` was unconditionally cloud-authoritative for status/completed_at.
+- 2026-05-10 e3f7a8 — A subset of users (founder included) holds Hive `schedule_<date>` rows with `status='completed'` while the cloud `scheduled_workouts` row stays at `status='planned'` for those dates. Once Bugs B.1 + B.2 ship, future writes stay consistent — but existing divergence won't self-heal without an explicit re-push.
+- 2026-05-10 a7c1e2 — Calendar checkmarks for May 5/6/7 vanished on the founder's account after restore, despite cloud workout_logs and scheduled_workouts.status='completed' being correct for those dates.
+
 ### exercise_equipment_tier (1 bugs)
 - 2026-07-19 d4e8a1 — >
 
@@ -280,14 +299,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-04 4c8788 — AI coach message count was recomputed from Supabase on every render, causing unnecessary round-trips; cache key was not IST-aware, causing stale counts across midnight.
 - 2026-05-04 bb3acc — Morning alert Edge Function computed day-of-week and date strings in UTC instead of IST, sending wrong day greetings after 18:30 IST.
 
-### exercise_logs_read_path (6 bugs)
-- 2026-06-06 e4a8b1 — >
-- 2026-06-06 d9a4f2 — >
-- 2026-06-05 e7b3c9 — >
-- 2026-05-31 7d3f0a — >
-- 2026-05-22 89d56c — |
-- 2026-05-12 f4c9e1 — After completing today's morning workout via the active-workout flow, the Edit Workout Log sheet shows "No exercise logs for this day" — blank. Cloud workout_log_exercises HAS the 5 rows for the founder on 2026-05-11 (completed_at 05:19 UTC = May 11 10:49 IST). Local Hive also has them at correct keys.
-
 ### check_and_sync_null_safety (1 bugs)
 - 2026-06-05 c5e1b7 — >
 
@@ -370,15 +381,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### blast_radius_commit_autotag (1 bugs)
 - 2026-05-29 c3d8a1 — >
-
-### workout_completion_status (7 bugs)
-- 2026-05-29 7c2a8b — >
-- 2026-05-12 d4e9c1 — |
-- 2026-05-12 a9f3d2 — Home today-card showed "BACK DAY A · DONE" (green DONE pill) for Sat May 9, but the calendar-strip's Sat May 9 cell showed only the gold today-border with NO checkmark, while earlier completed days (Mon May 4) correctly showed a checkmark.
-- 2026-05-10 c8e4a1 — 10 PostgrestException 23503 (scheduled_workouts_template_id_fkey) errors fired in 5 seconds on the founder's account at 2026-05-10 12:45 UTC. Saturday's completed workout never reached cloud and the calendar tick vanished after force-restart.
-- 2026-05-10 d9b2c5 — Saturday's locally-completed workout was overwritten back to 'planned' on every cold-start restore, because cloud still held the older 'planned' row (Bug B.1's FK violation prevented push) and `_restoreScheduledWorkouts` was unconditionally cloud-authoritative for status/completed_at.
-- 2026-05-10 e3f7a8 — A subset of users (founder included) holds Hive `schedule_<date>` rows with `status='completed'` while the cloud `scheduled_workouts` row stays at `status='planned'` for those dates. Once Bugs B.1 + B.2 ship, future writes stay consistent — but existing divergence won't self-heal without an explicit re-push.
-- 2026-05-10 a7c1e2 — Calendar checkmarks for May 5/6/7 vanished on the founder's account after restore, despite cloud workout_logs and scheduled_workouts.status='completed' being correct for those dates.
 
 ### alert_detection_edge_function_health (1 bugs)
 - 2026-05-28 b1f4e2 — >
@@ -818,6 +820,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-20 | a3c8e2 | > | exercise_logs_read_path | test/contracts/session_date_and_home_start_behavioral_test.dart |
+| 2026-07-20 | b7f30a | > | workout_completion_status | test/contracts/session_date_and_home_start_behavioral_test.dart |
 | 2026-07-19 | d4e8a1 | > | exercise_equipment_tier | test/contracts/equipment_tier_consistency_test.dart |
 | 2026-07-19 | e1a7c4 | > | exercise_library_schema | test/contracts/exercise_library_schema_contract_test.dart |
 | 2026-07-19 | f4c1e8 | > | exercise_injury_tags | test/contracts/injury_undertag_13b_contract_test.dart |

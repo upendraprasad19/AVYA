@@ -5,7 +5,6 @@
 #
 # Format: <file_path> :: <prefix>_* :: <field_name>
 
-lib/core/services/deload_e1rm_scan.dart :: exlog_* :: exercise_type
 lib/core/services/exlog_key_migrator.dart :: exlog_* :: reps
 lib/core/services/logging_type_repair_migrator.dart :: exlog_* :: logging_type_repaired_at_ms
 lib/core/services/logging_type_repair_migrator.dart :: exlog_* :: reps
@@ -44,7 +43,6 @@ lib/core/services/sync/sync_workout.dart :: exlog_* :: completed_at
 lib/core/services/sync/sync_workout.dart :: exlog_* :: day_of_week
 lib/core/services/sync/sync_workout.dart :: exlog_* :: description
 lib/core/services/sync/sync_workout.dart :: exlog_* :: duration_secs
-lib/core/services/sync/sync_workout.dart :: exlog_* :: exercise_id
 lib/core/services/sync/sync_workout.dart :: exlog_* :: exercises
 lib/core/services/sync/sync_workout.dart :: exlog_* :: has_warmup_sets
 lib/core/services/sync/sync_workout.dart :: exlog_* :: is_streak_maintained
@@ -508,7 +506,6 @@ lib/features/train/providers/train_provider.dart :: exlog_* :: default_duration_
 lib/features/train/providers/train_provider.dart :: exlog_* :: equipment_access
 lib/features/train/providers/train_provider.dart :: exlog_* :: equipment_needed
 lib/features/train/providers/train_provider.dart :: exlog_* :: exercise_count
-lib/features/train/providers/train_provider.dart :: exlog_* :: exercise_id
 lib/features/train/providers/train_provider.dart :: exlog_* :: exercise_type
 lib/features/train/providers/train_provider.dart :: exlog_* :: exercises
 lib/features/train/providers/train_provider.dart :: exlog_* :: focus
@@ -523,6 +520,7 @@ lib/features/train/providers/train_provider.dart :: exlog_* :: rest_seconds
 lib/features/train/providers/train_provider.dart :: exlog_* :: superset_group
 lib/features/train/providers/train_provider.dart :: exlog_* :: total_workouts_done
 lib/features/train/providers/train_provider.dart :: exlog_* :: warmup
+lib/features/train/providers/train_provider.dart :: exlog_* :: week
 lib/features/train/providers/train_provider.dart :: exlog_* :: workout_focus
 lib/features/train/providers/train_provider.dart :: exlog_* :: workout_name
 lib/features/train/repositories/workout_repository.dart :: exlog_* :: completed_at
@@ -580,4 +578,3 @@ lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_*
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: reps_completed
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: volume_kg
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: weight_kg
-lib/shared/repositories/plan_engine/volume_titration.dart :: exlog_* :: primary_muscles

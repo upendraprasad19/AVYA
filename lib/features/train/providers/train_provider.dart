@@ -451,11 +451,76 @@ class CurrentPlanData {
     }
 
     // Fallback: first non-rest, non-done workout in current week.
+    // ⚠ This can return a day whose `date` is in the PAST (today had no match).
+    // Fine for DISPLAY ("your next unfinished workout"), but never treat the
+    // returned day's `date` as the session date — see the clamp in
+    // `completeWorkout`, and prefer `workoutDayForDate` when the caller needs
+    // "the workout scheduled for THIS date".
     for (final day in weekDays) {
       if (!day.isRest && !day.isDone) return day;
     }
     return null;
   }
+}
+
+/// Pure: resolves the date a COMPLETED session must be logged under.
+///
+/// A session belongs to the day it was PERFORMED. [scheduledDate] (the plan-day
+/// being performed) is honoured ONLY when it already IS today —
+/// [CurrentPlanData.todayWorkout]'s fallback can hand back a PAST day, and
+/// logging to it wrote `exlog_<pastDate>`/`wlog_<pastDate>` and marked the PAST
+/// schedule row completed while today's row stayed `planned` forever,
+/// corrupting every downstream reader of the log date (streak, PRs,
+/// ProgressionResolver, e1RM history, adherence).
+///
+/// Extracted pure so the guard is behaviorally testable without driving the
+/// whole `completeWorkout` side-effect chain — same pattern as
+/// `RankService.shouldPromote` (rule 21 / `feedback_source_grep_false_confidence`).
+DateTime resolveSessionDate({
+  required DateTime? scheduledDate,
+  required DateTime now,
+}) {
+  if (scheduledDate == null) return now;
+  return formatDateKey(scheduledDate) == formatDateKey(now)
+      ? scheduledDate
+      : now;
+}
+
+/// Builds a [WorkoutDayData] for [date] directly from that date's `schedule_*`
+/// row — the SAME source Home's Today card renders from
+/// (`todayWorkoutProvider` → `getScheduleForDate`) — so the workout that
+/// STARTS is always the workout that was DISPLAYED.
+///
+/// Deliberately NOT [CurrentPlanData.todayWorkout]: that getter's fallback
+/// returns "first non-rest, non-done workout in the current week" when today
+/// has no match, which can be a different (past) day than the card showed.
+///
+/// Returns null for a rest day, a row with no exercises, or no row at all —
+/// callers should not offer START in those states.
+WorkoutDayData? workoutDayForDate(DateTime date) {
+  final row = WorkoutScheduleService.instance.getScheduleForDate(date);
+  if (row == null) return null;
+
+  final type = row['type'] as String? ?? 'rest';
+  if (type != 'workout' && type != 'custom_template') return null;
+
+  final exercises = _parseExerciseMaps(row['exercises'] as List?);
+  if (exercises.isEmpty) return null;
+
+  final week = (row['week'] as int?) ?? 1;
+  final dayOfWeek = (row['day_of_week'] as int?) ?? 0;
+
+  return WorkoutDayData(
+    dayNumber: (week - 1) * 7 + dayOfWeek + 1,
+    name: (row['workout_name'] as String? ?? 'Workout').toUpperCase(),
+    subtitle: '${row['workout_focus'] ?? ''} · ${exercises.length} exercises',
+    date: date,
+    isRest: false,
+    isDone: (row['status'] as String?) == 'completed',
+    exercises: exercises,
+    warmup: _parseExerciseMaps(row['warmup'] as List?),
+    cooldown: _parseExerciseMaps(row['cooldown'] as List?),
+  );
 }
 
 class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
@@ -1380,7 +1445,12 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
     final repo = WorkoutRepository.instance;
     final hive = HiveService.instance;
-    final now = DateTime.now();
+    // `nowWall()` (not DateTime.now()) so the dev/test clock seam reaches the
+    // session date below. Byte-identical to DateTime.now() in release
+    // (ist_date.dart:56-57). The year-sim is unaffected — it bypasses this
+    // method entirely and calls WorkoutWriteService directly
+    // (simulation_service.dart:444/452), driving dates via setTestClockTo.
+    final now = nowWall();
 
     // PR detection: single-scan cache of exercise → best weight + best per-set reps
     // (O(n) once, then O(1) per exercise).
@@ -1481,7 +1551,21 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       }
     }
 
-    final workoutDate = state.workoutDay?.date ?? now;
+    // A session is dated by WHEN IT WAS PERFORMED — never by the plan-day being
+    // performed. `state.workoutDay.date` can be a PAST date: `todayWorkout`
+    // (:453-456) falls back to "first non-rest, non-done workout in the current
+    // week" when today has no match, so a user completing a missed day wrote
+    // exlog_<pastDate>/wlog_<pastDate> and marked the PAST schedule row
+    // completed, while today's row stayed `planned` forever. That corrupted
+    // every downstream reader of the log date (streak, PRs, ProgressionResolver,
+    // e1RM history, adherence). `completeWorkout` has exactly ONE caller —
+    // finish_dialog.dart:163, a live user finishing right now — so today is
+    // always the correct date. Clamped rather than blanket-replaced so the
+    // healthy path (scheduled == today) is provably unchanged.
+    final workoutDate = resolveSessionDate(
+      scheduledDate: state.workoutDay?.date,
+      now: now,
+    );
 
     // Compute date key once — used by streak math below.
     final dateStr = formatDateKey(workoutDate);
