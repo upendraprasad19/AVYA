@@ -895,6 +895,21 @@ class WorkoutScheduleReadService {
   int getProgramWeek(int currentPhase) =>
       programWeekFor(currentPhase, getCurrentWeekNumber());
 
+  /// Value to project into the `user_progress.current_week` cloud column on
+  /// sync (diagnose c9f4a2). When [disabled] (kill-switch on), returns the
+  /// frozen Hive passthrough verbatim — byte-identical to the pre-fix write;
+  /// otherwise the derived program week (1..12), which is never null, so the
+  /// caller writes it UNCONDITIONALLY. Extracted here so the sync-projection
+  /// decision (flag polarity + which value) has a behavioral test that fails
+  /// when the runtime path is mis-wired, even if `getProgramWeek` still appears
+  /// in the source (rule 21).
+  int? currentWeekColumnProjection({
+    required int? frozenWeek,
+    required int phase,
+    required bool disabled,
+  }) =>
+      disabled ? frozenWeek : getProgramWeek(phase);
+
   /// 1-based day number within the current Phase.
   int getCurrentDayInPhase() {
     final start = getPlanStartDate();

@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### program_week_projection (1 bugs)
+- 2026-07-21 c9f4a2 — >
+
 ### exercise_logs_read_path (7 bugs)
 - 2026-07-20 a3c8e2 — >
 - 2026-06-06 e4a8b1 — >
@@ -820,6 +823,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-21 | c9f4a2 | > | program_week_projection | test/contracts/program_week_projection_behavioral_test.dart |
 | 2026-07-20 | a3c8e2 | > | exercise_logs_read_path | test/contracts/session_date_and_home_start_behavioral_test.dart |
 | 2026-07-20 | b7f30a | > | workout_completion_status | test/contracts/session_date_and_home_start_behavioral_test.dart |
 | 2026-07-19 | d4e8a1 | > | exercise_equipment_tier | test/contracts/equipment_tier_consistency_test.dart |

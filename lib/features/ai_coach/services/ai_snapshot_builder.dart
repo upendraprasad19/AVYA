@@ -85,7 +85,15 @@ class AiSnapshotBuilder {
       },
       'progress': {
         'current_phase': progress['current_phase'] ?? 1,
-        'current_week': WorkoutScheduleService.instance.getCurrentWeekNumber(),
+        // Program week (1..12) so the coach sees ONE consistent week that agrees
+        // with current_plan_summary.week + the weekly-recap push. Kill-switch
+        // `disable_program_week_projection` (default-ON) restores the prior
+        // phase-week emission verbatim. Diagnose 2026-07-21.
+        'current_week': _hive.configBox.get('disable_program_week_projection') ==
+                true
+            ? WorkoutScheduleService.instance.getCurrentWeekNumber()
+            : WorkoutScheduleService.instance
+                .getProgramWeek((progress['current_phase'] as int?) ?? 1),
         'total_workouts_done': progress['total_workouts_done'] ?? 0,
         'current_streak_weeks': progress['current_streak_weeks'] ?? 0,
         'detected_experience': progress['detected_experience_level'] ??
@@ -1203,7 +1211,14 @@ class AiSnapshotBuilder {
     final profile = (_hive.userBox.get('profile') as Map?) ?? const {};
 
     final phase = (progress['current_phase'] as int?) ?? 1;
-    final week = (progress['current_week'] as int?) ?? 1;
+    // Program week (1..12), matching the `progress.current_week` emission above,
+    // so the coach never sees two different week numbers in one snapshot. The
+    // frozen Hive `current_week` (always 1) is NOT read here anymore. Kill-switch
+    // `disable_program_week_projection` (default-ON) restores it. Diagnose 2026-07-21.
+    final week =
+        _hive.configBox.get('disable_program_week_projection') == true
+            ? ((progress['current_week'] as int?) ?? 1)
+            : WorkoutScheduleService.instance.getProgramWeek(phase);
     final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
 
     final weeklySessionsMap = <String, Map<String, dynamic>>{};

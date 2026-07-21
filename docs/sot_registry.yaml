@@ -7533,3 +7533,83 @@ concepts:
         semantic: no exercise requires an excluded item
         notes: consumed by Train screen / active workout; ⑥ C1 wired the equipment_exclusions profile central-read (TrainingHistoryAnalyzer.resolveEquipmentExclusions @ generateV4 :100)
     contract_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart
+
+  - concept: program_week_projection
+    domain: cross_domain
+    behavioral_test_path: test/contracts/program_week_projection_behavioral_test.dart
+    description: |
+      user_progress.current_week is a WRITE-ONLY cloud projection of the derived
+      PROGRAM week (getProgramWeek, 1..12 — "true deployment progress"), NOT a
+      stored counter. The Hive progress['current_week'] field remains a frozen
+      constant 1 (six literal-1 writers, no incrementer) and is deliberately
+      vestigial: it is re-hydrated by the restore merge but read by nobody (the
+      two Train fallbacks train_provider.dart:531/760 are dead code because
+      getCurrentWeekNumber() floors at 1). SAME-NAME divergence is intentional:
+      the cloud column = program week 1..12; the Hive field = frozen 1.
+      Kill-switch disable_program_week_projection (default-ON) restores the
+      pre-fix behaviour byte-identically. Diagnose c9f4a2. NOTE the accepted
+      coherence split — the in-app Train banner shows phase week (1..4) while
+      this column + the coach snapshot show program week (1..12); reconciling
+      the banner is week-model work, out of scope here.
+    writers:
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 167-231
+        method: _syncUserProgress
+        notes: |
+          THE canonical writer. Projects the program week into the current_week
+          column via WorkoutScheduleReadService.currentWeekColumnProjection(...)
+          — UNCONDITIONALLY when the kill-switch is OFF (the `!= null` guard on
+          the frozen field is dropped — B-pass F1 — so a restore/null-Hive
+          user's column can't stay stale). The projection decision is behaviorally
+          tested via the helper (rule 21), not just source-grepped.
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 898-912
+        method: currentWeekColumnProjection
+        notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
+      - file: lib/features/onboarding/providers/onboarding_provider.dart
+        line_range: 473-473
+        method: onboarding completion (initial + step)
+        notes: |
+          Writes current_week:1 at onboarding — correct-BY-CONSTRUCTION (a new
+          user is always at program week 1) and equal to what the projection
+          would compute, so it never disagrees with the canonical writer. Also
+          at :786. NOT routed through the projection (no need).
+      - file: lib/core/services/sync_service.dart
+        line_range: 1083-1087
+        method: _replayPendingOnboardingSync (NO LONGER writes current_week)
+        notes: |
+          B-pass F1: this boot-replay used to pass the frozen Hive current_week
+          into the user_progress upsert, stomping the projected column on every
+          launch while pending_onboarding_sync was set. current_week is now
+          OMITTED from its progressData — the column keeps its projected value on
+          update / schema-defaults to 1 on a fresh insert. Listed as a REMOVED
+          writer so the drift class stays documented.
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 86-101
+        method: buildAiContext (progress block)
+        notes: progress.current_week now emits getProgramWeek, not getCurrentWeekNumber().
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 1209-1222
+        method: _getCurrentPlanSummary
+        notes: current_plan_summary.week now emits getProgramWeek(phase), not the frozen field — the two snapshot week fields are now single-valued.
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/weekly-recap-ready/index.ts
+        line_range: 172-190
+        method: processUser progressMap
+        semantic: pass-through
+        fields_read: [current_week]
+        notes: push copy 'Week ${currentWeek} debrief ready' (:76). Pure interpolation — no EF redeploy needed; fixing the column fixes the push.
+      - file: supabase/functions/weekly-report/index.ts
+        line_range: 146-460
+        method: weekly brief userMessage
+        semantic: pass-through
+        fields_read: [current_week]
+        notes: "'Current week: ${current_week}' into the Gemini 2.5 Pro prompt."
+      - file: supabase/functions/_shared/captain_manual.ts
+        line_range: 317-317
+        method: temporal routing instruction
+        semantic: pass-through
+        fields_read: [via snapshot.current_plan_summary]
+        notes: points the coach at current_plan_summary (now the program week); targets the object not .week, so no change needed.
+    contract_test_path: test/contracts/program_week_projection_behavioral_test.dart

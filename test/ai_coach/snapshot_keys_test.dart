@@ -22,6 +22,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
@@ -173,8 +174,9 @@ void main() {
   });
 
   group('current_plan_summary', () {
-    test('reads phase + week from progress dict, days_per_week from profile',
-        () async {
+    test(
+        'reads phase from progress + days_per_week from profile; week is the '
+        'PROGRAM week, not the frozen current_week (diagnose c9f4a2)', () async {
       await HiveService.instance.userBox.put('progress', {
         'current_phase': 2,
         'current_week': 3,
@@ -186,7 +188,15 @@ void main() {
       final ctx = AiCoachRepository.instance.buildAiContext();
       final summary = ctx['current_plan_summary'] as Map;
       expect(summary['phase'], 2);
-      expect(summary['week'], 3);
+      // current_plan_summary.week now projects the PROGRAM week
+      // (getProgramWeek, 1..12) so the coach agrees with the weekly-recap push
+      // and progress.current_week — NOT the frozen progress['current_week'].
+      // Kill-switch disable_program_week_projection restores the legacy read.
+      expect(summary['week'],
+          WorkoutScheduleReadService.instance.getProgramWeek(2));
+      expect(summary['week'], isNot(3),
+          reason: 'must not read the frozen progress[current_week]=3; '
+              'getProgramWeek(2) ∈ {5,6,7,8}');
       expect(summary['days_per_week'], 5);
     });
 

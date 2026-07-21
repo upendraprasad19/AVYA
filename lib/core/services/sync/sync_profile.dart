@@ -171,10 +171,29 @@ extension SyncServiceProfile on SyncService {
 
       final p = Map<String, dynamic>.from(progress as Map);
 
+      // current_week PROJECTION (diagnose 2026-07-21). The Hive field is a dead
+      // constant `1` (every writer sets the literal); left as-is the column
+      // makes the weekly-recap push say "Week 1" forever, the weekly report say
+      // "Current week: 1", and the coach read a frozen 1. Project the derived
+      // PROGRAM week (1..12, "true deployment progress") into the column so the
+      // two Edge Functions that read it become correct with no EF redeploy.
+      // Kill-switch `disable_program_week_projection` (default-ON) restores the
+      // verbatim pre-fix behaviour: the guarded passthrough of the frozen field.
+      // Written UNCONDITIONALLY when ON — getProgramWeek never returns null, so
+      // a restore/null-Hive user's column can't be left stale (review F1).
+      final projectionOff =
+          _hive.configBox.get('disable_program_week_projection') == true;
+      final int? currentWeekOut =
+          WorkoutScheduleReadService.instance.currentWeekColumnProjection(
+        frozenWeek: (p['current_week'] as num?)?.toInt(),
+        phase: (p['current_phase'] as int?) ?? 1,
+        disabled: projectionOff,
+      );
+
       await _supabase.client.from('user_progress').upsert({
         'user_id': userId,
         if (p['current_phase'] != null) 'current_phase': p['current_phase'],
-        if (p['current_week'] != null) 'current_week': p['current_week'],
+        if (currentWeekOut != null) 'current_week': currentWeekOut,
         if (p['phase_started_at'] != null) 'phase_started_at': p['phase_started_at'],
         if (p['plan_generated_at'] != null) 'plan_generated_at': p['plan_generated_at'],
         if (p['total_workouts_done'] != null) 'total_workouts_done': p['total_workouts_done'],
