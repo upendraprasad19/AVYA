@@ -1109,13 +1109,24 @@ extension SyncServiceWorkout on SyncService {
             plan is Map ? Map<String, dynamic>.from(plan) : plan);
       }
       // plan_start / plan_end are the synced source of truth for the current
-      // phase window — always re-anchor them (the skip leaving these stale is
-      // what inflated the displayed week number).
-      if (planStart != null) {
-        await MigratedKey.write('plan_start_date', planStart);
+      // phase window. Re-anchor them MONOTONICALLY + phase-gated (free-tier-hold
+      // durability #1, PlanWindowReanchor): a hold extends plan_end locally, and
+      // this stale-cloud snapshot must NOT collapse it — same phase keeps the
+      // later plan_end; a fresh install / phase advance takes cloud verbatim
+      // (preserving the a7d3f1 stale-plan_start heal).
+      final reanchor = PlanWindowReanchor.resolve(
+        localStart: MigratedKey.read<String>('plan_start_date'),
+        localEnd: MigratedKey.read<String>('plan_end_date'),
+        cloudStart: planStart is String ? planStart : null,
+        cloudEnd: planEnd is String ? planEnd : null,
+      );
+      final reStart = reanchor.planStart;
+      final reEnd = reanchor.planEnd;
+      if (reStart != null) {
+        await MigratedKey.write('plan_start_date', reStart);
       }
-      if (planEnd != null) {
-        await MigratedKey.write('plan_end_date', planEnd);
+      if (reEnd != null) {
+        await MigratedKey.write('plan_end_date', reEnd);
       }
       if (schedules is Map) {
         for (final entry in schedules.entries) {
@@ -1792,8 +1803,15 @@ extension SyncServiceWorkout on SyncService {
       // exercises in a single round trip. Page size 1000 mirrors
       // _fetchAllRows; in practice no user has anywhere near 1000
       // scheduled workouts (one row per day).
-      final rows = identical(preFetched, _kNoInject)
-          ? await _supabase.client
+      // Free-tier-hold durability #4 — paginate instead of a single
+      // .range(0,999). A long-term holder can exceed 1000 daily rows (~2.7 yr);
+      // the old ascending cap dropped the CURRENT phase from the status merge.
+      // The pure `paginateAll` loops (keeping the template embed) so nothing is
+      // truncated; extracted for unit-testability (paginate_all_test.dart).
+      final List rows;
+      if (identical(preFetched, _kNoInject)) {
+        rows = await paginateAll<dynamic>(
+          fetchPage: (offset, pageSize) async => await _supabase.client
               .from('scheduled_workouts')
               .select(
                 '*, template:template_id('
@@ -1804,8 +1822,11 @@ extension SyncServiceWorkout on SyncService {
               .eq('user_id', userId)
               .gte('scheduled_date', since.substring(0, 10))
               .order('scheduled_date')
-              .range(0, 999)
-          : (preFetched as List? ?? const []);
+              .range(offset, offset + pageSize - 1),
+        );
+      } else {
+        rows = (preFetched as List? ?? const []);
+      }
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);

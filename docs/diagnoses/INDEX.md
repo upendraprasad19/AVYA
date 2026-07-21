@@ -9,6 +9,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### program_week_projection (1 bugs)
 - 2026-07-21 c9f4a2 — >
 
+### scheduled_workouts_mutations (4 bugs)
+- 2026-07-21 d7f3a9 — >
+- 2026-05-22 b0baa5 — |
+- 2026-05-12 8f3d22 — |
+- 2026-05-12 9e2c1a — |
+
 ### exercise_logs_read_path (7 bugs)
 - 2026-07-20 a3c8e2 — >
 - 2026-06-06 e4a8b1 — >
@@ -419,11 +425,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### phase_unlock_end_to_end (1 bugs)
 - 2026-05-22 ec4d27 — |
 
-### scheduled_workouts_mutations (3 bugs)
-- 2026-05-22 b0baa5 — |
-- 2026-05-12 8f3d22 — |
-- 2026-05-12 9e2c1a — |
-
 ### proactive_coach_promotion (1 bugs)
 - 2026-05-22 8b1f33 — |
 
@@ -824,6 +825,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-07-21 | c9f4a2 | > | program_week_projection | test/contracts/program_week_projection_behavioral_test.dart |
+| 2026-07-21 | d7f3a9 | > | scheduled_workouts_mutations | test/contracts/hold_week_mechanic_behavioral_test.dart |
 | 2026-07-20 | a3c8e2 | > | exercise_logs_read_path | test/contracts/session_date_and_home_start_behavioral_test.dart |
 | 2026-07-20 | b7f30a | > | workout_completion_status | test/contracts/session_date_and_home_start_behavioral_test.dart |
 | 2026-07-19 | d4e8a1 | > | exercise_equipment_tier | test/contracts/equipment_tier_consistency_test.dart |
