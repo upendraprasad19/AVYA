@@ -13,7 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// to main.dart because GoRouter's `initialLocation` clears the URL hash
 /// before any widget mounts. The fragment is now checked in `main()` pre-`runApp()`.
 ///
-/// **2026-07-23 update 2 (diagnose <id>):** detection logic extracted from
+/// **2026-07-23 update 2 (diagnose b7d4e2):** detection logic extracted from
 /// main.dart into the pure, unit-testable `PasswordRecoveryDetector` (see
 /// `password_recovery_detector_test.dart` for the behavioral coverage this
 /// source-grep test can't provide) — main.dart now delegates instead of

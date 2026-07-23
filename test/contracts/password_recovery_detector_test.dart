@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/utils/password_recovery_detector.dart';
 
-/// Behavioral regression test for diagnose <id> (2026-07-23): the PKCE
+/// Behavioral regression test for diagnose b7d4e2 (2026-07-23): the PKCE
 /// `?code=` query-param shape Supabase now sends by default for password
 /// recovery was never recognized by the fragment-only detector, so
 /// `AppRouter.isPasswordRecovery` stayed false and the reset link fell
