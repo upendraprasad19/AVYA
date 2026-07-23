@@ -13,20 +13,30 @@ import 'package:flutter_test/flutter_test.dart';
 /// to main.dart because GoRouter's `initialLocation` clears the URL hash
 /// before any widget mounts. The fragment is now checked in `main()` pre-`runApp()`.
 ///
+/// **2026-07-23 update 2 (diagnose <id>):** detection logic extracted from
+/// main.dart into the pure, unit-testable `PasswordRecoveryDetector` (see
+/// `password_recovery_detector_test.dart` for the behavioral coverage this
+/// source-grep test can't provide) — main.dart now delegates instead of
+/// inlining the fragment check. Also adds recognition of the PKCE `?code=`
+/// query-param shape Supabase now sends by default, which the fragment-only
+/// check never covered.
+///
 /// Pins:
 /// 1. `redirectTo` URL in forgot_password_sheet.dart — must be prod domain.
-/// 2. Recovery detection in main.dart — checks URL fragment for `type=recovery`
-///    BEFORE runApp() and stashes tokens on AppRouter.
+/// 2. main.dart delegates to `PasswordRecoveryDetector.detect` BEFORE runApp()
+///    and stashes the result on AppRouter.
 /// 3. `/reset` route in app_router.dart — GoRoute registration + name.
 /// 4. `_authRedirect` exemption for `/reset` in app_router.dart.
 /// 5. splash_screen.dart applies stashed recovery session after Supabase init.
 /// 6. app_router.dart declares static token fields for stash.
+/// 7. `PasswordRecoveryDetector` recognizes both the fragment and PKCE shapes.
 void main() {
   late String forgotSheet;
   late String mainSrc;
   late String splashScreen;
   late String appRouter;
   late String resetScreen;
+  late String recoveryDetector;
 
   setUpAll(() {
     final root = Directory.current.path;
@@ -44,6 +54,9 @@ void main() {
     ).readAsStringSync();
     resetScreen = File(
       '$root/lib/features/auth/screens/reset_password_screen.dart',
+    ).readAsStringSync();
+    recoveryDetector = File(
+      '$root/lib/core/utils/password_recovery_detector.dart',
     ).readAsStringSync();
   });
 
@@ -66,16 +79,11 @@ void main() {
   });
 
   group('main.dart', () {
-    test('checks Uri.base.fragment for type=recovery before runApp()', () {
+    test('delegates to PasswordRecoveryDetector before runApp()', () {
       expect(
         mainSrc,
-        contains('Uri.base.fragment'),
-        reason: 'must parse URL fragment in main() before runApp()',
-      );
-      expect(
-        mainSrc,
-        contains("'type=recovery'"),
-        reason: 'must check for type=recovery in the fragment',
+        contains('PasswordRecoveryDetector.detect(Uri.base)'),
+        reason: 'must detect recovery via the pure detector before runApp()',
       );
       expect(
         mainSrc,
@@ -84,11 +92,11 @@ void main() {
       );
     });
 
-    test('stashes recovery tokens from fragment on AppRouter', () {
+    test('stashes recovery tokens from the detector result on AppRouter', () {
       expect(
         mainSrc,
-        contains("params['access_token']"),
-        reason: 'must extract access_token from fragment params',
+        contains('result.accessToken'),
+        reason: 'must stash access_token from the detector result',
       );
       expect(
         mainSrc,
@@ -99,6 +107,29 @@ void main() {
         mainSrc,
         contains('AppRouter.recoveryRefreshToken'),
         reason: 'must stash refresh_token on AppRouter',
+      );
+    });
+  });
+
+  group('password_recovery_detector.dart', () {
+    test('recognizes the legacy implicit-flow fragment shape', () {
+      expect(
+        recoveryDetector,
+        contains("fragment.contains('type=recovery')"),
+        reason: 'must check for type=recovery in the fragment',
+      );
+    });
+
+    test('recognizes the PKCE code query-param shape scoped to /reset', () {
+      expect(
+        recoveryDetector,
+        contains("queryParameters.containsKey('code')"),
+        reason: 'must check for the PKCE code param',
+      );
+      expect(
+        recoveryDetector,
+        contains("uri.path == resetPath"),
+        reason: 'PKCE code check must be scoped to the /reset path',
       );
     });
   });
