@@ -51,6 +51,7 @@ touched_layers_checked:
   - { tier: 2, layer: hive, status: not_applicable, evidence: "No Hive read/write in this flow — routing-only bug." }
   - { tier: 3, layer: postgres_schema, status: not_applicable, evidence: "No schema change." }
   - { tier: 6, layer: edge_function, status: not_applicable, evidence: "No Edge Function involved — Supabase Auth's built-in code-exchange handles the PKCE session, no custom EF." }
+  - { tier: 11, layer: external_services, status: verified, evidence: "Fix correctness depends on the Supabase Auth dashboard's Redirect-URL allowlist including https://app.icanbefitter.com/reset (sibling risk to diagnose e9f2a4, where the dashboard Site URL overrode redirectTo). The observed bug-report URL (https://app.icanbefitter.com/reset?code=<uuid>#/restoring) is direct evidence the allowlist already includes this exact redirectTo today — the PKCE code reached /reset intact, only the client-side classification was missing. B-pass review (docs/reviews/0fc99a56da0c-review.md, Finding 2) flagged this tier was omitted; added retroactively." }
 impact_analysis: |
   Low risk, contained to auth recovery routing. No change to
   resetPasswordForEmail's redirectTo, the Supabase dashboard Site URL, or
