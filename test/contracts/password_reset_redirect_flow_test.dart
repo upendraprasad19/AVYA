@@ -9,14 +9,21 @@ import 'package:flutter_test/flutter_test.dart';
 /// `resetPasswordForEmail` call pointed to `vercel.app` instead of
 /// `app.icanbefitter.com`, and no `/reset` route or handler existed.
 ///
+/// **2026-07-23 update:** Recovery-detection shifted from splash_screen.dart
+/// to main.dart because GoRouter's `initialLocation` clears the URL hash
+/// before any widget mounts. The fragment is now checked in `main()` pre-`runApp()`.
+///
 /// Pins:
 /// 1. `redirectTo` URL in forgot_password_sheet.dart — must be prod domain.
-/// 2. Recovery detection in splash_screen.dart — checks URL fragment
-///    for `type=recovery` BEFORE Supabase.initialize().
+/// 2. Recovery detection in main.dart — checks URL fragment for `type=recovery`
+///    BEFORE runApp() and stashes tokens on AppRouter.
 /// 3. `/reset` route in app_router.dart — GoRoute registration + name.
 /// 4. `_authRedirect` exemption for `/reset` in app_router.dart.
+/// 5. splash_screen.dart applies stashed recovery session after Supabase init.
+/// 6. app_router.dart declares static token fields for stash.
 void main() {
   late String forgotSheet;
+  late String mainSrc;
   late String splashScreen;
   late String appRouter;
   late String resetScreen;
@@ -25,6 +32,9 @@ void main() {
     final root = Directory.current.path;
     forgotSheet = File(
       '$root/lib/features/auth/widgets/forgot_password_sheet.dart',
+    ).readAsStringSync();
+    mainSrc = File(
+      '$root/lib/main.dart',
     ).readAsStringSync();
     splashScreen = File(
       '$root/lib/features/auth/screens/splash_screen.dart',
@@ -55,17 +65,61 @@ void main() {
     });
   });
 
+  group('main.dart', () {
+    test('checks Uri.base.fragment for type=recovery before runApp()', () {
+      expect(
+        mainSrc,
+        contains('Uri.base.fragment'),
+        reason: 'must parse URL fragment in main() before runApp()',
+      );
+      expect(
+        mainSrc,
+        contains("'type=recovery'"),
+        reason: 'must check for type=recovery in the fragment',
+      );
+      expect(
+        mainSrc,
+        contains('AppRouter.isPasswordRecovery = true'),
+        reason: 'must set flag when recovery detected',
+      );
+    });
+
+    test('stashes recovery tokens from fragment on AppRouter', () {
+      expect(
+        mainSrc,
+        contains("params['access_token']"),
+        reason: 'must extract access_token from fragment params',
+      );
+      expect(
+        mainSrc,
+        contains('AppRouter.recoveryAccessToken'),
+        reason: 'must stash access_token on AppRouter',
+      );
+      expect(
+        mainSrc,
+        contains('AppRouter.recoveryRefreshToken'),
+        reason: 'must stash refresh_token on AppRouter',
+      );
+    });
+  });
+
   group('splash_screen.dart', () {
-    test('checks Uri.base.fragment for type=recovery before init', () {
+    test('applies stashed recovery session after Supabase init', () {
       expect(
         splashScreen,
-        contains('Uri.base.fragment'),
-        reason: 'must parse URL fragment before Supabase.initialize()',
+        contains('auth.setSession'),
+        reason:
+            'must call setSession after Supabase init when recovery detected',
       );
       expect(
         splashScreen,
-        contains("'type=recovery'"),
-        reason: 'must check for type=recovery in the fragment',
+        contains('AppRouter.recoveryRefreshToken'),
+        reason: 'reads stashed refresh_token from AppRouter',
+      );
+      expect(
+        splashScreen,
+        contains('AppRouter.recoveryAccessToken'),
+        reason: 'reads stashed access_token from AppRouter',
       );
     });
 
@@ -83,7 +137,22 @@ void main() {
       expect(
         appRouter,
         contains('static bool isPasswordRecovery'),
-        reason: 'flag set by splash_screen, read by reset_password_screen',
+        reason: 'flag set by main, read by reset_password_screen',
+      );
+    });
+
+    test('declares static token stash fields', () {
+      expect(
+        appRouter,
+        contains('static String? recoveryAccessToken'),
+        reason:
+            'stashed access_token from recovery URL fragment, set by main',
+      );
+      expect(
+        appRouter,
+        contains('static String? recoveryRefreshToken'),
+        reason:
+            'stashed refresh_token from recovery URL fragment, set by main',
       );
     });
 

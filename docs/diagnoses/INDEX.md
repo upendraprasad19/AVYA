@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### auth_password_reset_timing (1 bugs)
+- 2026-07-23 9f5c41 — |
+
 ### auth_password_reset (1 bugs)
 - 2026-07-22 e9f2a4 — |
 
@@ -827,6 +830,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-23 | 9f5c41 | \| | auth_password_reset_timing | test/contracts/password_reset_redirect_flow_test.dart |
 | 2026-07-22 | e9f2a4 | \| | auth_password_reset | test/contracts/password_reset_redirect_flow_test.dart |
 | 2026-07-21 | c9f4a2 | > | program_week_projection | test/contracts/program_week_projection_behavioral_test.dart |
 | 2026-07-21 | d7f3a9 | > | scheduled_workouts_mutations | test/contracts/hold_week_mechanic_behavioral_test.dart |

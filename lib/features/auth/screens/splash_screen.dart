@@ -118,20 +118,27 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// Initializes Supabase, seeds first-launch data, and sets up OneSignal.
   /// Safe to call multiple times — each service is idempotent.
   Future<void> _runDeferredInit() async {
-    // Check URL fragment for `type=recovery` BEFORE Supabase.initialize()
-    // consumes it. The Supabase SDK fires PASSWORD_RECOVERY during init,
-    // and there's no way to subscribe to onAuthStateChange before init runs.
-    if (kIsWeb) {
-      try {
-        final fragment = Uri.base.fragment;
-        AppRouter.isPasswordRecovery = fragment.contains('type=recovery');
-      } catch (_) {
-        // Non-web or Uri parsing failure — no recovery detection.
-      }
-    }
-
     // Supabase must come first — auth state is needed by _navigateNext.
     await SupabaseService.instance.initialize();
+
+    // Password recovery: GoRouter cleared the URL hash before this widget
+    // mounted (initialLocation: '/splash' calls history.replaceState), so
+    // Supabase.initialize() won't auto-detect the recovery tokens. Manually
+    // set the session from the tokens captured in main.dart.
+    if (AppRouter.isPasswordRecovery && !SupabaseService.instance.isAuthenticated) {
+      final rt = AppRouter.recoveryRefreshToken;
+      if (rt != null && rt.isNotEmpty) {
+        try {
+          await SupabaseService.instance.client.auth.setSession(
+            rt,
+            accessToken: AppRouter.recoveryAccessToken,
+          );
+        } catch (e, st) {
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'splash_recovery_set_session'));
+        }
+      }
+    }
 
     // Obs 4 (2026-06-05): warm the backend connection NOW (parallel with the
     // ~3s branding) so RestoringScreen's restore avoids the ~24s cold-start
@@ -258,7 +265,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!mounted) return;
 
     // Password recovery flow — route to reset screen instead of normal
-    // post-auth gate. Set by _runDeferredInit via URL fragment check.
+    // post-auth gate. Set by main() via URL fragment capture before runApp().
     if (AppRouter.isPasswordRecovery) {
       context.go('/reset');
       return;

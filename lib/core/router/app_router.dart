@@ -64,10 +64,21 @@ class AppRouter {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>(debugLabel: 'root');
 
-  /// Set by [SplashScreen] when the URL hash contains `type=recovery`
+  /// Set by [main] when the URL hash contains `type=recovery`
   /// (password reset from email link). [ResetPasswordScreen] reads this
   /// to verify the user arrived through a legitimate recovery flow.
+  /// Captured in [main] BEFORE [GoRouter] initializes so the fragment
+  /// is intact (fix: timing hole where [GoRouter]'s `initialLocation`
+  /// clears the hash via `history.replaceState` before any widget mounts).
   static bool isPasswordRecovery = false;
+
+  /// Stashed `access_token` from the password-recovery URL fragment.
+  /// Captured alongside [isPasswordRecovery] in [main]; used by
+  /// [SplashScreen] to manually set the Supabase recovery session.
+  static String? recoveryAccessToken;
+
+  /// Stashed `refresh_token` from the password-recovery URL fragment.
+  static String? recoveryRefreshToken;
 
   static final GoRouter router = GoRouter(
     navigatorKey: navigatorKey,

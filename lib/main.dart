@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/router/app_router.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -91,6 +92,26 @@ Future<void> main() async {
 
   // Supabase, SeedService, and OneSignal are deferred to SplashScreen
   // so the UI appears immediately instead of after a 30-50s black screen.
+
+  // 5. Password recovery: capture URL fragment BEFORE GoRouter initializes.
+  //    GoRouter's `initialLocation: '/splash'` calls history.replaceState
+  //    during widget-tree bootstrap, which strips the browser hash. If we
+  //    wait until SplashScreen._runDeferredInit, the fragment is already
+  //    gone and Supabase won't auto-detect the recovery tokens either.
+  //    (Bug: b49ed15b implementation missed this timing; fixed here.)
+  if (kIsWeb) {
+    try {
+      final fragment = Uri.base.fragment;
+      if (fragment.contains('type=recovery')) {
+        AppRouter.isPasswordRecovery = true;
+        final params = Uri.splitQueryString(fragment);
+        AppRouter.recoveryAccessToken = params['access_token'];
+        AppRouter.recoveryRefreshToken = params['refresh_token'];
+      }
+    } catch (_) {
+      // Non-web or Uri parsing failure — no recovery detection needed.
+    }
+  }
 
   await runZonedGuarded(
     () async {
