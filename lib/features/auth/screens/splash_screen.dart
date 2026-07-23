@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/router/app_router.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
@@ -117,6 +118,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// Initializes Supabase, seeds first-launch data, and sets up OneSignal.
   /// Safe to call multiple times — each service is idempotent.
   Future<void> _runDeferredInit() async {
+    // Check URL fragment for `type=recovery` BEFORE Supabase.initialize()
+    // consumes it. The Supabase SDK fires PASSWORD_RECOVERY during init,
+    // and there's no way to subscribe to onAuthStateChange before init runs.
+    if (kIsWeb) {
+      try {
+        final fragment = Uri.base.fragment;
+        AppRouter.isPasswordRecovery = fragment.contains('type=recovery');
+      } catch (_) {
+        // Non-web or Uri parsing failure — no recovery detection.
+      }
+    }
+
     // Supabase must come first — auth state is needed by _navigateNext.
     await SupabaseService.instance.initialize();
 
@@ -243,6 +256,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   void _navigateNext() {
     if (!mounted) return;
+
+    // Password recovery flow — route to reset screen instead of normal
+    // post-auth gate. Set by _runDeferredInit via URL fragment check.
+    if (AppRouter.isPasswordRecovery) {
+      context.go('/reset');
+      return;
+    }
 
     final isAuthenticated = SupabaseService.instance.isAuthenticated;
 

@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/auth/screens/splash_screen.dart';
 import 'package:icanbefitter/features/auth/screens/sign_in_screen.dart';
+import 'package:icanbefitter/features/auth/screens/reset_password_screen.dart';
 import 'package:icanbefitter/features/auth/screens/restoring_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/mission_brief_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/onboarding_chat_screen.dart';
@@ -63,6 +64,11 @@ class AppRouter {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>(debugLabel: 'root');
 
+  /// Set by [SplashScreen] when the URL hash contains `type=recovery`
+  /// (password reset from email link). [ResetPasswordScreen] reads this
+  /// to verify the user arrived through a legitimate recovery flow.
+  static bool isPasswordRecovery = false;
+
   static final GoRouter router = GoRouter(
     navigatorKey: navigatorKey,
     initialLocation: '/splash',
@@ -90,6 +96,23 @@ class AppRouter {
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
           child: const SignInScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      ),
+
+      // ── Password reset route — reachable from email link ─────────
+      // SplashScreen routes here when the URL hash contains a recovery
+      // token. Handles: new password + confirm → auth.updateUser.
+      // Exempt from _authRedirect so it works without a session.
+      GoRoute(
+        path: '/reset',
+        name: 'resetPassword',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const ResetPasswordScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
@@ -564,6 +587,9 @@ class AppRouter {
     // /restoring is the post-auth gate screen — always passthrough so the
     // decision tree can run. Authentication check is done inside the screen.
     final isOnRestoring = state.matchedLocation == '/restoring';
+    // /reset is the password-reset screen — reachable from an email link
+    // WITHOUT a normal session. Must bypass all auth guards.
+    final isOnReset = state.matchedLocation == '/reset';
     // Treat every `/onboarding*` sub-route (welcome / goal / stats /
     // plan / chat / mission-brief) as "on onboarding" so the stepped flow
     // can navigate between its own screens without the not-onboarded redirect
@@ -591,6 +617,10 @@ class AppRouter {
 
     // Let the post-auth gate handle its own branching.
     if (isOnRestoring) return null;
+
+    // Password reset screen — always passthrough. User has no normal session
+    // during recovery; the screen itself guards against accidental access.
+    if (isOnReset) return null;
 
     // Idempotency: already-inducted users landing on /coach/induction or
     // /coach/muster (deep-link, hot reload, back-navigation) get bounced to

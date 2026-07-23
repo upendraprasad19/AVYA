@@ -54,7 +54,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
     try {
       await SupabaseService.instance.client.auth.resetPasswordForEmail(
         email,
-        redirectTo: 'https://icanbefitter.vercel.app/reset',
+        redirectTo: 'https://app.icanbefitter.com/reset',
       );
       if (!mounted) return;
       Navigator.of(context).pop();

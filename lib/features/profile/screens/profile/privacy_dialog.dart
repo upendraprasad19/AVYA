@@ -42,7 +42,7 @@ extension _PrivacyDialog on _ProfileScreenState {
             ),
             const SizedBox(height: 16),
             GestureDetector(
-              onTap: () => _launchUrl('https://icanbefitter.vercel.app/privacy'),
+              onTap: () => _launchUrl('https://icanbefitter.com/privacy'),
               child: Row(
                 children: [
                   const Icon(Icons.open_in_new, size: 14, color: AppColors.accent),
@@ -59,7 +59,7 @@ extension _PrivacyDialog on _ProfileScreenState {
             ),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: () => _launchUrl('https://icanbefitter.vercel.app/terms'),
+              onTap: () => _launchUrl('https://icanbefitter.com/terms'),
               child: Row(
                 children: [
                   const Icon(Icons.open_in_new, size: 14, color: AppColors.accent),
