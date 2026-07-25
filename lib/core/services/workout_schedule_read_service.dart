@@ -876,10 +876,31 @@ class WorkoutScheduleReadService {
   /// week" rule the past-phase chips use, so the CURRENT phase's week chips can
   /// show the same ✓ (Obs 3a, 2026-06-05). Future / not-yet-dated weeks have no
   /// completed rows → naturally excluded.
+  /// ⚠ HOLD ROWS ARE EXCLUDED. [completedWeekNumbersFrom] maps a date onto a
+  /// week number by walking `plan_start + 7k`, but a hold week is NOT on that
+  /// grid — `holdWeek()` places it in the calendar week containing *today*
+  /// (`normalizeToMonday(nowWall())`), so a user who lapses and returns late
+  /// leaves a gap. A completed hold day therefore lands on whatever week index
+  /// its date happens to hit (H1 taken 3 weeks late → week 8), crediting a ✓ to
+  /// a PHASE II/III chip for a week that was never trained.
+  ///
+  /// Today that ✓ is invisible only because `_WeekChip` suppresses it on a
+  /// locked chip (`week_selector.dart`, `hasCompletedDay && !isLocked`) and a
+  /// holder is by definition free. That guard evaporates the instant they
+  /// upgrade — `week_selector` watches `subscriptionInfoProvider`, so the chip
+  /// unlocks BEFORE any phase advance moves `plan_start`, and the now-unlocked
+  /// chip is tappable straight into "Week 5 hasn't started yet".
+  ///
+  /// Hold weeks carry their own ✓ via [HoldWeekInfo.isCompleted], computed
+  /// independently in [holdWeeks], so excluding them here costs nothing.
   Set<int> completedWeekNumbers({int maxWeek = 12}) {
     return completedWeekNumbersFrom(
       getPlanStartDate(),
-      (date) => getScheduleForDate(date)?['status'] == 'completed',
+      (date) {
+        final row = getScheduleForDate(date);
+        if (row == null || row['is_hold'] == true) return false;
+        return row['status'] == 'completed';
+      },
       maxWeek: maxWeek,
     );
   }

@@ -222,8 +222,20 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                         // Phase-relative (founder decision 2026-06-06): real
                         // phase name from current_phase + week WITHIN the phase
                         // (1-4), not the clamped 1-4 value framed as "OF 12".
-                        'DEPLOYMENT 01  ·  ${plan.phaseName.toUpperCase()}'
-                        '  ·  WK ${plan.currentWeek} OF 4',
+                        //
+                        // While HOLDING, drop the week counter entirely. A hold
+                        // week sits OUTSIDE the phase's 4 weeks, so there is no
+                        // honest "WK n OF 4" for it — `getCurrentWeekNumber()`
+                        // clamps to 4 and would print "WK 4 OF 4" directly under
+                        // the `HOLDING · Hn` pill this screen also renders (live
+                        // walkthrough 2026-07-25: the two sat ~40px apart in the
+                        // same scroll view). Same rule the letterhead eyebrow
+                        // already applies — see plan_header.dart. The pill owns
+                        // the week identity during a hold.
+                        holdStatus.isHolding
+                            ? 'DEPLOYMENT 01  ·  ${plan.phaseName.toUpperCase()}'
+                            : 'DEPLOYMENT 01  ·  ${plan.phaseName.toUpperCase()}'
+                                '  ·  WK ${plan.currentWeek} OF 4',
                         style: AppTypography.mono.copyWith(
                           color: AppColors.textMute,
                           letterSpacing: 2,

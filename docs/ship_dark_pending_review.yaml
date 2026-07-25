@@ -53,4 +53,129 @@ pending:
       SAME flag as the row above — flipping it on must clear BOTH entries in
       the one flip-on commit, which needs the full ×2 + bpass: accepted.
 
+  - flag: enable_hold_weeks
+    branch: hold-display-fixes
+    build_commit: "(uncommitted — fill sha at commit)"
+    build_date: 2026-07-25
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Two converged fixes found by the 2026-07-25 LIVE walkthrough on test7 +
+      two independent context-blind plan reviews: D1 (the deployment banner
+      printed "WK 4 OF 4" ~40px under the HOLDING·Hn pill) and L1 (a completed
+      hold day credited a ✓ to a padlocked PHASE II/III chip — masked only by
+      the !isLocked guard, which evaporates the instant a holder upgrades).
+      Both key on hold state, so both are inert while the flag is OFF.
+      The SAME reviews returned NOT CONVERGED on four other proposed fixes;
+      per §4.12.1 the unit was split and those became the flip_on_blockers
+      below.
+
+# ── HARD PRECONDITIONS for flipping enable_hold_weeks ─────────────────────
+# Not a wish-list. The flip-on commit already requires the full ×2 + bpass
+# (§4.12.4); this is the checklist that review must show closed. Every item was
+# found by live verification or independent review on 2026-07-25 and every one
+# is currently UNFIXED. A holder today would be told a falsehood by the coach
+# and by the Sunday push.
+flip_on_blockers:
+  flag: enable_hold_weeks
+  raised: 2026-07-25
+  items:
+    - id: FOB-1
+      title: "Week-identity coherence — adopt 'a hold suppresses the week number; Hn is the identity'"
+      why: >
+        The shipped UI already chose this rule (plan_header.dart drops the week
+        counter while holding, "a hold week has no honest WK n OF m"), and D1
+        extends it to the banner. But 7+ surfaces still print the clamped week 4
+        for a holder: home_screen.dart (eyebrow), profile_provider.dart ->
+        profile_content.dart, journey_timeline.dart, phase_roadmap_screen.dart,
+        reports_screen.dart (the SHARE-AS-VIDEO stamp), ai_snapshot_builder.dart
+        (x2), and telegram-bot/bot.py. Meanwhile day_detail_sheet.dart and
+        preview_workout_screen.dart read the ROW and show week 6 — so the app
+        already contradicts itself across surfaces.
+      do_not: >
+        Do NOT project `4 + ordinal` into user_progress.current_week. That
+        manufactures the exact number the UI ruled dishonest AND reintroduces
+        the three-surface drift diagnose c9f4a2 closed. If any projected value
+        is ever needed it must be programWeekFor(phase, ...) — literal
+        `4 + ordinal` demotes a phase-2 holder from 8 to 5.
+    - id: FOB-2
+      title: "Weekly streak + streaks row are dead during a hold"
+      why: >
+        getCurrentWeekNumber() clamps to 4, so last_streak_week never advances,
+        current_streak_weeks freezes for the whole hold (stalling streak-week
+        badges), and the streaks row key stays pinned to week 4's Monday — every
+        hold completion REWRITES week 4's row and hold weeks get none.
+      how: >
+        Derive both the week identity and the row key from HoldWeekInfo.weekStart
+        BY DATE. Never `plan_start + 7k`: holdWeek() places the hold in the
+        calendar week containing today, so a late return leaves a gap (pinned by
+        the LATE RETURN case in hold_display_read_path_test.dart — ordinal 1 sits
+        at date-week 8). last_streak_week MUST stay an int (train_provider casts
+        `as int?` and completeWorkout has no try/catch). Cloud streaks is keyed
+        UNIQUE (user_id, week_start) — a DATE — so a new Monday is a new row, no
+        migration.
+    - id: FOB-3
+      title: "The AI coach asserts a falsehood to every holder, every week"
+      why: >
+        The snapshot sends current_week: 4 for EVERY hold day at EVERY ordinal
+        (holds start at plan_start+28 so the clamp always yields 4). Combined
+        with captain_manual.ts ("free locks at Phase I after 4 weeks") and
+        tier: free, the model synthesizes "final week of Phase I / upgrade" —
+        a repeating false milestone aimed at the user who just chose to stay.
+        Nothing in supabase/functions/ reads is_hold or hold_ordinal.
+      how: >
+        Add a `hold` block to the snapshot AND add 'hold' to the keep set in
+        trimSnapshotToBudget — it halves non-kept maps by insertion order and
+        would silently drop the meaning-carrying fields. Teach captain_manual.ts
+        what a hold is. Requires an ai-proxy deploy (own authorization, §4.3).
+    - id: FOB-4
+      title: "Sunday push and weekly report need hold copy, not a number"
+      why: >
+        weekly-recap-ready/index.ts interpolates current_week verbatim
+        ("Week N debrief ready") and weekly-report/index.ts feeds it to Gemini.
+        Whatever value is projected, the copy is wrong for a hold week. Both
+        need a hold branch — which means redeploys, so the earlier
+        "no EF redeploy needed" framing was false.
+    - id: FOB-5
+      title: "Holds are unobservable, and the events corrupt the one live metric"
+      why: >
+        The five phase_1_day_29_* events have ZERO consumers repo-wide — no
+        query, cron, dashboard or alert. Holds taken / hold->convert /
+        hold->churn are all unmeasurable, and the retention thesis rests on this
+        mechanic. Worse, founder_metrics_engagement() counts
+        ai_coach_interactions with no channel filter, so every app_event row
+        inflates ai_messages_today.
+      how: >
+        Add a hold_week_started event with a real consumer, and add
+        `where channel = 'app'` to the metric.
+    - id: FOB-6
+      title: "Selectable hold weeks (D2) — 6 lifecycle traps, do not ship naively"
+      why: >
+        During a hold the THIS WEEK rows show the phase's ORIGINAL week 4 while
+        the user trains the hold week, and both the W4 chip and the current H
+        chip render gold.
+      traps: >
+        (a) extracting the row->WorkoutDayData mapping depends on loop var `w`
+        for dayNumber, so the refactor runs for EVERY user and is NOT hold-gated
+        — it needs a characterization test before extraction; (b) a notifier
+        watching holdStatusProvider is reset by every currentPlanProvider
+        invalidation, clobbering manual selection; (c) needs the
+        authUserIdTokenProvider cross-account guard every sibling Train provider
+        carries; (d) the hero card sources TODAY unconditionally, so selecting a
+        past hold shows today's workout above another hold's rows; (e)
+        expandedDayProvider must collapse on selection or a stale index carries
+        over; (f) terminal states (hold elapses, PRO advance empties holds) are
+        undefined.
+    - id: FOB-7
+      title: "Residuals"
+      why: >
+        currentPhaseCompletionRate's phase>=2 branch scans getWeek(5..12) by
+        DATE, folding hold days into the PRO-advance gate input;
+        PlanIntegrityReconciler scans weeks 1-4 only, so a hold week's lost
+        exercises are never healed — the exact failure it exists to cure, on the
+        only week a free user is training; ai-media-proxy embeds the snapshot
+        with no size check and no FC7 untrusted-data wrapper (unlike ai-proxy);
+        and ai-proxy's size-envelope comment cites the wrong line for its own
+        10K check.
+
 resolved: []

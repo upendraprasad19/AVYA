@@ -2145,6 +2145,15 @@ concepts:
           "any completed day that week" rule. completedWeekNumbersFrom
           (planStart, isCompletedOn, {maxWeek}) is the pure, Hive-free
           decision (Hermes L1/L37 behavioral coverage).
+          ⚠ HOLD ROWS ARE EXCLUDED from the predicate (2026-07-25). The pure
+          helper maps date→week via `plan_start + 7k`, but holdWeek() places a
+          hold in the calendar week containing TODAY, so a hold is NOT on that
+          grid — a late return leaves a gap and a completed hold day lands on an
+          arbitrary index (ordinal 1 can sit at date-week 8). That credited a ✓
+          to a padlocked PHASE II/III chip; invisible only because _WeekChip
+          suppresses the tick when isLocked, a guard that evaporates the moment
+          the holder upgrades. Hold weeks carry their own ✓ via
+          HoldWeekInfo.isCompleted, computed independently in holdWeeks().
       - file: lib/features/train/widgets/week_selector.dart
         line_range: 1-9999
         method: _PhaseGroup → _WeekChip (hasCompletedDay)
@@ -7631,7 +7640,7 @@ concepts:
           user's column can't stay stale). The projection decision is behaviorally
           tested via the helper (rule 21), not just source-grepped.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1071-1086
+        line_range: 1092-1107
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart

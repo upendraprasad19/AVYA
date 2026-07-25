@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### hold_display_read_path (1 bugs)
+- 2026-07-25 c8b3f2 — >
+
 ### auth_password_reset_pkce_detection (1 bugs)
 - 2026-07-23 b7d4e2 — |
 
@@ -833,6 +836,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-25 | c8b3f2 | > | hold_display_read_path | test/contracts/hold_display_read_path_test.dart |
 | 2026-07-23 | b7d4e2 | \| | auth_password_reset_pkce_detection | test/contracts/password_recovery_detector_test.dart |
 | 2026-07-23 | 9f5c41 | \| | auth_password_reset_timing | test/contracts/password_reset_redirect_flow_test.dart |
 | 2026-07-22 | e9f2a4 | \| | auth_password_reset | test/contracts/password_reset_redirect_flow_test.dart |
