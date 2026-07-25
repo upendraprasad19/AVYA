@@ -2617,7 +2617,7 @@ concepts:
     restore_methods: [_restoreWorkoutPlan, _restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider, streakProvider]
     ist_sites:
-      - { file: lib/core/services/workout_schedule_read_service.dart, line: 248, fn: generateAndScheduleFromDate }
+      - { file: lib/core/services/workout_schedule_read_service.dart, line: 288, fn: generateAndScheduleFromDate }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.put.*schedule.*status.*planned", reason: "Never overwrite status=completed; check guard first" }
     class_constraints: |
@@ -2660,7 +2660,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1857-1884
+        line_range: 1937-1964
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -5948,6 +5948,65 @@ concepts:
         method: WorkoutScheduleWriteService
     reader_manifest_complete: false
 
+  - concept: hold_display_read_path
+    domain: workout
+    behavioral_test_path: test/contracts/hold_display_read_path_test.dart
+    description: |
+      How a materialized hold week becomes VISIBLE (hold-display batch, Slices
+      2-6). holdWeek() stamps is_hold + hold_ordinal on each schedule_* row;
+      this is the read half.
+
+      Hold weeks are addressed by ORDINAL and DATE, never by week index. The
+      writer stamps week = 4 + ordinal, but CurrentPlanData.weeks only ever
+      holds the phase's 4 weeks (train_provider hardcodes totalWeeks = 4 for
+      phase <= 1), so getWeek(5) is empty — a hold week is invisible to every
+      week-index-keyed reader. That is why the today card takes a date-sourced
+      branch and the H chips never drive selectedWeekProvider.
+
+      The deload cadence is NOT stored: the writer computes `n % 4 == 0` only
+      to pick a source week. isDeloadHold(n) is the display-side half of that
+      contract and MUST mirror it.
+
+      Ship-dark: holdStatusProvider is the SINGLE branch point every hold
+      surface reads, and returns HoldStatusData.empty whenever
+      enable_hold_weeks is OFF — so all of it is inert until the flag flips.
+      Deliberately does NOT touch getCurrentWeekNumber / getProgramWeek /
+      currentPhaseCompletionRate (still clamped) — see
+      docs/plan-reviews/free-tier-hold-findings.md.
+    writers:
+      - file: lib/core/services/workout_schedule_write_service.dart
+        line_range: 235-353
+        method: holdWeek → stamps is_hold (bool) + hold_ordinal (int, gap-proof max+1)
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 762-847
+        method: isDeloadHold / _holdDatesByOrdinal / holdOrdinalForDate / holdWeeks / holdWeekSessionProgress
+        semantic: latest
+        fields_read: [schedule_<date>.is_hold, schedule_<date>.hold_ordinal, schedule_<date>.status, schedule_<date>.type]
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 832-892
+        method: HoldStatusData / holdStatusProvider — the single flag branch point for every hold UI surface
+        semantic: latest
+        fields_read: [holdWeeks(), holdOrdinalForDate(), holdWeekSessionProgress()]
+      - file: lib/features/train/widgets/hold_chip_group.dart
+        method: HoldChipGroup / HoldWeekSheet — H-n chips, ✓ on completed (same rule as W chips), dashed upcoming-deload preview
+        semantic: latest
+        fields_read: [HoldStatusData.holds, HoldStatusData.todayHoldOrdinal]
+      - file: lib/features/train/screens/train/plan_header.dart
+        method: _buildPlanHeader / _buildHoldingPill — HOLDING · Hn pill + SESSIONS tally (the selected week's tallies describe the phase's ORIGINAL week 4 during a hold)
+        semantic: latest
+        fields_read: [HoldStatusData.isHolding, HoldStatusData.todayHoldOrdinal, HoldStatusData.sessionsCompleted, HoldStatusData.sessionsTotal]
+      - file: lib/features/train/screens/train/hero_cards.dart
+        method: _buildTodayHeroCard(holdDay:, isHolding:) — date-sourced today card; the ONLY way a hold week's workout is reachable
+        semantic: latest
+        fields_read: [workoutDayForDate(nowWall())]
+    class_constraints: |
+      Hold readers MUST NOT inherit the 12-week caps other schedule readers
+      apply — free users may hold indefinitely (founder decision #4).
+      isDeloadHold MUST stay `ordinal % 4 == 0`, mirroring holdWeek().
+      No hold surface may read PlanEngineFlags or Hive directly — all of them
+      go through holdStatusProvider so the flag-OFF guarantee holds in one place.
+
   # ── APK obs batch 2026-06-02 ─────────────────────────────────────────────
 
   - concept: phase_progress_current_phase
@@ -6095,16 +6154,21 @@ concepts:
         semantic: pass-through
     contract_test_path: test/contracts/weight_trend_chart_gap_connect_test.dart
     readers:
-      - file: lib/features/train/widgets/plan_expired_card.dart
-        line_range: 55-97
-        method: _handleRedoWeek4 → PlanEngineFlags.holdWeeksEnabled ? holdWeek() : redoWeek4()
+      - file: lib/features/train/widgets/keep_training_phase1_action.dart
+        line_range: 29-36
+        method: runFreeTierRepeatWrite → PlanEngineFlags.holdWeeksEnabled ? holdWeek() : redoWeek4() — the SINGLE place the free-tier flag branch lives (hold-display batch de-duplicated it from two independently-edited call sites)
         semantic: latest
         fields_read: [schedule_<date>.* (via holdWeek/redoWeek4 copy loop)]
       - file: lib/features/train/widgets/keep_training_phase1_action.dart
-        line_range: 19-43
-        method: keepTrainingPhase1 → flag ? holdWeek() : redoWeek4() (H5 — surfaces failure, no blind /train nav); wired from graduation_screen KEEP TRAINING PHASE 1
+        line_range: 38-57
+        method: keepTrainingPhase1 → runFreeTierRepeatWrite (H5 — surfaces failure, no blind /train nav); wired from graduation_screen KEEP TRAINING PHASE 1
         semantic: latest
         fields_read: [schedule_<date>.* via holdWeek/redoWeek4]
+      - file: lib/features/train/widgets/plan_expired_card.dart
+        line_range: 56-99
+        method: _handleRedoWeek4 → runFreeTierRepeatWrite; flag-aware snackbar copy ("week 4 again" is false for a hold)
+        semantic: latest
+        fields_read: [schedule_<date>.* (via holdWeek/redoWeek4 copy loop)]
     forbidden_legacy_patterns:
       - { pattern: "WorkoutScheduleService\\.instance\\.(markCompleted|markSkipped|pauseRange|redoWeek4|copyWeek)", reason: "Use workoutScheduleWriteServiceProvider after A2 split." }
     class_constraints: |
@@ -7567,7 +7631,7 @@ concepts:
           user's column can't stay stale). The projection decision is behaviorally
           tested via the helper (rule 21), not just source-grepped.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 898-912
+        line_range: 1071-1086
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart

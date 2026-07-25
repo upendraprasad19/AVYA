@@ -3,8 +3,18 @@ part of 'screen.dart';
 extension _HeroCards on _TrainScreenState {
   // ── 2. Today's Workout Hero Card ──────────────────────────────
 
+  /// [holdDay] / [isHolding] — the free-tier hold-week branch. During a hold,
+  /// the by-week lookup below CANNOT find today: `holdWeek()` stamps hold rows
+  /// `week = 4 + ordinal`, but `plan.weeks` only ever holds the phase's 4 weeks,
+  /// so `getWeek(plan.currentWeek)` is the ORIGINAL week 4 (last month's dates)
+  /// and no row matches today. [holdDay] is the date-keyed row for today —
+  /// the same `schedule_<date>` source Home's Today card reads — and becomes
+  /// the source of truth for the card when [isHolding]. Null [holdDay] while
+  /// holding means today is a rest day (or has no exercises), which falls
+  /// through to the same rest / empty handling as any other day.
   Widget _buildTodayHeroCard(BuildContext context, CurrentPlanData plan,
-      WorkoutDayData? todayWorkout) {
+      WorkoutDayData? todayWorkout,
+      {WorkoutDayData? holdDay, bool isHolding = false}) {
     // Always use current week data for today lookup (W2 fix).
     final currentWeekDays = plan.getWeek(plan.currentWeek);
     final todayStr = istTodayStr();
@@ -20,6 +30,11 @@ extension _HeroCards on _TrainScreenState {
       }
     }
 
+    if (isHolding) {
+      todayDay = holdDay;
+      todayWorkout = holdDay;
+    }
+
     final isRestDay = todayDay?.isRest ?? (todayWorkout == null);
     final isDoneToday = todayDay?.isDone ?? false;
 
@@ -30,9 +45,9 @@ extension _HeroCards on _TrainScreenState {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "TODAY'S WORKOUT",
+            isHolding ? 'TODAY · HOLD WEEK' : "TODAY'S WORKOUT",
             style: AppTypography.mono.copyWith(
-              color: AppColors.textMute,
+              color: isHolding ? AppColors.accent : AppColors.textMute,
               letterSpacing: 2,
             ),
           ),

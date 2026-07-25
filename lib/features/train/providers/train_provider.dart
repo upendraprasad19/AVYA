@@ -16,6 +16,8 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/exercise_display.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -808,6 +810,84 @@ final phaseArcProvider = Provider<PhaseArcData?>((ref) {
 final deloadReasonProvider = Provider<String?>((ref) {
   ref.watch(currentPlanProvider); // rebuild on (re)materialize / rollover un-deload
   return WorkoutScheduleService.instance.currentDeloadReason();
+});
+
+// ── Free-tier "Hold the Line" display state ──────────────────────
+
+/// Read-only display state for the free-tier hold mechanic (ship-dark behind
+/// `enable_hold_weeks`).
+///
+/// This is the **single branch point** every hold-aware UI surface reads —
+/// widgets never touch `PlanEngineFlags` or Hive directly. When the flag is OFF
+/// this is always [HoldStatusData.empty], so every consumer renders exactly what
+/// it rendered before the hold surfaces existed (the byte-identical-when-OFF
+/// property the ship-dark tier rests on; pinned by the `ship-dark` group in
+/// `test/contracts/hold_display_read_path_test.dart`, which reads THIS provider
+/// through a ProviderContainer with hold rows present and the flag OFF).
+///
+/// Hold weeks deliberately do NOT flow through `CurrentPlanData.currentWeek` /
+/// `getCurrentWeekNumber()`, which stay clamped to the phase's 1-4. Hold rows are
+/// stamped `week = 4 + ordinal`, and `CurrentPlanData.weeks` only holds 4 entries
+/// for phase 1, so `getWeek(5)` is empty — holds are addressed by ORDINAL and
+/// DATE instead. See `docs/plan-reviews/free-tier-hold-findings.md`.
+class HoldStatusData {
+  /// True when TODAY falls inside a materialized hold week.
+  final bool isHolding;
+
+  /// The hold number covering today (H1, H2, …), or null when not holding.
+  final int? todayHoldOrdinal;
+
+  /// Every materialized hold week, ordinal-ascending — the H-chip strip.
+  final List<HoldWeekInfo> holds;
+
+  /// Completed / scheduled workout days within TODAY's hold week (0/0 when not
+  /// holding) — the "4 / 5 SESSIONS" readout.
+  final int sessionsCompleted;
+  final int sessionsTotal;
+
+  const HoldStatusData({
+    this.isHolding = false,
+    this.todayHoldOrdinal,
+    this.holds = const [],
+    this.sessionsCompleted = 0,
+    this.sessionsTotal = 0,
+  });
+
+  /// The flag-OFF / never-held state.
+  static const HoldStatusData empty = HoldStatusData();
+
+  /// Fraction of this hold week's sessions completed, in `[0, 1]`. 0 when the
+  /// week has no scheduled workout days (guards a divide-by-zero on an all-rest
+  /// week).
+  double get sessionProgress =>
+      sessionsTotal == 0 ? 0 : sessionsCompleted / sessionsTotal;
+}
+
+final holdStatusProvider = Provider<HoldStatusData>((ref) {
+  ref.watch(currentPlanProvider); // rebuild on (re)materialize / hold write
+  if (!PlanEngineFlags.holdWeeksEnabled) return HoldStatusData.empty;
+
+  final readService = ref.read(workoutScheduleReadServiceProvider);
+  final holds = readService.holdWeeks();
+  if (holds.isEmpty) return HoldStatusData.empty;
+
+  // `nowWall()` (not DateTime.now()) so the dev time-travel / year-sim seam that
+  // holdWeek() writes against also drives what "today" means when reading back.
+  final todayOrdinal = readService.holdOrdinalForDate(nowWall());
+  if (todayOrdinal == null) {
+    // Past holds exist but today isn't one of them (e.g. the user advanced, or
+    // the hold week has elapsed). Show the chips; don't claim to be holding.
+    return HoldStatusData(holds: holds);
+  }
+
+  final progress = readService.holdWeekSessionProgress(todayOrdinal);
+  return HoldStatusData(
+    isHolding: true,
+    todayHoldOrdinal: todayOrdinal,
+    holds: holds,
+    sessionsCompleted: progress.completed,
+    sessionsTotal: progress.total,
+  );
 });
 
 // ── Selected Week ────────────────────────────────────────────────
