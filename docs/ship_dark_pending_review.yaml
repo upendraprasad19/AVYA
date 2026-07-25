@@ -25,15 +25,32 @@
 pending:
   - flag: enable_hold_weeks
     branch: hold-mechanic
-    build_commit: "(uncommitted — fill sha at commit)"
+    build_commit: df5e38b0
     build_date: 2026-07-21
     flip_reviewed: false
     flip_commit: null
     note: >
-      This batch is NOT the lighter 1-round tier — the durability fixes (#1
-      re-anchor, #4 pagination) are LIVE for all users, so the build got the
-      FULL ×2 review (docs/plan-reviews/hold-mechanic.md, review_rounds: 2).
-      Tracked here only so the default-OFF flag can't be flipped later without
-      its own flip-on ×2 (§4.12.4) — the flip-on lands with the display slices.
+      Slice 1 (the holdWeek WRITER). NOT the lighter 1-round tier — the
+      durability fixes (#1 re-anchor, #4 pagination) are LIVE for all users, so
+      the build got the FULL ×2 review (docs/plan-reviews/hold-mechanic.md,
+      review_rounds: 2). Merged to main as 7ca850d9. Tracked here so the
+      default-OFF flag can't be flipped later without its own flip-on ×2
+      (§4.12.4). Placeholder sha resolved by the hold-display batch.
+
+  - flag: enable_hold_weeks
+    branch: hold-display
+    build_commit: "(uncommitted — fill sha at commit)"
+    build_date: 2026-07-25
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Slice 2-6 (the DISPLAY for the same flag) — this one IS the §4.12.4
+      lighter build tier (review_rounds: 1, tier: ship_dark_build). Every new
+      surface reads one branch point, holdStatusProvider, which returns
+      HoldStatusData.empty whenever the flag is OFF; the flag-OFF group in
+      test/contracts/hold_display_read_path_test.dart is the byte-identical
+      evidence. Blast-radius verified `account` via scripts/blast_radius_from_diff.dart.
+      SAME flag as the row above — flipping it on must clear BOTH entries in
+      the one flip-on commit, which needs the full ×2 + bpass: accepted.
 
 resolved: []

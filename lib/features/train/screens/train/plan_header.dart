@@ -5,6 +5,8 @@ extension _PlanHeader on _TrainScreenState {
 
   Widget _buildPlanHeader(
       CurrentPlanData plan, int selectedWeek, List<WorkoutDayData> weekDays) {
+    final holdStatus = ref.watch(holdStatusProvider);
+
     // Calculate week completion
     int totalWorkoutDays = 0;
     int completedDays = 0;
@@ -13,6 +15,14 @@ extension _PlanHeader on _TrainScreenState {
         totalWorkoutDays++;
         if (day.isDone) completedDays++;
       }
+    }
+    // During a hold, `weekDays` is the phase's ORIGINAL week 4 (the selected
+    // week is clamped to 1-4 and hold rows live at week 5+), so its tallies
+    // describe a month-old week. The hold week's own session count is the only
+    // honest progress readout. Flag OFF ⇒ never holding ⇒ untouched.
+    if (holdStatus.isHolding) {
+      completedDays = holdStatus.sessionsCompleted;
+      totalWorkoutDays = holdStatus.sessionsTotal;
     }
     final progress =
         totalWorkoutDays > 0 ? completedDays / totalWorkoutDays : 0.0;
@@ -46,8 +56,13 @@ extension _PlanHeader on _TrainScreenState {
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  'TRAIN \u00B7 WK $selectedWeek OF ${plan.weeks.length} '
-                  '\u00B7 PHASE $currentPhase',
+                  // A hold week has no honest "WK n OF m" \u2014 it sits OUTSIDE the
+                  // phase's m weeks. The HOLDING \u00B7 Hn pill carries the identity
+                  // instead (locked mockup).
+                  holdStatus.isHolding
+                      ? 'TRAIN \u00B7 DEPLOYMENT 01 \u00B7 PHASE $currentPhase'
+                      : 'TRAIN \u00B7 WK $selectedWeek OF ${plan.weeks.length} '
+                          '\u00B7 PHASE $currentPhase',
                   style: AppTypography.monoXs.copyWith(
                     color: AppColors.accent,
                     letterSpacing: 3,
@@ -107,13 +122,21 @@ extension _PlanHeader on _TrainScreenState {
               ),
             ],
           ),
+          // HOLDING · Hn pill — the hold week's identity, replacing the week
+          // counter the eyebrow drops while holding.
+          if (holdStatus.isHolding) ...[
+            const SizedBox(height: 10),
+            _buildHoldingPill(holdStatus),
+          ],
           const SizedBox(height: 10),
           // ROW 3 — compact subtitle + progress bar inline
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                '$completedDays / $totalWorkoutDays',
+                holdStatus.isHolding
+                    ? '$completedDays / $totalWorkoutDays SESSIONS'
+                    : '$completedDays / $totalWorkoutDays',
                 style: AppTypography.monoXs.copyWith(
                   color: AppColors.textDim,
                   letterSpacing: 1.5,
@@ -130,6 +153,43 @@ extension _PlanHeader on _TrainScreenState {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// "● HOLDING · H3" — gold-on-gold-tint pill announcing the active hold week
+  /// (locked mockup). Only ever built when `holdStatus.isHolding`.
+  Widget _buildHoldingPill(HoldStatusData holdStatus) {
+    final ordinal = holdStatus.todayHoldOrdinal;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColors.accent),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: AppColors.accent,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            ordinal == null ? 'HOLDING' : 'HOLDING · H$ordinal',
+            style: AppTypography.monoXs.copyWith(
+              fontSize: 11,
+              letterSpacing: 1,
+              color: AppColors.accent,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),

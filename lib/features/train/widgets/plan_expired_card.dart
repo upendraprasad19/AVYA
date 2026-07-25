@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:icanbefitter/core/services/app_events_service.dart';
-import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'keep_training_phase1_action.dart';
 
 /// Day-29+ free-tier UI shown on Home + Train when Phase 1 has
 /// elapsed. Three doors:
@@ -61,18 +61,18 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
       // Ship-dark: enable_hold_weeks flips the free-tier mechanic from the
       // verbatim redoWeek4 (trailing-week copy) to the correct holdWeek
       // (Peak/deload-by-date, Monday-aligned, plan_json-durable). Default OFF.
-      final svc = ref.read(workoutScheduleWriteServiceProvider);
-      if (PlanEngineFlags.holdWeeksEnabled) {
-        await svc.holdWeek();
-      } else {
-        await svc.redoWeek4();
-      }
+      // The branch itself lives in ONE place — see runFreeTierRepeatWrite.
+      await runFreeTierRepeatWrite(ref);
       AppEventsService.instance.log('phase_1_cycle_repeat_started');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Week 4 back on the board. Carry on.',
+            // A hold is NOT "week 4 again" — it materializes the phase's Peak
+            // week (or a deload every 4th) dated to THIS week.
+            PlanEngineFlags.holdWeeksEnabled
+                ? 'Line held. Another week on the board.'
+                : 'Week 4 back on the board. Carry on.',
             style: AppTypography.body.copyWith(fontSize: 13),
           ),
           backgroundColor: AppColors.card,
@@ -141,36 +141,124 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
           _primaryCta(),
           const SizedBox(height: 12),
 
-          // Secondary / tertiary section header
-          Text(
-            'OR HOLD THE LINE — FREE',
-            style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
-          ),
-          const SizedBox(height: 10),
+          // Ship-dark: with `enable_hold_weeks` ON, holding is a REAL second
+          // door (an indefinite, correctly-periodized free path) rather than a
+          // one-shot "run it again", so it is promoted from a tertiary link to
+          // an accented pill beside the upgrade CTA — the locked mockup's
+          // two-door wall. Flag OFF renders the original three-link layout
+          // verbatim.
+          if (PlanEngineFlags.holdWeeksEnabled) ...[
+            _holdTheLineCta(),
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: 12),
+            _templateHint(),
+          ] else ...[
+            // Secondary / tertiary section header
+            Text(
+              'OR HOLD THE LINE — FREE',
+              style: AppTypography.monoXs.copyWith(fontWeight: FontWeight.w700, color: AppColors.textDim, letterSpacing: 1.2),
+            ),
+            const SizedBox(height: 10),
 
-          // Secondary — Build your own plan
-          _secondaryLink(
-            icon: Icons.build_outlined,
-            label: 'Draw up your own drills',
-            onTap: _handleTemplateBuilder,
-          ),
-          const SizedBox(height: 8),
+            // Secondary — Build your own plan
+            _secondaryLink(
+              icon: Icons.build_outlined,
+              label: 'Draw up your own drills',
+              onTap: _handleTemplateBuilder,
+            ),
+            const SizedBox(height: 8),
 
-          // Tertiary — Re-do Week 4
-          _secondaryLink(
-            icon: Icons.replay_outlined,
-            label: 'Run Week 4 again',
-            onTap: _redoing ? null : _handleRedoWeek4,
-            trailing: _redoing
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.textSecondary,
+            // Tertiary — Re-do Week 4
+            _secondaryLink(
+              icon: Icons.replay_outlined,
+              label: 'Run Week 4 again',
+              onTap: _redoing ? null : _handleRedoWeek4,
+              trailing: _redoing
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.textSecondary,
+                      ),
+                    )
+                  : null,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Outlined gold pill — the free door, weighted to read as a genuine choice
+  /// next to the gold-filled upgrade CTA rather than a consolation link.
+  Widget _holdTheLineCta() {
+    return GestureDetector(
+      onTap: _redoing ? null : _handleRedoWeek4,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: AppColors.accent.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: AppColors.accent, width: 1.5),
+        ),
+        child: Center(
+          child: _redoing
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.accent,
+                  ),
+                )
+              : Text(
+                  'Hold the line — another week',
+                  style: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.accent,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  /// The template door, kept reachable as a hint line so the two primary doors
+  /// stay visually uncontested (locked mockup).
+  Widget _templateHint() {
+    return GestureDetector(
+      onTap: _handleTemplateBuilder,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.build_outlined, size: 15, color: AppColors.textMute),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                text: 'Want different drills? Draw up your own from ',
+                children: [
+                  TextSpan(
+                    text: 'MY TEMPLATES',
+                    style: AppTypography.body.copyWith(
+                      fontSize: 11.5,
+                      height: 1.4,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textDim,
                     ),
-                  )
-                : null,
+                  ),
+                  const TextSpan(text: '.'),
+                ],
+              ),
+              style: AppTypography.body.copyWith(
+                fontSize: 11.5,
+                height: 1.4,
+                color: AppColors.textMute,
+              ),
+            ),
           ),
         ],
       ),

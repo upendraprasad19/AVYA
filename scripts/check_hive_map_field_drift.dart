@@ -104,6 +104,14 @@ const _expectedEmitFields = <String, Set<String>>{
     // SwapService.swapExercise stamps the replacement exercise map with the
     // swap marker + the name it replaced (LEVER 6 demotion source).
     'swapped_via', 'swapped_from',
+    // Free-tier "Hold the Line": WorkoutScheduleWriteService.holdWeek stamps
+    // both on every copied row (:287-288). Emitted since the hold-mechanic
+    // batch; first READ by the hold-display batch's
+    // WorkoutScheduleReadService.holdWeeks / holdOrdinalForDate /
+    // holdWeekSessionProgress — which is why the gate only fires now.
+    // `is_hold` is Hive+plan_json only (deliberately kept out of the
+    // scheduled_workouts cloud push field-set so it cannot 400).
+    'is_hold', 'hold_ordinal',
   },
   // wlog_* writer: WorkoutWriteService.markCompleted (workout summary row).
   // f1c8e4: markCompleted stamps type:'workout_log' + completed_at (ISO) +

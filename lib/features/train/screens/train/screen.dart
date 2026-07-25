@@ -31,6 +31,7 @@ import '../../widgets/edit_workout_log_sheet.dart';
 import '../../widgets/readiness_sheet.dart';
 import '../../widgets/week_selector.dart';
 import '../../widgets/phase_arc_strip.dart';
+import '../../widgets/hold_roadmap_strip.dart';
 import '../../widgets/plan_expired_card.dart';
 import '../../widgets/phase_generating_card.dart';
 import '../../widgets/stats_grid.dart';
@@ -104,6 +105,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
     final selectedWeek = ref.watch(selectedWeekProvider);
     final weekDays = plan.getWeek(selectedWeek);
     final todayWorkout = plan.todayWorkout;
+    // Free-tier hold weeks (ship-dark `enable_hold_weeks`) — always
+    // HoldStatusData.empty while the flag is OFF, so every branch keyed on
+    // `isHolding` below is inert and this screen renders exactly as before.
+    final holdStatus = ref.watch(holdStatusProvider);
+    // Date-keyed today row: the ONLY way to reach a hold week's workout, since
+    // hold rows sit at week 5+ and `plan.weeks` stops at the phase's 4.
+    final holdTodayDay =
+        holdStatus.isHolding ? workoutDayForDate(nowWall()) : null;
     // REG-1 (a4e2d9): PRO users get a one-tap regenerate on expiry instead of
     // the free PlanExpiredCard. Watched reactively (H-1) so a mid-session
     // upgrade flips the surface without a manual refresh.
@@ -167,7 +176,13 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                                       },
                                     ),
                             )
-                          : _buildTodayHeroCard(context, plan, todayWorkout))
+                          : _buildTodayHeroCard(
+                              context,
+                              plan,
+                              todayWorkout,
+                              holdDay: holdTodayDay,
+                              isHolding: holdStatus.isHolding,
+                            ))
                     else
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -253,6 +268,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                         ),
                       ),
                     ),
+
+                    // Hold-week roadmap card — reassures a holder that Phase I
+                    // is still theirs and shows what PRO unlocks, without
+                    // touching the roadmap's week math (see HoldRoadmapStrip).
+                    if (holdStatus.isHolding) ...[
+                      HoldRoadmapStrip(currentPhase: plan.phase),
+                      const SizedBox(height: 14),
+                    ],
 
                     // 3. This Week section label — moved BELOW Roadmap
                     // pill per APK Test #3 / Obs 1 ordering decision.

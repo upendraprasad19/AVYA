@@ -16,14 +16,28 @@ import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.d
 /// `redoWeek4` to `holdWeek` (default OFF). **H5:** on a materialize failure it
 /// surfaces a snackbar and STAYS PUT — it must NEVER blind-navigate to `/train`
 /// (the exact dead-end `redoWeek4` was originally added to cure).
-Future<void> keepTrainingPhase1(BuildContext context, WidgetRef ref) async {
+/// The free-tier "give me another week of this phase" WRITE — the single place
+/// the `enable_hold_weeks` branch lives.
+///
+/// Ship-dark: OFF → the verbatim legacy [redoWeek4] (trailing-week copy);
+/// ON → [holdWeek] (Peak/deload-by-date, Monday-aligned, plan_json-durable).
+///
+/// Extracted because this branch previously existed in TWO independently-edited
+/// call sites ([keepTrainingPhase1] and `plan_expired_card._handleHoldWeek`) —
+/// exactly the shape that drifts. Callers own their own UX (snackbar copy,
+/// analytics, navigation); only the write decision is shared.
+Future<void> runFreeTierRepeatWrite(WidgetRef ref) async {
   final svc = ref.read(workoutScheduleWriteServiceProvider);
+  if (PlanEngineFlags.holdWeeksEnabled) {
+    await svc.holdWeek();
+  } else {
+    await svc.redoWeek4();
+  }
+}
+
+Future<void> keepTrainingPhase1(BuildContext context, WidgetRef ref) async {
   try {
-    if (PlanEngineFlags.holdWeeksEnabled) {
-      await svc.holdWeek();
-    } else {
-      await svc.redoWeek4();
-    }
+    await runFreeTierRepeatWrite(ref);
   } catch (_) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

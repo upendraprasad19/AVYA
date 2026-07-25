@@ -8,6 +8,8 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'hold_chip_group.dart';
 
 /// Horizontal scrollable week tab bar — extended to 12 weeks (3 phases).
 ///
@@ -127,6 +129,22 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
     final pastPhases =
         _toPastPhases(service.pastPhaseBlocks(), widget.currentPhase);
 
+    // Free-tier hold weeks (ship-dark `enable_hold_weeks`). Always
+    // HoldStatusData.empty while the flag is OFF, so everything below this line
+    // is inert — the strip renders exactly as it did pre-hold-display.
+    final holdStatus = ref.watch(holdStatusProvider);
+    final isHolding = holdStatus.holds.isNotEmpty;
+    // Two groups would otherwise both read "PHASE I"; the phase NAME
+    // disambiguates the training block from the holding block (locked mockup).
+    // Suffix only — the label itself is built at the _PhaseGroup call site so
+    // the first `_phaseRoman(widget.currentPhase)` in this file stays INSIDE
+    // the current-phase group, after the past-phase loop
+    // (`week_selector_past_phases_test.dart` pins that source order as its
+    // proxy for "past groups render LEFT of the current group").
+    final holdingNameSuffix = isHolding
+        ? ' · ${service.phaseName(widget.currentPhase).toUpperCase()}'
+        : '';
+
     final strip = SingleChildScrollView(
       controller: _scrollCtrl,
       scrollDirection: Axis.horizontal,
@@ -146,7 +164,8 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
           // from the real current_phase, not a hardcoded "PHASE I".
           _PhaseGroup(
             key: _currentPhaseKey,
-            label: 'PHASE ${_phaseRoman(widget.currentPhase)}',
+            label: 'PHASE ${_phaseRoman(widget.currentPhase)}'
+                '$holdingNameSuffix',
             isPaywalled: false,
             weekStart: 1,
             weekEnd: 4,
@@ -155,6 +174,18 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
             completedWeeks: completedWeeks,
             onTap: widget.onSelect,
           ),
+          // Hold weeks sit between the phase they extend and the next phase.
+          // Tapping one opens a read-only sheet — never `onSelect`, which is
+          // week-index-keyed and cannot address a hold (see HoldChipGroup).
+          if (isHolding) ...[
+            const SizedBox(width: 16),
+            HoldChipGroup(
+              phaseLabel: 'PHASE ${_phaseRoman(widget.currentPhase)}',
+              holds: holdStatus.holds,
+              todayHoldOrdinal: holdStatus.todayHoldOrdinal,
+              onTapHold: (hold) => _showHoldWeekSheet(context, hold),
+            ),
+          ],
           const SizedBox(width: 16),
           // Next phase preview (PRO-locked for free users).
           _PhaseGroup(
@@ -246,6 +277,18 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => _PastWeekSheet(past: past, weekInPhase: weekInPhase),
+    );
+  }
+
+  void _showHoldWeekSheet(BuildContext context, HoldWeekInfo hold) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.card,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => HoldWeekSheet(hold: hold),
     );
   }
 }

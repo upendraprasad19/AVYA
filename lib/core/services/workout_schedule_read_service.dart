@@ -58,6 +58,42 @@ class PastPhaseBlock {
   });
 }
 
+/// One materialized **hold week** — a free-tier "Hold the Line" repeat of the
+/// phase's canonical Peak (or every-4th deload) week, written by
+/// `WorkoutScheduleWriteService.holdWeek()` behind `enable_hold_weeks`.
+///
+/// Display-side view of the row-stamped `is_hold` / `hold_ordinal` fields. Note
+/// the hold rows also carry `week = 4 + ordinal`, but that week number is NOT
+/// usable for display today: `CurrentPlanData.weeks` only ever holds 4 entries
+/// for phase 1 (`train_provider.dart` hardcodes `totalWeeks = 4`), so
+/// `getWeek(5)` returns empty. Hold weeks are therefore surfaced by ORDINAL and
+/// DATE, never by the clamped week index — see `holdWeeks()`.
+class HoldWeekInfo {
+  /// 1-based hold number — H1, H2, H3… Sourced from the row-stamped
+  /// `hold_ordinal` (gap-proof; the writer computes it as max-so-far + 1).
+  final int ordinal;
+
+  /// Monday of this hold week (holds are always Monday-backdated by the writer).
+  final DateTime weekStart;
+
+  /// True when this hold sourced the phase's deload week instead of Peak.
+  /// See [isDeloadHold] — mirrors the writer's cadence.
+  final bool isDeload;
+
+  /// ≥1 completed day in this hold week — the SAME "any completed day that
+  /// week" rule [completedWeekNumbers] applies to the regular W-chips, so an
+  /// H-chip's ✓ means exactly what a W-chip's ✓ means (a stricter all-days rule
+  /// here would read as punitive next to an identical-looking W-chip).
+  final bool isCompleted;
+
+  const HoldWeekInfo({
+    required this.ordinal,
+    required this.weekStart,
+    required this.isDeload,
+    required this.isCompleted,
+  });
+}
+
 /// Read + plan-generation orchestrator portion of the former
 /// `WorkoutScheduleService`. See file-level doc-comment for the split rationale.
 class WorkoutScheduleReadService {
@@ -704,6 +740,135 @@ class WorkoutScheduleReadService {
     }
 
     return map;
+  }
+
+  // ── Hold weeks (free-tier "Hold the Line" display read-path) ────
+  //
+  // Additive read surface over the `is_hold` / `hold_ordinal` fields stamped by
+  // `WorkoutScheduleWriteService.holdWeek()`. Deliberately does NOT touch
+  // `getCurrentWeekNumber()` / `getProgramWeek()` / `currentPhaseCompletionRate()`
+  // — those stay clamped exactly as they are today, so surfacing holds cannot
+  // perturb their 11 downstream consumers (restore, AI snapshot, deload
+  // evaluator, streak, the PRO advance gate). See
+  // `docs/plan-reviews/free-tier-hold-findings.md`.
+
+  /// Whether hold number [ordinal] is a **deload** hold.
+  ///
+  /// ⚠ MUST mirror the writer's cadence in
+  /// `workout_schedule_write_service.holdWeek()` (`final deload = n % 4 == 0`).
+  /// The writer never PERSISTS this as a field — it only uses it to choose the
+  /// source week — so display recomputes it from the stored `hold_ordinal`.
+  /// Pure + static so the write/display agreement is behaviorally testable.
+  static bool isDeloadHold(int ordinal) => ordinal % 4 == 0;
+
+  /// Hold-week dates grouped by `hold_ordinal`, each list date-ascending.
+  ///
+  /// Single walk of `schedule_*`; every public hold reader below builds on it so
+  /// the "what counts as a hold row" predicate lives in exactly one place.
+  ///
+  /// **Scoped to the CURRENT plan window** (`date >= plan_start`). Holds extend
+  /// the phase they belong to, so once the user leaves that phase (a PRO advance
+  /// moves `plan_start` forward) their old holds are ordinary history and belong
+  /// to [pastPhaseBlocks] — the same rows, under their real phase number. Without
+  /// this bound the chips would linger forever AND be relabelled with the new
+  /// phase's numeral, double-rendering a converted user's history under the wrong
+  /// heading. Hold rows are never re-stamped with `phase` (deliberately — an
+  /// explicit stamp trips legacy `bucketPastRows` carry-forward), so the date
+  /// window, not a phase field, is what scopes them.
+  ///
+  /// No UPPER bound: free users may hold indefinitely (founder decision:
+  /// unlimited holds), so this must never inherit the 12-week caps other readers
+  /// apply.
+  /// Midnight of `plan_start`, or null when no plan exists. The lower bound
+  /// every hold reader shares (see [_holdDatesByOrdinal]).
+  DateTime? _holdWindowStart() {
+    final planStart = getPlanStartDate();
+    if (planStart == null) return null;
+    return DateTime(planStart.year, planStart.month, planStart.day);
+  }
+
+  Map<int, List<DateTime>> _holdDatesByOrdinal() {
+    final windowStart = _holdWindowStart();
+    if (windowStart == null) return const {};
+    final box = _hive.workoutBox;
+    final out = <int, List<DateTime>>{};
+    for (final entry in box.toMap().entries) {
+      final key = entry.key.toString();
+      if (!key.startsWith(_schedulePrefix)) continue;
+      final value = entry.value;
+      if (value is! Map || value['is_hold'] != true) continue;
+      final ordinal = value['hold_ordinal'];
+      if (ordinal is! int || ordinal < 1) continue;
+      final date = DateTime.tryParse(key.substring(_schedulePrefix.length));
+      if (date == null || date.isBefore(windowStart)) continue;
+      (out[ordinal] ??= <DateTime>[]).add(date);
+    }
+    for (final dates in out.values) {
+      dates.sort();
+    }
+    return out;
+  }
+
+  /// The hold number covering [date], or null when that date is not a hold day
+  /// of the CURRENT phase.
+  ///
+  /// Window-scoped on the same rule as [_holdDatesByOrdinal] so the whole hold
+  /// read surface agrees: a hold the user has since advanced past is history,
+  /// not a live hold, and must not resurface through this entry point either.
+  int? holdOrdinalForDate(DateTime date) {
+    final windowStart = _holdWindowStart();
+    if (windowStart == null) return null;
+    final day = DateTime(date.year, date.month, date.day);
+    if (day.isBefore(windowStart)) return null;
+    final raw = _hive.workoutBox.get('$_schedulePrefix${_dateKey(date)}');
+    if (raw is! Map || raw['is_hold'] != true) return null;
+    final ordinal = raw['hold_ordinal'];
+    return (ordinal is int && ordinal >= 1) ? ordinal : null;
+  }
+
+  /// Every materialized hold week, ordinal-ascending (H1, H2, H3…).
+  ///
+  /// Empty when the user has never held — which is every user while
+  /// `enable_hold_weeks` is OFF, since only `holdWeek()` writes `is_hold`.
+  List<HoldWeekInfo> holdWeeks() {
+    final byOrdinal = _holdDatesByOrdinal();
+    final ordinals = byOrdinal.keys.toList()..sort();
+    return [
+      for (final ordinal in ordinals)
+        HoldWeekInfo(
+          ordinal: ordinal,
+          weekStart: byOrdinal[ordinal]!.first,
+          isDeload: isDeloadHold(ordinal),
+          // Routed through getScheduleForDate (not the raw row) so the
+          // completed-in-the-future normalization guard applies here exactly as
+          // it does for the regular week chips.
+          isCompleted: byOrdinal[ordinal]!
+              .any((d) => getScheduleForDate(d)?['status'] == 'completed'),
+        ),
+    ];
+  }
+
+  /// Completed vs. scheduled workout days within hold week [ordinal] — the
+  /// "4 / 5 SESSIONS" progress readout. Rest/off days are excluded from both
+  /// counts. Unknown ordinal → (0, 0).
+  ///
+  /// Independent of [currentPhaseCompletionRate], which hardcodes a 4-week phase
+  /// and is also the PRO-advance gate's input — reusing it here would both
+  /// mis-count and couple display to that gate.
+  ({int completed, int total}) holdWeekSessionProgress(int ordinal) {
+    final dates = _holdDatesByOrdinal()[ordinal];
+    if (dates == null) return (completed: 0, total: 0);
+    var completed = 0;
+    var total = 0;
+    for (final date in dates) {
+      final row = getScheduleForDate(date);
+      if (row == null) continue;
+      final type = (row['type'] ?? '').toString();
+      if (type == 'rest' || type == 'off') continue;
+      total++;
+      if (row['status'] == 'completed') completed++;
+    }
+    return (completed: completed, total: total);
   }
 
   /// Global week numbers (1-based from `plan_start_date`) in the CURRENT plan
