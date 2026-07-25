@@ -39,7 +39,7 @@ pending:
 
   - flag: enable_hold_weeks
     branch: hold-display
-    build_commit: "(uncommitted — fill sha at commit)"
+    build_commit: 4f4e9518
     build_date: 2026-07-25
     flip_reviewed: false
     flip_commit: null
