@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/services/day_rollover_service.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/features/dev/simulation_service.dart';
 import 'package:icanbefitter/features/dev/plan_xls.dart';
 
@@ -224,6 +227,38 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('PRO revoked');
   }
 
+  // ── Ship-dark flags ─────────────────────────────────────────────
+
+  /// Re-reads every daily-scoped provider so a clock jump or a flag flip is
+  /// actually REFLECTED on screen.
+  ///
+  /// Why this exists: Riverpod caches `currentPlanProvider`, and nothing else in
+  /// this panel invalidates anything — so time-travelling and walking to Train
+  /// can render month-old data, and a flag flip can appear to do nothing. The
+  /// obvious workaround is a trap: reloading the page DOES rebuild providers but
+  /// also wipes `_clockOverride`, which is an in-memory static (`ist_date.dart`),
+  /// silently returning you to real time.
+  ///
+  /// Delegates to the canonical invalidation entry point rather than hand-rolling
+  /// a second provider list that could drift from it.
+  Future<void> _refreshProviders() async {
+    await DayRolloverObserver.instance.runRolloverNow(ref);
+    if (!mounted) return;
+    setState(() {});
+    _toast('Providers refreshed');
+  }
+
+  Future<void> _toggleHoldWeeks() async {
+    final next = !PlanEngineFlags.holdWeeksEnabled;
+    // configBox is the SHARED, UNSYNCED Hive box — this never reaches the cloud
+    // and never leaves this browser profile / device.
+    await HiveService.instance.configBox.put('enable_hold_weeks', next);
+    await DayRolloverObserver.instance.runRolloverNow(ref);
+    if (!mounted) return;
+    setState(() {});
+    _toast('enable_hold_weeks = ${next ? 'ON' : 'OFF'}');
+  }
+
   void _toast(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
@@ -291,6 +326,31 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                   _btn('+12 weeks', () => _addDays(84)),
                   _btn('+1 year', () => _addDays(365)),
                   _btn('Reset', _resetClock, outlined: true),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _card(
+            title: 'Ship-dark flags',
+            children: [
+              _kv('enable_hold_weeks',
+                  PlanEngineFlags.holdWeeksEnabled ? 'ON' : 'off'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _btn(
+                    PlanEngineFlags.holdWeeksEnabled
+                        ? 'Turn hold weeks OFF'
+                        : 'Turn hold weeks ON',
+                    () => _toggleHoldWeeks(),
+                  ),
+                  // Use after every time-travel jump — the clock buttons above
+                  // do NOT invalidate providers on their own.
+                  _btn('Refresh providers', () => _refreshProviders(),
+                      outlined: true),
                 ],
               ),
             ],
