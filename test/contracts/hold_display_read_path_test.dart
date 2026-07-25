@@ -353,6 +353,152 @@ void main() {
     });
   });
 
+  group('L1 — a completed hold day must not tick a PHASE II/III week chip', () {
+    /// Completes the first workout day of the hold week starting [holdStart]
+    /// through the REAL completion writer.
+    Future<void> completeFirstHoldDay(DateTime holdStart) async {
+      final row = Map<String, dynamic>.from(
+          HiveService.instance.workoutBox
+              .get('schedule_${formatDateKey(holdStart)}') as Map);
+      row['status'] = 'completed';
+      await WorkoutWriteService.instance.upsertScheduled(
+        date: holdStart,
+        entry: row,
+        source: WriteSource.schedSwap,
+      );
+    }
+
+    /// The week index `completedWeekNumbersFrom` would assign to [date] — it
+    /// walks `plan_start + 7k`, so this is pure date arithmetic.
+    int dateWeekIndex(DateTime date) =>
+        date.difference(planStart).inDays ~/ 7 + 1;
+
+    test('CONTIGUOUS hold (starts at plan_end + 1) — would have ticked week 5',
+        () async {
+      await takeHolds(1);
+      expect(dateWeekIndex(hold1Start), 5, reason: 'precondition: week-5 slot');
+
+      await completeFirstHoldDay(hold1Start);
+
+      expect(read.completedWeekNumbers().contains(5), isFalse,
+          reason: 'a hold completion must never credit the PHASE II W5 chip');
+      expect(read.holdWeeks().single.isCompleted, isTrue,
+          reason: 'the H chip keeps its own tick — the exclusion costs nothing');
+    });
+
+    test('LATE RETURN hold — lands on week 8, must still not tick', () async {
+      // The realistic path: the user lapses, comes back weeks later and taps
+      // "Hold the line". holdWeek() places the hold in the calendar week
+      // containing TODAY, so it is NOT on the plan_start + 7k grid.
+      final lateStart = DateTime(2026, 7, 20); // plan_start + 49 → week 8
+      setTestClockTo(lateStart.add(const Duration(hours: 10)));
+      await WorkoutScheduleWriteService.instance.holdWeek();
+
+      final holds = read.holdWeeks();
+      expect(holds.single.weekStart, lateStart,
+          reason: 'hold occupies THIS week, leaving a calendar gap');
+      expect(dateWeekIndex(lateStart), 8,
+          reason: 'ordinal is 1 but the DATE index is 8 — they are not the same '
+              'thing; this is why 4 + ordinal is a label, not a date offset');
+
+      await completeFirstHoldDay(lateStart);
+
+      expect(read.completedWeekNumbers().contains(8), isFalse,
+          reason: 'a late hold would otherwise tick a PHASE III chip');
+      expect(read.holdWeeks().single.isCompleted, isTrue);
+    });
+
+    // ⚠ CHARACTERIZATION, NOT REGRESSION. B-pass verified this case passes
+    // with the L1 fix REVERTED — a date-week-15 hold is outside
+    // completedWeekNumbersFrom's maxWeek:12 loop either way. It documents WHY
+    // the pre-fix bug was intermittent rather than deterministic; the two cases
+    // above (CONTIGUOUS, LATE RETURN) are the ones that actually fail without
+    // the fix. Kept deliberately, labelled so it can't inflate apparent
+    // coverage.
+    test('CHARACTERIZATION: a hold beyond maxWeek was never miscounted anyway',
+        () async {
+      final veryLate = DateTime(2026, 9, 7); // plan_start + 98 → week 15 > 12
+      setTestClockTo(veryLate.add(const Duration(hours: 10)));
+      await WorkoutScheduleWriteService.instance.holdWeek();
+      await completeFirstHoldDay(veryLate);
+
+      expect(dateWeekIndex(veryLate), greaterThan(12));
+      expect(read.completedWeekNumbers(), isEmpty,
+          reason: 'clipped by maxWeek:12 — proves the pre-fix bug only fired '
+              'for holds inside the first 12 date-weeks');
+      expect(read.holdWeeks().single.isCompleted, isTrue);
+    });
+
+    test('ordinary (non-hold) week completions still tick normally', () async {
+      // Regression guard: the exclusion must not break the W-chip ✓.
+      final wk2Day = planStart.add(const Duration(days: 7));
+      final row = Map<String, dynamic>.from(HiveService.instance.workoutBox
+          .get('schedule_${formatDateKey(wk2Day)}') as Map);
+      row['status'] = 'completed';
+      await WorkoutWriteService.instance.upsertScheduled(
+        date: wk2Day,
+        entry: row,
+        source: WriteSource.schedSwap,
+      );
+
+      expect(read.completedWeekNumbers().contains(2), isTrue);
+    });
+  });
+
+  group('L3 — the REAL completion writer must preserve the hold stamp', () {
+    test('markCompleted keeps is_hold + hold_ordinal, so the chip survives '
+        'training', () async {
+      await takeHolds(1);
+      expect(read.holdWeeks(), hasLength(1), reason: 'precondition');
+
+      // Drive the ACTUAL writer, not a hand-built upsertScheduled — a future
+      // refactor that rebuilt the row from a template instead of merging in
+      // place would silently drop the hold stamp and vanish the H chip.
+      final result = await WorkoutWriteService.instance.markCompleted(
+        date: hold1Start,
+        workoutName: 'Upper Body',
+        durationSec: 1800,
+      );
+      expect(result.success, isTrue, reason: 'Hive write must succeed');
+
+      final raw = HiveService.instance.workoutBox
+          .get('schedule_${formatDateKey(hold1Start)}') as Map;
+      expect(raw['is_hold'], true, reason: 'the hold stamp must survive');
+      expect(raw['hold_ordinal'], 1);
+      expect(raw['status'], 'completed');
+
+      final holds = read.holdWeeks();
+      expect(holds, hasLength(1),
+          reason: 'the hold week is still addressable after training it');
+      expect(holds.single.isCompleted, isTrue);
+      expect(read.holdWeekSessionProgress(1).completed, 1);
+    });
+  });
+
+  group('D1 — the deployment banner drops the week counter while holding', () {
+    // Source-grep (comments stripped) — the banner is deep in a screen widget
+    // tree; this pins BOTH ternary arms exist. The behavioural half is covered
+    // by holdStatusProvider's own tests.
+    final banner = File('lib/features/train/screens/train/screen.dart')
+        .readAsStringSync()
+        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+        .replaceAll(RegExp(r'//[^\n]*'), '');
+
+    test('holding arm renders the phase WITHOUT a week counter', () {
+      expect(banner.contains('holdStatus.isHolding'), isTrue);
+      final holdingArm = RegExp(
+          r"holdStatus\.isHolding\s*\?\s*'DEPLOYMENT 01[^']*\$\{plan\.phaseName\.toUpperCase\(\)\}'");
+      expect(holdingArm.hasMatch(banner), isTrue,
+          reason: 'a hold week sits OUTSIDE the phase 4 weeks — no honest '
+              '"WK n OF 4" exists for it; the HOLDING pill owns the identity');
+    });
+
+    test('non-holding arm still carries the pinned WK n OF 4 literal', () {
+      // phase_relative_week_label_test.dart:62 greps for this exact string.
+      expect(banner.contains(r'WK ${plan.currentWeek} OF 4'), isTrue);
+    });
+  });
+
   group('hold scoping — holds belong to the phase they extend', () {
     test(
         'a PRO advance (plan_start moves forward) retires the old holds from '
