@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### cron_auth_gate (2 bugs)
+- 2026-07-26 c3f8a1 — >-
+- 2026-05-11 7ad0c4 — 8 cron Edge Functions had verify_jwt false at the gateway AND no manual auth check at handler entry. Anyone with the function URL could trigger expensive Gemini fanout, OneSignal pushes, or DB scans across the entire user base.
+
 ### hold_display_read_path (1 bugs)
 - 2026-07-25 c8b3f2 — >
 
@@ -688,9 +692,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### chat_workout_draft_write_service (1 bugs)
 - 2026-05-11 7ad0c8 — `submitWorkoutDraft` (the chat-confirmation handler for AI-coach-detected workouts) wrote `exlog_<ts>_<hash>` and `wlog_<ts>` rows directly to Hive with the *legacy* field shape (`sets_completed`, no `sets[]`, no `set_number`, no IST-stable key, no per-set rows). Bypassed `WorkoutWriteService`. Result — receipts and AI snapshot readers (`_getThisWeekWorkouts` / `_getPersonalRecords` / `_getMealsToday`) silently dropped every chat-confirmed workout because they filter on the new field shape introduced by Test #8. AI coach gave advice based on a workout history that excluded every "I did 3x10 squats" message the user confirmed.
 
-### cron_auth_gate (1 bugs)
-- 2026-05-11 7ad0c4 — 8 cron Edge Functions had verify_jwt false at the gateway AND no manual auth check at handler entry. Anyone with the function URL could trigger expensive Gemini fanout, OneSignal pushes, or DB scans across the entire user base.
-
 ### cross_account_guard_on_open (1 bugs)
 - 2026-05-11 7ad0c6 — splash_screen.dart cross-account Hive leak guard was a no-op on every cold start. `HiveService.instance.userBox` is a `GuardedBox` that throws `HiveUserSession not opened` before any `openForUser` has run; the try/catch swallowed it and the guard never executed. Android Auto Backup restores / dev-build Hive copies / legacy migration races could leave a foreign profile.id inside the new user's namespaced box and the safety net CLAUDE.md §19 promises did not actually run.
 
@@ -836,6 +837,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-26 | c3f8a1 | >- | cron_auth_gate | test/contracts/cron_auth_adoption_test.dart |
 | 2026-07-25 | c8b3f2 | > | hold_display_read_path | test/contracts/hold_display_read_path_test.dart |
 | 2026-07-23 | b7d4e2 | \| | auth_password_reset_pkce_detection | test/contracts/password_recovery_detector_test.dart |
 | 2026-07-23 | 9f5c41 | \| | auth_password_reset_timing | test/contracts/password_reset_redirect_flow_test.dart |

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { istDateStr } from "../_shared/ist_date.ts";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
@@ -163,16 +164,42 @@ serve(async (req: Request) => {
     });
   }
 
+  // ── Auth gate added 2026-07-26 (diagnose c3f8a1, Hermes L23/L24).
+  //
+  // This function shipped verify_jwt=false with NO authentication of any kind
+  // while creating a SERVICE-ROLE client below — so any unauthenticated POST
+  // from anywhere on the internet could drive a full-fleet recalculation over
+  // every user. It escaped every guard because it is scheduled by nothing (zero
+  // cron.job rows) and its client constant `weeklyRecalcFunction` is declared
+  // but never invoked, so neither the cron registry nor any call-site grep saw
+  // it — while `cron_auth_adoption_test.dart` omitted it and
+  // `cron_telemetry_adoption_test.dart` listed it, the two hand-maintained
+  // lists disagreeing about what it even is.
+  //
+  // Exactly the F44 shape: an unguarded verify_jwt=false service-role endpoint
+  // invisible because no list covered it.
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[weekly-recalc] unauthorized caller; status=401`);
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   // OI-21 / audit-2026-05-29 EF-2: in-function execution telemetry so the
   // alert_edge_function_health cron (migrations 076/077) can SEE weekly-recalc
   // failures via cron_call_log. pg_cron's job_run_details only reflects the
   // net.http_post dispatch, not the EF's actual HTTP outcome.
+  //
+  // Placed AFTER the gate above — before it, an anonymous caller would get an
+  // unauthenticated INSERT into public.cron_call_log (see _shared/cron_auth.ts).
   const logId = await logCronStart("weekly-recalc");
 
   try {
     const start = Date.now();
 
-    // This is a cron job — uses service role key, no JWT validation
+    // Cron-shaped job: service-role client, authorized by the CRON_SECRET gate
+    // above rather than by a caller JWT.
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // audit-2026-05-11 H-8 — 4-week window now IST-anchored so the

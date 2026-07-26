@@ -44,6 +44,13 @@ const _wiredCronFunctions = <String>[
   // now emits cron_call_log telemetry so alert_edge_function_health (076/077)
   // can see its failures.
   'weekly-recalc',
+  // Wired 2026-07-26 (diagnose c3f8a1). compute-coach-signals had neither an
+  // auth gate nor telemetry — it was the sole cron function still succeeding
+  // during the 401 outage, purely because nothing checked its caller.
+  // compute-admin-metrics-daily already emitted telemetry; listing it here
+  // makes that a guarded contract rather than an accident.
+  'compute-coach-signals',
+  'compute-admin-metrics-daily',
 ];
 
 const _functionsDir = 'supabase/functions';

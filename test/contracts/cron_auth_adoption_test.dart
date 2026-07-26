@@ -43,6 +43,30 @@ const _cronInvokedFunctions = <String>[
   'streak-guardian',
   'weekly-recap-ready',
   'workout-window-closing',
+  // Added 2026-07-26 (diagnose c3f8a1). Both were verify_jwt=true and so fell
+  // outside this list's stated scope; the CRON_SECRET migration flips both to
+  // verify_jwt=false, putting them squarely in scope.
+  //
+  // compute-coach-signals is the sharper case: it shipped with NO auth gate of
+  // any kind, relying entirely on verify_jwt=true — which accepts ANY
+  // project-signed JWT, including the anon key compiled into every APK. Any
+  // app user could invoke it and drive up to 5000 RPC round-trips. Exactly the
+  // F44 shape described below, and it stayed invisible for the same reason:
+  // this list did not cover it.
+  'compute-admin-metrics-daily',
+  'compute-coach-signals',
+  // Added 2026-07-26 (Hermes L23/L24, diagnose c3f8a1). weekly-recalc shipped
+  // verify_jwt=false with NO auth gate at all while creating a service-role
+  // client — any unauthenticated POST drove a full-fleet recalculation.
+  //
+  // It escaped every existing guard: nothing schedules it (zero cron.job rows,
+  // so the cron registry never saw it) and its client constant
+  // `weeklyRecalcFunction` is declared but never invoked (so no call-site grep
+  // saw it either). It was ALSO already listed in _wiredCronFunctions in
+  // cron_telemetry_adoption_test.dart — the two hand-maintained lists
+  // disagreeing about whether it is a cron function is precisely what let it
+  // sit ungated. Listing it here makes the gate a real contract for it.
+  'weekly-recalc',
 ];
 
 // Postgres-TRIGGER-dispatched verify_jwt=false Edge Functions (invoked via
@@ -110,8 +134,17 @@ void main() {
         // The auth gate must come BEFORE the first service-role
         // createClient — otherwise we leak resources to unauthorized callers.
         final callIdx = callRegex.firstMatch(src)!.start;
+        // NB `[^)]*` (the original) could never match the multi-line form
+        //     createClient(
+        //       Deno.env.get("SUPABASE_URL")!,
+        //       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        //     )
+        // because the `)` closing the first Deno.env.get terminates the class.
+        // The gate-before-service-role-client assertion therefore silently
+        // no-opped for every function written that way. Non-greedy [\s\S] with
+        // a bound fixes it without risking a runaway match. (c3f8a1, 2026-07-26)
         final svcRoleClientRegex = RegExp(
-          r'createClient\s*\([^)]*SUPABASE_SERVICE_ROLE_KEY',
+          r'createClient\s*\([\s\S]{0,240}?SUPABASE_SERVICE_ROLE_KEY',
           multiLine: true,
         );
         final svcClientMatch = svcRoleClientRegex.firstMatch(src);
