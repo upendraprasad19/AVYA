@@ -33,7 +33,21 @@ updates:
       # analyzer major upgrades blocked on riverpod_generator
       - dependency-name: "analyzer"
 
-  # GitHub Actions workflow files
+  # GitHub Actions workflow files.
+  #
+  # ⚠️ These PRs need a plan-review record to merge, and that is DELIBERATE.
+  # The only workflow file is .github/workflows/test.yml, promoted to `platform`
+  # tier on 2026-07-26, and the Dependabot exemption in
+  # scripts/check_plan_review_record_exists.dart covers ONLY pubspec.yaml /
+  # pubspec.lock — never .github/workflows/**. A bot must not rewrite the CI
+  # that enforces every other gate: `actions/checkout` is what supplies
+  # `fetch-depth: 0` to the keystone gate's own job, so a bump there can silently
+  # change whether the gate can see HEAD^2 at all.
+  #
+  # To land one: write docs/plan-reviews/dependabot-github_actions-<pkg>-<ver>.md
+  # (the branch name with `/` mapped to `-`) with a real review, exactly as for
+  # human work. Merging without one turns main red — which is the intended
+  # signal, not a malfunction. `pub` bumps above are exempt and merge freely.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
