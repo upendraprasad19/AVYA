@@ -6,10 +6,17 @@ on:
   pull_request:
     branches: [main, develop]
 
-# Cancel in-progress runs for the same PR/branch
+# Cancel in-progress runs for the same PR/branch — but NEVER on main.
+# Every main push shares the group `…-refs/heads/main`, so with a blanket
+# cancel-in-progress a second merge KILLS the first merge's run. That run is
+# the only place `plan-review-record` (the §4.12 keystone gate) executes, so
+# the gate silently skips itself for a commit that DID land on main — under
+# exactly the condition it exists to catch (rapid back-to-back merges). PRs
+# keep cancellation: `refs/pull/N/merge` is already unique per PR, so a new
+# push to a PR still supersedes its own stale run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Run all jobs in IST. This is an India-only app whose date logic is
 # IST-anchored (CLAUDE.md "IST throughout"), and several contract tests assert
@@ -246,11 +253,17 @@ jobs:
   # ── Build Gate: Verify APK compiles ─────────────────────────────
   # Catches compile errors that flutter analyze misses (template issues,
   # asset problems, Gradle failures).
+  # No `needs:` — this job is an independent compile check and gains nothing
+  # from waiting. It used to sit behind [analyze-and-unit-test, contract-tests],
+  # which serialized the two longest jobs and made total wall-clock their SUM
+  # (6m58s + 7m41s = 14m46s on run 30168462713) instead of their MAX. Running
+  # from t=0 weakens no gate: every job still runs and still fails the workflow
+  # on its own. The dependency also saved nothing on 3 of the last 4 red runs,
+  # which failed in `audit-gates` — a job build-check never depended on.
   build-check:
     name: Build Check (APK)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [analyze-and-unit-test, contract-tests]
 
     steps:
       - uses: actions/checkout@v4
@@ -259,6 +272,11 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          # Caches ~/.gradle keyed on **/*.gradle* + gradle-wrapper.properties
+          # (all present under android/). Content-keyed, so a stale or missing
+          # cache degrades to the previous uncached behaviour rather than
+          # breaking the build.
+          cache: 'gradle'
 
       - uses: subosito/flutter-action@v2
         with:

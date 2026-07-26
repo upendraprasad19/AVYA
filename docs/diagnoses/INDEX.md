@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### ci_concurrency_cancels_keystone_gate (1 bugs)
+- 2026-07-26 e4a7c1 — |
+
 ### hold_display_read_path (1 bugs)
 - 2026-07-25 c8b3f2 — >
 
@@ -836,6 +839,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-26 | e4a7c1 | \| | ci_concurrency_cancels_keystone_gate | test/contracts/ci_workflow_concurrency_test.dart |
 | 2026-07-25 | c8b3f2 | > | hold_display_read_path | test/contracts/hold_display_read_path_test.dart |
 | 2026-07-23 | b7d4e2 | \| | auth_password_reset_pkce_detection | test/contracts/password_recovery_detector_test.dart |
 | 2026-07-23 | 9f5c41 | \| | auth_password_reset_timing | test/contracts/password_reset_redirect_flow_test.dart |
