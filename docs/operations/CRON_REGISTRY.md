@@ -20,27 +20,39 @@
 
 ## Active jobs (declared by migration)
 
-| Migration | Job name | Cadence | Function | Owner | Vault dep | Notes |
+| Migration | Job name (jobid) | Cadence UTC | Cadence IST | Function | Vault dep | Notes |
 |---|---|---|---|---|---|---|
-| 015 | `morning-alert-daily` | 06:00 IST daily | `morning-alert` | founder | `service_role_key` | Pushes morning workout/streak nudge |
-| 028 | `compute-coach-signals-nightly` | 02:00 IST daily | `compute-coach-signals` | founder | `service_role_key` | Aggregates 7-day signals for AI coach context |
-| 031 | `proactive_re_engagement` (jobid 10) | 06:30 UTC = 12:00 IST | `re-engagement` | founder | `service_role_key` | Win-back nudge for lapsed users. **F47 (2026-06-07):** registry previously listed a single fictional `proactive-triggers` job → `proactive-triggers` (no such cron name, no such function dir). Migration 031 actually schedules these 5 granular jobs. |
-| 031 | `proactive_plateau_alert` (jobid 11) | 13:30 UTC = 19:00 IST | `plateau-alert` | founder | `service_role_key` | Flags weight/lift plateaus |
-| 031 | `proactive_protein_gap_alert` (jobid 12) | 14:30 UTC = 20:00 IST | `protein-gap-alert` | founder | `service_role_key` | Daily protein-deficit nudge |
-| 031 | `proactive_workout_window_closing` (jobid 13) | 15:30 UTC = 21:00 IST | `workout-window-closing` | founder | `service_role_key` | Evening pre-bed training nudge. (031 also schedules `proactive_pr_detection` (jobid 9) → `pr-detection` — see the `065` row below, which re-registered it for auth.) |
-| 040 | `evaluate-rank-promotions-daily` | 04:00 IST daily | `evaluate-rank-promotions` | founder | `service_role_key` | Promotes users up the Lt/Cdr ladder |
-| 043 | `i-see-you-daily` | 19:30 IST daily (14:00 UTC) | `i-see-you-callout` | founder | `service_role_key` | Surfaces "I see you" callouts |
-| 046 | `morning_alert_deliver_early` (jobid 17) | 04:30 IST daily | `morning-alert` (personalised delivery slot) | founder | `service_role_key` | Early-bird variant; broke silently in mid-May before being detected |
-| 046 | `morning_alert_deliver_late` | 07:30 IST daily | `morning-alert` (personalised delivery slot) | founder | `service_role_key` | Late-riser variant |
-| 047 | `clean-orphan-media-weekly` | Sunday 03:00 IST | `clean-orphan-media` | founder | `service_role_key` | Sweeps unreferenced Storage objects |
-| 061 | `rolling-context-nightly` | 03:00 IST daily | `rolling-context` | founder | `service_role_key` | Retrofitted to `private.morning_alert_get_service_key()` in audit 2026-05-12 P1-D |
-| 061 | `streak-guardian-daily` | 20:00 IST daily (14:30 UTC) | `streak-guardian` | founder | `service_role_key` | Same P1-D retrofit. **F46 (2026-06-07):** registry said 23:50 IST, but migration 061 + live jobid 20 are both `30 14 * * *` = 20:00 IST — corrected here + in the function docstring. |
-| 061 | `weekly_recap_ready_sunday` | Sunday 09:00 IST | `weekly-report` | founder | `service_role_key` | Audit P1-D fix; sends weekly performance recap |
-| 061 | `expiry_reminder_daily` | 10:00 IST daily | `expiry-reminder` | founder | `service_role_key` | Audit P1-D fix; subscription expiry nudges |
-| 047 | `clean_orphan_media_daily` | 03:00 IST daily | `clean-orphan-media` | founder | `service_role_key` | Sweeps unreferenced Storage objects (entry rename: registry initially used weekly cadence — actual migration is daily) |
-| 065 | `pr-detection` (jobid 9) | every 15 min | `pr-detection` | founder | `service_role_key` | Fixed env-vs-vault drift on 2026-05-15 (operational fix) |
-| 068 | cron_call_log housekeeping | hourly | (intra-DB function) | founder | n/a | Cleans `cron_call_log` rows older than 7d |
-| 102 | `compute_admin_metrics_daily` | 23:45 IST daily (18:15 UTC) | `compute-admin-metrics-daily` | founder | `service_role_key` | Populates `public.admin_metrics_daily` (one row/day) for the founder-only `/admin` dashboard's trend charts. Deliberately late in the day (not just-after-midnight) — the `*_today` fields are cumulative-since-midnight-IST, so an early-morning run would snapshot near-zero for every "today" metric. |
+| 015 | `morning_alert_generate` (5) | `30 20 * * *` | 02:00 | `morning-alert` (generate) | `cron_secret` | Builds the personalised morning payload |
+| 065 | `promote_community_item_daily` (7) | `30 20 * * *` | 02:00 | `promote-community-item` | `cron_secret` | **Never succeeded before 2026-07-26** — used `current_setting('app.settings.service_role_key')`, which is unset on this project, so `'Bearer ' \|\| NULL` sent a NULL header. Fixed by migration 107 |
+| 028 | `compute_coach_signals` (8) | `0 21 * * *` | 02:30 | `compute-coach-signals` | `cron_secret` | Writes `dropout_risk_score` / `plateau_risk_score`. **Was the ONLY job surviving the 401 outage** — because it had no auth gate at all (added 2026-07-26, diagnose c3f8a1) |
+| 065 | `proactive_pr_detection` (9) | `*/15 * * * *` | every 15 min | `pr-detection` | `cron_secret` | Highest-frequency job; the de-facto heartbeat `alert_cron_silence` keys on |
+| 031 | `proactive_re_engagement` (10) | `30 06 * * *` | 12:00 | `re-engagement` | `cron_secret` | Win-back nudge for lapsed users |
+| 031 | `proactive_plateau_alert` (11) | `30 13 * * *` | 19:00 | `plateau-alert` | `cron_secret` | PRO-only; flags weight/lift plateaus |
+| 031 | `proactive_protein_gap_alert` (12) | `30 14 * * *` | 20:00 | `protein-gap-alert` | `cron_secret` | PRO-only protein-deficit nudge |
+| 031 | `proactive_workout_window_closing` (13) | `30 15 * * *` | 21:00 | `workout-window-closing` | `cron_secret` | Evening pre-bed training nudge |
+| 040 | `evaluate_rank_promotions` (14) | `30 18 * * *` | **00:00** (next day) | `evaluate-rank-promotions` | `cron_secret` | Monotonic — promotes only, never demotes |
+| 043 | `i-see-you-daily` (15) | `0 14 * * *` | 19:30 | `i-see-you-callout` | `cron_secret` | Self-limiting to recently-active users |
+| 046 | `morning_alert_deliver_late` (16) | `*/15 22-23 * * *` | every 15 min, 03:30–05:29 | `morning-alert` (deliver) | `cron_secret` | Per-user delivery-slot sweep |
+| 046 | `morning_alert_deliver_early` (17) | `*/15 0-6 * * *` | every 15 min, 05:30–12:29 | `morning-alert` (deliver) | `cron_secret` | Per-user delivery-slot sweep |
+| 047 | `clean_orphan_media_daily` (18) | `0 3 * * *` | 08:30 | `clean-orphan-media` | `cron_secret` | **DELETES Storage objects** — highest-consequence endpoint behind the shared secret |
+| 061 | `rolling-context-nightly` (19) | `0 21 * * *` | 02:30 | `rolling-context` | `cron_secret` | Nightly AI context rebuild |
+| 061 | `streak-guardian-daily` (20) | `30 14 * * *` | 20:00 | `streak-guardian` | `cron_secret` | Nudges streaks at risk |
+| 061 | `weekly_recap_ready_sunday` (21) | `30 14 * * 0` | **Sun 20:00** | `weekly-recap-ready` | `cron_secret` | Gemini 2.5 Pro, PRO-only. Slowest cadence in the fleet — the reason `alert_cron_function_dead` uses an 8-day window |
+| 061 | `expiry_reminder_daily` (22) | `0 9 * * *` | 14:30 | `expiry-reminder` | `cron_secret` | Subscription expiry nudges |
+| 068 / 109 | `cron_call_log_cleanup_daily` (23) | `30 3 * * *` | 09:00 | (intra-DB) | n/a | 7-day retention, **always sparing the newest success row AND the newest row of any status** (110). Its function did not exist until 109 — the job had errored 70× |
+| 076 | `alert_payment_flow_health` (26) | `7 * * * *` | hourly, :07 UTC | (intra-DB) | n/a | Needs ≥3 new subscriptions in 24h to fire — effectively dormant at current scale |
+| 076 | `alert_edge_function_health` (27) | `*/15 * * * *` | every 15 min | (intra-DB) | n/a | Computes an error RATE from `cron_call_log`. **Structurally blind to an auth outage** — a 401 writes no row, so its `total >= 5` guard never matches. Never fired once |
+| 077 | `alert_client_errors_spike` (29) | `*/15 * * * *` | every 15 min | (intra-DB) | n/a | The only alert that has ever fired |
+| 102 | `compute_admin_metrics_daily` (30) | `15 18 * * *` | 23:45 | `compute-admin-metrics-daily` | `cron_secret` | Late-in-day deliberately: `*_today` fields are cumulative since IST midnight |
+| 109 | `alert_cron_silence` (31) | `17 * * * *` | hourly, :17 UTC | (intra-DB) | n/a | Fires when NO cron has succeeded in ≥2h. Catches a TOTAL outage fast; blind to single-function death — `alert_cron_function_dead` (110) is the complement |
+| 110 | `alert_cron_function_dead` | `47 6 * * *` | 12:17 | (intra-DB) | n/a | Per-function complement: a function that succeeded within 14d but not in 8d is presumed dead. Catches the shape `alert_cron_silence` misses |
+
+> **Cadence accuracy (corrected 2026-07-26, Hermes L31).** Every row above was regenerated from live
+> `cron.job` rather than hand-maintained — 11 of the previous 20 rows had wrong IST conversions, two
+> named jobs that do not exist, and five live jobs were missing entirely. pg_cron runs in **UTC**
+> (`cron.timezone = GMT`); IST = UTC+5:30. Gate 31 checks **presence only** — it cannot see a wrong
+> cadence, so this table's accuracy is unenforced and must be regenerated from live state, never
+> edited by hand.
 
 ## Deprecated / unscheduled
 
@@ -51,7 +63,8 @@
 ## How to add a new cron job
 
 1. Write the migration as `supabase/migrations/NNN_<feature>_cron.sql`.
-2. Use `private.morning_alert_get_service_key()` (NOT a hardcoded JWT) in the `Authorization: Bearer ' ||` clause. See `supabase/functions/CLAUDE.md` "Cron jobs send Authorization: Bearer null" entry for history.
+2. Use **`private.cron_get_secret()`** (NOT a hardcoded JWT, and NOT the old `private.morning_alert_get_service_key()`) in the `Authorization: Bearer ' ||` clause. The old accessor returns the service_role JWT, which the auth gate no longer accepts — migrations 107/108 moved the whole fleet onto the `CRON_SECRET` shared secret. `private.cron_get_secret()` RAISES if the Vault row is missing, so a future disappearance shows up as `cron.job_run_details.status='failed'` rather than as a silent 401. See `supabase/functions/_shared/cron_auth.ts` (HISTORY section) and diagnose `c3f8a1`.
+   ⚠ Target function must be `verify_jwt=false`. With `verify_jwt=true` the Supabase gateway validates the bearer as a project-signed JWT *before the module loads*, so an opaque shared secret is rejected before your gate ever runs.
 3. Add a row to this registry — name, cadence, function, owner, vault dep.
 4. Apply migration via Supabase MCP `apply_migration`. Update `backups/applied_migrations.json` in the same commit (per `feedback_migration_apply_record_pair.md`).
 5. Run `dart run scripts/check_cron_registry.dart` — must pass.

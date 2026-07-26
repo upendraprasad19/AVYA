@@ -699,5 +699,37 @@
     "hash": "sha256:839546b01c82de28d6994ca275fbfab4b05c21b93e8a99f0e05fc9572afb35ef",
     "applier": "claude",
     "slug": "email_is_registered_check"
+  },
+  {
+    "migration": "107",
+    "applied_at": "2026-07-26T10:05:00+05:30",
+    "hash": "sha256:8f0946425e60de066618384f28e62b077b65a408cd12dc92ed11875bdfbe38a3",
+    "applier": "claude-via-mcp",
+    "diagnose": "c3f8a1",
+    "slug": "cron_secret_auth"
+  },
+  {
+    "migration": "108",
+    "applied_at": "2026-07-26T12:14:00+05:30",
+    "hash": "sha256:3e641e2df53a0318920ccfd5e75555dd8727cbb1a9b5909923a8f82863a7d725",
+    "applier": "claude-via-mcp",
+    "diagnose": "c3f8a1",
+    "slug": "cron_secret_auth_verify_jwt_jobs"
+  },
+  {
+    "migration": "109",
+    "applied_at": "2026-07-26T10:07:00+05:30",
+    "hash": "sha256:1980b56f0a6c5bdf48a752476dc155282713830747839e0df1671f3dc62a826c",
+    "applier": "claude-via-mcp",
+    "diagnose": "c3f8a1",
+    "slug": "cron_silence_alert_and_log_cleanup"
+  },
+  {
+    "migration": "110",
+    "applied_at": "2026-07-26T13:00:00+05:30",
+    "hash": "sha256:4de9a96e14165cfa9eaf20ecae6c87471025cb61b23b0b835baa69efbf268c75",
+    "applier": "claude-via-mcp",
+    "diagnose": "c3f8a1",
+    "slug": "cron_silence_per_function_and_cleanup_null_guard"
   }
 ]

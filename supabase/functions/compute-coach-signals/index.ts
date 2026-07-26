@@ -10,6 +10,8 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { upsertCoachMemory } from "../_shared/coach_memory.ts";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +24,27 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // ── Auth gate added 2026-07-26 (diagnose c3f8a1).
+  //
+  // This function shipped with NO authentication of any kind. It relied
+  // entirely on verify_jwt=true at the gateway, which accepts ANY project-signed
+  // JWT — including the anon key compiled into every APK and web bundle. Any
+  // app user could therefore invoke it and drive up to 5000 RPC round-trips
+  // (see the active_users_for_signals ceiling noted above).
+  //
+  // DEPLOY ORDER MATTERS: this gate must be deployed while verify_jwt is still
+  // true (function is then double-protected), THEN verify_jwt flipped to false,
+  // THEN migration 108 repoints the cron job onto CRON_SECRET. Flipping the flag
+  // before this gate existed would have left the function briefly public.
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[compute-coach-signals] unauthorized caller; status=401`);
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const logId = await logCronStart("compute-coach-signals");
   const requestId = crypto.randomUUID().split("-")[0];
   try {
     const supabase = createClient(
@@ -56,12 +79,24 @@ Deno.serve(async (req) => {
     console.log(
       `[compute-coach-signals] request_id=${requestId} done processed=${processed} failed=${failed}`,
     );
+    await logCronEnd(logId, "success", { httpStatus: 200, requestId });
     return new Response(
       JSON.stringify({ status: "ok", processed, failed, request_id: requestId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     console.error(`[compute-coach-signals] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      // NOT String(err): the dominant throw here is `if (error) throw error`
+      // on a supabase-js PostgrestError, which is a plain {message, details,
+      // hint, code} object — not an Error subclass — so String() yields
+      // "[object Object]" and the telemetry carries no diagnostic content for
+      // exactly the failure it exists to surface.
+      errorSummary: (err as { message?: string } | null)?.message ??
+        String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

@@ -1,77 +1,99 @@
 /**
- * cron_auth.ts — JWT signature + role-claim auth for cron Edge Functions.
+ * cron_auth.ts — shared-secret auth gate for cron-dispatched Edge Functions.
  *
- * Audit 2026-05-16 / E.14.C (closes-diagnose: telemetry-hardening).
- *
- * BACKGROUND
- * ----------
- * Test #16 / P1-D documented a 401-storm root-cause class: every cron
- * Edge Function inlines an env-equality check shaped like:
- *
- *   const isServiceRole = !!serviceRoleKey && token === serviceRoleKey;
- *
- * This is brittle. When the Vault-stored JWT and the env-injected
- * `SUPABASE_SERVICE_ROLE_KEY` drift (platform rotation, manual Vault
- * re-save), the equality check fails and every cron tick returns 401
- * for hours/days before anyone notices — `cron.job_run_details` reports
- * "succeeded" regardless of the HTTP response.
- *
- * F9.1 (Agent 7 findings) flagged the lack of a shared helper as a
- * framework gap. This module is the replacement.
+ * Rewritten 2026-07-26 (closes-diagnose: c3f8a1). See HISTORY at the bottom —
+ * the two previous designs both failed in production, and the second failed
+ * silently for roughly eight weeks.
  *
  * AUTH MODEL
  * ----------
- * We decode the bearer token's JWT, verify the signature using the
- * project's `SUPABASE_JWT_SECRET` (Supabase auth signs all keys with
- * the same HS256 secret), and require `role === 'service_role'`.
- * Signature verification means a rotated key still authenticates as
- * long as it was signed by the same project secret — no env-drift
- * silent failure.
+ * A single opaque shared secret. The caller must present
+ * `Authorization: Bearer <CRON_SECRET>`, where `CRON_SECRET` is an Edge
+ * Function secret whose value also lives in the Vault row `cron_secret`, read
+ * by `private.cron_get_secret()` and interpolated into every `cron.job`
+ * command (migrations 107/108).
  *
- * The legacy `CRON_SECRET` opaque-token escape hatch is preserved so
- * we can rollback per-function if jose import or signature verify
- * misbehaves on Deno Deploy edge.
+ * WHY A SHARED SECRET RATHER THAN A JWT
+ * -------------------------------------
+ * This is machine-to-machine auth between pg_cron and the Edge runtime. There
+ * is no user identity to carry, no claims to inspect and no delegation — a
+ * signed token buys nothing here, and every JWT-shaped attempt has coupled the
+ * gate to platform key management that then changed underneath it:
  *
- * USAGE (per-cron-function)
+ *   - Attempt 1 compared the token to `SUPABASE_SERVICE_ROLE_KEY`. Broke when
+ *     the Vault copy and the env copy drifted (diagnose 5a65bd).
+ *   - Attempt 2 verified the signature against `SUPABASE_JWT_SECRET` — a
+ *     variable Supabase does not inject and **forbids creating**, because the
+ *     platform reserves the `SUPABASE_` prefix for secret names. Unsatisfiable
+ *     by construction; every cron call 401'd from the day it deployed.
+ *
+ * A string comparison has no such coupling. It is unaffected by the JWT
+ * signing-key migration now underway on this project and by the deprecation of
+ * `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`.
+ *
+ * ⚠ THE SECRET IS THE ONLY GATE. Cron functions run `verify_jwt=false`, so
+ * their URLs accept unauthenticated POSTs from anywhere and this comparison is
+ * all that stands between the open internet and a privileged fan-out (push
+ * sends, Gemini spend, storage deletion). `CRON_SECRET` must be long and
+ * cryptographically random — `openssl rand -hex 32`. Never a memorable phrase.
+ *
+ * USAGE (per cron function)
  * -------------------------
  *   import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
  *
  *   Deno.serve(async (req) => {
  *     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
  *     if (!await isAuthorizedCronCall(req)) {
- *       return new Response(
- *         JSON.stringify({ error: "Unauthorized" }),
- *         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
- *       );
+ *       return new Response(JSON.stringify({ error: "Unauthorized" }), {
+ *         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+ *       });
  *     }
+ *     const logId = await logCronStart("<slug>");   // AFTER the gate — see below
  *     // ... handler body
  *   });
  *
- * NOTE — DO NOT DEPLOY in this batch. Source edit only; founder must
- * approve per-function deploys (live Edge Function deploys are gated).
+ * ⚠ KEEP `logCronStart` AFTER THIS GATE. It is tempting to move it earlier so
+ * that rejected calls leave a telemetry row — the 2026-07-26 batch considered
+ * exactly that. Don't: on a `verify_jwt=false` endpoint it would hand every
+ * anonymous caller an unauthenticated INSERT into `public.cron_call_log`.
+ * Outage visibility is provided instead by `alert_cron_silence` (migration
+ * 109), which alerts on the ABSENCE of successful runs and therefore needs no
+ * writes from unauthenticated callers.
  */
 
-// Tech-debt audit 2026-05-20 D12: bumped jose v5.6.3 → v5.9.6 (security
-// patches in 5.7.x/5.8.x/5.9.x). Gate: scripts/check_jose_version.dart.
-import { jwtVerify } from "https://deno.land/x/jose@v5.9.6/index.ts";
+/**
+ * Constant-time string comparison.
+ *
+ * Both sides are hashed to a fixed 32-byte digest first, then compared with an
+ * XOR-accumulate that always walks the full length. This leaks neither the
+ * secret's length nor the position of the first differing byte, whereas a plain
+ * `!==` short-circuits on the first mismatch and is measurable over enough
+ * requests.
+ *
+ * Worth the few microseconds here specifically because this comparison is the
+ * ONLY gate on 16 publicly-reachable endpoints (see the warning above), and the
+ * secret in production is currently low-entropy by explicit accepted risk
+ * (migration 107 header) — a weak secret plus a timing oracle is materially
+ * worse than either alone.
+ */
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const va = new Uint8Array(da);
+  const vb = new Uint8Array(db);
+  let diff = 0;
+  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
+  return diff === 0;
+}
 
 /**
- * Returns true when the request's Authorization header carries either:
+ * True when the request carries `Authorization: Bearer <CRON_SECRET>`.
  *
- *   (a) a JWT signed by `SUPABASE_JWT_SECRET` with `role === 'service_role'`, OR
- *   (b) an opaque token exactly matching `CRON_SECRET` (legacy/escape hatch).
- *
- * False on missing header, malformed bearer, invalid signature, expired
- * token, wrong role claim, or any internal error. Safe to call without
- * try/catch — never throws.
- *
- * Env vars consulted:
- *   - SUPABASE_JWT_SECRET (required for JWT path)
- *   - CRON_SECRET         (optional escape hatch)
- *
- * Pinned by the diagnose-doc; not unit-tested at this revision because
- * jose's WebCrypto path is hard to mock in-process. Replace with a
- * decode-only mock in tests when adding coverage.
+ * False on a missing header, a malformed bearer, an unset `CRON_SECRET`, or any
+ * mismatch. Never throws — safe to call without try/catch.
  */
 export async function isAuthorizedCronCall(req: Request): Promise<boolean> {
   try {
@@ -86,40 +108,51 @@ export async function isAuthorizedCronCall(req: Request): Promise<boolean> {
       return false;
     }
 
-    // Escape hatch — opaque CRON_SECRET match. Kept so a per-function
-    // rollback is one env var away if jose / signature verify breaks.
-    const cronSecret = Deno.env.get("CRON_SECRET");
-    if (cronSecret && cronSecret.length > 0 && token === cronSecret) {
-      return true;
-    }
-
-    // JWT signature + role-claim path.
-    const jwtSecret = Deno.env.get("SUPABASE_JWT_SECRET");
-    if (!jwtSecret || jwtSecret.length === 0) {
-      console.warn("[cron_auth] SUPABASE_JWT_SECRET unset; cannot verify JWT");
-      return false;
-    }
-    const secretKey = new TextEncoder().encode(jwtSecret);
-
-    let payload: Record<string, unknown>;
-    try {
-      const verified = await jwtVerify(token, secretKey);
-      payload = verified.payload as Record<string, unknown>;
-    } catch (err) {
-      console.warn(`[cron_auth] jwtVerify failed: ${(err as Error).message}`);
+    // Trimmed on BOTH sides. A trailing newline pasted into the dashboard
+    // secret would otherwise reject every call with no visible reason.
+    const cronSecret = (Deno.env.get("CRON_SECRET") ?? "").trim();
+    if (cronSecret.length === 0) {
+      console.warn(
+        "[cron_auth] CRON_SECRET is unset — every cron call will be rejected. " +
+          "Set it in Project Settings -> Edge Functions -> Secrets, matching " +
+          "the `cron_secret` Vault row exactly.",
+      );
       return false;
     }
 
-    const role = payload["role"];
-    if (role !== "service_role") {
-      console.warn(`[cron_auth] role claim mismatch: got ${String(role)}`);
+    if (!await timingSafeEqual(token, cronSecret)) {
+      console.warn("[cron_auth] bearer token does not match CRON_SECRET");
       return false;
     }
 
     return true;
   } catch (err) {
-    // Defensive — never let auth-gate code crash the caller.
+    // Defensive — never let the auth gate crash its caller.
     console.error("[cron_auth] unexpected error:", err);
     return false;
   }
 }
+
+/*
+ * HISTORY
+ * -------
+ * 2026-05-11 (7ad0c4)  Gate introduced; 8 cron functions were publicly callable.
+ * 2026-05-12 (audit P0) Vault `service_role_key` row was empty, so the header
+ *                       went out as `Bearer null` → 401 on every tick, 12 jobs.
+ * 2026-05-15 (5a65bd)  Env-equality check broke on Vault/env key drift. That
+ *                       write-up proposed "replace the brittle env-equality
+ *                       check with a JWT signature+role decode" as the
+ *                       permanent class fix.
+ * 2026-05-16           The class fix shipped. It depended on
+ *                       `SUPABASE_JWT_SECRET`, which cannot exist. The fix
+ *                       made the bug permanent instead of ending it.
+ * 2026-07-26 (c3f8a1)  Discovered: ~8 weeks of total cron silence. Three
+ *                       safeguards had failed together — telemetry sat behind
+ *                       the failing gate, pg_cron reports `succeeded` for any
+ *                       dispatch regardless of HTTP status, and the health
+ *                       alert computed a rate from the table the failure kept
+ *                       empty. Replaced with this shared-secret gate; the
+ *                       `deno.land/x/jose` dependency is gone with it, closing
+ *                       a remote-dep-rot risk this repo has already been bitten
+ *                       by (feedback_mistake_remote_dep_rot).
+ */
