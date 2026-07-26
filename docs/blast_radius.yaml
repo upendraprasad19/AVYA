@@ -77,6 +77,23 @@ paths:
   - { glob: "scripts/git_safety_lib.dart", tier: platform }
   - { glob: "scripts/check_commit_from_worktree.dart", tier: platform }
   - { glob: "scripts/worktree_guard_lib.dart", tier: platform }
+  # The §4.12 keystone gate + the machinery that DECIDES every tier. Same
+  # reasoning as the hooks above, with a live smoking gun: merge 904e6961
+  # changed .github/workflows/test.yml — the file defining the keystone gate's
+  # own CI job, whose cancel-in-progress bug was silently SKIPPING that gate —
+  # and cleared zero review gate, because .github/** and scripts/** are feature
+  # tier via the catch-alls below. A change to the reviewer must not be exempt
+  # from review. blast_radius.yaml and the classifier are included because a
+  # commit that DOWNGRADES a tier would otherwise clear nothing either.
+  # (merge-governance batch 2026-07-26, review round 1 finding F8.)
+  - { glob: "scripts/check_plan_review_record_exists.dart", tier: platform }
+  - { glob: "scripts/plan_review_record_lib.dart", tier: platform }
+  - { glob: "scripts/check_gate_scripts_wired.dart", tier: platform }
+  - { glob: "scripts/blast_radius_from_diff.dart", tier: platform }
+  - { glob: "scripts/blast_radius_content_rules_lib.dart", tier: platform }
+  - { glob: "scripts/pre-commit.sh", tier: platform }
+  - { glob: "docs/blast_radius.yaml", tier: platform }
+  - { glob: ".github/workflows/test.yml", tier: platform }
   - { glob: ".claude/settings.json", tier: platform }
 
   # ----- account -----

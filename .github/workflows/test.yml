@@ -185,28 +185,23 @@ jobs:
       - name: Check plan-review record exists
         run: dart run scripts/check_plan_review_record_exists.dart
 
-  # ── Tier 2: Contract Tests ─────────────────────────────────────
-  # Verifies Hive key agreements, retry guards, Edge Function patterns.
-  # These catch the exact class of bugs from the 2026-04-07 audit.
-  contract-tests:
-    name: Contract Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.4'
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Run contract tests
-        run: flutter test test/contracts/ --reporter expanded
+  # ── Tier 2: Contract Tests — REMOVED 2026-07-26 (merge-governance batch) ──
+  # `test/contracts/` is a strict SUBDIRECTORY of `test/`, so the
+  # `analyze-and-unit-test` job's `flutter test test/ --exclude-tags golden`
+  # already runs every one of these. Measured at removal time: 432 of the 627
+  # `*_test.dart` files under `test/` live in `test/contracts/`, with no tag
+  # divergence — `dart_test.yaml` defines only `golden`, unused there — so this
+  # job was ~4m53s of identical work on every run.
+  #
+  # Deleting it does NOT reduce coverage, and — contrary to the batch's original
+  # rationale — it does NOT reduce wall-clock either: it finished ~2.5 min before
+  # the run ended (04:55:58 vs 04:58:29 on run 30188423209), so it was never on
+  # the critical path. The APK job is. What it actually saves is ~5 min of
+  # duplicate runner-minutes per run, and one source of "which job ran this
+  # test?" confusion.
+  #
+  # `scripts/pre-commit.sh` still runs the `test/contracts/` subset locally as
+  # the fast pre-commit gate — unaffected by this removal.
 
   # ── Tier 3: Supabase Integration Tests (requires secrets) ──────
   # Only runs if SUPABASE_URL secret is configured.

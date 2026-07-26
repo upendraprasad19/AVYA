@@ -44,6 +44,19 @@
 import 'dart:io';
 
 import 'blast_radius_content_rules_lib.dart';
+import 'plan_review_record_lib.dart';
+
+/// Repo owner for the PR-merge subject guard, when `GITHUB_REPOSITORY_OWNER`
+/// is absent (local runs). Derived from origin's URL; returns null if it cannot
+/// be determined, which makes the PR form fail closed rather than trust an
+/// unverifiable owner.
+String? _ownerFromRemote() {
+  final url = _git(['remote', 'get-url', 'origin']);
+  if (url.isEmpty) return null;
+  // git@github.com:owner/repo.git  |  https://github.com/owner/repo.git
+  final m = RegExp(r'[:/]([^/:]+)/[^/]+?(?:\.git)?$').firstMatch(url);
+  return m?.group(1);
+}
 
 const _registryPath = 'docs/blast_radius.yaml';
 const _recordsDir = 'docs/plan-reviews';
@@ -141,13 +154,49 @@ void main(List<String> args) {
   }
 
   // 3. Recover the merged branch name from the merge commit subject.
+  //    Handles three real shapes (see plan_review_record_lib.dart):
+  //      - `Merge branch 'X'`                      local --no-ff merge
+  //      - `Merge pull request #N from owner/X`    GitHub PR merge (owner-guarded)
+  //      - `Merge branch 'X' of <url>`             git pull — remote sync, not a landing
   final subject = _git(['log', '-1', '--format=%s', 'HEAD']);
-  final bm = RegExp(r"Merge branch '([^']+)'").firstMatch(subject);
-  if (bm == null) {
-    exit(die("could not recover merged branch from subject: '$subject' "
-        "(expected \"Merge branch 'X'\"). Use --no-ff merges with the default subject."));
+  final repoOwner =
+      Platform.environment['GITHUB_REPOSITORY_OWNER'] ?? _ownerFromRemote();
+  final ms = classifyMergeSubject(subject, repoOwner: repoOwner);
+
+  switch (ms.kind) {
+    case MergeSubjectKind.remoteSyncMerge:
+      // `git pull` on main with divergent local history. The incoming commits
+      // were already gated when they were originally pushed; treating this as a
+      // branch landing makes the gate demand docs/plan-reviews/main.md and
+      // reddens main for doing nothing but syncing.
+      //
+      // ONLY a same-branch sync qualifies. `git pull origin <feature>` while on
+      // main produces this same shape but IS a feature landing, and passing it
+      // unconditionally was a craftable bypass: any subject ending `' of x'`
+      // exited 0 before blast-radius was computed (round-2 review, P1-2).
+      // Anything else falls through to the normal record requirement.
+      if (ms.branch == 'main') {
+        stdout.writeln('$tag PASS: remote-sync merge (git pull) of '
+            "'main' — syncing main with its own remote, not a landing.");
+        exit(0);
+      }
+      break;
+    case MergeSubjectKind.foreignPullRequest:
+      exit(die("PR merge from owner '${ms.owner}' does not match this repo's "
+          "owner '${repoOwner ?? '<unknown>'}' (branch '${ms.branch}'). This "
+          'repo is public: a fork branch whose short name collides with an '
+          'existing approved record must never be treated as reviewed.'));
+    case MergeSubjectKind.unrecognized:
+      exit(die("could not recover merged branch from subject: '$subject' "
+          "(expected \"Merge branch 'X'\" or "
+          '"Merge pull request #N from owner/X").'));
+    case MergeSubjectKind.branchMerge:
+    case MergeSubjectKind.pullRequestMerge:
+      break;
   }
-  final branch = bm.group(1)!.split('/').last; // strip any remote/ prefix
+
+  final rawBranch = ms.branch!;
+  final branch = recordSlug(rawBranch);
 
   // 4. Blast-radius of the branch's changes (three-dot = merge-base..branch-tip).
   final regFile = File(_registryPath);
@@ -180,6 +229,52 @@ void main(List<String> args) {
     exit(0);
   }
 
+  // 4b. Dependabot exemption — CONTENT-verified, not name-trusted.
+  //
+  // pubspec.yaml/lock are platform tier, so every automated bump would demand a
+  // plan-review record no bot can author. Founder decision 2026-07-26: exempt
+  // the RECORD requirement for genuine dependency bumps, because the real
+  // control for a bump is the full CI suite, not a hand-written plan.
+  //
+  // The branch NAME alone earns nothing (anyone with push access can name a
+  // branch `dependabot/x`), so two further conditions apply:
+  //   (1) every commit on the merged side must be authored by Dependabot, AND
+  //   (2) the diff must touch ONLY dependency manifests.
+  //
+  // Be honest about the strength of (1): git author email is self-asserted and
+  // NOT cryptographically verified, so `GIT_AUTHOR_EMAIL=...dependabot...`
+  // defeats it. It raises the bar rather than sealing it. Condition (2) is the
+  // load-bearing one — it bounds any abuse to a pubspec-only diff, which the
+  // full CI suite still runs. Both require push access, so this sits at the
+  // same trust level as the known-open single-parent bypass, not below it.
+  // `.github/workflows/**` is deliberately NOT allowed — letting a bot rewrite
+  // the CI that enforces every other gate would contradict promoting test.yml
+  // to platform tier in this same batch. Action bumps still need a record.
+  //
+  // Tested on rawBranch (pre-slug), since recordSlug() maps the slashes away.
+  if (isDependabotBranch(rawBranch)) {
+    final authors = _git(['log', '--format=%ae', 'HEAD^1..HEAD^2']).split('\n');
+    if (!allCommitsAuthoredByDependabot(authors)) {
+      exit(die("branch '$rawBranch' is named like a Dependabot branch but its "
+          'commits are not authored by Dependabot (authors: '
+          "${authors.where((a) => a.trim().isNotEmpty).toSet().join(', ')}). "
+          'The exemption is content-verified; a branch name alone earns nothing.'));
+    }
+    final offending = paths.where((p) => !dependabotAllowedPaths.contains(p));
+    if (!dependabotDiffIsManifestOnly(paths)) {
+      exit(die("Dependabot branch '$rawBranch' touches paths outside the "
+          'dependency manifests: ${offending.join(', ')}. Allowed: '
+          '${dependabotAllowedPaths.join(', ')}. An Actions-version bump edits '
+          'CI workflow files and therefore still requires a plan-review record '
+          '— a bot must not rewrite the CI that enforces every other gate.'));
+    }
+    stdout.writeln('$tag PASS (Dependabot exemption): branch `$rawBranch` '
+        'blast-radius=$maxTier, but every commit is authored by Dependabot and '
+        'the diff touches only ${paths.join(', ')}. Record requirement waived; '
+        'the CI suite is the control. §4.12 founder decision 2026-07-26.');
+    exit(0);
+  }
+
   // 5. Require + validate the record.
   final recFile = File('$_recordsDir/$branch.md');
   if (!recFile.existsSync()) {
@@ -190,6 +285,21 @@ void main(List<String> args) {
   final content = recFile.readAsStringSync();
   String? field(String k) =>
       RegExp('^$k:\\s*(.+)\$', multiLine: true).firstMatch(content)?.group(1)?.trim();
+
+  // 5a. The record must NAME the branch it reviewed.
+  //
+  // recordSlug() maps `/` → `-`, which is not injective: a branch `hold/mechanic`
+  // slugs to `hold-mechanic`, an EXISTING converged + bpass-accepted record for
+  // unrelated work. Without this cross-check that merge would pass the gate on
+  // someone else's review. 68 of the 69 tracked records already carry `branch:`; the one
+  // that does not (free-tier-hold-findings.md) is a findings doc no branch
+  // resolves to.
+  if (!recordBranchFieldMatches(content, rawBranch)) {
+    exit(die("${recFile.path}: its `branch:` field does not name '$rawBranch' "
+        "(found: '${field('branch') ?? '<absent>'}'). A record vouches for ONE "
+        'branch — slug collisions (e.g. `a/b` and `a-b` both → `a-b.md`) must '
+        'not let one branch ride another branch\'s review.'));
+  }
 
   final rounds = int.tryParse(field('review_rounds') ?? '') ?? 0;
   final shipDarkBuild = field('tier') == 'ship_dark_build';
