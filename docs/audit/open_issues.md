@@ -1143,3 +1143,226 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   RazorpayService.instance.resetSessionState();
   ```
   Pin with `test/contracts/sign_out_clears_sdk_state_test.dart` source-grep.
+
+---
+
+# Reconciliation 2026-07-26 — board revived after 70 dormant days
+
+This file was last touched `32437ee7` on **2026-05-17** and then went unread while dozens of
+batches shipped. Root cause: it had **no mechanism** — no gate, no hook, no CI job referenced it
+(`grep open_issues scripts/ .github/ .claude/settings.json` → nothing). Everything in this repo
+with a gate holds; everything on intention decays. Same disease §4.12 records for plan quality
+("100% honor-system"). Fixed in this batch by `scripts/check_open_issues_reconciled.dart` +
+a SessionStart injection in `scripts/discipline_hook.dart`.
+
+**Audit of the 8 still-OPEN OIs against live code (2026-07-26).**
+
+> ⚠️ **An earlier draft of this section claimed "All verified STILL OPEN" and "Every line citation
+> had drifted, so they are refreshed here." Both statements were FALSE.** Only 4 of 8 were audited
+> and only 3 of ~20 citations were refreshed. Review round 1 caught it. The claim is corrected below
+> rather than quietly edited, because a backlog that overstates what is open is only marginally more
+> useful than one nobody reads — and this is the third instance today of the
+> `feedback_mistake_unverified_done_claims` class.
+
+| OI | Verified 2026-07-26 | Citation |
+|---|---|---|
+| OI-44 | **STILL OPEN** — `checkAndUnlock` at `badge_service.dart:18` | `getCurrentRank()` 176 → **`rank_service.dart:217`**. NOT refreshed: `isPro` `sub.service.dart:233` → **`subscription_service.dart:320`**; `gate()` 306 → **:420** |
+| OI-45 | **STILL OPEN** — `increment()` body is still `final current = read(); await write(current + 1)` | 74-79 → **`usage_counter_service.dart:100-106`**. NOT refreshed: `UserRepository.updateProgress` 75-84 → **:133**; `HealthSyncService.syncToHive` 190-192 → **:148** |
+| OI-46 | **STILL OPEN** — migration 026 explicitly scopes to `food_text_analysis`; no daily-cap trigger on `ai_coach_interactions` | — |
+| OI-47 | **STILL OPEN** — `_shared/sanitize_for_prompt.ts` **absent**; raw `User name: ${name}` live | 243 → **`morning-alert/index.ts:278`** |
+| OI-48 | **MATERIALLY STALE — the stated harm no longer describes the code.** `e78e2c7e` (2026-07-08, OPT-E) batched the per-user reads via chunked `.in()`. The outer `from("users").select(...)` remains, so the O(all users) *shape* survives, but "~5 Postgres reads × N users" does not. **Needs re-scoping, not carrying forward.** | — |
+| OI-51 | **PARTLY CLOSED.** `razorpay_service.dart:_onUserChanged()` nulls `_onSuccess`/`_onFailure`/`_pendingPlan` via `SingletonLifecycleRegistry`, added by the 2026-05-20 tech-debt audit (A7) — *after* this OI was filed, so its "No reset path" text is now false. **Still genuinely open:** Crashlytics `setUserIdentifier('')` and `OneSignal.logout()` — neither appears anywhere in `lib/`. | auth_provider 543/760 → **:587/:607**; razorpay 30-32 → **:40-42** |
+| OI-25 | Carried forward — **NOT audited this pass.** | — |
+| OI-50 | Carried forward — **NOT audited this pass.** Spot-check found `sets.first` moved `train_provider.dart:72` → **:85**, and the cited `mealType[0]` does **not exist** in `todays_meals_card.dart` at all (it is in `nutrition_screen.dart`). Citations unreliable. | — |
+
+**Standing rule this establishes:** an OI carried forward without an audit says so explicitly. "Carried
+forward" is a statement about effort spent, not about truth — conflating the two is what let a
+70-day-old file read as authoritative.
+
+---
+
+# Pending work as of 2026-07-26 (OI-52 … OI-67)
+
+Everything currently owed, from any source — not only audit findings. `MEMORY.md` remains the
+durable *why* (scars, retrospectives) but lives in the harness dir outside git and is invisible to
+cloud sessions; **this file is the cross-session backlog.**
+
+## OI-52 — Build the release APK
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26
+- **Blocked on**: FOUNDER (explicit approval required every time — §4.3)
+- **Note**: **Fronts four dependents — OI-55, OI-61, OI-62, OI-63 all wait on this.** Highest-leverage
+  single item on the board. `/build-apk --flavor prod --release` from CI-green `main`.
+
+## OI-53 — Flip the 13 workout-generator ship-dark flags
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · workout-generator overhaul complete `7bb766fa`
+- **Blocked on**: FOUNDER
+- **What's missing**: Test account first — plateau presupposes `enable_readiness` ON. Each flip needs
+  its own full ×2 review per §4.12.4; logged in `docs/ship_dark_pending_review.yaml`.
+
+## OI-54 — Confirm `/admin` access
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · admin dashboard shipped 2026-07-13
+- **Blocked on**: FOUNDER (must load `/admin` signed-in)
+- **What's missing**: Verify `ADMIN_USER_IDS` actually contains the founder UUID.
+
+## OI-55 — Live `amar` re-verify (Unit 0)
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · Unit 0 shipped `34621203`
+- **Blocked on**: FOUNDER sign-in; sequenced after OI-52
+
+## OI-56 — Revert repo to private
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26
+- **Blocked on**: FOUNDER (after billing is fixed)
+- **What's missing**: Public since 2026-07-18. Note the security consequence while public: fork-PR
+  branch-name collisions are a live concern for the keystone gate (owner-guard added `d947743d`).
+
+## OI-57 — Decide the 7 open Dependabot PRs
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26
+- **Blocked on**: FOUNDER
+- **Live state**: #17/#16/#15/#5 CLEAN · #14 DIRTY (conflicted) · #10 three FAILURE checks · #9 UNKNOWN
+- **What's missing**: `pub` bumps merge freely under the content-verified exemption; the 2
+  `github-actions` bumps require a plan-review record **by design** (a bot must not rewrite the CI
+  that enforces every other gate). Documented in `.github/dependabot.yml`.
+
+## OI-58 — Keystone gate: single-parent + subject-spoof bypass
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · diagnose `d3f8a2`, ci-governance batch
+- **Risk class**: enforcement bypass
+- **What's missing**: Branch identity derives from the merge SUBJECT (author-controlled free text)
+  and `HEAD^2`. Two faces: a local `git merge` that fast-forwards or `--squash` lands single-parent
+  commits the gate never inspects; and `git merge --no-ff -m "Merge branch 'other'"` resolves to
+  another branch's approved record. Disabling GitHub's squash/rebase buttons closed only the GitHub
+  path. The ACCIDENTAL half (slug + quote truncation) is closed.
+- **Fix shape**: stop keying on the subject/`HEAD^2`; evaluate the pushed range via
+  `github.event.before..after` (used nowhere in the repo today). Materially different design — own
+  reviewed unit.
+
+## OI-59 — Hold-week display Slices 2-6
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · hold mechanic Slice 1 shipped `7ca850d9`
+- **What's missing**: Built to the LOCKED mockup `scratchpad/holdweek_train_mockup.html`:
+  un-clamp → strip → header → roadmap → entry card. Structural caps noted in the hold-mechanic record.
+
+## OI-60 — Flip `enable_hold_weeks`
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26
+- **Blocked on**: OI-59
+- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts). Flip-on
+  blockers FOB-1…FOB-7 in `docs/ship_dark_pending_review.yaml` must all be closed first.
+
+## OI-61 — Coach-UX: live-verify test7, v74 hardening, temp-PRO cleanup
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · Units 2+3+FC8 shipped `237c347`, ai-proxy v73
+- **Blocked on**: OI-52
+
+## OI-62 — Coach-reliability: FC6 + Unit A
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · Unit B merged `b2ea2e3`, ai-proxy v72
+- **Blocked on**: FC6 waits on OI-52. Unit A: F3 anytime, F1 founder-gated.
+
+## OI-63 — Restore C2: 137-policy RLS initplan
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · restore-perf C3 shipped
+- **Blocked on**: sequenced after OI-52
+
+## OI-64 — Discipline-overhead: the three unbuilt gates
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · discipline-overhead shipped `dd51a40a`
+- **What's missing**: Stop-hook completion gate · automatic ship-dark verification gate (proving a
+  flag really is default-OFF and byte-identical from a script) · ship-dark ledger-enforcement gate.
+
+## OI-65 — Qualification-Exam feature
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26
+- **What's missing**: 9 decisions locked, committed `7328c99` on branch `qualification-exam`,
+  **unpushed**. Pre-implementation.
+
+## OI-66 — Prove or remove the CI gradle cache
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · ci-speed batch `904e6961`
+- **Risk class**: unverified optimisation
+- **What's missing**: The cache is **3.4 GB**; restore-and-extract cost may exceed the Gradle work it
+  saves. First run only populated it, so its value is still unmeasured. Compare a warm-cache run's
+  `Build Check (APK)` duration against the 7m41s/7m47s uncached baseline. **If it is not a clear win,
+  take it back out** — an unmeasured optimisation is tech debt.
+
+## OI-67 — `MEMORY.md` over its soft cap
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · consolidation pass
+- **What's missing**: 20,316 bytes vs the 17,510 soft target (hard read cap 24,400). Genuinely gated
+  on closing items above rather than on more compression — every surviving In-flight entry carries a
+  live obligation. Closing OI-52…OI-56 removes most of it.
+
+## OI-68 — Build the backlog MECHANISM (attempted 2026-07-26, withdrawn after 2 review rounds)
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26
+- **Risk class**: the backlog stays passive — visible only to whoever opens the file
+- **What's missing**: a SessionStart digest surfacing OPEN items, a merge-to-main gate forcing an
+  `open_issues:` declaration, and a format gate. All three were **built and then withdrawn** — two
+  independent review rounds found 5 P1s and the unit was split per §4.12.1, shipping only the data
+  half (this file + the `memory/MEMORY.md` stub), which carries no code risk.
+
+- **SCARS — read before re-attempting. Three generations of the SAME bug in one component:**
+  1. **v1 parser** used an exact-string match `line.trim() == '- **Status**: OPEN'`. It missed 7
+     realistic shapes — worst of all this file's OWN house style, since every CLOSED entry here is
+     written `- **Status**: CLOSED · <date> · <diagnose>` with a trailing qualifier
+     (`grep -cE '^- \*\*Status\*\*: CLOSED ·'` → 39; one reviewer counted 40, the discrepancy was
+     never settled and does not change the point). An author following the established convention
+     would have been silently dropped from the digest.
+  2. **v2 parser** loosened the regex to fix that — and made the colon optional and `*` a valid
+     bullet, so a prose line like `- Status quo is unchanged since May` **captures "quo", locks the
+     entry, and silently drops it**. Verified: 3 new drop modes, all invisible to the format gate
+     shipped alongside. Requiring the colon kills two of them.
+  3. **The format gate validated shape but not vocabulary**, though its own error message claimed
+     otherwise — `PENDING`, `BLOCKED`, `REOPENED` and a one-character `IN-PROGRESS` typo all passed
+     the gate and vanished from the digest.
+- **Other findings to carry forward:**
+  - The digest's cap (18) hid this very OI. Any accountability item filed against the mechanism must
+    be reachable *by* the mechanism, or the tracking is theatre.
+  - `open_issues:` was matched against the whole record, accepting a hit in prose or a fenced code
+    block — the class `recordBranchFieldMatches` was hardened against a week earlier, reintroduced.
+  - The gate reached its checks without computing blast-radius, so it could fail where the keystone
+    gate passes. **0 of 70 existing records carry `open_issues:`**, so switching it to hard-fail
+    without a migration would redden main immediately.
+  - Promoting **this data file** to `platform` tier was self-defeating (ticking one OI to CLOSED
+    would then demand a ×2 review + B-pass) and was reverted. Promoting the *enforcement scripts* is
+    still right.
+  - A brand-new gate on the merge path must ship `--warn-only` per §4.11 — and something must flip
+    it. Live precedent for the decay: `check_skipped_discipline_budget.dart` has been `--warn-only`
+    since `ae6146eb` (2026-06-18) against a documented *"24h smoke window"* — 38 days.
+
+## OI-69 — Nothing detects this backlog going stale AGAIN
+
+- **Status**: OPEN
+- **Identified**: 2026-07-26 · review round 1, "what this misses"
+- **Risk class**: the original failure, recurring
+- **What's missing**: even the withdrawn mechanism would not have caught renewed neglect — its gate
+  was satisfied by typing `none-affected`, and its digest was passive. The 70-day dormancy would
+  recur identically. None of the checks that would actually detect it exist: (a) days-since-this-file
+  -last-modified exceeding a threshold, (b) when a record declares specific `OI-NN` ids, requiring the
+  merge diff to actually touch this file, (c) verifying an OI declared closed really flipped to
+  `CLOSED`.
+- **Honest framing**: shipping this file repo-tracked makes the backlog **visible** from any machine,
+  any session, and GitHub. That is the durable half and it is real. It does not make neglect
+  **detectable**. Recorded rather than papered over.

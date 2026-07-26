@@ -1,29 +1,48 @@
-# Memory Index
+# ⚠️ NOT the live memory index — read this before trusting anything in this directory
 
-> This mirrors the agent memory at `C:\Users\upend\.claude\projects\C--Upendra-Claude-Code-Fitness-App\memory\MEMORY.md`. Keep both files in sync when adding new memory entries.
+This file used to be a **mirror** of the agent memory index. Its old header instructed *"Keep both
+files in sync when adding new memory entries."* That sync stopped on **2026-04-20** (`0a81f6cb`)
+and the copy then sat unchanged for ~3 months while the real index moved on.
 
-## User
-- [user_profile.md](user_profile.md) - Upendra, solo founder building ICANBEFITTER fitness app, first time with Claude Code
+Worse than merely stale: most of its links pointed at files that live **only** in the harness
+memory directory and were never committed here — so following them from the repo led nowhere. A
+**cloud session**, which can see the repo and nothing else, would have found a confident-looking
+index, trusted it, and been wrong about the project's state on every line.
 
-## Feedback
-- [feedback_approval_gate.md](feedback_approval_gate.md) - Never build until plan is explicitly approved — ask for approval at least twice
-- [feedback_bugfix_workflow.md](feedback_bugfix_workflow.md) - Structured bug analysis (bug, cause, past attempts, plan) before any fix; no APK without approval
-- [feedback_build_flavor.md](feedback_build_flavor.md) - Always build APKs with --flavor prod --release, never dev
+Kept as a pointer rather than deleted. A grep for `memory/MEMORY.md` returns 7 hits, but be precise
+about them — an earlier draft of this stub was not: **5 cite the harness path**
+(`~/.claude/projects/…/memory/MEMORY.md`), including `scripts/discipline_hook.dart`'s own constructed
+path. **Only 2 are repo-relative**, both inside already-executed 2026-05-10 plan documents. So the
+filename is worth preserving, but the "7 citations" figure overstated the case.
 
-## Project
-- [project_nutrition_macro_decisions.md](project_nutrition_macro_decisions.md) - Protein formula fixes, lifestyle activity system, BF% AI assessment, coaching_notes pipeline
-- [project_icanbefitter.md](project_icanbefitter.md) - Core architecture: Flutter + Supabase Postgres + Riverpod + Hive, non-negotiable rules
-- [project_data_architecture.md](project_data_architecture.md) - Offline-first data strategy: Hive primary, Supabase backup, sync schedule, seed bundling, paginated restore, UNIQUE constraints
-- [project_edge_cases.md](project_edge_cases.md) - AI routing, payment security, exercise log contract, onboarding sync retry, UI fixes, Bug Batch #2
-- [brainstorm_features_raw.md](brainstorm_features_raw.md) - Raw feature ideas: stateless backend, AI pipeline, viral shareables, zero-input personalization
-- [feature_decisions.md](feature_decisions.md) - Final free/PRO/both tier decisions for all 25 features. Pricing: ₹349/month, ₹2,999/year.
-- [project_qa_environment.md](project_qa_environment.md) - QA pipeline: Supabase branching, Flutter dev/prod flavors, integration tests, pre-push gate
-- [project_bug_batch_3.md](project_bug_batch_3.md) — Bug Batch #3 (April 12 2026): food log delete UX, profile Layout B, brushed pill, avatar bump, streetlight nav, pace picker + projection
-- [project_plan_generator_v3.md](project_plan_generator_v3.md) — Plan Generator V3: modular 8-stage pipeline, 4 cycling archetypes, beginner full-body, injury exclusion
-- [project_wardroom_handoff_enforcement.md](project_wardroom_handoff_enforcement.md) - Wardroom design handoff enforcement sweep: 17 commits, 14 screens, 13 new primitives, merge commit e3d5aaf
-- [project_pr_ag_handoff_gaps.md](project_pr_ag_handoff_gaps.md) - PR AG (5 sub-PRs): nutrition meal-slot cards, coach insight stack, profile subscription seal, onboarding defaults, notifications inbox. Merge commit 386f42e. New primitive: WardDashedBorder. New Hive box: notificationsBox.
-- [project_pr_ah_part_b.md](project_pr_ah_part_b.md) - PR AH / Part B (6 sub-PRs): home streak 18h floor + sparkline chips, nutrition "From Your Diet Plan" wiring, profile Rate App tile, weekly report 4-up sparklines, coach firstName greeting, token hygiene (legacy cyan → AppColors.accent). Merge commit 895b2e2. Part C decision: zero drift, hold position.
-- [project_pr_ai_onboarding_fields.md](project_pr_ai_onboarding_fields.md) - PR AI (3 sub-PRs): stepped onboarding field coverage — Stats gains target_weight_kg, new Details screen (03·04) collects fitness_experience + pace_preference + days_per_week + equipment_access, plan_screen rewired to consume real values. diet_preference default 'balanced' → 'veg', injuries default [] → ['none']. Merge commit bdbd2f2. Flow now 4 visible steps (Goal → Stats → Details → Plan).
+## Where things actually live
 
-## Reference
-- [reference_web_test_plan.md](reference_web_test_plan.md) - 17-section web test plan at testing/web_test_plan.md; token-optimised 3-tier execution strategy
+| You want | Read | Visible from a cloud session? |
+|---|---|---|
+| **What is still owed / pending** | **`docs/audit/open_issues.md`** | **Yes — repo-tracked.** The cross-session source of truth. Surfaced automatically at every session start by `scripts/discipline_hook.dart`, and gated at merge-to-main by `scripts/check_open_issues_reconciled.dart`. |
+| Why a decision was made; past scars | `~/.claude/projects/<mangled-project-path>/memory/` | **No.** Harness-local, outside git, untracked. Rich and current, but it does not exist on another machine. |
+| Bug forensics | `docs/diagnoses/INDEX.md` | Yes |
+| Architectural decisions | `docs/adr/` | Yes |
+
+## The sibling files in this directory
+
+`memory/feedback_worktree_per_session.md` is genuinely live — 5 inbound citations including
+CLAUDE.md §7, which points at it directly. Do not treat it as stale.
+
+The others are weaker, and saying so is the point of this stub: `project_pr_ah_part_b.md` and
+`project_pr_ai_onboarding_fields.md` have **zero inbound citations**, and overwriting the old index
+removed their only entry point. They are shipped-PR retrospectives from April, kept for history
+rather than reference. If you need them, they are right here in this directory — that is now their
+only discovery path, and this sentence is it.
+
+Only **the index** rotted, because only the index was a duplicate of something that kept changing.
+A mirror of a moving target is a liability; a file that is the only copy of itself is not.
+
+## Why no attempt to re-sync
+
+Restarting the mirror would recreate exactly the failure it just demonstrated: two copies, one
+authoritative, no mechanism holding them equal, and silent divergence the moment attention moves
+elsewhere. The durable-visibility problem is solved instead by putting *pending work* in a
+repo-tracked file with a gate and a session-start injection behind it. See the
+**Reconciliation 2026-07-26** section at the end of `docs/audit/open_issues.md` for the full
+reasoning and the audit of what was still open after the backlog's 70 dormant days.
