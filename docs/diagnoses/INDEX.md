@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### git_safety_hook_contract (1 bugs)
+- 2026-07-27 b7e4c2 — >-
+
 ### keystone_gate_branch_recovery (1 bugs)
 - 2026-07-26 d3f8a2 — |
 
@@ -842,6 +845,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-27 | b7e4c2 | >- | git_safety_hook_contract | test/contracts/git_safety_hook_integration_test.dart |
 | 2026-07-26 | d3f8a2 | \| | keystone_gate_branch_recovery | test/scripts/plan_review_record_lib_test.dart |
 | 2026-07-26 | e4a7c1 | \| | ci_concurrency_cancels_keystone_gate | test/contracts/ci_workflow_concurrency_test.dart |
 | 2026-07-25 | c8b3f2 | > | hold_display_read_path | test/contracts/hold_display_read_path_test.dart |

@@ -22,9 +22,51 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late String repoRoot;
 
+  /// A directory with NO merge/cherry-pick/revert in progress, used as the
+  /// payload `cwd` for every DENY assertion.
+  ///
+  /// Why this exists (diagnose b7e4c2, 2026-07-27): the hook deliberately
+  /// exempts raw `git commit` while MERGE_HEAD/CHERRY_PICK_HEAD/REVERT_HEAD
+  /// exists, because resolving a conflict REQUIRES a raw commit. The original
+  /// tests passed `cwd: repoRoot` — the live repo — so the moment a conflicted
+  /// merge was in progress the exemption fired and both deny assertions failed.
+  ///
+  /// That is not a cosmetic flake. The pre-commit hook runs the full suite on
+  /// a merge commit, so these two tests were guaranteed to fail exactly when
+  /// someone was doing an integration merge — the one moment the raw-commit
+  /// guard matters most. A guard that cries wolf during the operation it
+  /// governs teaches people to `--no-verify` past it.
+  late Directory neutralCwd;
+
   setUpAll(() {
     repoRoot = Directory.current.path;
+    neutralCwd = Directory.systemTemp.createTempSync('git_safety_neutral_');
   });
+
+  tearDownAll(() {
+    if (neutralCwd.existsSync()) neutralCwd.deleteSync(recursive: true);
+  });
+
+  /// Parent environment minus the three variables git exports to its own
+  /// hooks.
+  ///
+  /// GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE override BOTH `workingDirectory:`
+  /// and `git -C <path>` — so when this suite runs INSIDE pre-commit, an
+  /// inherited GIT_DIR makes the hook's `_gitOk(cwd, ...)` resolve against the
+  /// real repo no matter which cwd the payload names, and `neutralCwd` alone
+  /// would not save us. Same class as `feedback_mistake_git_hook_env_leak`,
+  /// reached by a different route (there it defeated a test's own temp repo).
+  ///
+  /// Removed case-insensitively: Windows env keys are case-insensitive, and
+  /// `Map.from(Platform.environment)` yields a case-SENSITIVE copy, so a
+  /// literal `.remove('GIT_DIR')` could silently miss a `Git_Dir`.
+  Map<String, String> scrubbedEnv() {
+    const leaky = {'git_dir', 'git_work_tree', 'git_index_file'};
+    return {
+      for (final e in Platform.environment.entries)
+        if (!leaky.contains(e.key.toLowerCase())) e.key: e.value,
+    };
+  }
 
   // A typed record instead of dart:io's ProcessResult -- that SDK class
   // types stdout/stderr as `dynamic` (it supports byte-list mode too),
@@ -41,6 +83,8 @@ void main() {
       'dart',
       ['run', '--verbosity=error', 'scripts/git_safety_hook.dart'],
       workingDirectory: repoRoot,
+      environment: scrubbedEnv(),
+      includeParentEnvironment: false,
       // runInShell: Windows' Process.start does not do PATHEXT resolution
       // the way a shell does -- without this, even a PATH-available `dart`
       // fails with "system cannot find the file specified" on Windows.
@@ -54,10 +98,12 @@ void main() {
     return (exitCode: exitCode, stdout: stdout, stderr: stderr);
   }
 
-  Map<String, dynamic> payload(String command) => {
+  /// Defaults `cwd` to [neutralCwd], NOT the live repo — see its doc comment.
+  /// Pass an explicit [cwd] only when the test is about cwd-dependent state.
+  Map<String, dynamic> payload(String command, {String? cwd}) => {
         'hook_event_name': 'PreToolUse',
         'tool_name': 'Bash',
-        'cwd': repoRoot,
+        'cwd': cwd ?? neutralCwd.path,
         'tool_input': {'command': command},
       };
 
@@ -80,6 +126,63 @@ void main() {
           await runHook(payload('sh scripts/safe_commit.sh "msg"'));
       expect(result.exitCode, 0);
     }, timeout: const Timeout(Duration(seconds: 30)));
+
+    // The other half of the contract, and the half that had no test at all
+    // until b7e4c2. Resolving a conflicted merge REQUIRES a raw `git commit`
+    // — safe_commit.sh cannot stand in for it — so the exemption is load-
+    // bearing, not a loophole. Previously it was "covered" only by accident:
+    // when a merge happened to be in progress it silently flipped the two
+    // deny tests to failures, which reads as a broken guard rather than as
+    // evidence the exemption works.
+    test('raw git commit IS allowed while a merge is in progress (exit 0)',
+        () async {
+      final repo = Directory.systemTemp.createTempSync('git_safety_merging_');
+      addTearDown(() {
+        if (repo.existsSync()) repo.deleteSync(recursive: true);
+      });
+
+      // Env must be scrubbed here too: run inside pre-commit, an inherited
+      // GIT_DIR would point every one of these commands at the REAL repo.
+      ProcessResult git(List<String> args) => Process.runSync(
+            'git',
+            args,
+            workingDirectory: repo.path,
+            environment: scrubbedEnv(),
+            includeParentEnvironment: false,
+            runInShell: true,
+          );
+
+      expect(git(['init']).exitCode, 0, reason: 'temp repo init failed');
+      git(['config', 'user.email', 't@example.com']);
+      git(['config', 'user.name', 'T']);
+      File('${repo.path}/f.txt').writeAsStringSync('x');
+      git(['add', 'f.txt']);
+      expect(git(['commit', '-m', 'seed']).exitCode, 0);
+
+      // Simulate the mid-merge state directly. A real conflicted merge would
+      // work too, but MERGE_HEAD is just a ref file and the hook only asks
+      // `rev-parse --verify MERGE_HEAD` — so writing it is the same signal
+      // with far less setup that could itself flake.
+      // Cast before use: ProcessResult types stdout as `dynamic`, and a
+      // dynamic call is an avoid_dynamic_calls WARNING — fatal to pre-commit's
+      // `flutter analyze --no-fatal-infos`. Same trap this file's header
+      // documents for the runHook record.
+      final head = (git(['rev-parse', 'HEAD']).stdout as String).trim();
+      final gitDir = (git(['rev-parse', '--git-dir']).stdout as String).trim();
+      final mergeHead = gitDir == '.git' || gitDir.isEmpty
+          ? '${repo.path}/.git/MERGE_HEAD'
+          : '$gitDir/MERGE_HEAD';
+      File(mergeHead).writeAsStringSync('$head\n');
+      expect(git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']).exitCode, 0,
+          reason: 'MERGE_HEAD simulation did not take — the rest of this test '
+              'would pass vacuously against a repo with no merge in progress.');
+
+      final result =
+          await runHook(payload('git commit -m "resolve"', cwd: repo.path));
+      expect(result.exitCode, 0,
+          reason: 'A raw commit during a merge must be allowed — it is the '
+              'only way to complete a conflict resolution.');
+    }, timeout: const Timeout(Duration(seconds: 60)));
 
     test('raw git push is denied (exit 2)', () async {
       final result = await runHook(payload('git push origin main'));
