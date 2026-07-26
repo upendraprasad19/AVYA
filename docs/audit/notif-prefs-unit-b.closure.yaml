@@ -23,7 +23,7 @@ findings:
     title: morning-alert decided PRO from users.subscription_status
     severity: P1
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
       A denormalized column with no expiry term that nothing writes back to
       'free'. Live: it claimed 6 PRO users; the correct predicate returned 0.
@@ -35,7 +35,7 @@ findings:
     title: No shared definition of PRO existed anywhere
     severity: P1
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
       Five distinct hand-rolled predicates across the Edge Functions; nothing in
       _shared/ determined PRO. Added supabase/functions/_shared/subscription.ts
@@ -46,7 +46,7 @@ findings:
     title: morning-alert's header claimed a subscriptions gate it never had
     severity: P2
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
       Header line read "subscriptions.status = 'active' (PRO gating)" while the
       code read a users column. An auditor reading the header would have
@@ -57,9 +57,9 @@ findings:
     title: No regression guard against the PRO-predicate class
     severity: P1
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
-      test/contracts/pro_predicate_adoption_test.dart — 4 assertions. Fails the
+      test/contracts/pro_predicate_adoption_test.dart — 4 test cases. Fails the
       build if any Edge Function READS users.subscription_status for a tier
       decision, while still permitting writes (it remains a legitimate cache).
       Includes a positive control asserting the detector flags the exact pre-fix
@@ -69,7 +69,7 @@ findings:
     title: snapshot_contract.yaml's notification_preferences entry was wrong in three ways
     severity: P2
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
       written_by speculated a "legacy or future path" when no writer has ever
       existed; notes said "5 readers" while listing 6; all six line citations
@@ -80,7 +80,7 @@ findings:
     title: check_snapshot_contract.dart structurally could not validate extra_server_written_keys
     severity: P1
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
       The parser set inKeys=false at the first column-0 key after `keys:`, and
       only `keys:` re-entered — so the entire extra_server_written_keys block
@@ -94,7 +94,7 @@ findings:
     title: The gate's reader probe produced false negatives on this codebase's own idioms
     severity: P1
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
       Surfaced only once B6 made the block visible. The probe required
       snapshot.<key>, but the code writes snapshot_json?.<key> (optional
@@ -108,7 +108,7 @@ findings:
     title: fetchProUserIds had no row cap — PostgREST would truncate it silently
     severity: P2
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
       B-pass finding 1. An unbounded select is truncated at the project's
       max-rows setting with no error and no log, so past that point PRO users
@@ -123,7 +123,7 @@ findings:
     title: the "never throws" contract held for API errors but not transport errors
     severity: P2
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
       B-pass finding 2. The { data, error } destructure converts PostgREST-level
       failures into a soft error, but a transport-level fetch rejection (DNS,
@@ -140,7 +140,7 @@ findings:
     title: the new guard's regex missed loose == despite its comment claiming otherwise
     severity: P3
     terminal_state: closed_in_commit
-    commit: "notif-prefs (uncommitted)"
+    commit: 55202d89
     verification: >-
       B-pass finding 3, confirmed by the reviewer running the regex rather than
       reading it. `[!=]==` requires three characters, so it matched === and !==
@@ -150,7 +150,7 @@ findings:
       breaks either fails the build.
 
 notes: |
-  Two of the seven (B6, B7) were not on the original plan. They were found by
+  Two of the ten (B6, B7) were not on the original plan. They were found by
   implementing it: B6 was known from review, but B7 only became visible once B6
   was fixed — the gate could not report a false negative on a block it never
   read. Both are closed here rather than recorded as findings, because a gate
