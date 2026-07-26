@@ -528,22 +528,41 @@ keys:
 # for completeness so OI-03's gate doesn't false-flag them.
 extra_server_written_keys:
   - key: notification_preferences
-    written_by: client (legacy path — not visible in current
-      buildAiContext) OR a future write path
+    written_by: NOBODY — no writer exists anywhere. The client stores this map
+      in a local Hive box (lib/features/profile/screens/profile/screen.dart:330)
+      and nothing ever lifts it into a snapshot. Not a "legacy path" and not a
+      "future path"; the chain was simply never connected.
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 509 }
-      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 132 }
-      - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 196 }
-      - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 79 }
-      - { fn: weekly-recap-ready, file: supabase/functions/weekly-recap-ready/index.ts, line: 52 }
-      - { fn: protein-gap-alert, file: supabase/functions/protein-gap-alert/index.ts, line: 197 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 574 }
+      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 146 }
+      - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 216 }
+      - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 107 }
+      - { fn: weekly-recap-ready, file: supabase/functions/weekly-recap-ready/index.ts, line: 53 }
+      - { fn: protein-gap-alert, file: supabase/functions/protein-gap-alert/index.ts, line: 205 }
     status: orphan_writer
     notes: |
-      5 readers but buildAiContext does NOT emit this key today.
-      Likely a debt item — either the writer was retired (Test #11
-      delete-account cleanup?) or readers were added speculatively.
-      OI-03's gate will surface this as a failure for next-batch
-      remediation.
+      SIX readers (this entry previously said five while listing six), and
+      buildAiContext does NOT emit the key. Verified live 2026-07-26:
+      0 of 91 user_daily_snapshots rows contain it. Every reader therefore
+      falls through to its permissive default, so all five user-facing
+      notification toggles are decorative.
+
+      Line citations were stale by 1-42 lines when re-verified on 2026-07-26
+      (509->574, 132->146, 196->216, 79->107, 52->53, 197->205) and NOTHING
+      CAUGHT IT: check_snapshot_contract.dart's parser stops at the first
+      column-0 key after `keys:`, so this whole `extra_server_written_keys:`
+      block was never validated. That gap is closed in the same batch as this
+      correction — see the parser's extra-block handling.
+
+      The note this replaced predicted "OI-03's gate will surface this as a
+      failure for next-batch remediation." It never did and structurally never
+      could, for the reason above.
+
+      Remediation is planned (unit 0.5): emit from compileDailySnapshot rather
+      than buildAiContext, because buildAiContext's output passes through
+      trimSnapshotToBudget, whose keep-set excludes this key and whose map
+      branch HALVES the biggest map — a trimmed preference map reads as absent,
+      which every reader treats as "send".
 
   - key: fitness_summary
     written_by: rolling-context (nightly cron) -> upserts into
@@ -570,9 +589,13 @@ extra_server_written_keys:
   - key: morning_alert
     written_by: morning-alert Edge Function (self)
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 505 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 568 }
     notes: |
       Self-read (function stores its template alert for later display).
+      Citation moved 505 -> 568 on 2026-07-26: the PRO-predicate fix added
+      imports and explanatory comments above this line. Caught by this gate on
+      the same commit, which is the first time it could have been — the
+      `extra_server_written_keys:` parsing fix landed here too.
 
 # ── Orphan readers (cron functions reading keys the writer doesn't emit) ──
 #

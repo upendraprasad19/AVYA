@@ -61,6 +61,10 @@ void main(List<String> args) async {
   // Phase 1 — every key must appear in the writer source as
   // `'<key>':` (the YAML-emission pattern).
   for (final k in keys) {
+    // `extra_server_written_keys:` entries are read by servers but NOT emitted
+    // by buildAiContext — that is what the block means, so a writer-emit check
+    // would fail by construction. Phase 2 still validates their citations.
+    if (k.extraServerWritten) continue;
     final name = k.name;
     // Allow nested keys like `daily_targets.protein` — only check the
     // top-level segment.
@@ -95,8 +99,22 @@ void main(List<String> args) async {
       // Tolerant — many cron functions use varied aliases for the
       // root.
       final topLevel = k.name.contains('.') ? k.name.split('.').first : k.name;
+      // Two alternatives:
+      //   (a) rooted   — `snap`/`snapshot`/`snapshot_json` then the key.
+      //   (b) unrooted — the key as a property access or string index,
+      //                  whatever precedes it.
+      //
+      // (b) added 2026-07-26. The rooted form alone produced FALSE NEGATIVES on
+      // the two idioms this codebase actually uses:
+      //   `snapshot?.snapshot_json?.notification_preferences`   ← optional chain
+      //   `(snapshot as Record<string, unknown>)?.notif…`       ← cast in between
+      // Both put tokens between the root and the key, so the rooted probe
+      // missed them and the gate would have demanded "fixes" to citations that
+      // were already correct. Requiring a property access still means a bare
+      // mention in prose cannot satisfy the check.
       final probe = RegExp(
-          "(snap|snapshot)(_?json)?\\s*(\\.${topLevel}\\b|\\[\\s*['\"]${topLevel}['\"]\\s*\\])");
+          "(snap|snapshot)(_?json)?\\s*\\??\\s*(\\.${topLevel}\\b|\\[\\s*['\"]${topLevel}['\"]\\s*\\])"
+          "|[.\\[]\\s*['\"]?${topLevel}\\b");
       final start = (r.line - 15).clamp(1, readerLines.length);
       final end = (r.line + 15).clamp(1, readerLines.length);
       var matched = false;
@@ -135,7 +153,22 @@ void main(List<String> args) async {
 class _Key {
   final String name;
   final List<_Reader> readers;
-  _Key(this.name, this.readers);
+
+  /// True for entries under `extra_server_written_keys:` — keys that servers
+  /// READ but `buildAiContext` does not emit.
+  ///
+  /// Added 2026-07-26. That whole block was previously invisible to this gate:
+  /// the parser stopped at the first column-0 key after `keys:`, so its reader
+  /// citations were never checked and drifted 1-42 lines undetected — which is
+  /// exactly how `notification_preferences` sat as a documented orphan while
+  /// nothing verified its six citations.
+  ///
+  /// These keys are exempt from Phase 1 (writer-emit) BY DEFINITION — "no
+  /// writer emits this" is the fact the block records. Phase 2 (reader-citation
+  /// accuracy) applies to them in full, and is the check that was missing.
+  final bool extraServerWritten;
+
+  _Key(this.name, this.readers, {this.extraServerWritten = false});
 }
 
 class _Reader {
@@ -159,13 +192,16 @@ List<_Key> _extractKeys(String yaml) {
   // Find start of `keys:` block (top-level, not nested in orphan_readers).
   var inKeys = false;
   var inReaders = false;
+  // Which block we are inside, so entries can be tagged. See _Key.extraServerWritten.
+  var inExtraBlock = false;
   String? currentKey;
   final result = <_Key>[];
   var currentReaders = <_Reader>[];
 
   void flush() {
     if (currentKey != null) {
-      result.add(_Key(currentKey!, List.of(currentReaders)));
+      result.add(_Key(currentKey!, List.of(currentReaders),
+          extraServerWritten: inExtraBlock));
       currentKey = null;
       currentReaders = <_Reader>[];
     }
@@ -174,15 +210,26 @@ List<_Key> _extractKeys(String yaml) {
   for (final raw in lines) {
     final line = raw;
     if (line.startsWith('keys:')) {
+      flush();
       inKeys = true;
+      inExtraBlock = false;
+      continue;
+    }
+    // 2026-07-26: this block used to terminate parsing entirely, leaving its
+    // reader citations unvalidated (they had drifted 1-42 lines). Same entry
+    // shape as `keys:`, so parse it identically and tag the entries.
+    if (line.startsWith('extra_server_written_keys:')) {
+      flush();
+      inKeys = true;
+      inExtraBlock = true;
       continue;
     }
     if (!inKeys) continue;
-    // Leave the keys section when we hit a top-level non-indented key
-    // that isn't `keys:`.
-    if (RegExp(r'^[a-z_]+:').hasMatch(line) && !line.startsWith('keys:')) {
+    // Leave the current section when we hit any other top-level key.
+    if (RegExp(r'^[a-z_]+:').hasMatch(line)) {
       flush();
       inKeys = false;
+      inExtraBlock = false;
       continue;
     }
     final keyMatch = RegExp(r'^\s+- key:\s*(.+)$').firstMatch(line);
