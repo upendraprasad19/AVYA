@@ -6,7 +6,14 @@
  *          subscriber-side dedup keyed on the local IST date.
  *
  * Input shape: invoked by cron with no body; reads its working set from DB:
- *   - subscriptions.status = 'active' (PRO gating)
+ *   - subscriptions: status='active' AND end_date > now(), via
+ *     `fetchProUserIds()` from `_shared/subscription.ts`. BOTH terms matter —
+ *     `status` is never reconciled to 'expired', so a status-only check reads
+ *     every lapsed row as PRO. (Until 2026-07-26 this function used
+ *     `users.subscription_status`, which has no expiry term at all and is
+ *     never written back to 'free'; it sent PRO copy to 6 churned users while
+ *     the correct predicate returned zero. This header claimed the
+ *     `subscriptions` gate the whole time. See diagnose doc.)
  *   - users + user_profile (name, motivation_style, wake_up_time)
  *   - coach_memory (preferred_name, coaching context)
  *   - daily_snapshots (yesterday's steps/calories/etc. for "data_driven" tone)
@@ -42,6 +49,7 @@ import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_ded
 import { istDayOfWeek } from "../_shared/ist_date.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { fetchProUserIds } from "../_shared/subscription.ts";
 
 type MotivationTone = "tough_love" | "gentle" | "data_driven";
 
@@ -345,7 +353,6 @@ async function sendTelegramMessage(
 interface ActiveUser {
   id: string;
   full_name: string | null;
-  subscription_status: string | null;
 }
 
 async function generateAndStoreAlert(
@@ -353,9 +360,18 @@ async function generateAndStoreAlert(
   supabaseClient: SupabaseClient,
   todayIST: string,
   yesterdayIST: string,
+  proUserIds: Set<string>,
 ): Promise<void> {
   try {
-    const isPro = user.subscription_status === "pro";
+    // PRO status comes from the `subscriptions` table via _shared/subscription.ts,
+    // NOT from `users.subscription_status`.
+    //
+    // That column has no expiry term and nothing ever writes it back to 'free'
+    // — three code paths set it to 'pro' and none unset it. Live it claimed 6
+    // PRO users while the correct predicate returned ZERO, so this function was
+    // sending Gemini-generated PRO copy to 6 churned users: paid tokens spent
+    // on people who had stopped paying, and no churn signal. See diagnose doc.
+    const isPro = proUserIds.has(user.id);
 
     // Read coach_memory ONCE per user.
     // private_mode users get default copy — explicit guard since fetchCoachMemory
@@ -474,12 +490,19 @@ async function processBatch(
   supabaseClient: SupabaseClient,
   todayIST: string,
   yesterdayIST: string,
+  proUserIds: Set<string>,
 ): Promise<void> {
   for (let i = 0; i < users.length; i += CONCURRENCY) {
     const chunk = users.slice(i, i + CONCURRENCY);
     await Promise.allSettled(
       chunk.map((user) =>
-        generateAndStoreAlert(user, supabaseClient, todayIST, yesterdayIST)
+        generateAndStoreAlert(
+          user,
+          supabaseClient,
+          todayIST,
+          yesterdayIST,
+          proUserIds,
+        )
       ),
     );
   }
@@ -686,6 +709,19 @@ serve(async (req: Request) => {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const sevenDaysAgoISO = sevenDaysAgo.toISOString();
 
+    // PRO set fetched ONCE for the whole run, then O(1) membership per user.
+    // Deliberately not per-user: this function paginates, so an isProUser()
+    // call inside the loop would be one query per user per night.
+    //
+    // On query error this returns an EMPTY set, i.e. nobody is PRO and every
+    // user gets the free template. That is the fail-safe direction — the
+    // alternative is spending Gemini tokens on users we cannot confirm.
+    const proUserIds = await fetchProUserIds(supabaseClient);
+    console.log(
+      `morning-alert [generate]: ${proUserIds.size} PRO user(s) ` +
+        `(subscriptions.status='active' AND end_date > now())`,
+    );
+
     // Reset counters
     proAlerts = 0;
     proLightAlerts = 0;
@@ -701,7 +737,7 @@ serve(async (req: Request) => {
     while (hasMore) {
       const { data: users, error: usersError } = await supabaseClient
         .from("users")
-        .select("id, full_name, subscription_status")
+        .select("id, full_name")
         .gte("last_active_at", sevenDaysAgoISO)
         .range(offset, offset + PAGE_SIZE - 1);
 
@@ -736,7 +772,13 @@ serve(async (req: Request) => {
           `${users.length} users (offset ${offset})`,
       );
 
-      await processBatch(users, supabaseClient, todayIST, yesterdayIST);
+      await processBatch(
+        users,
+        supabaseClient,
+        todayIST,
+        yesterdayIST,
+        proUserIds,
+      );
 
       console.log(
         `morning-alert [generate]: batch ${batchNum} done in ${Date.now() - batchStart}ms`,

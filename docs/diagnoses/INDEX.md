@@ -12,6 +12,15 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### ci_concurrency_cancels_keystone_gate (1 bugs)
 - 2026-07-26 e4a7c1 — |
 
+### subscription_state (7 bugs)
+- 2026-07-26 a7d2e9 — >-
+- 2026-06-16 a1c9f4 — >
+- 2026-06-08 b4e2a9 — >
+- 2026-05-31 c7e1a4 — >
+- 2026-05-06 979a8e — PRO upgrade did not reflect immediately in train screen; train expanded view showed 0 sets; macros displayed incorrectly — three stacked bugs from the first on-device audit.
+- 2026-05-06 69276a — subscriptionInfoProvider was not invalidated on cold-start subscription state writes (verify, downgrade), so PRO status changes did not propagate to the UI until next hot restart.
+- 2026-05-04 5d2ff1 — razorpay-webhook derived plan (monthly/yearly) from client-supplied body.plan instead of payment amount, allowing a monthly payment to grant yearly entitlement.
+
 ### hold_display_read_path (1 bugs)
 - 2026-07-25 c8b3f2 — >
 
@@ -178,14 +187,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### streak_freeze_denominator_grant_decay (1 bugs)
 - 2026-06-18 f9d2e7 — >
-
-### subscription_state (6 bugs)
-- 2026-06-16 a1c9f4 — >
-- 2026-06-08 b4e2a9 — >
-- 2026-05-31 c7e1a4 — >
-- 2026-05-06 979a8e — PRO upgrade did not reflect immediately in train screen; train expanded view showed 0 sets; macros displayed incorrectly — three stacked bugs from the first on-device audit.
-- 2026-05-06 69276a — subscriptionInfoProvider was not invalidated on cold-start subscription state writes (verify, downgrade), so PRO status changes did not propagate to the UI until next hot restart.
-- 2026-05-04 5d2ff1 — razorpay-webhook derived plan (monthly/yearly) from client-supplied body.plan instead of payment amount, allowing a monthly payment to grant yearly entitlement.
 
 ### client_web_platform_gating (1 bugs)
 - 2026-06-14 d8f3a2 — >
@@ -844,6 +845,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 |---|---|---|---|---|
 | 2026-07-26 | d3f8a2 | \| | keystone_gate_branch_recovery | test/scripts/plan_review_record_lib_test.dart |
 | 2026-07-26 | e4a7c1 | \| | ci_concurrency_cancels_keystone_gate | test/contracts/ci_workflow_concurrency_test.dart |
+| 2026-07-26 | a7d2e9 | >- | subscription_state | test/contracts/pro_predicate_adoption_test.dart |
 | 2026-07-25 | c8b3f2 | > | hold_display_read_path | test/contracts/hold_display_read_path_test.dart |
 | 2026-07-23 | b7d4e2 | \| | auth_password_reset_pkce_detection | test/contracts/password_recovery_detector_test.dart |
 | 2026-07-23 | 9f5c41 | \| | auth_password_reset_timing | test/contracts/password_reset_redirect_flow_test.dart |
