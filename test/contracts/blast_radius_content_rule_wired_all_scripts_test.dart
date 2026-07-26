@@ -42,6 +42,88 @@ void main() {
     'scripts/check_code_review_pass_exists.dart',
   ];
 
+  // c9f1d3 (2026-07-27): the same three scripts must ALSO be >= platform tier
+  // in the registry, or a change to one of them clears no review gate at all.
+  //
+  // The 2026-07-19 sweep that promoted enforcement scripts wrote, in its own
+  // comment in docs/blast_radius.yaml, "A change to the reviewer must not be
+  // exempt from review" — and then missed check_code_review_pass_exists.dart,
+  // one word away in name from the gate it did promote and named by THIS
+  // file's header as "the most load-bearing one". It fell through the
+  // `scripts/** -> feature` catch-all, so the file deciding whether a
+  // catastrophic diff has an accepted review could itself be edited with no
+  // review at all.
+  //
+  // A prose comment did not prevent that; this test does. Checked against the
+  // registry rather than a hardcoded list so the two cannot drift apart.
+  group('registry tiering — a change to the reviewer is not exempt', () {
+    late List<({String glob, String tier})> rules;
+
+    setUpAll(() {
+      final f = File('docs/blast_radius.yaml');
+      expect(f.existsSync(), isTrue);
+      rules = <({String glob, String tier})>[];
+      var inPaths = false;
+      for (final raw in f.readAsStringSync().split('\n')) {
+        final line = raw.trim();
+        if (line.isEmpty || line.startsWith('#')) continue;
+        if (line == 'paths:') {
+          inPaths = true;
+          continue;
+        }
+        if (!inPaths || !line.startsWith('-')) continue;
+        final g = RegExp(r'glob:\s*"([^"]+)"').firstMatch(line);
+        final t = RegExp(r'tier:\s*([a-z]+)').firstMatch(line);
+        if (g != null && t != null) {
+          rules.add((glob: g.group(1)!, tier: t.group(1)!));
+        }
+      }
+      expect(rules, isNotEmpty, reason: 'registry parsed to zero rules');
+    });
+
+    // FIRST match wins (docs/blast_radius.yaml header), so an exact-path rule
+    // only counts if it precedes the scripts/** catch-all.
+    String tierFor(String path) {
+      for (final r in rules) {
+        final pattern = RegExp(
+          '^${RegExp.escape(r.glob).replaceAll(r'\*\*', '.*').replaceAll(r'\*', '[^/]*')}\$',
+        );
+        if (pattern.hasMatch(path)) return r.tier;
+      }
+      return 'feature';
+    }
+
+    test('the classifier itself resolves scripts/** to feature '
+        '(so an exact rule is the ONLY thing that can save these)', () {
+      expect(tierFor('scripts/some_unrelated_helper.dart'), 'feature',
+          reason: 'if this is not feature, the assertions below could pass '
+              'for the wrong reason and prove nothing');
+    });
+
+    for (final path in scriptPaths) {
+      test('$path is >= platform', () {
+        expect(
+          ['platform', 'catastrophic'].contains(tierFor(path)),
+          isTrue,
+          reason: '$path implements the tier engine that decides whether a '
+              'change needs review. At feature tier a change to it clears no '
+              'review gate — the exemption docs/blast_radius.yaml explicitly '
+              'exists to close. Got tier: ${tierFor(path)}.',
+        );
+      });
+    }
+
+    test('scripts/blast_radius_content_rules_lib.dart is >= platform', () {
+      // The shared library all three delegate to; weakening it weakens all
+      // three at once, so it cannot sit below them.
+      expect(
+        ['platform', 'catastrophic']
+            .contains(tierFor('scripts/blast_radius_content_rules_lib.dart')),
+        isTrue,
+      );
+    });
+  });
+
   for (final path in scriptPaths) {
     group(path, () {
       late String src;

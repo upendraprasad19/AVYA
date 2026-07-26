@@ -88,6 +88,13 @@ paths:
   # (merge-governance batch 2026-07-26, review round 1 finding F8.)
   - { glob: "scripts/check_plan_review_record_exists.dart", tier: platform }
   - { glob: "scripts/plan_review_record_lib.dart", tier: platform }
+  # c9f1d3 (2026-07-27): the review-ACCEPTANCE gate, one word away in name from
+  # the record gate above and identical in function, was missed by the sweep
+  # that wrote the comment above — it fell through scripts/** to feature tier.
+  # So the one file that decides whether a catastrophic diff has an accepted
+  # review could itself be edited with no review at all, which is precisely the
+  # exemption this block exists to close.
+  - { glob: "scripts/check_code_review_pass_exists.dart", tier: platform }
   - { glob: "scripts/check_gate_scripts_wired.dart", tier: platform }
   - { glob: "scripts/blast_radius_from_diff.dart", tier: platform }
   - { glob: "scripts/blast_radius_content_rules_lib.dart", tier: platform }
