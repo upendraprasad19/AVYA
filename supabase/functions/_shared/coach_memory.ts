@@ -76,6 +76,19 @@ export async function upsertCoachMemory(
 }
 
 /**
+ * Tone guidance keyed by motivation_style.
+ *
+ * A Map rather than an object literal DELIBERATELY: object-literal indexing with
+ * an unvalidated key reaches inherited members ("constructor", "toString", ...).
+ * Found by review round 2.
+ */
+const _TONE_GUIDANCE = new Map<string, string>([
+  ["tough_love", "be direct, no soft padding"],
+  ["gentle", "be warm and validating before suggesting"],
+  ["data_driven", "lead with the number, then the suggestion"],
+]);
+
+/**
  * Renders the coach_memory row as a system-prompt fragment (block [3]
  * of the 7-block context layout). Returns empty string when row is null
  * or private_mode is on.
@@ -124,11 +137,14 @@ export function renderCoachMemoryBlock(mem: CoachMemory | null): string {
     );
   }
   if (mem.motivation_style) {
-    const tone = {
-      tough_love: "be direct, no soft padding",
-      gentle: "be warm and validating before suggesting",
-      data_driven: "lead with the number, then the suggestion",
-    }[mem.motivation_style];
+    // A plain object literal indexed by an UNVALIDATED key returns inherited
+    // members: motivation_style = "constructor" yielded `function Object() {
+    // [native code] }` rendered straight into the SYSTEM prompt. The TS union on
+    // this field is compile-time only -- daily-snapshot:264 writes whatever
+    // Gemini's extraction returns, with no runtime validation. A Map has no
+    // prototype chain to walk, so an unknown key is simply absent.
+    const tone = _TONE_GUIDANCE.get(mem.motivation_style) ??
+      "be warm and validating before suggesting";
     lines.push(
       `- Motivation style: ${sanitizeIdentifier(mem.motivation_style, {
         fallback: "gentle",

@@ -323,6 +323,12 @@ class _SignOutButton extends StatelessWidget {
           await ref.read(authNotifierProvider.notifier).signOut();
         } catch (e) {
           debugPrint('[Settings] signOut error: $e');
+          // OI-51 round 2: the DERIVED gate found this site -- no reviewer did,
+          // and neither did I. signOut() failing partway may leave the device
+          // still bound to the departing user, and this screen's own snackbar
+          // tells them the session was cleared. Release explicitly so that
+          // message is true.
+          await releaseDeviceSessionIdentity();
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(

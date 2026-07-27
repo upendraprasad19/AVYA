@@ -573,6 +573,10 @@ class AuthNotifier extends Notifier<AuthState2> {
         try {
           await _supabase.client.auth.signOut();
         } catch (_) {}
+        // OI-51 round 2: this is the cross-account guard firing -- the single
+        // moment the device is MOST likely to be carrying the wrong user's
+        // identity -- and it force-signs-out without going through signOut().
+        await releaseDeviceSessionIdentity();
         throw StateError(
             'Cross-account clear partial-failed; signed out for safety.');
       }

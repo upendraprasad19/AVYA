@@ -4,7 +4,10 @@ import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/b
 import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
 import { COACH_REPLIES } from "../_shared/coach_replies.ts";
 import { istDayStartIso } from "../_shared/ist_date.ts";
-import { sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
+import {
+  asPrincipalMessage,
+  sanitizeJsonForPrompt,
+} from "../_shared/sanitize_for_prompt.ts";
 
 // F14 · Test #9 — free users get 5 LIFETIME image analyses on the AI coach.
 // Counted via ai_coach_interactions.channel='free_image_analysis'.
@@ -594,7 +597,7 @@ serve(async (req: Request) => {
     const { content: rawReply, tokensUsed } = await geminiChat({
       model: MODEL_FLASH_LITE,
       systemPrompt,
-      userPrompt: message,
+      userPrompt: asPrincipalMessage(message),
       imageBase64,
       imageMimeType: mimeType,
       maxTokens: 2048,

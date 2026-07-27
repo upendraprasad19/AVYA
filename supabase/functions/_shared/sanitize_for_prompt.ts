@@ -87,71 +87,59 @@ const _controls = new RegExp(
 const _unicodeSeps = new RegExp("[\\u0085\\u2028\\u2029]", "g");
 
 /**
- * Runs of `<` or `>`, which are what [fenceAsData]'s delimiters are built from.
+ * THE CHARACTER POLICY IS AN ALLOWLIST, AND THAT IS THE WHOLE POINT.
  *
- * WHY THIS EXISTS. The first version of this module fenced user text in
- * `<<<BEGIN_X>>>` / `<<<END_X>>>` and did NOT strip those tokens from the
- * content -- the doc even said so, telling callers "a caller must not allow
- * user text to contain it verbatim". Every call site then passed user text
- * straight through, so a user typing `<<<END_MEAL>>>` closed the fence early
- * and everything after it read as prompt. The half added to cover what
- * sanitising cannot do was itself forgeable, which is worse than no fence: it
- * looks like a boundary while not being one.
+ * Two review rounds killed the denylist approach. Round 1 added a zero-width
+ * class; round 2 defeated it with five more BMP characters AND an entire astral
+ * plane the class structurally could not reach -- every regex here is built
+ * without the `u` flag, so a BMP character class can never match U+10000+, no
+ * matter what is added to it. Unicode Tag characters (U+E0000-E007F) each map
+ * to an ASCII byte, so that was a covert channel, not merely a fence bypass.
  *
- * DEFANG, DO NOT DELETE. `<<<` becomes `< < <`, so no run of two-or-more
- * survives anywhere in sanitised output and the delimiter cannot be
- * reconstructed. Spacing rather than removal keeps the user's own text legible
- * (a meal note reading `a <<< b` becomes `a < < < b`, still readable) instead of
- * silently editing content out from under them.
+ * The stated premise was also wrong on its own terms: "strip category Cf" does
+ * not cover U+3164 (Lo) or U+FE00-FE0F (Mn). Enumerating harder was never going
+ * to finish.
+ *
+ * So: keep what is legitimate, drop everything else. `u` flag, so astral code
+ * points are matched as code points rather than surrogate halves.
+ *
+ *   \p{L}  letters      \p{N}  numbers    \p{P}  punctuation
+ *   \p{M}  marks        \p{Zs} spaces     \p{S}  symbols (incl. emoji)
+ *   plus tab and newline
+ *
+ * Everything in \p{C} (Cc control, Cf format, Co private-use, Cn unassigned)
+ * is dropped, which is what closes the covert channel.
+ *
+ * \p{M} IS REQUIRED AND IS NOT NEGOTIABLE. Dropping marks strips Devanagari
+ * matras, turning a written Hindi greeting into mojibake. This app's users write Hindi and
+ * Hinglish; silently destroying their text would be a worse bug than the one
+ * being fixed. Measured, not assumed: Devanagari, Tamil, Hinglish and emoji all
+ * round-trip byte-identical under this policy, and there is a test that fails if
+ * that stops being true.
+ *
+ * ACCEPTED CONSEQUENCES, stated rather than hidden:
+ *   - U+FE0F VARIATION SELECTOR-16 (Mn) and U+3164 HANGUL FILLER (Lo) SURVIVE.
+ *     Under the old adjacency-based fence that was a P0, because they split a
+ *     `<<<` run. Under the nonce fence it is harmless: an attacker cannot forge
+ *     a delimiter they cannot predict. The two designs are coupled, which is
+ *     exactly why the fence had to change before this could be permissive.
+ *   - ZWJ (Cf) is dropped, so a ZWJ family emoji degrades to its component
+ *     emoji. Acceptable: ZWJ is a real smuggling primitive and the loss is
+ *     cosmetic.
  */
-const _angleRuns = new RegExp("[<>]{2,}", "g");
+//
+// NOTE: a regex LITERAL here, deliberately, despite this file's own
+// no-regex-literal doctrine above. That doctrine exists because embedding a
+// literal U+2028 CHARACTER terminates a literal mid-expression. It does not
+// apply to pure-ASCII property escapes -- and the string form actively
+// misfired: `new RegExp(\"[^\p{L}...\")` needs DOUBLED backslashes, and a
+// single-backslash version silently compiles to [^p{L}...], which strips
+// almost everything. Verified by od -c that the file carried one backslash.
+const _disallowed = /[^\p{L}\p{M}\p{N}\p{Zs}\p{P}\p{S}\t\n]/gu;
 
-/**
- * Invisible / zero-width / bidi-control characters.
- *
- * THESE DEFEAT EVERY ADJACENCY-BASED CHECK, which is why they are stripped
- * BEFORE the defang rather than alongside it. Review round 1 (2026-07-27)
- * demonstrated the hole empirically: `_angleRuns` requires literally adjacent
- * brackets, so
- *
- *     "<" + ZWSP + "<" + ZWSP + "<END_MEAL>" + ZWSP + ">" + ZWSP + ">"
- *
- * passed through `sanitizeBlock` COMPLETELY UNCHANGED -- the sanitiser was a
- * no-op, and the module's own property test (`!/[<>]{2,}/`) reported it clean.
- * Any consumer that normalises zero-width away (tokenizer preprocessing does)
- * then sees TWO `<<<END_MEAL>>>` markers and the payload sits outside the
- * fence. An adjacency test on text an attacker can interleave is not a test.
- *
- * (The line below once contained a LITERAL zero-width space, inside the comment
- * explaining zero-width spaces, and the module's pure-ASCII self-test is what
- * caught it. Third time that assertion has paid for itself.)
- *
- * None of these were caught by anything else: they are category Cf (Format),
- * so `\s` does not match them (a probe on U+200B returns false) and
- * they sit outside `_controls`' C0/C1 ranges entirely.
- *
- * Stripped outright rather than defanged: none carries legitimate meaning in a
- * name or a fitness note, and U+202A-U+202E additionally enable Trojan-Source
- * style visual reordering in any surface that re-renders the text (a push
- * notification, an admin view) -- in scope because this module's stated threat
- * model includes what lands in the user's own notifications.
- */
-const _invisibles = new RegExp(
-  "[\\u00AD\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]",
-  "g",
-);
-
-/**
- * Breaks up any `<<`/`>>` run so [fenceAsData]'s delimiters cannot be forged.
- *
- * ORDER IS LOAD-BEARING: invisibles are removed FIRST so a run an attacker
- * split with zero-width characters is rejoined into a real run and then
- * defanged. Reversing these two lines reopens the P0 above.
- */
-function _defangFenceTokens(s: string): string {
-  return s
-    .replace(_invisibles, "")
-    .replace(_angleRuns, (run) => run.split("").join(" "));
+/** Drops every character outside the allowlist above. */
+function _keepAllowedOnly(s: string): string {
+  return s.replace(_disallowed, "");
 }
 
 /**
@@ -173,7 +161,7 @@ export function sanitizeIdentifier(
   const fallback = opts?.fallback ?? "there";
   if (raw == null) return fallback;
 
-  let s = _defangFenceTokens(
+  let s = _keepAllowedOnly(
     String(raw)
       .replace(_lineBreaks, " ")
       .replace(_controls, ""),
@@ -211,7 +199,7 @@ export function sanitizeBlock(
   const maxLen = opts?.maxLen ?? kBlockMaxLen;
   if (raw == null) return "";
 
-  let s = _defangFenceTokens(
+  let s = _keepAllowedOnly(
     String(raw)
       .replace(/\r\n?/g, "\n")
       .replace(_unicodeSeps, "\n")
@@ -286,27 +274,60 @@ export function sanitizeJsonForPrompt(value: unknown, space?: number): string {
     .replace(new RegExp("\\u0085", "g"), "\\u0085");
 }
 
+/** A fenced block plus the exact markers that delimit it. */
+export interface FencedBlock {
+  /** The full fenced text to interpolate into the prompt. */
+  readonly text: string;
+  /** Opening marker -- name it in the surrounding instruction. */
+  readonly begin: string;
+  /** Closing marker. */
+  readonly end: string;
+}
+
 /**
- * Wraps a sanitised block in an explicit data fence.
+ * Wraps sanitised content in a data fence whose delimiters CANNOT BE FORGED.
  *
- * Sanitising alone leaves the model reading attacker-influenced prose with no
- * marker saying "this is quoted material". The fence plus the surrounding
- * instruction is the half that survives text the sanitiser cannot judge --
- * judging intent in free text is exactly what cannot be done reliably.
+ * THE FIX THAT ENDED THE ARMS RACE. The first version used a fixed marker,
+ * <<<END_MEAL>>>, and defended it by trying to remove every character an
+ * attacker could use to reconstruct it. That defence failed three times:
+ *   1. user types the marker verbatim              -> defang the bracket runs
+ *   2. user splits it with a zero-width character  -> strip zero-width
+ *   3. five more BMP chars, plus astral Tag chars
+ *      a non-`u` regex structurally cannot see     -> unwinnable
  *
- * PASS ONLY SANITISED CONTENT. [sanitizeBlock] and [sanitizeIdentifier] defang
- * `<<`/`>>` runs, so content that has been through either cannot reconstruct
- * these delimiters. Handing this function RAW user text re-opens the hole:
- * a meal note reading `<<<END_MEAL>>>` would close the fence early and
- * everything after it would read as prompt.
+ * Each fix was a longer list, and the list can never be finished. So the
+ * delimiter is UNPREDICTABLE instead: a fresh 12-hex nonce per call. An attacker
+ * cannot close a fence whose token they cannot guess, whatever characters
+ * survive sanitisation. That is also why the character policy above can afford
+ * to keep U+FE0F and U+3164 -- the fence no longer depends on it.
  *
- * That was this module's own first-version bug. The doc here used to say
- * "[sanitizeBlock] does not strip it, so a caller must not allow user text to
- * contain it verbatim" -- and all three call sites then passed user text
- * straight through. A boundary the contained text can forge is worse than no
- * boundary, because it reads as protection. The invariant now lives in the
- * sanitiser rather than in a warning nobody applied.
+ * The caller MUST name [begin] and [end] in its instruction text instead of
+ * hardcoding a marker, which is why this returns them rather than a bare string.
  */
-export function fenceAsData(sanitised: string, label = "USER_DATA"): string {
-  return `<<<BEGIN_${label}>>>\n${sanitised}\n<<<END_${label}>>>`;
+export function fenceAsData(
+  sanitised: string,
+  label = "USER_DATA",
+): FencedBlock {
+  const nonce = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  const begin = "<<<BEGIN_" + label + "_" + nonce + ">>>";
+  const end = "<<<END_" + label + "_" + nonce + ">>>";
+  return { text: begin + "\n" + sanitised + "\n" + end, begin, end };
+}
+
+/**
+ * Marks a value as DELIBERATELY unsanitised because the user is the principal.
+ *
+ * The chat channel is the one place raw user text belongs in a prompt: the
+ * user's message IS the request. Sanitising it would corrupt legitimate
+ * multi-line messages, strip emoji from "great session!", and buy nothing --
+ * they are not escaping into someone else's instructions, they are writing
+ * their own. What needs protecting is the SYSTEM prompt around it.
+ *
+ * This is an identity function on purpose. It exists so the coverage gate sees
+ * an explicit decision IN CODE at the call site, rather than a prose exemption
+ * in a list somewhere else -- the mechanism that previously let a wrong
+ * justification silence a right detection (food_parser.ts, review round 2).
+ */
+export function asPrincipalMessage(userMessage: string): string {
+  return userMessage;
 }

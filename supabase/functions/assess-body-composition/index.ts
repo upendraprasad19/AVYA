@@ -26,9 +26,19 @@ const corsHeaders = {
  * states a measurement the caller did not send. (Round-1 review P2.)
  */
 function _num(v: unknown): string {
-  if (v === null || v === undefined || v === "") return "unknown";
-  const n = Number(v);
-  return Number.isFinite(n) ? String(n) : "unknown";
+  // Round-2 review: the first version still let three shapes through, each
+  // violating this function's own stated purpose.
+  //   "   "  -> Number(" ") === 0, and `v === ""` does not catch whitespace
+  //   true   -> Number(true) === 1, so `age: true` rendered "1 years old"
+  //   []     -> Number([]) === 0, and Number([5]) === 5
+  // Only a genuine number, or a string that is entirely a number, is a
+  // measurement the caller actually sent.
+  if (typeof v === "number") return Number.isFinite(v) ? String(v) : "unknown";
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? String(n) : "unknown";
+  }
+  return "unknown";
 }
 
 function json(data: unknown, status = 200) {

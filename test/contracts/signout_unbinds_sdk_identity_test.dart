@@ -250,29 +250,48 @@ void main() {
       }
     });
 
-    test('EVERY session-ending path releases the device identity, not just '
-        'AuthNotifier.signOut', () {
-      // Round-1 P1: sign-out was not the choke point it looked like. Two other
-      // paths clear Hive + Supabase directly and never touch the notifier, so
-      // the unbind was unreachable from either:
-      //   - main.dart's HiveOwnershipException recovery, which fires exactly
-      //     when the cross-account guard trips;
-      //   - the DPDP hard-delete, where the user is GONE but the handset kept
-      //     external_id and the Crashlytics id pointing at them.
-      // Hence the extraction to a top-level releaseDeviceSessionIdentity().
-      const paths = <String, String>{
-        'lib/main.dart': 'HiveOwnershipException recovery',
-        'lib/features/profile/screens/delete_account_screen.dart':
-            'DPDP hard-delete',
-      };
-      paths.forEach((path, why) {
-        final f = File(path);
-        expect(f.existsSync(), isTrue, reason: '$path must exist');
-        final body = _strip(f.readAsStringSync());
-        expect(body, contains('releaseDeviceSessionIdentity()'),
-            reason: '$path ends a session ($why) but never releases the '
-                "device's OneSignal / Crashlytics bindings");
+    test('DERIVED: every .auth.signOut( call site in lib/ reaches '
+        'releaseDeviceSessionIdentity()', () {
+      // Round 2 found this list was WRONG in the most embarrassing way: the
+      // previous version of this test hard-coded TWO paths (main.dart and
+      // delete_account_screen). `grep "\.auth\.signOut("` finds FIVE. A
+      // closed list written by the same person who missed the sites is not a
+      // check -- so the set is now computed from the tree.
+      //
+      // The five: AuthNotifier.signOut, _ensureLocalUser's cross-account-guard
+      // force-signout, reset_password_screen, delete_account_screen, and
+      // perform_sign_out's defensive fallback (which runs precisely BECAUSE the
+      // notifier path failed, possibly before reaching the unbind).
+      final sites = <String, List<int>>{};
+      for (final f in Directory('lib').listSync(recursive: true)) {
+        if (f is! File || !f.path.endsWith('.dart')) continue;
+        final lines = _strip(f.readAsStringSync()).split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          if (RegExp(r'\.auth\s*\.?\s*$').hasMatch(lines[i]) ||
+              lines[i].contains('.auth.signOut(') ||
+              (lines[i].contains('.signOut(') && lines[i].contains('auth'))) {
+            sites.putIfAbsent(f.path, () => []).add(i + 1);
+          }
+        }
+      }
+
+      expect(sites.length, greaterThanOrEqualTo(4),
+          reason: 'found sign-out sites in only ${sites.length} files — the '
+              'enumerator is probably broken, not the tree');
+
+      final missing = <String>[];
+      sites.forEach((path, lineNos) {
+        final src = _strip(File(path).readAsStringSync());
+        // The auth provider DEFINES the release function, so it trivially
+        // contains the name; require an actual invocation instead.
+        final invocations =
+            RegExp(r'await releaseDeviceSessionIdentity\(\)').allMatches(src).length;
+        if (invocations == 0) missing.add('$path (sign-out at $lineNos)');
       });
+
+      expect(missing, isEmpty,
+          reason: 'these files end a session but never release the device '
+              'identity: ${missing.join(", ")}');
     });
 
     test('every unbind step is individually try/caught', () {

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:icanbefitter/core/router/app_router.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -84,6 +85,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
       // Sign out so GoRouter redirects to /sign-in.
       await Supabase.instance.client.auth.signOut();
+      // OI-51 round 2: a password reset ends the session too. Same user
+      // re-authenticates seconds later, but leaving the binding set means a
+      // push aimed at the old session can still land in the gap.
+      await releaseDeviceSessionIdentity();
       // Reset the recovery flag so the guard on next mount works.
       AppRouter.isPasswordRecovery = false;
       // The router's _authRedirect handles the navigation automatically.
