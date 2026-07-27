@@ -211,6 +211,68 @@ batch exists to prevent; inheriting it from a default would have been ironic.
 Both sites now pass `maxLen: 32000` explicitly — ~5.6× the observed max, ~18×
 p95, still a hard refusal of a pathological payload.
 
+
+## The design was wrong, not merely incomplete (rounds 1-3)
+
+Three independent review rounds, six reviewers. The first two were spent
+extending a list that could not be finished:
+
+| Attack | My fix |
+|---|---|
+| user types the marker verbatim | defang runs of `<<<` |
+| user splits it with a zero-width char -- no *run* to defang | strip zero-width |
+| five more BMP chars (U+180E, U+3164, U+FFA0, U+FE0F, U+FE00) | ...extend the list? |
+| astral Tag chars (U+E0000-E007F) | **impossible** |
+
+The last row is the one that settled it. Every regex was `new RegExp(..., "g")`
+with no `u` flag, so a character class physically cannot match above U+FFFF --
+adding Tag characters to the list would not have worked. And each Tag character
+maps to an ASCII byte, so this was a covert channel, not a delimiter trick.
+
+The stated premise was wrong on its own terms too: I justified the class as
+"strip category Cf", but U+3164/U+FFA0 are **Lo** and U+FE00-FE0F are **Mn**.
+
+### What replaced it
+
+**Nonce delimiters.** `fenceAsData` mints a fresh 12-hex token per call and
+returns `{text, begin, end}`; callers name the markers rather than hardcoding
+them. Content cannot close a fence whose token it cannot predict, so the
+character set stops mattering for the boundary.
+
+**An allowlist, with the `u` flag**, keeping `\p{L}\p{M}\p{N}\p{Zs}\p{P}\p{S}`
+plus tab and newline, dropping all of `\p{C}`.
+
+**The two are coupled, and measuring proved it.** An allowlist WITHOUT `\p{M}`
+strips Devanagari matras and turns written Hindi into mojibake -- unacceptable
+for an app whose users write Hinglish. WITH `\p{M}`, U+FE0F and U+3164 survive,
+which under the old adjacency-based fence was a P0. Character-perfection and
+Indic support are mutually exclusive; the nonce is what lets the policy be
+permissive enough to be safe for real users.
+
+Both properties are asserted: the forgery test replays the whole escalation
+history (literal marker, ZWSP, HANGUL FILLER, VS-16, astral TAG) and the fence
+closes exactly once for each, negative-controlled by pinning the nonce; and
+Devanagari, Tamil, Hindi, Hinglish, emoji and punctuation round-trip
+byte-identical.
+
+### The closed lists were the failure mechanism
+
+Three of them, and one did active harm:
+
+- `_invisibles` -- the character class above.
+- `SHARED_VERIFIED_CLEAN` -- I wrote an entry exempting `food_parser.ts` that
+  explained the template literals at `:104`/`:149` while never mentioning
+  `userPrompt: description` at `:84`. **The gate flagged it correctly and my
+  justification silenced it.**
+- the sign-out path list -- hard-coded 2; round 2 found 5; the derived gate then
+  found a **sixth** (`settings_screen.dart:323`) on its first run that no
+  reviewer and no author had named.
+
+Both gates now derive their required set from the tree. A deliberate exception
+has to be expressed in code (`asPrincipalMessage()`) at the call site, where it
+appears in the diff of the file that carries the risk -- not in a list somewhere
+else where a wrong reason can hide a right detection.
+
 ## The scar this file keeps re-earning
 
 The module and its test are asserted pure-ASCII by a test, not by eye. The first
