@@ -36,6 +36,7 @@ import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/profile/services/notification_prefs_repository.dart';
 import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
@@ -824,6 +825,21 @@ class SyncService {
     return {
       'snapshot_date': today,
       ...aiContext,
+      // Unit D — notification preferences, emitted AFTER the spread ON PURPOSE.
+      //
+      // buildAiContext() returns an ALREADY-TRIMMED map (it ends in
+      // `trimSnapshotToBudget(context, budget: 9500)`, ai_snapshot_builder.dart:420),
+      // and that trimmer keeps only a fixed allowlist and halves the largest
+      // remaining map. Emitting inside buildAiContext would put this key at the
+      // mercy of that trim — a silently dropped key reads to the server as
+      // "absent", which means SEND, which means a user's OFF toggle is ignored
+      // exactly when their snapshot is biggest. Adding it here, outside the
+      // trimmed map, makes that unrepresentable. ~400 bytes for 10 keys.
+      //
+      // Repository, not raw Hive: §4.4 r4, and the accessor is where the
+      // session check and the never-throw contract live. An exception here
+      // would be swallowed by pushSnapshotNow and kill the whole snapshot.
+      'notification_preferences': NotificationPrefsRepository.emissionMap(),
     };
   }
 

@@ -528,24 +528,45 @@ keys:
 # for completeness so OI-03's gate doesn't false-flag them.
 extra_server_written_keys:
   - key: notification_preferences
-    written_by: NOBODY — no writer exists anywhere. The client stores this map
-      in a local Hive box (lib/features/profile/screens/profile/screen.dart:330)
-      and nothing ever lifts it into a snapshot. Not a "legacy path" and not a
-      "future path"; the chain was simply never connected.
+    written_by: |
+      SyncService.compileDailySnapshot (lib/core/services/sync_service.dart),
+      emitting NotificationPrefsRepository.emissionMap() AFTER the buildAiContext
+      spread — outside the already-trimmed map, so the snapshot trimmer cannot
+      drop it. The Hive-side single writer is
+      NotificationPrefsRepository.write (user-scoped box; the pre-d4e8b2 writer
+      at profile/screen.dart:330 wrote the SHARED configBox and is gone).
+      Connected 2026-07-27 by d4e8b2; before that no writer existed anywhere and
+      the key appeared in 0 of 91 rows.
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 574 }
+      # Unit E: morning-alert and protein-gap-alert no longer read the key
+      # directly. They delegate to the shared helper, which is the single
+      # server-side reader for them — and, unlike their own snapshot reads, is
+      # latest-desc rather than date-pinned. Their old direct reads were pinned
+      # to today / yesterday and were therefore inert for ~16 of 17 live users.
+      - { fn: _shared/notification_prefs, file: supabase/functions/_shared/notification_prefs.ts, line: 77 }
+      # These four already read latest-desc and keep their own direct reads.
       - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 146 }
       - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 216 }
       - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 107 }
       - { fn: weekly-recap-ready, file: supabase/functions/weekly-recap-ready/index.ts, line: 53 }
-      - { fn: protein-gap-alert, file: supabase/functions/protein-gap-alert/index.ts, line: 205 }
-    status: orphan_writer
+    status: connected
     notes: |
-      SIX readers (this entry previously said five while listing six), and
-      buildAiContext does NOT emit the key. Verified live 2026-07-26:
-      0 of 91 user_daily_snapshots rows contain it. Every reader therefore
-      falls through to its permissive default, so all five user-facing
-      notification toggles are decorative.
+      CONNECTED 2026-07-27 (d4e8b2 = storage + emission, Unit E = server
+      guards). Before that: no writer anywhere, 0 of 91 user_daily_snapshots
+      rows carried the key, every reader fell through to its permissive
+      default, and every user-facing toggle was decorative.
+
+      Reader count went 6 -> 5 because morning-alert and protein-gap-alert
+      stopped reading the key directly and now delegate to
+      _shared/notification_prefs.ts. That was not a tidy-up: both had pinned
+      their preference read to a specific snapshot_date (today / yesterday),
+      and live only 1 of 91 rows is dated today, so both guards were inert for
+      roughly 16 of 17 users while appearing implemented. The shared helper is
+      latest-desc. Their date pins remain for CONTENT, which is correct there.
+
+      The live number that proves the whole arc: `snapshot_json ?
+      'notification_preferences'` must go 0/91 -> non-zero. Everything else can
+      pass while the feature stays inert.
 
       Line citations were stale by 1-42 lines when re-verified on 2026-07-26
       (509->574, 132->146, 196->216, 79->107, 52->53, 197->205) and NOTHING
@@ -558,11 +579,11 @@ extra_server_written_keys:
       failure for next-batch remediation." It never did and structurally never
       could, for the reason above.
 
-      Remediation is planned (unit 0.5): emit from compileDailySnapshot rather
-      than buildAiContext, because buildAiContext's output passes through
-      trimSnapshotToBudget, whose keep-set excludes this key and whose map
-      branch HALVES the biggest map — a trimmed preference map reads as absent,
-      which every reader treats as "send".
+      That remediation SHIPPED: emission is from compileDailySnapshot, after
+      the buildAiContext spread, precisely because buildAiContext's output
+      passes through trimSnapshotToBudget, whose keep-set excludes this key and
+      whose map branch HALVES the biggest map — a trimmed preference map reads
+      as absent, which every reader treats as "send".
 
   - key: fitness_summary
     written_by: rolling-context (nightly cron) -> upserts into

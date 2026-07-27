@@ -16,6 +16,10 @@ import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,11 +99,29 @@ Deno.serve(async (req) => {
       prsByUser.get(row.user_id)!.push(row);
     }
 
+    // Unit E — one batched, latest-desc read for the whole run (NOT
+    // today-pinned; see _shared/notification_prefs.ts for why that shape is
+    // inert against live data).
+    const notifPrefs = await fetchNotificationPrefs(
+      supabase,
+      [...prsByUser.keys()],
+    );
+
     let sent = 0;
     let dedupSkipped = 0;
+    let prefsOff = 0;
     let errors = 0;
 
     for (const [userId, prs] of prsByUser.entries()) {
+      // User turned PR celebrations off. Checked BEFORE the dedup gate so an
+      // opted-out user does not burn their one-per-day proactive slot on a
+      // push that is then discarded, which would suppress a different
+      // notification they still want.
+      if (!isNotificationEnabled(notifPrefs, userId, "pr_celebration")) {
+        prefsOff++;
+        continue;
+      }
+
       // Dedup gate
       if (!(await shouldSendProactive(supabase, userId, "pr_celebration"))) {
         dedupSkipped++;
@@ -167,7 +189,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(
-      `[pr-detection] request_id=${requestId} pr_rows=${rows.length} users=${prsByUser.size} sent=${sent} dedup_skipped=${dedupSkipped} errors=${errors}`,
+      `[pr-detection] request_id=${requestId} pr_rows=${rows.length} users=${prsByUser.size} sent=${sent} prefs_off=${prefsOff} dedup_skipped=${dedupSkipped} errors=${errors}`,
     );
 
     await logCronEnd(logId, "success", { httpStatus: 200, requestId });
@@ -176,6 +198,7 @@ Deno.serve(async (req) => {
         pr_rows: rows.length,
         users: prsByUser.size,
         sent,
+        prefs_off: prefsOff,
         dedup_skipped: dedupSkipped,
         errors,
       }),

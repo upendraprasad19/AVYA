@@ -50,6 +50,11 @@ import { istDayOfWeek } from "../_shared/ist_date.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { fetchProUserIds } from "../_shared/subscription.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+  type PrefsByUser,
+} from "../_shared/notification_prefs.ts";
 
 type MotivationTone = "tough_love" | "gentle" | "data_driven";
 
@@ -361,6 +366,7 @@ async function generateAndStoreAlert(
   todayIST: string,
   yesterdayIST: string,
   proUserIds: Set<string>,
+  notifPrefs: PrefsByUser,
 ): Promise<void> {
   try {
     // PRO status comes from the `subscriptions` table via _shared/subscription.ts,
@@ -491,6 +497,7 @@ async function processBatch(
   todayIST: string,
   yesterdayIST: string,
   proUserIds: Set<string>,
+  notifPrefs: PrefsByUser,
 ): Promise<void> {
   for (let i = 0; i < users.length; i += CONCURRENCY) {
     const chunk = users.slice(i, i + CONCURRENCY);
@@ -502,6 +509,7 @@ async function processBatch(
           todayIST,
           yesterdayIST,
           proUserIds,
+          notifPrefs,
         )
       ),
     );
@@ -570,11 +578,16 @@ async function deliverAlerts(
             | undefined;
           if (!alertMsg) return;
 
-          // Check notification preferences for morning_checkin.
-          const prefs = snap.snapshot_json?.notification_preferences as
-            | { morning_checkin?: { enabled?: boolean } }
-            | undefined;
-          if (prefs?.morning_checkin?.enabled === false) return;
+          // Notification preference — from the LATEST snapshot, not this
+          // yesterday-pinned one (F7 / Unit E).
+          //
+          // The date pin is right for CONTENT (the alert summarises
+          // yesterday) and was wrong for PREFERENCES: a user with no row for
+          // yesterday — most users, live — skipped this check entirely, so
+          // the toggle was inert while appearing implemented.
+          if (!isNotificationEnabled(notifPrefs, user.id, "morning_checkin")) {
+            return;
+          }
 
           // Proactive dedup: skip if morning_brief already sent today.
           const allow = await shouldSendProactive(
@@ -772,12 +785,22 @@ serve(async (req: Request) => {
           `${users.length} users (offset ${offset})`,
       );
 
+      // Preferences for THIS page's users, latest-desc (F7 / Unit E).
+      // Fetched per batch rather than once up-front because the working set is
+      // paginated — the ids are not known before the page is read. One extra
+      // batched query per page, never per user.
+      const notifPrefs = await fetchNotificationPrefs(
+        supabaseClient,
+        (users as ActiveUser[]).map((u) => u.id),
+      );
+
       await processBatch(
         users,
         supabaseClient,
         todayIST,
         yesterdayIST,
         proUserIds,
+        notifPrefs,
       );
 
       console.log(

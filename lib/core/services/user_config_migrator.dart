@@ -190,6 +190,72 @@ class UserConfigMigrator {
     debugPrint('[UserConfigMigrator] $result');
     return result;
   }
+
+  /// Flag for [purgeDeleteOnlyKeys]. Separate from [_flagKey] on purpose.
+  ///
+  /// Bumping `_flagKey` to v3 would re-run the whole 31-key COPY sweep on
+  /// every existing device just to reach one key — re-executing a migration
+  /// that already completed, for no benefit and with real risk.
+  static const String _purgeFlagKey = 'notif_prefs_purge_v1_done';
+
+  /// Keys removed from the shared `configBox` **without** copying to
+  /// `userBox`. Delete-only, and the distinction is load-bearing.
+  ///
+  /// `userScopedKeys` copies-then-deletes, which is right for a key whose
+  /// value provably belongs to the person signed in. It is WRONG here.
+  /// `configBox` carries no owner: the migration runs once per DEVICE, for
+  /// whoever happens to be signed in at that moment. Copying would hand user
+  /// A's notification preferences to user B permanently — the precise bug (c)
+  /// this unit closes. Ownership of a shared-box value is unknowable by
+  /// construction, so the only safe action is to drop it.
+  ///
+  /// Losing the value is harmless: absent ⇒ the server SENDS (decision N2),
+  /// so a user whose stale preferences are dropped starts receiving
+  /// notifications again and can re-set them. The opposite error — inheriting
+  /// a stranger's "off" — is silent and unfixable by the affected user.
+  static const List<String> deleteOnlyKeys = <String>[
+    'notification_preferences',
+  ];
+
+  /// Drops [deleteOnlyKeys] from `configBox`. Once per device, never throws.
+  ///
+  /// Deliberately does NOT require a session: it only ever deletes from the
+  /// shared box, so there is no owner to get wrong, and running it early
+  /// shrinks the window in which a stale value could be read.
+  static Future<void> purgeDeleteOnlyKeys() async {
+    final hive = HiveService.instance;
+    final migBox = hive.migrationBox;
+    try {
+      if (migBox.get(_purgeFlagKey) == true) return;
+    } catch (e, st) {
+      debugPrint('[UserConfigMigrator] purge flag read failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'user_config_migrator_purge_flag_read'));
+      return; // Can't confirm state — do nothing rather than guess.
+    }
+
+    final purged = <String>[];
+    for (final key in deleteOnlyKeys) {
+      try {
+        if (!hive.configBox.containsKey(key)) continue;
+        await hive.configBox.delete(key);
+        purged.add(key);
+      } catch (e, st) {
+        debugPrint('[UserConfigMigrator] purge $key failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'user_config_migrator_purge_key'));
+      }
+    }
+
+    try {
+      await migBox.put(_purgeFlagKey, true);
+    } catch (e, st) {
+      debugPrint('[UserConfigMigrator] purge flag write failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'user_config_migrator_purge_flag_write'));
+    }
+    debugPrint('[UserConfigMigrator] purged delete-only keys: $purged');
+  }
 }
 
 class MigrationResult {

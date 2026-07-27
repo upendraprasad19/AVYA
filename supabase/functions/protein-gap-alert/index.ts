@@ -39,6 +39,10 @@ import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -173,6 +177,10 @@ serve(async (req: Request) => {
     let prefSkipped = 0;
     let errors = 0;
 
+    // F7 — preferences come from the LATEST snapshot per user, separately from
+    // the today-pinned content read above. One extra batched query per run.
+    const notifPrefs = await fetchNotificationPrefs(supabase, proUserIds);
+
     for (const userId of proUserIds) {
       const profile = profileByUser.get(userId) ?? {};
       const snap = snapByUser.get(userId) ?? {};
@@ -201,11 +209,16 @@ serve(async (req: Request) => {
         continue;
       }
 
-      // Notification preference (most-permissive default).
-      const prefs = snap.notification_preferences as
-        | Record<string, Record<string, unknown>>
-        | undefined;
-      if (prefs?.protein_alerts?.enabled === false) {
+      // Notification preference — read from the LATEST snapshot, not this
+      // today-pinned one (F7 / Unit E).
+      //
+      // The date pin above is correct for CONTENT: a protein-gap alert needs
+      // today's intake. It was wrong for PREFERENCES. Live, only 1 of 91
+      // snapshot rows is dated today, so for ~16 of 17 users `snap` simply did
+      // not exist and this check never ran — the toggle looked implemented and
+      // was inert. Preferences are not time-series data; the most recent known
+      // value is the right one however old.
+      if (!isNotificationEnabled(notifPrefs, userId, "protein_alerts")) {
         prefSkipped++;
         continue;
       }

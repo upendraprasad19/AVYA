@@ -21,6 +21,10 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.42.0";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -103,6 +107,35 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  // Unit E — respect the user's Promotion Day toggle.
+  //
+  // Early RETURN, not `continue`: unlike the other three guarded functions
+  // this one is trigger-fired for a SINGLE promotion and has no loop, so
+  // there is no iteration to skip and no per-run counter to increment.
+  //
+  // Returning 200 (not 4xx) on purpose — the caller is a database trigger and
+  // an opted-out user is a correct, expected outcome, not a failure. A non-2xx
+  // here would show up as trigger noise and, worse, could be retried.
+  //
+  // The 200 body names the reason so a future operator reading logs can tell
+  // "user opted out" apart from "silently did nothing".
+  try {
+    const prefs = await fetchNotificationPrefs(admin, [user_id]);
+    if (!isNotificationEnabled(prefs, user_id, "rank_promotion")) {
+      console.log(
+        `[proactive-coach-promotion] user=${user_id} opted out of rank_promotion — no push`,
+      );
+      return jsonResponse({ status: "skipped", reason: "notification_disabled" }, 200);
+    }
+  } catch (prefErr) {
+    // Absent means SEND (N2): a preferences lookup must never cost a user
+    // their promotion notification.
+    console.error(
+      "[proactive-coach-promotion] prefs lookup failed, sending anyway:",
+      prefErr,
+    );
+  }
 
   try {
     // 1. Pull user context (profile + progress snapshot).
