@@ -69,6 +69,31 @@ const _controls = new RegExp(
 const _unicodeSeps = new RegExp("[\\u0085\\u2028\\u2029]", "g");
 
 /**
+ * Runs of `<` or `>`, which are what [fenceAsData]'s delimiters are built from.
+ *
+ * WHY THIS EXISTS. The first version of this module fenced user text in
+ * `<<<BEGIN_X>>>` / `<<<END_X>>>` and did NOT strip those tokens from the
+ * content -- the doc even said so, telling callers "a caller must not allow
+ * user text to contain it verbatim". Every call site then passed user text
+ * straight through, so a user typing `<<<END_MEAL>>>` closed the fence early
+ * and everything after it read as prompt. The half added to cover what
+ * sanitising cannot do was itself forgeable, which is worse than no fence: it
+ * looks like a boundary while not being one.
+ *
+ * DEFANG, DO NOT DELETE. `<<<` becomes `< < <`, so no run of two-or-more
+ * survives anywhere in sanitised output and the delimiter cannot be
+ * reconstructed. Spacing rather than removal keeps the user's own text legible
+ * (a meal note reading `a <<< b` becomes `a < < < b`, still readable) instead of
+ * silently editing content out from under them.
+ */
+const _angleRuns = new RegExp("[<>]{2,}", "g");
+
+/** Breaks up any `<<`/`>>` run so [fenceAsData]'s delimiters cannot be forged. */
+function _defangFenceTokens(s: string): string {
+  return s.replace(_angleRuns, (run) => run.split("").join(" "));
+}
+
+/**
  * Sanitises a SHORT identity field -- a display name, a preferred name.
  *
  * Every line break and control character becomes a single space, runs of
@@ -87,9 +112,11 @@ export function sanitizeIdentifier(
   const fallback = opts?.fallback ?? "there";
   if (raw == null) return fallback;
 
-  let s = String(raw)
-    .replace(_lineBreaks, " ")
-    .replace(_controls, "")
+  let s = _defangFenceTokens(
+    String(raw)
+      .replace(_lineBreaks, " ")
+      .replace(_controls, ""),
+  )
     .replace(/\s+/g, " ")
     .trim();
 
@@ -109,7 +136,9 @@ export function sanitizeIdentifier(
  *   - runs of blank lines collapse, denying a large visual gap that pushes the
  *     real instructions out of the model's attention,
  *   - the block is capped, and truncation is DISCLOSED in-band so the model is
- *     not silently reading half a conversation.
+ *     not silently reading half a conversation,
+ *   - and [fenceAsData]'s delimiters are DEFANGED, so content can never forge
+ *     the boundary that is supposed to contain it.
  *
  * Structural safety at the call site (fencing plus a "this is data"
  * instruction) remains necessary; see [fenceAsData].
@@ -121,10 +150,12 @@ export function sanitizeBlock(
   const maxLen = opts?.maxLen ?? kBlockMaxLen;
   if (raw == null) return "";
 
-  let s = String(raw)
-    .replace(/\r\n?/g, "\n")
-    .replace(_unicodeSeps, "\n")
-    .replace(_controls, "")
+  let s = _defangFenceTokens(
+    String(raw)
+      .replace(/\r\n?/g, "\n")
+      .replace(_unicodeSeps, "\n")
+      .replace(_controls, ""),
+  )
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
@@ -182,8 +213,18 @@ export function sanitizeJsonForPrompt(value: unknown, space?: number): string {
  * instruction is the half that survives text the sanitiser cannot judge --
  * judging intent in free text is exactly what cannot be done reliably.
  *
- * The token is fixed and deliberately distinctive; [sanitizeBlock] does not
- * strip it, so a caller must not allow user text to contain it verbatim.
+ * PASS ONLY SANITISED CONTENT. [sanitizeBlock] and [sanitizeIdentifier] defang
+ * `<<`/`>>` runs, so content that has been through either cannot reconstruct
+ * these delimiters. Handing this function RAW user text re-opens the hole:
+ * a meal note reading `<<<END_MEAL>>>` would close the fence early and
+ * everything after it would read as prompt.
+ *
+ * That was this module's own first-version bug. The doc here used to say
+ * "[sanitizeBlock] does not strip it, so a caller must not allow user text to
+ * contain it verbatim" -- and all three call sites then passed user text
+ * straight through. A boundary the contained text can forge is worse than no
+ * boundary, because it reads as protection. The invariant now lives in the
+ * sanitiser rather than in a warning nobody applied.
  */
 export function fenceAsData(sanitised: string, label = "USER_DATA"): string {
   return `<<<BEGIN_${label}>>>\n${sanitised}\n<<<END_${label}>>>`;
