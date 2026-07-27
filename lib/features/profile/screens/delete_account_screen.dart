@@ -19,6 +19,7 @@
 //              + navigate to '/sign-in'.
 //   3. On error: error-code-aware snackbar, no Hive wipe.
 
+import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -107,6 +108,11 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
       await UserRepository.instance.clearAllData();
       await SupabaseService.instance.client.auth
           .signOut(scope: SignOutScope.global);
+      // OI-51 round 1: account DELETION is the sharpest case of the scenario
+      // this fix exists for -- the user is gone, but the handset kept
+      // external_id and the Crashlytics id pointing at them. Bypassed the
+      // notifier entirely, so it never reached the unbind.
+      await releaseDeviceSessionIdentity();
 
       if (mounted) {
         context.go('/sign-in');

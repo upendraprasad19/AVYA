@@ -40,6 +40,24 @@
 // an esm.sh URL is what turned a CDN 522 into a red CI run on 2026-07-27; see
 // feedback_mistake_remote_dep_rot.)
 
+/**
+ * `String.slice` on a UTF-16 code-unit boundary, backing off one unit if that
+ * boundary lands INSIDE a surrogate pair.
+ *
+ * `"A".repeat(63) + emoji` sliced to 64 keeps the high surrogate and drops its
+ * low half, leaving a lone surrogate. It round-trips through JSON fine, so it
+ * is invisible in tests, but `TextEncoder` (what `fetch` runs over the request
+ * body) silently replaces it with U+FFFD -- a function whose job is producing
+ * well-formed output should not emit half a character. Found in review round 1.
+ */
+function _sliceWholeChars(s: string, maxLen: number): string {
+  if (s.length <= maxLen) return s;
+  const code = s.charCodeAt(maxLen - 1);
+  // A high surrogate at the final kept position means its pair is being cut.
+  const cutsPair = code >= 0xd800 && code <= 0xdbff;
+  return s.slice(0, cutsPair ? maxLen - 1 : maxLen);
+}
+
 /** Default cap for a short identity field (a display name). */
 export const kIdentifierMaxLen = 64;
 
@@ -88,9 +106,52 @@ const _unicodeSeps = new RegExp("[\\u0085\\u2028\\u2029]", "g");
  */
 const _angleRuns = new RegExp("[<>]{2,}", "g");
 
-/** Breaks up any `<<`/`>>` run so [fenceAsData]'s delimiters cannot be forged. */
+/**
+ * Invisible / zero-width / bidi-control characters.
+ *
+ * THESE DEFEAT EVERY ADJACENCY-BASED CHECK, which is why they are stripped
+ * BEFORE the defang rather than alongside it. Review round 1 (2026-07-27)
+ * demonstrated the hole empirically: `_angleRuns` requires literally adjacent
+ * brackets, so
+ *
+ *     "<" + ZWSP + "<" + ZWSP + "<END_MEAL>" + ZWSP + ">" + ZWSP + ">"
+ *
+ * passed through `sanitizeBlock` COMPLETELY UNCHANGED -- the sanitiser was a
+ * no-op, and the module's own property test (`!/[<>]{2,}/`) reported it clean.
+ * Any consumer that normalises zero-width away (tokenizer preprocessing does)
+ * then sees TWO `<<<END_MEAL>>>` markers and the payload sits outside the
+ * fence. An adjacency test on text an attacker can interleave is not a test.
+ *
+ * (The line below once contained a LITERAL zero-width space, inside the comment
+ * explaining zero-width spaces, and the module's pure-ASCII self-test is what
+ * caught it. Third time that assertion has paid for itself.)
+ *
+ * None of these were caught by anything else: they are category Cf (Format),
+ * so `\s` does not match them (a probe on U+200B returns false) and
+ * they sit outside `_controls`' C0/C1 ranges entirely.
+ *
+ * Stripped outright rather than defanged: none carries legitimate meaning in a
+ * name or a fitness note, and U+202A-U+202E additionally enable Trojan-Source
+ * style visual reordering in any surface that re-renders the text (a push
+ * notification, an admin view) -- in scope because this module's stated threat
+ * model includes what lands in the user's own notifications.
+ */
+const _invisibles = new RegExp(
+  "[\\u00AD\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]",
+  "g",
+);
+
+/**
+ * Breaks up any `<<`/`>>` run so [fenceAsData]'s delimiters cannot be forged.
+ *
+ * ORDER IS LOAD-BEARING: invisibles are removed FIRST so a run an attacker
+ * split with zero-width characters is rejoined into a real run and then
+ * defanged. Reversing these two lines reopens the P0 above.
+ */
 function _defangFenceTokens(s: string): string {
-  return s.replace(_angleRuns, (run) => run.split("").join(" "));
+  return s
+    .replace(_invisibles, "")
+    .replace(_angleRuns, (run) => run.split("").join(" "));
 }
 
 /**
@@ -121,7 +182,7 @@ export function sanitizeIdentifier(
     .trim();
 
   if (s.length === 0) return fallback;
-  if (s.length > maxLen) s = s.slice(0, maxLen).trim();
+  if (s.length > maxLen) s = _sliceWholeChars(s, maxLen).trim();
   return s.length === 0 ? fallback : s;
 }
 
@@ -159,8 +220,14 @@ export function sanitizeBlock(
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
+  // The disclosure marker is the system speaking, so user text must not be able
+  // to counterfeit it. Without this a user types "[...truncated]" mid-note and
+  // primes the model to read what follows as a system-emitted continuation
+  // rather than as their own content -- no length cap required. Review round 1.
+  s = s.replace(/\[\.\.\.truncated\]/g, "[ ...truncated ]");
+
   if (s.length > maxLen) {
-    s = s.slice(0, maxLen).trim() + "\n[...truncated]";
+    s = _sliceWholeChars(s, maxLen).trim() + "\n[...truncated]";
   }
   return s;
 }
@@ -197,7 +264,21 @@ export function sanitizeBlock(
  * pure-ASCII property is asserted by the test suite rather than eyeballed.
  */
 export function sanitizeJsonForPrompt(value: unknown, space?: number): string {
-  const json = JSON.stringify(value, null, space);
+  // JSON.stringify THROWS on a BigInt (a plain Postgres bigint column surfaced
+  // without coercion) and on any circular structure. A hardening helper that
+  // crashes the request it was added to protect is a worse outcome than the
+  // injection it prevents, so failure degrades to an inert placeholder rather
+  // than propagating. Review round 1 reproduced both throws directly.
+  let json: string | undefined;
+  try {
+    json = JSON.stringify(value, null, space);
+  } catch (e) {
+    console.error(
+      "[sanitize_for_prompt] JSON.stringify failed; emitting placeholder:",
+      e instanceof Error ? e.message : String(e),
+    );
+    return '{"_unavailable":"data could not be serialised"}';
+  }
   if (json === undefined) return "null";
   return json
     .replace(new RegExp("\\u2028", "g"), "\\u2028")

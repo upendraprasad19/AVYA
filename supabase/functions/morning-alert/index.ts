@@ -69,7 +69,14 @@ function applyTone(
   tone: MotivationTone | null,
   snapshotJson: Record<string, unknown> | null,
 ): string {
-  const firstName = name?.split(" ")[0] ?? "there";
+  // OI-47 round 1: splitting on whitespace drops spaces but NOT CR,
+  // U+2028/2029/0085, control chars or angle brackets. These three
+  // non-AI paths (tone wrapper, free tier, PRO-light) carry the MAJORITY
+  // of actual sends -- the sanitised generateProAlert is the minority case.
+  const firstName = sanitizeIdentifier(name?.split(" ")[0], {
+    fallback: "there",
+    maxLen: 32,
+  });
 
   if (tone === "tough_love") {
     return `${firstName}, no excuses today. ${baseAlert}`;
@@ -155,7 +162,14 @@ function generateFreeAlert(
   name: string,
   snapshotJson: Record<string, unknown> | null,
 ): string {
-  const firstName = name?.split(" ")[0] ?? "Champion";
+  // OI-47 round 1: splitting on whitespace drops spaces but NOT CR,
+  // U+2028/2029/0085, control chars or angle brackets. These three
+  // non-AI paths (tone wrapper, free tier, PRO-light) carry the MAJORITY
+  // of actual sends -- the sanitised generateProAlert is the minority case.
+  const firstName = sanitizeIdentifier(name?.split(" ")[0], {
+    fallback: "Champion",
+    maxLen: 32,
+  });
   const snap = snapshotJson ?? {};
   const streakWeeks = (snap.current_streak_weeks as number) ?? 0;
   const streakDays = (snap.current_streak_days as number) ?? streakWeeks * 7;
@@ -247,7 +261,14 @@ function generateFreeAlert(
  * — which is what Upen experienced. Personalised on name + primary_goal only, no AI cost.
  */
 function generateProLightAlert(name: string, primaryGoal: string | null): string {
-  const firstName = name?.split(" ")[0] ?? "Champion";
+  // OI-47 round 1: splitting on whitespace drops spaces but NOT CR,
+  // U+2028/2029/0085, control chars or angle brackets. These three
+  // non-AI paths (tone wrapper, free tier, PRO-light) carry the MAJORITY
+  // of actual sends -- the sanitised generateProAlert is the minority case.
+  const firstName = sanitizeIdentifier(name?.split(" ")[0], {
+    fallback: "Champion",
+    maxLen: 32,
+  });
   const goal = (primaryGoal ?? "").toLowerCase();
 
   if (goal === "build_muscle" || goal.includes("muscle")) {

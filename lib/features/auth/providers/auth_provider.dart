@@ -16,9 +16,6 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
-import 'package:icanbefitter/core/services/nutrition_write_service.dart';
-import 'package:icanbefitter/core/services/rank_service.dart';
-import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/streak_freeze_clamp_migrator.dart';
 import 'package:icanbefitter/core/services/user_config_migrator.dart';
 import 'package:icanbefitter/core/services/body_fat_default_healer.dart';
@@ -26,6 +23,44 @@ import 'package:icanbefitter/core/services/logging_type_repair_migrator.dart';
 import 'package:icanbefitter/core/services/wlog_type_backfill_migrator.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+
+/// Releases every per-user identity this DEVICE holds outside Hive.
+///
+/// TOP-LEVEL, not a method on [AuthNotifier], because sign-out is not the only
+/// path that ends a session. Review round 1 (2026-07-27) found two others that
+/// clear Hive + Supabase directly and never touch the notifier:
+///
+///   - `main.dart`'s `runZonedGuarded` HiveOwnershipException recovery — which
+///     fires exactly when the cross-account guard trips, i.e. precisely the
+///     "this device may be carrying a stale identity" case.
+///   - `delete_account_screen.dart`'s DPDP hard-delete — and "a handset the
+///     user sold or handed on" is the scenario this whole fix describes, so
+///     leaving account deletion uncovered inverted the intent. Crashlytics
+///     would keep tagging crashes with the deleted user's id.
+///
+/// Guards mirror the BIND sites in `_ensureLocalUser` exactly (`!kIsWeb`,
+/// `!kDebugMode`): an unbind running where the bind never did is a new failure
+/// mode, not a fix. Each step is individually try/caught so a throwing SDK
+/// cannot block the rest — and so this is safe to call from a zone handler.
+///
+/// Does NOT touch the static `onStateChanged` callbacks; see the note in
+/// [AuthNotifier.unbindSessionIdentity] for why clearing those is a regression.
+Future<void> releaseDeviceSessionIdentity() async {
+  if (!kIsWeb) {
+    try {
+      await OneSignal.logout();
+    } catch (e) {
+      debugPrint('[auth/releaseIdentity] OneSignal.logout failed: $e');
+    }
+  }
+  if (!kDebugMode) {
+    try {
+      await FirebaseCrashlytics.instance.setUserIdentifier('');
+    } catch (e) {
+      debugPrint('[auth/releaseIdentity] Crashlytics clear failed: $e');
+    }
+  }
+}
 
 // ── Auth State Stream ───────────────────────────────────────────
 
@@ -415,39 +450,40 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// even if a third-party SDK throws.
   @visibleForTesting
   Future<void> unbindSessionIdentity() async {
-    if (!kIsWeb) {
-      try {
-        await OneSignal.logout();
-      } catch (e) {
-        debugPrint('[auth/signOut] OneSignal.logout failed: $e');
-      }
-    }
-    if (!kDebugMode) {
-      try {
-        await FirebaseCrashlytics.instance.setUserIdentifier('');
-      } catch (e) {
-        debugPrint('[auth/signOut] Crashlytics identifier clear failed: $e');
-      }
-    }
+    await releaseDeviceSessionIdentity();
 
-    // 4th sub-finding — drop the static callbacks. These capture Riverpod state
-    // in a long-lived closure. Two of them ARE nulled in `app.dart:dispose()`,
-    // but that is WIDGET TEARDOWN: a sign-out that navigates without tearing the
-    // app down leaves the previous session's closure installed. Clearing here
-    // makes sign-out itself the boundary.
+    // THE STATIC onStateChanged CALLBACKS ARE DELIBERATELY *NOT* CLEARED HERE.
     //
-    // ALL THREE static `onStateChanged` callbacks in the codebase are cleared
-    // here — grep `static void Function()? onStateChanged` returns exactly
-    // subscription_service.dart:238, nutrition_write_service.dart:755 and
-    // rank_service.dart:53. RankService is the one this batch nearly missed:
-    // `app.dart:76` installs it alongside the other two, but `dispose()` (:90-91)
-    // clears only the first two, so it had NO clear site anywhere. Enumerating
-    // the declaration site rather than copying the pair named in the OI is what
-    // caught it (`feedback_ist_sweep_gap` — an exhaustive-sounding sweep that
-    // leaves sites behind).
-    SubscriptionService.onStateChanged = null;
-    NutritionWriteService.onStateChanged = null;
-    RankService.onStateChanged = null;
+    // The first version of this method nulled all three. Review round 1
+    // (2026-07-27) showed that is a REGRESSION, not a fix, and the reasoning is
+    // worth keeping because OI-51's own sub-finding 4 asks for it:
+    //
+    //   `app.dart:45/59/76` (initState) is the ONLY place in `lib/` that
+    //   installs them — verified by `grep -rn "onStateChanged = " lib/`. And
+    //   `ICanBeFitterApp` is constructed exactly once per process
+    //   (`main.dart:123`, `main_dev.dart:36`, `main_prod.dart:33`), so
+    //   initState runs once for the app's lifetime. `_ensureLocalUser` never
+    //   re-installs them. Nulling them on sign-out therefore kills provider
+    //   invalidation PERMANENTLY for every later sign-in in the same process —
+    //   and every call site uses `onStateChanged?.call()`, so nothing throws;
+    //   the invalidation just silently stops.
+    //
+    //   That reintroduces three already-fixed, founder-observed bugs for the
+    //   rest of the session: APK Test #12.2 (PRO pill stuck on FREE),
+    //   #12.4 ("I logged breakfast … nothing got updated in UI"), and OI-37
+    //   (stale rank after promotion).
+    //
+    // OI-51 SUB-FINDING 4 IS WRONG ON ITS PREMISE. It says the closure
+    // "captures Riverpod state" and so needs a reset path. It captures the
+    // ConsumerState's `ref`, which is bound to the process-lived ProviderScope,
+    // NOT to a user. After B signs in, invalidating those providers is exactly
+    // the correct behaviour — they re-read from B's Hive boxes through the
+    // `wrapUserScopedBox` guard. There is no cross-account leak to close here,
+    // so the right number of clears on the sign-out path is zero.
+    //
+    // The genuine half of that sub-finding — that `RankService` had no clear
+    // site ANYWHERE, not even at teardown — is fixed where it belongs, in
+    // `app.dart:dispose()` alongside the other two.
   }
 
   /// Reset back to idle.

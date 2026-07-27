@@ -67,7 +67,16 @@ List<String> _staticOnStateChangedOwners() {
         continue;
       }
       for (var j = i; j >= 0; j--) {
-        final m = RegExp(r'^(?:abstract\s+)?class\s+(\w+)').firstMatch(lines[j]);
+        // Dart 3 class modifiers (sdk: ^3.11.1) — `sealed`, `base`, `final`,
+        // `interface`, `mixin`, and `abstract base` are all valid prefixes. The
+        // first version matched only `abstract`, so an owner declared with any
+        // other modifier would fail to match and the backward walk would
+        // silently misattribute the field to an EARLIER plain `class`. Not
+        // triggered today (all three owners are plain `class`), which is
+        // exactly why it needed catching by reading rather than by a red test.
+        final m = RegExp(
+          r'^(?:(?:abstract|base|final|interface|sealed|mixin)\s+)*class\s+(\w+)',
+        ).firstMatch(lines[j]);
         if (m != null) {
           owners.add(m.group(1)!);
           break;
@@ -86,27 +95,32 @@ void main() {
       RankService.onStateChanged = null;
     });
 
-    test('all three callbacks are non-null before, null after clearing', () {
+    test('BEHAVIOURAL: a cleared callback stays cleared — nothing re-arms it, '
+        'which is why sign-out must not clear it', () {
+      // This is the P0 from review round 1, expressed as a state transition
+      // rather than as prose. `app.dart` initState is the only installer and it
+      // runs ONCE per process, so "cleared" is terminal for the app's lifetime.
       SubscriptionService.onStateChanged = () {};
       NutritionWriteService.onStateChanged = () {};
       RankService.onStateChanged = () {};
-      expect(SubscriptionService.onStateChanged, isNotNull);
-      expect(NutritionWriteService.onStateChanged, isNotNull);
-      expect(RankService.onStateChanged, isNotNull);
 
-      // The exact three statements unbindSessionIdentity() performs. Asserted as
-      // a real state transition so a future refactor that drops them is caught
-      // by behaviour, not by text.
+      // Simulate what the first version of unbindSessionIdentity() did.
       SubscriptionService.onStateChanged = null;
       NutritionWriteService.onStateChanged = null;
       RankService.onStateChanged = null;
 
+      // Simulate a subsequent sign-in: _ensureLocalUser runs, nothing else.
+      // (Verified: `grep -rn "onStateChanged = " lib/` finds installs ONLY in
+      // app.dart initState — never in the auth provider.)
       expect(SubscriptionService.onStateChanged, isNull,
-          reason: 'a stale closure captures the PREVIOUS session Riverpod state');
-      expect(NutritionWriteService.onStateChanged, isNull);
+          reason: 'a sign-in does NOT restore it, so a PRO write after the '
+              'second sign-in would not invalidate subscriptionInfoProvider '
+              '(APK Test #12.2 — PRO pill stuck showing FREE)');
+      expect(NutritionWriteService.onStateChanged, isNull,
+          reason: 'APK Test #12.4 — "I logged breakfast, it showed meal saved, '
+              'but nothing got updated in UI"');
       expect(RankService.onStateChanged, isNull,
-          reason: 'RankService had NO clear site anywhere before this batch — '
-              'not even app.dart dispose()');
+          reason: 'OI-37 — rank promotion writes cloud but UI shows stale rank');
     });
 
     test('these are static — they survive across notifier instances, which is '
@@ -173,18 +187,23 @@ void main() {
           reason: 'both the set and the clear must coexist');
     });
 
-    test('DERIVED COMPLETENESS: every static onStateChanged in lib/ is cleared '
-        'by unbindSessionIdentity', () {
-      // This is the assertion that actually caught the bug. The OI named two
-      // callbacks; the first draft of the fix cleared exactly those two, and
-      // RankService — installed in app.dart right beside them — was missed.
+    test('REGRESSION GUARD: sign-out must NOT clear the static callbacks', () {
+      // The inverse of what this test originally asserted, because the original
+      // assertion was WRONG and shipped a P0. Review round 1 (2026-07-27):
       //
-      // So the set is DERIVED from the declarations rather than restated here:
-      // a FOURTH `static void Function()? onStateChanged` added tomorrow fails
-      // this test until it is cleared too. A hand-written list of three would
-      // have passed the day the bug was introduced.
-      // (`feedback_ist_sweep_gap` — exhaustive-sounding sweeps leave sites
-      // behind; the same structural answer as a3d7b1's derived hook set.)
+      //   `app.dart:45/59/76` (initState) is the ONLY install site in lib/, and
+      //   ICanBeFitterApp is constructed once per process, so initState runs
+      //   ONCE for the app's lifetime. `_ensureLocalUser` never re-installs.
+      //   Nulling the callbacks on sign-out therefore kills provider
+      //   invalidation permanently for every later sign-in in the same process
+      //   — silently, because every call site uses `onStateChanged?.call()`.
+      //   That reintroduces APK #12.2, #12.4 and OI-37.
+      //
+      // OI-51's sub-finding 4 asks for this clear on the premise that the
+      // closure "captures Riverpod state". It captures the ConsumerState `ref`,
+      // bound to the process-lived ProviderScope, not to a user — so there is
+      // no cross-account leak to close and the correct number of clears on the
+      // sign-out path is ZERO.
       final owners = _staticOnStateChangedOwners();
       expect(owners.length, greaterThanOrEqualTo(3),
           reason: 'the enumerator found ${owners.length} declarations — if this '
@@ -202,9 +221,11 @@ void main() {
       final body = src.substring(idx, end);
 
       for (final owner in owners) {
-        expect(body, contains('$owner.onStateChanged = null'),
-            reason: '$owner declares a static onStateChanged but sign-out never '
-                'clears it — its closure survives into the next session');
+        expect(body, isNot(contains('$owner.onStateChanged = null')),
+            reason: 'sign-out clears $owner.onStateChanged, but nothing '
+                're-installs it — app.dart initState runs once per PROCESS. '
+                'Every subsequent sign-in in this session loses that provider '
+                'invalidation silently. Clear it in app.dart dispose() instead.');
       }
     });
 
@@ -229,9 +250,40 @@ void main() {
       }
     });
 
+    test('EVERY session-ending path releases the device identity, not just '
+        'AuthNotifier.signOut', () {
+      // Round-1 P1: sign-out was not the choke point it looked like. Two other
+      // paths clear Hive + Supabase directly and never touch the notifier, so
+      // the unbind was unreachable from either:
+      //   - main.dart's HiveOwnershipException recovery, which fires exactly
+      //     when the cross-account guard trips;
+      //   - the DPDP hard-delete, where the user is GONE but the handset kept
+      //     external_id and the Crashlytics id pointing at them.
+      // Hence the extraction to a top-level releaseDeviceSessionIdentity().
+      const paths = <String, String>{
+        'lib/main.dart': 'HiveOwnershipException recovery',
+        'lib/features/profile/screens/delete_account_screen.dart':
+            'DPDP hard-delete',
+      };
+      paths.forEach((path, why) {
+        final f = File(path);
+        expect(f.existsSync(), isTrue, reason: '$path must exist');
+        final body = _strip(f.readAsStringSync());
+        expect(body, contains('releaseDeviceSessionIdentity()'),
+            reason: '$path ends a session ($why) but never releases the '
+                "device's OneSignal / Crashlytics bindings");
+      });
+    });
+
     test('every unbind step is individually try/caught', () {
-      final idx = src.indexOf('unbindSessionIdentity() async');
-      expect(idx, greaterThan(0));
+      // The two plugin calls now live in the top-level
+      // releaseDeviceSessionIdentity(), which is what the extra session-ending
+      // paths call — so that is where the per-step guarding has to hold. It is
+      // invoked from a zone handler (main.dart), where an escaping throw would
+      // be especially bad.
+      final idx = src.indexOf('Future<void> releaseDeviceSessionIdentity()');
+      expect(idx, greaterThan(0),
+          reason: 'the extracted top-level release function must exist');
       final body = src.substring(idx, idx + 1200);
       // Two plugin calls, each in its own try — a single shared try would let
       // a OneSignal failure skip the Crashlytics clear and the callback reset.

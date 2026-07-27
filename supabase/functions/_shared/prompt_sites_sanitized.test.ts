@@ -38,6 +38,54 @@ const VERIFIED_CLEAN: Record<string, string> = {
   // (currently empty -- every prompt-building function reaches the sanitiser)
 };
 
+/**
+ * Signals that a _shared helper ASSEMBLES a prompt fragment.
+ *
+ * The `<fn>/index.ts` markers do not appear in a helper that merely returns a
+ * string another file drops into a system prompt, which is precisely how the
+ * P0 below escaped. `coach_memory.ts`'s `renderCoachMemoryBlock` builds the
+ * `[3] COACH MEMORY` block that ai-proxy concatenates into the SYSTEM prompt of
+ * every chat turn, interpolating an AI-written `preferred_name` raw — and this
+ * gate reported the whole tree clean, because it only ever opened
+ * `<fn>/index.ts` files.
+ */
+const SHARED_PROMPT_MARKERS = [
+  "system-prompt fragment",
+  "systemPrompt",
+  "userPrompt",
+  "PromptBlock",
+  "renderCoachMemoryBlock",
+];
+
+/**
+ * _shared files that legitimately need no sanitiser, each with the reason it is
+ * safe. Detection is deliberately BROAD (any mention of a prompt marker) so a
+ * new helper fails loud and lands here as a decision rather than slipping
+ * through a clever pattern. Every entry below was checked by reading the file.
+ */
+const SHARED_VERIFIED_CLEAN: Record<string, string> = {
+  "sanitize_for_prompt.ts":
+    "the sanitiser itself - importing itself would be circular",
+  "sanitize_for_prompt.test.ts": "its own test file",
+  "prompt_sites_sanitized.test.ts": "this gate",
+  "captain_manual.ts":
+    "a static authored constant; interpolates no user data at all",
+  "gemini.ts":
+    "the TRANSPORT layer - it RECEIVES systemPrompt/userPrompt as parameters " +
+    "and posts them; it never assembles user data into a prompt itself, so the " +
+    "obligation belongs to its callers",
+  "tool-loop.ts":
+    "passes opts.systemPrompt through untouched; its only template literals " +
+    "build console logs and tool-name error strings (248/303/399/464/495), " +
+    "never prompt content",
+  "food_parser.ts":
+    "its template literals are an error message (:104) and a display string " +
+    "built from Gemini's PARSED OUTPUT (:149) - neither is prompt input",
+  "gemini_backoff_retry_test.ts": "test file for gemini.ts",
+  "gemini_thinking_config_test.ts": "test file for gemini.ts",
+  "tool-loop_intent_apology_test.ts": "test file for tool-loop.ts",
+};
+
 function functionDirsWithPrompts(root: URL): string[] {
   const hits: string[] = [];
   for (const entry of Deno.readDirSync(root)) {
@@ -50,6 +98,17 @@ function functionDirsWithPrompts(root: URL): string[] {
       continue; // no index.ts in this directory
     }
     if (PROMPT_MARKERS.some((m) => src.includes(m))) hits.push(entry.name);
+  }
+  return hits.sort();
+}
+
+/** _shared/*.ts files that assemble prompt text. */
+function sharedFilesWithPrompts(root: URL): string[] {
+  const hits: string[] = [];
+  for (const entry of Deno.readDirSync(new URL("_shared/", root))) {
+    if (!entry.isFile || !entry.name.endsWith(".ts")) continue;
+    const src = Deno.readTextFileSync(new URL("_shared/" + entry.name, root));
+    if (SHARED_PROMPT_MARKERS.some((m) => src.includes(m))) hits.push(entry.name);
   }
   return hits.sort();
 }
@@ -79,6 +138,36 @@ Deno.test("every prompt-building Edge Function imports the sanitiser", () => {
     "these build prompts but never import the sanitiser: " + missing.join(", ") +
       " -- either wrap the user-controlled interpolations or add the function " +
       "to VERIFIED_CLEAN with a concrete reason",
+  );
+});
+
+Deno.test("_shared helpers that assemble prompt text also reach the sanitiser", () => {
+  // Added after review round 1 found the gate's own blind spot: it opened only
+  // <fn>/index.ts, so `coach_memory.ts` — which builds the [3] COACH MEMORY
+  // block that lands in ai-proxy's SYSTEM prompt every turn, with an AI-written
+  // preferred_name interpolated raw inside quotes — was invisible to it. The
+  // gate said 15/15 clean while the highest-trust interpolation in the tree was
+  // unsanitised. A coverage gate that cannot see a whole directory is not
+  // coverage.
+  const root = new URL("../", import.meta.url);
+  const files = sharedFilesWithPrompts(root);
+  assert(
+    files.length >= 1,
+    "expected at least one _shared prompt-assembling helper, found " +
+      files.length + " — the enumerator is probably broken",
+  );
+
+  const missing: string[] = [];
+  for (const f of files) {
+    if (f in SHARED_VERIFIED_CLEAN) continue;
+    const src = Deno.readTextFileSync(new URL("_shared/" + f, root));
+    if (!src.includes("sanitize_for_prompt.ts")) missing.push(f);
+  }
+  assertEquals(
+    missing,
+    [],
+    "these _shared files assemble prompt text but never import the sanitiser: " +
+      missing.join(", "),
   );
 });
 

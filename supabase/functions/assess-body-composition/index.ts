@@ -16,6 +16,21 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+/**
+ * Renders a request-body measurement for the prompt.
+ *
+ * `Number(x) || "unknown"` conflates "invalid" with "legitimately zero" — a
+ * posted `0` became "unknown" rather than "0". It also silently accepted
+ * `Number(null) === 0`. Absent/blank/non-numeric is reported as unknown;
+ * everything finite is reported verbatim, including 0, so the prompt never
+ * states a measurement the caller did not send. (Round-1 review P2.)
+ */
+function _num(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "unknown";
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : "unknown";
+}
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -115,9 +130,7 @@ User stats: ${
         // three numerics are coerced with Number() so a string payload cannot
         // smuggle prose through a field the prompt presents as a measurement.
         sanitizeIdentifier(gender as string | null, { fallback: "unspecified" })
-      }, ${Number(age) || "unknown"} years old, ${
-        Number(height_cm) || "unknown"
-      } cm tall, ${Number(weight_kg) || "unknown"} kg.
+      }, ${_num(age)} years old, ${_num(height_cm)} cm tall, ${_num(weight_kg)} kg.
 
 Rules:
 - Be objective and clinical. Only assess visible body composition markers (muscle definition, fat distribution).

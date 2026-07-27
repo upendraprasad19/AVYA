@@ -9,6 +9,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/core/services/razorpay_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/router/app_router.dart';
@@ -152,6 +153,13 @@ Future<void> main() async {
         } catch (e) {
           debugPrint('[main] signOut on ownership-exception failed: $e');
         }
+        // OI-51 round 1: this path ends a session without going through
+        // AuthNotifier.signOut, so it never released the device's OneSignal /
+        // Crashlytics bindings. It fires exactly when the cross-account guard
+        // trips -- the one moment the device is most likely to be carrying a
+        // stale identity. Internally per-step try/caught, so safe in a zone
+        // handler.
+        await releaseDeviceSessionIdentity();
         // Router auth listener will redirect to /sign-in on signOut.
         // No need to push a route manually.
         return;

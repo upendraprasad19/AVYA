@@ -232,13 +232,13 @@ Deno.serve(async (req: Request) => {
         if (!isPrivate) {
           const preferred = memory.preferred_name as string | null;
           if (preferred && preferred.length > 0) {
-            firstName = preferred.split(" ")[0];
+            firstName = sanitizeIdentifier(preferred.split(" ")[0], { maxLen: 32 });
           }
         }
       } else {
         const fullName = fallbackNames.get(userId);
         if (fullName && fullName.length > 0) {
-          firstName = fullName.split(" ")[0];
+          firstName = sanitizeIdentifier(fullName.split(" ")[0], { maxLen: 32 });
         }
       }
 

@@ -121,7 +121,7 @@ keys:
     type: scalar
     writer_line: 76
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 68 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 87 }
     notes: |
       Verified: morning-alert reads `snap.today_steps` as int. The
       reader is in `generateDataDrivenAlert` for the "yesterday: N steps"
@@ -533,7 +533,7 @@ extra_server_written_keys:
       and nothing ever lifts it into a snapshot. Not a "legacy path" and not a
       "future path"; the chain was simply never connected.
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 591 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 612 }
       - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 146 }
       - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 216 }
       - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 107 }
@@ -589,7 +589,7 @@ extra_server_written_keys:
   - key: morning_alert
     written_by: morning-alert Edge Function (self)
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 585 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 606 }
     notes: |
       Self-read (function stores its template alert for later display).
       Citation moved 505 -> 568 on 2026-07-26: the PRO-predicate fix added

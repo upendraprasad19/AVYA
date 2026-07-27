@@ -110,8 +110,12 @@ Deno.serve(async (req) => {
       // Personalization
       const memory = await fetchCoachMemory(supabase, userId);
       const usableMemory = memory?.private_mode ? null : memory;
-      const firstName =
-        (usableMemory?.preferred_name as string | null) ?? "champ";
+      // OI-47 round 1: firstName feeds composeMessage(), which builds the
+      // FALLBACK push that actually ships when Gemini fails.
+      const firstName = sanitizeIdentifier(
+        usableMemory?.preferred_name as string | null,
+        { fallback: "champ", maxLen: 32 },
+      );
 
       // Fallback: existing hardcoded English copy preserved as safety net.
       const fallbackMessage = composeMessage(firstName, prs);

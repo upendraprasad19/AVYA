@@ -66,8 +66,14 @@ async function generatePrediction(
     `User Progress:\n${sanitizeJsonForPrompt(progress, 2)}\n\n` +
     `Predict 90-day outcomes for this user. Be realistic based on their current stats, ` +
     `goal (${
+      // FALLBACK IS "unspecified", NOT a real goal. `primary_goal` is nullable
+      // and generatePrediction runs at trigger === "onboarding" -- exactly when
+      // it is most likely unset. Defaulting to "general_fitness" would tell
+      // Gemini the user chose a goal they never chose, steering the whole
+      // 90-day prediction off a fabricated premise. That is the
+      // `body_fat ?? 18.0` anti-pattern CLAUDE.md 4.12 names by name.
       sanitizeIdentifier(profile.primary_goal as string | null, {
-        fallback: "general_fitness",
+        fallback: "unspecified",
       })
     }), training frequency (${
       sanitizeIdentifier(String(profile.days_per_week ?? ""), {
