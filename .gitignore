@@ -120,3 +120,10 @@ assets/naval pics/
 # Per-session baseline files (capture_baseline.dart / compare_baseline.dart)
 baseline.json
 baseline-lints.json
+
+# Deno lockfile — a local `deno test` byproduct, never tracked. CI runs
+# `deno test --no-check --allow-all --node-modules-dir=auto supabase/functions/`
+# with no lockfile and is green, so tracking one would only add a
+# lock-mismatch failure surface with nothing depending on it. Ignored so it
+# cannot drift into a commit unnoticed (2026-07-27).
+deno.lock
