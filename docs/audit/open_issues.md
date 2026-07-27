@@ -1189,11 +1189,24 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-52 — Build the release APK
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-07-27 · APK `1.0.0+37`, commit `99e145d2`
 - **Identified**: 2026-07-26
-- **Blocked on**: FOUNDER (explicit approval required every time — §4.3)
-- **Note**: **Fronts four dependents — OI-55, OI-61, OI-62, OI-63 all wait on this.** Highest-leverage
-  single item on the board. `/build-apk --flavor prod --release` from CI-green `main`.
+- **Closed by**: `/build-apk` from CI-green `main` @ `99e145d2` (all 6 jobs success).
+  Artifact `build/app/outputs/flutter-apk/app-prod-release.apk`, 117.2 MB,
+  md5 `d7b00cabeadb56579803c840cc498037`, recorded in `backups/apk_sizes.json`.
+- **Gates**: Gate 13 PASS (+1.3% vs +36's 115.7 MB) · **Gate 48 PASS — release-signed,
+  cert SHA-256 matches the pin (`CN=ICANBEFITTER`)**. Gate 48 is the one that matters: a
+  debug-signed APK cannot install over a release-signed app, the suspected reason +32 never
+  reached the founder and the device stayed on +28.
+- **Notes**: versionCode required a bump first — `+36` was already shipped 2026-06-19. The bump
+  commit (`2c4cbddd`) was correctly BLOCKED on its first attempt by
+  `check_app_version_matches_pubspec.dart`: only `pubspec.yaml` had moved, not
+  `AppConstants.appVersion`, which is what the app reports at runtime. Its CI run then failed on an
+  UNRELATED transient — `esm.sh` HTTP 522 during Deno type-check (`clean-orphan-media/index.ts`
+  still imports via CDN URL rather than `npm:`/`jsr:`; see `feedback_mistake_remote_dep_rot`).
+  Re-ran green on `99e145d2`.
+- **Unblocks**: OI-55, OI-61, OI-62, OI-63 — the APK now exists; each still needs the founder to
+  install `+37` and perform its verification.
 
 ## OI-53 — Flip the 13 workout-generator ship-dark flags
 
