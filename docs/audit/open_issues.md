@@ -1070,7 +1070,25 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-47 — L30 prompt injection vectors: 5 unsanitized user-field interpolations (P1)
 
-- **Status**: OPEN
+- **Status**: OPEN — **work COMMITTED on branch `sdk-identity-prompt-safety`, NOT merged**
+- **Progress 2026-07-27**: `b1bd184d` (sanitiser) + `842e813c` (15 call sites) +
+  `94f0bf9e` (measured caps). Diagnose `f4a9c2`, closure
+  `docs/audit/sdk-identity-prompt-safety.closure.yaml`, SoT concept
+  `llm_prompt_input_sanitization`.
+  **Blocked on**: platform-tier ×2 independent review + B-pass before merge.
+  **Every Edge Function change is INERT until a separately authorized redeploy** —
+  do not read "committed" as "live".
+- **⚠ THE SITE LIST BELOW IS STALE AND INCOMPLETE — kept verbatim as filed.**
+  It names 5 sites and 3 of the 5 line numbers no longer resolve. The real
+  surface is **15** prompt-building functions. Counting by method: ticket 5 →
+  `grep geminiChat(` 14 → `grep userPrompt|systemPrompt|generateContent` **15**.
+  Two of the most serious are absent from the list entirely:
+  `daily-snapshot` (its output is written into `user_profile`, so injected text
+  steers what the system durably believes — a persistence loop) and
+  `proactive-coach-promotion` (user-editable name in the SYSTEM INSTRUCTION;
+  invisible to a grep on the shared helper because it calls Gemini via `fetch`).
+  `rolling-context:230` is NOT a prompt — it is `getEmbedding` + a storage
+  insert. See `f4a9c2` for the full disposition of all 15.
 - **Identified**: 2026-05-17 · OI-43 / L30 lens scan
 - **Risk class**: prompt injection in Edge Functions
 - **Effort**: ~3-4 hours (1 shared sanitizer + 5 callsite wrap)
@@ -1126,7 +1144,29 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-51 — L38 cross-account SDK state: 3 unwired clear-on-signOut paths (P1)
 
-- **Status**: OPEN
+- **Status**: OPEN — **work COMMITTED on branch `sdk-identity-prompt-safety`, NOT merged**
+- **Progress 2026-07-27**: `ff716e29`. Diagnose `e7b3c5`, SoT concept
+  `device_session_identity_binding`, test
+  `test/contracts/signout_unbinds_sdk_identity_test.dart` (9/9, both derived
+  assertions negative-controlled). Client-only — no redeploy; live on the next APK.
+  **Blocked on**: platform-tier ×2 independent review + B-pass before merge.
+- **⚠ TWO CORRECTIONS to the text below, which is kept verbatim as filed.**
+  1. **The severity framing is wrong.** This is NOT "user B's crashes get tagged
+     as user A" — `_ensureLocalUser` overwrites both bindings when B signs in, so
+     B is attributed correctly. The real exposure is the **signed-out window**:
+     after A signs out the device is still `external_id = A`, so A's push
+     notifications keep arriving with A's fitness data on a handset A may have
+     sold or handed on. Unbounded in duration.
+  2. **It lists the wrong third callback and misses the real one.** Razorpay was
+     already closed by `razorpay_service._onUserChanged()` via
+     `SingletonLifecycleRegistry` (2026-05-20 audit, after this was filed), and
+     `SubscriptionService.onStateChanged` WAS reset — at `app.dart:90` in
+     `dispose()`, i.e. widget teardown, which a sign-out-and-navigate never
+     triggers. The one nobody had noticed is **`RankService.onStateChanged`**:
+     installed at `app.dart:76` beside the other two and cleared **nowhere** —
+     it survived sign-out AND teardown. Found by enumerating the declaration
+     site (`grep -rn "static void Function()? onStateChanged" lib/` → exactly
+     three) rather than trusting this list.
 - **Identified**: 2026-05-17 · OI-43 / L38 lens scan
 - **Risk class**: cross-account state leak via 3rd-party SDK / static callbacks
 - **Effort**: ~2-3 hours
