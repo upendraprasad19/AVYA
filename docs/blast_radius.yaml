@@ -99,6 +99,75 @@ paths:
   - { glob: "scripts/blast_radius_from_diff.dart", tier: platform }
   - { glob: "scripts/blast_radius_content_rules_lib.dart", tier: platform }
   - { glob: "scripts/pre-commit.sh", tier: platform }
+  # a3d7b1 (2026-07-27, founder decision) — the THIRD partial sweep of this
+  # block, and the one that tries to stop there being a fourth.
+  #
+  # scripts/setup-hooks.sh:38-41 installs FOUR hook sources in four consecutive
+  # lines. Before this batch, two were platform (pre-commit.sh, promoted by
+  # d947743d 2026-07-26 under "a change to the reviewer must not be exempt from
+  # review") and two were feature. Promoting a git hook while its siblings stay
+  # exempt is arbitrary, so the rule is now: EVERY hook source setup-hooks.sh
+  # installs is >= platform, asserted by a test that DERIVES the list from
+  # setup-hooks.sh rather than restating it here.
+  #
+  # pre-push.sh is the self-referential one: it decides whether the ~7-min full
+  # suite runs before code leaves the machine (:64, a string equality against
+  # "feature"), so an edit disabling it would clear zero review gate AND skip
+  # the suite on the very push that lands it. CI is not a substitute —
+  # .github/workflows/test.yml:61 excludes golden-image tests, which run ONLY in
+  # that local suite.
+  #
+  # commit-msg.sh is the sole LOCAL enforcement of coding rule 22 (every
+  # fix/bug/regression commit must cite a validating diagnose-doc). Hard-fail,
+  # zero tests, and it owns the `regression-test-skipped:` waiver path, which
+  # has no CI equivalent. Its whole downstream chain is promoted with it —
+  # promoting the §4.2 no-deferrals chain in full while leaving the parallel
+  # rule-22 chain at feature was the arbitrary half of this batch's first draft.
+  #
+  # safe_commit.sh / safe_push.sh are the sole sanctioned write paths
+  # (git_safety_hook.dart, already platform above, exists solely to force them).
+  # The existing git_safety tests assert only that the HOOK recognises these
+  # filenames — the wrappers' own verify-after-write logic has no behavioural
+  # coverage.
+  #
+  # check_no_deferral_euphemism.dart is the thinnest-defended: one commit ever,
+  # no test of its phrase list, hard-fail locally, and it fails OPEN on error.
+  # (It is not allow-listed out of CI, but runs vacuously there — CI has no
+  # staged diff.) Its phrase LIST lives in docs/deferral_euphemisms.yaml at
+  # feature tier by design: adding a banned phrase must stay a one-line edit,
+  # while changing how matching works stays gated. Same split as this registry
+  # (platform) versus the code that reads it.
+  #
+  # Cost measured before promoting, not assumed: 10 DISTINCT commits touch this
+  # whole set, across 6 distinct days in the repo's 4.1-month life — roughly 4-5
+  # review events per quarter. (An earlier draft said "12 of 1366 / ~3 per
+  # quarter"; 12 was a per-file sum that double-counted two commits touching
+  # more than one file, and the cadence was understated ~2x. Corrected by the
+  # B-pass before founder ratified it.)
+  #
+  # DECLINED, recorded so the next sweep need not re-derive it:
+  #   prepare-commit-msg.sh — its own header says the Blast-radius line it
+  #     writes is informational; verified no gate parses it back.
+  #   setup-hooks.sh — affects fresh clones only, and check_hooks_installed.dart
+  #     backstops hook presence.
+  #   new-worktree.sh / vercel_build.sh / run-device-tests.sh — not enforcement.
+  - { glob: "scripts/pre-push.sh", tier: platform }
+  - { glob: "scripts/commit-msg.sh", tier: platform }
+  - { glob: "scripts/safe_commit.sh", tier: platform }
+  - { glob: "scripts/safe_push.sh", tier: platform }
+  - { glob: "scripts/validate_audit_closure.dart", tier: platform }
+  - { glob: "scripts/check_no_deferral_euphemism.dart", tier: platform }
+  # The rule-22 diagnose-doc chain commit-msg.sh drives, promoted with it.
+  # validate_diagnose_doc.dart is the structural twin of validate_audit_closure
+  # above: a per-invariant validator called from a hard-fail hook and from
+  # /build-apk Gate 10.
+  - { glob: "scripts/validate_diagnose_doc.dart", tier: platform }
+  - { glob: "scripts/validate_diagnose_doc_lib.dart", tier: platform }
+  - { glob: "scripts/check_bugfix_commits_have_diagnose.dart", tier: platform }
+  # CLAUDE.md §7 names the blast-radius trio: this registry + the classifier +
+  # the coverage gate. The first two were already platform; the third was not,
+  # so the pointer table advertised an unprotected file.
+  - { glob: "scripts/check_blast_radius_coverage.dart", tier: platform }
   - { glob: "docs/blast_radius.yaml", tier: platform }
   - { glob: ".github/workflows/test.yml", tier: platform }
   - { glob: ".claude/settings.json", tier: platform }

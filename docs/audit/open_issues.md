@@ -1392,3 +1392,64 @@ cloud sessions; **this file is the cross-session backlog.**
 - **Honest framing**: shipping this file repo-tracked makes the backlog **visible** from any machine,
   any session, and GitHub. That is the durable half and it is real. It does not make neglect
   **detectable**. Recorded rather than papered over.
+
+## OI-70 — Tier engines classify a commit using the registry the commit itself changes
+
+- **Status**: OPEN
+- **Identified**: 2026-07-27 · B-pass on `a3d7b1` (pre-existing since `d947743d`, 2026-07-26)
+- **Risk class**: self-protection is non-hermetic — the guard grades its own homework
+- **What's wrong**: `blast_radius_from_diff.dart:121` and
+  `check_plan_review_record_exists.dart:207` read `docs/blast_radius.yaml` from the **merged/working
+  tree**, so the *new* registry classifies the very commit that changes it. Demonstrated: with the
+  `docs/blast_radius.yaml` and `scripts/pre-push.sh` rules deleted, both resolve to `feature`, and
+  the merge-to-main gate prints "PASS … (< account; no record required)".
+- **Concrete exploit shape**: one commit deleting those two lines clears every review gate, and the
+  deletion is what makes it clear them.
+- **Real fix**: classify a merge using the registry as of `HEAD^1`, not the merged tree. Not
+  attempted in `a3d7b1` — it changes how every tier decision is computed and needs its own review.
+- **Why not papered over**: `a3d7b1`'s whole thesis is "a change to the reviewer must not be exempt
+  from review". This is the one route by which it still can be.
+
+## OI-71 — Keystone gate is blind to content written during conflict resolution
+
+- **Status**: OPEN
+- **Identified**: 2026-07-27 · adversarial review during the cron/notif-prefs merges
+- **Risk class**: gate input means something different at a merge commit
+- **What's wrong**: `check_plan_review_record_exists.dart:208` computes blast-radius from
+  `git diff --name-only HEAD^1...HEAD^2` — the *branch's* diff, not the merge result. A file created
+  or rewritten **while resolving conflicts** exists in neither parent and is therefore invisible to
+  it. For a branch whose own diff is `< account`, the gate exits "no record required" while the
+  merge commit itself carries higher-tier content.
+- **Real fix**: union the three-dot branch diff with `git show --name-only HEAD`.
+- **Related**: same family as `b7e4c2` / `c9f1d3` — checks written for the authoring-commit model
+  behaving differently at a merge.
+
+## OI-72 — A review file can satisfy the catastrophic gate without ever entering history
+
+- **Status**: OPEN
+- **Identified**: 2026-07-27 · while satisfying the gate legitimately for the cron merge
+- **Risk class**: index/working-tree asymmetry in an enforcement gate
+- **What's wrong**: `check_code_review_pass_exists.dart` hashes `git diff --cached` (the **index**)
+  but reads the review file with `File(...).existsSync()` (the **working tree**). An untracked review
+  file therefore satisfies the gate without changing the hash — which is genuinely useful (it is how
+  a merge-diff attestation is possible at all) but means the artifact can be present at commit time
+  and never committed. The same file already reads *staged* blobs elsewhere (`:129-138`) with a
+  comment explaining why the working tree cannot be trusted.
+- **Real fix**: read the review file from the staged blob and exclude `docs/reviews/**` from the
+  gate's own hash, so the artifact is both required and recorded.
+
+## OI-73 — ~15 Edge Functions still run the pre-`a3ff9571` cron auth gate
+
+- **Status**: OPEN — hygiene, **not** an outage
+- **Identified**: 2026-07-27 · after the cron-auth restore
+- **What's true**: cron auth is LIVE. Migrations 107-110 plus the dashboard secret restored it with
+  no redeploy, because the deployed gate checks a legacy `CRON_SECRET` hatch *before* the
+  unreachable `SUPABASE_JWT_SECRET` path. `cron_call_log` shows 15 functions succeeding 2026-07-26.
+- **What's left**: those functions still carry the dead `SUPABASE_JWT_SECRET` branch and a live
+  `deno.land/x/jose` remote import. If that pinned URL ever 404s upstream, every one of them
+  boot-fails at once (`feedback_mistake_remote_dep_rot`). `morning-alert` v28,
+  `compute-coach-signals`, `weekly-recalc` and `compute-admin-metrics-daily` already carry the clean
+  gate.
+- **How to do it**: one function at a time with verification between — the deploy skill's §6.6
+  warns that latent dep-rot boot-fails only on the NEXT redeploy, so a blind batch is the wrong
+  shape.

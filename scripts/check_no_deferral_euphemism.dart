@@ -15,47 +15,81 @@
 // additions (not whole files) means pre-existing prose that merely DESCRIBES
 // the rule (e.g. this gate's own doc, feedback files) is not re-flagged.
 //
-// Ships --warn-only (§4.11 gates-before-refactor baseline window). Flip to
-// hard-fail after a 24h soak by removing the explicit --warn-only invocation
-// from pre-commit.sh + test.yml and dropping it from their skip allowlists.
+// HARD-FAIL since the baseline soak cleared 2026-06-28. pre-commit.sh:122
+// invokes it with no --warn-only flag. (The header previously still described
+// the soak window as pending — corrected in a3d7b1, which promoted this file to
+// platform tier; leaving a stale comment in a platform-tier file would have
+// made fixing it later cost a full review round.)
 //
-// Exit 0 = clean (or --warn-only). Exit 1 = euphemism found (hard-fail mode).
+// PHRASE LIST LIVES IN docs/deferral_euphemisms.yaml, NOT HERE (a3d7b1).
+// This script is platform tier, so changing how matching works needs a
+// plan-review record + B-pass. The list is data and must stay cheap to extend —
+// at feature tier, adding a banned phrase is a one-line edit. A gate whose
+// phrase list is expensive to grow ossifies while violations invent new
+// phrasings.
+//
+// Exit 0 = clean (or --warn-only). Exit 1 = euphemism found (hard-fail mode),
+// or the phrase file is missing/unparseable (fails CLOSED — see _loadPhrases).
 
 import 'dart:convert';
 import 'dart:io';
 
-/// High-signal, deferral-as-scope-cut phrases. Curated to be distinctive enough
-/// to rarely false-positive — bare "defer"/"deferred" is intentionally EXCLUDED
-/// (too common in legit technical prose: "deferred to pre-push", "deferred
-/// init", etc.). Lowercased; matched case-insensitively.
-const List<String> _euphemisms = [
-  'dedicated batch',
-  'follow-up batch',
-  'followup batch',
-  'follow up batch',
-  'test-maintenance batch',
-  'test maintenance batch',
-  'cleanup batch',
-  'clean-up batch',
-  'next-batch baseline',
-  'baseline for next batch',
-  'documented baseline for next batch',
-  'its own careful batch',
-  'own careful batch',
-  'gradual population',
-  'can be folded into',
-  'folded into a future',
-  'fresh session pickup',
-  'responsible handoff',
-  'defer-friendly',
-  'minimum viable ship',
-  'responsible focus management',
-  'contingency to pull out',
-];
+const _phrasesPath = 'docs/deferral_euphemisms.yaml';
+
+/// Reads the phrase list from [_phrasesPath].
+///
+/// FAILS CLOSED. A missing, unreadable or empty file exits non-zero rather than
+/// returning an empty list — an empty list would make the gate pass everything
+/// forever while looking healthy, which is indistinguishable from working. That
+/// silent-disable shape is the exact failure this gate's own promotion to
+/// platform tier exists to prevent, so it must not be reachable by deleting a
+/// data file at feature tier.
+///
+/// Deliberately a minimal line parser, not a YAML dependency: this runs in the
+/// pre-commit hot path and the format is a flat list of quoted strings.
+List<String> _loadPhrases(String tag) {
+  final f = File(_phrasesPath);
+  if (!f.existsSync()) {
+    stderr.writeln('$tag FAIL: $_phrasesPath not found. The phrase list is '
+        'required — an absent file would silently disable this gate.');
+    exit(1);
+  }
+  final phrases = <String>[];
+  var inPhrases = false;
+  for (final raw in f.readAsLinesSync()) {
+    final line = raw.trim();
+    if (line.isEmpty || line.startsWith('#')) continue;
+    if (line == 'phrases:') {
+      inPhrases = true;
+      continue;
+    }
+    if (!inPhrases) continue;
+    if (!line.startsWith('-')) break; // next top-level key ends the list
+    var v = line.substring(1).trim();
+    if (v.length >= 2 &&
+        ((v.startsWith("'") && v.endsWith("'")) ||
+            (v.startsWith('"') && v.endsWith('"')))) {
+      v = v.substring(1, v.length - 1);
+    }
+    if (v.isNotEmpty) phrases.add(v.toLowerCase());
+  }
+  if (phrases.isEmpty) {
+    stderr.writeln('$tag FAIL: $_phrasesPath parsed to ZERO phrases. Refusing '
+        'to run as a no-op gate — fix the file rather than shipping a gate '
+        'that passes everything.');
+    exit(1);
+  }
+  return phrases;
+}
 
 void main(List<String> args) {
   final warnOnly = args.contains('--warn-only');
   final tag = warnOnly ? '[Gate-DEU WARN]' : '[Gate-DEU]';
+
+  // Loaded BEFORE the staged-diff check on purpose: a missing or empty phrase
+  // file must fail loudly everywhere the gate runs, including contexts with no
+  // staged diff. Otherwise deleting it would look like a clean pass.
+  final euphemisms = _loadPhrases(tag);
 
   // Staged additions only, no color, zero context lines.
   final result = Process.runSync(
@@ -81,7 +115,7 @@ void main(List<String> args) {
     if (!line.startsWith('+') || line.startsWith('+++')) continue;
     final added = line.substring(1);
     final lower = added.toLowerCase();
-    for (final phrase in _euphemisms) {
+    for (final phrase in euphemisms) {
       if (lower.contains(phrase)) {
         violations.add('$currentFile:  "$phrase"  →  ${_trim(added)}');
       }
