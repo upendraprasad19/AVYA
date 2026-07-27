@@ -35,6 +35,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/services/hive_user_session.dart';
+import '../../../core/services/sync_service.dart';
 
 class NotificationPrefsRepository {
   const NotificationPrefsRepository._();
@@ -181,6 +182,17 @@ class NotificationPrefsRepository {
     }
     try {
       await HiveService.instance.userBox.put(hiveKey, normalize(prefs));
+      // Push the snapshot so the SERVER sees the change today, not at next
+      // launch (B-pass P1). Without this the only backstop is checkAndSync's
+      // next-login pushSnapshotNow: a user who turns Morning Check-in off at
+      // 22:00 and closes the app still gets the 07:00 push, because both the
+      // 02:00 generate and the 07:00 deliver read the pre-change snapshot —
+      // the exact "my toggle did nothing" failure this batch removes.
+      //
+      // Fire-and-forget + coalesced, matching every sibling WriteService; the
+      // Hive write above is already durable, so a failed push costs a delay,
+      // never the setting.
+      unawaited(SyncService.instance.pushSnapshot());
       return true;
     } catch (e, st) {
       debugPrint('[NotificationPrefs] write failed: $e');

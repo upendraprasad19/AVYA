@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/features/profile/services/notification_prefs_repository.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -36,8 +38,16 @@ class _NotificationSettingsScreenState
   void initState() {
     super.initState();
     // Deep copy so mutations don't affect parent until onSave
+    // Self-sufficient fallback (B-pass P1). The Settings entry point pushes
+    // this route WITHOUT `extra`, so widget.notifPrefs arrives empty, isPro
+    // false and onSave a no-op. Rendering that would show every toggle ON,
+    // silently discard every change, and show a paying PRO user a lock. Read
+    // the real values instead when the caller supplied none.
+    final source = widget.notifPrefs.isNotEmpty
+        ? widget.notifPrefs
+        : NotificationPrefsRepository.read();
     _prefs = {};
-    for (final entry in widget.notifPrefs.entries) {
+    for (final entry in source.entries) {
       if (entry.value is Map) {
         _prefs[entry.key] = Map<String, dynamic>.from(entry.value as Map);
       } else {
@@ -56,8 +66,28 @@ class _NotificationSettingsScreenState
 
   dynamic _pref(String key) => _prefs[key] ?? _prefs[_legacyAliases[key] ?? ''];
 
+  /// Persists a change.
+  ///
+  /// Prefers the caller's [onSave] (ProfileScreen owns the in-memory copy and
+  /// needs to stay in sync). Falls back to writing through the repository
+  /// directly when the caller supplied the router's no-op default — otherwise
+  /// every change made via the Settings entry point is silently discarded
+  /// (B-pass P1).
+  void _persist() {
+    widget.onSave(_prefs);
+    if (widget.notifPrefs.isEmpty) {
+      // Reached without `extra` — the caller's onSave is the router default,
+      // which throws the value away. Write it ourselves.
+      unawaited(NotificationPrefsRepository.write(_prefs));
+    }
+  }
+
   bool _getEnabled(String key) {
     final pref = _pref(key);
+    // `!= false`, never `== true`. A map that carries only {time: '20:00'} —
+    // which is exactly what _setTime writes for a key the user has never
+    // toggled — must still read as ENABLED. The old `== true` flipped the
+    // toggle off the moment someone changed a time (B-pass P1).
     if (pref is Map) return pref['enabled'] == true;
     return true;
   }
@@ -80,7 +110,7 @@ class _NotificationSettingsScreenState
       pref['enabled'] = value;
       _prefs[key] = pref;
     });
-    widget.onSave(_prefs);
+    _persist();
   }
 
   void _setTime(String key, String time) {
@@ -89,7 +119,7 @@ class _NotificationSettingsScreenState
       pref['time'] = time;
       _prefs[key] = pref;
     });
-    widget.onSave(_prefs);
+    _persist();
   }
 
   void _setDay(String key, String day) {
@@ -98,7 +128,7 @@ class _NotificationSettingsScreenState
       pref['day'] = day;
       _prefs[key] = pref;
     });
-    widget.onSave(_prefs);
+    _persist();
   }
 
   @override

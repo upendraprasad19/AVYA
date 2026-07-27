@@ -108,29 +108,21 @@ serve(async (req: Request): Promise<Response> => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // Unit E — respect the user's Promotion Day toggle.
+  // Unit E — the Promotion Day toggle gates the PUSH, not the chat message.
   //
-  // Early RETURN, not `continue`: unlike the other three guarded functions
-  // this one is trigger-fired for a SINGLE promotion and has no loop, so
-  // there is no iteration to skip and no per-run counter to increment.
+  // An earlier draft returned early before step 3, which also suppressed the
+  // ai_coach_interactions insert — so opting out of a NOTIFICATION silently
+  // deleted the coach's congratulation from the user's chat history. This is
+  // the only guarded function that writes a persistent in-app record; its three
+  // siblings write none, which is why the early return read as consistent and
+  // was not (B-pass P2).
   //
-  // Returning 200 (not 4xx) on purpose — the caller is a database trigger and
-  // an opted-out user is a correct, expected outcome, not a failure. A non-2xx
-  // here would show up as trigger noise and, worse, could be retried.
-  //
-  // The 200 body names the reason so a future operator reading logs can tell
-  // "user opted out" apart from "silently did nothing".
+  // Absent means SEND (N2): a failed lookup must never cost a promotion push.
+  let pushAllowed = true;
   try {
     const prefs = await fetchNotificationPrefs(admin, [user_id]);
-    if (!isNotificationEnabled(prefs, user_id, "rank_promotion")) {
-      console.log(
-        `[proactive-coach-promotion] user=${user_id} opted out of rank_promotion — no push`,
-      );
-      return jsonResponse({ status: "skipped", reason: "notification_disabled" }, 200);
-    }
+    pushAllowed = isNotificationEnabled(prefs, user_id, "rank_promotion");
   } catch (prefErr) {
-    // Absent means SEND (N2): a preferences lookup must never cost a user
-    // their promotion notification.
     console.error(
       "[proactive-coach-promotion] prefs lookup failed, sending anyway:",
       prefErr,
@@ -170,7 +162,14 @@ serve(async (req: Request): Promise<Response> => {
 
     // 4. OneSignal push so the user gets a notification even when
     //    the app is closed.
-    await sendOneSignalPush(user_id, rank_code, congrats);
+    // The chat message above is written regardless; only the push is gated.
+    if (pushAllowed) {
+      await sendOneSignalPush(user_id, rank_code, congrats);
+    } else {
+      console.log(
+        `[proactive-coach-promotion] user=${user_id} opted out of rank_promotion — chat message kept, push suppressed`,
+      );
+    }
 
     // 5. Success telemetry.
     await logTelemetry(admin, user_id,

@@ -26,7 +26,20 @@ export type ProactiveType =
   | "plateau_alert"
   | "weekly_recap"
   | "re_engagement"
-  | "subscription_expiry";
+  | "subscription_expiry"
+  // Unit G — added so the vocabulary is complete and the notification key
+  // `rank_promotion` is canonical rather than an ad-hoc payload string.
+  //
+  // DELIBERATELY NOT DAY-DEDUPED. proactive-coach-promotion must NOT call
+  // markProactiveSent with this type. `shouldSendProactive` compares a SINGLE
+  // `last_proactive_type` slot, so stamping a promotion would overwrite
+  // whatever was last sent — and a pr_celebration already sent that day would
+  // then pass the `lastType !== type` check and fire AGAIN. Adding a rare event
+  // to the chain would weaken dedup for the frequent ones.
+  //
+  // Nothing is lost: a promotion is trigger-fired once per rank change, so it
+  // is one-per-event by construction and needs no day gate. (round-3 F8)
+  | "rank_promotion";
 
 /**
  * Returns true if this proactive type can be sent now (i.e. NOT already
