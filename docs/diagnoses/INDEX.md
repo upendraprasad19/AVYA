@@ -12,6 +12,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### blast_radius_registry_coverage (1 bugs)
 - 2026-07-27 c9f1d3 — >-
 
+### device_session_identity_binding (1 bugs)
+- 2026-07-27 e7b3c5 — >-
+
 ### cron_auth_gate (2 bugs)
 - 2026-07-26 c3f8a1 — >-
 - 2026-05-11 7ad0c4 — 8 cron Edge Functions had verify_jwt false at the gateway AND no manual auth check at handler entry. Anyone with the function URL could trigger expensive Gemini fanout, OneSignal pushes, or DB scans across the entire user base.
@@ -852,6 +855,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 |---|---|---|---|---|
 | 2026-07-27 | b7e4c2 | >- | git_safety_hook_contract | test/contracts/git_safety_hook_integration_test.dart |
 | 2026-07-27 | c9f1d3 | >- | blast_radius_registry_coverage | test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart |
+| 2026-07-27 | e7b3c5 | >- | device_session_identity_binding | test/contracts/signout_unbinds_sdk_identity_test.dart |
 | 2026-07-26 | c3f8a1 | >- | cron_auth_gate | test/contracts/cron_auth_adoption_test.dart |
 | 2026-07-26 | d3f8a2 | \| | keystone_gate_branch_recovery | test/scripts/plan_review_record_lib_test.dart |
 | 2026-07-26 | e4a7c1 | \| | ci_concurrency_cancels_keystone_gate | test/contracts/ci_workflow_concurrency_test.dart |

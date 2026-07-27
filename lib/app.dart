@@ -89,6 +89,10 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
     AiService.instance.dispose();
     SubscriptionService.onStateChanged = null;
     NutritionWriteService.onStateChanged = null;
+    // OI-51 (e7b3c5) — RankService was installed at :76 alongside the other two
+    // but never cleared here, so its closure outlived every teardown. The set
+    // and the clear must stay symmetric: one entry above, one entry here.
+    RankService.onStateChanged = null;
     super.dispose();
   }
 

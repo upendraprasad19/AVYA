@@ -5403,6 +5403,94 @@ concepts:
         - test/contracts/referral_repository_only_test.dart — pins the
           two named callers explicitly.
 
+  - concept: device_session_identity_binding
+    domain: cross_domain
+    behavioral_test_path: test/contracts/signout_unbinds_sdk_identity_test.dart
+    description: |
+      Every per-user identity this DEVICE holds OUTSIDE Hive, and the rule that
+      sign-in binds all of them and sign-out releases all of them. Three kinds:
+
+        1. OneSignal `external_id` — bound by `OneSignal.login(user.id)`,
+           released by `OneSignal.logout()`. Guarded `!kIsWeb` at BOTH ends.
+        2. Firebase Crashlytics `userIdentifier` — bound to `user.id[0:8]`,
+           released by `setUserIdentifier('')`. Guarded `!kDebugMode` at BOTH
+           ends. (The 8-char prefix, not the full uuid, is deliberate.)
+        3. The three static `void Function()? onStateChanged` callbacks —
+           SubscriptionService, NutritionWriteService, RankService — each of
+           which captures the CURRENT session's Riverpod container in a
+           long-lived closure.
+
+      OI-51 / e7b3c5 (2026-07-27): before this batch `signOut` cleared Hive and
+      Supabase and released NONE of the three. The exposure is the SIGNED-OUT
+      WINDOW, not cross-user attribution: `_ensureLocalUser` overwrites both SDK
+      bindings when the next user signs in, so B is never mistaken for A. But
+      between A signing out and anyone signing in — unbounded on a sold or
+      handed-on handset — the device stays `external_id = A` and A's push
+      notifications keep arriving carrying A's calories, streaks and coach
+      messages.
+
+      RankService is called out separately because it is the one a
+      ticket-following fix misses: `app.dart` installs all three side by side,
+      but `dispose()` released only the first two, so RankService had NO clear
+      site anywhere. It survived sign-out AND widget teardown.
+
+      THE REQUIRED SET IS DERIVED, NEVER LISTED. The contract test enumerates
+      every `static void Function()? onStateChanged` declaration under `lib/`,
+      resolves the owning class, and requires a matching
+      `X.onStateChanged = null` inside `unbindSessionIdentity` — so a FOURTH
+      callback added later joins the required set automatically. A hand-written
+      list of three would have passed on the day the RankService gap was
+      introduced (`feedback_ist_sweep_gap`; same structural answer as a3d7b1).
+    writers:
+      - file: lib/features/auth/providers/auth_provider.dart
+        method: _ensureLocalUser (bind) / unbindSessionIdentity (release)
+        notes: |
+          BIND: setUserIdentifier at :655, OneSignal.login at :675.
+          RELEASE: unbindSessionIdentity at :417 — OneSignal.logout,
+          setUserIdentifier(''), then all three callbacks nulled.
+          Extracted from signOut() and marked @visibleForTesting because
+          signOut() itself needs Supabase + Hive + GoRouter and is not
+          unit-testable. Each step keeps signOut's per-step try/catch: a
+          throwing third-party SDK must not abort the rest of sign-out.
+      - file: lib/app.dart
+        method: _AppState.initState (install) / dispose (release)
+        notes: |
+          Installs all three callbacks at :45/:59/:76 and now releases all three
+          at :90-95. The set and the clear must stay symmetric — a second
+          derived assertion pins that within app.dart, independently of the
+          sign-out path, so either half regressing fails on its own.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/subscription_service.dart
+        line_range: 238-238
+        method: onStateChanged
+        semantic: callback-invocation
+        fields_read: []
+        notes: Fired at :58/:285/:883; invalidates subscriptionInfoProvider + messageLimitProvider.
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 755-755
+        method: onStateChanged
+        semantic: callback-invocation
+        fields_read: []
+        notes: Fired at :780; invalidates the 6 nutrition providers.
+      - file: lib/core/services/rank_service.dart
+        line_range: 53-53
+        method: onStateChanged
+        semantic: callback-invocation
+        fields_read: []
+        notes: |
+          Fired at :186; invalidates userProfileProvider. Had no clear site
+          anywhere before e7b3c5 — neither sign-out nor dispose.
+    class_constraints: |
+      A new `static void Function()? onStateChanged` anywhere under `lib/` MUST
+      be released in `AuthNotifier.unbindSessionIdentity` AND, if installed in
+      `app.dart`, cleared in the same file's `dispose()`. Both are enforced by
+      DERIVED assertions in test/contracts/signout_unbinds_sdk_identity_test.dart
+      that compute the required set from the declarations, so neither can go
+      stale. The SDK unbinds must keep the SAME platform guards as their bind
+      sites (`!kIsWeb`, `!kDebugMode`) — an unbind running where the bind never
+      did is a new failure mode, not a fix.
+
   - concept: referral_trial_subscription_grant
     domain: profile
     description: |

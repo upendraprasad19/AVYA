@@ -16,6 +16,9 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/streak_freeze_clamp_migrator.dart';
 import 'package:icanbefitter/core/services/user_config_migrator.dart';
 import 'package:icanbefitter/core/services/body_fat_default_healer.dart';
@@ -379,7 +382,72 @@ class AuthNotifier extends Notifier<AuthState2> {
     } catch (e) {
       debugPrint('[auth/signOut] supabase signOut failed: $e');
     }
+
+    await unbindSessionIdentity();
+
     state = const AuthState2(status: AuthStatus.idle);
+  }
+
+  /// OI-51 — releases every per-user identity this device holds outside Hive.
+  ///
+  /// `_ensureLocalUser` BINDS the device to a user at sign-in (`OneSignal.login`
+  /// + Crashlytics `setUserIdentifier`). Until 2026-07-27 nothing ever unbound
+  /// it, and `signOut` cleared only Hive + Supabase.
+  ///
+  /// The exposure is the SIGNED-OUT WINDOW, not the next user: when B signs in,
+  /// `_ensureLocalUser` overwrites both bindings, so B is attributed correctly.
+  /// But between A signing out and anyone signing in, the device remains
+  /// `external_id = A` — so **A's push notifications keep arriving**, carrying
+  /// A's fitness data (calories, streaks, coach messages), on a handset A may
+  /// have sold, returned, or handed to someone else. Crashes in that window are
+  /// likewise tagged with A's id.
+  ///
+  /// Extracted from [signOut] so it is directly callable in tests: `signOut()`
+  /// itself needs Supabase + Hive + GoRouter and is not unit-testable (the same
+  /// reason `profile_signout_routes_through_auth_notifier_test.dart` is
+  /// source-grep). The static-callback clearing below IS verified behaviourally
+  /// against this method; the two plugin calls are platform channels and are
+  /// pinned by source-grep + channel mocking.
+  ///
+  /// Guards mirror the BIND sites exactly (`!kIsWeb` / `!kDebugMode`) — an
+  /// unbind running where the bind never did would be a new failure mode. Each
+  /// step keeps [signOut]'s per-step try/catch shape: sign-out must complete
+  /// even if a third-party SDK throws.
+  @visibleForTesting
+  Future<void> unbindSessionIdentity() async {
+    if (!kIsWeb) {
+      try {
+        await OneSignal.logout();
+      } catch (e) {
+        debugPrint('[auth/signOut] OneSignal.logout failed: $e');
+      }
+    }
+    if (!kDebugMode) {
+      try {
+        await FirebaseCrashlytics.instance.setUserIdentifier('');
+      } catch (e) {
+        debugPrint('[auth/signOut] Crashlytics identifier clear failed: $e');
+      }
+    }
+
+    // 4th sub-finding — drop the static callbacks. These capture Riverpod state
+    // in a long-lived closure. Two of them ARE nulled in `app.dart:dispose()`,
+    // but that is WIDGET TEARDOWN: a sign-out that navigates without tearing the
+    // app down leaves the previous session's closure installed. Clearing here
+    // makes sign-out itself the boundary.
+    //
+    // ALL THREE static `onStateChanged` callbacks in the codebase are cleared
+    // here — grep `static void Function()? onStateChanged` returns exactly
+    // subscription_service.dart:238, nutrition_write_service.dart:755 and
+    // rank_service.dart:53. RankService is the one this batch nearly missed:
+    // `app.dart:76` installs it alongside the other two, but `dispose()` (:90-91)
+    // clears only the first two, so it had NO clear site anywhere. Enumerating
+    // the declaration site rather than copying the pair named in the OI is what
+    // caught it (`feedback_ist_sweep_gap` — an exhaustive-sounding sweep that
+    // leaves sites behind).
+    SubscriptionService.onStateChanged = null;
+    NutritionWriteService.onStateChanged = null;
+    RankService.onStateChanged = null;
   }
 
   /// Reset back to idle.
