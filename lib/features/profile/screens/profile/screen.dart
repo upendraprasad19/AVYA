@@ -340,9 +340,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   bool _getNotifEnabled(String key) {
-    final pref = _notifPrefs[key];
-    if (pref is Map) return pref['enabled'] == true;
-    return true;
+    // Reuses the repository's normalisation + legacy-alias resolution so the
+    // "N/M enabled" count agrees with what the server will actually honour.
+    // Reading `_notifPrefs[key]` raw would miss a value stored under the legacy
+    // singular `workout_reminder` and report it as ON while the server sees OFF.
+    final normalised = NotificationPrefsRepository.normalize(_notifPrefs);
+    final direct = normalised[key];
+    final pref = direct ??
+        (key == 'workout_reminders' ? normalised['workout_reminder'] : null);
+    if (pref == null) return true; // untouched ⇒ enabled (decision N2)
+    return pref['enabled'] != false;
   }
 
   @override
