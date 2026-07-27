@@ -13,8 +13,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### git_safety_hook_contract (1 bugs)
 - 2026-07-27 b7e4c2 — >-
 
+### plan_review_record_enforcement (1 bugs)
+- 2026-07-27 a7f3d1 — >
+
 ### notification_preferences_emission (1 bugs)
 - 2026-07-27 d4e8b2 — >-
+
+### code_review_pass_enforcement (1 bugs)
+- 2026-07-27 b2e6c4 — >
 
 ### cron_auth_gate (2 bugs)
 - 2026-07-26 c3f8a1 — >-
@@ -856,7 +862,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 |---|---|---|---|---|
 | 2026-07-27 | a3d7b1 | >- | blast_radius_registry_coverage | test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart |
 | 2026-07-27 | b7e4c2 | >- | git_safety_hook_contract | test/contracts/git_safety_hook_integration_test.dart |
+| 2026-07-27 | a7f3d1 | > | plan_review_record_enforcement | test/scripts/gate_input_family_e2e_test.dart |
 | 2026-07-27 | d4e8b2 | >- | notification_preferences_emission | test/contracts/notification_preferences_writer_to_reader_test.dart |
+| 2026-07-27 | b2e6c4 | > | code_review_pass_enforcement | test/contracts/review_gate_staged_content_not_working_tree_test.dart |
 | 2026-07-27 | c9f1d3 | >- | blast_radius_registry_coverage | test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart |
 | 2026-07-26 | c3f8a1 | >- | cron_auth_gate | test/contracts/cron_auth_adoption_test.dart |
 | 2026-07-26 | d3f8a2 | \| | keystone_gate_branch_recovery | test/scripts/plan_review_record_lib_test.dart |

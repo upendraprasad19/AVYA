@@ -634,6 +634,15 @@ const SMOKE_TOLERATED_CODES = {
   'clean-orphan-media': [401],
   'pr-detection': [401],
   'daily-snapshot': [401],
+  // Cron-only auth, same as their siblings above. These three were MISSING when
+  // the six notif-prefs guards were deployed on 2026-07-27: an unauthenticated
+  // smoke correctly gets 401 from `isAuthorizedCronCall`, but with no toleration
+  // entry the deploy script reported that healthy 401 as a smoke FAILURE. The
+  // deploy had in fact succeeded, so the misreport pushed toward re-deploying a
+  // function that was already fine — the opposite of what a smoke step is for.
+  'plateau-alert': [401],
+  'protein-gap-alert': [401],
+  're-engagement': [401],
   'beat-my-coach': [400, 401],
   'future-prediction': [400, 401],
   'assess-body-composition': [400, 401],

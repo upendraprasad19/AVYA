@@ -188,4 +188,141 @@ void main() {
     expect(catFile.exitCode, 0,
         reason: 'git cat-file -e :<path> must confirm the staged blob exists');
   });
+
+  // ── OI-72 ────────────────────────────────────────────────────────────────
+  // The SAME staged-vs-working-tree asymmetry, one level up: the gate applied
+  // the fix above to `contentForcesCatastrophic` but NOT to the review file it
+  // is gating on. `stagedDiffHash()` hashed the INDEX while the review file was
+  // checked with `File(...).existsSync()` — the WORKING TREE. So an untracked
+  // docs/reviews/<hash>-review.md satisfied the catastrophic gate without ever
+  // entering history, and because it was untracked it contributed nothing to
+  // the staged diff, so the hash it was named after never moved. Three untracked
+  // `docs/reviews/*-review.md` files were sitting in the working tree when this
+  // was found.
+  //
+  // Staging the review is what makes the fix meaningful, and that is only
+  // possible because the hash now EXCLUDES docs/reviews/ — otherwise staging it
+  // would rename the very file it satisfies.
+  group('OI-72 — the review artifact must be staged, not merely on disk', () {
+    /// Builds an isolated repo carrying the real gate + registry, stages a
+    /// catastrophic change, and returns (repo, expected review filename).
+    Future<({Directory tmp, String hash})> setUpCatastrophicRepo(
+        String prefix) async {
+      final srcRoot = Directory.current.path;
+      final tmp = await _freshIsolatedGitTargetDir(prefix);
+      await _git(tmp.path, ['init', '-q']);
+      await _git(tmp.path, ['config', 'user.email', 'test@example.com']);
+      await _git(tmp.path, ['config', 'user.name', 'Test']);
+
+      await Directory('${tmp.path}/scripts').create(recursive: true);
+      for (final f in const [
+        'check_code_review_pass_exists.dart',
+        'blast_radius_content_rules_lib.dart',
+      ]) {
+        File('$srcRoot/scripts/$f').copySync('${tmp.path}/scripts/$f');
+      }
+      await Directory('${tmp.path}/docs/reviews').create(recursive: true);
+      File('$srcRoot/docs/blast_radius.yaml')
+          .copySync('${tmp.path}/docs/blast_radius.yaml');
+
+      // SECURITY DEFINER content forces catastrophic regardless of path tier.
+      const mig = 'supabase/migrations/999_probe.sql';
+      final migFile = File('${tmp.path}/$mig');
+      await migFile.parent.create(recursive: true);
+      await migFile.writeAsString(
+          'create function f() returns void security definer as \$\$ \$\$;');
+      await _git(tmp.path, ['add', mig]);
+
+      // The hash the gate will demand — computed the same way it does, over the
+      // staged diff EXCLUDING docs/reviews.
+      final diff = await Process.run(
+          // MUST be byte-identical to the gate's own argv in
+          // check_code_review_pass_exists.dart, or this computes a different
+          // oracle and the test passes by coincidence (round-2 review P2-C
+          // caught exactly that: the pre-P3-2 form here happened to agree at
+          // the repo root and diverged from a subdirectory).
+          'git', ['-C', tmp.path, 'diff', '--cached', '--', ':(top)',
+              ':(top,exclude)docs/reviews'],
+          stdoutEncoding: null,
+          environment: Map<String, String>.from(Platform.environment)
+            ..removeWhere((k, _) => _gitEnvKeysToStrip.contains(k.toUpperCase())),
+          includeParentEnvironment: false);
+      final hasher = await Process.start('git', ['hash-object', '--stdin']);
+      hasher.stdin.add(diff.stdout as List<int>);
+      await hasher.stdin.close();
+      final hash = (await hasher.stdout
+              .transform(const SystemEncoding().decoder)
+              .join())
+          .trim()
+          .substring(0, 12);
+      await hasher.exitCode;
+      return (tmp: tmp, hash: hash);
+    }
+
+    Future<ProcessResult> runGate(Directory tmp) => Process.run(
+          'dart',
+          ['scripts/check_code_review_pass_exists.dart'],
+          workingDirectory: tmp.path,
+          environment: Map<String, String>.from(Platform.environment)
+            ..removeWhere((k, _) => _gitEnvKeysToStrip.contains(k.toUpperCase())),
+          includeParentEnvironment: false,
+          runInShell: true,
+        );
+
+    test('an UNTRACKED accepted review no longer satisfies the gate', () async {
+      final s = await setUpCatastrophicRepo('oi72_untracked_test');
+      addTearDown(() => s.tmp.delete(recursive: true));
+
+      // Present on disk, accepted, correctly named — but never `git add`ed.
+      await File('${s.tmp.path}/docs/reviews/${s.hash}-review.md')
+          .writeAsString('---\nverdict: accepted\n---\n');
+
+      final r = await runGate(s.tmp);
+      expect(r.exitCode, 1,
+          reason: 'the pre-fix gate passed here: existsSync() saw the working-'
+              'tree file while the hash came from the index. An unstaged review '
+              'never enters history, so nothing records that this commit was '
+              'reviewed.');
+      expect('${r.stdout}${r.stderr}', contains('not staged'),
+          reason: 'the failure must name the actual problem — the author is '
+              'one `git add` away, and a generic "run /review" message would '
+              'send them to regenerate a file they already have');
+    });
+
+    test('a STAGED accepted review satisfies it, and staging does not rename it',
+        () async {
+      final s = await setUpCatastrophicRepo('oi72_staged_test');
+      addTearDown(() => s.tmp.delete(recursive: true));
+
+      final rel = 'docs/reviews/${s.hash}-review.md';
+      await File('${s.tmp.path}/$rel').writeAsString('---\nverdict: accepted\n---\n');
+      await _git(s.tmp.path, ['add', rel]);
+
+      final r = await runGate(s.tmp);
+      expect(r.exitCode, 0,
+          reason: 'staging the review must SATISFY the gate — if the hash still '
+              'covered docs/reviews/, adding the file would move the hash and '
+              'the gate would now demand a differently-named file, making the '
+              'requirement unsatisfiable');
+      expect('${r.stdout}${r.stderr}', contains(rel));
+    });
+
+    test('a staged review whose verdict is not accepted still FAILS', () async {
+      final s = await setUpCatastrophicRepo('oi72_rejected_test');
+      addTearDown(() => s.tmp.delete(recursive: true));
+
+      final rel = 'docs/reviews/${s.hash}-review.md';
+      await File('${s.tmp.path}/$rel').writeAsString('---\nverdict: rejected\n---\n');
+      await _git(s.tmp.path, ['add', rel]);
+
+      final r = await runGate(s.tmp);
+      expect(r.exitCode, 1,
+          reason: 'reading from the index must not weaken the verdict check');
+      // Assert the REASON, not just the exit code (round-1B review P3-1): the
+      // pre-fix gate also exits 1 here, but for the wrong reason — staging the
+      // review moved the hash, so it failed with file-not-found rather than
+      // verdict-rejected. Exit code alone cannot tell those apart.
+      expect('${r.stdout}${r.stderr}', contains('verdict is not "accepted"'));
+    });
+  });
 }

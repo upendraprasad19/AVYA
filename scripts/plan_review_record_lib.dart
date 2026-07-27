@@ -168,6 +168,10 @@ bool recordBranchFieldMatches(String recordContent, String branch) {
   return m.group(1)!.trim() == branch;
 }
 
+/// Public alias — the keystone gate scopes ALL of its record fields to the
+/// frontmatter, not just `branch:` (round-1 review P3-1).
+String? recordFrontmatter(String content) => _frontmatter(content);
+
 /// Returns the content between the opening `---` and the next `---`, or null
 /// when the file does not open with a frontmatter fence.
 String? _frontmatter(String content) {
@@ -207,6 +211,16 @@ bool dependabotDiffIsManifestOnly(Iterable<String> changedPaths) {
   if (paths.isEmpty) return false;
   return paths.every(dependabotAllowedPaths.contains);
 }
+
+/// NOTE: `versionBumpAllowedPaths`, `isMechanicalVersionBump` and
+/// `requiresFreshRecord` were written for OI-58a/OI-58b and REMOVED again on
+/// 2026-07-27 when that half of the batch was split out (CLAUDE.md §4.12.1 —
+/// three review rounds each found a new material defect in them, the last being
+/// an exemption that accepted any SUBSET of its path allow-list, so a direct
+/// commit rewriting prices and free-tier caps in app_constants.dart passed at
+/// account tier). They return with the split unit, where the exemption must be
+/// CONTENT-verified — every changed LINE a version line — to the same standard
+/// as the Dependabot exemption below.
 
 /// True when every commit author on the merged side is Dependabot.
 ///

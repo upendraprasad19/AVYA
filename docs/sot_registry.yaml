@@ -7738,11 +7738,16 @@ concepts:
         fields_read: [paths, default_tier]
         notes: informational classifier; printed by the hooks and used by pre-push to decide the local full suite.
       - file: scripts/check_plan_review_record_exists.dart
-        line_range: 72-89
+        line_range: 104-121
         method: _parseRules
         semantic: pass-through
         fields_read: [paths, default_tier]
-        notes: CI keystone gate — requires a plan-review record >= account, bpass >= platform, hermes at catastrophic.
+        notes: >
+          CI keystone gate — requires a plan-review record >= account, bpass >= platform,
+          hermes at catastrophic. Since 2026-07-27 (OI-70) it parses the registry TWICE
+          per run, at the pushed range's base AND at HEAD, and takes the max tier: a
+          commit can no longer lower its own tier by relaxing a rule in the same change,
+          nor escape one by landing content no rule covers yet.
       - file: scripts/check_code_review_pass_exists.dart
         line_range: 28-45
         method: parseRules

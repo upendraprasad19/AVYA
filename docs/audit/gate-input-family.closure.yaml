@@ -1,0 +1,293 @@
+# Closure ledger — the gate-input family (OI-58 / OI-70 / OI-71 / OI-72) + riders
+#
+# §4.2 structural invariant: every entry carries a terminal_state; the schema
+# has no `deferred:` key. Gate 40 recomputes the tally and fails if any item is
+# non-terminal.
+#
+# One thesis across four open issues: the merge-to-main gates derived their
+# inputs from author-controllable or post-merge state. OI-58 was folded in over
+# its own "own reviewed unit" note (founder-approved 2026-07-27) because its fix
+# replaces the exact line OI-71 patches — splitting them meant writing the range
+# derivation twice.
+#
+# OI-58 is recorded as TWO findings, because its two faces have different
+# terminal states. The single-parent bypass is closed in code. The deliberate
+# merge-subject spoof is not closeable by a script whose every input is authored
+# by the person being checked; its realistic form is closed and the residual is
+# blocked_on_user with the specific action named.
+
+batch: gate-input-family
+date: 2026-07-27
+blast_radius: platform
+diagnose_docs:
+  - docs/diagnoses/2026-07-27-keystone-gate-derives-inputs-from-controllable-state-a7f3d1.md
+  - docs/diagnoses/2026-07-27-review-artifact-satisfies-gate-without-entering-history-b2e6c4.md
+total_count: 13
+closed_count: 13
+
+findings:
+  - id: RV1
+    title: Round-1 independent review — 3 P1, 3 P2, 3 P3, all fixed in-branch
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: "gate-input-family (uncommitted)"
+    verification: >-
+      One independent context-blind round on gate correctness returned nine
+      findings; every one was re-verified by me against the code or by execution
+      before being acted on, and every one is fixed with its own regression test
+      (7 new tests, `round-1 review regressions` group). The two that matter
+      most are method failures, not code failures. P1-1: the version-bump
+      exemption was evaluated per-PUSH while the baseline justifying hard-fail
+      over --warn-only ("3 of 60, 1 exempted") was measured per-COMMIT — under
+      the shipped code the real release push (2c4cbddd bump + 6a364656 docs, the
+      two halves of APK +37) FAILED, verified by running the gate over
+      3bca83a8..HEAD. P1-2: the rewrite deleted the old `if (diff.isEmpty)
+      die(...)` guard while `_git()` returned '' on any failure, so an errored
+      diff read as feature-tier. Also fixed: P2-1 unresolvable PUSH_BEFORE
+      narrowing silently (force-push shape), P2-2 content escalation read from
+      the working tree rather than the commit's own tree, P2-3 one-record-one-
+      landing blind to merges earlier in the same push, P3-1 record fields not
+      frontmatter-scoped, P3-2 CWD-relative pathspec, P3-3 stale CI comment.
+
+  - id: RV1b
+    title: Round-1B independent review — 1 P1, 6 P2, 4 P3, all fixed in-branch
+    severity: P1
+    commit: "gate-input-family (uncommitted)"
+    terminal_state: closed_in_commit
+    verification: >-
+      A second independent round on a different surface (tests + factual claims).
+      Its highest-value output was three FALSE STATEMENTS OF MINE, each
+      re-verified by me before acting. (1) I wrote that 904e6961's registry had
+      no rule covering .github/workflows/test.yml so it fell through to
+      default_tier; it has `.github/** -> feature` at line 111 — I had grepped
+      that registry for `workflows` and `scripts/` and never for `.github/**`,
+      the second incomplete-grep conclusion in this batch. Tier outcome
+      unchanged; mechanism was wrong in four places. (2) "Five untracked
+      docs/reviews/*-review.md files" — there are three; the other two are
+      `-bpass.md` and invisible to the gate. Corrected in five places. (3) One
+      of the eight controls was vacuous: the OI-70 "rule arrives with the
+      change" test also fails against the pre-fix gate, so it is a DESIGN-LOCK
+      on the rejected base-only alternative, not a revert-control — the file
+      header claiming all tests were revert-controls is corrected and each kind
+      is now labelled. Also fixed: this ledger failed its own Gate 40 (no
+      `commit:` fields); the ship-dark ledger still carried an unresolved
+      "(uncommitted — fill sha at commit)" placeholder for hold-display-fixes
+      (ff13623e / merge 342820b3) despite R1 existing to make that file true;
+      .claude/skills/code-review/SKILL.md documented the staging hash as
+      sha256(git diff --cached) when the gate uses git sha1 hash-object AND now
+      excludes docs/reviews, so a review named by following it could never match
+      (CLAUDE.md 5.1 skill self-evolution); four file:line citations had
+      drifted; the freshness-safety window was 25 merges when 182 were
+      available (widened — conclusion strengthened, zero false positives across
+      all of history); and two controls asserted only an exit code where the
+      pre-fix gate exited 1 for a different reason, now asserting the reason.
+
+  - id: R4
+    title: CI job wiring for the pushed-range base
+    severity: P3
+    commit: "gate-input-family (uncommitted)"
+    terminal_state: closed_in_commit
+    verification: >-
+      .github/workflows/test.yml:191-199 passes PUSH_BEFORE from
+      github.event.before to the gate, and its comment now explains why
+      fetch-depth: 0 is still load-bearing for a DIFFERENT reason than before
+      (the gate no longer touches HEAD^2; without full history the range base is
+      unreachable and the gate fails loudly instead of narrowing). Round-2
+      review P3-9 noted this was the one diff element with no ledger finding
+      naming it.
+
+  - id: BP1
+    title: B-pass on the final staged diff — 3 P2, 1 P3, all fixed
+    severity: P2
+    commit: "gate-input-family (uncommitted)"
+    terminal_state: closed_in_commit
+    verification: >-
+      Mandatory §4.3 pre-merge pass, and NOT a formality here: the split landed
+      after round 2, so this is the only review that saw the code that actually
+      ships. Findings: (1) two `_git` sites still failed open —
+      `rev-list --first-parent` reported "nothing landed" on a git error, and
+      `log -1 --format=%P` mis-filed a genuine MERGE as a direct commit, which
+      after the OI-58a scope cut means it is never checked for a record at all.
+      I had ALREADY REPORTED the rev-list site as fixed in an earlier turn and
+      it had not applied — `feedback_mistake_unverified_done_claims`, the most
+      recurrent class in this repo, inside the batch about gates that
+      confidently return wrong answers. Neither site has a crafted trigger,
+      which is why three rounds hunting reachable bypasses missed both. (2) the
+      diagnose-doc's `writers:` field cited three symbols the split had DELETED,
+      at line numbers past EOF in a 237-line file. (3) the control count claimed
+      16/14/2 when the truth is 8/7/1, contradicting the same doc's own body.
+      (4) P3, pre-existing and outside the diff: `stagedPaths()` returned `[]`
+      on git failure so a catastrophic commit exited 0 — fixed anyway rather
+      than left as a deferral by another name, since it is the same class OI-72
+      fixes twice in that file. Full suite green at 101 after the fixes. Record:
+      docs/reviews/gate-input-family-bpass.md.
+
+  - id: RV2
+    title: The gate and its CI invocation are still read from the tree they judge
+    severity: P2
+    terminal_state: blocked_on_user
+    reason: >-
+      Same control as OI-58b-residual: requiring PRs so `main` cannot be pushed
+      directly. `.github/workflows/test.yml` runs the gate from the merged
+      checkout, and on a push event GitHub evaluates the workflow file at the
+      pushed SHA — so both the gate and its invocation are supplied by the
+      commit under test, while the registry marks both `platform`. This is the
+      same class OI-70 closes for docs/blast_radius.yaml, and an earlier draft
+      of the diagnose-doc's "What is NOT closed" named only the merge-subject
+      spoof; round-1 review caught that over-claim and it is corrected in place
+      rather than widened quietly. Not fixable in-repo: pinning the script to a
+      base revision still leaves the workflow step author-supplied, and would
+      stop a genuine improvement to the gate from ever governing its own merge.
+      Recorded rather than claimed closed.
+
+  - id: OI-58a
+    title: Single-parent commits pushed straight to main skip the gate
+    severity: P0
+    terminal_state: upstream_blocked
+    blocker: >-
+      Split out per CLAUDE.md §4.12.1 (founder-approved 2026-07-27). The
+      enforcement needs a CONTENT-verified exemption designed from scratch, not
+      another patch on the path-verified one; that is its own reviewed unit.
+    reopen_when: >-
+      The split unit ships: direct-to-main >=account landings judged per-commit,
+      with an exemption that verifies every CHANGED LINE is a version line, plus
+      its own ×2 review. Tracked as OI-58 in docs/audit/open_issues.md.
+    reason: >-
+      SPLIT OUT of this batch on 2026-07-27, founder-approved, per CLAUDE.md
+      §4.12.1 ("when successive rounds keep surfacing new material issues the
+      unit is too large — split it and ship the smallest converged piece").
+      Three independent review rounds each found a NEW material defect in the
+      enforcement written for this, every one in the same place: round 1 found a
+      per-PUSH union that broke the standard release flow; round 2 found that
+      the FIX for that introduced a version-bump exemption accepting any SUBSET
+      of its path allow-list — confirmed by execution, a direct commit rewriting
+      monthlyPriceInr and freeAiMessagesPerDay in app_constants.dart passed at
+      account tier with a "version-bump exemption" note. The finding is real and
+      demonstrated (be3b4baf and 8c38c855 are account-tier auth commits that
+      landed unreviewed), so this is NOT a judgement that it does not matter —
+      it is a judgement that the enforcement needs designing rather than
+      patching. The next unit builds it with a CONTENT-verified exemption (every
+      changed LINE a version line), matching the standard the Dependabot
+      exemption in the same file already meets. Tracked OPEN in
+      docs/audit/open_issues.md; the range walk it motivated ships here.
+
+  - id: OI-58b
+    title: Merged branch identity comes from the merge subject, which is free text
+    severity: P1
+    terminal_state: upstream_blocked
+    blocker: >-
+      Split out with OI-58a — one-record-one-landing belongs with the unit that
+      judges landings, and was built then removed again inside this batch.
+    reopen_when: >-
+      The split unit ships, re-adding requiresFreshRecord with its two e2e
+      controls. Residual first-time spoof stays blocked_on_user (branch
+      protection / require PRs).
+    reason: >-
+      Split out with OI-58a — one-record-one-landing was built and removed again
+      in the same batch; it belongs with the unit that judges landings. Its
+      residual (a first-time spoof naming a never-landed branch) is a trust
+      boundary no in-repo script can close and shares the control below.
+
+  - id: OI-70
+    title: Tier engines classified a commit using the registry that commit changes
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: "gate-input-family (uncommitted)"
+    verification: >-
+      Fixed BEYOND the filed scope, because the filed fix was half of one. OI-70
+      proposed reading `docs/blast_radius.yaml` as of HEAD^1, which closes
+      self-exemption (delete your own rule) but preserves the mirror hole:
+      `904e6961` landed `.github/workflows/test.yml` while the registry of the
+      day graded it only via a BROADER `.github/** -> feature` rule (line 111);
+      the narrower `.github/workflows/test.yml -> platform` promotion arrived a
+      batch later in `9e3ce5d8` (line 96). Round-1B review corrected an earlier
+      wording here that claimed no rule covered the path at all — the tier
+      outcome is the same, the mechanism was misstated. Base-only would exempt
+      exactly the branches that tighten the rules. Implemented as max(tier under
+      range base, tier under merged tree). Both directions carry an e2e test,
+      but only the self-exemption one is a revert-control: the "rule arrives
+      with the change" test also fails against the pre-fix gate (which read the
+      merged tree, already containing the new rule), so it is a DESIGN-LOCK on
+      the rejected base-only alternative rather than proof of this change.
+      Labelled as such in the test after round-1B review flagged the over-claim.
+
+  - id: OI-71
+    title: Blast-radius diff was three-dot, blind to conflict-resolution content
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: "gate-input-family (uncommitted)"
+    verification: >-
+      `HEAD^1...HEAD^2` is merge-base..branch-tip and excludes what the merge
+      commit itself wrote. Every diff is now two-dot over the actual range, so
+      the inspected set can only grow — the change can raise a tier and never
+      lower one. The e2e control carries an explicit setup guard asserting the
+      old three-dot diff really is blind to the planted file, so it cannot pass
+      for the wrong reason. Honest note: `904e6961` was checked as a candidate
+      live instance of this and is NOT one (its two-dot and three-dot file lists
+      are identical); the registry-version effect above is its real explanation.
+
+  - id: OI-72
+    title: A review file satisfied the catastrophic gate without entering history
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: "gate-input-family (uncommitted)"
+    verification: >-
+      The hash came from `git diff --cached` (index) while the file was checked
+      with `File(...).existsSync()` (working tree), so an untracked review
+      passed — and being untracked, it never moved the hash it was named after.
+      Three untracked docs/reviews/*-review.md files were present when this was
+      found. Now read through `_stagedFileExists`/`_stagedFileContent`, helpers
+      already in that same file for this exact class and applied to the SECURITY
+      DEFINER check but not to the review artifact. The hash excludes
+      docs/reviews/ so staging the review cannot rename it; the middle of three
+      e2e controls is what proves that circle is broken.
+
+  - id: R1
+    title: Thirteen ship-dark flags had no ledger entry, contradicting OI-53
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: "gate-input-family (uncommitted)"
+    verification: >-
+      OI-53 asserted the 13 workout-generator flags were "logged in
+      docs/ship_dark_pending_review.yaml"; that file held only enable_hold_weeks
+      (3 rows). The claim was false. Backfilled from source rather than memory —
+      each build_commit is the first commit introducing that flag's string into
+      plan_engine_flags.dart (`git log -S --reverse`), each branch from the
+      subject of the first containing merge (`git log --merges
+      --ancestry-path`). The code-imposed flip ORDER is recorded with it and was
+      verified in source, not repeated from memory: enable_plateau_escalation
+      "Presupposes `enable_readiness` ON", and enable_triggered_deload's
+      evaluator "additionally requires readiness ON … running the eval without
+      it biases toward LIFTING". enable_readiness flips first.
+
+  - id: R2
+    title: OI-73 cited a review-file hash as a commit and a deployed fact as a git fact
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: "gate-input-family (uncommitted)"
+    verification: >-
+      `git log a3ff9571` returns unknown revision — it is
+      docs/reviews/a3ff9571fbc9-review.md, not a commit; the cron-auth restore
+      is `9ab9f42b`, merged `d2b1b74b`. And the `deno.land/x/jose` import is
+      real in the DEPLOYED bundles, not in git, where the only tracked hits are
+      a history comment and import_map.json. Both corrected in place with the
+      correction visible, per the same discipline the 2026-07-26 reconciliation
+      used. Count also revised ~15 to ~10 to reflect the five functions
+      incidentally cleaned by the 2026-07-27 deploys.
+
+  - id: R3
+    title: Smoke map missing three cron functions; OI-48 materially stale
+    severity: P3
+    terminal_state: closed_in_commit
+    commit: "gate-input-family (uncommitted)"
+    verification: >-
+      SMOKE_TOLERATED_CODES had no entry for plateau-alert, protein-gap-alert or
+      re-engagement, so their healthy cron-auth 401 was reported as a smoke
+      FAILURE during the 2026-07-27 deploys — pushing toward redeploying
+      functions that were already fine. Added alongside their siblings. OI-48
+      was flagged "MATERIALLY STALE" on 2026-07-26 and then carried forward
+      unchanged; re-read all three functions instead of re-asserting the text —
+      evaluate-rank-promotions was batched by `e78e2c7e` (chunked `.in()`,
+      index.ts:47-53/:81/:136) and no longer matches the finding, while
+      i-see-you-callout (:98 with :202/:236/:289) and re-engagement (:131 with
+      :164/:173/:182) still do. Re-scoped to two functions.

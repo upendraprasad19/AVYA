@@ -162,10 +162,16 @@ jobs:
         run: dart run scripts/validate_audit_closure.dart
 
   # ── Plan-review record gate (P1.A keystone, §4.12) ─────────────
-  # The ONE structurally-gateable point for plan-quality: a merge-to-main
-  # commit, in CI. A >=account merged branch must carry a converged
-  # docs/plan-reviews/<branch>.md. Needs fetch-depth:0 so HEAD^1..HEAD^2
-  # (the merged branch diff) is reachable — the shared jobs are shallow.
+  # The ONE structurally-gateable point for plan-quality: any push to main, in
+  # CI. Every >=account landing in the pushed range must carry a converged
+  # docs/plan-reviews/<branch>.md.
+  #
+  # fetch-depth: 0 IS STILL LOAD-BEARING, for a different reason than before.
+  # The gate no longer touches HEAD^2; it walks PUSH_BEFORE..HEAD. Without full
+  # history the range base is unreachable and the gate now FAILS loudly rather
+  # than narrowing to HEAD^1 and reporting a clean PASS over a partial range.
+  # (The old comment here still described the HEAD^1..HEAD^2 diff — corrected
+  # by round-1 review P3-3.)
   plan-review-record:
     name: Plan-review record (>=account merge-to-main)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -183,6 +189,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
       - name: Check plan-review record exists
+        # PUSH_BEFORE is the previous tip of main, i.e. the base of the range
+        # this push actually landed. The gate walks `PUSH_BEFORE..HEAD` rather
+        # than assuming HEAD is a merge — single-parent commits pushed straight
+        # to main used to skip the gate entirely (OI-58a; `be3b4baf` and
+        # `8c38c855` both shipped account-tier auth code that way). The script
+        # falls back to parsing GITHUB_EVENT_PATH, then to HEAD^1.
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
         run: dart run scripts/check_plan_review_record_exists.dart
 
   # ── Tier 2: Contract Tests — REMOVED 2026-07-26 (merge-governance batch) ──
