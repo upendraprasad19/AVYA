@@ -1453,3 +1453,39 @@ cloud sessions; **this file is the cross-session backlog.**
 - **How to do it**: one function at a time with verification between — the deploy skill's §6.6
   warns that latent dep-rot boot-fails only on the NEXT redeploy, so a blind batch is the wrong
   shape.
+
+## OI-74 — Notification-prefs helper fetches whole snapshot_json history, unbounded
+
+- **Status**: OPEN
+- **Identified**: 2026-07-27 · B-pass on notif-prefs Units C..G
+- **Risk class**: silent degradation to SEND at scale
+- **What's wrong**: `supabase/functions/_shared/notification_prefs.ts` selects the entire
+  `snapshot_json` for EVERY historical row of every queried user — no `.limit`, no `.range`, no
+  JSON-path projection. `morning-alert` deliberately paginates users at `PAGE_SIZE = 200` "to cap
+  memory", and this query re-imports each page's whole snapshot history underneath it.
+- **Failure shape**: Edge Function memory/timeout, or PostgREST max-rows truncation silently
+  dropping the oldest-latest users from the map. Truncation degrades to SEND, so a user's OFF stops
+  being honoured with **no error and no signal** — the same silent-inertness class the batch closed.
+- **Fix shape**: `.select("user_id, snapshot_json->notification_preferences")` and/or a
+  `DISTINCT ON (user_id)` RPC. Schema-adjacent, so it wants its own review rather than a late edit.
+- **Not urgent today**: 17 users, 91 rows. It becomes real with growth, which is exactly when
+  nobody is looking.
+
+## OI-75 — notification_preferences has no SoT registry entry
+
+- **Status**: OPEN
+- **Identified**: 2026-07-27 · B-pass
+- **What's missing**: §4.5 requires a `docs/sot_registry.yaml` entry for a new writer/reader
+  contract. The arc created one (repository → compileDailySnapshot → 6 Edge Function readers) and
+  did not register it. `docs/snapshot_contract.yaml` WAS updated, so the drift gate covers the
+  snapshot seam; the SoT registry entry is the missing half.
+
+## OI-76 — Notification count includes PRO-locked rows a free user cannot disable
+
+- **Status**: OPEN
+- **Identified**: 2026-07-27 · B-pass
+- **What's wrong**: `profile_content.dart` counts all 10 registry keys, including Protein Alerts and
+  Plateau Check. A free user cannot turn those off, and their server functions PRO-gate anyway, so
+  the subtitle permanently reads at least 2/10 "enabled" for notifications that will never fire.
+- **Related**: the paywall callback passes `AppConstants.featureProgressPhotos` for notification
+  rows — wrong copy, and §4.4 r19 keys server-side verification off that id.
