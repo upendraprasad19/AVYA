@@ -19,8 +19,8 @@ blast_radius: platform
 diagnose_docs:
   - docs/diagnoses/2026-07-27-signout-leaves-device-bound-to-signed-out-user-e7b3c5.md
   - docs/diagnoses/2026-07-27-unsanitized-user-text-into-llm-prompts-f4a9c2.md
-total_count: 9
-closed_count: 9
+total_count: 10
+closed_count: 10
 
 findings:
   - id: A1
@@ -90,7 +90,7 @@ findings:
     title: OI-47's site list was both stale AND incomplete — 5 filed, 15 real
     severity: P1
     terminal_state: closed_in_commit
-    commit: pending-unit-b
+    commit: 842e813c
     verification: >-
       Three passes gave three answers: the ticket said 5; grep on geminiChat(
       found 14; widening to userPrompt|systemPrompt|generateContent found 15.
@@ -103,7 +103,7 @@ findings:
     title: daily-snapshot — the highest-consequence site, absent from the OI entirely
     severity: P1
     terminal_state: closed_in_commit
-    commit: pending-unit-b
+    commit: 842e813c
     verification: >-
       Its prompt extracts "facts the user explicitly stated" and writes them to
       user_profile, so typed text can steer what the system durably believes —
@@ -115,7 +115,7 @@ findings:
     title: JSON.stringify sites were assumed safe; measurement showed a residual lever
     severity: P2
     terminal_state: closed_in_commit
-    commit: pending-unit-b
+    commit: 842e813c
     verification: >-
       A Deno probe settled it rather than reasoning about it: JSON.stringify
       escapes LF/CR/C0 but passes U+2028/U+2029/U+0085 through RAW, and those
@@ -130,7 +130,7 @@ findings:
     title: FC7's untrusted-data boundary was half a fix, and ai-media-proxy had neither half
     severity: P1
     terminal_state: closed_in_commit
-    commit: pending-unit-b
+    commit: 842e813c
     verification: >-
       Recurrence of 9c2d4a. FC7 added an instructional boundary around
       ai-proxy's snapshot concatenation — correct, but structural escaping was
@@ -138,6 +138,24 @@ findings:
       </user_snapshot> inside the fence. ai-media-proxy carries the identical
       concatenation into its SYSTEM prompt and had received neither half. Both
       now carry both.
+
+  - id: B6
+    title: The fix itself nearly introduced a silent conversation truncation
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: 94f0bf9e
+    verification: >-
+      Caught by self-review AFTER 842e813c landed. Both conversation sites took
+      sanitizeBlock's default kBlockMaxLen of 8,000 chars; neither had ANY
+      character cap before, so the fix silently introduced one. Measured rather
+      than guessed — ai_coach_interactions by user and IST day, 47 user-days:
+      max 5,668 chars, p95 1,801, avg 541, ZERO above 8,000, max 9 turns/day.
+      So not an active regression, but 1.4x headroom is too thin: the upstream
+      bound is .limit(30) turns and ai-proxy caps one user_message at 5,000
+      chars. The failure mode is what made it worth fixing — truncation is
+      disclosed to the model but invisible to us, so daily-snapshot would extract
+      a profile from half a conversation and write it to user_profile. Both sites
+      now pass maxLen 32000 explicitly (~5.6x observed max, ~18x p95).
 
 # ── Not closed here, and deliberately so ────────────────────────────────────
 #
