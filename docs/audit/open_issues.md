@@ -1250,18 +1250,31 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-59 — Hold-week display Slices 2-6
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-07-25 · `d753e380` (+ fixes `342820b3`, `/dev` Flags card `066dd3f6`) ·
+  shipped in a different session/thread, verified via `git log --grep=hold` + merge-body read 2026-07-27
 - **Identified**: 2026-07-26 · hold mechanic Slice 1 shipped `7ca850d9`
-- **What's missing**: Built to the LOCKED mockup `scratchpad/holdweek_train_mockup.html`:
-  un-clamp → strip → header → roadmap → entry card. Structural caps noted in the hold-mechanic record.
+- **Resolution differs from the original scope**: this entry originally called for un-clamp →
+  strip → header → roadmap → entry card against the LOCKED mockup. The shipped implementation
+  took a different, additive route instead — `holdStatusProvider` as the single flag-branch point
+  (returns `.empty` when `enable_hold_weeks` is OFF) driving `hold_chip_group.dart` /
+  `hold_roadmap_strip.dart` / a date-sourced hero card — while leaving `getCurrentWeekNumber` /
+  `getProgramWeek` / `totalWeeks` clamped and untouched. Ship-dark tier (§4.12.4, 1 review round +
+  bpass, `docs/plan-reviews/hold-display.md`); the follow-up `hold-display-fixes` batch closed 2
+  more live-walkthrough defects. Flag `enable_hold_weeks` is still default OFF — the display is
+  functionally live and correct, but only reachable via the `/dev` Flags card today.
 
 ## OI-60 — Flip `enable_hold_weeks`
 
 - **Status**: OPEN
 - **Identified**: 2026-07-26
-- **Blocked on**: OI-59
-- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts). Flip-on
-  blockers FOB-1…FOB-7 in `docs/ship_dark_pending_review.yaml` must all be closed first.
+- **Blocked on**: 7 unstarted flip-on-blocker items (FOB-1…FOB-7) in
+  `docs/ship_dark_pending_review.yaml` — coach/push/weekly-report tell every holder a false
+  week-4 story, weekly streak is dead during a hold, hold telemetry has zero consumers, selectable
+  past-hold-weeks has 6 named lifecycle traps, and 4 residual scan gaps. None were touched by the
+  OI-59 display batch (that work is additive and inert while the flag is OFF). FOB-3/FOB-4 also
+  require ai-proxy + weekly-recap-ready/weekly-report EF redeploys (own explicit go, §4.3).
+- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — all 7 FOB
+  items closed first.
 
 ## OI-61 — Coach-UX: live-verify test7, v74 hardening, temp-PRO cleanup
 
