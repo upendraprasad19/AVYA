@@ -90,7 +90,22 @@ async function extractCoachingNotes(
   //     sanitiser cannot enforce. No escaping makes a model immune to
   //     persuasion in prose it is asked to read; naming the block as quoted
   //     data is the half that addresses that.
-  const safeConvo = fenceAsData(sanitizeBlock(convoText), "CONVERSATION");
+  // maxLen is set from MEASURED data, not from the module default. Query over
+  // ai_coach_interactions grouped by user + IST day (2026-07-27, 47 user-days):
+  //   max 5,668 chars · p95 1,801 · avg 541 · 0 days above 8,000 · max 9 turns
+  // The default kBlockMaxLen of 8,000 truncates nothing today, but 1.4x headroom
+  // against the observed max is too thin to leave alone: the upstream bound is
+  // `.limit(30)` turns and each user_message may be up to 5,000 chars
+  // (ai-proxy's own cap), so a heavier user reaches five figures long before
+  // anything else complains. Truncation here would silently shrink the
+  // conversation this extraction reads, and its output is written into the
+  // user's profile -- a quiet degradation, which is the failure mode this batch
+  // exists to avoid. 32,000 is ~5.6x the observed max and still refuses a
+  // pathological payload outright.
+  const safeConvo = fenceAsData(
+    sanitizeBlock(convoText, { maxLen: 32000 }),
+    "CONVERSATION",
+  );
 
   const prompt =
     `You are extracting factual profile data from a fitness coaching conversation.

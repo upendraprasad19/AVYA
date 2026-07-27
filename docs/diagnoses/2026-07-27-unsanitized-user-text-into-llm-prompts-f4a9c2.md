@@ -181,6 +181,36 @@ is an intended feature of that endpoint is a product decision, not something to
 resolve silently inside a sanitisation batch. Recorded as a finding for a
 decision rather than changed unilaterally.
 
+## The cap the fix nearly introduced
+
+Self-review after the main commit caught this. `sanitizeBlock` defaults to
+`kBlockMaxLen` = 8,000 characters, and both conversation sites took the default.
+Neither had ANY character cap before, so the fix silently introduced one.
+
+Measured before choosing a replacement rather than guessing —
+`ai_coach_interactions` grouped by user and IST day, 2026-07-27:
+
+| user-days | max chars | p95 | avg | over 8,000 | max turns/day |
+|---|---|---|---|---|---|
+| 47 | 5,668 | 1,801 | 541 | **0** | 9 |
+
+So this was **not** an active regression; nothing truncates today. But 1.4×
+headroom against the observed max is too thin to leave: the upstream bound is
+`.limit(30)` turns and `ai-proxy` caps one `user_message` at 5,000 chars, so a
+heavier user reaches five figures long before anything else complains — and
+`rolling-context` is the larger of the two, summarising everything older than the
+keep window rather than a single day.
+
+The failure mode is what made it worth fixing rather than noting. Truncation is
+disclosed to the model but invisible to us, so `daily-snapshot` would extract a
+profile from half a conversation and write it to `user_profile`, and
+`rolling-context` would store a summary of half the history that later coach
+prompts then read. Silent degradation of a write path is the exact class this
+batch exists to prevent; inheriting it from a default would have been ironic.
+
+Both sites now pass `maxLen: 32000` explicitly — ~5.6× the observed max, ~18×
+p95, still a hard refusal of a pathological payload.
+
 ## The scar this file keeps re-earning
 
 The module and its test are asserted pure-ASCII by a test, not by eye. The first

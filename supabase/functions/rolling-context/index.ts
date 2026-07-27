@@ -80,8 +80,17 @@ async function summarizeMessages(
   const { content } = await geminiChat({
     model: MODEL_FLASH,
     systemPrompt,
+    // maxLen from the same measurement as daily-snapshot (see its comment):
+    // 47 user-days, max 5,668 chars, p95 1,801, none above 8,000. This site is
+    // the LARGER of the two -- it summarises everything older than the keep
+    // window rather than one day -- so the module default's 1.4x headroom is
+    // thinner still here. Truncating would silently shrink the history that
+    // becomes the stored summary, and that summary feeds later coach prompts.
     userPrompt: `Summarize this fitness coaching conversation:\n\n${
-      fenceAsData(sanitizeBlock(conversationText), "CONVERSATION")
+      fenceAsData(
+        sanitizeBlock(conversationText, { maxLen: 32000 }),
+        "CONVERSATION",
+      )
     }`,
     maxTokens: 300,
     timeoutMs: 15_000,
