@@ -53,7 +53,7 @@ touched_layers_checked:
   - { tier: 3_postgres_schema, status: verified, evidence: "no schema change; subscriptions.status + end_date already exist and are read-only here" }
   - { tier: 4_postgres_data, status: verified, evidence: "9 subscription rows, 5 status='active', 0 unexpired; newest active end_date 2026-07-13; users.subscription_status='pro' = 6, all 6 lapsed" }
   - { tier: 5_migrations_applied, status: not_applicable, evidence: "no migration in this fix" }
-  - { tier: 6_edge_function_code_vs_deploy, status: fixed_in_this_batch, evidence: "morning-alert source updated; redeploy required before the fix takes effect in production" }
+  - { tier: 6_edge_function_code_vs_deploy, status: fixed_in_this_batch, evidence: "DEPLOYED 2026-07-27 v27->v28 (verify_jwt=false preserved). Verified in the deployed bytes with comments stripped: fetchProUserIds x8, proUserIds.has x1, `isPro = user.subscription_status` x0, the subscription_status select x0, .eq(status,active) x2 + .gt(end_date) x2. Cron tick 23:45:02Z ran v28 -> cron_call_log success, HTTP 200, 3972ms." }
   - { tier: 7_cron_jobs, status: verified, evidence: "morning_alert_generate (jobid 5) and the two delivery jobs unchanged; they invoke the same slug" }
   - { tier: 8_rls_policies, status: not_applicable, evidence: "service-role read, no RLS path" }
   - { tier: 9_storage, status: not_applicable, evidence: "no storage objects touched" }
@@ -151,4 +151,35 @@ helper is scoped as its own unit rather than widened into this one.
 including a positive control proving the detector flags the exact pre-fix line,
 so the absence assertions cannot pass vacuously.
 
-The fix takes effect in production only on redeploy of `morning-alert`.
+## Deploy (2026-07-27)
+
+`morning-alert` **v27 → v28**, `verify_jwt=false` preserved. Verified three ways
+rather than by version number alone:
+
+1. **Deployed bytes**, comments stripped — `fetchProUserIds` ×8,
+   `proUserIds.has` ×1, `isPro = user.subscription_status` ×**0**, the
+   `subscription_status` select ×**0**, `.eq("status","active")` ×2 and
+   `.gt("end_date")` ×2. The redeploy also removed `jwtVerify` /
+   `SUPABASE_JWT_SECRET` and with them a live `deno.land/x/jose` remote import.
+2. **Boot** — the post-deploy smoke returned the module's own 401
+   (`verify_jwt=false`, so the request reaches the module; the 401 is the cron
+   gate, not the gateway).
+3. **End-to-end** — the 23:45:02Z cron tick, after the 23:32:19Z deploy, logged
+   `cron_call_log` success / HTTP 200 / 3972 ms on version 28.
+
+### Correction to this batch's own record
+
+The batch notes claimed the cron auth fix was "not live pending redeploy". That
+was **wrong**, and it is recorded here because it nearly caused 18 needless
+production deploys. The **deployed** `_shared/cron_auth.ts` checks a legacy
+`CRON_SECRET` opaque-token hatch *before* the unreachable `SUPABASE_JWT_SECRET`
+path — so migrations 107-110 plus the dashboard secret restored cron auth with
+no deploy at all. `cron_call_log` showed 15 functions succeeding on 2026-07-26.
+
+The trap: the obvious probe (`list_edge_functions` version + `updated_at`) would
+have *confirmed* the error — `morning-alert` genuinely sat at v27 since May. Old
+code can be working through a path you forgot about. **Ask what artifact success
+would produce and look for THAT** — here `cron_call_log`, which is only written
+after the auth gate passes. Ref `memory/feedback_mistake_unverified_done_claims.md` §8b.
+
+Only the PRO fix in this doc actually required the deploy.
