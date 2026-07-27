@@ -135,6 +135,46 @@ export function sanitizeBlock(
 }
 
 /**
+ * Serialises [value] for interpolation into a prompt, closing the ONE lever
+ * `JSON.stringify` leaves open.
+ *
+ * Measured, not assumed (Deno probe, 2026-07-27):
+ *
+ *   lever                   survives JSON.stringify?
+ *   LF / CR                 NO.  escaped to the two-char sequences
+ *                                backslash-n and backslash-r
+ *   C0 controls (e.g. ESC)  NO.  escaped to a backslash-u00XX sequence
+ *   U+2028 / U+2029         YES. passed through RAW
+ *   U+0085 NEL              YES. passed through RAW
+ *
+ * So a stringified payload is ALREADY immune to the classic newline injection,
+ * but NOT to the Unicode separators, which render as line breaks to a model and
+ * reach it verbatim. That makes a `JSON.stringify(userRow)` site a REAL but
+ * NARROWER exposure than a raw interpolation, and it wants a DIFFERENT fix:
+ * running [sanitizeBlock] over JSON would destroy the structure the prompt
+ * depends on.
+ *
+ * The separators are re-escaped as backslash-uXXXX rather than replaced with a
+ * space: still valid JSON, still inert to the model, and lossless, so a
+ * legitimate separator inside a user's own note is preserved rather than
+ * silently edited.
+ *
+ * NOTE ON THIS COMMENT. Its first draft wrote the escape examples as literal
+ * characters and embedded an actual ESC byte plus em-dashes. In a file whose
+ * whole subject is invisible characters, that is not irony, it is the predicted
+ * failure -- which is why every example here is spelled out in words and the
+ * pure-ASCII property is asserted by the test suite rather than eyeballed.
+ */
+export function sanitizeJsonForPrompt(value: unknown, space?: number): string {
+  const json = JSON.stringify(value, null, space);
+  if (json === undefined) return "null";
+  return json
+    .replace(new RegExp("\\u2028", "g"), "\\u2028")
+    .replace(new RegExp("\\u2029", "g"), "\\u2029")
+    .replace(new RegExp("\\u0085", "g"), "\\u0085");
+}
+
+/**
  * Wraps a sanitised block in an explicit data fence.
  *
  * Sanitising alone leaves the model reading attacker-influenced prose with no

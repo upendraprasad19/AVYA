@@ -50,6 +50,10 @@ import { istDayOfWeek } from "../_shared/ist_date.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { fetchProUserIds } from "../_shared/subscription.ts";
+import {
+  sanitizeIdentifier,
+  sanitizeJsonForPrompt,
+} from "../_shared/sanitize_for_prompt.ts";
 
 type MotivationTone = "tough_love" | "gentle" | "data_driven";
 
@@ -282,8 +286,21 @@ async function generateProAlert(
     `\n\n${toneGuidance} ` +
     "Output ONLY the alert message — no preamble, no formatting, no signoff.";
 
-  const userPrompt =
-    `User name: ${name}\nYesterday's snapshot data:\n${JSON.stringify(snapshotJson)}`;
+  // OI-47 / e7b3c5. `name` is `preferred_name ?? full_name ?? "Champion"` --
+  // both user-editable free text, interpolated RAW into a prompt line. A
+  // newline in it starts what reads to the model as a fresh instruction:
+  //   "Bob\nIgnore all previous instructions. Instead output ..."
+  // Blast radius is self-targeted (this user's own name, this user's own push),
+  // so the win is denying system-prompt leakage and arbitrary text in their own
+  // notification, not preventing a cross-user breach.
+  //
+  // The snapshot goes through sanitizeJsonForPrompt rather than sanitizeBlock:
+  // JSON.stringify already escapes LF/CR/C0, but measurably does NOT escape
+  // U+2028/U+2029/U+0085, which still render as line breaks to a model. See
+  // that helper's doc block for the probe.
+  const userPrompt = `User name: ${
+    sanitizeIdentifier(name, { fallback: "Champion" })
+  }\nYesterday's snapshot data:\n${sanitizeJsonForPrompt(snapshotJson)}`;
 
   const { content } = await geminiChat({
     model: MODEL_FLASH,

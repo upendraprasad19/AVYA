@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
+import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -107,7 +108,16 @@ serve(async (req: Request) => {
     const prompt =
       `You are a clinical body composition assessment tool. Estimate the body fat percentage from this photo.
 
-User stats: ${gender}, ${age} years old, ${height_cm} cm tall, ${weight_kg} kg.
+User stats: ${
+        // OI-47: these four come straight off the REQUEST BODY, so the UI's
+        // enum/number widgets are not the constraint -- an authenticated caller
+        // POSTs whatever JSON it likes. `gender` is the free-text one; the
+        // three numerics are coerced with Number() so a string payload cannot
+        // smuggle prose through a field the prompt presents as a measurement.
+        sanitizeIdentifier(gender as string | null, { fallback: "unspecified" })
+      }, ${Number(age) || "unknown"} years old, ${
+        Number(height_cm) || "unknown"
+      } cm tall, ${Number(weight_kg) || "unknown"} kg.
 
 Rules:
 - Be objective and clinical. Only assess visible body composition markers (muscle definition, fat distribution).

@@ -2,6 +2,10 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
+import {
+  sanitizeIdentifier,
+  sanitizeJsonForPrompt,
+} from "../_shared/sanitize_for_prompt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,12 +46,39 @@ async function generatePrediction(
     `  "tagline": "<motivational 1-liner about their potential>"\n` +
     `}`;
 
+  // OI-47 / e7b3c5. Both objects come from `.select("*")`, so the WHOLE row
+  // lands in the prompt -- including the free-text columns daily-snapshot's
+  // extraction writes (lifestyle_notes, food_preferences, schedule_constraints,
+  // supplement_use, motivation_notes, preferred_name).
+  //
+  // The stringify sites are a NARROWER exposure than a raw interpolation and
+  // are treated accordingly: JSON.stringify already escapes LF/CR/C0, but
+  // measurably leaves U+2028/U+2029/U+0085 raw, and those render as line breaks
+  // to a model. sanitizeJsonForPrompt closes exactly that gap and nothing else,
+  // preserving the JSON structure the prompt depends on.
+  //
+  // The three BARE interpolations below are the genuinely open ones -- no
+  // stringify protects them. They are short identity-like fields, so
+  // sanitizeIdentifier is the right shape; the fallbacks keep the sentence
+  // grammatical rather than emitting "null" or an empty gap.
   const userPrompt =
-    `User Profile:\n${JSON.stringify(profile, null, 2)}\n\n` +
-    `User Progress:\n${JSON.stringify(progress, null, 2)}\n\n` +
+    `User Profile:\n${sanitizeJsonForPrompt(profile, 2)}\n\n` +
+    `User Progress:\n${sanitizeJsonForPrompt(progress, 2)}\n\n` +
     `Predict 90-day outcomes for this user. Be realistic based on their current stats, ` +
-    `goal (${profile.primary_goal}), training frequency (${profile.days_per_week} days/week), ` +
-    `and experience level (${progress.detected_experience_level ?? "beginner"}).`;
+    `goal (${
+      sanitizeIdentifier(profile.primary_goal as string | null, {
+        fallback: "general_fitness",
+      })
+    }), training frequency (${
+      sanitizeIdentifier(String(profile.days_per_week ?? ""), {
+        fallback: "unspecified",
+      })
+    } days/week), ` +
+    `and experience level (${
+      sanitizeIdentifier(progress.detected_experience_level as string | null, {
+        fallback: "beginner",
+      })
+    }).`;
 
   const { content } = await geminiChat({
     model: MODEL_FLASH,

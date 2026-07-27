@@ -533,7 +533,7 @@ extra_server_written_keys:
       and nothing ever lifts it into a snapshot. Not a "legacy path" and not a
       "future path"; the chain was simply never connected.
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 574 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 591 }
       - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 146 }
       - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 216 }
       - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 107 }
@@ -575,7 +575,7 @@ extra_server_written_keys:
   - key: future_prediction
     written_by: future-prediction Edge Function
     readers:
-      - { fn: future-prediction, file: supabase/functions/future-prediction/index.ts, line: 257 }
+      - { fn: future-prediction, file: supabase/functions/future-prediction/index.ts, line: 288 }
     notes: |
       Self-read (function caches its own output for re-display).
 
@@ -589,7 +589,7 @@ extra_server_written_keys:
   - key: morning_alert
     written_by: morning-alert Edge Function (self)
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 568 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 585 }
     notes: |
       Self-read (function stores its template alert for later display).
       Citation moved 505 -> 568 on 2026-07-26: the PRO-predicate fix added

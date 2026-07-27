@@ -36,6 +36,7 @@ import {
 import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
@@ -171,7 +172,7 @@ Deno.serve(async (req: Request) => {
           model: MODEL_FLASH,
           systemPrompt: captainPrompt("proactive"),
           userPrompt:
-            `User state: ${JSON.stringify(userState)}.\n\n` +
+            `User state: ${sanitizeJsonForPrompt(userState)}.\n\n` +
             `Generate a plateau diagnostic nudge — user's weight has not moved in ` +
             `a while. Ask a single diagnostic question before changing anything.`,
           maxTokens: 120,

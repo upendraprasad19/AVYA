@@ -1,0 +1,160 @@
+# Closure ledger — sdk-identity-prompt-safety (OI-51 + OI-47)
+#
+# §4.2 structural invariant: every entry carries a terminal_state; the schema
+# has no `deferred:` key. Gate 40 recomputes the tally and fails if any item is
+# non-terminal.
+#
+# Two units that share a theme (untrusted values crossing a trust boundary) and
+# nothing else — one Flutter client, one Deno server. Unit A shipped first and
+# separately (ff716e29) so the live privacy fix was not held behind the larger
+# server survey.
+#
+# Both OIs were filed 2026-05-17 and BOTH descriptions turned out to be partly
+# wrong. That is recorded per-entry below rather than smoothed over, because
+# "the ticket was stale" is the reason both sat for 71 days.
+
+batch: sdk-identity-prompt-safety
+date: 2026-07-27
+blast_radius: platform
+diagnose_docs:
+  - docs/diagnoses/2026-07-27-signout-leaves-device-bound-to-signed-out-user-e7b3c5.md
+  - docs/diagnoses/2026-07-27-unsanitized-user-text-into-llm-prompts-f4a9c2.md
+total_count: 9
+closed_count: 9
+
+findings:
+  - id: A1
+    title: signOut never released the OneSignal external_id binding
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: ff716e29
+    verification: >-
+      _ensureLocalUser binds the device with OneSignal.login(user.id); a
+      repo-wide grep for OneSignal.logout() returned nothing before this batch.
+      The exposure is the SIGNED-OUT WINDOW, not cross-user attribution — when B
+      signs in, _ensureLocalUser overwrites the binding, so B is attributed
+      correctly. Between A signing out and anyone signing in, unbounded on a
+      device that changed hands, the handset stays external_id = A and A's
+      pushes keep arriving with A's fitness data. unbindSessionIdentity() now
+      calls logout() under the same !kIsWeb guard as the bind site.
+
+  - id: A2
+    title: Crashlytics userIdentifier stayed set to the signed-out user
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: ff716e29
+    verification: >-
+      setUserIdentifier('') under the same !kDebugMode guard as the bind site.
+      Guard symmetry is load-bearing: an unbind running where the bind never did
+      would be a new failure mode, not a fix.
+
+  - id: A3
+    title: RankService.onStateChanged had NO clear site anywhere in the codebase
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: ff716e29
+    verification: >-
+      The finding this batch nearly missed, and the reason the tests are derived.
+      OI-51 named two static callbacks; enumerating the DECLARATION site
+      (`grep -rn "static void Function()? onStateChanged" lib/` — exactly three
+      hits) found a third. app.dart:76 installs RankService beside the other two
+      and dispose() at :90-91 cleared only the first two, so it survived
+      sign-out AND widget teardown. Cleared in both places now. Negative-control:
+      removing it from unbindSessionIdentity fails ONLY 'DERIVED COMPLETENESS';
+      removing it from dispose fails ONLY 'DERIVED SYMMETRY'.
+
+  - id: A4
+    title: OI-51's remaining two sub-findings were already closed before this batch
+    severity: P3
+    terminal_state: verified_clean
+    evidence: >-
+      Razorpay callbacks are nulled by razorpay_service._onUserChanged() via
+      SingletonLifecycleRegistry (2026-05-20 audit, after the OI was filed), and
+      SubscriptionService.onStateChanged WAS reset — but at app.dart:90 in
+      dispose(), which is widget teardown, not sign-out. Recorded so the batch
+      does not take credit for work it did not do.
+
+  - id: B1
+    title: No prompt sanitiser existed for any Edge Function
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: b1bd184d
+    verification: >-
+      _shared/sanitize_for_prompt.ts ships three shapes matched to three
+      call-site kinds, dependency-free so it type-checks and tests with no
+      network (the esm.sh 522 that reddened CI on 2026-07-27 is why).
+      19 behavioural cases, each feeding a real injection payload — none would
+      pass against a no-op implementation.
+
+  - id: B2
+    title: OI-47's site list was both stale AND incomplete — 5 filed, 15 real
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: pending-unit-b
+    verification: >-
+      Three passes gave three answers: the ticket said 5; grep on geminiChat(
+      found 14; widening to userPrompt|systemPrompt|generateContent found 15.
+      The 15th, proactive-coach-promotion, calls the Gemini REST endpoint via
+      fetch directly and interpolates a user-editable first name into the SYSTEM
+      INSTRUCTION — the sharpest placement in the tree, invisible to a grep keyed
+      on the shared helper. All 15 now import the sanitiser.
+
+  - id: B3
+    title: daily-snapshot — the highest-consequence site, absent from the OI entirely
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: pending-unit-b
+    verification: >-
+      Its prompt extracts "facts the user explicitly stated" and writes them to
+      user_profile, so typed text can steer what the system durably believes —
+      and weekly-report, future-prediction and the coach all read that profile.
+      A persistence loop, not a one-shot. Now sanitizeBlock + fenceAsData plus an
+      explicit treat-as-data instruction.
+
+  - id: B4
+    title: JSON.stringify sites were assumed safe; measurement showed a residual lever
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: pending-unit-b
+    verification: >-
+      A Deno probe settled it rather than reasoning about it: JSON.stringify
+      escapes LF/CR/C0 but passes U+2028/U+2029/U+0085 through RAW, and those
+      render as line breaks to a model. Stringified sites are therefore a real
+      but NARROWER exposure needing a different fix — sanitizeJsonForPrompt
+      escapes exactly those three and preserves the JSON structure, where
+      sanitizeBlock would have destroyed it. A BASELINE test pins the
+      measurement so a future V8 change surfaces instead of silently invalidating
+      the premise.
+
+  - id: B5
+    title: FC7's untrusted-data boundary was half a fix, and ai-media-proxy had neither half
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: pending-unit-b
+    verification: >-
+      Recurrence of 9c2d4a. FC7 added an instructional boundary around
+      ai-proxy's snapshot concatenation — correct, but structural escaping was
+      never added, so a value could still emit a line break or a closing
+      </user_snapshot> inside the fence. ai-media-proxy carries the identical
+      concatenation into its SYSTEM prompt and had received neither half. Both
+      now carry both.
+
+# ── Not closed here, and deliberately so ────────────────────────────────────
+#
+# ai-proxy's prediction branch reads its system prompt from the CLIENT:
+#   const systemPrompt = (context?.system_prompt as string) ?? "<default>"
+# A caller can replace the system prompt wholesale. This is a DIFFERENT bug
+# class from OI-47 — not a data field leaking into instructions, but an
+# instruction field being writable — and whether client-supplied system_prompt
+# is an intended feature of that endpoint is a product decision. Surfaced to the
+# founder with the evidence rather than changed unilaterally inside a
+# sanitisation batch. It is not an item of THIS batch, so it is recorded here as
+# context, not as a finding with a terminal state.
+#
+# ── Live state ──────────────────────────────────────────────────────────────
+#
+# Unit A is LIVE-capable on the next APK: it is Flutter code, no deploy needed.
+# Unit B is INERT. Edge Function code changes take effect only on redeploy, and
+# a redeploy needs its own explicit authorization (CLAUDE.md §4.3). Deployed
+# versions are UNCHANGED by this batch. Any claim that prompt injection is
+# "fixed in production" would be false until that deploy happens.

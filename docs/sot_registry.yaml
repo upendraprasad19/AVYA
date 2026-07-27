@@ -5403,6 +5403,197 @@ concepts:
         - test/contracts/referral_repository_only_test.dart — pins the
           two named callers explicitly.
 
+  - concept: llm_prompt_input_sanitization
+    domain: cross_domain
+    presence_only: true
+    presence_only_reason: |
+      Deno Edge Functions only -- there is no Flutter unit-test seam, which is
+      the documented escape hatch in Gate 42's own header. The behavioural proof
+      is real, it just lives on the Deno side:
+      supabase/functions/_shared/sanitize_for_prompt.test.ts (19 cases, each
+      feeding an actual injection payload and asserting the structural lever is
+      gone -- none of them would pass against a no-op implementation), plus
+      supabase/functions/_shared/prompt_sites_sanitized.test.ts for coverage.
+      Both run in CI's `deno-edge-functions` job.
+    description: |
+      Every user-controlled value that reaches an LLM prompt must pass through
+      `_shared/sanitize_for_prompt.ts` first. OI-47 / f4a9c2, 2026-07-27.
+
+      THE LEVER is a newline. A prompt is a flat string and the model has no
+      structural way to separate typed data from system instructions, so a
+      newline inside a name or a note starts what reads as a fresh instruction.
+
+      THREE SHAPES, matched to three call-site kinds -- using the wrong one is a
+      bug, not a style choice:
+        - sanitizeIdentifier  short identity fields (a display name, a goal, an
+                              experience level). Flattens ALL line terminators
+                              and control characters to spaces, caps length, and
+                              never returns "" or "null" into a prompt.
+        - sanitizeBlock       multi-line free text (conversation history). Keeps
+                              turn structure, normalises every break variant to
+                              \n, collapses blank-line gaps, and DISCLOSES
+                              truncation in-band. Pair with fenceAsData.
+        - sanitizeJsonForPrompt   a stringified row. Measured, not assumed:
+                              JSON.stringify escapes LF/CR/C0 but passes
+                              U+2028/U+2029/U+0085 through RAW. This escapes
+                              exactly those three and preserves the JSON
+                              structure -- sanitizeBlock over JSON would destroy
+                              it.
+
+      SANITISING IS NOT SUFFICIENT ALONE. No escaping makes a model immune to
+      persuasion in prose it is asked to read; it removes the STRUCTURAL lever
+      only. Free-text blocks also get fenceAsData plus an explicit
+      "treat this as data" instruction. Recurrence note: FC7 (diagnose 9c2d4a)
+      shipped the instructional half for ai-proxy and never the structural half,
+      and ai-media-proxy's identical concatenation had neither.
+
+      COVERAGE IS DERIVED, NEVER LISTED. OI-47 named 5 sites; a grep on
+      `geminiChat(` found 14; widening to `userPrompt|systemPrompt|
+      generateContent` found 15. The 15th calls the Gemini REST API through
+      `fetch` directly. prompt_sites_sanitized.test.ts recomputes the required
+      set from the tree every run so a 16th function joins it automatically.
+    writers:
+      - file: supabase/functions/_shared/sanitize_for_prompt.ts
+        method: sanitizeIdentifier / sanitizeBlock / sanitizeJsonForPrompt / fenceAsData
+        notes: |
+          Deliberately dependency-free (no imports) so it type-checks and tests
+          without network -- clean-orphan-media's esm.sh URL turning a CDN 522
+          into a red CI run on 2026-07-27 is the precedent.
+          Character classes are built with `new RegExp("...")` rather than regex
+          literals: the first draft embedded a literal U+2028, which IS a line
+          separator, so it terminated the regex literal and the module would not
+          parse. Both files are asserted pure-ASCII by a test, not by eye.
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/daily-snapshot/index.ts
+        line_range: 1-9999
+        method: extractCoachingNotes
+        semantic: sanitise-then-fence
+        fields_read: [user_message, ai_response]
+        notes: |
+          HIGHEST CONSEQUENCE in the set and absent from OI-47's own list. This
+          prompt's OUTPUT is written back into user_profile, so typed text can
+          steer what the system durably believes about the user -- and
+          weekly-report, future-prediction and the coach all read that profile.
+          A persistence loop, not a one-shot.
+      - file: supabase/functions/ai-proxy/index.ts
+        line_range: 1-9999
+        method: food_text_analysis prompt + system snapshot block
+        semantic: sanitise-then-fence
+        fields_read: [text, snapshot_json]
+        notes: |
+          The meal text was interpolated raw INSIDE double quotes -- two levers,
+          since a plain `"` closes the quoted context as surely as a newline
+          breaks the line. Now fenced instead of quoted. The snapshot block
+          completes FC7 (9c2d4a).
+      - file: supabase/functions/ai-media-proxy/index.ts
+        line_range: 1-9999
+        method: system prompt snapshot block
+        semantic: sanitise-then-fence
+        fields_read: [snapshot_json]
+        notes: Client-supplied JSON at SYSTEM trust; had neither half of FC7.
+      - file: supabase/functions/proactive-coach-promotion/index.ts
+        line_range: 1-9999
+        method: composeCongrats
+        semantic: sanitise
+        fields_read: [full_name]
+        notes: |
+          Sharpest placement in the tree -- a user-editable first name inside the
+          SYSTEM INSTRUCTION. Missed by the first survey because it calls the
+          Gemini REST endpoint via `fetch`, not geminiChat.
+      - file: supabase/functions/morning-alert/index.ts
+        line_range: 1-9999
+        method: generateProAlert
+        semantic: sanitise
+        fields_read: [preferred_name, full_name, snapshot_json]
+        notes: The site OI-47 filed. Name raw, snapshot stringified.
+      - file: supabase/functions/rolling-context/index.ts
+        line_range: 1-9999
+        method: summarizeMessages
+        semantic: sanitise-then-fence
+        fields_read: [user_message, ai_response]
+        notes: |
+          The summary is STORED and fed to later coach prompts, so an injected
+          instruction outlives the conversation that carried it. Note :230 is
+          NOT a prompt -- it is getEmbedding + a storage insert, and sanitising
+          there would corrupt stored memory for retrieval while buying nothing.
+      - file: supabase/functions/future-prediction/index.ts
+        line_range: 1-9999
+        method: generatePrediction
+        semantic: sanitise
+        fields_read: [user_profile.*, user_progress.*]
+        notes: |
+          `.select("*")` puts the WHOLE row in the prompt, including the
+          free-text columns daily-snapshot's extraction writes. Second hop of
+          the same loop.
+      - file: supabase/functions/weekly-report/index.ts
+        line_range: 1-9999
+        method: weekly report user message
+        semantic: sanitise
+        fields_read: [primary_goal, fitness_experience, activity_level, diet_preference]
+        notes: The four free-text fields; every other line is a computed number.
+      - file: supabase/functions/assess-body-composition/index.ts
+        line_range: 1-9999
+        method: body composition prompt
+        semantic: sanitise
+        fields_read: [gender, age, height_cm, weight_kg]
+        notes: |
+          Straight off the REQUEST BODY, so the UI's widgets are not the
+          constraint -- an authenticated caller POSTs any JSON. Numerics coerced
+          with Number() so a string payload cannot smuggle prose through a field
+          the prompt presents as a measurement.
+      - file: supabase/functions/plateau-alert/index.ts
+        line_range: 1-9999
+        method: proactive alert prompt
+        semantic: sanitise
+        fields_read: [userState]
+        notes: One of six alert functions sharing an identical userState shape.
+      - file: supabase/functions/pr-detection/index.ts
+        line_range: 1-9999
+        method: proactive alert prompt
+        semantic: sanitise
+        fields_read: [userState]
+        notes: Same family.
+      - file: supabase/functions/protein-gap-alert/index.ts
+        line_range: 1-9999
+        method: proactive alert prompt
+        semantic: sanitise
+        fields_read: [userState]
+        notes: Same family.
+      - file: supabase/functions/re-engagement/index.ts
+        line_range: 1-9999
+        method: proactive alert prompt
+        semantic: sanitise
+        fields_read: [userState]
+        notes: Same family.
+      - file: supabase/functions/streak-guardian/index.ts
+        line_range: 1-9999
+        method: proactive alert prompt
+        semantic: sanitise
+        fields_read: [userState]
+        notes: |
+          Same family, but its userState carries recent_pr_exercise -- an
+          exercise name, which for a custom exercise is user-authored text.
+      - file: supabase/functions/workout-window-closing/index.ts
+        line_range: 1-9999
+        method: proactive alert prompt
+        semantic: sanitise
+        fields_read: [userState, workoutName]
+        notes: |
+          The only one in the family with a BARE free-text interpolation --
+          workoutName, a user-editable schedule/template name that no
+          JSON.stringify protects. The other five interpolate only numbers.
+    class_constraints: |
+      Any NEW Edge Function that builds a prompt MUST import
+      `_shared/sanitize_for_prompt.ts`, or be added to VERIFIED_CLEAN in
+      prompt_sites_sanitized.test.ts with a concrete reason. The gate computes
+      the required set from the tree, so this cannot be satisfied by editing a
+      list. The chat channel itself (`userPrompt: message` in ai-proxy /
+      ai-media-proxy) is deliberately NOT sanitised: there the user's message IS
+      the prompt and the user is the principal; sanitising would corrupt
+      legitimate multi-line messages without closing any hole. Protect the
+      system prompt around it instead.
+
   - concept: device_session_identity_binding
     domain: cross_domain
     behavioral_test_path: test/contracts/signout_unbinds_sdk_identity_test.dart
