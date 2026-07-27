@@ -30,7 +30,7 @@ findings:
     title: Round-1 independent review — 3 P1, 3 P2, 3 P3, all fixed in-branch
     severity: P1
     terminal_state: closed_in_commit
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     verification: >-
       One independent context-blind round on gate correctness returned nine
       findings; every one was re-verified by me against the code or by execution
@@ -52,7 +52,7 @@ findings:
   - id: RV1b
     title: Round-1B independent review — 1 P1, 6 P2, 4 P3, all fixed in-branch
     severity: P1
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     terminal_state: closed_in_commit
     verification: >-
       A second independent round on a different surface (tests + factual claims).
@@ -85,7 +85,7 @@ findings:
   - id: R4
     title: CI job wiring for the pushed-range base
     severity: P3
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     terminal_state: closed_in_commit
     verification: >-
       .github/workflows/test.yml:191-199 passes PUSH_BEFORE from
@@ -99,7 +99,7 @@ findings:
   - id: BP1
     title: B-pass on the final staged diff — 3 P2, 1 P3, all fixed
     severity: P2
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     terminal_state: closed_in_commit
     verification: >-
       Mandatory §4.3 pre-merge pass, and NOT a formality here: the split landed
@@ -192,7 +192,7 @@ findings:
     title: Tier engines classified a commit using the registry that commit changes
     severity: P1
     terminal_state: closed_in_commit
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     verification: >-
       Fixed BEYOND the filed scope, because the filed fix was half of one. OI-70
       proposed reading `docs/blast_radius.yaml` as of HEAD^1, which closes
@@ -215,7 +215,7 @@ findings:
     title: Blast-radius diff was three-dot, blind to conflict-resolution content
     severity: P1
     terminal_state: closed_in_commit
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     verification: >-
       `HEAD^1...HEAD^2` is merge-base..branch-tip and excludes what the merge
       commit itself wrote. Every diff is now two-dot over the actual range, so
@@ -230,7 +230,7 @@ findings:
     title: A review file satisfied the catastrophic gate without entering history
     severity: P1
     terminal_state: closed_in_commit
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     verification: >-
       The hash came from `git diff --cached` (index) while the file was checked
       with `File(...).existsSync()` (working tree), so an untracked review
@@ -246,7 +246,7 @@ findings:
     title: Thirteen ship-dark flags had no ledger entry, contradicting OI-53
     severity: P1
     terminal_state: closed_in_commit
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     verification: >-
       OI-53 asserted the 13 workout-generator flags were "logged in
       docs/ship_dark_pending_review.yaml"; that file held only enable_hold_weeks
@@ -264,7 +264,7 @@ findings:
     title: OI-73 cited a review-file hash as a commit and a deployed fact as a git fact
     severity: P2
     terminal_state: closed_in_commit
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     verification: >-
       `git log a3ff9571` returns unknown revision — it is
       docs/reviews/a3ff9571fbc9-review.md, not a commit; the cron-auth restore
@@ -279,7 +279,7 @@ findings:
     title: Smoke map missing three cron functions; OI-48 materially stale
     severity: P3
     terminal_state: closed_in_commit
-    commit: "gate-input-family (uncommitted)"
+    commit: 310eac83
     verification: >-
       SMOKE_TOLERATED_CODES had no entry for plateau-alert, protein-gap-alert or
       re-engagement, so their healthy cron-auth 401 was reported as a smoke
