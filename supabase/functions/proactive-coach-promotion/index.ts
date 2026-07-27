@@ -21,6 +21,10 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.42.0";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -104,6 +108,27 @@ serve(async (req: Request): Promise<Response> => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+  // Unit E — the Promotion Day toggle gates the PUSH, not the chat message.
+  //
+  // An earlier draft returned early before step 3, which also suppressed the
+  // ai_coach_interactions insert — so opting out of a NOTIFICATION silently
+  // deleted the coach's congratulation from the user's chat history. This is
+  // the only guarded function that writes a persistent in-app record; its three
+  // siblings write none, which is why the early return read as consistent and
+  // was not (B-pass P2).
+  //
+  // Absent means SEND (N2): a failed lookup must never cost a promotion push.
+  let pushAllowed = true;
+  try {
+    const prefs = await fetchNotificationPrefs(admin, [user_id]);
+    pushAllowed = isNotificationEnabled(prefs, user_id, "rank_promotion");
+  } catch (prefErr) {
+    console.error(
+      "[proactive-coach-promotion] prefs lookup failed, sending anyway:",
+      prefErr,
+    );
+  }
+
   try {
     // 1. Pull user context (profile + progress snapshot).
     const userCtx = await loadUserContext(admin, user_id);
@@ -137,7 +162,14 @@ serve(async (req: Request): Promise<Response> => {
 
     // 4. OneSignal push so the user gets a notification even when
     //    the app is closed.
-    await sendOneSignalPush(user_id, rank_code, congrats);
+    // The chat message above is written regardless; only the push is gated.
+    if (pushAllowed) {
+      await sendOneSignalPush(user_id, rank_code, congrats);
+    } else {
+      console.log(
+        `[proactive-coach-promotion] user=${user_id} opted out of rank_promotion — chat message kept, push suppressed`,
+      );
+    }
 
     // 5. Success telemetry.
     await logTelemetry(admin, user_id,

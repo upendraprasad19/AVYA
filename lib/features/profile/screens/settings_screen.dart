@@ -102,15 +102,15 @@ class SettingsScreen extends ConsumerWidget {
                   [
                     _Row(
                       label: 'Training reminders',
-                      onTap: () => context.go('/notification-settings'),
+                      onTap: () => context.push('/profile/notification-settings'),
                     ),
                     _Row(
                       label: 'Coach insights',
-                      onTap: () => context.go('/notification-settings'),
+                      onTap: () => context.push('/profile/notification-settings'),
                     ),
                     _Row(
                       label: 'Streak warnings',
-                      onTap: () => context.go('/notification-settings'),
+                      onTap: () => context.push('/profile/notification-settings'),
                     ),
                   ],
                 ),

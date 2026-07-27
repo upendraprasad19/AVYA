@@ -486,6 +486,18 @@ class AuthNotifier extends Notifier<AuthState2> {
       // launch. Cross-account guard would still clear them if needed.
     }
 
+    // Unit C (bug c) — drop `notification_preferences` from the SHARED
+    // configBox. Delete-only, never copied: configBox has no owner, so a copy
+    // would hand the previous user's preferences to this one. Losing the value
+    // is safe (absent ⇒ server SENDS, decision N2); inheriting a stranger's
+    // "off" is silent and unfixable by the affected user. Own flag, so this
+    // does not re-run the completed 31-key copy sweep.
+    try {
+      await UserConfigMigrator.purgeDeleteOnlyKeys();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] delete-only purge failed: $e');
+    }
+
     // Unit 4 (d-bf) — heal the fabricated onboarding body-fat 18.0 (clears the
     // cloud column FIRST, then local) so the profile-edit Katch recompute stops
     // consuming a made-up value. Idempotent + kill-switched (disable_bodyfat_heal).

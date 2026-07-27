@@ -17,6 +17,7 @@ import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/features/profile/services/notification_prefs_repository.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -188,9 +189,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   Map<String, dynamic> _loadNotificationPreferences() {
-    final configBox = HiveService.instance.configBox;
-    final stored = configBox.get('notification_preferences');
-    if (stored != null && stored is Map) {
+    // Unit C (bug c): reads the USER-scoped box via the repository, which
+    // normalises the Hive `Map<dynamic, dynamic>` shape and returns {} rather
+    // than throwing. Deliberately NOT MigratedKey — its configBox fallback
+    // would serve the previous user's value (migrated_key.dart:46-48).
+    final stored = NotificationPrefsRepository.read();
+    if (stored.isNotEmpty) {
       return Map<String, dynamic>.from(stored);
     }
     // Default preferences
@@ -327,13 +331,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   // lib/features/profile/utils/profile_image_url.dart.
 
   Future<void> _saveNotificationPreferences() async {
-    await HiveService.instance.configBox.put('notification_preferences', _notifPrefs);
+    // Unit C (bug c): routed through the repository, which writes the
+    // USER-scoped box. This used to `put` straight into the SHARED configBox,
+    // so on a shared device the last saver set preferences for whoever signed
+    // in next. Returns false without a session — silently doing nothing is
+    // correct here, since absent ⇒ the server SENDS (decision N2).
+    await NotificationPrefsRepository.write(_notifPrefs);
   }
 
   bool _getNotifEnabled(String key) {
-    final pref = _notifPrefs[key];
-    if (pref is Map) return pref['enabled'] == true;
-    return true;
+    // Reuses the repository's normalisation + legacy-alias resolution so the
+    // "N/M enabled" count agrees with what the server will actually honour.
+    // Reading `_notifPrefs[key]` raw would miss a value stored under the legacy
+    // singular `workout_reminder` and report it as ON while the server sees OFF.
+    final normalised = NotificationPrefsRepository.normalize(_notifPrefs);
+    final direct = normalised[key];
+    final pref = direct ??
+        (key == 'workout_reminders' ? normalised['workout_reminder'] : null);
+    if (pref == null) return true; // untouched ⇒ enabled (decision N2)
+    return pref['enabled'] != false;
   }
 
   @override

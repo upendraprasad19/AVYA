@@ -46,6 +46,10 @@ import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -209,11 +213,34 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Unit E — ONE batched, latest-desc read for the whole run.
+    //
+    // Batched matters most here: this loop already issues several queries per
+    // candidate, so a per-user .single() would multiply round-trips on the
+    // function with the largest candidate set.
+    //
+    // Latest-desc matters even more. This function targets people who have NOT
+    // opened the app recently, so their newest snapshot can never be today's.
+    // A today-pinned preference read would therefore be guaranteed inert here —
+    // not merely usually inert, as it is elsewhere.
+    const notifPrefs = await fetchNotificationPrefs(
+      supabase,
+      [...allCandidates],
+    );
+
     let sent = 0;
     let dedupSkipped = 0;
+    let prefsOff = 0;
     let errors = 0;
 
     for (const userId of allCandidates) {
+      // User turned check-ins off. Before the dedup gate so an opted-out user
+      // does not burn their one-per-day proactive slot on a discarded push.
+      if (!isNotificationEnabled(notifPrefs, userId, "re_engagement")) {
+        prefsOff++;
+        continue;
+      }
+
       // Dedup gate — one re_engagement push per user per IST day.
       const allow = await shouldSendProactive(supabase, userId, "re_engagement");
       if (!allow) {
@@ -292,7 +319,7 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log(
-      `[re-engagement] request_id=${requestId} from_memory=${candidatesFromMemory.size} from_fallback=${fallbackCandidates.length} sent=${sent} dedup_skipped=${dedupSkipped} errors=${errors}`,
+      `[re-engagement] request_id=${requestId} from_memory=${candidatesFromMemory.size} from_fallback=${fallbackCandidates.length} sent=${sent} prefs_off=${prefsOff} dedup_skipped=${dedupSkipped} errors=${errors}`,
     );
 
     await logCronEnd(logId, "success", { httpStatus: 200, requestId });
@@ -302,6 +329,7 @@ Deno.serve(async (req: Request) => {
         from_memory: candidatesFromMemory.size,
         from_fallback: fallbackCandidates.length,
         sent,
+        prefs_off: prefsOff,
         dedup_skipped: dedupSkipped,
         errors,
       }),

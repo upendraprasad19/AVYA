@@ -59,10 +59,14 @@ extension _ProfileContent on _ProfileScreenState {
     final isPro = subInfo.isPro;
 
     // Enabled notifications count
+    // Driven by the registry, not a hardcoded list. The old literal listed 5
+    // keys — and one of them (`workout_reminder`, singular) had already drifted
+    // from what the server reads, so the count was wrong as well as stale.
     int enabledNotifCount = 0;
-    for (final key in ['morning_checkin', 'workout_reminder', 'streak_alerts', 'weekly_recap', 'subscription_reminders']) {
+    for (final key in NotificationPrefsRepository.allKeys) {
       if (_getNotifEnabled(key)) enabledNotifCount++;
     }
+    final totalNotifCount = NotificationPrefsRepository.allKeys.length;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -457,13 +461,21 @@ extension _ProfileContent on _ProfileScreenState {
                 ProfileRow(
                   icon: Icons.notifications_outlined,
                   title: 'Notifications',
-                  subtitle: '$enabledNotifCount/5 enabled',
+                  subtitle: '$enabledNotifCount/$totalNotifCount enabled',
                   trailing: const ProfileRowChevron(),
                   onTap: () => context.push(
                     '/profile/notification-settings',
                     extra: {
                       'notifPrefs': _notifPrefs,
                       'isPro': subInfo.isPro,
+                      // Locked PRO rows open the paywall (§4.4 r7 — PaywallSheet
+                      // is the only paywall UI). Passed as a callback because
+                      // subscription.gate() is an action dispatcher and cannot
+                      // render a chip (round-3 F9).
+                      'onProLockedTap': () => showPaywallSheet(
+                            context,
+                            feature: AppConstants.featureProgressPhotos,
+                          ),
                       'onSave': (Map<String, dynamic> prefs) {
                         setState(() => _notifPrefs = prefs);
                         _saveNotificationPreferences();

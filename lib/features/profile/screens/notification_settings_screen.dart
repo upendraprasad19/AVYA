@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/features/profile/services/notification_prefs_repository.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -9,12 +11,17 @@ import '../widgets/profile_row.dart';
 class NotificationSettingsScreen extends StatefulWidget {
   final Map<String, dynamic> notifPrefs;
   final bool isPro;
+
+  /// Opens the paywall when a free user taps a locked PRO row. Optional so the
+  /// screen stays usable from a test or a preview harness.
+  final VoidCallback? onProLockedTap;
   final ValueChanged<Map<String, dynamic>> onSave;
 
   const NotificationSettingsScreen({
     super.key,
     required this.notifPrefs,
     required this.isPro,
+    this.onProLockedTap,
     required this.onSave,
   });
 
@@ -31,8 +38,16 @@ class _NotificationSettingsScreenState
   void initState() {
     super.initState();
     // Deep copy so mutations don't affect parent until onSave
+    // Self-sufficient fallback (B-pass P1). The Settings entry point pushes
+    // this route WITHOUT `extra`, so widget.notifPrefs arrives empty, isPro
+    // false and onSave a no-op. Rendering that would show every toggle ON,
+    // silently discard every change, and show a paying PRO user a lock. Read
+    // the real values instead when the caller supplied none.
+    final source = widget.notifPrefs.isNotEmpty
+        ? widget.notifPrefs
+        : NotificationPrefsRepository.read();
     _prefs = {};
-    for (final entry in widget.notifPrefs.entries) {
+    for (final entry in source.entries) {
       if (entry.value is Map) {
         _prefs[entry.key] = Map<String, dynamic>.from(entry.value as Map);
       } else {
@@ -41,20 +56,50 @@ class _NotificationSettingsScreenState
     }
   }
 
+  /// Legacy key aliases — the client historically stored `workout_reminder`
+  /// (singular). Reading only the plural would show the row as ON for a user
+  /// who deliberately turned it OFF, and their next save would overwrite the
+  /// stored choice. Mirrors NotificationPrefsRepository._legacyAliases.
+  static const Map<String, String> _legacyAliases = {
+    'workout_reminders': 'workout_reminder',
+  };
+
+  dynamic _pref(String key) => _prefs[key] ?? _prefs[_legacyAliases[key] ?? ''];
+
+  /// Persists a change.
+  ///
+  /// Prefers the caller's [onSave] (ProfileScreen owns the in-memory copy and
+  /// needs to stay in sync). Falls back to writing through the repository
+  /// directly when the caller supplied the router's no-op default — otherwise
+  /// every change made via the Settings entry point is silently discarded
+  /// (B-pass P1).
+  void _persist() {
+    widget.onSave(_prefs);
+    if (widget.notifPrefs.isEmpty) {
+      // Reached without `extra` — the caller's onSave is the router default,
+      // which throws the value away. Write it ourselves.
+      unawaited(NotificationPrefsRepository.write(_prefs));
+    }
+  }
+
   bool _getEnabled(String key) {
-    final pref = _prefs[key];
+    final pref = _pref(key);
+    // `!= false`, never `== true`. A map that carries only {time: '20:00'} —
+    // which is exactly what _setTime writes for a key the user has never
+    // toggled — must still read as ENABLED. The old `== true` flipped the
+    // toggle off the moment someone changed a time (B-pass P1).
     if (pref is Map) return pref['enabled'] == true;
     return true;
   }
 
   String _getTime(String key) {
-    final pref = _prefs[key];
+    final pref = _pref(key);
     if (pref is Map && pref['time'] is String) return pref['time'] as String;
     return '07:00';
   }
 
   String _getDay(String key) {
-    final pref = _prefs[key];
+    final pref = _pref(key);
     if (pref is Map && pref['day'] is String) return pref['day'] as String;
     return 'sunday';
   }
@@ -65,7 +110,7 @@ class _NotificationSettingsScreenState
       pref['enabled'] = value;
       _prefs[key] = pref;
     });
-    widget.onSave(_prefs);
+    _persist();
   }
 
   void _setTime(String key, String time) {
@@ -74,7 +119,7 @@ class _NotificationSettingsScreenState
       pref['time'] = time;
       _prefs[key] = pref;
     });
-    widget.onSave(_prefs);
+    _persist();
   }
 
   void _setDay(String key, String day) {
@@ -83,7 +128,7 @@ class _NotificationSettingsScreenState
       pref['day'] = day;
       _prefs[key] = pref;
     });
-    widget.onSave(_prefs);
+    _persist();
   }
 
   @override
@@ -130,7 +175,6 @@ class _NotificationSettingsScreenState
                   title: 'Morning Check-in',
                   enabled: _getEnabled('morning_checkin'),
                   onToggle: (v) => _toggle('morning_checkin', v),
-                  isPro: widget.isPro,
                   timeValue: _getTime('morning_checkin'),
                   timeOptions: const [
                     '05:00', '05:30', '06:00', '06:30', '07:00',
@@ -141,15 +185,15 @@ class _NotificationSettingsScreenState
                 _NotificationRow(
                   icon: Icons.fitness_center,
                   title: 'Workout Reminder',
-                  enabled: _getEnabled('workout_reminder'),
-                  onToggle: (v) => _toggle('workout_reminder', v),
-                  timeValue: _getTime('workout_reminder'),
+                  enabled: _getEnabled('workout_reminders'),
+                  onToggle: (v) => _toggle('workout_reminders', v),
+                  timeValue: _getTime('workout_reminders'),
                   timeOptions: const [
                     '06:00', '07:00', '08:00', '09:00', '10:00',
                     '16:00', '17:00', '18:00', '18:30', '19:00',
                     '20:00', '21:00',
                   ],
-                  onTimeChanged: (t) => _setTime('workout_reminder', t),
+                  onTimeChanged: (t) => _setTime('workout_reminders', t),
                 ),
                 _NotificationRow(
                   icon: Icons.local_fire_department_outlined,
@@ -174,6 +218,42 @@ class _NotificationSettingsScreenState
                   title: 'Subscription Reminders',
                   enabled: _getEnabled('subscription_reminders'),
                   onToggle: (v) => _toggle('subscription_reminders', v),
+                ),
+                _NotificationRow(
+                  icon: Icons.egg_outlined,
+                  title: 'Protein Alerts',
+                  enabled: _getEnabled('protein_alerts'),
+                  onToggle: (v) => _toggle('protein_alerts', v),
+                  isProFeature: true,
+                  userIsPro: widget.isPro,
+                  onLockedTap: widget.onProLockedTap,
+                ),
+                _NotificationRow(
+                  icon: Icons.trending_flat_rounded,
+                  title: 'Plateau Check',
+                  enabled: _getEnabled('plateau_alert'),
+                  onToggle: (v) => _toggle('plateau_alert', v),
+                  isProFeature: true,
+                  userIsPro: widget.isPro,
+                  onLockedTap: widget.onProLockedTap,
+                ),
+                _NotificationRow(
+                  icon: Icons.emoji_events_outlined,
+                  title: 'PR Celebrations',
+                  enabled: _getEnabled('pr_celebration'),
+                  onToggle: (v) => _toggle('pr_celebration', v),
+                ),
+                _NotificationRow(
+                  icon: Icons.military_tech_outlined,
+                  title: 'Promotion Day',
+                  enabled: _getEnabled('rank_promotion'),
+                  onToggle: (v) => _toggle('rank_promotion', v),
+                ),
+                _NotificationRow(
+                  icon: Icons.waving_hand_outlined,
+                  title: 'Check-ins When Away',
+                  enabled: _getEnabled('re_engagement'),
+                  onToggle: (v) => _toggle('re_engagement', v),
                   showBorder: false,
                 ),
               ],
@@ -198,7 +278,19 @@ class _NotificationRow extends StatelessWidget {
   final String title;
   final bool enabled;
   final ValueChanged<bool> onToggle;
-  final bool isPro;
+  /// TRUE when THIS ROW is a PRO feature — not when the user is PRO.
+  ///
+  /// The old semantic was inverted: `isPro: widget.isPro` showed the gold
+  /// chip only to users who ALREADY had PRO, i.e. the one audience that did
+  /// not need telling. A PRO badge is a signal to free users.
+  final bool isProFeature;
+
+  /// Whether the signed-in user actually has PRO. Combined with
+  /// [isProFeature] this decides LOCKED vs interactive.
+  final bool userIsPro;
+
+  /// Invoked when a free user taps a locked PRO row (opens the paywall).
+  final VoidCallback? onLockedTap;
   final bool showBorder;
   final String? timeValue;
   final List<String>? timeOptions;
@@ -212,7 +304,9 @@ class _NotificationRow extends StatelessWidget {
     required this.title,
     required this.enabled,
     required this.onToggle,
-    this.isPro = false,
+    this.isProFeature = false,
+    this.userIsPro = false,
+    this.onLockedTap,
     this.showBorder = true,
     this.timeValue,
     this.timeOptions,
@@ -256,7 +350,7 @@ class _NotificationRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (isPro) ...[
+                if (isProFeature) ...[
                   const SizedBox(width: 6),
                   Container(
                     padding:
@@ -287,7 +381,21 @@ class _NotificationRow extends StatelessWidget {
               onChanged: onDayChanged!,
             ),
           const SizedBox(width: 8),
-          ProfileToggle(value: enabled, onChanged: onToggle),
+          // A locked PRO row shows a lock, not a dead toggle. A toggle the
+          // user can flip but that never persists is the exact "settings lie"
+          // this whole batch exists to remove.
+          if (isProFeature && !userIsPro)
+            GestureDetector(
+              onTap: onLockedTap,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Icon(Icons.lock_outline,
+                    size: 18, color: AppColors.proGold),
+              ),
+            )
+          else
+            ProfileToggle(value: enabled, onChanged: onToggle),
         ],
       ),
     );

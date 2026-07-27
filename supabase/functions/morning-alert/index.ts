@@ -50,6 +50,10 @@ import { istDayOfWeek } from "../_shared/ist_date.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { fetchProUserIds } from "../_shared/subscription.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 
 type MotivationTone = "tough_love" | "gentle" | "data_driven";
 
@@ -563,6 +567,16 @@ async function deliverAlerts(
         user_id: string;
         snapshot_json: Record<string, unknown> | null;
       };
+      // Preferences for THIS chunk, latest-desc. Fetched HERE — in deliver
+      // mode — because this is the branch that actually pushes. An earlier
+      // draft plumbed it through generate mode instead, where nothing consults
+      // it, leaving this call site referencing identifiers that do not exist
+      // in scope (B-pass P0).
+      const deliverPrefs = await fetchNotificationPrefs(
+        supabaseClient,
+        (chunk as MorningSnapRow[]).map((r) => r.user_id),
+      );
+
       await Promise.allSettled(
         chunk.map(async (snap: MorningSnapRow) => {
           const alertMsg = snap.snapshot_json?.morning_alert as
@@ -570,11 +584,18 @@ async function deliverAlerts(
             | undefined;
           if (!alertMsg) return;
 
-          // Check notification preferences for morning_checkin.
-          const prefs = snap.snapshot_json?.notification_preferences as
-            | { morning_checkin?: { enabled?: boolean } }
-            | undefined;
-          if (prefs?.morning_checkin?.enabled === false) return;
+          // Notification preference — from the LATEST snapshot, not this
+          // yesterday-pinned one (F7 / Unit E).
+          //
+          // The date pin is right for CONTENT (the alert summarises
+          // yesterday) and was wrong for PREFERENCES: a user with no row for
+          // yesterday — most users, live — skipped this check entirely, so
+          // the toggle was inert while appearing implemented.
+          if (
+            !isNotificationEnabled(deliverPrefs, snap.user_id, "morning_checkin")
+          ) {
+            return;
+          }
 
           // Proactive dedup: skip if morning_brief already sent today.
           const allow = await shouldSendProactive(

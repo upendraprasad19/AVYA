@@ -37,6 +37,10 @@ import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -124,9 +128,16 @@ Deno.serve(async (req: Request) => {
       (subs ?? []).map((s: Record<string, unknown>) => s.user_id as string),
     );
 
+    // Unit E — one batched, latest-desc read for the whole run. NOT
+    // today-pinned: live, only 1 of 91 snapshot rows is dated today, so a
+    // today-pinned lookup would find nothing for 16 of 17 users and fall
+    // through to SEND, leaving the toggle decorative.
+    const notifPrefs = await fetchNotificationPrefs(supabase, candidateIds);
+
     let sent = 0;
     let nonPro = 0;
     let dedupSkipped = 0;
+    let prefsOff = 0;
     let errors = 0;
 
     for (const memory of highRisk as Record<string, unknown>[]) {
@@ -134,6 +145,15 @@ Deno.serve(async (req: Request) => {
 
       if (!proSet.has(userId)) {
         nonPro++;
+        continue;
+      }
+
+      // User turned this off. Checked BEFORE the dedup gate so an opted-out
+      // user never burns their one-per-day proactive slot on a push that is
+      // then discarded — that would suppress a DIFFERENT notification they do
+      // still want.
+      if (!isNotificationEnabled(notifPrefs, userId, "plateau_alert")) {
+        prefsOff++;
         continue;
       }
 
@@ -206,7 +226,7 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log(
-      `[plateau-alert] request_id=${requestId} candidates=${highRisk.length} sent=${sent} non_pro=${nonPro} dedup_skipped=${dedupSkipped} errors=${errors}`,
+      `[plateau-alert] request_id=${requestId} candidates=${highRisk.length} sent=${sent} non_pro=${nonPro} prefs_off=${prefsOff} dedup_skipped=${dedupSkipped} errors=${errors}`,
     );
 
     await logCronEnd(logId, "success", { httpStatus: 200, requestId });
@@ -216,6 +236,7 @@ Deno.serve(async (req: Request) => {
         candidates: highRisk.length,
         sent,
         non_pro: nonPro,
+        prefs_off: prefsOff,
         dedup_skipped: dedupSkipped,
         errors,
       }),
