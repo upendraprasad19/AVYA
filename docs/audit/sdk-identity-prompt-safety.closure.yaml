@@ -20,8 +20,8 @@ diagnose_docs:
   - docs/diagnoses/2026-07-27-signout-leaves-device-bound-to-signed-out-user-e7b3c5.md
   - docs/diagnoses/2026-07-27-unsanitized-user-text-into-llm-prompts-f4a9c2.md
 review_rounds: 3
-total_count: 20
-closed_count: 20
+total_count: 22
+closed_count: 22
 
 findings:
   - id: A1
@@ -127,18 +127,64 @@ findings:
       measurement so a future V8 change surfaces instead of silently invalidating
       the premise.
 
-  - id: B5
-    title: FC7's untrusted-data boundary was half a fix, and ai-media-proxy had neither half
+  - id: B5a
+    title: FC7's untrusted-data boundary was half a fix in ai-proxy
     severity: P1
     terminal_state: closed_in_commit
     commit: 842e813c
     verification: >-
       Recurrence of 9c2d4a. FC7 added an instructional boundary around
-      ai-proxy's snapshot concatenation — correct, but structural escaping was
-      never added, so a value could still emit a line break or a closing
-      </user_snapshot> inside the fence. ai-media-proxy carries the identical
-      concatenation into its SYSTEM prompt and had received neither half. Both
-      now carry both.
+      ai-proxy's snapshot concatenation -- correct, but structural escaping was
+      never added. Closed with sanitizeJsonForPrompt, then superseded by the
+      nonce fence in f402938e.
+
+  - id: B5b
+    title: ai-media-proxy had neither half, and the merged B5 entry hid it
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: 57d9dfb8
+    verification: >-
+      SPLIT OUT BECAUSE THE MERGED ENTRY WAS FALSE. B5 originally covered both
+      functions and asserted "Both now carry both [halves]". The B-pass proved
+      otherwise: ai-media-proxy still wrapped client-controlled snapshot_json in
+      a HARDCODED <user_snapshot> tag, and `<`, `>`, `/` are all \p{P}/\p{S} --
+      allowed through by design -- so a field containing the literal closing tag
+      closes the fence early. sanitizeJsonForPrompt only re-escapes the three
+      Unicode separators; it was never going to close a guessable delimiter.
+      It also had NO snapshot size cap despite CLAUDE.md 4.4 rule 18 requiring
+      one on every AI endpoint. Both closed: nonce fence + a 10,000-char cap
+      throwing a typed 400.
+
+      Kept as its own entry so a partial fix can never again hide behind a
+      claim about a pair. A terminal_state asserts real resolution (4.2's
+      closed==N invariant); asserting it for two functions when only one was
+      fixed is exactly the over-reporting that invariant exists to prevent.
+
+  - id: B15
+    title: The coverage gate could not fail -- three real fixes reverted, two passed
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: 57d9dfb8
+    verification: >-
+      The B-pass reverted three genuine fixes and the gate stayed green for two
+      of them (food_parser's fence and ai-media-proxy's principal marker). Root
+      cause was the APPROACH, not one bug: v3 traced identifiers to their
+      declarations, and every tracing rule needed a text window that either bled
+      into unrelated code (false PASS) or truncated the value (false FAIL). Five
+      tuning rounds did not converge.
+
+      Rebuilt (v4) on a blunter, checkable contract: a prompt value must be
+      VISIBLY safe at its own assignment -- an interpolation-free literal or a
+      recognised marker. No tracing. A DECLARATION is now itself a site, which
+      removes the ES6-shorthand ambiguity outright; value extraction is a
+      balanced-expression scan rather than a window, so multi-line values read
+      correctly without bleeding.
+
+      THE DURABLE PART: the gate now TESTS ITSELF. Six synthetic snippets --
+      every false-pass shape from v1/v2/v3 -- are asserted rejected, and eight
+      legitimate shapes asserted accepted. Every hole this gate ever had would
+      have been caught on its first run by that test. Four negative controls,
+      each reverting a real fix, now fail the gate by name.
 
   - id: B6
     title: The fix itself nearly introduced a silent conversation truncation
