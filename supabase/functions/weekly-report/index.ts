@@ -3,7 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_PRO } from "../_shared/gemini.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
-import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
+import {
+  asAuthoredPrompt, sanitizeIdentifier
+} from "../_shared/sanitize_for_prompt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -488,7 +490,7 @@ ${Object.entries(dailyTotals)
     const { content: aiContent, modelUsed, tokensUsed } = await geminiChat({
       model: MODEL_PRO,
       systemPrompt,
-      userPrompt: userMessage,
+      userPrompt: asAuthoredPrompt(userMessage),
       maxTokens: 1500,
       temperature: 0.7,
       timeoutMs: 40_000,

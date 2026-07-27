@@ -21,7 +21,9 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.42.0";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
-import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
+import {
+  asAuthoredPrompt, sanitizeIdentifier
+} from "../_shared/sanitize_for_prompt.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -209,7 +211,7 @@ async function composeCongrats(
   );
   const goalCopy = goalToCopy(ctx.primary_goal);
 
-  const systemPrompt = `You are AVYA, an AI fitness coach for the
+  const systemPrompt = asAuthoredPrompt(`You are AVYA, an AI fitness coach for the
 Indian Navy-themed fitness app ICANBEFITTER. The user just promoted
 to rank ${rankLabel} (code: ${rankCode}). Write a warm but
 disciplined congratulation in 80-120 words.
@@ -223,7 +225,7 @@ Hard rules:
   the ladder is documented elsewhere).
 - Military lexicon allowed sparingly (e.g. "mission", "soldier", "rank").
 - NO emojis. NO bullet points. Single flowing paragraph.
-- End with a forward-looking line, not a closing salutation.`;
+- End with a forward-looking line, not a closing salutation.`);
 
   // Call Gemini 2.5 Flash via the public REST API. The "messages"
   // shape is mapped to Gemini's "contents" + "systemInstruction".

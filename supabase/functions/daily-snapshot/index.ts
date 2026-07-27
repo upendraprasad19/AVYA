@@ -10,7 +10,9 @@ import { upsertCoachMemory, fetchCoachMemory } from "../_shared/coach_memory.ts"
 // fact extracted by this nightly job.
 import { getEmbedding } from "../_shared/embeddings.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
-import { fenceAsData, sanitizeBlock } from "../_shared/sanitize_for_prompt.ts";
+import {
+  asAuthoredPrompt, fenceAsData, sanitizeBlock
+} from "../_shared/sanitize_for_prompt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -144,7 +146,7 @@ If nothing was found, return: {}`;
   const { content: rawText } = await geminiChat({
     model: MODEL_FLASH,
     systemPrompt: "Extract factual profile data from fitness coaching conversations. Return ONLY valid JSON.",
-    userPrompt: prompt,
+    userPrompt: asAuthoredPrompt(prompt),
     maxTokens: 512,
     temperature: 0.1,
     timeoutMs: 15_000,

@@ -1,54 +1,70 @@
 // supabase/functions/_shared/prompt_sites_sanitized.test.ts
 //
-// OI-47 coverage gate. Every ASSIGNMENT of prompt text must be traceable to a
-// literal, a sanitiser call, or an explicit decision.
+// OI-47 coverage gate: every prompt value must be VISIBLY safe at the point of
+// assignment.
 //
-// WHY THIS WAS REWRITTEN, twice over. The first version asked "does this FILE
-// import the sanitiser?" and kept a hand-written allowlist for the rest. Both
-// halves failed, and review round 2 found both:
+// THIS GATE HAS BEEN WRONG THREE TIMES, EACH TIME IN A WAY THAT PASSED.
+//   v1  asked "does this FILE import the sanitiser?" -- `ai-proxy` read clean
+//       while formatRetrievalBlock piped raw memories into the system prompt,
+//       because the file imported the module for two OTHER sites. It also kept
+//       a hand-written allowlist, and the entry written for `food_parser.ts`
+//       explained lines :104/:149 while never mentioning `userPrompt:
+//       description` at :84 -- a wrong justification silencing a right
+//       detection.
+//   v2  required a COLON, so ES6 shorthand was invisible -- and that is exactly
+//       how ai-proxy hands the assembled system prompt to runToolLoop.
+//   v3  TRACED identifiers to their declarations. Five rounds of tuning, and
+//       negative controls STILL showed false passes: windows bleeding past the
+//       statement, `.exec()` matching a declaration in a different scope, a
+//       semicolon inside a COMMENT truncating a body.
 //
-//   - File-level presence let `ai-proxy/index.ts` read CLEAN while
-//     `formatRetrievalBlock` piped retrieved memories raw into the system
-//     prompt. The file did import the module -- for two other sites.
-//   - The allowlist actively HID a real bug. `food_parser.ts` was correctly
-//     flagged, and the exemption written for it explained the template literals
-//     at :104/:149 while never mentioning `userPrompt: description` at :84. A
-//     wrong justification silenced a right detection.
+// A regex taint-tracker over TypeScript is the wrong tool, and a gate that
+// cannot be trusted to fail is worse than no gate -- it converts "unreviewed"
+// into "reviewed and clean". So v4 drops tracing entirely:
 //
-// So: assignments, not files. No allowlist. A deliberate raw pass has to be
-// stated in CODE, via asPrincipalMessage(), at the call site -- where it shows
-// up in the diff of the file that carries the risk.
+//   A prompt value must CONTAIN a recognised safe marker, or be an inline
+//   literal with no interpolation. Nothing is inferred. Nothing is traced.
+//
+// If a value is authored by us, say so with asAuthoredPrompt(). If it is the
+// user's own message on the chat channel, say so with asPrincipalMessage().
+// Both are identity functions whose only job is to put the decision in the diff
+// of the file that carries the risk.
+//
+// And this file now TESTS ITSELF. Every false pass listed above would have been
+// caught on the first run by the SELF test below.
 
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 
-/**
- * A prompt SITE: either `systemPrompt:` or the ES6 shorthand `systemPrompt,`.
- *
- * Round 3 found the colon-only version blind to ai-proxy:864, which hands the
- * fully assembled system prompt to runToolLoop as shorthand -- the single line
- * that delivers the vulnerable prompt to Gemini. The gate was green because it
- * never looked at it.
- */
-const PROMPT_SITE = /\b(userPrompt|systemPrompt)\s*[:,}]|\b(userPrompt|systemPrompt)\s*$/;
-
-/** Right-hand-side tokens that prove the value was handled. */
-const SANITISED = [
+/** Tokens that make a prompt value visibly safe. */
+const SAFE_MARKERS = [
   "sanitizeIdentifier(",
   "sanitizeBlock(",
   "sanitizeJsonForPrompt(",
   "asPrincipalMessage(",
+  "asAuthoredPrompt(",
+  "captainPrompt(",
+  "CAPTAIN_MANUAL",
+  "SYSTEM_PROMPT",
   ".text", // a FencedBlock
-  ".begin", // a nonce marker interpolated into authored instruction text
+  ".begin", // a nonce marker named in authored instruction text
 ];
 
 /**
- * Module-level AUTHORED prompt sources -- constants and builders whose content
- * is written by us, not by a user. Naming these is not the allowlist mistake:
- * an allowlist exempted FILES from inspection, whereas this names the specific
- * authored VALUES a prompt may legitimately be assembled from. A user-derived
- * value still has to be sanitised even inside the same expression.
+ * A prompt site is an ASSIGNMENT of a prompt value:
+ *   `systemPrompt: <value>`   an object property
+ *   `const systemPrompt = …`  a local declaration
+ *
+ * Including the DECLARATION is what removes the ES6-shorthand ambiguity that
+ * defeated v2. `systemPrompt,` at a call site is just a reference; the value was
+ * decided where it was declared, and that line is now gated. So shorthand needs
+ * no special rule, and a destructured parameter (which has no declaration in
+ * this file) is correctly treated as the caller's obligation.
+ *
+ * A property READ (`opts.systemPrompt`) is excluded -- it is a forward, not a
+ * new value.
  */
-const AUTHORED = ["captainPrompt(", "CAPTAIN_MANUAL", "SYSTEM_PROMPT"];
+const PROMPT_SITE =
+  /(?<![.\w])(userPrompt|systemPrompt)\s*:|(?:const|let|var)\s+(userPrompt|systemPrompt)\s*=/;
 
 /** Every .ts under supabase/functions/, excluding test files. */
 function sourceFiles(root: URL): string[] {
@@ -67,167 +83,154 @@ function sourceFiles(root: URL): string[] {
   return out.sort();
 }
 
-/** True when the value assigned to a prompt key is provably safe. */
-function isSafeExpression(
-  rhs: string,
-  fileSrc: string,
-  siteLine: number,
-): boolean {
-  // ES6 SHORTHAND (`systemPrompt,`) has no right-hand side, so the value is
-  // whatever the local of that name holds.
-  if (/^(userPrompt|systemPrompt)\s*[,}]/.test(rhs.trim())) {
-    const name = rhs.trim().replace(/[^A-Za-z].*$/, "");
-    // NEAREST-PRECEDING declaration, not the first one in the file. Searching
-    // the whole source matched ai-proxy's prediction-branch
-    // `const systemPrompt = sanitizeBlock(...)` at :550 while the site under
-    // test was :882 -- the gate validated an unrelated, safe declaration and
-    // passed. Only a negative control exposes that, because the gate is green
-    // either way.
-    const declRe = new RegExp(
-      "(?:const|let|var)\\s+" + name + "\\s*(?::[^=]+)?=\\s*([\\s\\S]{0,200})",
-      "g",
-    );
-    const beforeSite = fileSrc.split("\n").slice(0, siteLine).join("\n");
-    let decl: RegExpExecArray | null = null;
-    for (let hit = declRe.exec(beforeSite); hit; hit = declRe.exec(beforeSite)) {
-      decl = hit;
-    }
+/**
+ * Is this ONE line's prompt assignment visibly safe?
+ *
+ * Deliberately single-line. Every earlier version widened the window to be
+ * helpful, and every one of them then read a marker from a NEIGHBOURING line
+ * and declared an unsafe assignment clean.
+ */
+export function isVisiblySafe(src: string, siteIndex: number): boolean {
+  const tail = src.slice(siteIndex);
 
-    // NO local declaration => this is a destructured PARAMETER (gemini.ts's
-    // `{ systemPrompt, userPrompt, ... }`), not an assignment of a new value.
-    // The obligation sits with the caller, which is itself a site this gate
-    // inspects.
-    if (!decl) return true;
-
-    // BOUND the declaration to its own statement. Taking a fixed window ran past
-    // the `;` into unrelated code and picked up a sanitiser token from there --
-    // the same bleed that made the push-argument check false-pass. Both were
-    // found by negative-controlling the round-3 P0 back in and watching the gate
-    // stay green, which is the only reason to ever run a negative control.
-    const body = decl[1].split(";")[0];
-    if (SANITISED.some((t) => body.includes(t))) return true;
-    if (AUTHORED.some((t) => body.includes(t))) return true;
-    // An interpolation-free literal.
-    if (/^["'`][^$]*$/.test(body.split("\n")[0].trim())) return true;
-
-    // ASSEMBLED via `parts.join(...)`: check every `parts.push(` argument.
-    // This is the rule that would have caught the round-3 P0 -- the raw
-    // `"..." + retrievalBlock + "..."` push carried neither a literal-only
-    // argument nor a sanitiser token.
-    const join = /^(\w+)\.join\(/.exec(body.trim());
-    if (join) {
-      const parts = join[1];
-      const pushes = fileSrc.split(parts + ".push(").slice(1);
-      return pushes.every((chunk) => {
-        // BOUND the argument to this call's own parentheses. The first version
-        // took a fixed 600-char window, which bled into the FOLLOWING code and
-        // picked up a sanitiser token from an unrelated statement -- a
-        // false PASS, caught by negative-controlling the round-3 P0 back in and
-        // watching the gate stay green.
-        let depth = 1;
-        let end = 0;
-        for (; end < chunk.length && depth > 0; end++) {
-          if (chunk[end] === "(") depth++;
-          else if (chunk[end] === ")") depth--;
-        }
-        const arg = chunk.slice(0, Math.max(0, end - 1));
-        if (SANITISED.some((t) => arg.includes(t))) return true;
-        if (AUTHORED.some((t) => arg.includes(t))) return true;
-        // Otherwise it must be literal-only: no bare identifier concatenated in.
-        return !/\+\s*[A-Za-z_$][\w$]*\s*[,)+]|^\s*[A-Za-z_$][\w$]*\s*[,)]/
-          .test(arg);
-      });
-    }
-    return false;
+  // A TYPE DECLARATION inside an interface assigns no value.
+  if (/^(userPrompt|systemPrompt)\??\s*:\s*(string|number|boolean)\s*[;,)]/.test(tail)) {
+    return true;
   }
-  // A TYPE DECLARATION (`systemPrompt: string;` inside an interface) is not an
-  // assignment at all -- there is no value here to sanitise.
-  if (/:\s*(string|number|boolean)\s*[;,)]/.test(rhs)) return true;
-  // A string or template literal is authored text -- BUT a template literal can
-  // interpolate anything, and the first version of this rule fired on the
-  // opening backtick alone. Round 3: `systemPrompt: \`... ${rawUserInput}\`` was
-  // declared SAFE. So a template with interpolation has to prove ITS pieces are
-  // handled; only an interpolation-free literal passes on sight.
-  if (/:\s*["']/.test(rhs)) return true;
-  if (/:\s*`/.test(rhs)) {
-    if (!rhs.includes("${")) return true;
-    return SANITISED.some((t) => rhs.includes(t));
-  }
-  // A direct sanitiser call, a fence marker, or the explicit principal marker.
-  if (SANITISED.some((t) => rhs.includes(t))) return true;
 
-  // A pure FORWARD of the same key off a params object -- `systemPrompt:
-  // opts.systemPrompt`. This is not a new value, so the obligation belongs to
-  // whoever built it, and that builder is itself a prompt assignment this gate
-  // inspects. Deliberately narrow: only the IDENTICAL key name off an object.
-  // `systemPrompt: opts.somethingElse` still fails, because that would be a
-  // different value wearing a forwarding shape.
-  const fwd = /\b(userPrompt|systemPrompt)\s*:\s*\w+\.(userPrompt|systemPrompt)\s*[,)]/
-    .exec(rhs);
-  if (fwd && fwd[1] === fwd[2]) return true;
+  const sep = (() => {
+    const nl = tail.indexOf("\n");
+    const line = nl === -1 ? tail : tail.slice(0, nl);
+    const c = line.indexOf(":");
+    const e = line.indexOf("=");
+    if (c === -1) return e;
+    if (e === -1) return c;
+    return Math.min(c, e);
+  })();
+  if (sep === -1) return true; // no value begins on this line
 
-  // A bare identifier: TRACE it to its declaration in the same file and check
-  // THAT. This is the step a file-level check could never do, and it is exactly
-  // what let formatRetrievalBlock hide behind two unrelated safe call sites.
-  const m = /:\s*([A-Za-z_$][\w$]*)\s*[,)]/.exec(rhs);
-  if (m) {
-    const name = m[1];
-    const decl = new RegExp(
-      "(?:const|let|var)\\s+" + name + "\\s*(?::[^=]+)?=([\\s\\S]{0,900})",
-    ).exec(fileSrc);
-    if (decl) {
-      const body = decl[1];
-      if (/^\s*[`"']/.test(body)) return true;
-      if (SANITISED.some((t) => body.includes(t))) return true;
+  // Read the COMPLETE expression: forward from the separator until the
+  // delimiters balance and we hit a `,` or `;` at depth 0. Quotes and template
+  // literals are skipped so a comma inside a string cannot end it early.
+  //
+  // This is the fix for the tension that produced every earlier version's bug.
+  // A FIXED WINDOW is wrong in both directions: too wide and it reads a marker
+  // from an unrelated statement (false pass, v3); too narrow -- one line -- and
+  // it cannot see a multi-line value like
+  //     const userPrompt = `User name: ${
+  //       sanitizeIdentifier(name, ...)
+  //     }...`
+  // (false fail). Reading to the expression's real end is neither.
+  let depth = 0;
+  let quote = "";
+  let i = sep + 1;
+  for (; i < tail.length; i++) {
+    const c = tail[i];
+    if (quote) {
+      if (c === "\\") i++;
+      else if (c === quote) quote = "";
+      continue;
     }
-    // A value threaded in as a typed parameter is the caller's obligation, and
-    // the caller is a prompt assignment this same gate inspects.
-    if (new RegExp("\\b" + name + "\\s*:\\s*string").test(fileSrc)) return true;
+    if (c === '"' || c === "'" || c === "`") quote = c;
+    else if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (depth === 0) break;
+      depth--;
+    } else if ((c === "," || c === ";") && depth === 0) break;
   }
-  return false;
+  const value = tail.slice(sep + 1, i).trim();
+
+  // A pure FORWARD of the same key (`systemPrompt: opts.systemPrompt`) is not a
+  // new value; the obligation belongs to whoever built it, and that builder is
+  // itself a site this gate inspects.
+  if (/^\w+\.(userPrompt|systemPrompt)$/.test(value)) return true;
+
+  // An inline literal with no interpolation is authored text.
+  if (/^(["'])(?:(?!\1)[\s\S])*\1$/.test(value) && !value.includes("${")) return true;
+  if (value.startsWith("`") && !value.includes("${")) return true;
+
+  return SAFE_MARKERS.some((t) => value.includes(t));
 }
 
-Deno.test("every prompt ASSIGNMENT is a literal or a traceably sanitised value", () => {
+/** Every prompt-assignment offset in a source file. */
+function promptSites(src: string): number[] {
+  const re = new RegExp(PROMPT_SITE.source, "g");
+  const out: number[] = [];
+  for (let m = re.exec(src); m; m = re.exec(src)) out.push(m.index);
+  return out;
+}
+
+Deno.test("SELF - the checker rejects every shape that previously slipped past", () => {
+  // Each case is a REAL false pass from an earlier version of this gate. If one
+  // starts passing again, that version's bug is back.
+  const check = (snippet: string) => {
+    const idx = snippet.search(PROMPT_SITE);
+    return idx === -1 ? true : isVisiblySafe(snippet, idx);
+  };
+
+  const mustReject: [string, string][] = [
+    ["v1/v3 bare identifier", "    userPrompt: description,\n    maxTokens: 800,"],
+    ["v3 bare identifier", "      userPrompt: message,\n      imageBase64: x,"],
+    [
+      "v3 neighbouring literal launders it",
+      '    userPrompt: rawThing,\n    note: "probe",',
+    ],
+    [
+      "round-3 template with interpolation",
+      "    systemPrompt: `Ignore prior. ${rawUserInput}`,\n",
+    ],
+    [
+      "v3 concatenation starting with a literal",
+      '    systemPrompt: "SYSTEM: " + rawUserInput,\n',
+    ],
+    ["assembled local with no marker", 'let systemPrompt = parts.join("\n");\n'],
+  ];
+  for (const [why, snip] of mustReject) {
+    assert(!check(snip), "should be REJECTED (" + why + "): " + snip.trim());
+  }
+
+  const mustAccept: [string, string][] = [
+    ["plain literal", '    userPrompt: "a plain literal",\n'],
+    ["principal marker", "    userPrompt: asPrincipalMessage(message),\n"],
+    ["fenced block", "    userPrompt: fenced.text,\n"],
+    ["sanitiser call", "    userPrompt: sanitizeBlock(convoText),\n"],
+    ["authored marker", "    systemPrompt: asAuthoredPrompt(prompt),\n"],
+    ["interface member", "  systemPrompt: string;\n"],
+    ["same-key forward", "    systemPrompt: opts.systemPrompt,\n"],
+    [
+      "MULTI-LINE value with the marker on a later line",
+      "  const userPrompt = `User name: ${\n" +
+        "    sanitizeIdentifier(name, { fallback: 'Champion' })\n" +
+        "  }\nSnapshot:`;\n",
+    ],
+  ];
+  for (const [why, snip] of mustAccept) {
+    assert(check(snip), "should be ACCEPTED (" + why + "): " + snip.trim());
+  }
+});
+
+Deno.test("every prompt assignment is visibly safe", () => {
   const root = new URL("../", import.meta.url);
   const unsafe: string[] = [];
+  let sites = 0;
   for (const f of sourceFiles(root)) {
     const src = Deno.readTextFileSync(new URL(f, root));
-    const lines = src.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      // Round 3 P0: the scanner required a COLON, so ES6 shorthand
-      // (`systemPrompt,`) was invisible -- and ai-proxy:864 passes the fully
-      // assembled system prompt to runToolLoop exactly that way. The gate ran
-      // green while never looking at the line that actually delivers the prompt
-      // to Gemini. Shorthand is now a first-class site.
-      if (!PROMPT_SITE.test(lines[i])) continue;
-      const chunk = lines.slice(i, i + 3).join(" ");
-      const rhs = chunk.slice(chunk.search(PROMPT_SITE));
-      if (!isSafeExpression(rhs, src, i)) {
-        unsafe.push(f + ":" + (i + 1) + "  " + rhs.trim().slice(0, 90));
+    for (const idx of promptSites(src)) {
+      sites++;
+      if (!isVisiblySafe(src, idx)) {
+        const line = src.slice(0, idx).split("\n").length;
+        unsafe.push(f + ":" + line + "  " + src.slice(idx, idx + 70).split("\n")[0]);
       }
     }
   }
 
+  assert(sites >= 20, "expected >=20 prompt sites, found " + sites);
   assertEquals(
     unsafe,
     [],
-    "these prompt assignments take a value this gate cannot trace to a " +
-      "sanitiser, a literal, or an explicit asPrincipalMessage() decision",
+    "these prompt assignments are not visibly safe. Wrap the value AT THE CALL " +
+      "SITE: sanitizeBlock / sanitizeIdentifier / sanitizeJsonForPrompt for " +
+      "user text, asPrincipalMessage() for the chat channel, asAuthoredPrompt() " +
+      "for text we wrote",
   );
-});
-
-Deno.test("the enumerator actually finds the prompt sites", () => {
-  // Guards against a vacuously green gate: if the scan silently found nothing,
-  // the assertion above would pass while checking zero call sites. The old
-  // version reported 15/15 clean partly because of what it never opened, so
-  // "did we look at anything?" is worth asserting separately.
-  const root = new URL("../", import.meta.url);
-  let count = 0;
-  for (const f of sourceFiles(root)) {
-    const src = Deno.readTextFileSync(new URL(f, root));
-    for (const ln of src.split("\n")) {
-      if (/\b(userPrompt|systemPrompt)\s*:/.test(ln)) count++;
-    }
-  }
-  assert(count >= 20, "expected >=20 prompt-key occurrences, found " + count);
 });

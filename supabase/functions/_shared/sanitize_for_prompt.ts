@@ -331,3 +331,26 @@ export function fenceAsData(
 export function asPrincipalMessage(userMessage: string): string {
   return userMessage;
 }
+
+/**
+ * Marks a locally-assembled prompt as AUTHORED BY US, not user-derived.
+ *
+ * Companion to [asPrincipalMessage]. Some prompts are built from our own
+ * constants and template text a few lines above the call site
+ * (assess-body-composition's clinical prompt, morning-alert's tone wrapper).
+ * They are safe, but a checker cannot tell that from the identifier alone.
+ *
+ * WHY THIS EXISTS RATHER THAN A CLEVERER CHECKER. The coverage gate first tried
+ * to TRACE identifiers to their declarations. Five rounds of tuning later,
+ * negative controls still showed false PASSes -- windows bleeding past
+ * statements, `.exec()` matching the wrong declaration, semicolons inside
+ * comments truncating a body. A regex taint-tracker over TypeScript is the
+ * wrong tool, and a gate that cannot be trusted to fail is worse than none.
+ *
+ * So the contract became blunt and checkable: a prompt value must be VISIBLY
+ * safe at the assignment. If it is authored, say so here. The cost is one
+ * wrapper call; the benefit is a gate with no tracing left to get wrong.
+ */
+export function asAuthoredPrompt(authored: string): string {
+  return authored;
+}

@@ -1,7 +1,9 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
-import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
+import {
+  asAuthoredPrompt, sanitizeIdentifier
+} from "../_shared/sanitize_for_prompt.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -156,7 +158,7 @@ Return ONLY valid JSON — no markdown, no code fences:
     const { content: rawText } = await geminiChat({
       model: MODEL_FLASH_LITE,
       systemPrompt: "You are a clinical body composition assessment tool. Return ONLY valid JSON.",
-      userPrompt: prompt,
+      userPrompt: asAuthoredPrompt(prompt),
       imageBase64: image_base64,
       imageMimeType: mime_type,
       maxTokens: 256,

@@ -45,6 +45,7 @@ import {
 } from "../_shared/coach_memory.ts";
 import { capCoachHistory, runToolLoop } from "../_shared/tool-loop.ts";
 import {
+  asAuthoredPrompt,
   asPrincipalMessage,
   fenceAsData,
   sanitizeBlock,
@@ -326,7 +327,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
       const { content, modelUsed, tokensUsed } = await geminiChat({
         model: MODEL_FLASH,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
-        userPrompt: prompt,
+        userPrompt: asAuthoredPrompt(prompt),
         maxTokens: 1024,
         temperature: 0.2,
         timeoutMs: 15_000,
@@ -456,7 +457,7 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
       const { content, tokensUsed } = await geminiChat({
         model: MODEL_FLASH_LITE,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
-        userPrompt: scanPrompt,
+        userPrompt: asAuthoredPrompt(scanPrompt),
         imageBase64: body.image,
         imageMimeType: "image/jpeg",
         maxTokens: 1024,
@@ -500,7 +501,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       const { content, tokensUsed } = await geminiChat({
         model: MODEL_FLASH_LITE,
         systemPrompt: "You are a nutrition expert. Return ONLY valid JSON, no markdown.",
-        userPrompt: cartPrompt,
+        userPrompt: asAuthoredPrompt(cartPrompt),
         imageBase64: body.image,
         imageMimeType: "image/jpeg",
         maxTokens: 2048,
@@ -825,7 +826,11 @@ Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weig
           fencedRetrieval.text,
       );
     }
-    let systemPrompt = promptParts.join("\n\n");
+    // asAuthoredPrompt marks the reviewed decision AT the assembly point: every
+    // promptParts.push() above either pushes our own text or a nonce-fenced,
+    // sanitised block. This is the line the gate was blind to for three
+    // versions -- it is where the system prompt actually comes into existence.
+    let systemPrompt = asAuthoredPrompt(promptParts.join("\n\n"));
 
     // Bug C fix (APK Test #3, 2026-04-26): inject the current IST day of
     // week so Gemini stops hallucinating "today, Monday" on a Sunday.
