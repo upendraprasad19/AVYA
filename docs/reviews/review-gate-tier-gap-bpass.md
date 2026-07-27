@@ -91,9 +91,14 @@ assertions cannot pass for the wrong reason.
 
 ## Residual, not closed here
 
-`safe_commit.sh`, `safe_push.sh`, `validate_audit_closure.dart`,
+**CLOSED by `a3d7b1` (2026-07-27)** — founder ratified the promotion, and the
+set turned out to be larger than the five listed here: `commit-msg.sh` and the
+whole rule-22 chain were missed by this review too. The git-hook half of the set
+is now derived from `setup-hooks.sh` rather than hand-typed.
+
+~~`safe_commit.sh`, `safe_push.sh`, `validate_audit_closure.dart`,
 `check_no_deferral_euphemism.dart` and `pre-push.sh` remain `feature` tier while
-enforcing the same system. Extending the promotion carries a recurring review
+enforcing the same system.~~ Extending the promotion carries a recurring review
 cost on every future edit, so it is a founder scope decision, recorded in
 `memory/feedback_gates_unsatisfiable_at_merge.md` rather than taken unilaterally.
 

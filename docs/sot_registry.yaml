@@ -7690,3 +7690,69 @@ concepts:
         fields_read: [via snapshot.current_plan_summary]
         notes: points the coach at current_plan_summary (now the program week); targets the object not .week, so no change needed.
     contract_test_path: test/contracts/program_week_projection_behavioral_test.dart
+
+  - concept: blast_radius_registry_coverage
+    domain: cross_domain
+    behavioral_test_path: test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart
+    description: |
+      docs/blast_radius.yaml is the SINGLE writer of every file's review tier.
+      Four independent engines read it (the classifier, both review gates, and
+      the coverage gate), each re-implementing the same first-match-wins glob
+      resolution — so the registry is a genuine one-writer/many-reader contract.
+
+      The recurring defect is COVERAGE, not correctness: a file that enforces
+      the discipline system falls through the `scripts/** -> feature` catch-all
+      and can then be edited with no review at all. Three instances: the
+      2026-07-19 sweep (missed the keystone-gate family), c9f1d3 (missed
+      check_code_review_pass_exists.dart — the review-acceptance gate itself),
+      and a3d7b1 (missed scripts/commit-msg.sh plus the whole rule-22 chain,
+      while promoting the parallel no-deferrals chain in full).
+
+      Each time the cause was the same: a hand-typed list. a3d7b1 therefore
+      DERIVES the git-hook half of the set from scripts/setup-hooks.sh — every
+      hook source it installs must be >= platform, or be named in an explicit
+      declined-with-reason set. Adding a fifth hook fails the test until its
+      tier is decided.
+
+      Known residual (B-pass P2-4, pre-existing since d947743d): both engines
+      read the registry from the MERGED tree, so a commit that deletes its own
+      protecting rule is classified by the post-change registry. Closing that
+      means classifying a merge using the registry as of HEAD^1 — not done here,
+      recorded in docs/audit/open_issues.md.
+    writers:
+      - file: docs/blast_radius.yaml
+        line_range: 39-160
+        method: paths list (declaration order, first match wins)
+        notes: |
+          THE canonical writer. Exact-path rules must be declared ABOVE the
+          `scripts/**` and `docs/**` catch-alls or they never fire. Exact paths
+          are deliberate over globs: a glob auto-promotes future files with
+          nobody deciding, and this repo already reverted promoting a data file
+          (open_issues.md) as self-defeating.
+    reader_manifest_complete: true
+    readers:
+      - file: scripts/blast_radius_from_diff.dart
+        line_range: 120-160
+        method: main
+        semantic: pass-through
+        fields_read: [paths, default_tier]
+        notes: informational classifier; printed by the hooks and used by pre-push to decide the local full suite.
+      - file: scripts/check_plan_review_record_exists.dart
+        line_range: 72-89
+        method: _parseRules
+        semantic: pass-through
+        fields_read: [paths, default_tier]
+        notes: CI keystone gate — requires a plan-review record >= account, bpass >= platform, hermes at catastrophic.
+      - file: scripts/check_code_review_pass_exists.dart
+        line_range: 28-45
+        method: parseRules
+        semantic: pass-through
+        fields_read: [paths]
+        notes: requires an accepted review file at catastrophic only.
+      - file: scripts/check_blast_radius_coverage.dart
+        line_range: 30-49
+        method: parseRules
+        semantic: pass-through
+        fields_read: [paths]
+        notes: meta-gate — every watched top-level dir must be matched by some glob, so new code cannot silently inherit default_tier.
+    contract_test_path: test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart

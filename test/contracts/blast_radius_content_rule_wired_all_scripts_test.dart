@@ -42,6 +42,49 @@ void main() {
     'scripts/check_code_review_pass_exists.dart',
   ];
 
+  /// Enforcement scripts that are NOT tier engines, but whose compromise is
+  /// just as total. Promoted 2026-07-27 (founder decision) after the c9f1d3
+  /// sweep found the same 2026-07-19 omission had left these behind too.
+  ///
+  /// Each is either the SOLE path for an operation or a hard-fail gate, and
+  /// between them they carry almost no test coverage:
+  ///   - pre-push.sh          self-referential — it decides whether the full
+  ///                          suite runs before a push, so an edit disabling
+  ///                          it skips the suite on the very push that lands
+  ///                          it. CI is no substitute: golden-image tests run
+  ///                          ONLY in that local suite.
+  ///   - safe_commit.sh /     the only sanctioned write paths (git_safety_hook
+  ///     safe_push.sh         exists purely to force them); zero behavioural
+  ///                          coverage of their own verification logic.
+  ///   - validate_audit_      Gate 40 — the structural no-deferrals invariant.
+  ///     closure.dart
+  ///   - check_no_deferral_   one commit ever, zero tests, hard-fail,
+  ///     euphemism.dart       local-only, and it fails OPEN on error.
+  const enforcementPaths = [
+    'scripts/pre-push.sh',
+    'scripts/commit-msg.sh',
+    'scripts/safe_commit.sh',
+    'scripts/safe_push.sh',
+    'scripts/validate_audit_closure.dart',
+    'scripts/check_no_deferral_euphemism.dart',
+    // The rule-22 diagnose-doc chain that commit-msg.sh drives.
+    'scripts/validate_diagnose_doc.dart',
+    'scripts/validate_diagnose_doc_lib.dart',
+    'scripts/check_bugfix_commits_have_diagnose.dart',
+    // Third member of the blast-radius trio named in CLAUDE.md §7.
+    'scripts/check_blast_radius_coverage.dart',
+  ];
+
+  /// Hook sources that setup-hooks.sh installs but which are deliberately NOT
+  /// platform tier. Every exclusion needs a reason recorded here — the point of
+  /// the derived assertion below is that being in the set is the DEFAULT and
+  /// leaving something out must be argued.
+  const declinedHookSources = {
+    // Its own header (:9-10) states the Blast-radius line it writes is
+    // informational; verified no gate parses `^Blast-radius:` back out.
+    'scripts/prepare-commit-msg.sh',
+  };
+
   // c9f1d3 (2026-07-27): the same three scripts must ALSO be >= platform tier
   // in the registry, or a change to one of them clears no review gate at all.
   //
@@ -112,6 +155,84 @@ void main() {
         );
       });
     }
+
+    for (final path in enforcementPaths) {
+      test('$path is >= platform', () {
+        expect(
+          ['platform', 'catastrophic'].contains(tierFor(path)),
+          isTrue,
+          reason: '$path is either the SOLE path for a git operation or a '
+              'hard-fail gate, and carries little or no test coverage. At '
+              'feature tier a change to it clears no review gate — the same '
+              'omission c9f1d3 closed for the review-acceptance gate. '
+              'Got tier: ${tierFor(path)}.',
+        );
+      });
+    }
+
+    // THE assertion that stops a fourth partial sweep.
+    //
+    // The list above is still hand-typed, and a hand-typed list is what failed
+    // in the 2026-07-19 sweep, again in c9f1d3, and again in this batch's own
+    // first draft (which promoted two of the four installed hooks and missed
+    // commit-msg.sh). So the hook family is DERIVED from setup-hooks.sh: add a
+    // fifth hook there and this fails until its tier is decided.
+    test('every hook source setup-hooks.sh installs is >= platform', () {
+      final f = File('scripts/setup-hooks.sh');
+      expect(f.existsSync(), isTrue);
+      final installed = RegExp(r'install_hook\s+"\$REPO_ROOT/(scripts/[^"]+)"')
+          .allMatches(f.readAsStringSync())
+          .map((m) => m.group(1)!)
+          .toList();
+
+      expect(installed.length, greaterThanOrEqualTo(4),
+          reason: 'Parsed ${installed.length} install_hook lines from '
+              'setup-hooks.sh — the regex has probably drifted from the '
+              'script, which would make this assertion vacuous.');
+
+      final unprotected = installed
+          .where((p) => !declinedHookSources.contains(p))
+          .where((p) => !['platform', 'catastrophic'].contains(tierFor(p)))
+          .toList();
+
+      expect(
+        unprotected,
+        isEmpty,
+        reason: 'These git hook sources gate every future git operation but '
+            'resolve below platform tier, so editing them clears no review '
+            'gate: $unprotected. Either promote them in docs/blast_radius.yaml '
+            'or add them to declinedHookSources with a written reason.',
+      );
+    });
+
+    // P2-3 from the B-pass: tierFor() re-implements the glob engine, so it
+    // could in principle drift from the real gates. Verified faithful today
+    // across all registry globs, but "verified today" is not a guard. This
+    // asserts agreement against the ACTUAL classifier binary, which is
+    // drift-proof by construction. One subprocess for the whole set — the
+    // classifier prints the MAX tier across its positional args.
+    test('the real classifier agrees: promoted set is platform, control is not',
+        () {
+      String classify(List<String> paths) {
+        final r = Process.runSync(
+          'dart',
+          ['run', 'scripts/blast_radius_from_diff.dart', ...paths],
+          runInShell: true,
+        );
+        final m = RegExp(r'Blast-radius:\s*(\w+)')
+            .firstMatch((r.stdout as String).trim());
+        expect(m, isNotNull,
+            reason: 'classifier printed no tier for $paths:\n${r.stdout}');
+        return m!.group(1)!;
+      }
+
+      expect(classify(['docs/diagnoses/x.md']), 'feature',
+          reason: 'Control failed — the classifier is not answering correctly, '
+              'so the assertion below would prove nothing.');
+      expect(classify([...scriptPaths, ...enforcementPaths]), 'platform',
+          reason: 'The real gate must see the promoted set as >= platform, not '
+              'just this test\'s reimplementation of the glob engine.');
+    }, timeout: const Timeout(Duration(seconds: 120)));
 
     test('scripts/blast_radius_content_rules_lib.dart is >= platform', () {
       // The shared library all three delegate to; weakening it weakens all
