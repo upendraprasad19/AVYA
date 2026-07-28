@@ -16,9 +16,10 @@ status: active
 `supabase/functions/` holds every Deno Edge Function deployed to the
 **fitness-app project (`dedsavbjuwgarrhphgnl`)**. They serve three roles:
 
-1. **AI proxies** — all client-facing AI calls (`ai-proxy`, `ai-media-proxy`,
-   `food-text-analysis`, `food-scan-analysis`, `cart-auditor`) so API keys
-   never live client-side.
+1. **AI proxies** — all client-facing AI calls, so API keys never live
+   client-side. There are exactly THREE: `ai-proxy`, `ai-media-proxy` and
+   `weekly-report`. The food/scan/cart AI are `type` values on `ai-proxy`, not
+   functions of their own — see the routing table in the AI Architecture section.
 2. **Payment / subscription** — `verify-payment`, `razorpay-webhook`,
    `validate-promo`, `validate-referral`, `delete-account` (DPDP §17).
 3. **Cron-dispatched jobs** — `morning-alert`, `evening-alert`, `pr-detection`,
@@ -76,14 +77,31 @@ serving) — gate `scripts/check_std_encoding_import_rot.dart` blocks it (deploy
 
 ## AI Architecture (canonical)
 
+> ⚠️ **There are only THREE LLM-calling Edge Functions**: `ai-proxy`, `ai-media-proxy`,
+> `weekly-report`. Everything else in `supabase/functions/` reaches no model. In particular
+> `food-text-analysis`, `food-scan-analysis` and `cart-auditor` are **NOT** Edge Functions —
+> they are `type` values POSTed to `ai-proxy`. This table said otherwise until 2026-07-28 and
+> the wrong version is what a reader consulted to decide whether a function touches an LLM.
+
 | Function | Model | Tier | Notes |
 |---|---|---|---|
-| `ai-proxy` | Gemini 2.5 Flash | Free 10/day forever (no trial), PRO unlimited | Single chat entry. Inserts placeholder row BEFORE Gemini call (rate-limit trigger SoT). 60s client dedup + placeholder dedup + 3-strike circuit breaker (APK Test #16.1 / Theme B). |
-| `ai-media-proxy` | Gemini Flash multimodal | PRO only | Photo/video chat. SSRF allowlist: `progress-photos` + `chat-attachments` Storage buckets only + user-scope assertion on path (OI-28). |
-| `food-text-analysis` | Gemini 2.5 Flash | 50/day free, 200/day PRO | `trg_food_text_rate_limit` Postgres trigger (migration 024) enforces cap atomically. Trigger raises `food_text_daily_limit_reached` (SQLSTATE P0001) → 429. |
-| `food-scan-analysis` | Gemini 2.5 Flash Lite | Free + PRO | Photo → editable result. Returns structured items[]. |
-| `cart-auditor` | Gemini 2.5 Flash Lite | PRO only | Grocery cart macro + cost audit. |
-| `weekly-recap-ready` | Gemini 2.5 Pro (deepest reasoning) | PRO only | Weekly Report deep-dive. Cron-dispatched Sunday 7 PM IST. |
+| `ai-proxy` | Gemini 2.5 Flash (`MODEL_FLASH`) + Gemini 2.5 Flash Lite (`MODEL_FLASH_LITE`) for the vision types | Free 10/day forever (no trial), PRO unlimited | Single chat entry, and the ONLY host of the food/scan/cart AI. Inserts placeholder row BEFORE Gemini call (rate-limit trigger SoT). 60s client dedup + placeholder dedup + 3-strike circuit breaker (APK Test #16.1 / Theme B). Per-`type` routing table below. |
+| `ai-media-proxy` | Gemini 2.5 Flash **Lite** (Vision) — `MODEL_FLASH_LITE`, self-labelled at `ai-media-proxy/index.ts:119` | PRO only | Photo/video chat. SSRF allowlist: `progress-photos` + `chat-attachments` Storage buckets only + user-scope assertion on path (OI-28). |
+| `weekly-report` | Gemini 2.5 Pro (`MODEL_PRO`) — deepest reasoning | PRO only | The Weekly Report deep-dive. **This is the Gemini 2.5 Pro function** — not `weekly-recap-ready`, which only sends the "recap ready" push and calls no model at all. |
+
+### `ai-proxy` request types (NOT separate Edge Functions)
+
+Source of truth: `supabase/functions/ai-proxy/index.ts:14-16` (the function's own header).
+Client call sites are all `SupabaseService.callFunction(AppConstants.aiProxyFunction, …)`.
+
+| `type` | Model | Cap | Client call site |
+|---|---|---|---|
+| `food_text_analysis` | `gemini-2.5-flash`, JSON mode | 50/day free · 200/day PRO — enforced atomically by the `trg_food_text_rate_limit` Postgres trigger (migration 024), which raises `food_text_daily_limit_reached` (SQLSTATE P0001) → 429 | `lib/features/nutrition/providers/nutrition_provider.dart:733` |
+| `scan_meal` | `gemini-2.5-flash-lite` (vision), JSON mode | **15/day server cap** | `nutrition_provider.dart:1356` |
+| `cart_auditor` | `gemini-2.5-flash-lite` (vision), JSON mode | **15/day server cap** | `nutrition_provider.dart:1445` |
+
+Note `scan_meal` — the `type` is NOT `food-scan-analysis`; the old table named a slug that
+never existed on either side of the wire.
 
 Every AI proxy enforces input limits server-side: **message ≤ 5K chars**,
 **snapshot ≤ 10K chars** (CLAUDE.md §4.4 rule 18). Every catch block returns

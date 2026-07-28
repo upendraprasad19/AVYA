@@ -19,8 +19,8 @@ Screens / sections:
 
 - `nutrition_screen.dart` — top targets + today's macros + 2-tab Log Food (AI text + Scan meal) + saved meals + water + today's meals card (from saved diet plan).
 - `food_search_sheet.dart` — 5K-food search (Hive `food_database` box) + per-serving math + save to meal slot.
-- `food_logger_section.dart` — AI text analysis ("2 chapatis and dal") via `food-text-analysis` Edge Function → AI breakdown card.
-- `scan_meal_section.dart` — photo capture → `food-scan-analysis` (Gemini Flash Lite) → editable result via `_ScanResultEditor`.
+- `food_logger_section.dart` — AI text analysis ("2 chapatis and dal") via `ai-proxy` with `type: 'food_text_analysis'` (gemini-2.5-flash) → AI breakdown card. NOT a `food-text-analysis` Edge Function — no such function exists.
+- `scan_meal_section.dart` — photo capture → `ai-proxy` with `type: 'scan_meal'` (gemini-2.5-flash-lite vision, 15/day server cap) → editable result via `_ScanResultEditor`.
 - `cart_auditor_section.dart` — paste / photograph grocery cart → AI macro/cost audit.
 - `diet_plan_screen.dart` — generated diet plan + PDF export.
 - `water_section.dart` — `WardGlassGrid` 8-cell tracker.
@@ -65,6 +65,6 @@ for `nlog_*` Hive rows + `nutrition_logs` cloud) + `nutrition_read_service.dart`
 
 - `lib/features/ai_coach/CLAUDE.md` — AI breakdown card + tool dispatcher routing.
 - `lib/core/services/CLAUDE.md` — `NutritionWriteService` + sync fan-out + counters.
-- `supabase/functions/CLAUDE.md` — `food-text-analysis`, `food-scan-analysis`, `cart-auditor` Edge Functions.
+- `supabase/functions/CLAUDE.md` — the `ai-proxy` request types `food_text_analysis`, `scan_meal` and `cart_auditor`. All three are `type` values on `ai-proxy`, **not** Edge Functions of their own; all three call sites are in `nutrition_provider.dart` (:733, :1356, :1445).
 - `docs/architecture/business-rules.md` — calorie/protein formulas.
 - `docs/reference/food-database.md` — Hive food_database box (5K rows).
