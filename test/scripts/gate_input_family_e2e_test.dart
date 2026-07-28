@@ -33,7 +33,24 @@ import 'package:flutter_test/flutter_test.dart';
 
 Map<String, String> _cleanEnv() {
   final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
+  // GIT_*  — a surrounding git hook exports GIT_DIR / GIT_WORK_TREE, which
+  //          override BOTH `workingDirectory:` and `-C <path>`, so the child
+  //          git would operate on the REAL repo (feedback_mistake_git_hook_env_leak).
+  //
+  // GITHUB_* — added 2026-07-28 after this file went RED in CI while green
+  //          locally. The gate's range-base resolution falls back to parsing
+  //          `GITHUB_EVENT_PATH`, and in CI that payload is real: its `before`
+  //          names a commit on the ACTUAL repo, which does not exist in this
+  //          throwaway one. The gate then correctly reported
+  //          "supplied but unresolvable" and hard-failed — the right behaviour
+  //          on a bogus base, triggered by an input the test never meant to
+  //          give it. Each test re-supplies the GITHUB_* keys it actually wants
+  //          via `extra:`, so the spawned gate sees only what the scenario
+  //          declares. Hermetic by construction rather than by luck.
+  env.removeWhere((k, _) {
+    final u = k.toUpperCase();
+    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
+  });
   return env;
 }
 

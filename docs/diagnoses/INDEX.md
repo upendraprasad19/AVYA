@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### gate_test_environment_hermeticity (1 bugs)
+- 2026-07-28 c3f8e1 — >
+
 ### blast_radius_registry_coverage (2 bugs)
 - 2026-07-27 a3d7b1 — >-
 - 2026-07-27 c9f1d3 — >-
@@ -866,6 +869,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-28 | c3f8e1 | > | gate_test_environment_hermeticity | test/contracts/gate_e2e_env_hermetic_test.dart |
 | 2026-07-27 | a3d7b1 | >- | blast_radius_registry_coverage | test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart |
 | 2026-07-27 | b7e4c2 | >- | git_safety_hook_contract | test/contracts/git_safety_hook_integration_test.dart |
 | 2026-07-27 | a7f3d1 | > | plan_review_record_enforcement | test/scripts/gate_input_family_e2e_test.dart |
