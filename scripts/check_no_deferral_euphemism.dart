@@ -110,6 +110,7 @@ void main(List<String> args) {
       currentFile = line.substring('+++ b/'.length).trim();
       continue;
     }
+    if (_isGeneratedMirror(currentFile)) continue;
     // Added content lines start with a single '+'; skip the '+++' header and
     // any line that is just the marker.
     if (!line.startsWith('+') || line.startsWith('+++')) continue;
@@ -147,4 +148,32 @@ void main(List<String> args) {
 String _trim(String s) {
   final t = s.trim();
   return t.length <= 100 ? t : '${t.substring(0, 100)}…';
+}
+
+/// Auto-generated index files that MIRROR prose living in other tracked docs.
+///
+/// Why they are exempt. This gate scans staged ADDED lines. A generated index
+/// is rewritten wholesale whenever its generator runs, so every line it
+/// contains becomes an "addition" — including sentences quoted verbatim from
+/// historical documents that the current commit did not write and must not
+/// rewrite. `docs/diagnoses/INDEX.md` mirrors `docs/diagnoses/*.md`, and bug
+/// `7ad0e0` (2026-05-11) legitimately records that an EARLIER batch deferred
+/// work; that diagnose-doc exists precisely because the deferral was then
+/// closed. Gating the mirror made an unrelated commit fail for a phrase it
+/// merely re-rendered, and the only "fixes" available were to falsify a
+/// historical record or bypass the hook.
+///
+/// The source documents are still scanned when they themselves are staged, so
+/// nothing is lost: this removes a double-report, not the coverage. Kept to an
+/// explicit list rather than a glob so it cannot quietly widen into a general
+/// escape hatch.
+bool _isGeneratedMirror(String path) {
+  const generated = <String>{
+    'docs/diagnoses/INDEX.md',
+    'docs/adr/INDEX.md',
+    'docs/incidents/INDEX.md',
+    'docs/handbook/INDEX.md',
+  };
+  // git's `+++ b/<path>` is always forward-slashed, on every platform.
+  return generated.contains(path.trim());
 }

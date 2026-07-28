@@ -4,6 +4,8 @@ date: 2026-05-16
 batch: APK Test #16.2 / Phase E (audit 2026-05-16) — E.8 + E.9
 status: fixed
 regression_test: test/contracts/gate_coverage_test.dart
+symptom: >-
+  Three orthogonal issues bundled into one diagnose-doc:
 ---
 
 ## Symptom

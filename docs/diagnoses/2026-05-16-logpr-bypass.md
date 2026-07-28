@@ -4,6 +4,11 @@ date: 2026-05-16
 batch: APK Test #16.2 / Phase E (audit 2026-05-16) — E.5.1
 status: fixed
 regression_test: test/contracts/tool_dispatcher_log_pr_uses_writeservice_test.dart
+symptom: >-
+  The AI coach `logPR` tool (one of 24 tools registered in
+  `_shared/tools/registry.ts`) routes user-claimed PR attempts through the
+  legacy `WorkoutRepository.logSetWithPrRescan` method instead of the
+  canonical `WorkoutWriteService.logExercise`. The canonical writer enforces:
 ---
 
 ## Symptom

@@ -4,6 +4,11 @@ date: 2026-05-16
 batch: APK Test #16.2 / Phase E (audit 2026-05-16) — E.11
 status: fixed
 regression_test: test/contracts/rank_widget_migration_test.dart
+symptom: >-
+  CLAUDE.md §9 "Wardroom primitives" Legacy section documented `RankChip` +
+  `RankInsignia` as "slated for removal — do not introduce new usages", but 5
+  active callsites remained for 3 weeks after the canonical `WardRankPill` /
+  `WardRankInsignia` shipped (APK Test #6):
 ---
 
 ## Symptom
