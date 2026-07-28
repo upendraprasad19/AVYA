@@ -159,6 +159,229 @@ void main() {
     return r;
   }
 
+  // ── OI-58a (2026-07-28) ──────────────────────────────────────────────────
+  // Direct-to-main commits are judged again. The exemption compares each
+  // touched file's BLOB before and after with the version token normalised —
+  // it parses nothing, because the commit author writes the diff.
+  //
+  // Attack-shaped controls for the exemption itself live in
+  // test/scripts/version_bump_exemption_test.dart; these five cover the gate's
+  // end-to-end behaviour on real commits.
+  group('OI-58a — direct-to-main landings are judged', () {
+    /// A real bump: `version:` in pubspec, `appVersion` in constants.
+    void writeBump(String repo, String v) {
+      Directory('$repo/lib/core/constants').createSync(recursive: true);
+      File('$repo/pubspec.yaml').writeAsStringSync('name: probe\nversion: $v\n');
+      File('$repo/lib/core/constants/app_constants.dart').writeAsStringSync(
+          'class AppConstants {\n'
+          "  static const String appVersion = '$v';\n"
+          '}\n');
+    }
+
+    test('an account-tier commit pushed STRAIGHT to main FAILS', () {
+      final repo = newRepo('oi58direct');
+      final before = _head(repo);
+      Directory('$repo/lib/features/auth').createSync(recursive: true);
+      File('$repo/lib/features/auth/reset.dart').writeAsStringSync('// x\n');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'fix(auth): straight to main'], repo);
+
+      final r = _gate(repo, before);
+      expect(r.code, 1,
+          reason: 'this is `be3b4baf` and `8c38c855` — account-tier auth '
+              'commits that landed on main unreviewed because the gate exited '
+              'at `rev-parse HEAD^2` before looking');
+      expect(r.out, contains('DIRECTLY on main'));
+    });
+
+    test('a bare version bump PASSES (blobs identical modulo the version)', () {
+      final repo = newRepo('oi58bump');
+      writeBump(repo, '1.0.0+36');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'seed version'], repo);
+      final before = _head(repo);
+      writeBump(repo, '1.0.0+37');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'chore: bump versionCode'], repo);
+
+      final r = _gate(repo, before);
+      expect(r.code, 0,
+          reason: '`2c4cbddd` is platform tier but its entire diff is the four '
+              'version lines; the release flow bumps these on main by design');
+      expect(r.out, contains('version-bump exemption'));
+    });
+
+    test('THE ATTEMPT-2 BYPASS: bump-shaped paths, non-version lines → FAILS',
+        () {
+      // The exact defect that failed round 1 of this branch's review.
+      // `paths.every(allowList)`
+      // is an all-of test over an ALLOW-LIST, so it accepts every subset — a
+      // commit touching ONLY app_constants.dart passed at account tier while
+      // rewriting prices and free-tier caps, with no version line anywhere.
+      // Confirmed by execution before the split; this is the control that must
+      // exist for attempt 3 to mean anything.
+      final repo = newRepo('oi58bypass');
+      Directory('$repo/lib/core/constants').createSync(recursive: true);
+      File('$repo/lib/core/constants/app_constants.dart').writeAsStringSync(
+          'class AppConstants {\n'
+          "  static const String appVersion = '1.0.0+36';\n"
+          '  static const int monthlyPriceInr = 349;\n'
+          '  static const int freeAiMessagesPerDay = 10;\n'
+          '}\n');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'seed constants'], repo);
+      final before = _head(repo);
+
+      // Version line untouched; the money and the free-tier cap rewritten.
+      File('$repo/lib/core/constants/app_constants.dart').writeAsStringSync(
+          'class AppConstants {\n'
+          "  static const String appVersion = '1.0.0+36';\n"
+          '  static const int monthlyPriceInr = 1;\n'
+          '  static const int freeAiMessagesPerDay = 9999;\n'
+          '}\n');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'chore: bump versionCode'], repo);
+
+      final r = _gate(repo, before);
+      expect(r.code, 1,
+          reason: 'the paths are exactly the allow-list, so a path-level test '
+              'exempts this. Only reading the CONTENT can refuse it.');
+      // Assert on the GRANT form specifically. The failure message itself says
+      // "The version-bump exemption did not apply", so a bare substring check
+      // matches the refusal too — it would pass whether the gate granted or
+      // refused, which is no assertion at all.
+      expect(r.out, isNot(contains('NOTE (version-bump exemption)')),
+          reason: 'the exemption must not be GRANTED here');
+      expect(r.out, contains('did not apply'),
+          reason: 'and the failure should say why, so the author is not left '
+              'guessing which half of the rule they missed');
+    });
+
+    test('a version bump with ONE extra file loses the exemption', () {
+      final repo = newRepo('oi58bumpplus');
+      writeBump(repo, '1.0.0+36');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'seed'], repo);
+      final before = _head(repo);
+      writeBump(repo, '1.0.0+38');
+      Directory('$repo/lib/features/auth').createSync(recursive: true);
+      File('$repo/lib/features/auth/sneak.dart').writeAsStringSync('// y\n');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'chore: bump versionCode'], repo);
+
+      expect(_gate(repo, before).code, 1,
+          reason: 'the full path list disqualifies it even though the bump '
+              'lines themselves are valid — an auth edit must not ride along');
+    });
+
+    // ── Round-2 review: three breaks in the INPUT PLUMBING ────────────────
+    // The blob-comparison exemption itself survived every attack. These three
+    // are how a commit reached (or crashed) it with the wrong inputs, and all
+    // three sit in `_diffPaths` / blob reading — code the direct-commit loop
+    // newly exercises.
+
+    test('P1-1: deleting a governed file BY RENAME is still judged', () {
+      // `git diff --name-only` with rename detection ON prints only the
+      // DESTINATION, so renaming a platform-tier file into docs/ made the
+      // governed path invisible and the commit graded `feature`. Verified
+      // against real git: --name-only gives 1 path, --no-renames gives 2.
+      final repo = newRepo('oi58rename');
+      Directory('$repo/lib/features/auth').createSync(recursive: true);
+      File('$repo/lib/features/auth/reset.dart').writeAsStringSync('// x');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'seed governed file'], repo);
+      final before = _head(repo);
+
+      Directory('$repo/docs').createSync(recursive: true);
+      _run('git', ['mv', 'lib/features/auth/reset.dart', 'docs/archived.bak'], repo);
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'docs: archive an old note'], repo);
+
+      final r = _gate(repo, before);
+      expect(r.code, 1,
+          reason: 'the account-tier file is DELETED by this commit; a subject '
+              'saying "docs:" must not make it feature tier');
+      expect(r.out, contains('account'));
+    });
+
+    test('P1-2: a governed file with a NON-ASCII name is still judged', () {
+      // git C-quotes such paths by default ("lib/…/rÃ©sumÃ©.dart"),
+      // and the glob matcher anchors ^…$, so the quoted form matched no rule and
+      // fell to default_tier: feature.
+      final repo = newRepo('oi58nonascii');
+      final before = _head(repo);
+      Directory('$repo/lib/features/auth').createSync(recursive: true);
+      File('$repo/lib/features/auth/résumé.dart').writeAsStringSync('// x');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'feat: add resume screen'], repo);
+
+      expect(_gate(repo, before).code, 1,
+          reason: 'core.quotePath=false must be set, or an accented filename '
+              'silently downgrades its own tier');
+    });
+
+    test('P1-3: a BINARY file does not crash the gate', () {
+      // `Process.runSync`'s default stdoutEncoding is a STRICT Utf8Decoder on
+      // Linux — it THROWS on the first invalid byte. The direct-commit loop
+      // reads blobs, and the repo tracks 79 binary files, so a push touching a
+      // PNG would have crashed CI with an uncaught FormatException. Windows
+      // hides it: its ACP decoder is total.
+      //
+      // NOT fixable with allowMalformed: 0x80 and 0x81 both decode to U+FFFD,
+      // which would turn the crash into a byte-equality COLLISION.
+      //
+      // The payload MUST sit at pubspec.yaml, not an arbitrary path: _gitBlob is
+      // only called for isMigrationSqlPath or versionBumpPaths, so a PNG under
+      // lib/features/auth/ never reaches it and the test would pass with the
+      // guard deleted. B-pass mutation-tested exactly that and it was vacuous.
+      final repo = newRepo('oi58binary');
+      final before = _head(repo);
+      Directory('$repo/lib/features/auth').createSync(recursive: true);
+      File('$repo/pubspec.yaml').writeAsBytesSync(
+          <int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x80, 0x81, 0xFF, 0xFE]);
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'feat: add asset'], repo);
+
+      final r = _gate(repo, before);
+      expect(r.out, isNot(contains('FormatException')),
+          reason: 'a binary blob must never crash the gate');
+      expect(r.out, isNot(contains('Unhandled exception')));
+      expect(r.code, 1,
+          reason: 'and it must still be JUDGED — account tier, no record');
+    });
+
+    test('the release push (bump commit + docs commit) PASSES', () {
+      // DESIGN-LOCK, not a revert-control. Verified: this is the one test in
+      // the group that also passes against main's pre-fix gate (which does not
+      // judge direct commits at all, so everything passes there). What it pins
+      // is ATTEMPT 1's defect — a per-PUSH union that tested all direct commits
+      // together, so this standard two-commit release failed on the very bump
+      // the exemption exists for. Keeping it stops a future "simplification"
+      // back to per-push.
+      //
+      // Discrimination measured, not assumed: against main's gate the group
+      // scores 4 failures and this pass; against an attempt-2 reconstruction
+      // (path-level exemption) exactly one test fails — the bypass control.
+      final repo = newRepo('oi58release');
+      writeBump(repo, '1.0.0+36');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'seed'], repo);
+      final before = _head(repo);
+
+      writeBump(repo, '1.0.0+37');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'chore: bump versionCode'], repo);
+
+      File('$repo/docs/shipped.md').writeAsStringSync('APK +37 shipped\n');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'docs(audit): close OI-52'], repo);
+
+      expect(_gate(repo, before).code, 0,
+          reason: 'per-commit, not per-push: a feature-tier docs commit in the '
+              'same push must not poison the bump\'s exemption');
+    });
+  });
+
   test('OI-71 — content written BY the merge commit is inspected', () {
     // The branch itself touches only a feature-tier file. The platform-tier
     // file appears in the merge commit, exactly as it would when resolving a

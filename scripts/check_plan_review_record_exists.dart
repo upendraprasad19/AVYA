@@ -37,12 +37,20 @@
 // Inputs that were derived from author-controllable or post-merge state. The
 // reasoning and the measurements are in docs/plan-reviews/gate-input-family.md.
 //
-// SCOPE NOTE: OI-58a (single-parent commits pushed straight to main skip the
-// gate) and OI-58b (branch identity from the merge subject) were in this batch
-// and were SPLIT OUT on 2026-07-27 per CLAUDE.md §4.12.1 — three independent
-// review rounds each found a NEW material defect in that half, the last being a
-// version-bump exemption that accepted any SUBSET of its path allow-list. Both
-// remain OPEN. The range walk they motivated STAYS, because OI-70/OI-71 need it.
+//   OI-58a  (2026-07-28) Single-parent commits pushed straight to main used to
+//           skip the gate entirely — it exited at `rev-parse HEAD^2` before
+//           reading anything. Now every direct commit in the pushed range is
+//           judged on its own tier, with a version-bump exemption decided by
+//           comparing the touched files' BLOBS before and after with the version
+//           token normalised (`isVersionBumpCommit`). Three earlier attempts are
+//           documented at the call site; all three failed independent review,
+//           the last because it parsed diff text that the commit author writes.
+//
+//   OI-58b  (still OPEN) Branch identity still comes from the merge SUBJECT,
+//           which is author-written free text. Its realistic form —
+//           one-record-one-landing — and the residual first-time spoof are NOT
+//           addressed here; the spoof's only real control is requiring PRs so
+//           GitHub writes the subject, a repository-settings decision.
 //
 //   OI-70   The tier registry was read from the MERGED tree, so a commit
 //           relaxing its own rules was judged by the relaxed rules. Now the tier
@@ -171,6 +179,50 @@ String? _gitOrNull(List<String> args) {
 /// Convenience for the sites where an empty answer is genuinely benign.
 String _git(List<String> args) => _gitOrNull(args) ?? '';
 
+/// Reads a blob VERBATIM — no trimming, no lossy decoding.
+///
+/// Round-2 review P1-3 + P2-2, two bugs in one line of plumbing:
+///
+///   `_gitOrNull` uses `Process.runSync`'s default `stdoutEncoding`, which on
+///   Linux is a STRICT `Utf8Decoder` — it THROWS on the first invalid byte. The
+///   direct-commit loop added a second site that reads `git show <rev>:<path>`
+///   for changed paths, and this repo tracks 79 binary files, so a push touching
+///   any PNG would have crashed CI with an uncaught FormatException. Windows
+///   never saw it: its ACP decoder is total.
+///
+///   `_gitOrNull` also `.trim()`s, which silently breaks the byte-identity
+///   contract `isVersionBumpCommit` documents — leading/trailing whitespace
+///   changes were accepted as "byte-identical".
+///
+/// DO NOT "fix" the first half with `allowMalformed: true`: verified that both
+/// 0x80 and 0x81 decode to U+FFFD under that flag, which would convert a loud
+/// crash into a silent byte-equality COLLISION. Bytes are read raw and decoded
+/// strictly; a blob that is not valid UTF-8 returns null, and every caller
+/// treats null as "cannot judge this" rather than "nothing to see".
+/// The git tree MODE of [path] at [rev] (`100644`, `120000`, …), or null.
+///
+/// B-pass P0-2: `git show <rev>:<path>` returns a symlink's TARGET TEXT as if it
+/// were file content, so a `pubspec.yaml` converted to a symlink pointing at a
+/// string that reads like a bumped pubspec was granted the exemption. Content
+/// cannot see that; the mode can.
+String? _gitMode(String rev, String path) {
+  final out = _gitOrNull(['ls-tree', rev, '--', path]);
+  if (out == null || out.isEmpty) return null;
+  final m = RegExp(r'^(\d{6})\s').firstMatch(out.trimLeft());
+  return m?.group(1);
+}
+
+String? _gitBlob(String rev, String path) {
+  final r = Process.runSync('git', ['show', '$rev:$path'], stdoutEncoding: null);
+  if (r.exitCode != 0) return null;
+  try {
+    return const Utf8Decoder(allowMalformed: false)
+        .convert(r.stdout as List<int>);
+  } on FormatException {
+    return null; // binary or non-UTF-8 — not something we can compare textually
+  }
+}
+
 bool _gitOk(List<String> args) => Process.runSync('git', args).exitCode == 0;
 
 bool _isCommit(String rev) =>
@@ -217,9 +269,13 @@ String _maxTierAcross(
     // `try { ... } catch (_) { return false; }`, so the throw was swallowed into
     // "no SECURITY DEFINER here": a silent fail-OPEN dressed up as a defence.
     // Read the blob FIRST, then decide explicitly.
+    // `isMigrationSqlPath` FIRST: contentForcesCatastrophic ignores every other
+    // path anyway, and reading blobs we will not inspect is exactly what made
+    // the binary-file crash reachable (round-2 P1-3).
     if (_tierRank('catastrophic') > _tierRank(t) &&
+        isMigrationSqlPath(p) &&
         _gitOk(['cat-file', '-e', '$atRev:$p'])) {
-      final blob = _gitOrNull(['show', '$atRev:$p']);
+      final blob = _gitBlob(atRev, p);
       if (blob == null) {
         stdout.writeln('[plan-review-record] NOTE: $p exists at $atRev but '
             'could not be read; treating as catastrophic rather than clean.');
@@ -236,9 +292,23 @@ String _maxTierAcross(
   return maxTier;
 }
 
-/// Changed paths between two revs, or NULL when git could not answer (P1-2).
+/// Changed paths between two revs, or NULL when git could not answer.
+///
+/// Two flags are load-bearing, both from round-2 review:
+///
+///   `--no-renames` (P1-1): with rename detection on, `--name-only` prints ONLY
+///   the destination, so deleting a governed file by renaming it out of the way
+///   made it invisible to the tier computation. Verified: a commit renaming a
+///   `platform` path into `docs/` graded `feature` and was skipped entirely.
+///
+///   `-c core.quotePath=false` (P1-2): by default git C-quotes non-ASCII paths
+///   (`"lib/core/rÃ©sumÃ©.dart"`). The glob matcher anchors
+///   `^...$`, so the quoted form matches no rule and fell to `default_tier`.
+///   Verified: editing a `platform`-tier file with an accented name graded
+///   `feature`.
 List<String>? _diffPaths(String from, String to) => _gitOrNull(
-        ['diff', '--name-only', '$from..$to'])
+        ['-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only',
+         '$from..$to'])
     ?.split('\n')
     .map((s) => s.trim())
     .where((s) => s.isNotEmpty)
@@ -407,35 +477,111 @@ void main(List<String> args) {
     (parents.length >= 2 ? merges : directCommits).add(sha);
   }
 
-  // DIRECT-TO-MAIN COMMITS ARE NOT JUDGED HERE — deliberately, and OI-58a stays
-  // OPEN because of it.
+  // OI-58a — direct-to-main commits, judged ONE AT A TIME.
   //
-  // Judging them is a real and demonstrated need: `be3b4baf` and `8c38c855` are
-  // account-tier auth commits that landed straight on main, unreviewed, because
-  // the pre-2026-07-27 gate exited at `rev-parse HEAD^2` before looking. But
-  // three independent review rounds each found a NEW material defect in the
-  // enforcement built for it, every one in the same place — first a per-PUSH
-  // union that broke the standard release flow, then, in the fix for that, a
-  // version-bump exemption that accepted any SUBSET of its allow-list. That last
-  // one let a direct commit rewriting `monthlyPriceInr` and
-  // `freeAiMessagesPerDay` in app_constants.dart pass at account tier with a
-  // reassuring "version-bump exemption" note (confirmed by execution).
+  // The gate used to exit at `rev-parse HEAD^2` before reading any diff, so
+  // anything committed straight to main was never judged at all. Observed twice
+  // on real auth code: `be3b4baf` (account, 11 files, in-app password reset) and
+  // `8c38c855` (account, 8 files, password-recovery routing), both landed with
+  // no branch, no merge and no plan-review record.
   //
-  // CLAUDE.md §4.12.1: when successive rounds keep surfacing new material
-  // issues, the unit is too large — split it and ship the smallest converged
-  // piece. Founder approved the split 2026-07-27. The range walk below stays
-  // (OI-70/OI-71 need it and were stable across two rounds); the direct-commit
-  // judgement and the one-record-one-landing rule come out and get their own
-  // unit, where the exemption can be CONTENT-verified — every changed LINE must
-  // be a version line — instead of path-verified, matching the Dependabot
-  // exemption's standard in this same file.
+  // THIS IS THE FOURTH ATTEMPT. The three before it each passed all of their own
+  // tests and were killed by independent review. The progression is worth
+  // keeping next to the code, because each fix produced the next bug:
+  //   1. Per-PUSH union of every direct commit's paths — so one `feature`-tier
+  //      docs commit alongside the version bump killed the exemption. That is
+  //      the standard release flow (`2c4cbddd` bump + `6a364656` docs, the two
+  //      halves of shipping APK +37), so it would have reddened main on the next
+  //      release.
+  //   2. Per-commit, but testing PATHS: `paths.every(allowList.contains)`. An
+  //      all-of test over an ALLOW-LIST accepts every proper subset, so a commit
+  //      touching only `app_constants.dart` and rewriting `monthlyPriceInr` and
+  //      `freeAiMessagesPerDay` — no version line anywhere — passed at `account`
+  //      tier under a "version-bump exemption" banner. Confirmed by execution.
+  //   3. Per-commit, testing every changed LINE of `git diff --unified=0`.
+  //      Broken three ways in one review pass: a content line beginning `++ `
+  //      was parsed as a `+++ ` header and skipped (and could reassign which
+  //      file's regex applied); a file git renders with no `+`/`-` lines at all
+  //      was never inspected while a global flag was satisfied by the other
+  //      file; and the constants regex was unanchored and applied with
+  //      `hasMatch`, i.e. a CONTAINMENT test, so
+  //      `appVersion = '1.0.0+38'; static const bool kBypassProGate = true;`
+  //      counted as "a version line".
   //
-  // Net effect vs today: strictly better for merges, unchanged for direct
-  // commits. No behaviour regresses.
-  if (directCommits.isNotEmpty) {
-    stdout.writeln('$tag NOTE: ${directCommits.length} direct-to-main commit(s) '
-        'in this range are NOT judged (OI-58a, still open — see the closure '
-        'ledger). Merges below are.');
+  // The through-line: (2) was an all-of over an allow-LIST, and (3) was an
+  // all-of over the lines the parser chose to look at — and the commit author
+  // writes the diff, so the author chooses what the parser sees. Both are
+  // "accept anything containing X" wearing the costume of "require everything
+  // to be X".
+  //
+  // So attempt 4 parses NOTHING. `isVersionBumpCommit` compares each touched
+  // file's BLOB before and after with the version token normalised to a
+  // placeholder, and demands byte equality. Paths remain a cheap precondition,
+  // never the decision.
+  for (final sha in directCommits) {
+    final short = sha.length >= 8 ? sha.substring(0, 8) : sha;
+    final paths = _diffPaths('$sha^', sha);
+    if (paths == null) {
+      fail('$short: could not diff $sha^..$sha (git failed). A landing whose '
+          'contents cannot be read must not be assumed benign.');
+      continue;
+    }
+    final tier = _maxTierAcross(paths, registries, sha);
+    // Round-1 review P2-5: `_tierRank` is `indexOf`, so an unknown tier returns
+    // -1 and `-1 < 1` skipped the commit SILENTLY — a registry typo
+    // (`tier: platfrom`) or any future tier name would wave every direct commit
+    // through with no output at all. Fail loud instead of ranking it.
+    if (_tierRank(tier) < 0) {
+      fail('$short: unknown blast-radius tier "$tier" — not one of '
+          '${_tierOrder.join('/')}. Refusing to rank it; check '
+          '$_registryPath for a typo.');
+      continue;
+    }
+    if (_tierRank(tier) < _tierRank('account')) {
+      stdout.writeln('$tag NOTE: $short blast-radius=$tier '
+          '(< account; no record required).');
+      continue;
+    }
+
+    // Fetch each touched file's BEFORE and AFTER blob. Deliberately not a diff:
+    // round-1 review broke the diff-parsing version three ways in one pass, all
+    // from the same root — the diff text is written by the thing being checked.
+    // See `isVersionBumpCommit`.
+    final bumpFiles = <VersionBumpFile>[];
+    var blobReadFailed = false;
+    for (final p in paths) {
+      if (!versionBumpPaths.contains(p)) continue;
+      // `git show <rev>:<path>` fails when the path is absent at that rev; a
+      // create or delete is not a bump, so null is the correct value to carry
+      // and `isVersionBumpCommit` rejects on it.
+      final before = _gitBlob('$sha^', p);
+      final after = _gitBlob(sha, p);
+      if (before == null || after == null) blobReadFailed = true;
+      bumpFiles.add((
+        path: p,
+        before: before,
+        after: after,
+        beforeMode: _gitMode('$sha^', p),
+        afterMode: _gitMode(sha, p),
+      ));
+    }
+    if (!blobReadFailed && isVersionBumpCommit(paths, bumpFiles)) {
+      stdout.writeln('$tag NOTE (version-bump exemption): $short is '
+          'blast-radius=$tier but every touched file is byte-identical to its '
+          'parent once the version token is normalised (${paths.join(', ')}). '
+          'Pinned to each other by check_app_version_matches_pubspec.dart.');
+      continue;
+    }
+
+    fail('$short landed DIRECTLY on main with no merge and no reviewed branch, '
+        'at blast-radius=$tier (paths: ${paths.join(', ')}). §4.12 requires '
+        '>=account work to land via a branch carrying a converged '
+        '$_recordsDir/<branch>.md. The version-bump exemption did not apply: it '
+        'requires each touched file to be BYTE-IDENTICAL to its parent once '
+        'the version token is normalised, not merely that the paths look '
+        'right. Before '
+        '2026-07-27 this gate exited before looking — `be3b4baf` and `8c38c855` '
+        'both shipped account-tier auth code that way.');
   }
 
   // Every merge in the range needs a valid record for its own tier.
@@ -534,9 +680,10 @@ void main(List<String> args) {
   }
 
   if (failures.isEmpty) {
-    stdout.writeln('$tag PASS: every merge in $base..HEAD carries a valid record '
-        '(${merges.length} merge(s); ${directCommits.length} direct commit(s) '
-        'not judged — OI-58a).');
+    stdout.writeln('$tag PASS: every landing in $base..HEAD is accounted for — '
+        '${merges.length} merge(s) with a valid record, '
+        '${directCommits.length} direct commit(s) either below account tier or '
+        'exempt as a bare version bump (each noted above).');
     exit(0);
   }
   for (final f in failures) {

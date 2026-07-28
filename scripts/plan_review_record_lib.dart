@@ -63,7 +63,7 @@ final _remoteSyncRe = RegExp(r"^Merge branch '([^']+)'(?=\s) of \S+");
 /// Local merge: `Merge branch 'X'`, with ANY trailing text.
 ///
 /// Deliberately NOT anchored at the end. This repo's dominant merge convention
-/// is `Merge branch 'X' — <description>` (49 of the 174 merges on main), and an
+/// is `Merge branch 'X' — <description>` (62 of the 187 merges on main), and an
 /// end-anchored form that tolerated only ` into Y` rejected every one of them —
 /// including the commit that shipped the batch immediately before this one
 /// (`904e6961`, "Merge branch 'ci-speed' — never cancel a main run…"). That
@@ -212,15 +212,142 @@ bool dependabotDiffIsManifestOnly(Iterable<String> changedPaths) {
   return paths.every(dependabotAllowedPaths.contains);
 }
 
-/// NOTE: `versionBumpAllowedPaths`, `isMechanicalVersionBump` and
-/// `requiresFreshRecord` were written for OI-58a/OI-58b and REMOVED again on
-/// 2026-07-27 when that half of the batch was split out (CLAUDE.md §4.12.1 —
-/// three review rounds each found a new material defect in them, the last being
-/// an exemption that accepted any SUBSET of its path allow-list, so a direct
-/// commit rewriting prices and free-tier caps in app_constants.dart passed at
-/// account tier). They return with the split unit, where the exemption must be
-/// CONTENT-verified — every changed LINE a version line — to the same standard
-/// as the Dependabot exemption below.
+/// The ONLY two files a bare version bump may touch.
+///
+/// A necessary condition, never a sufficient one. Attempt 2 of OI-58a treated it
+/// as sufficient — `paths.every(allowList.contains)` is an all-of test over an
+/// ALLOW-LIST, which accepts every proper subset — and a commit touching only
+/// `app_constants.dart` rewrote prices and free-tier caps under a
+/// "version-bump exemption" banner.
+const versionBumpPaths = <String>{
+  'pubspec.yaml',
+  'lib/core/constants/app_constants.dart',
+};
+
+/// The top-level `version:` key in `pubspec.yaml`.
+///
+/// Anchored at column 0 ON PURPOSE — no `\s*` prefix. A nested `version:` under
+/// a `hosted:` or dependency block is indented, so this cannot be used to
+/// smuggle a dependency-pin change through the exemption (round-1 review P2-6).
+final versionLinePubspec =
+    RegExp(r'^version:[ 	]*[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+[ 	]*$', multiLine: true);
+
+/// The `appVersion` constant declaration in `app_constants.dart`.
+final versionLineConstants =
+    RegExp(r"static\s+const\s+String\s+appVersion\s*=\s*'[^']*'\s*;");
+
+/// Replaces the version token in [content] with a fixed placeholder.
+///
+/// Returns null when the file has no version token at all — a file that never
+/// declared a version cannot be "bumped", and treating it as unchanged would be
+/// the fail-open this whole helper exists to prevent.
+/// EXACTLY ONE occurrence is required, not "at least one".
+///
+/// B-pass P0-1: the first draft checked `hasMatch` (>= 1) and then called
+/// `replaceAll`. With TWO version-shaped tokens in a file, both collapse to the
+/// same placeholder — so the SECOND one's value can change freely between before
+/// and after and the normalised blobs still compare equal. Confirmed by
+/// execution on both exempt-eligible files:
+///   - `pubspec.yaml` with a duplicate top-level `version:` key: line 1 does a
+///     believable bump while line 2 changes silently;
+///   - `app_constants.dart` with a SECOND class declaring its own
+///     `static const String appVersion` — valid, compiling Dart, and unlike YAML
+///     there is no duplicate-key circuit-breaker anywhere downstream.
+/// Zero matches is equally disqualifying: a file with no version token cannot be
+/// "bumped", and normalising nothing would compare two raw blobs as if they had
+/// been normalised.
+String? normalizeVersionToken(String path, String content) {
+  final re = path == 'pubspec.yaml'
+      ? versionLinePubspec
+      : path == 'lib/core/constants/app_constants.dart'
+          ? versionLineConstants
+          : null;
+  if (re == null) return null;
+  if (re.allMatches(content).length != 1) return null;
+  return content.replaceAll(
+      re, path == 'pubspec.yaml' ? 'version: <VERSION>' : '<APP_VERSION_DECL>');
+}
+
+/// One file's before/after content and git tree MODE, as fetched from git.
+///
+/// The modes are load-bearing (B-pass P0-2). `git show <rev>:<path>` happily
+/// returns the LINK TARGET text for a symlink entry (mode 120000) as if it were
+/// file content, so converting `pubspec.yaml` into a symlink whose target string
+/// happens to read like a bumped pubspec was granted the exemption. Content
+/// alone cannot see that; the mode can. (A submodule/gitlink, mode 160000, fails
+/// closed on its own because `git show` errors on it — but relying on that
+/// accident for symlinks too would be luck, not design.)
+typedef VersionBumpFile = ({
+  String path,
+  String? before,
+  String? after,
+  String? beforeMode,
+  String? afterMode,
+});
+
+/// Regular-file modes. Anything else — symlink (120000), gitlink (160000),
+/// directory (040000) — is not a file whose CONTENT this comparison can judge.
+const regularFileModes = <String>{'100644', '100755'};
+
+/// True when [files] describe NOTHING BUT a version bump.
+///
+/// ── WHY THIS READS BLOBS AND NOT THE DIFF ────────────────────────────────
+/// Attempt 3 parsed `git diff --unified=0` and required every `+`/`-` line to
+/// match a version regex. Independent review broke it three ways in one pass,
+/// and every break came from the same root: **the diff text is written by the
+/// thing being checked.**
+///   - a content line beginning `++ ` was parsed as a `+++ ` header, skipped
+///     entirely, and could even reassign which file's regex applied;
+///   - a file rendered with no `+`/`-` lines at all (one NUL byte makes it
+///     binary; a `.gitattributes` `-diff` entry does it deliberately, and
+///     `.gitattributes` is itself `feature` tier) was never inspected, while the
+///     other file's version line satisfied a single global flag;
+///   - the constants regex was unanchored and applied with `hasMatch`, so
+///     `appVersion = '1.0.0+38'; static const bool kBypassProGate = true;`
+///     counted as "a version line".
+///
+/// So this does not parse anything. It compares the FILE CONTENTS before and
+/// after, with the version token replaced by a placeholder, and demands they be
+/// byte-identical. Anything else in the file — anywhere, in any encoding, however
+/// git chooses to render it — survives normalization and breaks equality.
+///
+/// [changedPaths] is the commit's FULL path list, so touching a third file
+/// disqualifies regardless of what [files] contains.
+bool isVersionBumpCommit(
+    Iterable<String> changedPaths, List<VersionBumpFile> files) {
+  final paths =
+      changedPaths.map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+  if (paths.isEmpty) return false;
+  if (!paths.every(versionBumpPaths.contains)) return false;
+
+  // Every changed path must be accounted for by a fetched before/after pair.
+  // A path git reported as changed but that we could not read is not benign.
+  final covered = files.map((f) => f.path).toSet();
+  if (!paths.every(covered.contains)) return false;
+
+  var sawVersionChange = false;
+  for (final f in files) {
+    if (!versionBumpPaths.contains(f.path)) return false;
+    // Creating or deleting either file is not a bump.
+    if (f.before == null || f.after == null) return false;
+    // Neither is turning one into a symlink (or anything else non-regular).
+    if (!regularFileModes.contains(f.beforeMode) ||
+        !regularFileModes.contains(f.afterMode)) {
+      return false;
+    }
+
+    final beforeN = normalizeVersionToken(f.path, f.before!);
+    final afterN = normalizeVersionToken(f.path, f.after!);
+    // No version token on either side ⇒ not a version file ⇒ not a bump.
+    if (beforeN == null || afterN == null) return false;
+    // THE test: everything except the version token must be identical.
+    if (beforeN != afterN) return false;
+    if (f.before != f.after) sawVersionChange = true;
+  }
+
+  // "Nothing changed" is not a version bump.
+  return sawVersionChange;
+}
 
 /// True when every commit author on the merged side is Dependabot.
 ///
