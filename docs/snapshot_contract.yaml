@@ -121,7 +121,7 @@ keys:
     type: scalar
     writer_line: 76
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 68 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 91 }
     notes: |
       Verified: morning-alert reads `snap.today_steps` as int. The
       reader is in `generateDataDrivenAlert` for the "yesterday: N steps"
@@ -596,7 +596,7 @@ extra_server_written_keys:
   - key: future_prediction
     written_by: future-prediction Edge Function
     readers:
-      - { fn: future-prediction, file: supabase/functions/future-prediction/index.ts, line: 257 }
+      - { fn: future-prediction, file: supabase/functions/future-prediction/index.ts, line: 288 }
     notes: |
       Self-read (function caches its own output for re-display).
 
@@ -610,7 +610,7 @@ extra_server_written_keys:
   - key: morning_alert
     written_by: morning-alert Edge Function (self)
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 568 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 620 }
     notes: |
       Self-read (function stores its template alert for later display).
       Citation moved 505 -> 568 on 2026-07-26: the PRO-predicate fix added

@@ -30,6 +30,10 @@ extension _PerformSignOut on _ProfileScreenState {
       } catch (e) {
         debugPrint('[ProfileScreen._performSignOut] fallback signOut: $e');
       }
+      // OI-51 round 2: this fallback runs precisely BECAUSE the notifier path
+      // failed -- possibly before it reached the unbind. Releasing here is the
+      // difference between "sign-out mostly worked" and a device left bound.
+      await releaseDeviceSessionIdentity();
     }
 
     if (mounted) {

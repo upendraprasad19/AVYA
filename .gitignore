@@ -120,3 +120,32 @@ assets/naval pics/
 # Per-session baseline files (capture_baseline.dart / compare_baseline.dart)
 baseline.json
 baseline-lints.json
+
+# Deno lockfile — a local `deno test` byproduct, never tracked. CI runs
+# `deno test --no-check --allow-all --node-modules-dir=auto supabase/functions/`
+# with no lockfile and is green, so tracking one would only add a
+# lock-mismatch failure surface with nothing depending on it. Ignored so it
+# cannot drift into a commit unnoticed (2026-07-27).
+deno.lock
+
+# Deno's `--node-modules-dir=auto` materialisation cache. NOT a blanket
+# node_modules ignore — 142 files under node_modules/pg*, postgres-*, split2,
+# xtend are deliberately VENDORED and tracked, and ignoring the whole directory
+# would hide them. Only these two paths are build artifacts: `.deno/` is the
+# cache itself, and `zod/` is materialised from the `npm:zod@3.25.76` import in
+# _shared/tools/zodToGemini.ts. Confirmed zero tracked files under either
+# (`git ls-files node_modules/.deno` and `.../zod` both return 0) before adding.
+# Without this, a `git add -A` after any local deno run sweeps ~1400 cache files
+# into the commit (2026-07-27).
+#
+# ⚠ RUNNING DENO LOCALLY CLOBBERS THE VENDORED DEPS. `--node-modules-dir=auto`
+# REPLACES node_modules/pg with a SYMLINK to .deno/pg@<ver>/node_modules/pg, so
+# git reports all 22 tracked pg files as deleted and offers a symlink in their
+# place. Ignoring the cache does not prevent this — the ignore only stops the
+# cache being ADDED. After any local deno run, check `git status node_modules`
+# and repair with:
+#     rm -f node_modules/pg node_modules/zod && git checkout -- node_modules/pg
+# CI is unaffected (fresh checkout per run), which is exactly why this only
+# ever bites locally and is easy to commit by accident.
+node_modules/.deno/
+node_modules/zod/

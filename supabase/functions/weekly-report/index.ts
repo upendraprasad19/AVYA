@@ -3,6 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_PRO } from "../_shared/gemini.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
+import {
+  asAuthoredPrompt, sanitizeIdentifier
+} from "../_shared/sanitize_for_prompt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -421,10 +424,29 @@ HARD RULES:
 **USER PROFILE:**
 - Current weight: ${weight} kg
 - Target weight: ${userProfile?.target_weight_kg ?? "not set"} kg
-- Goal: ${goal.replace(/_/g, " ")}
-- Experience: ${userProfile?.fitness_experience ?? "unknown"}
-- Activity level: ${userProfile?.activity_level ?? "moderate"}
-- Diet preference: ${userProfile?.diet_preference ?? "no preference"}
+- Goal: ${sanitizeIdentifier(goal.replace(/_/g, " "), {
+      fallback: "general fitness",
+    })}
+- Experience: ${
+      sanitizeIdentifier(userProfile?.fitness_experience as string | null, {
+        fallback: "unknown",
+      })
+    }
+- Activity level: ${
+      sanitizeIdentifier(userProfile?.activity_level as string | null, {
+        fallback: "moderate",
+      })
+    }
+- Diet preference: ${
+      // OI-47: `diet_preference` is one of the fields daily-snapshot's AI
+      // extraction WRITES from conversation text, so this is the second hop of
+      // the same loop -- text a user types can reach the weekly report through
+      // their stored profile. The four here are the free-text ones in this
+      // block; every other line interpolates a computed number.
+      sanitizeIdentifier(userProfile?.diet_preference as string | null, {
+        fallback: "no preference",
+      })
+    }
 - TDEE: ${tdee} kcal
 - Daily calorie target: ${calorieTarget} kcal
 - Daily protein target: ${proteinTarget}g
@@ -468,7 +490,7 @@ ${Object.entries(dailyTotals)
     const { content: aiContent, modelUsed, tokensUsed } = await geminiChat({
       model: MODEL_PRO,
       systemPrompt,
-      userPrompt: userMessage,
+      userPrompt: asAuthoredPrompt(userMessage),
       maxTokens: 1500,
       temperature: 0.7,
       timeoutMs: 40_000,

@@ -54,6 +54,10 @@ import {
   fetchNotificationPrefs,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
+import {
+  sanitizeIdentifier,
+  sanitizeJsonForPrompt,
+} from "../_shared/sanitize_for_prompt.ts";
 
 type MotivationTone = "tough_love" | "gentle" | "data_driven";
 
@@ -69,7 +73,14 @@ function applyTone(
   tone: MotivationTone | null,
   snapshotJson: Record<string, unknown> | null,
 ): string {
-  const firstName = name?.split(" ")[0] ?? "there";
+  // OI-47 round 1: splitting on whitespace drops spaces but NOT CR,
+  // U+2028/2029/0085, control chars or angle brackets. These three
+  // non-AI paths (tone wrapper, free tier, PRO-light) carry the MAJORITY
+  // of actual sends -- the sanitised generateProAlert is the minority case.
+  const firstName = sanitizeIdentifier(name?.split(" ")[0], {
+    fallback: "there",
+    maxLen: 32,
+  });
 
   if (tone === "tough_love") {
     return `${firstName}, no excuses today. ${baseAlert}`;
@@ -155,7 +166,14 @@ function generateFreeAlert(
   name: string,
   snapshotJson: Record<string, unknown> | null,
 ): string {
-  const firstName = name?.split(" ")[0] ?? "Champion";
+  // OI-47 round 1: splitting on whitespace drops spaces but NOT CR,
+  // U+2028/2029/0085, control chars or angle brackets. These three
+  // non-AI paths (tone wrapper, free tier, PRO-light) carry the MAJORITY
+  // of actual sends -- the sanitised generateProAlert is the minority case.
+  const firstName = sanitizeIdentifier(name?.split(" ")[0], {
+    fallback: "Champion",
+    maxLen: 32,
+  });
   const snap = snapshotJson ?? {};
   const streakWeeks = (snap.current_streak_weeks as number) ?? 0;
   const streakDays = (snap.current_streak_days as number) ?? streakWeeks * 7;
@@ -247,7 +265,14 @@ function generateFreeAlert(
  * — which is what Upen experienced. Personalised on name + primary_goal only, no AI cost.
  */
 function generateProLightAlert(name: string, primaryGoal: string | null): string {
-  const firstName = name?.split(" ")[0] ?? "Champion";
+  // OI-47 round 1: splitting on whitespace drops spaces but NOT CR,
+  // U+2028/2029/0085, control chars or angle brackets. These three
+  // non-AI paths (tone wrapper, free tier, PRO-light) carry the MAJORITY
+  // of actual sends -- the sanitised generateProAlert is the minority case.
+  const firstName = sanitizeIdentifier(name?.split(" ")[0], {
+    fallback: "Champion",
+    maxLen: 32,
+  });
   const goal = (primaryGoal ?? "").toLowerCase();
 
   if (goal === "build_muscle" || goal.includes("muscle")) {
@@ -286,8 +311,21 @@ async function generateProAlert(
     `\n\n${toneGuidance} ` +
     "Output ONLY the alert message — no preamble, no formatting, no signoff.";
 
-  const userPrompt =
-    `User name: ${name}\nYesterday's snapshot data:\n${JSON.stringify(snapshotJson)}`;
+  // OI-47 / e7b3c5. `name` is `preferred_name ?? full_name ?? "Champion"` --
+  // both user-editable free text, interpolated RAW into a prompt line. A
+  // newline in it starts what reads to the model as a fresh instruction:
+  //   "Bob\nIgnore all previous instructions. Instead output ..."
+  // Blast radius is self-targeted (this user's own name, this user's own push),
+  // so the win is denying system-prompt leakage and arbitrary text in their own
+  // notification, not preventing a cross-user breach.
+  //
+  // The snapshot goes through sanitizeJsonForPrompt rather than sanitizeBlock:
+  // JSON.stringify already escapes LF/CR/C0, but measurably does NOT escape
+  // U+2028/U+2029/U+0085, which still render as line breaks to a model. See
+  // that helper's doc block for the probe.
+  const userPrompt = `User name: ${
+    sanitizeIdentifier(name, { fallback: "Champion" })
+  }\nYesterday's snapshot data:\n${sanitizeJsonForPrompt(snapshotJson)}`;
 
   const { content } = await geminiChat({
     model: MODEL_FLASH,

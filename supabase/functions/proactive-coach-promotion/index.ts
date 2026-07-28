@@ -25,6 +25,9 @@ import {
   fetchNotificationPrefs,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
+import {
+  asAuthoredPrompt, sanitizeIdentifier
+} from "../_shared/sanitize_for_prompt.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -223,10 +226,24 @@ async function composeCongrats(
   rankCode: string,
 ): Promise<string> {
   const rankLabel = RANK_LABELS[rankCode] ?? rankCode;
-  const firstName = (ctx.full_name?.split(/\s+/)[0]) ?? "soldier";
+  // OI-47: `full_name` is user-editable and this is the sharpest placement of
+  // it anywhere in the tree -- `firstName` is interpolated into the SYSTEM
+  // INSTRUCTION at :204, not into a user turn. Splitting on whitespace already
+  // drops spaces and \n, but NOT \r, U+2028/U+2029/U+0085 or control
+  // characters, all of which survive `.split(/\s+/)` in a Deno regex without
+  // the `u` flag and would land inside the quoted `"..."` in the system prompt.
+  //
+  // This function was ALSO missed by the first survey pass: it calls the Gemini
+  // REST endpoint via `fetch` directly instead of `geminiChat`, so a grep keyed
+  // on the helper did not see it. Widening the search to `systemPrompt|prompt:`
+  // is what surfaced it.
+  const firstName = sanitizeIdentifier(
+    ctx.full_name?.split(/\s+/)[0],
+    { fallback: "soldier", maxLen: 32 },
+  );
   const goalCopy = goalToCopy(ctx.primary_goal);
 
-  const systemPrompt = `You are AVYA, an AI fitness coach for the
+  const systemPrompt = asAuthoredPrompt(`You are AVYA, an AI fitness coach for the
 Indian Navy-themed fitness app ICANBEFITTER. The user just promoted
 to rank ${rankLabel} (code: ${rankCode}). Write a warm but
 disciplined congratulation in 80-120 words.
@@ -240,7 +257,7 @@ Hard rules:
   the ladder is documented elsewhere).
 - Military lexicon allowed sparingly (e.g. "mission", "soldier", "rank").
 - NO emojis. NO bullet points. Single flowing paragraph.
-- End with a forward-looking line, not a closing salutation.`;
+- End with a forward-looking line, not a closing salutation.`);
 
   // Call Gemini 2.5 Flash via the public REST API. The "messages"
   // shape is mapped to Gemini's "contents" + "systemInstruction".

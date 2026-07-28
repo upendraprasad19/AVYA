@@ -24,6 +24,44 @@ import 'package:icanbefitter/core/services/wlog_type_backfill_migrator.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
+/// Releases every per-user identity this DEVICE holds outside Hive.
+///
+/// TOP-LEVEL, not a method on [AuthNotifier], because sign-out is not the only
+/// path that ends a session. Review round 1 (2026-07-27) found two others that
+/// clear Hive + Supabase directly and never touch the notifier:
+///
+///   - `main.dart`'s `runZonedGuarded` HiveOwnershipException recovery — which
+///     fires exactly when the cross-account guard trips, i.e. precisely the
+///     "this device may be carrying a stale identity" case.
+///   - `delete_account_screen.dart`'s DPDP hard-delete — and "a handset the
+///     user sold or handed on" is the scenario this whole fix describes, so
+///     leaving account deletion uncovered inverted the intent. Crashlytics
+///     would keep tagging crashes with the deleted user's id.
+///
+/// Guards mirror the BIND sites in `_ensureLocalUser` exactly (`!kIsWeb`,
+/// `!kDebugMode`): an unbind running where the bind never did is a new failure
+/// mode, not a fix. Each step is individually try/caught so a throwing SDK
+/// cannot block the rest — and so this is safe to call from a zone handler.
+///
+/// Does NOT touch the static `onStateChanged` callbacks; see the note in
+/// [AuthNotifier.unbindSessionIdentity] for why clearing those is a regression.
+Future<void> releaseDeviceSessionIdentity() async {
+  if (!kIsWeb) {
+    try {
+      await OneSignal.logout();
+    } catch (e) {
+      debugPrint('[auth/releaseIdentity] OneSignal.logout failed: $e');
+    }
+  }
+  if (!kDebugMode) {
+    try {
+      await FirebaseCrashlytics.instance.setUserIdentifier('');
+    } catch (e) {
+      debugPrint('[auth/releaseIdentity] Crashlytics clear failed: $e');
+    }
+  }
+}
+
 // ── Auth State Stream ───────────────────────────────────────────
 
 /// Streams Supabase auth state changes (sign-in, sign-out, token refresh).
@@ -379,7 +417,73 @@ class AuthNotifier extends Notifier<AuthState2> {
     } catch (e) {
       debugPrint('[auth/signOut] supabase signOut failed: $e');
     }
+
+    await unbindSessionIdentity();
+
     state = const AuthState2(status: AuthStatus.idle);
+  }
+
+  /// OI-51 — releases every per-user identity this device holds outside Hive.
+  ///
+  /// `_ensureLocalUser` BINDS the device to a user at sign-in (`OneSignal.login`
+  /// + Crashlytics `setUserIdentifier`). Until 2026-07-27 nothing ever unbound
+  /// it, and `signOut` cleared only Hive + Supabase.
+  ///
+  /// The exposure is the SIGNED-OUT WINDOW, not the next user: when B signs in,
+  /// `_ensureLocalUser` overwrites both bindings, so B is attributed correctly.
+  /// But between A signing out and anyone signing in, the device remains
+  /// `external_id = A` — so **A's push notifications keep arriving**, carrying
+  /// A's fitness data (calories, streaks, coach messages), on a handset A may
+  /// have sold, returned, or handed to someone else. Crashes in that window are
+  /// likewise tagged with A's id.
+  ///
+  /// Extracted from [signOut] so it is directly callable in tests: `signOut()`
+  /// itself needs Supabase + Hive + GoRouter and is not unit-testable (the same
+  /// reason `profile_signout_routes_through_auth_notifier_test.dart` is
+  /// source-grep). The static-callback clearing below IS verified behaviourally
+  /// against this method; the two plugin calls are platform channels and are
+  /// pinned by source-grep + channel mocking.
+  ///
+  /// Guards mirror the BIND sites exactly (`!kIsWeb` / `!kDebugMode`) — an
+  /// unbind running where the bind never did would be a new failure mode. Each
+  /// step keeps [signOut]'s per-step try/catch shape: sign-out must complete
+  /// even if a third-party SDK throws.
+  @visibleForTesting
+  Future<void> unbindSessionIdentity() async {
+    await releaseDeviceSessionIdentity();
+
+    // THE STATIC onStateChanged CALLBACKS ARE DELIBERATELY *NOT* CLEARED HERE.
+    //
+    // The first version of this method nulled all three. Review round 1
+    // (2026-07-27) showed that is a REGRESSION, not a fix, and the reasoning is
+    // worth keeping because OI-51's own sub-finding 4 asks for it:
+    //
+    //   `app.dart:45/59/76` (initState) is the ONLY place in `lib/` that
+    //   installs them — verified by `grep -rn "onStateChanged = " lib/`. And
+    //   `ICanBeFitterApp` is constructed exactly once per process
+    //   (`main.dart:123`, `main_dev.dart:36`, `main_prod.dart:33`), so
+    //   initState runs once for the app's lifetime. `_ensureLocalUser` never
+    //   re-installs them. Nulling them on sign-out therefore kills provider
+    //   invalidation PERMANENTLY for every later sign-in in the same process —
+    //   and every call site uses `onStateChanged?.call()`, so nothing throws;
+    //   the invalidation just silently stops.
+    //
+    //   That reintroduces three already-fixed, founder-observed bugs for the
+    //   rest of the session: APK Test #12.2 (PRO pill stuck on FREE),
+    //   #12.4 ("I logged breakfast … nothing got updated in UI"), and OI-37
+    //   (stale rank after promotion).
+    //
+    // OI-51 SUB-FINDING 4 IS WRONG ON ITS PREMISE. It says the closure
+    // "captures Riverpod state" and so needs a reset path. It captures the
+    // ConsumerState's `ref`, which is bound to the process-lived ProviderScope,
+    // NOT to a user. After B signs in, invalidating those providers is exactly
+    // the correct behaviour — they re-read from B's Hive boxes through the
+    // `wrapUserScopedBox` guard. There is no cross-account leak to close here,
+    // so the right number of clears on the sign-out path is zero.
+    //
+    // The genuine half of that sub-finding — that `RankService` had no clear
+    // site ANYWHERE, not even at teardown — is fixed where it belongs, in
+    // `app.dart:dispose()` alongside the other two.
   }
 
   /// Reset back to idle.
@@ -469,6 +573,10 @@ class AuthNotifier extends Notifier<AuthState2> {
         try {
           await _supabase.client.auth.signOut();
         } catch (_) {}
+        // OI-51 round 2: this is the cross-account guard firing -- the single
+        // moment the device is MOST likely to be carrying the wrong user's
+        // identity -- and it force-signs-out without going through signOut().
+        await releaseDeviceSessionIdentity();
         throw StateError(
             'Cross-account clear partial-failed; signed out for safety.');
       }

@@ -29,6 +29,7 @@ import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 
 const corsHeaders = {
@@ -240,7 +241,13 @@ serve(async (req: Request) => {
       const preferredName = (usableMemory?.preferred_name as string | null) ??
         userById.get(userId) ??
         null;
-      const firstName = preferredName ? preferredName.split(" ")[0] : null;
+      // OI-47 round 1: this firstName reaches the FALLBACK message that
+      // actually ships when Gemini fails or times out -- the sanitised
+      // Gemini path is only the success case. Splitting on whitespace
+      // drops spaces but not CR, U+2028/2029/0085, controls or angle runs.
+      const firstName = preferredName
+          ? sanitizeIdentifier(preferredName.split(" ")[0], { maxLen: 32 })
+          : null;
 
       const templateId = sched.template_id as string | null;
       const workoutName = (templateId && templateNameById.get(templateId)) ||
@@ -263,9 +270,15 @@ serve(async (req: Request) => {
           model: MODEL_FLASH,
           systemPrompt: captainPrompt("proactive"),
           userPrompt:
-            `User state: ${JSON.stringify(userState)}.\n\n` +
+            `User state: ${sanitizeJsonForPrompt(userState)}.\n\n` +
             `Generate a workout window closing nudge — user has a scheduled workout ` +
-            `(${workoutName}) they haven't logged yet and the day is almost over.`,
+            // OI-47: `workoutName` is a BARE interpolation of a user-editable
+            // schedule/template name -- the only free-text field in this family
+            // that no JSON.stringify protects. The other five alerts interpolate
+            // only numbers here.
+            `(${
+              sanitizeIdentifier(workoutName, { fallback: "your session" })
+            }) they haven't logged yet and the day is almost over.`,
           maxTokens: 120,
           temperature: 0.7,
         });

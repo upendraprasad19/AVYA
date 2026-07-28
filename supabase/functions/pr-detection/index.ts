@@ -15,6 +15,7 @@ import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { captainPrompt } from "../_shared/captain_manual.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import {
   fetchNotificationPrefs,
@@ -131,8 +132,12 @@ Deno.serve(async (req) => {
       // Personalization
       const memory = await fetchCoachMemory(supabase, userId);
       const usableMemory = memory?.private_mode ? null : memory;
-      const firstName =
-        (usableMemory?.preferred_name as string | null) ?? "champ";
+      // OI-47 round 1: firstName feeds composeMessage(), which builds the
+      // FALLBACK push that actually ships when Gemini fails.
+      const firstName = sanitizeIdentifier(
+        usableMemory?.preferred_name as string | null,
+        { fallback: "champ", maxLen: 32 },
+      );
 
       // Fallback: existing hardcoded English copy preserved as safety net.
       const fallbackMessage = composeMessage(firstName, prs);
@@ -154,7 +159,7 @@ Deno.serve(async (req) => {
           model: MODEL_FLASH,
           systemPrompt: captainPrompt("proactive"),
           userPrompt:
-            `User state: ${JSON.stringify(userState)}.\n\n` +
+            `User state: ${sanitizeJsonForPrompt(userState)}.\n\n` +
             `Generate a PR celebration nudge — user just set ${prs.length} new ` +
             `personal record(s) in their workout.`,
           maxTokens: 120,

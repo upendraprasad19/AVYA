@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
+import {
+  asAuthoredPrompt, sanitizeIdentifier
+} from "../_shared/sanitize_for_prompt.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -14,6 +17,31 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+/**
+ * Renders a request-body measurement for the prompt.
+ *
+ * `Number(x) || "unknown"` conflates "invalid" with "legitimately zero" — a
+ * posted `0` became "unknown" rather than "0". It also silently accepted
+ * `Number(null) === 0`. Absent/blank/non-numeric is reported as unknown;
+ * everything finite is reported verbatim, including 0, so the prompt never
+ * states a measurement the caller did not send. (Round-1 review P2.)
+ */
+function _num(v: unknown): string {
+  // Round-2 review: the first version still let three shapes through, each
+  // violating this function's own stated purpose.
+  //   "   "  -> Number(" ") === 0, and `v === ""` does not catch whitespace
+  //   true   -> Number(true) === 1, so `age: true` rendered "1 years old"
+  //   []     -> Number([]) === 0, and Number([5]) === 5
+  // Only a genuine number, or a string that is entirely a number, is a
+  // measurement the caller actually sent.
+  if (typeof v === "number") return Number.isFinite(v) ? String(v) : "unknown";
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? String(n) : "unknown";
+  }
+  return "unknown";
+}
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -107,7 +135,14 @@ serve(async (req: Request) => {
     const prompt =
       `You are a clinical body composition assessment tool. Estimate the body fat percentage from this photo.
 
-User stats: ${gender}, ${age} years old, ${height_cm} cm tall, ${weight_kg} kg.
+User stats: ${
+        // OI-47: these four come straight off the REQUEST BODY, so the UI's
+        // enum/number widgets are not the constraint -- an authenticated caller
+        // POSTs whatever JSON it likes. `gender` is the free-text one; the
+        // three numerics are coerced with Number() so a string payload cannot
+        // smuggle prose through a field the prompt presents as a measurement.
+        sanitizeIdentifier(gender as string | null, { fallback: "unspecified" })
+      }, ${_num(age)} years old, ${_num(height_cm)} cm tall, ${_num(weight_kg)} kg.
 
 Rules:
 - Be objective and clinical. Only assess visible body composition markers (muscle definition, fat distribution).
@@ -123,7 +158,7 @@ Return ONLY valid JSON — no markdown, no code fences:
     const { content: rawText } = await geminiChat({
       model: MODEL_FLASH_LITE,
       systemPrompt: "You are a clinical body composition assessment tool. Return ONLY valid JSON.",
-      userPrompt: prompt,
+      userPrompt: asAuthoredPrompt(prompt),
       imageBase64: image_base64,
       imageMimeType: mime_type,
       maxTokens: 256,
