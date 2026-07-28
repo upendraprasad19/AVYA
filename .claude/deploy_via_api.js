@@ -643,6 +643,13 @@ const SMOKE_TOLERATED_CODES = {
   'plateau-alert': [401],
   'protein-gap-alert': [401],
   're-engagement': [401],
+  // Same omission, same shape, found the same way one batch later — during the
+  // OI-47 sanitizer rollout on 2026-07-28. Both gate on `isAuthorizedCronCall`
+  // (streak-guardian/index.ts:52, rolling-context/index.ts:120), so an unauth
+  // smoke gets a healthy 401 that was being reported as a smoke FAILURE.
+  // Verified by reading each function's source, not by inferring from the slug.
+  'streak-guardian': [401],
+  'rolling-context': [401],
   'beat-my-coach': [400, 401],
   'future-prediction': [400, 401],
   'assess-body-composition': [400, 401],
