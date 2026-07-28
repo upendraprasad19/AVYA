@@ -16,17 +16,26 @@ status: active
 `supabase/functions/` holds every Deno Edge Function deployed to the
 **fitness-app project (`dedsavbjuwgarrhphgnl`)**. They serve three roles:
 
-1. **AI proxies** — all client-facing AI calls, so API keys never live
-   client-side. There are exactly THREE: `ai-proxy`, `ai-media-proxy` and
-   `weekly-report`. The food/scan/cart AI are `type` values on `ai-proxy`, not
-   functions of their own — see the routing table in the AI Architecture section.
+1. **AI proxies** — the CLIENT-FACING AI calls, so API keys never live
+   client-side. Exactly three: `ai-proxy`, `ai-media-proxy`, `weekly-report`.
+   The food/scan/cart AI are `type` values on `ai-proxy`, not functions of their
+   own — see the routing table in the AI Architecture section.
+   ⚠️ These three are NOT the full set of functions that call an LLM. Nine of the
+   cron jobs in role 3 below call Gemini too, as do three client-invoked
+   non-proxy functions — **15 in total**. The AI Architecture section carries the
+   complete list; derive it by grep, never by hand.
 2. **Payment / subscription** — `verify-payment`, `razorpay-webhook`,
    `validate-promo`, `validate-referral`, `delete-account` (DPDP §17).
-3. **Cron-dispatched jobs** — `morning-alert`, `evening-alert`, `pr-detection`,
-   `streak-guardian-daily`, `rolling-context-nightly`, `weekly-recap-ready`,
-   `evaluate-rank-promotions`, `plateau-alert`, `protein-gap-alert`,
-   `re-engagement`, `workout-window-closing`, `i-see-you-callout`,
-   `clean-orphan-media`, `expiry-reminder`, `promote-community-item-daily`.
+3. **Cron-dispatched jobs** — FUNCTION slugs (three of these were previously
+   listed under their pg_cron JOB name, which is a different string; the
+   job → function mapping lives in `docs/operations/CRON_REGISTRY.md`):
+   `morning-alert`, `evening-alert`, `pr-detection`, `streak-guardian`
+   (job `streak-guardian-daily`), `rolling-context` (job
+   `rolling-context-nightly`), `weekly-recap-ready`, `evaluate-rank-promotions`,
+   `plateau-alert`, `protein-gap-alert`, `re-engagement`,
+   `workout-window-closing`, `i-see-you-callout`, `clean-orphan-media`,
+   `expiry-reminder`, `promote-community-item` (job
+   `promote_community_item_daily`), `proactive-coach-promotion`.
 
 Shared helpers live under `_shared/`:
 
@@ -77,11 +86,31 @@ serving) — gate `scripts/check_std_encoding_import_rot.dart` blocks it (deploy
 
 ## AI Architecture (canonical)
 
-> ⚠️ **There are only THREE LLM-calling Edge Functions**: `ai-proxy`, `ai-media-proxy`,
-> `weekly-report`. Everything else in `supabase/functions/` reaches no model. In particular
-> `food-text-analysis`, `food-scan-analysis` and `cart-auditor` are **NOT** Edge Functions —
-> they are `type` values POSTed to `ai-proxy`. This table said otherwise until 2026-07-28 and
-> the wrong version is what a reader consulted to decide whether a function touches an LLM.
+> ⚠️ **This table covers the CLIENT-FACING AI proxies only. It is NOT the list of functions
+> that call an LLM.** Twelve cron-dispatched functions also call Gemini (they are listed
+> below). Read the full list before making any "does this function touch a model?" decision —
+> that judgement sets prompt-sanitiser scope and redeploy scope, and this table alone will
+> under-count it by a factor of five.
+>
+> Also: `food-text-analysis`, `food-scan-analysis` and `cart-auditor` are **NOT** Edge
+> Functions — they are `type` values POSTed to `ai-proxy`. The table claimed they were
+> separate functions until 2026-07-28.
+
+**Every function that calls an LLM (15).** Derived by grepping
+`geminiChat|generateContent` across `supabase/functions/*/index.ts` — regenerate it that way
+rather than editing by hand, because a hand-maintained list is what was wrong here twice:
+
+- **Client-facing proxies (3, detailed in the table below):** `ai-proxy`, `ai-media-proxy`,
+  `weekly-report`.
+- **Client-invoked, not proxies, but they DO call Gemini (3):**
+  `assess-body-composition`, `daily-snapshot`, `future-prediction`. All three are
+  `verify_jwt=true` and carry no cron-auth gate — they are not cron jobs.
+- **Cron-dispatched and call Gemini (9):** `morning-alert`, `plateau-alert`, `pr-detection`,
+  `proactive-coach-promotion`, `protein-gap-alert`, `re-engagement`, `rolling-context`,
+  `streak-guardian`, `workout-window-closing`.
+
+These 15 are exactly the set the OI-47 prompt-sanitiser had to cover. `weekly-recap-ready` is
+NOT among them — it sends the "recap ready" push and calls no model.
 
 | Function | Model | Tier | Notes |
 |---|---|---|---|
