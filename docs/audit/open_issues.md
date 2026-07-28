@@ -1070,14 +1070,38 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-47 — L30 prompt injection vectors: 5 unsanitized user-field interpolations (P1)
 
-- **Status**: OPEN — **work COMMITTED on branch `sdk-identity-prompt-safety`, NOT merged**
+- **Status**: CLOSED · 2026-07-28 · merged `9d5e9d31` **and deployed to all 16 functions**
 - **Progress 2026-07-27**: `b1bd184d` (sanitiser) + `842e813c` (15 call sites) +
   `94f0bf9e` (measured caps). Diagnose `f4a9c2`, closure
   `docs/audit/sdk-identity-prompt-safety.closure.yaml`, SoT concept
   `llm_prompt_input_sanitization`.
-  **Blocked on**: platform-tier ×2 independent review + B-pass before merge.
-  **Every Edge Function change is INERT until a separately authorized redeploy** —
-  do not read "committed" as "live".
+- **⚠ The merge was not the fix, and that gap is the lesson.** The merge landed
+  2026-07-27. A day later this entry still read *"NOT merged"* (it was), and the
+  **deployed** `morning-alert` bundle still contained **0** occurrences of the
+  sanitizer. Control for that grep: `isNotificationEnabled`, deployed 2026-07-27,
+  present in the same fetched bundle — so the grep was reading the real artifact,
+  not failing to find anything. An Edge Function change is inert until redeploy;
+  "committed", "merged" and "live" are three different claims and the board was
+  conflating all three.
+- **Deploy evidence — all 16, read back live from `dedsavbjuwgarrhphgnl`:**
+  `ai-proxy` 77→78 · `morning-alert` 29→30 · `weekly-report` 24→25 ·
+  `daily-snapshot` 22→23 · `ai-media-proxy` 20→21 · `streak-guardian` 19→20 ·
+  `rolling-context` 16→17 · `future-prediction` and `assess-body-composition`
+  14→15 · `pr-detection` and `compute-coach-signals` 10→11 · `re-engagement` and
+  `protein-gap-alert` 9→10 · `plateau-alert`, `proactive-coach-promotion` and
+  `workout-window-closing` 8→9. Every version incremented by exactly 1, every
+  `updated_at` inside the deploy window, every emitted payload greps non-zero for
+  the module **and** its exported symbols, and the remote bundles for
+  `morning-alert` / `streak-guardian` / `ai-proxy` were re-fetched and grepped
+  directly.
+- **Why 16 is the whole surface (completeness, not assumption):** every function
+  whose `index.ts` reaches an LLM — 15 of them — imports `sanitize_for_prompt.ts`,
+  and **zero** LLM-reaching functions lack it. `compute-coach-signals` is the 16th:
+  it consumes the sanitizer transitively via `_shared/coach_memory.ts`, so a
+  direct-import grep alone would have missed it. `expiry-reminder` /
+  `i-see-you-callout` / `weekly-recap-ready` carry the module in their emitted
+  bundle as dead transitive weight but reach no LLM at all — not part of this
+  surface, and correctly not redeployed.
 - **⚠ THE SITE LIST BELOW IS STALE AND INCOMPLETE — kept verbatim as filed.**
   It names 5 sites and 3 of the 5 line numbers no longer resolve. The real
   surface is **15** prompt-building functions. Counting by method: ticket 5 →
@@ -1156,12 +1180,16 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-51 — L38 cross-account SDK state: 3 unwired clear-on-signOut paths (P1)
 
-- **Status**: OPEN — **work COMMITTED on branch `sdk-identity-prompt-safety`, NOT merged**
+- **Status**: CLOSED · 2026-07-28 · merged `9d5e9d31`
 - **Progress 2026-07-27**: `ff716e29`. Diagnose `e7b3c5`, SoT concept
   `device_session_identity_binding`, test
   `test/contracts/signout_unbinds_sdk_identity_test.dart` (9/9, both derived
-  assertions negative-controlled). Client-only — no redeploy; live on the next APK.
-  **Blocked on**: platform-tier ×2 independent review + B-pass before merge.
+  assertions negative-controlled).
+- **Client-only, so nothing to redeploy — but it is not yet in users' hands.**
+  The shipped APK is `1.0.0+37` at `99e145d2` (OI-52), and this branch was cut
+  *from* `99e145d2`, so `ff716e29` is not in it. The fix reaches devices with the
+  next APK build. Stated explicitly because the sibling OI-47 above was left
+  half-done by exactly this kind of unstated residual step.
 - **⚠ TWO CORRECTIONS to the text below, which is kept verbatim as filed.**
   1. **The severity framing is wrong.** This is NOT "user B's crashes get tagged
      as user A" — `_ensureLocalUser` overwrites both bindings when B signs in, so
