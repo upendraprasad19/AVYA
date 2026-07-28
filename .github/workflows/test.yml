@@ -73,9 +73,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # `cache: true` is setup-deno's OWN module cache, not a hand-rolled
+      # actions/cache step at a guessed DENO_DIR — the action resolves the dir
+      # and save timing itself. `cache-hash` defaults to hashing deno.lock,
+      # which is deliberately untracked here (.gitignore:129, 2026-07-27:
+      # "tracking one would only add a lock-mismatch failure surface with
+      # nothing depending on it"), so the EF tree is hashed instead.
+      #
+      # This is what makes an esm.sh outage survivable: Deno does not re-fetch a
+      # cached, version-pinned remote URL without --reload, so a warm cache skips
+      # the request entirely.
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+          cache: true
+          cache-hash: ${{ hashFiles('supabase/functions/**/*.ts') }}
 
       # Runs ALL Deno tests (the 18 shape tests + Unit C's behavioral tests) so
       # the read-hardening regression guard gates + a red test can no longer sit
@@ -84,8 +96,22 @@ jobs:
       # behavioral gate (throw / -1.0 / send-vs-skip); the separate type-check step
       # below is the dedicated gate for the type system (see 2026-07-09 type-debt
       # cleanup note).
+      #
+      # RETRIED. Both Deno steps resolve ~50 remote modules from esm.sh and
+      # deno.land. A single upstream 522 reddens `main` on a commit that touched
+      # no Deno code at all — it happened twice in 25 runs (2c4cbddd on
+      # 2026-07-27, 93f6fe41 on 2026-07-28), both times on the identical URL.
+      # A transient CDN failure is not a test result.
       - name: Deno test (shape + Unit C behavioral)
-        run: deno test --no-check --allow-all --node-modules-dir=auto supabase/functions/
+        run: |
+          for i in 1 2 3; do
+            if deno test --no-check --allow-all --node-modules-dir=auto supabase/functions/; then exit 0; fi
+            [ "$i" = 3 ] && break
+            echo "::warning::deno test attempt $i failed — retrying in $((i * 15))s (likely a transient remote-module fetch)"
+            sleep $((i * 15))
+          done
+          echo "::error::deno test failed after 3 attempts — this is a real failure, not a fetch blip"
+          exit 1
 
       # Full-tree type-check. The pre-existing type-annotation debt referenced above
       # (cross-module SupabaseClient generics, Date overloads, intentBuilder arity,
@@ -94,7 +120,15 @@ jobs:
       # verified via a before/after `deno test` pass-count match). This is now a
       # permanent hard-blocking regression gate against the debt regrowing.
       - name: Deno type-check (full tree)
-        run: deno check --node-modules-dir=auto supabase/functions/
+        run: |
+          for i in 1 2 3; do
+            if deno check --node-modules-dir=auto supabase/functions/; then exit 0; fi
+            [ "$i" = 3 ] && break
+            echo "::warning::deno check attempt $i failed — retrying in $((i * 15))s (likely a transient remote-module fetch)"
+            sleep $((i * 15))
+          done
+          echo "::error::deno check failed after 3 attempts — this is a real type error, not a fetch blip"
+          exit 1
 
   # ── Tier 1.5: Tech-debt audit gates (introduced 2026-05-20, finding I2) ──
   # Runs every scripts/check_*.dart gate. Each gate is independent; the job

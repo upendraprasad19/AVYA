@@ -12,6 +12,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### gate_test_environment_hermeticity (1 bugs)
 - 2026-07-28 c3f8e1 — main went RED on 10dffc90. Two PRE-EXISTING gate e2e tests failed in CI while passing locally and through both pre-commit and pre-push: the gate they spawn inherited CI's real GITHUB_EVENT_PATH, whose…
 
+### ci_remote_dependency_resilience (1 bugs)
+- 2026-07-28 e1b7d4 — `main` went red twice in 25 CI runs on commits that touched no Deno code, both times with `Import 'https://esm.sh/@supabase/supabase-js@2.39.0' failed: 522` at clean-orphan-media/index.ts:2. 522 is a…
+
 ### plan_review_record_enforcement (2 bugs)
 - 2026-07-28 d9b4e7 — Commits pushed straight to main skipped the keystone plan-review gate entirely — it exited at `rev-parse HEAD^2` before reading anything. Observed twice on account-tier auth code that landed with no…
 - 2026-07-27 a7f3d1 — The merge-to-main keystone gate returned PASS for changes it was built to block. A branch could lower its own tier by editing the registry in the same commit, and content written while resolving a…
@@ -875,6 +878,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 |---|---|---|---|---|
 | 2026-07-28 | c4e8a2 | 237 of 344 entries in docs/diagnoses/INDEX.md carried no symptom text — just a bare `>`, `>-` or `\|`. CLAUDE.md §4.1.5 makes grepping that index the mandatory first step before any root-cause… | bug_history_index | test/contracts/bug_index_frontmatter_test.dart |
 | 2026-07-28 | c3f8e1 | main went RED on 10dffc90. Two PRE-EXISTING gate e2e tests failed in CI while passing locally and through both pre-commit and pre-push: the gate they spawn inherited CI's real GITHUB_EVENT_PATH, whose… | gate_test_environment_hermeticity | test/contracts/gate_e2e_env_hermetic_test.dart |
+| 2026-07-28 | e1b7d4 | `main` went red twice in 25 CI runs on commits that touched no Deno code, both times with `Import 'https://esm.sh/@supabase/supabase-js@2.39.0' failed: 522` at clean-orphan-media/index.ts:2. 522 is a… | ci_remote_dependency_resilience | not_applicable |
 | 2026-07-28 | d9b4e7 | Commits pushed straight to main skipped the keystone plan-review gate entirely — it exited at `rev-parse HEAD^2` before reading anything. Observed twice on account-tier auth code that landed with no… | plan_review_record_enforcement | test/scripts/version_bump_exemption_test.dart |
 | 2026-07-27 | a3d7b1 | Ten enforcement scripts — two of the four git hooks setup-hooks.sh installs, both sanctioned write wrappers, the whole rule-22 diagnose-doc chain, and two hard-fail discipline gates — were all feature… | blast_radius_registry_coverage | test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart |
 | 2026-07-27 | b7e4c2 | The two tests guarding the raw-`git commit` block fail whenever a conflicted merge is in progress — which is precisely when the pre-commit hook runs the full suite. Any integration merge with a… | git_safety_hook_contract | test/contracts/git_safety_hook_integration_test.dart |

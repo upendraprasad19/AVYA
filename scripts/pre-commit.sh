@@ -152,6 +152,7 @@ for GATE in scripts/check_*.dart; do
     check_snapshot_contract.dart|\
     check_test_runtime_budget.dart|\
     check_no_deferral_euphemism.dart|\
+    check_closes_oi_cited.dart|\
     check_skipped_discipline_budget.dart)
       # Razorpay gate: .env.prod is user-only / gitignored secret state.
       # Other gates: require live DB / merge context / build artifact —
@@ -161,6 +162,11 @@ for GATE in scripts/check_*.dart; do
       # gates-before-refactor baseline window — 2 pre-existing open waivers
       # from 2026-05-11 are >14d old; remove --warn-only once waivers are
       # resolved or a behavioral test ships). Invoked explicitly below.
+      # check_closes_oi_cited.dart: a commit-msg gate — it takes the proposed
+      # message file as its argument, and that file does not exist yet at
+      # pre-commit time (the same reason scripts/commit-msg.sh exists at all).
+      # This loop invokes every gate with NO arguments, so running it here would
+      # only ever produce its usage error. Wired in scripts/commit-msg.sh.
       continue
       ;;
   esac
