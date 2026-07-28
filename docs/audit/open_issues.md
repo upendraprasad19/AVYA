@@ -1107,10 +1107,22 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 - **Identified**: 2026-05-17 · OI-43 / L31 lens scan
 - **Risk class**: cost scaling (billing alert at 10K users)
 - **Effort**: ~1-2 days (per-function pre-filter design)
-- **Top findings:**
-  - **evaluate-rank-promotions** — iterates ALL users, ~5 Postgres reads × N users. At 10K users = 50K reads/day. Plus Gemini call per promotion event.
-  - **i-see-you-callout** — iterates ALL users with 6 indexed queries each. 60K reads at 10K users.
-  - **re-engagement** Path B fallback — pulls all users without coach_memory, then 3-table verification per user.
+- **RE-SCOPED 2026-07-27** (gate-input-family batch). The 2026-07-26 pass flagged this entry as
+  *"MATERIALLY STALE — needs re-scoping, not carrying forward"* and then carried it forward
+  unchanged. Re-read all three functions rather than re-asserting the 2026-05-17 text; **one of the
+  three is genuinely fixed and two are not**:
+  - **evaluate-rank-promotions — NO LONGER MATCHES THE FINDING.** `e78e2c7e` (2026-07-08, OPT-E)
+    replaced the per-user reads with chunked `.in("user_id", chunk)` batch pre-fetches
+    (`index.ts:47-53` chunk-size comment + BATCH_SIZE, `:81` the batched `.in(`, `:136`
+    — *"Reduces N*3 queries/tick to 3"*). The outer
+    `.from("users")` scan at `:118` survives, so the O(all users) *shape* is intact, but
+    "~5 Postgres reads × N users / 50K reads a day" is simply no longer true of this code.
+  - **i-see-you-callout — STILL OPEN.** `.from("users")` at `:98` with per-user `.limit(...)`
+    queries at `:202`, `:236`, `:289`.
+  - **re-engagement — STILL OPEN.** `.from("users")` at `:131` with three per-user `.limit(1)`
+    verification queries at `:164`, `:173`, `:182`.
+- **Revised scope**: two functions, not three, and the remaining work is the pre-filter SELECT —
+  `evaluate-rank-promotions` is now the in-repo example of the fix rather than an instance of the bug.
 - **Already efficient (pattern to copy):**
   - `clean-orphan-media` — RPC pre-filter → small working set
   - `pr-detection` — 20-min time window filter
@@ -1290,6 +1302,36 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-58 — Keystone gate: single-parent + subject-spoof bypass
 
 - **Status**: OPEN
+- **Attempted and SPLIT OUT 2026-07-27** (branch `gate-input-family`, founder-approved
+  per §4.12.1). The enforcement was built twice and failed review twice, each time in
+  the same place. **Read this before re-attempting:**
+  - **Attempt 1** judged all direct-to-main commits in a push as ONE union before testing
+    the exemption, so a single `feature`-tier commit alongside the version bump killed
+    it. That is the standard release flow (`2c4cbddd` bump 05:24 + `6a364656` docs 06:42,
+    the two halves of APK +37) and it FAILED — verified by running the gate over
+    `3bca83a8..HEAD`.
+  - **Attempt 2** fixed that per-commit and introduced a worse bug: the exemption is
+    `paths.every(versionBumpAllowedPaths.contains)`, an all-of test over an ALLOW-LIST,
+    which accepts every proper subset. **Confirmed by execution**: a direct commit
+    rewriting `monthlyPriceInr = 1` and `freeAiMessagesPerDay = 9999` in
+    `app_constants.dart` — no version line touched — passed at `account` tier with a
+    `NOTE (version-bump exemption)`. `check_app_version_matches_pubspec.dart` only pins
+    the `version:` string, so it backs nothing else in either file.
+  - **The fix shape for attempt 3**: verify the changed LINES, not the paths — every
+    changed line in the diff of those two files must be a version line. That matches the
+    standard the Dependabot exemption in the same file already meets ("earned by what the
+    diff contains, not by trusting a branch name"). Do NOT simply require both files:
+    10+ historical bumps touched `pubspec.yaml` alone.
+  - **Do not re-derive the baseline**: 5 of the last 60 first-parent commits are
+    single-parent, 3 of those ≥account — `be3b4baf` (account, 11 files, password reset)
+    and `8c38c855` (account, 8 files) are real unreviewed auth landings; `2c4cbddd`
+    (platform, 2 files) is the bump the exemption exists for. Measure per-COMMIT: the
+    per-push figure is different and justifying hard-fail on the wrong one is how
+    attempt 1 shipped.
+  - **What DID ship**: the pushed-range walk, two-dot diffs and dual-registry tiering
+    (OI-70/OI-71) — so the range machinery this needs already exists.
+  - Residual first-time merge-subject spoof stays **founder-only**: no in-repo script can
+    close it; the control is requiring PRs so GitHub writes the merge subject.
 - **Identified**: 2026-07-26 · diagnose `d3f8a2`, ci-governance batch
 - **Risk class**: enforcement bypass
 - **What's missing**: Branch identity derives from the merge SUBJECT (author-controlled free text)
@@ -1435,7 +1477,7 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-70 — Tier engines classify a commit using the registry the commit itself changes
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-07-27 · diagnose `a7f3d1` · branch `gate-input-family`
 - **Identified**: 2026-07-27 · B-pass on `a3d7b1` (pre-existing since `d947743d`, 2026-07-26)
 - **Risk class**: self-protection is non-hermetic — the guard grades its own homework
 - **What's wrong**: `blast_radius_from_diff.dart:121` and
@@ -1452,7 +1494,7 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-71 — Keystone gate is blind to content written during conflict resolution
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-07-27 · diagnose `a7f3d1` · branch `gate-input-family`
 - **Identified**: 2026-07-27 · adversarial review during the cron/notif-prefs merges
 - **Risk class**: gate input means something different at a merge commit
 - **What's wrong**: `check_plan_review_record_exists.dart:208` computes blast-radius from
@@ -1466,7 +1508,7 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-72 — A review file can satisfy the catastrophic gate without ever entering history
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-07-27 · diagnose `b2e6c4` · branch `gate-input-family`
 - **Identified**: 2026-07-27 · while satisfying the gate legitimately for the cron merge
 - **Risk class**: index/working-tree asymmetry in an enforcement gate
 - **What's wrong**: `check_code_review_pass_exists.dart` hashes `git diff --cached` (the **index**)
@@ -1478,18 +1520,32 @@ cloud sessions; **this file is the cross-session backlog.**
 - **Real fix**: read the review file from the staged blob and exclude `docs/reviews/**` from the
   gate's own hash, so the artifact is both required and recorded.
 
-## OI-73 — ~15 Edge Functions still run the pre-`a3ff9571` cron auth gate
+## OI-73 — ~10 Edge Functions still run the pre-`9ab9f42b` cron auth gate
 
 - **Status**: OPEN — hygiene, **not** an outage
 - **Identified**: 2026-07-27 · after the cron-auth restore
+- **Corrected 2026-07-27** (gate-input-family batch), two errors in this entry's own text:
+  1. It cited **`a3ff9571`** as the restoring commit. That is not a commit —
+     `git log a3ff9571` returns *unknown revision*. It is a **review-file** hash
+     (`docs/reviews/a3ff9571fbc9-review.md`). The actual cron-auth restore is `9ab9f42b`,
+     merged as `d2b1b74b`. The title above is corrected.
+  2. It said the affected functions "carry a live `deno.land/x/jose` remote import". True of the
+     **deployed bundles**, not of git — the only tracked hits are a history comment and
+     `import_map.json`. Wording corrected below. Same class as
+     `feedback_mistake_unverified_done_claims`: an artifact hash read as a commit, and a
+     deployed-side fact stated as a source-side one.
+- **Count revised ~15 → ~10.** The six notif-prefs deploys on 2026-07-27 shipped from current git,
+  so five of them incidentally picked up the clean gate. Verified in the deployed bytes rather than
+  by version number: `jwtVerify` = 0 occurrences, `env.get("SUPABASE_JWT_SECRET")` = 0,
+  `CRON_SECRET` = 10, and `jose` appearing only inside a comment.
 - **What's true**: cron auth is LIVE. Migrations 107-110 plus the dashboard secret restored it with
   no redeploy, because the deployed gate checks a legacy `CRON_SECRET` hatch *before* the
   unreachable `SUPABASE_JWT_SECRET` path. `cron_call_log` shows 15 functions succeeding 2026-07-26.
-- **What's left**: those functions still carry the dead `SUPABASE_JWT_SECRET` branch and a live
-  `deno.land/x/jose` remote import. If that pinned URL ever 404s upstream, every one of them
-  boot-fails at once (`feedback_mistake_remote_dep_rot`). `morning-alert` v28,
-  `compute-coach-signals`, `weekly-recalc` and `compute-admin-metrics-daily` already carry the clean
-  gate.
+- **What's left**: the remaining functions still carry the dead `SUPABASE_JWT_SECRET` branch, and
+  their **deployed bundles** still resolve a `deno.land/x/jose` remote import. If that pinned URL
+  ever 404s upstream, every one of them boot-fails at once
+  (`feedback_mistake_remote_dep_rot`). `morning-alert`, `compute-coach-signals`, `weekly-recalc`
+  and `compute-admin-metrics-daily` already carry the clean gate, as do the five cleaned on 07-27.
 - **How to do it**: one function at a time with verification between — the deploy skill's §6.6
   warns that latent dep-rot boot-fails only on the NEXT redeploy, so a blind batch is the wrong
   shape.

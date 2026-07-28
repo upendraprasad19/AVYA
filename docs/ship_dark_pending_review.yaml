@@ -17,6 +17,8 @@
 #   branch:          worktree branch the build shipped from
 #   build_commit:    sha of the build-tier commit (review_rounds: 1)
 #   build_date:      YYYY-MM-DD (IST)
+#   merge_commit:    sha of the --no-ff merge that landed the build on main
+#                    (optional; recoverable via `git log --merges --ancestry-path`)
 #   flip_reviewed:   false until the flip-on commit's plan-review record shows
 #                    review_rounds >= 2 + bpass: accepted; then true
 #   flip_commit:     sha of the flip-on commit (fill in when flip_reviewed
@@ -55,7 +57,8 @@ pending:
 
   - flag: enable_hold_weeks
     branch: hold-display-fixes
-    build_commit: "(uncommitted — fill sha at commit)"
+    build_commit: ff13623e
+    merge_commit: 342820b3
     build_date: 2026-07-25
     flip_reviewed: false
     flip_commit: null
@@ -69,6 +72,152 @@ pending:
       The SAME reviews returned NOT CONVERGED on four other proposed fixes;
       per §4.12.1 the unit was split and those became the flip_on_blockers
       below.
+
+  # ── The 13 workout-generator-overhaul flags (OI-53) ─────────────────────
+  #
+  # BACKFILLED 2026-07-27, gate-input-family batch. OI-53 asserted these were
+  # "logged in docs/ship_dark_pending_review.yaml"; they were not — this file
+  # held only enable_hold_weeks. Thirteen flags had shipped ship-dark with no
+  # ledger entry at all, which is precisely what §4.12.4's ledger clause exists
+  # to prevent ("the guardrail against a flag quietly going live, or sitting
+  # forgotten"). The claim is now true.
+  #
+  # Recovered from source, not from memory: each `build_commit` is the first
+  # commit introducing that flag's string into plan_engine_flags.dart
+  # (`git log -S"'<flag>'" --reverse`), and each `branch` comes from the subject
+  # of the first merge containing it (`git log --merges --ancestry-path`).
+  #
+  # All 13 remain default OFF. Every flip-on commit needs its own full ×2 +
+  # `bpass: accepted` per §4.12.4 — there is no batch discount, and flipping
+  # thirteen flags in one commit would be one review pretending to be thirteen.
+  #
+  # FLIP ORDER IS CONSTRAINED BY CODE, not preference. Verified in
+  # plan_engine_flags.dart, not assumed:
+  #   - enable_plateau_escalation "Presupposes `enable_readiness` ON (the fatigue
+  #     gate needs data; `plateauedGroups` self-gates on `readinessEnabled`)"
+  #   - enable_triggered_deload's consumer "additionally requires readiness ON
+  #     (`&& readinessEnabled` at the eval site … running the eval without it
+  #     biases toward LIFTING)"
+  # So enable_readiness flips FIRST or those two are inert-to-wrong.
+
+  - flag: enable_graded_progression
+    branch: workout-graded-progression
+    build_commit: c4db7214
+    build_date: 2026-07-13
+    merge_commit: 266fa884
+    flip_reviewed: false
+    flip_commit: null
+
+  - flag: enable_session_detraining_cut
+    branch: workout-resume-banner
+    build_commit: 8a2e8654
+    build_date: 2026-07-13
+    merge_commit: b81e4fb6
+    flip_reviewed: false
+    flip_commit: null
+
+  - flag: enable_physique_focus_bringup
+    branch: workout-body-focus
+    build_commit: e0abbc24
+    build_date: 2026-07-13
+    merge_commit: f53d439c
+    flip_reviewed: false
+    flip_commit: null
+
+  - flag: enable_equipment_exclusions
+    branch: workout-equipment-filter
+    build_commit: a8583f01
+    build_date: 2026-07-16
+    merge_commit: 95b9bd6e
+    flip_reviewed: false
+    flip_commit: null
+
+  - flag: enable_readiness
+    branch: workout-6-readiness
+    build_commit: 21d155f1
+    build_date: 2026-07-17
+    merge_commit: 7a9ba3c7
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      FLIP THIS ONE FIRST. Both enable_plateau_escalation and the
+      enable_triggered_deload evaluator self-gate on readinessEnabled, so
+      flipping either of those while this is OFF leaves them inert at best and
+      biased at worst. Its build also carried migration 105, so unlike the
+      others this flag has live cloud state behind it.
+
+  - flag: enable_phase_arc
+    branch: workout-7a-phase-arc
+    build_commit: ea7a603e
+    build_date: 2026-07-17
+    merge_commit: b14186fa
+    flip_reviewed: false
+    flip_commit: null
+
+  - flag: enable_triggered_deload
+    branch: workout-7b-deload
+    build_commit: 2c3ec370
+    build_date: 2026-07-17
+    merge_commit: bf2e352b
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Depends on enable_readiness (see above). The deload cut is
+      non-invertible, which is why the build stashes the pre-cut week.
+
+  - flag: enable_adherence_gate
+    branch: workout-adherence-8a2int
+    build_commit: f47de745
+    build_date: 2026-07-18
+    merge_commit: 4fdcf4af
+    flip_reviewed: false
+    flip_commit: null
+
+  - flag: enable_volume_titration
+    branch: workout-titration-9
+    build_commit: 05f66c9b
+    build_date: 2026-07-18
+    merge_commit: 38706bae
+    flip_reviewed: false
+    flip_commit: null
+
+  - flag: enable_exercise_id_history
+    branch: workout-idkey-variety-11
+    build_commit: d66cd4c1
+    build_date: 2026-07-18
+    merge_commit: 1d93b677
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Forward-only by design — turning it on starts ID-keying new history and
+      does not retro-key old rows, so a flip is not cleanly reversible in the
+      data even though the code path is.
+
+  - flag: enable_injury_substitute_pref
+    branch: workout-variety-injurysub-11bc
+    build_commit: c7e26462
+    build_date: 2026-07-18
+    merge_commit: 0fa2b56c
+    flip_reviewed: false
+    flip_commit: null
+
+  - flag: enable_cross_phase_variety
+    branch: workout-variety-11b
+    build_commit: 6e8b491d
+    build_date: 2026-07-19
+    merge_commit: 544a1bbe
+    flip_reviewed: false
+    flip_commit: null
+
+  - flag: enable_plateau_escalation
+    branch: workout-plateau-12
+    build_commit: 83180fe6
+    build_date: 2026-07-19
+    merge_commit: dc8f4880
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Depends on enable_readiness (see above).
 
 # ── HARD PRECONDITIONS for flipping enable_hold_weeks ─────────────────────
 # Not a wish-list. The flip-on commit already requires the full ×2 + bpass

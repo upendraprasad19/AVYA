@@ -92,9 +92,17 @@ String _stagedFileContent(String path) {
   return r.stdout as String;
 }
 
-Future<List<String>> stagedPaths() async {
+/// Staged paths, or NULL when git could not answer.
+///
+/// B-pass finding 4: this returned `[]` on failure, which the caller read as
+/// "no staged changes" and exited 0 — passing a catastrophic-tier commit
+/// through untouched. Same class OI-72 fixes twice further down this very file
+/// (the SECURITY DEFINER content read and the review-artifact read), left alone
+/// at the earliest call site. Flagged as pre-existing rather than introduced
+/// here; fixed anyway, because it sits three lines from its own cure.
+Future<List<String>?> stagedPaths() async {
   final result = await Process.run('git', ['diff', '--cached', '--name-only']);
-  if (result.exitCode != 0) return [];
+  if (result.exitCode != 0) return null;
   return (result.stdout as String)
       .split('\n')
       .map((s) => s.trim())
@@ -106,6 +114,12 @@ Future<String> stagedDiffHash() async {
   // Pipe `git diff --cached` through `git hash-object --stdin` to get a stable
   // sha1 of the staged diff. No external Dart package needed.
   //
+  // OI-72: `docs/reviews/**` is EXCLUDED from the hash. The review file is
+  // named after this hash, so staging it — which is what makes it part of the
+  // commit — would move the hash and rename the file it is meant to satisfy.
+  // Excluding the directory breaks that circularity, and is what lets the
+  // existence check below read the STAGED blob instead of the working tree.
+  //
   // f4d1b7: capture the diff as RAW BYTES (`stdoutEncoding: null`) and feed them
   // verbatim. Pre-fix it decoded stdout to a String (via SystemEncoding — the
   // system code page, cp1252 on Windows) then hashed `.codeUnits` (UTF-16);
@@ -113,7 +127,17 @@ Future<String> stagedDiffHash() async {
   // (e.g. an emoji in a comment) the gate's hash diverged from
   // `git diff --cached | git hash-object --stdin` and the catastrophic review
   // file could NEVER be matched. Raw bytes are byte-identical to git's own hash.
-  final diff = await Process.run('git', ['diff', '--cached'],
+  // `:(top)` (aka `:/`) makes both halves repo-root-relative.
+  //
+  // HONEST HISTORY (round-2 review P2-C corrected round-1's P3-2): the ORIGINAL
+  // code passed no pathspec at all, and `git diff --cached` is NOT CWD-limited,
+  // so there was no bug to fix. Adding the exclusion is what introduced a
+  // pathspec — and a bare `.` WOULD have been CWD-relative. `:(top)` keeps the
+  // exclusion without introducing that sensitivity. Recorded rather than left
+  // reading as if it had fixed a real defect.
+  final diff = await Process.run(
+      'git',
+      ['diff', '--cached', '--', ':(top)', ':(top,exclude)$_reviewsDir'],
       stdoutEncoding: null);
   if (diff.exitCode != 0) return '';
   final bytes = (diff.stdout as List<int>);
@@ -139,6 +163,12 @@ Future<void> main(List<String> args) async {
   final rules = parseRules(regFile.readAsStringSync());
 
   final paths = await stagedPaths();
+  if (paths == null) {
+    stderr.writeln('$tag FAIL: `git diff --cached --name-only` failed. Refusing '
+        'to read a git error as "no staged changes" — that exits 0 and waves a '
+        'catastrophic-tier commit through.');
+    exit(warnOnly ? 0 : 1);
+  }
   if (paths.isEmpty) {
     stdout.writeln('$tag SKIP: no staged changes.');
     exit(0);
@@ -174,21 +204,42 @@ Future<void> main(List<String> args) async {
     exit(warnOnly ? 0 : 1);
   }
 
-  final reviewFile = File('$_reviewsDir/$hash-review.md');
-  if (!reviewFile.existsSync()) {
-    stderr.writeln('$tag FAIL: blast-radius=catastrophic requires a review file at $_reviewsDir/$hash-review.md');
-    stderr.writeln('  Run `/review` to generate it, then triage findings, then mark `verdict: accepted` in the frontmatter.');
+  // OI-72: read the review from the STAGED blob, not the working tree.
+  //
+  // The asymmetry this closes: the hash came from `git diff --cached` (the
+  // index) while the file was checked with `File(...).existsSync()` (the working
+  // tree). An UNTRACKED docs/reviews/<hash>-review.md therefore satisfied the
+  // catastrophic gate without ever entering history — and because it was
+  // untracked it contributed nothing to the staged diff, so the hash it was
+  // named after never moved. Three untracked `docs/reviews/*-review.md` files
+  // were sitting in the working tree when this was found.
+  //
+  // The helpers used here already exist a few lines up, with a comment
+  // describing exactly this class — they were applied to the SECURITY DEFINER
+  // content check and not to the review file itself.
+  final reviewPath = '$_reviewsDir/$hash-review.md';
+  if (!_stagedFileExists(reviewPath)) {
+    final untracked = File(reviewPath).existsSync();
+    stderr.writeln('$tag FAIL: blast-radius=catastrophic requires a STAGED review file at $reviewPath');
+    if (untracked) {
+      stderr.writeln('  The file exists in the working tree but is not staged. '
+          '`git add $reviewPath` — an unstaged review does not enter history, '
+          'so nothing records that this commit was reviewed.');
+    } else {
+      stderr.writeln('  Run `/review` to generate it, then triage findings, then mark `verdict: accepted` in the frontmatter.');
+    }
+    stderr.writeln('  (The hash excludes $_reviewsDir/, so staging the review does not rename it.)');
     exit(warnOnly ? 0 : 1);
   }
 
-  final content = reviewFile.readAsStringSync();
+  final content = _stagedFileContent(reviewPath);
   final verdictMatch = RegExp(r'^verdict:\s*([a-z_]+)', multiLine: true).firstMatch(content);
   if (verdictMatch == null || verdictMatch.group(1) != 'accepted') {
-    stderr.writeln('$tag FAIL: review file ${reviewFile.path} exists but verdict is not "accepted".');
-    stderr.writeln('  Triage all findings then change frontmatter to `verdict: accepted`.');
+    stderr.writeln('$tag FAIL: staged review file $reviewPath exists but verdict is not "accepted".');
+    stderr.writeln('  Triage all findings then change frontmatter to `verdict: accepted` AND re-stage it.');
     exit(warnOnly ? 0 : 1);
   }
 
-  stdout.writeln('$tag PASS: catastrophic commit has accepted review at ${reviewFile.path}.');
+  stdout.writeln('$tag PASS: catastrophic commit has an accepted, STAGED review at $reviewPath.');
   exit(0);
 }

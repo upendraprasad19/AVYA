@@ -71,13 +71,29 @@ When invoked, this skill should:
 
 1. Run `git diff --cached --name-only` and `git diff --cached` to assemble the diff.
 2. Compute blast-radius via `dart run scripts/blast_radius_from_diff.dart`.
-3. Generate a unique staging hash: `sha256(git diff --cached)` truncated to 12 chars.
+3. Generate the staging hash **exactly the way the gate does**, or the file you write
+   will not be the one it looks for:
+   ```bash
+   git diff --cached -- ':(top)' ':(top,exclude)docs/reviews' | git hash-object --stdin
+   ```
+   then truncate to 12 chars. Two details are load-bearing and this step documented
+   neither:
+   - It is git's **sha1 `hash-object`**, not `sha256`.
+     `scripts/check_code_review_pass_exists.dart` has always used `git hash-object`, so
+     a review named by following the old text could never match. (Found by round-1B
+     review of the gate-input-family batch, 2026-07-27.)
+   - `docs/reviews/` is **excluded** from the hash (OI-72, same batch). The gate now
+     reads the review from the STAGED blob, so the file must be `git add`ed — and
+     without the exclusion, staging it would move the hash and rename the very file it
+     is meant to satisfy.
 4. **Dispatch a FRESH Sonnet subagent** via `Agent({subagent_type: 'general-purpose', model: 'sonnet', ...})` with:
    - The diff inline (or list of changed files to Read)
    - The 5 lens prompts
    - Explicit instruction: "find bugs, do not validate; if you find nothing, list what you specifically checked and why each lens returned clean"
    - Output schema (the markdown above)
-5. Subagent returns findings — write to `docs/reviews/<staging-hash>-review.md`.
+5. Subagent returns findings — write to `docs/reviews/<staging-hash>-review.md`, then
+   **`git add` it**. An unstaged review no longer satisfies the catastrophic gate: it
+   never enters history, so nothing in the commit records that a review happened.
 6. Surface the file path in the main conversation; instruct founder to triage.
 
 ## 4. Triage workflow
