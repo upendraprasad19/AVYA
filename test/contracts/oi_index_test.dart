@@ -87,6 +87,53 @@ void main() {
     });
   });
 
+  group('OI-68 scar: unknown vocabulary must ERROR, never vanish', () {
+    // open_issues.md OI-68 records two withdrawn attempts at this mechanism and
+    // says "read before re-attempting". Its third-generation failure verbatim:
+    // "the format gate validated shape but not vocabulary — PENDING, BLOCKED,
+    // REOPENED and a one-character IN-PROGRESS typo all passed the gate and
+    // vanished from the digest." The first draft of this generator reproduced
+    // it exactly, via `if (!status.startsWith('OPEN')) continue;`.
+    for (final word in ['PENDING', 'BLOCKED', 'REOPENED', 'IN-PROGESS']) {
+      test('"$word" is reported, not silently dropped', () {
+        final board = _entry('OI-44', 'x', word);
+        expect(unrecognisedStatuses(board), hasLength(1),
+            reason: '$word must be named as unrecognised');
+        expect(unrecognisedStatuses(board).single, contains('OI-44'));
+        expect(parseOpenIssues(board), isEmpty,
+            reason: 'and it must NOT silently appear as open either');
+      });
+    }
+
+    test('the known vocabulary is accepted', () {
+      final board = _entry('OI-1', 'a', 'OPEN') +
+          _entry('OI-2', 'b', 'IN_PROGRESS') +
+          _entry('OI-3', 'c', 'CLOSED · 2026-07-28 · `abc123`');
+      expect(unrecognisedStatuses(board), isEmpty);
+      expect(parseOpenIssues(board).map((i) => i.id), ['OI-1', 'OI-2']);
+    });
+
+    test('a section with NO status line is reported', () {
+      expect(unrecognisedStatuses('## OI-9 — t\n\n- **Identified**: x\n'),
+          hasLength(1));
+    });
+
+    test('a trailing qualifier does not change the word', () {
+      expect(statusWord('CLOSED · 2026-07-28 · `abc123`'), 'CLOSED');
+      expect(statusWord('**OPEN**'), 'OPEN');
+      expect(statusWord('IN-PROGRESS'), 'IN_PROGRESS');
+    });
+
+    test('a doubly-bolded OPEN still parses (sibling-parser parity)', () {
+      // check_closes_oi_cited.dart already stripped `**` from values; the two
+      // disagreeing on the same board text is how one gate fires and the other
+      // stays silent.
+      final board = _entry('OI-44', 'x', '**OPEN**');
+      expect(unrecognisedStatuses(board), isEmpty);
+      expect(parseOpenIssues(board), hasLength(1));
+    });
+  });
+
   group('renderIndex', () {
     test('one line per issue, and the count is stated', () {
       final issues = parseOpenIssues(

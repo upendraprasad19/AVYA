@@ -93,6 +93,36 @@ void main() {
     });
   });
 
+  group('an unreadable status line must FAIL, not skip silently', () {
+    // parseBoardStatuses omits what it cannot read, so newlyClosed never visits
+    // it and no citation is demanded — the gate disables itself for that issue,
+    // with no output. Same family as the OI-68 scar: a parser that silently
+    // skips what it does not understand reports success while doing nothing.
+    test('colon INSIDE the bold is caught', () {
+      const board = '## OI-90 — t\n\n- **Status:** CLOSED · 2026-07-28\n';
+      expect(parseBoardStatuses(board), isEmpty,
+          reason: 'this is the silent-omission that made it a bypass');
+      expect(unreadableStatuses(board), ['OI-90']);
+    });
+
+    test('a missing `- ` bullet is caught', () {
+      expect(unreadableStatuses('## OI-90 — t\n\n**Status**: CLOSED\n'),
+          ['OI-90']);
+    });
+
+    test('a well-formed board reports nothing unreadable', () {
+      expect(
+          unreadableStatuses(_board({'OI-47': 'OPEN', 'OI-51': 'CLOSED'})),
+          isEmpty);
+    });
+
+    test('only the malformed section is named', () {
+      const board = '## OI-1 — a\n\n- **Status**: OPEN\n\n'
+          '## OI-2 — b\n\n- **Status:** CLOSED\n';
+      expect(unreadableStatuses(board), ['OI-2']);
+    });
+  });
+
   group('citedOis', () {
     test('picks up citations anywhere in the body', () {
       expect(citedOis('subject\n\nbody\n\ncloses-oi: OI-47\ncloses-oi: OI-51\n'),

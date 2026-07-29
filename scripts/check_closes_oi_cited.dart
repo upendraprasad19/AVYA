@@ -43,8 +43,30 @@ String? _gitOrNull(List<String> args) {
 bool _refExists(String ref) =>
     Process.runSync('git', ['rev-parse', '-q', '--verify', ref]).exitCode == 0;
 
+/// `## OI-NN` sections in [content] whose status line this parser cannot read.
+///
+/// An unreadable status is NOT a silent omission. `parseBoardStatuses` drops
+/// such a section from its map, so `newlyClosed` never visits it and no citation
+/// is ever demanded — a formatting slip like `- **Status:** CLOSED` (colon
+/// inside the bold) or a missing `- ` bullet would disable this gate for that
+/// issue, with no output at all. Same family as the OI-68 scar recorded in
+/// `open_issues.md`: a parser that silently skips what it does not understand
+/// reports success while doing nothing.
+List<String> unreadableStatuses(String content) {
+  final bad = <String>[];
+  final matches = _sectionRe.allMatches(content).toList();
+  for (var i = 0; i < matches.length; i++) {
+    final end = i + 1 < matches.length ? matches[i + 1].start : content.length;
+    if (_statusRe.firstMatch(content.substring(matches[i].end, end)) == null) {
+      bad.add(matches[i].group(1)!);
+    }
+  }
+  return bad;
+}
+
 /// Maps every `## OI-NN` section to the status on its first `**Status**:` line.
-/// A section with no status line is omitted rather than guessed.
+/// A section with no status line is omitted here and reported by
+/// [unreadableStatuses] — never silently accepted.
 Map<String, String> parseBoardStatuses(String content) {
   final out = <String, String>{};
   final matches = _sectionRe.allMatches(content).toList();
@@ -115,6 +137,22 @@ void main(List<String> args) {
   final afterRaw = _gitOrNull(['show', ':$_boardPath']);
   if (afterRaw == null) exit(0); // deleted, or unreadable — not our call to make
   // No HEAD version (initial commit / board newly added) means no transition.
+  // Fail LOUD on a status line we cannot read, rather than quietly requiring no
+  // citation for it. Checked on the staged (after) blob only — a pre-existing
+  // malformed line in HEAD is not this commit's to fix, but shipping one is.
+  final unreadable = unreadableStatuses(afterRaw);
+  if (unreadable.isNotEmpty) {
+    stderr.writeln('[closes-oi] FAIL: ${unreadable.length} section(s) in '
+        '$_boardPath have a `**Status**:` line this gate cannot read, so they '
+        'would silently escape the citation requirement:');
+    for (final oi in unreadable) {
+      stderr.writeln('  - $oi');
+    }
+    stderr.writeln('             Expected exactly: `- **Status**: OPEN` / '
+        '`- **Status**: CLOSED · …` (leading `- `, colon OUTSIDE the bold).');
+    exit(1);
+  }
+
   final before = parseBoardStatuses(beforeRaw ?? '');
   final after = parseBoardStatuses(afterRaw);
 

@@ -72,6 +72,43 @@ void main() {
     });
   });
 
+  group('shapes the first draft got wrong', () {
+    test('explicit indentation indicators (`|2`, `>2-`) are recognised', () {
+      // `symptom: |2` parsed as the literal string "|2", which the generator's
+      // self-check accepted — neither empty nor a BARE indicator. Same
+      // "looked populated but wasn't" failure in a different hat.
+      for (final ind in ['|2', '>2', '|2-', '>-', '|+']) {
+        expect(blockScalarRe.hasMatch(ind), isTrue, reason: 'indicator $ind');
+      }
+      final fm = parseFrontmatter(_doc('symptom: |2\n  real text\n'));
+      expect(fm!['symptom'], 'real text');
+    });
+
+    test('an INDENTED `---` inside a scalar does not truncate frontmatter', () {
+      // A lazy `^---\n(.*?)\n---` regex ended the frontmatter at the first
+      // `\n---` anywhere, silently dropping every field after it while
+      // `symptom` still looked fine — so the self-check never fired.
+      final fm = parseFrontmatter('---\n'
+          'bug_id: aaa111\n'
+          'symptom: >\n'
+          '  before the rule\n'
+          '  ---\n'
+          '  after the rule\n'
+          'concept: sync_guard\n'
+          'contract_test_path: test/contracts/x_test.dart\n'
+          '---\n\n# body\n');
+      expect(fm, isNotNull);
+      expect(fm!['concept'], 'sync_guard',
+          reason: 'fields after the embedded rule must survive');
+      expect(fm['contract_test_path'], 'test/contracts/x_test.dart');
+      expect(fm['symptom'], contains('after the rule'));
+    });
+
+    test('a doc with no closing delimiter returns null, not a partial parse', () {
+      expect(parseFrontmatter('---\nbug_id: x\nno close here\n'), isNull);
+    });
+  });
+
   group('scalar termination', () {
     test('a following key at column 0 is not swallowed', () {
       final fm = parseFrontmatter(_doc('symptom: >\n'

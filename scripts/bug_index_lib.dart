@@ -13,8 +13,15 @@
 // index the mandatory first step before any root-cause hypothesis, so 70% of
 // bug history was unsearchable by symptom while the file looked populated.
 
-/// A bare YAML block-scalar indicator: `|`, `|-`, `|+`, `>`, `>-`, `>+`.
-final blockScalarRe = RegExp(r'^[|>][-+]?$');
+/// A YAML block-scalar indicator: `|`, `|-`, `|+`, `>`, `>-`, `>+`, and the
+/// explicit-indentation forms `|2`, `>2-`, `|-2` …
+///
+/// The digit forms were missing from the first draft: `symptom: |2` parsed as
+/// the literal two-character string `"|2"`, which the self-check accepted as a
+/// perfectly good symptom because it is neither empty nor a *bare* indicator.
+/// That is the same "looked populated but wasn't" failure this file exists to
+/// kill, wearing a slightly different hat.
+final blockScalarRe = RegExp(r'^[|>](?:[-+]?\d*|\d*[-+]?)$');
 
 /// One-line, greppable summary of a possibly multi-paragraph field.
 ///
@@ -52,10 +59,28 @@ String foldScalar(List<String> lines) {
 Map<String, dynamic>? parseFrontmatter(String content) {
   // Normalize line endings so CRLF (Windows) files parse the same as LF.
   final normalized = content.replaceAll('\r\n', '\n');
-  final match = RegExp(r'^---\n(.*?)\n---', dotAll: true).firstMatch(normalized);
-  if (match == null) return null;
+  final all = normalized.split('\n');
+  if (all.isEmpty || all.first.trimRight() != '---') return null;
+
+  // Find the closing delimiter by scanning LINES for one that is exactly `---`,
+  // not with a lazy `.*?` regex over the raw string. A folded `symptom:` block
+  // can legitimately contain an unindented `---` (a markdown rule, a pasted
+  // frontmatter fence), and the lazy form ended the frontmatter THERE — silently
+  // dropping every field written after it (concept, contract_test_path,
+  // recurrence, writers) while `symptom` itself still looked fine, so the
+  // self-check never fired.
+  var close = -1;
+  for (var i = 1; i < all.length; i++) {
+    if (all[i].trimRight() != '---') continue;
+    // A line indented under an open block scalar belongs to that scalar.
+    if (all[i].startsWith(' ') || all[i].startsWith('\t')) continue;
+    close = i;
+    break;
+  }
+  if (close < 0) return null;
+
   final out = <String, dynamic>{};
-  final lines = match.group(1)!.split('\n');
+  final lines = all.sublist(1, close);
   final keyRe = RegExp(r'^([a-z_]+):\s*(.*)$');
 
   for (var i = 0; i < lines.length; i++) {

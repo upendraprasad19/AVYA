@@ -32,7 +32,22 @@ const _boardPath = 'docs/audit/open_issues.md';
 const _indexPath = 'docs/audit/OPEN_INDEX.md';
 
 final _sectionRe = RegExp(r'^## (OI-\d+)\s*—\s*(.*)$');
-final _fieldRe = RegExp(r'^-\s+\*\*(Status|Blocked on|Verified)\*\*:\s*(.*)$');
+// `\**` strips a doubly-bolded value (`- **Status**: **OPEN**`). The sibling
+// parser in check_closes_oi_cited.dart already did this; the two disagreeing on
+// the same board text is how one gate stays silent while the other fires.
+final _fieldRe =
+    RegExp(r'^-\s+\*\*(Status|Blocked on|Verified)\*\*:\s*\**\s*(.*)$');
+
+/// Status vocabulary this index understands. Anything else is an ERROR, never a
+/// silent skip — see [_classify].
+const _openWords = {'OPEN', 'IN_PROGRESS'};
+const _closedWords = {'CLOSED'};
+
+/// The first word of a status line: `CLOSED · 2026-07-28 · abc123` → `CLOSED`.
+String statusWord(String raw) {
+  final m = RegExp(r'^\**\s*([A-Za-z_-]+)').firstMatch(raw.trim());
+  return (m?.group(1) ?? '').toUpperCase().replaceAll('-', '_');
+}
 
 class OpenIssue {
   OpenIssue(this.id, this.title, this.line, this.blockedOn, this.verified);
@@ -43,8 +58,51 @@ class OpenIssue {
   final String verified;
 }
 
-/// Parses the board into its OPEN entries. Anything not `**Status**: OPEN` is
-/// skipped — closed entries live in `closed_issues.md`.
+/// Every `## OI-NN` header whose status this parser does NOT recognise.
+///
+/// THE SCAR THIS EXISTS FOR — `open_issues.md` OI-68, "read before
+/// re-attempting". Two earlier attempts at this exact mechanism were built and
+/// withdrawn, and the third-generation failure is recorded verbatim: *"the
+/// format gate validated shape but not vocabulary — `PENDING`, `BLOCKED`,
+/// `REOPENED` and a one-character `IN-PROGRESS` typo all passed the gate and
+/// vanished from the digest."*
+///
+/// A `continue` on an unrecognised status reproduces that exactly: the entry is
+/// silently absent from the index, the generator exits 0, and the backlog looks
+/// complete. Unknown vocabulary is therefore an ERROR, not a skip. Adding a new
+/// status word is a deliberate one-line edit to [_openWords]/[_closedWords], not
+/// something a typo can do by accident.
+List<String> unrecognisedStatuses(String content) {
+  final lines = content.replaceAll('\r\n', '\n').split('\n');
+  final bad = <String>[];
+  for (var i = 0; i < lines.length; i++) {
+    final head = _sectionRe.firstMatch(lines[i]);
+    if (head == null) continue;
+    String? raw;
+    for (var j = i + 1; j < lines.length; j++) {
+      if (lines[j].startsWith('## ') || lines[j].startsWith('# ')) break;
+      final f = _fieldRe.firstMatch(lines[j]);
+      if (f != null && f.group(1) == 'Status') {
+        raw = f.group(2)!.trim();
+        break;
+      }
+    }
+    if (raw == null) {
+      bad.add('${head.group(1)} (line ${i + 1}): no `- **Status**:` line found');
+      continue;
+    }
+    final w = statusWord(raw);
+    if (!_openWords.contains(w) && !_closedWords.contains(w)) {
+      bad.add('${head.group(1)} (line ${i + 1}): unknown status "$w" '
+          '(known: ${{..._openWords, ..._closedWords}.join(', ')})');
+    }
+  }
+  return bad;
+}
+
+/// Parses the board into its OPEN entries. Closed entries live in
+/// `closed_issues.md`; unknown vocabulary is rejected by [unrecognisedStatuses]
+/// before this result is ever rendered.
 List<OpenIssue> parseOpenIssues(String content) {
   final lines = content.replaceAll('\r\n', '\n').split('\n');
   final out = <OpenIssue>[];
@@ -66,7 +124,7 @@ List<OpenIssue> parseOpenIssues(String content) {
           if (verified.isEmpty) verified = v;
       }
     }
-    if (!status.toUpperCase().startsWith('OPEN')) continue;
+    if (!_openWords.contains(statusWord(status))) continue;
     out.add(OpenIssue(
         head.group(1)!, _shorten(head.group(2)!.trim()), i + 1, blocked, verified));
   }
@@ -117,7 +175,22 @@ void main() {
     stderr.writeln('$_boardPath not found');
     exit(1);
   }
-  final issues = parseOpenIssues(board.readAsStringSync());
+  final content = board.readAsStringSync();
+
+  // Vocabulary check FIRST — an unrecognised status must not be able to vanish
+  // an issue from the index. See unrecognisedStatuses() for the OI-68 scar.
+  final unknown = unrecognisedStatuses(content);
+  if (unknown.isNotEmpty) {
+    stderr.writeln('[OI-INDEX] FAIL: ${unknown.length} issue(s) in $_boardPath '
+        'carry a status this index does not recognise. They would be SILENTLY '
+        'absent from the index, which is exactly the failure OI-68 records:');
+    for (final u in unknown) {
+      stderr.writeln('  - $u');
+    }
+    exit(1);
+  }
+
+  final issues = parseOpenIssues(content);
 
   // SELF-CHECK — fail closed. docs/diagnoses/INDEX.md sat 70% empty for months
   // because its generator exited 0 while writing placeholders. An index nobody

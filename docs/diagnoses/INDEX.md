@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### gate_fail_closed_discipline (1 bugs)
+- 2026-07-29 a9f2c6 — Three gates shipped in this batch exited 0 while doing nothing. An OI whose status read `BLOCKED` vanished from OPEN_INDEX.md with no error; an OI whose status line read `- **Status:** CLOSED` escaped…
+
 ### bug_history_index (1 bugs)
 - 2026-07-28 c4e8a2 — 237 of 344 entries in docs/diagnoses/INDEX.md carried no symptom text — just a bare `>`, `>-` or `|`. CLAUDE.md §4.1.5 makes grepping that index the mandatory first step before any root-cause…
 
@@ -876,6 +879,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-29 | a9f2c6 | Three gates shipped in this batch exited 0 while doing nothing. An OI whose status read `BLOCKED` vanished from OPEN_INDEX.md with no error; an OI whose status line read `- **Status:** CLOSED` escaped… | gate_fail_closed_discipline | test/contracts/oi_index_test.dart |
 | 2026-07-28 | c4e8a2 | 237 of 344 entries in docs/diagnoses/INDEX.md carried no symptom text — just a bare `>`, `>-` or `\|`. CLAUDE.md §4.1.5 makes grepping that index the mandatory first step before any root-cause… | bug_history_index | test/contracts/bug_index_frontmatter_test.dart |
 | 2026-07-28 | c3f8e1 | main went RED on 10dffc90. Two PRE-EXISTING gate e2e tests failed in CI while passing locally and through both pre-commit and pre-push: the gate they spawn inherited CI's real GITHUB_EVENT_PATH, whose… | gate_test_environment_hermeticity | test/contracts/gate_e2e_env_hermetic_test.dart |
 | 2026-07-28 | e1b7d4 | `main` went red twice in 25 CI runs on commits that touched no Deno code, both times with `Import 'https://esm.sh/@supabase/supabase-js@2.39.0' failed: 522` at clean-orphan-media/index.ts:2. 522 is a… | ci_remote_dependency_resilience | not_applicable |
