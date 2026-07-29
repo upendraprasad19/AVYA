@@ -194,41 +194,6 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   5. **`HealthSyncService.syncToHive()` CONFIRMED**, citation refreshed to `:148` (check at
      `:197`, put at `:199`).
 
-## OI-46 — L28 service-invariant gaps: 3 client-side-only rules (P1)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-07-29
-- **Identified**: 2026-05-17 · OI-43 / L28 lens scan
-- **Risk class**: rule bypass via new entry point
-- **Effort**: ~1 day
-- **Findings (UI-only — new caller would bypass):**
-  - Daily AI text log limit (50 free / 200 PRO) — only `UsageCounterService` in-memory counter; NO Postgres trigger on `ai_coach_interactions` for `channel='in_app'`. Compare to `enforce_food_text_daily_limit` precedent (migration 026).
-  - Scan meal daily limit + cart auditor daily limit — same in-memory-only pattern; nutrition API batch endpoint lacks gates.
-  - Onboarding fields required — only `OnboardingNotifier` route sequence enforces; no `users.*` NOT NULL constraints.
-- **Already mitigated**: swapDays consecutive-rest + source≠target guards moved into `WorkoutScheduleService.swapDays()` per audit-2026-05-11 H-6 (precedent pattern).
-- **Fix shape**: add Postgres `BEFORE INSERT` triggers + 23P01 raise on cap exceeded; let Edge Function catch + return 429.
-- **CORRECTED 2026-07-29** (oi-board-corrections batch) — **the first named finding above is
-  WRONG, not just stale.** `channel='in_app'` does not exist as an `ai_coach_interactions`
-  value anywhere in the codebase (it's an unrelated client-only coach-delivery-mode string).
-  The actual 50/200 food-text cap is `channel='food_text_analysis'`, and it **already has**
-  atomic trigger protection — `trg_food_text_rate_limit`, migration 026 — the exact precedent
-  this entry cites as what to imitate is already applied to the feature this entry describes as
-  unprotected. `tool_dispatcher.dart:1225-1227` and diagnose-docs `0f8d54`/`7ad0d8` corroborate
-  this predates the 2026-07-26 "Verified" stamp by months.
-  **Two REAL, different gaps found in its place:**
-  1. Free-tier chat (`channel='app'`, 10/day cap) is check-then-insert —
-     `ai-proxy/index.ts:607` (gate check), `:942` (insert) — no trigger.
-  2. Vision cap (`scan_meal`+`cart_auditor` combined, 15/day) is check-then-insert —
-     `ai-proxy/index.ts:438` (cap check), `:475`/`:519` (inserts) — no trigger.
-  **`swapDays` "already mitigated" claim is misleading, not true.** Verified
-  `swap_service.dart:111-167` — the guards are real but 100% client-side Dart against local
-  Hive state; there is **no Postgres constraint/trigger** on `scheduled_workouts` backing them.
-  This entry's own risk model says client-only rules are exactly what's insufficient —
-  reclassified as a 4th instance of the same gap (client-only, accepted lower-severity risk
-  given the blast radius is a malformed schedule, not a quota/money bypass), not a fix
-  precedent.
-
 ## OI-48 — L31 cron efficiency: 3 functions are O(all users), recompute-everything (P2)
 
 - **Status**: OPEN

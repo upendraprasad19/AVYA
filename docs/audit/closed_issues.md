@@ -1125,3 +1125,77 @@ board.
   comment explaining why the working tree cannot be trusted.
 - **Real fix**: read the review file from the staged blob and exclude `docs/reviews/**` from the
   gate's own hash, so the artifact is both required and recorded.
+
+## OI-46 — L28 service-invariant gaps: 3 client-side-only rules (P1)
+
+- **Status**: CLOSED · 2026-07-29 · branch `oi46-daily-cap-triggers`, diagnose `f4a19c`
+- **Blocked on**: none
+- **Verified**: 2026-07-29
+- **Identified**: 2026-05-17 · OI-43 / L28 lens scan
+- **Risk class**: rule bypass via new entry point
+- **Effort**: ~1 day (actual: 3 new migrations + an ai-proxy restructuring, ×2 review + B-pass)
+- **Findings (UI-only — new caller would bypass), kept verbatim as filed:**
+  - Daily AI text log limit (50 free / 200 PRO) — only `UsageCounterService` in-memory counter; NO Postgres trigger on `ai_coach_interactions` for `channel='in_app'`. Compare to `enforce_food_text_daily_limit` precedent (migration 026).
+  - Scan meal daily limit + cart auditor daily limit — same in-memory-only pattern; nutrition API batch endpoint lacks gates.
+  - Onboarding fields required — only `OnboardingNotifier` route sequence enforces; no `users.*` NOT NULL constraints.
+- **Already mitigated**: swapDays consecutive-rest + source≠target guards moved into `WorkoutScheduleService.swapDays()` per audit-2026-05-11 H-6 (precedent pattern).
+- **Fix shape (as filed)**: add Postgres `BEFORE INSERT` triggers + 23P01 raise on cap exceeded; let Edge Function catch + return 429.
+- **CORRECTED 2026-07-29** (oi-board-corrections batch) — **the first named finding above was
+  WRONG, not just stale.** `channel='in_app'` does not exist as an `ai_coach_interactions`
+  value anywhere in the codebase (it's an unrelated client-only coach-delivery-mode string).
+  The actual 50/200 food-text cap is `channel='food_text_analysis'`, and it **already had**
+  atomic trigger protection — `trg_food_text_rate_limit`, migration 026 — the exact precedent
+  this entry cited as what to imitate was already applied to the feature this entry described as
+  unprotected. `tool_dispatcher.dart:1225-1227` and diagnose-docs `0f8d54`/`7ad0d8` corroborate
+  this predates the 2026-07-26 "Verified" stamp by months.
+  **Two REAL, different gaps found in its place — both closed by this fix:**
+  1. Free-tier chat (`channel='app'`, 10/day cap) was check-then-insert —
+     `ai-proxy/index.ts:607` (gate check), `:942` (insert) — no trigger.
+  2. Vision cap (`scan_meal`+`cart_auditor` combined, 15/day) was check-then-insert —
+     `ai-proxy/index.ts:438` (cap check), `:475`/`:519` (inserts) — no trigger; worse than a
+     TOCTOU, the success-path insert was wrapped in a swallowed `catch (_) {}`, so even a
+     hypothetical trigger added there alone would never have actually rejected a capped request.
+  **`swapDays` "already mitigated" claim was misleading, not true — reclassified, not fixed by
+  this batch.** Verified `swap_service.dart:111-167` — the guards are real but 100% client-side
+  Dart against local Hive state; there is **no Postgres constraint/trigger** on
+  `scheduled_workouts` backing them. This entry's own risk model says client-only rules are
+  exactly what's insufficient — reclassified as a 4th instance of the same gap, **accepted as a
+  lower-severity residual risk** given the blast radius is a malformed workout schedule, not a
+  quota/money bypass. Not part of this closure's fix scope (the plan that closed this OI scoped
+  the fix to the chat/vision caps + onboarding fields only — see `docs/plan-reviews/
+  oi46-daily-cap-triggers.md`); if `swapDays` needs a server-side backstop, that is a new,
+  separately-filed OI, not a reopen of this one.
+- **What actually shipped (2026-07-29, branch `oi46-daily-cap-triggers`)**:
+  - Migration 111: `trg_chat_app_rate_limit` (channel='app', 10/day, PRO-exempt) +
+    `trg_vision_analysis_rate_limit` (channel IN ('scan_meal','cart_auditor'), combined 15/day) —
+    both `BEFORE INSERT` triggers on `ai_coach_interactions`, mirroring migration 026's
+    `RAISE EXCEPTION ... USING ERRCODE='P0001'` shape.
+  - Migration 112: `trg_onboarding_required_fields` — a state-TRANSITION gate on `user_profile`
+    (fires only on the NULL→non-NULL flip of `onboarding_completed_at`, not every update),
+    requiring all 9 onboarding-critical fields (`date_of_birth`, `gender`, `height_cm`,
+    `current_weight_kg`, `target_weight_kg`, `primary_goal`, `fitness_experience`,
+    `days_per_week`, `equipment_access`) non-null at that moment.
+  - Migration 113 (unplanned finding, fixed in the same batch): migration 026's own
+    `enforce_food_text_daily_limit` used a bare `date_trunc('day', now())` boundary, resetting
+    the food-text cap at 05:30 IST instead of midnight IST — the exact bug class this batch was
+    adding IST-correct triggers to prevent, found live in the precedent being mirrored. Fixed via
+    `CREATE OR REPLACE`, cap values/gating unchanged.
+  - `ai-proxy/index.ts` restructured from check-then-insert (chat) / insert-after-success behind
+    a swallowed catch (vision) to an insert-first "reservation" pattern matching
+    `food_text_analysis`'s own precedent: reserve a row before calling Gemini, catch the
+    trigger's P0001 and return 429 without calling Gemini, UPDATE (not INSERT) the reserved row
+    once Gemini succeeds.
+  - **Live apply + deploy, both under explicit separate founder authorization per CLAUDE.md
+    §4.3** (plan approval ≠ deploy approval): migrations 111/112/113 applied to
+    `dedsavbjuwgarrhphgnl` 2026-07-29T16:03:47+05:30; `ai-proxy` redeployed as version 79 (the
+    pre-batch deployed code would have thrown raw errors on chat's 11th message and silently
+    discarded the vision trigger's rejection entirely — surfaced proactively, not left as a
+    deploy-lag gap). Verified live via `pg_trigger` (all 4 triggers present/enabled) and
+    `test/sql/oi46_daily_cap_triggers_live_verify.sql` (7/7 cases passing).
+  - Process: ×2 independent context-blind plan review + a 5-lens B-pass (`docs/reviews/
+    2dbdf134304e-review.md`), converged per `docs/plan-reviews/oi46-daily-cap-triggers.md`. The
+    B-pass caught a second `onboarding_completed_at` writer (`restoring_screen.dart`'s OBS-3
+    self-heal) that neither review round's writer enumeration had found, which this same fix
+    would otherwise have put into a permanent doomed-retry loop for a narrow legacy cohort —
+    fixed in the same batch.
+- **Diagnose-doc**: `docs/diagnoses/2026-07-29-ai-coach-daily-caps-toctou-f4a19c.md`.

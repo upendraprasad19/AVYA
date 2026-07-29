@@ -137,10 +137,22 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         // every cold start. Self-heal-stamp instead.
         final hiveProfile = HiveService.instance.userBox.get('profile');
         final hiveProfileMap = hiveProfile is Map ? hiveProfile : null;
-        final hasCorePlanFields = hiveProfileMap != null &&
+        // OI-46 (2026-07-29, B-pass) — renamed from hasCorePlanFields (3
+        // fields) to hasAllRequiredFields, matching the 9 columns migration
+        // 112 gates server-side. Also now gates the stamp ATTEMPT below: a
+        // flagOnboarded=true legacy user missing one of the other 6 fields
+        // would otherwise retry-and-be-rejected (P0001) forever with no way
+        // to succeed. Navigation is unaffected — that cohort still goes home.
+        final hasAllRequiredFields = hiveProfileMap != null &&
             hiveProfileMap['primary_goal'] != null &&
             hiveProfileMap['fitness_experience'] != null &&
-            hiveProfileMap['current_weight_kg'] != null;
+            hiveProfileMap['current_weight_kg'] != null &&
+            hiveProfileMap['date_of_birth'] != null &&
+            hiveProfileMap['gender'] != null &&
+            hiveProfileMap['height_cm'] != null &&
+            hiveProfileMap['target_weight_kg'] != null &&
+            hiveProfileMap['days_per_week'] != null &&
+            hiveProfileMap['equipment_access'] != null;
         // audit-2026-05-16 reader-side / F3-2.1 — onboarding_completed
         // moved to userBox via MigratedKey (Test #11.1, UserConfigMigrator
         // v2). Reading from configBox directly returns the legacy/empty
@@ -151,15 +163,22 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         final flagOnboarded =
             MigratedKey.readWithDefault<bool>('onboarding_completed', false);
 
-        if (flagOnboarded || hasCorePlanFields) {
+        if (flagOnboarded || hasAllRequiredFields) {
           debugPrint(
             '[RestoringScreen] self-heal: cloud onboarding_completed_at is '
             'NULL but Hive profile is populated — stamping now.',
           );
-          // Fire-and-forget — non-fatal if it fails; next launch retries.
-          unawaited(_stampOnboardingCompletedAt(user.id).catchError((e) {
-            debugPrint('[RestoringScreen] self-heal stamp failed: $e');
-          }));
+          if (hasAllRequiredFields) {
+            // Only attempt the stamp when it can actually satisfy migration
+            // 112's trigger. A flagOnboarded=true legacy user whose profile
+            // is missing one of the 9 gated fields skips the attempt (it
+            // would just be rejected every time) but still goes home below
+            // — no navigation change for that cohort, just no more
+            // pointless doomed-write retries on every cold start.
+            unawaited(_stampOnboardingCompletedAt(user.id).catchError((e) {
+              debugPrint('[RestoringScreen] self-heal stamp failed: $e');
+            }));
+          }
           // Treat as fully onboarded — go home (default: await restore first;
           // bg-restore flag: a returning user reaches home immediately).
           await _goHome(user.id, restoreFuture);

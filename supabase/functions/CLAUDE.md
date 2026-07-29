@@ -126,8 +126,15 @@ Client call sites are all `SupabaseService.callFunction(AppConstants.aiProxyFunc
 | `type` | Model | Cap | Client call site |
 |---|---|---|---|
 | `food_text_analysis` | `gemini-2.5-flash`, JSON mode | 50/day free · 200/day PRO — enforced atomically by the `trg_food_text_rate_limit` Postgres trigger (migration 024), which raises `food_text_daily_limit_reached` (SQLSTATE P0001) → 429 | `lib/features/nutrition/providers/nutrition_provider.dart:733` |
-| `scan_meal` | `gemini-2.5-flash-lite` (vision), JSON mode | **15/day server cap** | `nutrition_provider.dart:1356` |
-| `cart_auditor` | `gemini-2.5-flash-lite` (vision), JSON mode | **15/day server cap** | `nutrition_provider.dart:1445` |
+| `scan_meal` | `gemini-2.5-flash-lite` (vision), JSON mode | **15/day COMBINED with `cart_auditor`** — one shared budget, not two independent 15/day caps (corrected 2026-07-29, OI-46). Enforced atomically by `trg_vision_analysis_rate_limit` (migration 111), which raises `vision_analysis_daily_limit_reached` (SQLSTATE P0001) → 429. | `nutrition_provider.dart:1356` |
+| `cart_auditor` | `gemini-2.5-flash-lite` (vision), JSON mode | **15/day COMBINED with `scan_meal`** — same shared budget as above, same trigger. | `nutrition_provider.dart:1445` |
+
+Chat (`type` omitted or `"chat"`, `channel='app'` in `ai_coach_interactions`) is free 10/day forever ·
+PRO unlimited — enforced atomically by `trg_chat_app_rate_limit` (migration 111), which raises
+`chat_app_daily_limit_reached` (SQLSTATE P0001) → 429. All three triggers (food_text, chat, vision)
+use the insert-first "reservation" pattern: the row is inserted (or updated) BEFORE calling Gemini,
+so a capped request never pays for a model call it can't keep — Edge Function catches the trigger's
+error message substring and maps it to a 429 without ever reaching `geminiChat()`.
 
 Note `scan_meal` — the `type` is NOT `food-scan-analysis`; the old table named a slug that
 never existed on either side of the wire.
@@ -144,6 +151,8 @@ into the response body (CLAUDE.md §4.4 rule 17).
 |---|---|---|
 | `ai_proxy_placeholder_resolution` | `ai-proxy/index.ts` inserts placeholder row → calls Gemini → updates row | client-side dedup checks placeholder before issuing new request. |
 | `food_text_analysis_daily_cap` | `trg_food_text_rate_limit` Postgres trigger (migration 024) on `ai_coach_interactions` | client maps 429 → "limit reached". |
+| `chat_app_daily_cap` | `trg_chat_app_rate_limit` Postgres trigger (migration 111, PRO-aware) on `ai_coach_interactions`, channel='app' | `ai-proxy/index.ts` catches `chat_app_daily_limit_reached` → 429; client maps to "Daily message limit reached". |
+| `vision_analysis_daily_cap` | `trg_vision_analysis_rate_limit` Postgres trigger (migration 111) on `ai_coach_interactions`, channel IN ('scan_meal','cart_auditor') — one shared 15/day budget | `ai-proxy/index.ts` catches `vision_analysis_daily_limit_reached` → 429; client maps to "Daily vision analysis limit reached". |
 | `chat_media_signed_url` | `ai-media-proxy` issues short-TTL signed URL after SSRF allowlist check | `WardroomChatBubble` photo renderer. |
 | `log_client_error_payload` | client `ErrorTelemetry.recordNonFatal` POSTs to `log-client-error` Edge Function (rate-limit 100→2000/window, `next_window_at` signal, HIGH_PRIORITY_OP_TYPES bypass) | `client_errors` Postgres table + audit queries. APK Test #16.1 / D silent-drop fix. |
 | Cron auth gate | `_shared/cron_auth.ts` (service-role-key + JWT decode fallback) | every cron-dispatched function. Adoption gated by `cron_auth_adoption_test.dart`. |
