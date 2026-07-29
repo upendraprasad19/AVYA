@@ -30,6 +30,8 @@
 
 import 'dart:io';
 
+import 'gate_scripts_wired_lib.dart';
+
 const _allowList = <String, String>{
   // Gates that run from /build-apk skill, not pre-commit/CI (too slow
   // or require build artifacts).
@@ -69,6 +71,8 @@ const _allowList = <String, String>{
       'Runs `flutter test --reporter json` internally — too slow for pre-commit. Manual / CI artifact gate (Gate 41 audit T9).',
   'check_no_deferral_euphemism.dart':
       'Scans the STAGED diff (git diff --cached) for deferral-euphemism phrases (§4.2) — meaningful ONLY at pre-commit; CI has no staged index. Hard-fail in scripts/pre-commit.sh (baseline soak cleared 2026-06-28); case-skipped from the auto-loop, invoked explicitly.',
+  'check_closes_oi_cited.dart':
+      'Commit-msg gate for the closes-oi convention (§7 pointer table / docs/audit/open_issues.md:17) — takes the proposed commit message file as its REQUIRED argument, which the check_*.dart loop never supplies. Bare invocation is a usage-error exit, not a real gate verdict. Case-skipped from BOTH scripts/pre-commit.sh and the .github/workflows/test.yml loop; wired instead in scripts/commit-msg.sh. Without this entry, the dynamic-wiring inference below (absence from a case-skip block reads as "covered by the loop") misclassifies a guaranteed crash as wired — a9f2c6.',
 };
 
 // Explicit allowlist for validate_*.dart and audit_*.dart scripts (P1.H/F2).
@@ -156,9 +160,8 @@ void main(List<String> args) async {
   // a `case "$NAME" in` block). If a script appears here, it's intentionally
   // skipped by the dynamic loop and we should NOT count it as wired even if
   // the loop nominally covers it.
-  final caseSkipRegex = RegExp(r'check_[a-z0-9_]+\.dart');
-  final preCommitCaseSkips = _extractCaseSkips(preCommitContent, caseSkipRegex);
-  final workflowCaseSkips = _extractCaseSkips(workflowContent, caseSkipRegex);
+  final preCommitCaseSkips = extractCaseSkips(preCommitContent, caseSkipRegex);
+  final workflowCaseSkips = extractCaseSkips(workflowContent, caseSkipRegex);
 
   for (final script in allChecks) {
     if (_allowList.containsKey(script)) continue;
@@ -224,28 +227,4 @@ void main(List<String> args) async {
   stderr.writeln('  to pre-commit.sh or test.yml, OR add an entry to');
   stderr.writeln('  _explicitAllowList with a reason (on-demand validators only).');
   exit(warnOnly ? 0 : 1);
-}
-
-// Return script filenames that appear inside a shell `case "$NAME" in` block —
-// these are intentionally skipped by the dynamic loop.
-Set<String> _extractCaseSkips(String content, RegExp pattern) {
-  final skips = <String>{};
-  final lines = content.split('\n');
-  var inCase = false;
-  for (final line in lines) {
-    final trimmed = line.trim();
-    if (trimmed.startsWith('case ') && trimmed.contains(' in')) {
-      inCase = true;
-      continue;
-    }
-    if (inCase && trimmed == 'esac') {
-      inCase = false;
-      continue;
-    }
-    if (!inCase) continue;
-    for (final m in pattern.allMatches(line)) {
-      skips.add(m.group(0)!);
-    }
-  }
-  return skips;
 }

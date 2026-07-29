@@ -169,8 +169,15 @@ jobs:
               check_two_user_cross_account.dart|\
               check_regression_catalog.dart|\
               check_snapshot_contract.dart|\
-              check_test_runtime_budget.dart)
+              check_test_runtime_budget.dart|\
+              check_closes_oi_cited.dart)
                 # Razorpay: .env.prod gitignored, CI never sees it.
+                # check_closes_oi_cited.dart: a commit-msg gate — takes the
+                # proposed message file as its argument, which does not exist
+                # in this loop. Bare invocation is `Usage: ... <commit-msg-file>`
+                # then a non-zero exit, not a real gate failure. Wired instead
+                # in scripts/commit-msg.sh (mirrors the pre-commit.sh skip for
+                # the identical reason).
                 # Other 4: require live DB / merge context / build artifact.
                 # See scripts/check_gate_scripts_wired.dart allowlist.
                 echo "[skip allow-list] $NAME"
