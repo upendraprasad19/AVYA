@@ -183,3 +183,34 @@ The method note: verifying a fix against the failure it targets is not the
 same as verifying the fix doesn't introduce a new one. Re-running the
 relevant gate after *every* edit — not just at the end — is what caught
 this before it reached a commit.
+
+## B-pass: the extraction's own parser scanned a comment as a real pattern
+
+The B-pass found what round 1 and round 2 both missed: `extractCaseSkips`
+(both before and after the shared-library extraction — the logic is
+byte-for-byte unchanged there) regex-matches every line inside a case arm,
+including its **command body**, not just its pattern list. `test.yml`'s
+`check_closes_oi_cited.dart` arm has an explanatory comment that restates the
+filename inside that body. That comment independently satisfies the match,
+so a future edit deleting the real `check_closes_oi_cited.dart)` pattern
+line while leaving the comment behind would make this fix's own two
+regression-test assertions keep passing — silently, with the real bash loop
+now bare-invoking the gate again.
+
+Traced whether this reaches `check_gate_scripts_wired.dart`'s own PASS/FAIL
+verdict: it doesn't, because `inWorkflow = workflowContent.contains(script)
+|| (...)` — the same comment text that causes the false case-skip match also
+independently satisfies the plain-substring first disjunct, so Gate 33's
+verdict is protected by coincidence, not by the parser being correct. This
+fix's OWN regression test has no such second disjunct — it asserts
+`extractCaseSkips(...).contains(_gate)` directly, so the coincidence that
+protects Gate 33 does not protect the test.
+
+Fixed by making `extractCaseSkips` track the pattern-list portion of each
+arm separately from its command body, stopping the regex scan at the line
+containing the arm's closing `)`. New test:
+`test/contracts/gate_wiring_args_required_test.dart`'s "B-pass scar" group
+constructs a case block where a name appears ONLY in a command-body comment
+and asserts it is NOT reported as skipped — confirmed to fail against the
+pre-fix parsing logic (extracted verbatim from `f258f6bd` and run standalone:
+it wrongly included the comment-only name) before being fixed.

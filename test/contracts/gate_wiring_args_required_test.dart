@@ -72,4 +72,40 @@ void main() {
             'gate, and is why Gate 33 reported PASS on the commit that '
             'broke CI');
   });
+
+  group('B-pass scar: a comment restating a name is not a real case-skip', () {
+    // The bare `case ... in` / `esac` scan used to regex-match every line in
+    // an arm, including its COMMAND BODY — so an explanatory comment like
+    // "# check_closes_oi_cited.dart: a commit-msg gate..." registered as a
+    // case-skip with no real pattern behind it. This test's OWN two assertions
+    // above would have kept passing after a future edit deleted the real
+    // `check_closes_oi_cited.dart)` pattern line but left that comment —
+    // exactly the false-confidence shape this whole fix exists to close.
+    test('a name ONLY in a comment (no real pattern) is NOT reported skipped',
+        () {
+      const block = 'case "\$NAME" in\n'
+          '  check_a.dart)\n'
+          '    # check_b.dart: mentioned here but never actually skipped.\n'
+          '    echo skip\n'
+          '    ;;\n'
+          'esac\n';
+      final skips = extractCaseSkips(block, caseSkipRegex);
+      expect(skips, contains('check_a.dart'),
+          reason: 'a real pattern-list entry must still be found');
+      expect(skips, isNot(contains('check_b.dart')),
+          reason: 'a name that only ever appears in a command-body comment '
+              'was never a real case pattern — reporting it as skipped is '
+              'the exact false-positive that could hide a real crash');
+    });
+
+    test('the real .github/workflows/test.yml does not regress', () {
+      // check_closes_oi_cited.dart's own explanatory comment restates its
+      // filename inside the command body — the concrete instance of the
+      // pattern above, in the actual file this fix edits.
+      final src = File('.github/workflows/test.yml').readAsStringSync();
+      final skips = extractCaseSkips(src, caseSkipRegex);
+      expect(skips, contains(_gate),
+          reason: 'still found via the REAL pattern-list entry');
+    });
+  });
 }
