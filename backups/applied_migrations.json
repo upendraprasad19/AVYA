@@ -731,5 +731,29 @@
     "applier": "claude-via-mcp",
     "diagnose": "c3f8a1",
     "slug": "cron_silence_per_function_and_cleanup_null_guard"
+  },
+  {
+    "migration": "111",
+    "applied_at": "2026-07-29T16:03:47+05:30",
+    "hash": "sha256:e76c8f54cd46dc733dc331e4ed940a290104704905e31329cd05b6fe8e7d77ca",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4a19c",
+    "slug": "chat_vision_daily_cap_triggers"
+  },
+  {
+    "migration": "112",
+    "applied_at": "2026-07-29T16:03:47+05:30",
+    "hash": "sha256:8a3094c71d0df10989ad9d666d51766eb9e0154649a2a666408099c63ff7d942",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4a19c",
+    "slug": "onboarding_required_fields_transition_gate"
+  },
+  {
+    "migration": "113",
+    "applied_at": "2026-07-29T16:03:47+05:30",
+    "hash": "sha256:9675b12b44030a7df08e87e1d2a1c1d480a74c139493b0b69f0ccaaadb2f10dd",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4a19c",
+    "slug": "fix_food_text_trigger_ist_boundary"
   }
 ]

@@ -54,7 +54,7 @@ import {
 } from "../_shared/sanitize_for_prompt.ts";
 import type { ToolContext } from "../_shared/tools/index.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
-import { istDateStr, istDayStartIso } from "../_shared/ist_date.ts";
+import { istDateStr } from "../_shared/ist_date.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -411,11 +411,21 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
 
     // ── Vision abuse cap (scan_meal + cart_auditor: 15/day per user) ─────
     //
-    // audit-2026-05-11 H-10 — was filtering against UTC midnight
-    // (`<date>T00:00:00Z`), so the cap reset at 05:30 IST every
-    // morning instead of midnight. Indian users hitting the limit at
-    // 23:00 IST saw it stay locked for another 6.5h. Switched to
-    // istDayStartIso() (IST midnight as +05:30 timestamptz).
+    // OI-46 (2026-07-29) — was a check-then-insert TOCTOU: the SELECT
+    // count() below ran, then Gemini was called, then the interaction
+    // row was inserted AFTER Gemini succeeded inside a swallowed
+    // `catch (_) {}` — so even a capped user's request would complete
+    // successfully with the row-insert failure silently discarded.
+    // Replaced with the same insert-first reservation pattern as
+    // food_text_analysis above: reserve a row BEFORE calling Gemini,
+    // let the `trg_vision_analysis_rate_limit` Postgres trigger
+    // (migration 111) raise P0001 if over cap, and only call Gemini on
+    // a successful reservation. Handlers below UPDATE the reserved row
+    // instead of INSERTing a new one.
+    // Declared outside the cap-check block below — the reservation is
+    // made there but consumed by the scan_meal/cart_auditor handler
+    // blocks further down, which are sibling `if`s, not nested inside it.
+    let visionReservationId: string | undefined;
     if (type === "scan_meal" || type === "cart_auditor") {
       // H-21 (audit-2026-05-11) — image size validation. Pre-fix
       // `body.image` was forwarded to Gemini unbounded — a 50MB
@@ -424,28 +434,83 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
       // Base64 expands by ~4/3 so a 5MB decoded ceiling = ~6.7MB
       // encoded. Use the raw base64 length as a fast proxy.
       const imgB64 = body.image;
+      // OI-46 round-1 review — must reject a missing/empty image BEFORE the
+      // reservation insert below. The reservation is shared for both
+      // scan_meal and cart_auditor, but each handler only runs when
+      // `body.image` is truthy (`if (type === "scan_meal" && body.image)`);
+      // pre-fix, an undefined/null/"" image would still pass this block
+      // silently, insert a reservation that neither handler would ever
+      // resolve, and fall through toward the chat handler further down —
+      // burning a vision-cap slot on a malformed request and orphaning a
+      // 'pending' row.
       if (typeof imgB64 === "string") {
+        if (imgB64.length === 0) {
+          return err(400, "Missing 'image' in request body");
+        }
         // 7_500_000 ≈ 5.6MB decoded — a small slop margin over the
         // 5MB ai-media-proxy ceiling so legitimate 5MB images don't
         // edge-trip the cap.
         if (imgB64.length > 7_500_000) {
           return err(400, "Image too large (max ~5MB)");
         }
-      } else if (imgB64 != null) {
-        return err(400, "Image must be a base64 string");
+      } else {
+        return err(400, imgB64 == null ? "Missing 'image' in request body" : "Image must be a base64 string");
       }
 
-      const { count: visionCount } = await supabaseClient
+      const visionReserved = await supabaseClient
         .from("ai_coach_interactions")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .in("channel", ["scan_meal", "cart_auditor"])
-        .gte("created_at", istDayStartIso());
+        .insert({
+          user_id: userId,
+          channel: type,
+          user_message: `[${type}] analysis`,
+          ai_response: "",
+          model_used: "pending",
+          tokens_used: 0,
+        })
+        .select("id")
+        .single();
 
-      if ((visionCount ?? 0) >= 15) {
-        return err(429, "Daily vision analysis limit reached. Try again tomorrow.");
+      if (visionReserved.error) {
+        const msg = String((visionReserved.error as { message?: string })?.message ?? "");
+        if (msg.includes("vision_analysis_daily_limit_reached")) {
+          return err(429, "Daily vision analysis limit reached. Try again tomorrow.");
+        }
+        console.error("[ai-proxy.vision] reservation insert failed:", visionReserved.error);
+        return err(500, "Vision analysis unavailable");
       }
+
+      visionReservationId = visionReserved.data?.id as string | undefined;
     }
+
+    // OI-46 round-1 review — mirrors food_text_analysis's resolvePlaceholder
+    // (line ~348): the reserved row MUST reach a terminal state on every
+    // exit path, not just success. Pre-fix, the `!content` and invalid-JSON
+    // branches in both scan_meal and cart_auditor returned without ever
+    // touching the row, leaving it stuck at model_used='pending' forever —
+    // which still counts toward today's 15-cap for a request that never
+    // actually got a result.
+    const resolveVisionPlaceholder = async (
+      finalModel: string,
+      finalResponse: string,
+      tokens: number,
+    ): Promise<void> => {
+      if (!visionReservationId) return;
+      // OI-46 round-2 review — supabase-js query builders resolve with
+      // {data, error} on a PostgREST-level failure (RLS denial, constraint
+      // violation, 5xx) rather than rejecting, so a bare try/catch here
+      // never observes it (feedback_postgrest_builder_no_catch.md). Must
+      // destructure + log `.error`, mirroring resolvePlaceholder above.
+      const { error } = await supabaseClient
+        .from("ai_coach_interactions")
+        .update({ ai_response: finalResponse, model_used: finalModel, tokens_used: tokens })
+        .eq("id", visionReservationId);
+      if (error) {
+        console.error(
+          `[ai-proxy.vision] placeholder resolution failed model=${finalModel} id=${visionReservationId}:`,
+          error,
+        );
+      }
+    };
 
     // ── Scan meal (image → nutrition JSON) ────────────────────────
     if (type === "scan_meal" && body.image) {
@@ -467,26 +532,24 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
         fallbackToLite: false, // already Flash-Lite; no point
       });
 
-      if (!content) return err(502, "Image analysis failed");
+      if (!content) {
+        await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
+        return err(502, "Image analysis failed");
+      }
 
       try {
         const parsed = JSON.parse(stripJsonFences(content));
-        try {
-          await supabaseClient.from("ai_coach_interactions").insert({
-            user_id: userId,
-            channel: "scan_meal",
-            user_message: "[scan_meal] analysis",
-            ai_response: "success",
-            model_used: LABEL_FLASH_LITE,
-            tokens_used: tokensUsed,
-            created_at: new Date().toISOString(),
-          });
-        } catch (_) {}
+        await resolveVisionPlaceholder(LABEL_FLASH_LITE, "success", tokensUsed);
         return new Response(JSON.stringify(parsed), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (_) {
+        await resolveVisionPlaceholder(
+          "failed_parse",
+          JSON.stringify({ error: "non-JSON response", raw: content.substring(0, 500) }),
+          tokensUsed,
+        );
         return err(502, "Image analysis returned invalid JSON");
       }
     }
@@ -511,26 +574,24 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
         fallbackToLite: false,
       });
 
-      if (!content) return err(502, "Cart analysis failed");
+      if (!content) {
+        await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
+        return err(502, "Cart analysis failed");
+      }
 
       try {
         const parsed = JSON.parse(stripJsonFences(content));
-        try {
-          await supabaseClient.from("ai_coach_interactions").insert({
-            user_id: userId,
-            channel: "cart_auditor",
-            user_message: "[cart_auditor] analysis",
-            ai_response: "success",
-            model_used: LABEL_FLASH_LITE,
-            tokens_used: tokensUsed,
-            created_at: new Date().toISOString(),
-          });
-        } catch (_) {}
+        await resolveVisionPlaceholder(LABEL_FLASH_LITE, "success", tokensUsed);
         return new Response(JSON.stringify(parsed), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (_) {
+        await resolveVisionPlaceholder(
+          "failed_parse",
+          JSON.stringify({ error: "non-JSON response", raw: content.substring(0, 500) }),
+          tokensUsed,
+        );
         return err(502, "Cart analysis returned invalid JSON");
       }
     }
@@ -597,30 +658,6 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // ── isPro gate: PRO → no daily cap. Free → 10 msg/day forever (OQ-1). ──
     const isProUser = await checkPro(supabaseClient, userId);
 
-    if (!isProUser) {
-      // Free-tier gate: 10 messages/day in perpetuity — no trial window.
-      // OQ-1 decision: free tier gets 10/day forever. Captain Manual reflects this.
-      //
-      // audit-2026-05-11 H-4 — was setUTCHours(0,0,0,0) which is UTC
-      // midnight = 05:30 IST. Free users in India saw their 10-msg cap
-      // reset at dawn instead of midnight. Switched to istDayStartIso().
-      const { count: msgCount, error: countError } = await supabaseClient
-        .from("ai_coach_interactions")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("channel", "app")
-        .gte("created_at", istDayStartIso());
-
-      if (countError) return err(500, "Failed to check rate limit");
-
-      if ((msgCount ?? 0) >= FREE_DAILY_LIMIT) {
-        return err(429, "Daily message limit reached", {
-          code: "RATE_LIMITED",
-          limit: FREE_DAILY_LIMIT,
-        });
-      }
-    }
-
     // ── Deduplication: return cached response for same user+message in last 30s ──
     const dedupCutoff = new Date(Date.now() - DEDUP_WINDOW_SECS * 1000).toISOString();
     const { data: recentDup } = await supabaseClient
@@ -648,6 +685,44 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    // ── Reserve a slot before paying for coach_memory + Gemini ──
+    // OI-46 (2026-07-29) — was a check-then-insert TOCTOU: the SELECT
+    // count() removed above ran, then Gemini was called, then the
+    // interaction row was inserted AFTER the tool loop finished with no
+    // gate on it at all. Two concurrent requests could both see
+    // msgCount=9 and both pass, or a single request could just insert
+    // unconditionally after the free-tier check with no re-check at
+    // insert time. Replaced with the same insert-first reservation
+    // pattern as food_text_analysis: reserve a row now, let the
+    // `trg_chat_app_rate_limit` trigger (migration 111, PRO-aware
+    // internally) raise P0001 if over cap. Safe to call unconditionally
+    // for PRO users — the trigger short-circuits them with no exception.
+    const chatReservation = await supabaseClient
+      .from("ai_coach_interactions")
+      .insert({
+        user_id: userId,
+        channel: "app",
+        user_message: message,
+        ai_response: "",
+        model_used: "pending",
+        tokens_used: 0,
+      })
+      .select("id")
+      .single();
+
+    if (chatReservation.error) {
+      const msg = String((chatReservation.error as { message?: string })?.message ?? "");
+      if (msg.includes("chat_app_daily_limit_reached")) {
+        return err(429, "Daily message limit reached", {
+          code: "RATE_LIMITED",
+          limit: FREE_DAILY_LIMIT,
+        });
+      }
+      console.error("[ai-proxy.chat] reservation insert failed:", chatReservation.error);
+      return err(500, "Failed to check rate limit");
+    }
+    const chatReservationId = chatReservation.data?.id as string | undefined;
 
     // ── Fetch coach_memory for identity-mirroring (chat path only) ──
     // Block [3] of the 7-block context layout. Helper returns "" when
@@ -909,6 +984,26 @@ yet" — never make up a number.
         `[ai-proxy] runToolLoop threw request_id=${chatRequestId} had_history=${cappedHistory.length > 0}`,
         loopErr,
       );
+      // Close the reservation so a Gemini-side failure (not the user's
+      // fault) doesn't leave a permanently 'pending' row — it wouldn't
+      // burn a real cap slot forever (created_at is today, so it only
+      // affects today's count), but it would still count against today's
+      // 10/day for a message that never actually got a reply.
+      if (chatReservationId) {
+        // OI-46 round-2 review — destructure `.error`, don't bare try/catch:
+        // supabase-js resolves {data, error} on a PostgREST-level failure
+        // rather than rejecting (feedback_postgrest_builder_no_catch.md).
+        const { error: resolveErr } = await supabaseClient
+          .from("ai_coach_interactions")
+          .update({ ai_response: "[failed] runToolLoop threw", model_used: "failed" })
+          .eq("id", chatReservationId);
+        if (resolveErr) {
+          console.error(
+            `[ai-proxy.chat] placeholder resolution failed (loopErr path) id=${chatReservationId}:`,
+            resolveErr,
+          );
+        }
+      }
       return err(502, "AI temporarily unavailable. Please try again.", {
         request_id: chatRequestId,
       });
@@ -935,18 +1030,27 @@ yet" — never make up a number.
       .limit(1)
       .single();
 
-    // Log interaction (store clean reply without tags) + tool-call telemetry.
-    await supabaseClient.from("ai_coach_interactions").insert({
-      user_id: userId,
-      snapshot_id: snapshotData?.id ?? null,
-      channel: "app",
-      user_message: message,
-      ai_response: cleanReply,
-      model_used: modelLabel,
-      tokens_used: loop.tokensUsed,
-      tool_calls: loop.toolCallsLog.length > 0 ? loop.toolCallsLog : null,
-      created_at: new Date().toISOString(),
-    });
+    // Resolve the reservation (store clean reply without tags) + tool-call
+    // telemetry. UPDATE, not INSERT — the row already exists from the
+    // reservation above the tool loop.
+    if (chatReservationId) {
+      const { error: resolveErr } = await supabaseClient
+        .from("ai_coach_interactions")
+        .update({
+          snapshot_id: snapshotData?.id ?? null,
+          ai_response: cleanReply,
+          model_used: modelLabel,
+          tokens_used: loop.tokensUsed,
+          tool_calls: loop.toolCallsLog.length > 0 ? loop.toolCallsLog : null,
+        })
+        .eq("id", chatReservationId);
+      if (resolveErr) {
+        console.error(
+          `[ai-proxy.chat] placeholder resolution failed (success path) id=${chatReservationId}:`,
+          resolveErr,
+        );
+      }
+    }
 
     // Embedding accumulation for both free + PRO tiers. Retrieval
     // (Phase B, above at the top of the chat handler) also runs for

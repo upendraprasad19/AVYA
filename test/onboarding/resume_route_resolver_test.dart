@@ -142,5 +142,56 @@ void main() {
               'reached at least Stats step, so onboarding really happened, '
               'just the stamp didn\'t land".');
     });
+
+    test('OI-46 (2026-07-29, B-pass round) — self-heal stamp attempt is '
+        'gated on ALL 9 migration-112 fields, not just the 3-field '
+        'hasCorePlanFields heuristic', () {
+      // Round-1 B-pass finding: migration 112's trigger requires 9 fields
+      // (date_of_birth, gender, height_cm, current_weight_kg,
+      // target_weight_kg, primary_goal, fitness_experience, days_per_week,
+      // equipment_access) non-null before allowing onboarding_completed_at
+      // to transition non-null. Pre-fix, this file's self-heal only
+      // checked 3 of them (primary_goal, fitness_experience,
+      // current_weight_kg) before attempting a stamp — a flagOnboarded=true
+      // legacy user missing any of the other 6 would have the stamp
+      // rejected by the trigger EVERY cold start, forever, with no way to
+      // ever succeed. Pin the renamed variable + all 9 field checks + the
+      // stamp-attempt now being conditional (not unconditional) inside the
+      // self-heal branch.
+      expect(restoringSrc.contains('hasAllRequiredFields'), isTrue,
+          reason: 'the widened 9-field check must exist under this name.');
+      for (final field in [
+        'date_of_birth',
+        'gender',
+        'height_cm',
+        'current_weight_kg',
+        'target_weight_kg',
+        'primary_goal',
+        'fitness_experience',
+        'days_per_week',
+        'equipment_access',
+      ]) {
+        expect(
+          restoringSrc.contains("hiveProfileMap['$field'] != null"),
+          isTrue,
+          reason: 'hasAllRequiredFields must check $field, matching '
+              'migration 112 exactly.',
+        );
+      }
+      // The stamp attempt must be wrapped in its OWN conditional on
+      // hasAllRequiredFields — not fired unconditionally for every
+      // flagOnboarded/hasAllRequiredFields entrant to the self-heal branch.
+      final selfHealBlockStart = restoringSrc.indexOf('if (flagOnboarded || hasAllRequiredFields)');
+      expect(selfHealBlockStart, greaterThan(-1),
+          reason: 'the self-heal entry condition must reference both signals.');
+      final stampCallIdx = restoringSrc.indexOf('_stampOnboardingCompletedAt(user.id)', selfHealBlockStart);
+      final innerGuardIdx = restoringSrc.indexOf('if (hasAllRequiredFields)', selfHealBlockStart);
+      expect(innerGuardIdx, greaterThan(-1),
+          reason: 'a second, inner hasAllRequiredFields guard must wrap the '
+              'stamp attempt so a flagOnboarded-only (field-incomplete) '
+              'user still navigates home but stops retrying a doomed write.');
+      expect(innerGuardIdx, lessThan(stampCallIdx),
+          reason: 'the inner guard must wrap the stamp call, not follow it.');
+    });
   });
 }

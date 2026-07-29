@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### ai_coach_daily_cap_enforcement (1 bugs)
+- 2026-07-29 f4a19c — OI-46 (audit finding, re-verified 2026-07-29) named a `channel='in_app'` gap that does not exist as a live value. The real gaps, found during re-verification: (1) chat's free-tier 10/day cap…
+
 ### gate_fail_closed_discipline (2 bugs)
 - 2026-07-29 d7a3f9 — CI's Audit Gates job failed on 96c6fac2 — the enforcement-infra merge commit that had already landed on main — with "Gate failed: check_closes_oi_cited.dart". The same commit's local pre-commit hook…
 - 2026-07-29 a9f2c6 — Three gates shipped in this batch exited 0 while doing nothing. An OI whose status read `BLOCKED` vanished from OPEN_INDEX.md with no error; an OI whose status line read `- **Status:** CLOSED` escaped…
@@ -880,6 +883,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-29 | f4a19c | OI-46 (audit finding, re-verified 2026-07-29) named a `channel='in_app'` gap that does not exist as a live value. The real gaps, found during re-verification: (1) chat's free-tier 10/day cap… | ai_coach_daily_cap_enforcement | test/contracts/chat_app_daily_cap_test.dart, test/contracts/vision_analysis_daily_cap_test.dart, test/contracts/onboarding_required_fields_test.dart, test/onboarding/resume_route_resolver_test.dart |
 | 2026-07-29 | d7a3f9 | CI's Audit Gates job failed on 96c6fac2 — the enforcement-infra merge commit that had already landed on main — with "Gate failed: check_closes_oi_cited.dart". The same commit's local pre-commit hook… | gate_fail_closed_discipline | test/contracts/gate_wiring_args_required_test.dart |
 | 2026-07-29 | a9f2c6 | Three gates shipped in this batch exited 0 while doing nothing. An OI whose status read `BLOCKED` vanished from OPEN_INDEX.md with no error; an OI whose status line read `- **Status:** CLOSED` escaped… | gate_fail_closed_discipline | test/contracts/oi_index_test.dart |
 | 2026-07-28 | c4e8a2 | 237 of 344 entries in docs/diagnoses/INDEX.md carried no symptom text — just a bare `>`, `>-` or `\|`. CLAUDE.md §4.1.5 makes grepping that index the mandatory first step before any root-cause… | bug_history_index | test/contracts/bug_index_frontmatter_test.dart |
