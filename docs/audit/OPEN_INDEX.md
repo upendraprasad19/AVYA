@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**26 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**24 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -27,10 +27,8 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-64 | Discipline-overhead: the three unbuilt gates | none | never | [:393](open_issues.md#L393) |
 | OI-65 | Qualification-Exam feature | none | never | [:402](open_issues.md#L402) |
 | OI-66 | Prove or remove the CI gradle cache | none | never | [:411](open_issues.md#L411) |
-| OI-67 | `MEMORY.md` over its soft cap | none | never | [:423](open_issues.md#L423) |
-| OI-68 | Build the backlog MECHANISM (attempted 2026-07-26, withdrawn after 2… | none | never | [:433](open_issues.md#L433) |
-| OI-69 | Nothing detects this backlog going stale AGAIN | none | never | [:474](open_issues.md#L474) |
-| OI-73 | ~10 Edge Functions still run the pre-`9ab9f42b` cron auth gate | none | never | [:491](open_issues.md#L491) |
-| OI-74 | Notification-prefs helper fetches whole snapshot_json history, unbounded | none | never | [:523](open_issues.md#L523) |
-| OI-75 | notification_preferences has no SoT registry entry | none | never | [:542](open_issues.md#L542) |
-| OI-76 | Notification count includes PRO-locked rows a free user cannot disable | none | never | [:553](open_issues.md#L553) |
+| OI-69 | Nothing detects this backlog going stale AGAIN | none | never | [:492](open_issues.md#L492) |
+| OI-73 | ~10 Edge Functions still run the pre-`9ab9f42b` cron auth gate | none | never | [:509](open_issues.md#L509) |
+| OI-74 | Notification-prefs helper fetches whole snapshot_json history, unbounded | none | never | [:541](open_issues.md#L541) |
+| OI-75 | notification_preferences has no SoT registry entry | none | never | [:560](open_issues.md#L560) |
+| OI-76 | Notification count includes PRO-locked rows a free user cannot disable | none | never | [:571](open_issues.md#L571) |
