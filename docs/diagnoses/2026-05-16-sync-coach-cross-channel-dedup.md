@@ -4,6 +4,14 @@ date: 2026-05-16
 batch: APK Test #16.2 / Phase E (audit 2026-05-16) — E.5.3
 status: fixed
 regression_test: test/contracts/sync_coach_cross_channel_dedup_test.dart
+symptom: >-
+  `ai_coach_interactions` accumulated paired duplicate rows for one logical
+  user turn. Live audit on 2026-05-16 found **8 cross-channel pairs** spanning
+  2026-05-11 → 2026-05-15. Each pair: same `user_id`, same `user_message`,
+  close `created_at` (within 19s on the worst case), but DIFFERENT `channel` —
+  one `food_text_analysis` (server-side, written by ai-proxy when user used
+  Nutrition AI Text tab) and one `in_app_orphan` (client-side, written by
+  `_syncCoachInteractions` when user pasted same text into AI Coach chat).
 ---
 
 ## Symptom

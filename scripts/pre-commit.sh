@@ -54,6 +54,23 @@ if git diff --cached --name-only | grep -q '^docs/diagnoses/'; then
   git add docs/diagnoses/INDEX.md
 fi
 
+# Regen the open-issues index whenever the board moves.
+#
+# THIS IS THE MECHANISM THE BOARD LACKED. open_issues.md went unread for 70 days
+# while dozens of batches shipped; its own reconciliation section names the cause
+# ("no gate, no hook, no CI job referenced it — everything with a gate holds,
+# everything on intention decays") and then credits a fix,
+# scripts/check_open_issues_reconciled.dart, that `git log --all` shows was never
+# written. This regen is the real one.
+if git diff --cached --name-only | grep -q '^docs/audit/open_issues\.md$'; then
+  echo "[pre-commit] Open-issues board touched — regenerating OPEN_INDEX.md..."
+  if ! dart run scripts/build_oi_index.dart; then
+    echo "[pre-commit] FAIL: build_oi_index.dart errored."
+    exit 1
+  fi
+  git add docs/audit/OPEN_INDEX.md
+fi
+
 # Regen ADR index if any ADR file was modified (six industry-gap closure 2026-05-28).
 if git diff --cached --name-only | grep -qE '^docs/adr/[0-9]{4}-.*\.md$'; then
   echo "[pre-commit] ADR docs touched — regenerating INDEX.md..."
@@ -152,6 +169,7 @@ for GATE in scripts/check_*.dart; do
     check_snapshot_contract.dart|\
     check_test_runtime_budget.dart|\
     check_no_deferral_euphemism.dart|\
+    check_closes_oi_cited.dart|\
     check_skipped_discipline_budget.dart)
       # Razorpay gate: .env.prod is user-only / gitignored secret state.
       # Other gates: require live DB / merge context / build artifact —
@@ -161,6 +179,11 @@ for GATE in scripts/check_*.dart; do
       # gates-before-refactor baseline window — 2 pre-existing open waivers
       # from 2026-05-11 are >14d old; remove --warn-only once waivers are
       # resolved or a behavioral test ships). Invoked explicitly below.
+      # check_closes_oi_cited.dart: a commit-msg gate — it takes the proposed
+      # message file as its argument, and that file does not exist yet at
+      # pre-commit time (the same reason scripts/commit-msg.sh exists at all).
+      # This loop invokes every gate with NO arguments, so running it here would
+      # only ever produce its usage error. Wired in scripts/commit-msg.sh.
       continue
       ;;
   esac

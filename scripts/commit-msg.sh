@@ -32,6 +32,20 @@ fi
 COMMIT_SUBJECT=$(head -n1 "$COMMIT_MSG_FILE")
 COMMIT_BODY=$(tail -n +2 "$COMMIT_MSG_FILE")
 
+# ── closes-oi gate ────────────────────────────────────────────────────────────
+# Runs BEFORE the bug-fix subject test below, deliberately. That test exits 0 for
+# any non-fix: subject, and OI closures overwhelmingly land in docs(...) commits
+# — `f15cb1f3 docs(closure): close OI-47 and OI-51` is exactly the shape. Placed
+# after the early exit, this gate would never fire on the commits it exists for.
+#
+# docs/audit/open_issues.md documents the `closes-oi: OI-NN` convention; it was
+# followed in 5 citation lines across 3 of the last 400 commits and enforced by
+# nothing. The gate itself decides by comparing the HEAD blob against the staged
+# blob, never by parsing diff text (see its header for why).
+if ! dart run scripts/check_closes_oi_cited.dart "$COMMIT_MSG_FILE"; then
+  exit 1
+fi
+
 if ! echo "$COMMIT_SUBJECT" | grep -qE '^(fix|bug|regression)(\([^)]*\))?:'; then
   # Not a strict bug-fix commit; mandatory gate not applicable.
   #

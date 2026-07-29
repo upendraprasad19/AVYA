@@ -4,6 +4,11 @@ date: 2026-05-16
 batch: APK Test #16.2 / Phase E (audit 2026-05-16) — E.6
 status: fixed
 regression_test: test/contracts/workout_schedule_service_uses_write_service_test.dart
+symptom: >-
+  `WorkoutScheduleService` had 13 direct `workoutBox.put` callsites — every
+  schedule mutation (template assignment, swap exercise, shorten day, mark
+  completed/skipped/travel, copy week, restore displaced) silently bypassed
+  the canonical `WorkoutWriteService`. Concrete failures observed:
 ---
 
 ## Symptom

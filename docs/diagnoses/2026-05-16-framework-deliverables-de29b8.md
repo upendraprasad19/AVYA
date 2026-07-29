@@ -3,6 +3,10 @@ bug_id: de29b8
 date: 2026-05-16
 batch: audit-2026-05-16-E13
 status: shipped-framework-only
+symptom: >-
+  Not a bug — the audit-2026-05-16 framework deliverable: 6 new gate scripts
+  plus 6 new contract tests codifying discipline rules that until then existed
+  only as prose. Carries a symptom line so the bug index has no blank entry.
 regression_test: test/contracts/applied_migrations_parity_test.dart, test/contracts/type_consistency_test.dart, test/contracts/high_priority_op_types_parity_test.dart, test/contracts/migrated_key_contracts_test.dart, test/contracts/custom_exercise_writer_to_reader_test.dart, test/contracts/undo_stash_lifetime_test.dart
 ---
 

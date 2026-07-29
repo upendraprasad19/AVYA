@@ -4,6 +4,9 @@ date: 2026-05-16
 batch: APK Test #16.2 / Phase E (audit 2026-05-16) — E.15
 status: fixed
 regression_test: test/contracts/sot_registry_completeness_test.dart
+symptom: >-
+  CLAUDE.md and `docs/sot_registry.yaml` need to track the audit-2026-05-16
+  architectural changes so the next contributor sees the canonical patterns:
 ---
 
 ## Symptom

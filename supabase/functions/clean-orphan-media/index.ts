@@ -1,5 +1,10 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+// 2.39.3, not 2.39.0 — this was the ONLY file in the tree on 2.39.0, and that
+// lone version 522'd from esm.sh twice in 25 CI runs (2c4cbddd 2026-07-27,
+// 93f6fe41 2026-07-28) while 2.39.3 (36 files) fetched fine in the very same
+// runs. A version nobody else requests is cold at the CDN edge. Patch-level
+// move, and it deletes the failing URL from the repo.
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { isAuthorizedCronCall } from '../_shared/cron_auth.ts';
 import { logCronStart, logCronEnd } from '../_shared/cron_telemetry.ts';
 

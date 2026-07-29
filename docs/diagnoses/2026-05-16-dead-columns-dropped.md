@@ -4,6 +4,10 @@ date: 2026-05-16
 batch: APK Test #16.2 / Phase E (audit 2026-05-16) — E.12 + E.16
 status: fixed_pending_live_apply
 regression_test: test/contracts/dead_columns_dropped_test.dart
+symptom: >-
+  17 cloud columns across 7 tables were 100% NULL across all live rows (audit
+  Agent 3 / Cluster 4 live SQL on 2026-05-16). Each had at least one of these
+  failure modes:
 ---
 
 ## Symptom

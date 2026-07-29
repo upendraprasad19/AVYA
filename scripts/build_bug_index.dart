@@ -12,6 +12,8 @@
 
 import 'dart:io';
 
+import 'bug_index_lib.dart';
+
 void main() {
   final dir = Directory('docs/diagnoses');
   if (!dir.existsSync()) {
@@ -25,13 +27,42 @@ void main() {
     if (!file.path.endsWith('.md')) continue;
     if (file.path.endsWith('INDEX.md')) continue;
     final content = file.readAsStringSync();
-    final fm = _parseFrontmatter(content);
+    final fm = parseFrontmatter(content);
     if (fm == null) {
       stderr.writeln('Warning: ${file.path} has no parseable frontmatter');
       continue;
     }
     fm['_path'] = file.path;
     entries.add(fm);
+  }
+
+  // SELF-CHECK: refuse to emit an index whose entries carry no usable symptom.
+  //
+  // `docs/diagnoses/INDEX.md` sat 237-of-344 empty for months because nothing
+  // ever asserted its OUTPUT was meaningful — the generator exited 0 while
+  // writing `— >` for every doc that used a YAML block scalar, and 8 older docs
+  // carried their symptom only as a `## Symptom` markdown section. CLAUDE.md
+  // §4.1.5 makes grepping this index the mandatory first step before any
+  // root-cause hypothesis, so a blank symptom is a silent hole in the discipline.
+  // Failing here is what stops it regrowing.
+  final bad = <String>[];
+  for (final e in entries) {
+    final s = summarize(e['symptom']);
+    if (s.isEmpty || blockScalarRe.hasMatch(s)) {
+      bad.add('  ${e['_path']} (bug_id: ${e['bug_id'] ?? '<none>'}) -> "$s"');
+    }
+  }
+  if (bad.isNotEmpty) {
+    stderr.writeln(
+        'FAIL: ${bad.length} diagnose-doc(s) would index with an empty or '
+        'placeholder symptom.');
+    stderr.writeln(
+        'Add a `symptom:` frontmatter field (a folded `>-` block is fine — it '
+        'is now parsed correctly).');
+    for (final b in bad) {
+      stderr.writeln(b);
+    }
+    exit(1);
   }
 
   // Sort chronologically (latest first by `date`), tiebreak by `_path` for a
@@ -69,7 +100,7 @@ void main() {
   for (final cls in byClass.keys) {
     buf.writeln('### $cls (${byClass[cls]!.length} instances)');
     for (final e in byClass[cls]!) {
-      buf.writeln('- ${e['date']} ${e['bug_id']} — ${e['symptom']?.toString().split('\n').first ?? '(no symptom)'} — ${e['contract_test_path'] ?? '(no test)'}');
+      buf.writeln('- ${e['date']} ${e['bug_id']} — ${summarize(e['symptom'], fallback: '(no symptom)')} — ${e['contract_test_path'] ?? '(no test)'}');
     }
     buf.writeln('');
   }
@@ -85,7 +116,7 @@ void main() {
   for (final c in byConcept.keys) {
     buf.writeln('### $c (${byConcept[c]!.length} bugs)');
     for (final e in byConcept[c]!) {
-      buf.writeln('- ${e['date']} ${e['bug_id']} — ${e['symptom']?.toString().split('\n').first ?? ''}');
+      buf.writeln('- ${e['date']} ${e['bug_id']} — ${summarize(e['symptom'])}');
     }
     buf.writeln('');
   }
@@ -110,7 +141,7 @@ void main() {
     final unique = byDir[dir]!.toSet().toList();
     buf.writeln('### $dir (${unique.length} bugs)');
     for (final e in unique) {
-      buf.writeln('- ${e['date']} ${e['bug_id']} — ${e['symptom']?.toString().split('\n').first ?? ''}');
+      buf.writeln('- ${e['date']} ${e['bug_id']} — ${summarize(e['symptom'])}');
     }
     buf.writeln('');
   }
@@ -121,36 +152,13 @@ void main() {
   buf.writeln('| Date | Bug ID | Symptom | Concept | Test path |');
   buf.writeln('|---|---|---|---|---|');
   for (final e in entries) {
-    buf.writeln('| ${e['date']} | ${e['bug_id']} | ${(e['symptom']?.toString().split('\n').first ?? '').replaceAll('|', '\\|')} | ${e['concept'] ?? ''} | ${e['contract_test_path'] ?? ''} |');
+    buf.writeln('| ${e['date']} | ${e['bug_id']} | ${summarize(e['symptom']).replaceAll('|', '\\|')} | ${e['concept'] ?? ''} | ${e['contract_test_path'] ?? ''} |');
   }
 
   File('docs/diagnoses/INDEX.md').writeAsStringSync(buf.toString());
   stdout.writeln('INDEX.md regenerated: ${entries.length} bugs indexed.');
 }
 
-Map<String, dynamic>? _parseFrontmatter(String content) {
-  // Normalize line endings so CRLF (Windows) files parse the same as LF.
-  final normalized = content.replaceAll('\r\n', '\n');
-  final match = RegExp(r'^---\n(.*?)\n---', dotAll: true).firstMatch(normalized);
-  if (match == null) return null;
-  final raw = match.group(1)!;
-  // Very simple YAML parser — only top-level scalar keys + simple lists/maps.
-  // For complex shapes (writers:, readers: lists), capture as String.
-  final out = <String, dynamic>{};
-  String? currentKey;
-  final lines = raw.split('\n');
-  for (final line in lines) {
-    final m = RegExp(r'^([a-z_]+):\s*(.*)$').firstMatch(line);
-    if (m != null) {
-      currentKey = m.group(1);
-      final value = m.group(2)!.trim();
-      if (value.isNotEmpty) out[currentKey!] = value;
-    }
-    // For list/map continuation lines, skip — we only need scalar fields
-    // for the index. Validator catches the rest.
-  }
-  return out;
-}
 
 String? _featureDir(String path) {
   if (path.startsWith('lib/features/')) {

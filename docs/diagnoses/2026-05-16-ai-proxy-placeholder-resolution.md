@@ -4,6 +4,12 @@ date: 2026-05-16
 batch: APK Test #16.2 / Phase E (audit 2026-05-16) — E.5.2
 status: fixed
 regression_test: test/contracts/ai_proxy_placeholder_resolution_test.dart
+symptom: >-
+  `ai_coach_interactions` table accumulated stuck rows with
+  `model_used='pending'` and empty `ai_response`. Live audit on 2026-05-16
+  found 8 such rows spanning 2026-05-11 → 2026-05-15 (4 on
+  `food_text_analysis` channel + 4 paired client `in_app_orphan` rows that are
+  tracked separately in E.5.3).
 ---
 
 ## Symptom

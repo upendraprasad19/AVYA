@@ -23,6 +23,18 @@ set -e
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
+# Hooks live in the COMMON git dir, not "$REPO_ROOT/.git/hooks".
+#
+# In a linked worktree `.git` is a FILE containing `gitdir: …`, not a directory,
+# so the old `$REPO_ROOT/.git/hooks/pre-commit` path failed outright:
+#   cp: failed to access '<worktree>/.git/hooks/pre-commit': Not a directory
+# CLAUDE.md §4.13 requires every session to work in its own worktree, so the
+# installer was broken in exactly the place the workflow mandates. Git also
+# shares one hooks dir across all worktrees, so installing to the common dir is
+# both the working path AND the correct one.
+HOOKS_DIR="$(git rev-parse --git-common-dir)/hooks"
+mkdir -p "$HOOKS_DIR"
+
 install_hook() {
   local src="$1"
   local dst="$2"
@@ -35,10 +47,10 @@ install_hook() {
   echo "[setup-hooks] installed $dst"
 }
 
-install_hook "$REPO_ROOT/scripts/pre-commit.sh" "$REPO_ROOT/.git/hooks/pre-commit"
-install_hook "$REPO_ROOT/scripts/pre-push.sh" "$REPO_ROOT/.git/hooks/pre-push"
-install_hook "$REPO_ROOT/scripts/commit-msg.sh" "$REPO_ROOT/.git/hooks/commit-msg"
-install_hook "$REPO_ROOT/scripts/prepare-commit-msg.sh" "$REPO_ROOT/.git/hooks/prepare-commit-msg"
+install_hook "$REPO_ROOT/scripts/pre-commit.sh" "$HOOKS_DIR/pre-commit"
+install_hook "$REPO_ROOT/scripts/pre-push.sh" "$HOOKS_DIR/pre-push"
+install_hook "$REPO_ROOT/scripts/commit-msg.sh" "$HOOKS_DIR/commit-msg"
+install_hook "$REPO_ROOT/scripts/prepare-commit-msg.sh" "$HOOKS_DIR/prepare-commit-msg"
 
 # SSH keepalive for pushes (2026-05-30 cross-check fix).
 # The pre-push hook runs the full flutter test suite (~8 min). git opens the
@@ -52,4 +64,4 @@ git -C "$REPO_ROOT" config core.sshCommand \
   "ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=30 -o TCPKeepAlive=yes"
 echo "[setup-hooks] configured core.sshCommand keepalive (survives long pre-push)"
 
-echo "[setup-hooks] verify: ls -la $REPO_ROOT/.git/hooks/{pre-commit,pre-push,commit-msg,prepare-commit-msg}"
+echo "[setup-hooks] verify: ls -la $HOOKS_DIR/{pre-commit,pre-push,commit-msg,prepare-commit-msg}"
