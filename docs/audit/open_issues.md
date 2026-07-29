@@ -422,25 +422,43 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-67 — `MEMORY.md` over its soft cap
 
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
+- **Status**: CLOSED · 2026-07-29 · commit `<pending>`
 - **Identified**: 2026-07-26 · consolidation pass
 - **What's missing**: 20,316 bytes vs the 17,510 soft target (hard read cap 24,400). Genuinely gated
   on closing items above rather than on more compression — every surviving In-flight entry carries a
   live obligation. Closing OI-52…OI-56 removes most of it.
+- **How closed**: NOT via closing OI-52…OI-56 as anticipated above — those remain OPEN (verified).
+  A `/consolidate-memory` pass ran in a separate session (2026-07-29), trimming dual-tracked
+  In-flight lines that already had their own OI number. Measured directly (`wc -c`), not taken from
+  MEMORY.md's own retrospective entry (which claims 16,866 bytes): actual current size is
+  **17,227 bytes**, under the 17,510-byte soft target by a 283-byte margin — real, but thin.
 
 ## OI-68 — Build the backlog MECHANISM (attempted 2026-07-26, withdrawn after 2 review rounds)
 
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
+- **Status**: CLOSED · 2026-07-29 · diagnose `a9f2c6` · commit `<pending>`
 - **Identified**: 2026-07-26
 - **Risk class**: the backlog stays passive — visible only to whoever opens the file
 - **What's missing**: a SessionStart digest surfacing OPEN items, a merge-to-main gate forcing an
   `open_issues:` declaration, and a format gate. All three were **built and then withdrawn** — two
   independent review rounds found 5 P1s and the unit was split per §4.12.1, shipping only the data
   half (this file + the `memory/MEMORY.md` stub), which carries no code risk.
+- **How closed**: NOT the withdrawn design above (SessionStart digest + blanket merge-gate
+  `open_issues:` declaration + format gate) — a narrower, different mechanism shipped instead:
+  `e4bc9040` built `docs/audit/OPEN_INDEX.md` (generated, one line per open issue, fails closed on
+  a missing field or an empty index) and `scripts/check_closes_oi_cited.dart` (citation required
+  only on an actual OPEN→CLOSED transition, not on every merge — strictly narrower than the
+  original blanket-declaration idea). Scar #3 below — "the format gate validated shape but not
+  vocabulary" — reproduced live a 4th time during `build_oi_index.dart`'s own build (a
+  `startsWith('OPEN')` skip silently dropped a `BLOCKED` entry); caught by the B-pass and fixed in
+  `f78d721c` (diagnose `a9f2c6`) with explicit negative controls for all four words this entry
+  names (PENDING, BLOCKED, REOPENED, the IN-PROGRESS typo) — `unrecognisedStatuses()` /
+  `unreadableStatuses()` now classify every status line and exit 1 naming the offending entry
+  rather than silently dropping it.
+  **Residual, not silently dropped:** no SessionStart digest exists. Both prior attempts were
+  withdrawn as buggy (2026-07-26); not re-attempted here. Distinct from OI-69 (staleness
+  *detection*) — this is per-session proactive surfacing, and stays unbuilt.
+- **Closes**: diagnose-doc
+  `docs/diagnoses/2026-07-29-gates-silently-skip-what-they-cannot-parse-a9f2c6.md`.
 
 - **SCARS — read before re-attempting. Three generations of the SAME bug in one component:**
   1. **v1 parser** used an exact-string match `line.trim() == '- **Status**: OPEN'`. It missed 7
