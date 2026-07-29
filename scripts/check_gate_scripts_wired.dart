@@ -69,6 +69,8 @@ const _allowList = <String, String>{
       'Runs `flutter test --reporter json` internally — too slow for pre-commit. Manual / CI artifact gate (Gate 41 audit T9).',
   'check_no_deferral_euphemism.dart':
       'Scans the STAGED diff (git diff --cached) for deferral-euphemism phrases (§4.2) — meaningful ONLY at pre-commit; CI has no staged index. Hard-fail in scripts/pre-commit.sh (baseline soak cleared 2026-06-28); case-skipped from the auto-loop, invoked explicitly.',
+  'check_closes_oi_cited.dart':
+      'Commit-msg gate (§4.3 closes-oi enforcement) — takes the proposed commit message file as its REQUIRED argument, which the check_*.dart loop never supplies. Bare invocation is a usage-error exit, not a real gate verdict. Case-skipped from BOTH scripts/pre-commit.sh and the .github/workflows/test.yml loop; wired instead in scripts/commit-msg.sh. Without this entry, the dynamic-wiring inference below (absence from a case-skip block reads as "covered by the loop") misclassifies a guaranteed crash as wired — a9f2c6.',
 };
 
 // Explicit allowlist for validate_*.dart and audit_*.dart scripts (P1.H/F2).

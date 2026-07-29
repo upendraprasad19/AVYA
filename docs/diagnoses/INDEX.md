@@ -6,7 +6,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
-### gate_fail_closed_discipline (1 bugs)
+### gate_fail_closed_discipline (2 bugs)
+- 2026-07-29 d7a3f9 — CI's Audit Gates job failed on 96c6fac2 — the enforcement-infra merge commit that had already landed on main — with "Gate failed: check_closes_oi_cited.dart". The same commit's local pre-commit hook…
 - 2026-07-29 a9f2c6 — Three gates shipped in this batch exited 0 while doing nothing. An OI whose status read `BLOCKED` vanished from OPEN_INDEX.md with no error; an OI whose status line read `- **Status:** CLOSED` escaped…
 
 ### bug_history_index (1 bugs)
@@ -879,6 +880,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-29 | d7a3f9 | CI's Audit Gates job failed on 96c6fac2 — the enforcement-infra merge commit that had already landed on main — with "Gate failed: check_closes_oi_cited.dart". The same commit's local pre-commit hook… | gate_fail_closed_discipline | test/contracts/gate_wiring_args_required_test.dart |
 | 2026-07-29 | a9f2c6 | Three gates shipped in this batch exited 0 while doing nothing. An OI whose status read `BLOCKED` vanished from OPEN_INDEX.md with no error; an OI whose status line read `- **Status:** CLOSED` escaped… | gate_fail_closed_discipline | test/contracts/oi_index_test.dart |
 | 2026-07-28 | c4e8a2 | 237 of 344 entries in docs/diagnoses/INDEX.md carried no symptom text — just a bare `>`, `>-` or `\|`. CLAUDE.md §4.1.5 makes grepping that index the mandatory first step before any root-cause… | bug_history_index | test/contracts/bug_index_frontmatter_test.dart |
 | 2026-07-28 | c3f8e1 | main went RED on 10dffc90. Two PRE-EXISTING gate e2e tests failed in CI while passing locally and through both pre-commit and pre-push: the gate they spawn inherited CI's real GITHUB_EVENT_PATH, whose… | gate_test_environment_hermeticity | test/contracts/gate_e2e_env_hermetic_test.dart |
