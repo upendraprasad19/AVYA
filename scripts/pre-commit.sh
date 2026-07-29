@@ -54,6 +54,23 @@ if git diff --cached --name-only | grep -q '^docs/diagnoses/'; then
   git add docs/diagnoses/INDEX.md
 fi
 
+# Regen the open-issues index whenever the board moves.
+#
+# THIS IS THE MECHANISM THE BOARD LACKED. open_issues.md went unread for 70 days
+# while dozens of batches shipped; its own reconciliation section names the cause
+# ("no gate, no hook, no CI job referenced it — everything with a gate holds,
+# everything on intention decays") and then credits a fix,
+# scripts/check_open_issues_reconciled.dart, that `git log --all` shows was never
+# written. This regen is the real one.
+if git diff --cached --name-only | grep -q '^docs/audit/open_issues\.md$'; then
+  echo "[pre-commit] Open-issues board touched — regenerating OPEN_INDEX.md..."
+  if ! dart run scripts/build_oi_index.dart; then
+    echo "[pre-commit] FAIL: build_oi_index.dart errored."
+    exit 1
+  fi
+  git add docs/audit/OPEN_INDEX.md
+fi
+
 # Regen ADR index if any ADR file was modified (six industry-gap closure 2026-05-28).
 if git diff --cached --name-only | grep -qE '^docs/adr/[0-9]{4}-.*\.md$'; then
   echo "[pre-commit] ADR docs touched — regenerating INDEX.md..."
