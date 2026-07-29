@@ -45,7 +45,7 @@ forbidden_patterns_checked: >
   invocation
 proposed_fix: >
   Add check_closes_oi_cited.dart to .github/workflows/test.yml's case-skip
-  block (stops the crash — mirrors the 11 other entries already skip-listed
+  block (stops the crash — mirrors the 12 other entries already skip-listed
   there for analogous "requires special context" reasons). Add it to
   check_gate_scripts_wired.dart's _allowList with a reason (removes it from
   the flawed dynamic-wiring inference entirely, closing Gate 33's blind spot
@@ -69,7 +69,7 @@ touched_layers_checked:
   - { tier: 9_storage, status: not_applicable, evidence: "no storage" }
   - { tier: 10_secrets, status: not_applicable, evidence: "no secret read or written" }
   - { tier: 11_external_services, status: not_applicable, evidence: "no external service" }
-  - { tier: 12_client_server_contract, status: fixed_in_this_batch, evidence: "Extracted the real 96c6fac2 blobs for test.yml and check_gate_scripts_wired.dart and confirmed zero occurrences of check_closes_oi_cited.dart pre-fix (the genuine negative control, not an assumed one). Extracted the exact `run: |` step from the fixed test.yml and executed it for real (not simulated) against the full scripts/ directory: it now prints `[skip allow-list] check_closes_oi_cited.dart` and continues, matching the 11 other already-working skip-listed gates, instead of crashing. dart run scripts/check_gate_scripts_wired.dart re-run: PASS. bash -n syntax check on the extracted workflow step: OK. 3/3 new contract tests green." }
+  - { tier: 12_client_server_contract, status: fixed_in_this_batch, evidence: "Extracted the real 96c6fac2 blobs for test.yml and check_gate_scripts_wired.dart and confirmed zero occurrences of check_closes_oi_cited.dart pre-fix (the genuine negative control, not an assumed one). Extracted the exact `run: |` step from the fixed test.yml and executed it for real (not simulated) against the full scripts/ directory: it now prints `[skip allow-list] check_closes_oi_cited.dart` and continues, matching the 12 other already-working skip-listed gates, instead of crashing. dart run scripts/check_gate_scripts_wired.dart re-run: PASS. bash -n syntax check on the extracted workflow step: OK. 3/3 new contract tests green." }
 impact_analysis: >
   CI/gate tooling only; no product code. The fix can only ADD a required skip,
   never remove enforcement. Residual, stated rather than hidden: a FUTURE
