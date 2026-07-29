@@ -121,7 +121,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 - **Status**: OPEN
 - **Blocked on**: none
-- **Verified**: 2026-07-26
+- **Verified**: 2026-07-29
 - **Identified**: 2026-05-17 · OI-43 / L26 lens scan
 - **Risk class**: CQRS / pure-function discipline
 - **Effort**: ~6-8 hours (10 methods × ~30-45 min each for migration + tests)
@@ -133,12 +133,33 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   - `SubscriptionService.verifyFromServer()` — writes Hive subscription state from a verify-named method
 - **Fix shape**: rename to verb-form (`refreshIsPro`, `evaluateAndDowngrade`, `checkAndPersistBadges`) OR move mutation into a separately-named method. Test pattern: source-grep that names starting `get*`/`is*`/`has*`/`calculate*` don't contain `box.put` / `instance.update` / `recordNonFatal` in their body.
 - **Why not fixed now**: 10 methods × multi-callsite renames is a separate scoped batch.
+- **CORRECTED 2026-07-29** (oi-board-corrections batch), re-verified against live code, not
+  re-asserted from this entry's own 2026-05-17 text:
+  1. **`RankService.getCurrentRank()` is NOT a violation** — `rank_service.dart:217`. Telemetry
+     (`ErrorTelemetry.recordNonFatal`) fires ONLY in the exception catch block, never on the
+     success path; zero Hive writes in any branch. Removed from the finding list.
+  2. **`checkAndUnlock()`'s own name already signals its write** (doesn't match the
+     `get*/is*/has*/calculate*` prefix set the fix-shape test targets) — the board's own test
+     pattern would already pass this one. Kept as a real but milder finding than the other two.
+  3. **`isPro()` → `subscription_service.dart:320`, `gate()` → `:420`** (both files renamed
+     since this OI was filed; citations refreshed).
+  4. **New finding**: `WorkoutRepository.calculateCurrentStreak()`
+     (`workout_repository.dart:275`) — already `@Deprecated` since the 2026-05-11 streak CQRS
+     split, **zero live callers** (grep confirms only doc-comment mentions). Fix shape is
+     **delete**, not rename.
+  5. **New finding, low severity**: `SupabaseService.getOrCreateReferralCode()`
+     (`supabase_service.dart:103`) — genuine hidden write (falls through to a live Postgres
+     upsert), but "get-or-create" is a defensible naming idiom. Optional rename.
+  6. **Revised total: ~4 real items** (isPro split, gate split, calculateCurrentStreak
+     deletion, optional getOrCreateReferralCode rename) — not 10 methods. A sweep across
+     `nutrition_repository.dart`, `ai_coach_repository.dart`, `coach_interaction_repository.dart`,
+     `water_target_service.dart`, `sync_service.dart` found no further live instances.
 
 ## OI-45 — L27 concurrency races: 4 unguarded getX→modify→setX patterns (P1)
 
 - **Status**: OPEN
 - **Blocked on**: none
-- **Verified**: 2026-07-26
+- **Verified**: 2026-07-29
 - **Identified**: 2026-05-17 · OI-43 / L27 lens scan
 - **Risk class**: lost-update race on shared state
 - **Effort**: ~1-2 days (each needs a mutex / RPC / version field)
@@ -148,12 +169,36 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   - **HIGH** `BadgeService.checkAndUnlock()` — 2 writers (checkAndUnlock + checkAll). Rapid-fire achievement triggers can lose newly-unlocked badges.
   - **MEDIUM** `HealthSyncService.syncToHive()` line 190-192 — TOCTOU between `existing == null` check and `put()`.
 - **Already mitigated**: StreakProgressService uses migration 056 `update_streak_progress` RPC (the canonical pattern). WorkoutWriteService uses per-(date,exerciseName) `synchronized` mutex.
+- **CORRECTED 2026-07-29** (oi-board-corrections batch), re-verified against live code:
+  1. **`increment()` CONFIRMED exactly as described** — `usage_counter_service.dart:100-106`,
+     still a raw `read; write(current+1)` with zero atomicity. CRITICAL rating stands.
+  2. **`UserRepository.updateProgress()` race is real but 3x UNDER-counted.** Real writer set
+     is **12+ callsites across 9 files**: `user_repository.dart` `updateProgress:133` +
+     `saveProgress:89`; `streak_progress_service.dart` `commitRefill:61`, `commitConsume:126`,
+     `grantFirstProFreezes:213`, `resetToFreeCapOnLapse:245`; `workout_repository.dart:247`
+     (`_persistCurrentStreakDays`); plus callers in `simulation_service.dart`,
+     `pro_phase_advance.dart`, `phase_progress_reconciler.dart`, `graduation_screen.dart`,
+     `restoring_screen.dart`, `train_provider.dart`, `home_screen.dart`,
+     `onboarding_provider.dart`. **`updateProfileFields` does NOT belong on this list** — it
+     writes the separate `profile` Hive key via `ProfileWriteService.patchProfile`, which is
+     already `Completer`-mutex-protected (`profile_write_service.dart:46,128`) — a genuine
+     canonical pattern already in the repo, cite it alongside migration 056.
+  3. **`checkAndUnlock`/`checkAll` DOWNGRADED from HIGH.** Both bodies are fully synchronous —
+     no `await` between the `_box.get` read and the `_box.put` write — so there is no live
+     interleaving window today under Dart's single-isolate model. Worth a defensive mutex
+     anyway (a future edit could add an `await` mid-body), but it is not an active race.
+  4. **"WorkoutWriteService uses a `synchronized` mutex" is WRONG.** It's a hand-rolled
+     `Map<String, Completer<void>>` (`workout_write_service.dart:41,1083-1092`), not the
+     `synchronized` Dart package (that package IS used elsewhere — `hive_user_session.dart` —
+     which is likely the source of the mix-up).
+  5. **`HealthSyncService.syncToHive()` CONFIRMED**, citation refreshed to `:148` (check at
+     `:197`, put at `:199`).
 
 ## OI-46 — L28 service-invariant gaps: 3 client-side-only rules (P1)
 
 - **Status**: OPEN
 - **Blocked on**: none
-- **Verified**: 2026-07-26
+- **Verified**: 2026-07-29
 - **Identified**: 2026-05-17 · OI-43 / L28 lens scan
 - **Risk class**: rule bypass via new entry point
 - **Effort**: ~1 day
@@ -163,12 +208,32 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   - Onboarding fields required — only `OnboardingNotifier` route sequence enforces; no `users.*` NOT NULL constraints.
 - **Already mitigated**: swapDays consecutive-rest + source≠target guards moved into `WorkoutScheduleService.swapDays()` per audit-2026-05-11 H-6 (precedent pattern).
 - **Fix shape**: add Postgres `BEFORE INSERT` triggers + 23P01 raise on cap exceeded; let Edge Function catch + return 429.
+- **CORRECTED 2026-07-29** (oi-board-corrections batch) — **the first named finding above is
+  WRONG, not just stale.** `channel='in_app'` does not exist as an `ai_coach_interactions`
+  value anywhere in the codebase (it's an unrelated client-only coach-delivery-mode string).
+  The actual 50/200 food-text cap is `channel='food_text_analysis'`, and it **already has**
+  atomic trigger protection — `trg_food_text_rate_limit`, migration 026 — the exact precedent
+  this entry cites as what to imitate is already applied to the feature this entry describes as
+  unprotected. `tool_dispatcher.dart:1225-1227` and diagnose-docs `0f8d54`/`7ad0d8` corroborate
+  this predates the 2026-07-26 "Verified" stamp by months.
+  **Two REAL, different gaps found in its place:**
+  1. Free-tier chat (`channel='app'`, 10/day cap) is check-then-insert —
+     `ai-proxy/index.ts:607` (gate check), `:942` (insert) — no trigger.
+  2. Vision cap (`scan_meal`+`cart_auditor` combined, 15/day) is check-then-insert —
+     `ai-proxy/index.ts:438` (cap check), `:475`/`:519` (inserts) — no trigger.
+  **`swapDays` "already mitigated" claim is misleading, not true.** Verified
+  `swap_service.dart:111-167` — the guards are real but 100% client-side Dart against local
+  Hive state; there is **no Postgres constraint/trigger** on `scheduled_workouts` backing them.
+  This entry's own risk model says client-only rules are exactly what's insufficient —
+  reclassified as a 4th instance of the same gap (client-only, accepted lower-severity risk
+  given the blast radius is a malformed schedule, not a quota/money bypass), not a fix
+  precedent.
 
 ## OI-48 — L31 cron efficiency: 3 functions are O(all users), recompute-everything (P2)
 
 - **Status**: OPEN
 - **Blocked on**: none
-- **Verified**: 2026-07-26
+- **Verified**: 2026-07-29
 - **Identified**: 2026-05-17 · OI-43 / L31 lens scan
 - **Risk class**: cost scaling (billing alert at 10K users)
 - **Effort**: ~1-2 days (per-function pre-filter design)
@@ -193,12 +258,32 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   - `pr-detection` — 20-min time window filter
   - `expiry-reminder` — single indexed SELECT with date range
 - **Fix shape**: add pre-filter SELECT (last_active_at, signals_computed_at, or other "interesting users today" predicate). Compare to plateau-alert/protein-gap-alert which already use coach_memory scores.
+- **CORRECTED 2026-07-29** (oi-board-corrections batch) — **the 2026-07-27 re-scope pass's
+  "i-see-you-callout — STILL OPEN" is ITSELF wrong, the second stale miss on this same
+  function.** Verified live: `i-see-you-callout/index.ts:26-100` carries an
+  `F45 (2026-06-07 audit)` active-user pre-filter (`ACTIVE_WINDOW_DAYS=28`,
+  `.gte("last_active_at", activeCutoffIso)` at `:100`) plus `PAGE_SIZE=1000` pagination —
+  landed over 7 weeks before this "STILL OPEN" line was written and over a month before the
+  2026-07-26 pass that also missed it. **Move it to the "already efficient" list below;** only
+  `re-engagement` remains a real, open instance now.
+  `re-engagement`'s citation is off by one — `.from("users")` is actually at `:132`, not `:131`
+  (region otherwise correct). Its Path B scan carries only an `is_deleted` filter, genuinely
+  O(all non-deleted users), then a per-user 3-table (`workout_logs`/`nutrition_logs`/
+  `weight_logs`) sequential-query loop at `:140-185` checking for the *absence* of recent
+  activity (an anti-join, not a batchable positive-filter check).
+  **"plateau-alert/protein-gap-alert already use coach_memory scores" is only half true.**
+  `plateau-alert` does (`index.ts:96`, `plateau_risk_score >= 0.7`). `protein-gap-alert` does
+  NOT — it pre-filters on `subscriptions.status='active'` then issues already-batched `.in()`
+  queries (`index.ts:94-99,123-150`), no score involved. This is actually the **better**
+  structural precedent for `re-engagement`'s fix (batched positive-filter pattern), though the
+  anti-join shape of `re-engagement`'s actual check fits `clean-orphan-media`'s RPC pattern
+  more directly.
 
 ## OI-50 — L37 empty/null-shape readers: 23 risky accesses across 6 files (P2)
 
 - **Status**: OPEN
 - **Blocked on**: none
-- **Verified**: 2026-07-26
+- **Verified**: 2026-07-29
 - **Identified**: 2026-05-17 · OI-43 / L37 lens scan
 - **Risk class**: runtime crash OR silent-wrong on malformed/empty Hive shapes
 - **Effort**: ~1-2 days (8 contract tests + null-guard refactors)
@@ -210,6 +295,31 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   - **SILENT-WRONG** `edit_workout_log_sheet.dart:938` — fallback to `sets_completed` key without existence check.
 - **Already clean** (canonical pattern): `workout_read_service.dart`, `profile_provider.dart` — both use `if (X is List && X.isNotEmpty)` then `for (final s in X) if (s is Map)` guards consistently.
 - **Fix shape**: per-file null-guard refactor + contract tests with `empty | malformed | missing-key | wrong-type` cases (the L37 charter pattern).
+- **CORRECTED 2026-07-29** (oi-board-corrections batch) — **3 of the 5 named "CRASH" findings
+  are WRONG; all already guarded.** Verified live, plus a broad `.first`/`.last`/bracket-index
+  sweep across all of `lib/` found no further live instances:
+  1. `train_provider.dart` `sets.first` (now at `:85`, moved from `:72`) — guarded, `if (sets
+     is List && sets.isNotEmpty)` immediately precedes it at `:84`. No crash reachable.
+  2. `todays_meals_card.dart:340` `mealType[0]` — **the citation doesn't exist**; that line is
+     a section-divider comment (`// ── Empty slot ──...`), confirmed by direct read, not just
+     stale. Both real `mealType[0]` sites — `nutrition_read_service.dart:70-72` and
+     `nutrition_screen.dart:1258-1260` — are null/empty-guarded.
+  3. `workout_receipt_card.dart:450` null-deref — guarded by `if (val is Map && ...)` at the
+     real location, `:454-455`. No crash reachable.
+  The 2 SILENT-WRONG findings are real but narrower than described: `:387` (was `:380`) — the
+  `sets`/`sets_detail` fallback only produces an empty *per-set breakdown*, not "zero reps
+  rendered" (aggregate reps/set-count are read from separate top-level fields); `:939`
+  (was `:938`) — confirmed as described, no crash, silent `?? 0` fallback.
+  **"23 risky accesses across 6 files" does not hold up.** Confirmed real: 2. A broad sweep of
+  every `.first`/`.last`/bracket-index pattern in `lib/` found no further live crash-shaped
+  risk. This OI (filed 2026-05-17) very likely predates or was never reconciled against
+  PR-FIX-2 (2026-04-24, `lib/CLAUDE.md` common-pitfalls table), which already swept 6 instances
+  of exactly this `.first`-on-empty-list bug class 3 weeks earlier.
+  **`profile_provider.dart` is NOT a canonical-pattern example** — the `is List &&
+  isNotEmpty`/`for (s) if (s is Map)` idiom does not appear anywhere in that file (it only
+  reads scalar profile fields). The sole verified canonical example is
+  `workout_read_service.dart` (`bestPerSetReps:64-83`, `bestPerSetDuration:91-112`,
+  `bestPerSetWeight:118-131`, all three using the idiom).
 
 # Reconciliation 2026-07-26 — board revived after 70 dormant days
 
