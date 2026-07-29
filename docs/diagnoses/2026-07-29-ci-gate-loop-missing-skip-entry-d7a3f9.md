@@ -151,3 +151,35 @@ Two divergences between the two skip-lists were checked and are NOT this bug:
 crashing; `check_hooks_installed.dart` (workflow-only) is deliberately
 CI-specific per its own `_allowList` reason (CI checkouts never run
 `setup-hooks.sh`). Neither reproduces the args-required crash.
+
+## Round-1 review: the fix reproduced its own bug class while shipping
+
+Independent review of the first draft found the new test hand-copied Gate
+33's private `_extractCaseSkips` instead of importing it — two
+independently-maintained copies of the same parsing logic, the exact shape
+this doc names as root cause, now inside the regression test meant to guard
+against it. Fixed by extracting the function to a shared library, imported
+by both `check_gate_scripts_wired.dart` and the test.
+
+Naming that library `check_gate_scripts_wired_lib.dart` reproduced the bug
+**one level deeper, live, during this fix's own development.** Gate 33 scans
+every `scripts/check_*.dart` file as a gate the dynamic loops must invoke; a
+`check_`-prefixed library with no `main()` matched that glob. Re-running
+Gate 33 immediately after adding the file — a habit from writing this exact
+fix, not a coincidence — showed its count had silently gone from 91 to 92,
+and `dart run scripts/check_gate_scripts_wired_lib.dart` failed with
+`Invoked Dart programs must have a 'main' function defined`. Had this
+shipped, both `pre-commit.sh` and `test.yml` would have bare-invoked it and
+crashed, for a third reason in the same family, introduced by the fix for
+the first two.
+
+Renamed to `gate_scripts_wired_lib.dart`, matching the naming already used
+by every other pure script library in this repo (`bug_index_lib.dart`,
+`worktree_guard_lib.dart`, `git_safety_lib.dart`,
+`plan_review_record_lib.dart`) — none carry a gate-triggering prefix. Gate
+33's count confirmed back to 91 after the rename.
+
+The method note: verifying a fix against the failure it targets is not the
+same as verifying the fix doesn't introduce a new one. Re-running the
+relevant gate after *every* edit — not just at the end — is what caught
+this before it reached a commit.

@@ -22,39 +22,24 @@
 // content (verified by hand before writing this file, per
 // feedback_source_grep_false_confidence.md) and all three must hold for the
 // crash to be structurally prevented, not just patched once.
+//
+// Parses via gate_scripts_wired_lib.dart — the SAME function Gate 33 itself
+// uses, not a hand-copied clone. Round-1 review of this fix flagged the
+// first draft for duplicating Gate 33's private parsing logic, which would
+// have recreated this fix's own root-cause shape inside its own test.
 
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-const _gate = 'check_closes_oi_cited.dart';
+import '../../scripts/gate_scripts_wired_lib.dart';
 
-Set<String> _extractCaseSkips(String content) {
-  final pattern = RegExp(r'check_[a-z0-9_]+\.dart');
-  final skips = <String>{};
-  var inCase = false;
-  for (final line in content.split('\n')) {
-    final trimmed = line.trim();
-    if (trimmed.startsWith('case ') && trimmed.contains(' in')) {
-      inCase = true;
-      continue;
-    }
-    if (inCase && trimmed == 'esac') {
-      inCase = false;
-      continue;
-    }
-    if (!inCase) continue;
-    for (final m in pattern.allMatches(line)) {
-      skips.add(m.group(0)!);
-    }
-  }
-  return skips;
-}
+const _gate = 'check_closes_oi_cited.dart';
 
 void main() {
   test('check_closes_oi_cited.dart is case-skipped in scripts/pre-commit.sh', () {
     final src = File('scripts/pre-commit.sh').readAsStringSync();
-    expect(_extractCaseSkips(src), contains(_gate),
+    expect(extractCaseSkips(src, caseSkipRegex), contains(_gate),
         reason: 'a bare `dart run scripts/$_gate` with no commit-msg-file '
             'argument prints its Usage line and exits non-zero — the '
             'dynamic check_*.dart loop must skip it, not invoke it');
@@ -65,7 +50,7 @@ void main() {
       '.github/workflows/test.yml (the a9f2c6-sibling bug: this exact line '
       'was missing when it broke CI on 96c6fac2)', () {
     final src = File('.github/workflows/test.yml').readAsStringSync();
-    expect(_extractCaseSkips(src), contains(_gate),
+    expect(extractCaseSkips(src, caseSkipRegex), contains(_gate),
         reason: 'CI\'s "Run all check_*.dart gates" step is a SEPARATE, '
             'hand-maintained copy of the same loop+case-skip pattern as '
             'pre-commit.sh — being skip-listed in one does not skip-list '
