@@ -132,8 +132,8 @@ Input $0.075/M · output $0.30/M for Flash; $1.25/M · $10/M for Pro; Flash-Lite
 
 ## Vision Features (ai-proxy — Gemini 2.5 Flash Lite)
 - `food_text_analysis`: Text → nutrition JSON. **Rate limited: 50/day free, 200/day PRO** (server-side abuse cap; client has no hard limit — server is source of truth). Counted via `ai_coach_interactions` rows with `channel='food_text_analysis'`.
-- `scan_meal`: Photo → nutrition JSON. Client: 3 free / 10 PRO per day. Server: 15/day abuse cap.
-- `cart_auditor`: Grocery screenshot → health audit JSON (items, health_score, suggestions). Client: 1 free / 10 PRO per day. Server: 15/day abuse cap.
+- `scan_meal`: Photo → nutrition JSON. Client: 3 free / 10 PRO per day. Server: 20/day combined abuse cap (raised from 15, 2026-07-29 usage-counter-race batch, to cover PRO's full documented 10+10 combined allowance).
+- `cart_auditor`: Grocery screenshot → health audit JSON (items, health_score, suggestions). Client: 1 free / 10 PRO per day. Server: 20/day combined abuse cap (same shared budget as scan_meal).
 - Server-side rate limit: scan_meal + cart_auditor combined counted via `ai_coach_interactions` rows with `channel IN ('scan_meal', 'cart_auditor')`. Client-side limits handle exact free/PRO tiers.
 
 ## Edge Function Error Sanitization (ALL functions)

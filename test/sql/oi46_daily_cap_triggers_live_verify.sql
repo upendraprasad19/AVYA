@@ -34,10 +34,17 @@
 -- real (not its comment's shorthand) pattern.
 --
 -- Status: RUN LIVE 2026-07-29 against migrations 111/112/113 immediately
--- after they were applied — all 7 cases returned status='ok'. Re-run any
--- time after a change to any of the three trigger functions.
+-- after they were applied — all 7 cases returned status='ok'. Case 3 (vision
+-- combined cap) was UPDATED the same day, in the usage-counter-race batch,
+-- to expect the migration-114-raised cap of 20 (was 15) — RE-RUN LIVE
+-- 2026-07-30T06:06:57+05:30 immediately after migration 114's apply (via
+-- direct execute_sql, the check_onconflict_live_arbiter.dart wrapper hit an
+-- unrelated Management-API token-privilege 403): status='ok', 20 rows
+-- succeeded, 21st raised P0001 'vision_analysis_daily_limit_reached
+-- (cap=20)'. Re-run the full file any time after a change to any of the
+-- four trigger functions.
 --
--- closes-diagnose: f4a19c
+-- closes-diagnose: f4a19c, c9e3b1
 
 BEGIN;
 
@@ -118,10 +125,15 @@ BEGIN
   END;
 
   -- =====================================================================
-  -- Case 3 — vision_analysis_daily_limit: 15 combined scan_meal/cart_auditor
-  -- rows succeed, 16th (either channel) fails.
+  -- Case 3 — vision_analysis_daily_limit: 20 combined scan_meal/cart_auditor
+  -- rows succeed, 21st (either channel) fails. Raised from 15/16th via
+  -- migration 114 (usage-counter-race batch, 2026-07-29, same day as
+  -- migration 111 that this case originally verified) — round-1 review of
+  -- that batch caught this file still hardcoding the superseded 15/16
+  -- values, which would have silently false-failed the moment migration 114
+  -- went live while this file didn't change with it.
   BEGIN
-    FOR i IN 1..15 LOOP
+    FOR i IN 1..20 LOOP
       INSERT INTO ai_coach_interactions (user_id, channel, user_message, ai_response, model_used, tokens_used)
         VALUES (
           v_vision_user,
@@ -131,19 +143,19 @@ BEGIN
     END LOOP;
     BEGIN
       INSERT INTO ai_coach_interactions (user_id, channel, user_message, ai_response, model_used, tokens_used)
-        VALUES (v_vision_user, 'scan_meal', 'vision 16', '', 'pending', 0);
-      INSERT INTO _v_results VALUES ('vision_combined_cap_16th_row_rejected', 'fail', NULL,
-        'trigger did not raise on the 16th combined vision row');
+        VALUES (v_vision_user, 'scan_meal', 'vision 21', '', 'pending', 0);
+      INSERT INTO _v_results VALUES ('vision_combined_cap_21st_row_rejected', 'fail', NULL,
+        'trigger did not raise on the 21st combined vision row');
     EXCEPTION WHEN SQLSTATE 'P0001' THEN
       IF SQLERRM LIKE '%vision_analysis_daily_limit_reached%' THEN
-        INSERT INTO _v_results VALUES ('vision_combined_cap_16th_row_rejected', 'ok', 'P0001', SQLERRM);
+        INSERT INTO _v_results VALUES ('vision_combined_cap_21st_row_rejected', 'ok', 'P0001', SQLERRM);
       ELSE
-        INSERT INTO _v_results VALUES ('vision_combined_cap_16th_row_rejected', 'fail', 'P0001',
+        INSERT INTO _v_results VALUES ('vision_combined_cap_21st_row_rejected', 'fail', 'P0001',
           'raised P0001 but wrong message: ' || SQLERRM);
       END IF;
     END;
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('vision_combined_cap_16th_row_rejected', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('vision_combined_cap_21st_row_rejected', 'fail', SQLSTATE, SQLERRM);
   END;
 
   -- =====================================================================
