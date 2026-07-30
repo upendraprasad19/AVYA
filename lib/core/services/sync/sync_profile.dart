@@ -50,6 +50,101 @@ extension SyncServiceProfile on SyncService {
     }
   }
 
+  /// Unit 3b round-1-review P1 fix (2026-07-30) — routes
+  /// `UserRepository.syncOnboardingToSupabase`'s user_progress write through
+  /// the SAME optimistic-lock RPC as the regular periodic sync, instead of a
+  /// raw version-blind upsert. A raw upsert there was a THIRD unprotected
+  /// writer to the fields `update_user_progress_snapshot` exists to guard:
+  /// the 10s-delayed inline retry (`onboarding_provider.dart`) or a
+  /// multi-launch `pending_onboarding_sync` replay (`_replayPendingOnboarding
+  /// Sync` — re-reads Hive fresh each call, but a fresh LOCAL read still
+  /// races a raw upsert against a DIFFERENT device's already-versioned
+  /// write) could silently clobber real post-onboarding progress with stale
+  /// values. Strictly safer than the prior behavior in every case: a version
+  /// match now REQUIRED to write at all (old code always overwrote
+  /// unconditionally), so the only new outcome is "lost the race, dropped
+  /// after one retry" — which preserves whatever fresher state already
+  /// landed rather than silently replacing it with day-1 onboarding values.
+  ///
+  /// THROWS on a genuine RPC/network exception (unlike `syncProgressNow`,
+  /// which swallows) — preserves `syncOnboardingToSupabase`'s existing
+  /// "throws so the caller can detect sync gaps" contract that drives the
+  /// 10s retry + pending-flag replay safety net. Does NOT throw on a benign
+  /// version-mismatch drop (see above — that is correct concurrent-write
+  /// handling, not a failure).
+  ///
+  /// `progressData` uses the SAME semantic keys the 2 existing callers
+  /// already build (`current_phase`, `current_week`, `total_workouts_done`,
+  /// …). A key the caller omits maps to an explicit RPC NULL — COALESCE
+  /// preserves the existing column on an UPDATE (e.g. the onboarding-replay
+  /// path deliberately omits `current_week` to avoid stomping the
+  /// program-week projection); migration 115's P2 fix COALESCEs the 4
+  /// schema-defaulted columns to their real defaults on a fresh INSERT too,
+  /// so an all-null fresh insert still lands the correct 1/1/0/0.
+  Future<void> pushOnboardingProgressSnapshot({
+    required String userId,
+    required Map<String, dynamic> progressData,
+  }) async {
+    // Hermes C9 (2026-07-30): defensive `(x as num?)?.toInt()` casts, not
+    // hard `as int?` — matches `_buildUserProgressRpcParams`'s identical
+    // fields (the shared helper `_syncUserProgress` uses). A hard cast
+    // throws on any non-int numeric shape (e.g. a value that round-tripped
+    // through JSON as a double); `_sanitize` upstream does NOT guard these
+    // fields (its `_integerOnlyColumns` allowlist contains zero progress
+    // columns), so this cast was the only guard in the path. Kept as a
+    // separate literal (not routed through the shared helper) because this
+    // path deliberately skips the week PROJECTION logic — see that
+    // helper's doc comment — onboarding-time `progressData` isn't
+    // Hive-shaped and doesn't need it.
+    final rpcParams = <String, dynamic>{
+      'p_current_phase': (progressData['current_phase'] as num?)?.toInt(),
+      'p_current_week': (progressData['current_week'] as num?)?.toInt(),
+      'p_phase_started_at': progressData['phase_started_at'],
+      'p_plan_generated_at': progressData['plan_generated_at'],
+      'p_total_workouts_done':
+          (progressData['total_workouts_done'] as num?)?.toInt(),
+      'p_current_streak_weeks':
+          (progressData['current_streak_weeks'] as num?)?.toInt(),
+      'p_detected_experience_level':
+          progressData['detected_experience_level'] as String?,
+      'p_deployments_complete':
+          (progressData['deployments_complete'] as num?)?.toInt(),
+      'p_current_streak_days':
+          (progressData['current_streak_days'] as num?)?.toInt(),
+      'p_last_workout_date': progressData['last_workout_date'],
+      'p_longest_gap_days': (progressData['longest_gap_days'] as num?)?.toInt(),
+    };
+
+    final rawProgress = _hive.userBox.get('progress');
+    final expectedVersion = rawProgress == null
+        ? 0
+        : ((Map<String, dynamic>.from(rawProgress as Map)
+                    ['streak_progress_version'] as num?)
+                ?.toInt() ??
+            0);
+
+    final firstAttempt = await _supabase.client.rpc(
+      'update_user_progress_snapshot',
+      params: {
+        'p_user_id': userId,
+        'p_expected_version': expectedVersion,
+        ...rpcParams,
+      },
+    );
+    final firstVersion = (firstAttempt as num?)?.toInt();
+    if (firstVersion != null) {
+      SyncService._stampProgressVersion(firstVersion, userId: userId);
+      return;
+    }
+    // Version mismatch — reuse the SAME bounded single-retry helper
+    // _syncUserProgress uses (re-fetches the fresh version, resends the
+    // SAME field values once, then drops with telemetry rather than loops).
+    await _retrySyncUserProgressOnceAfterConflict(
+      userId: userId,
+      rpcParams: rpcParams,
+    );
+  }
+
   Future<void> _syncUserProfile(String userId) async {
     final userBox = _hive.userBox;
     final profile = userBox.get('profile');
@@ -163,62 +258,112 @@ extension SyncServiceProfile on SyncService {
         .single();
   }
 
+  /// Builds the `update_user_progress_snapshot` RPC's field params (every
+  /// key but `p_user_id`/`p_expected_version`, which the caller adds) from a
+  /// raw Hive `progress` map. Shared by [_syncUserProgress]'s initial build
+  /// and [_retrySyncUserProgressOnceAfterConflict]'s fresh-Hive rebuild on
+  /// retry (B-pass round-2, 2026-07-30) — one definition means the two can't
+  /// silently drift apart the way a duplicated copy could.
+  ///
+  /// Defensive `(x as num?)?.toInt()` casts, not hard `as int?` — a hard
+  /// cast throws on any non-int numeric shape (e.g. a value that round-
+  /// tripped through JSON as a double somewhere upstream), and this is the
+  /// only guard in the path (`_sanitize`'s `_integerOnlyColumns` allowlist
+  /// contains zero progress columns).
+  Map<String, dynamic> _buildUserProgressRpcParams(Map<String, dynamic> p) {
+    // current_week PROJECTION (diagnose 2026-07-21). The Hive field is a dead
+    // constant `1` (every writer sets the literal); left as-is the column
+    // makes the weekly-recap push say "Week 1" forever, the weekly report say
+    // "Current week: 1", and the coach read a frozen 1. Project the derived
+    // PROGRAM week (1..12, "true deployment progress") into the column so the
+    // two Edge Functions that read it become correct with no EF redeploy.
+    // Kill-switch `disable_program_week_projection` (default-ON) restores the
+    // verbatim pre-fix behaviour: the guarded passthrough of the frozen field.
+    // Written UNCONDITIONALLY when ON — getProgramWeek never returns null, so
+    // a restore/null-Hive user's column can't be left stale (review F1).
+    final projectionOff =
+        _hive.configBox.get('disable_program_week_projection') == true;
+    final int? currentWeekOut =
+        WorkoutScheduleReadService.instance.currentWeekColumnProjection(
+      frozenWeek: (p['current_week'] as num?)?.toInt(),
+      phase: (p['current_phase'] as num?)?.toInt() ?? 1,
+      disabled: projectionOff,
+    );
+
+    // Every key is ALWAYS present (explicit null, not omitted) — unlike the
+    // old upsert's `if (x != null) 'x': x` conditional-inclusion. The RPC's
+    // SQL body does `COALESCE(p_x, existing_column)` per field, so a NULL
+    // param has the SAME "don't touch this column" effect the old
+    // conditional-omit had on a partial upsert; explicit-null is required
+    // here because PostgREST maps every declared function parameter by
+    // name and there is no DEFAULT NULL in migration 115's signature.
+    return <String, dynamic>{
+      'p_current_phase': (p['current_phase'] as num?)?.toInt(),
+      'p_current_week': currentWeekOut,
+      'p_phase_started_at': p['phase_started_at'],
+      'p_plan_generated_at': p['plan_generated_at'],
+      'p_total_workouts_done': (p['total_workouts_done'] as num?)?.toInt(),
+      'p_current_streak_weeks': (p['current_streak_weeks'] as num?)?.toInt(),
+      // F21 · detected_experience_level — seeded from onboarding answer,
+      // may be overwritten by AI detection.
+      'p_detected_experience_level': p['detected_experience_level'] as String?,
+      // Rank-evaluation columns (migration 081, diagnose b9f4d2). The server
+      // cron `evaluate-rank-promotions` SELECTs these to evaluate the ladder;
+      // pre-081 they didn't exist → the cron read null → only ever granted SD2.
+      // Source of truth is the CLIENT (schedule-aware streak walk + the F18
+      // deployment counter). current_streak_days + last_workout_date are
+      // already stamped into `progress` by train_provider on workout
+      // completion; deployments_complete by UserRepository.updateProgress.
+      'p_deployments_complete': (p['deployments_complete'] as num?)?.toInt(),
+      'p_current_streak_days': (p['current_streak_days'] as num?)?.toInt(),
+      'p_last_workout_date': p['last_workout_date'],
+      'p_longest_gap_days': (p['longest_gap_days'] as num?)?.toInt(),
+    };
+  }
+
   /// Pushes local user progress (phase, week, streaks, etc.) to Supabase.
+  ///
+  /// Unit 3b (OI-45 cross-device half, e6b9c4): routes through the
+  /// `update_user_progress_snapshot` optimistic-lock RPC (migration 115)
+  /// instead of a raw version-blind upsert — the same cross-device race
+  /// class migration 056 closed for the streak-freeze fields (device A and
+  /// B both read a stale snapshot, whichever writes last silently wins,
+  /// clobbering the other) applied here too, just with no RPC to close it
+  /// until now.
   Future<void> _syncUserProgress(String userId) async {
     try {
       final progress = _hive.userBox.get('progress');
       if (progress == null) return;
 
       final p = Map<String, dynamic>.from(progress as Map);
+      final rpcParams = _buildUserProgressRpcParams(p);
 
-      // current_week PROJECTION (diagnose 2026-07-21). The Hive field is a dead
-      // constant `1` (every writer sets the literal); left as-is the column
-      // makes the weekly-recap push say "Week 1" forever, the weekly report say
-      // "Current week: 1", and the coach read a frozen 1. Project the derived
-      // PROGRAM week (1..12, "true deployment progress") into the column so the
-      // two Edge Functions that read it become correct with no EF redeploy.
-      // Kill-switch `disable_program_week_projection` (default-ON) restores the
-      // verbatim pre-fix behaviour: the guarded passthrough of the frozen field.
-      // Written UNCONDITIONALLY when ON — getProgramWeek never returns null, so
-      // a restore/null-Hive user's column can't be left stale (review F1).
-      final projectionOff =
-          _hive.configBox.get('disable_program_week_projection') == true;
-      final int? currentWeekOut =
-          WorkoutScheduleReadService.instance.currentWeekColumnProjection(
-        frozenWeek: (p['current_week'] as num?)?.toInt(),
-        phase: (p['current_phase'] as int?) ?? 1,
-        disabled: projectionOff,
+      final expectedVersion =
+          (p['streak_progress_version'] as num?)?.toInt() ?? 0;
+      final firstAttempt = await _supabase.client.rpc(
+        'update_user_progress_snapshot',
+        params: {
+          'p_user_id': userId,
+          'p_expected_version': expectedVersion,
+          ...rpcParams,
+        },
       );
-
-      await _supabase.client.from('user_progress').upsert({
-        'user_id': userId,
-        if (p['current_phase'] != null) 'current_phase': p['current_phase'],
-        if (currentWeekOut != null) 'current_week': currentWeekOut,
-        if (p['phase_started_at'] != null) 'phase_started_at': p['phase_started_at'],
-        if (p['plan_generated_at'] != null) 'plan_generated_at': p['plan_generated_at'],
-        if (p['total_workouts_done'] != null) 'total_workouts_done': p['total_workouts_done'],
-        if (p['current_streak_weeks'] != null) 'current_streak_weeks': p['current_streak_weeks'],
-        // F21 · detected_experience_level — seeded from onboarding answer,
-        // may be overwritten by AI detection.
-        if (p['detected_experience_level'] != null)
-          'detected_experience_level': p['detected_experience_level'],
-        // Rank-evaluation columns (migration 081, diagnose b9f4d2). The server
-        // cron `evaluate-rank-promotions` SELECTs these to evaluate the ladder;
-        // pre-081 they didn't exist → the cron read null → only ever granted SD2.
-        // Source of truth is the CLIENT (schedule-aware streak walk + the F18
-        // deployment counter). current_streak_days + last_workout_date are
-        // already stamped into `progress` by train_provider on workout
-        // completion; deployments_complete by UserRepository.updateProgress.
-        if (p['deployments_complete'] != null) 'deployments_complete': p['deployments_complete'],
-        if (p['current_streak_days'] != null) 'current_streak_days': p['current_streak_days'],
-        if (p['last_workout_date'] != null) 'last_workout_date': p['last_workout_date'],
-        if (p['longest_gap_days'] != null) 'longest_gap_days': p['longest_gap_days'],
-        // Stamp updated_at on every push — there is NO DB trigger on
-        // user_progress, so without this the column stays frozen at created_at
-        // even as the row's data advances, and any "changed-since" /
-        // incremental-sync / conflict logic keyed on it is wrong (diagnose a2d8f4).
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'user_id');
+      final firstVersion = (firstAttempt as num?)?.toInt();
+      if (firstVersion != null) {
+        SyncService._stampProgressVersion(firstVersion, userId: userId);
+      } else {
+        // Version mismatch — a concurrent device's write landed first.
+        // Bounded: re-fetch the fresh version, resend the SAME local field
+        // values once, then drop. Not a field-level merge (unlike freezes'
+        // mergeFreezeProgress) — these fields are client-authoritative per
+        // the comment above (cloud is a passive mirror for cron/report
+        // consumption), so re-asserting local values against the fresh
+        // version is the correct reconciliation, not a 3-way merge.
+        await _retrySyncUserProgressOnceAfterConflict(
+          userId: userId,
+          rpcParams: rpcParams,
+        );
+      }
     } catch (e, st) {
       debugPrint('[SyncService._syncUserProgress] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -228,6 +373,103 @@ extension SyncServiceProfile on SyncService {
         await _reportSyncFailure(opType: 'sync_user_progress', error: e);
       } catch (_) {}
     }
+  }
+
+  /// Unit 3b (e6b9c4) — bounded retry for `_syncUserProgress` after a
+  /// version mismatch. Re-fetches ONLY the fresh version (not the field
+  /// values — local is authoritative for these fields), retries ONCE, then
+  /// drops (logs telemetry, does not loop).
+  Future<void> _retrySyncUserProgressOnceAfterConflict({
+    required String userId,
+    required Map<String, dynamic> rpcParams,
+  }) async {
+    final Object? rawRes = await _supabase.client
+        .from('user_progress')
+        .select('streak_progress_version')
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (rawRes == null) {
+      // Hermes C7 (2026-07-30): was a silent return. Both RPCs return NULL
+      // for row-absent (migration 115), so this state does NOT prove the
+      // row genuinely doesn't exist — it's reachable via a partial restore
+      // that leaves a non-zero local version with no cloud row behind it,
+      // and every subsequent sync silently no-ops the same way forever
+      // (self-perpetuating, Hermes L34 Finding 2). The sibling drop 11
+      // lines below already telemeters; this one didn't.
+      unawaited(ErrorTelemetry.logEvent(
+        'sync_user_progress_row_absent_after_conflict',
+        message: 'user=$userId — cloud row absent on retry re-fetch, '
+            'dropped whole snapshot',
+      ));
+      return;
+    }
+    final freshVersion =
+        ((rawRes as Map)['streak_progress_version'] as num?)?.toInt();
+    if (freshVersion == null) return;
+
+    // B-pass round-2 (2026-07-30): rebuild from a FRESH Hive read rather
+    // than resending the params the caller captured before its own first
+    // RPC attempt — mirrors the freezes-retry fix (Hermes C2), which this
+    // sibling helper had NOT received despite being the exact same bug
+    // class. That capture happened before this helper's own cloud re-fetch
+    // above, so a routine same-device write landing in that window
+    // (train_provider.dart on workout completion, UserRepository.
+    // updateProgress, etc. — see this class's own rpcParams-build comment)
+    // would otherwise be silently overwritten by a stale resend for every
+    // COALESCE-only field (all but total_workouts_done/deployments_complete,
+    // which GREATEST protects regardless of which snapshot is resent).
+    //
+    // B-pass round-3 (2026-07-30) caught the first version of this fix: it
+    // was all-or-nothing (Hive map present -> use ONLY its fields, ignoring
+    // rpcParams entirely). That's correct for _syncUserProgress's own retry
+    // (same Hive source as the original attempt, so Hive always has every
+    // field). It's WRONG for pushOnboardingProgressSnapshot's retry: its
+    // first attempt's progressData carries fields Hive's progress map
+    // never gets (detected_experience_level in particular — seeded from
+    // the onboarding answer via `profile['fitness_experience']`, but
+    // `saveProgress`'s onboarding write, onboarding_provider.dart:471-478,
+    // never puts it in the Hive progress map at all). An all-or-nothing
+    // swap silently resent NULL for that field on retry, permanently
+    // dropping a real answer whenever the fresh-insert race is lost to a
+    // sibling writer whose own INSERT branch also never sets it (e.g.
+    // syncFreezes' fresh-insert, migration 115's own comment names this
+    // exact interleaving as reachable). Fixed as a per-field merge instead:
+    // prefer the fresh-Hive value when Hive actually carries that field
+    // (non-null), otherwise fall back to what the ORIGINAL attempt sent —
+    // never regressing a real value to NULL just because Hive doesn't
+    // track that particular field for this caller. Consistent with the
+    // RPC's own COALESCE semantics, where every one of these params was
+    // already designed to mean "no fresher info, don't touch this column"
+    // when null — never "actively clear this column".
+    final freshLocal = _hive.userBox.get('progress');
+    final freshParams = freshLocal is Map
+        ? SyncService.mergeRpcParamsPreferringNonNull(
+            _buildUserProgressRpcParams(Map<String, dynamic>.from(freshLocal)),
+            rpcParams,
+          )
+        : rpcParams;
+
+    final retryResult = await _supabase.client.rpc(
+      'update_user_progress_snapshot',
+      params: {
+        'p_user_id': userId,
+        'p_expected_version': freshVersion,
+        ...freshParams,
+      },
+    );
+    final retryVersion = (retryResult as num?)?.toInt();
+    if (retryVersion == null) {
+      // Second consecutive mismatch — drop rather than loop. The next
+      // updateProgress() call's own sync (or the next restore) reconciles
+      // from a fresher snapshot.
+      unawaited(ErrorTelemetry.logEvent(
+        'sync_user_progress_retry_dropped',
+        message: 'user=$userId expected=$freshVersion — dropped after '
+            'one retry',
+      ));
+      return;
+    }
+    SyncService._stampProgressVersion(retryVersion, userId: userId);
   }
 
   /// Pushes user preferences to Supabase user_preferences table.
@@ -347,6 +589,14 @@ extension SyncServiceProfile on SyncService {
   Future<void> _restoreUserProgress(String userId,
       {Object? preFetched = _kNoInject}) async {
     try {
+      // Bare .select() = SELECT * — this is intentional (Unit 3b, e6b9c4):
+      // it means streak_progress_version rides along for free and the
+      // generic cloud-non-null-wins merge below already adopts it
+      // correctly (a fresh restore read is always at least as new as
+      // whatever's local, same reasoning as _restoreFreezes's explicit
+      // cloud-always-wins version handling). No column list to keep in
+      // sync here, unlike _restoreFreezes / restore-user-snapshot's
+      // "freezes" projection.
       final rows = identical(preFetched, _kNoInject)
           ? await _supabase.client
               .from('user_progress')

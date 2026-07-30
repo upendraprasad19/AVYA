@@ -477,10 +477,17 @@ class UserRepository {
       ..._sanitize(profileData),
     }, onConflict: 'user_id');
 
-    await supabase.from('user_progress').upsert({
-      'user_id': userId,
-      ..._sanitize(progressData),
-    }, onConflict: 'user_id');
+    // Unit 3b round-1-review P1 fix (2026-07-30): user_progress routes
+    // through the SAME optimistic-lock RPC every other progress writer uses
+    // (migration 115's update_user_progress_snapshot) instead of a raw
+    // version-blind upsert — see SyncService.pushOnboardingProgressSnapshot's
+    // doc comment for why a raw upsert here was a real, live cross-device
+    // race. _sanitize still runs first (drops empty-string values that would
+    // 400 a strict-typed column, e.g. a blank date).
+    await SyncService.instance.pushOnboardingProgressSnapshot(
+      userId: userId,
+      progressData: _sanitize(progressData),
+    );
   }
 
   // ── Account Management ───────────────────────────────────────────────────

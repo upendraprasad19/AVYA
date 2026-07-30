@@ -29,12 +29,22 @@
 //   Each table value reproduces the legacy PostgREST response VERBATIM, including embed
 //   nesting (nutrition_logs→nutrition_log_items(*); workout_templates→template_exercises(*);
 //   scheduled_workouts→template:template_id(...template_exercises(*))) and the exact column
-//   projections (coach_memory 10-col, freezes 4-col, referral_codes 3-col, redemptions
+//   projections (coach_memory 10-col, freezes 5-col, referral_codes 3-col, redemptions
 //   5-col, users 2-col), so the client `_restoreX` parsers hydrate UNCHANGED. Caps inherit
 //   today's behaviour verbatim (H-9). Column names are verbatim (H-11).
+//   Unit 3b (OI-45 cross-device half, e6b9c4): freezes went 4-col -> 5-col to add
+//   streak_progress_version — the legacy client-side _restoreFreezes select was updated in
+//   the same commit, and this projection must keep matching it per H-1's own contract.
 //
 // verify_jwt: true at deploy (user must be authenticated; gateway pre-check + getUser here).
-// Plan: ~/.claude/plans/restore-single-call-c3.md. NOT YET DEPLOYED — deploy is founder-gated.
+// Plan: ~/.claude/plans/restore-single-call-c3.md.
+// Deployed and LIVE (v3, ACTIVE as of 2026-07-30 — confirmed via list_edge_functions;
+// SyncService._singleCallKillSwitch defaults OFF, so the client attempts this path
+// by default, NOT founder-gated-off). This header previously claimed "NOT YET
+// DEPLOYED — deploy is founder-gated"; that was stale and was corrected by Unit 3b
+// round-1 review (diagnose e6b9c4) after the freezes-projection edit below assumed
+// it was inert pre-deploy prep. Any future edit to this file's response shape is a
+// LIVE behavior change, not future-proofing — redeploy + smoke-test accordingly.
 // closes-diagnose: (restore-perf single-call) — see docs/diagnoses on impl.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -261,7 +271,7 @@ serve(async (req: Request) => {
       "freezes",
       db.from("user_progress")
         .select(
-          "streak_freezes_available, streak_freezes_used_dates, streak_freezes_last_refill, streak_freezes_first_pro_grant_done",
+          "streak_freezes_available, streak_freezes_used_dates, streak_freezes_last_refill, streak_freezes_first_pro_grant_done, streak_progress_version",
         )
         .eq("user_id", vUid)
         .maybeSingle(),

@@ -117,6 +117,18 @@ class ErrorTelemetry {
     // stay in sync with the server HIGH_PRIORITY_OP_TYPES (twin test).
     'streak_freeze_first_pro_grant',
     'streak_freeze_lapse_reset',
+
+    // Cross-device optimistic-lock drop events (Hermes C8, 2026-07-30, same
+    // reasoning as the streak-freeze pair above: a dropped write is only
+    // discoverable via this exact event, and a cooldown is most likely to
+    // be active precisely when the backend is degraded — exactly when a
+    // drop is most likely and most needs to be seen, not hidden
+    // (feedback_backend_collapse_blinds_telemetry.md, c4f8d2). MUST stay in
+    // sync with the server HIGH_PRIORITY_OP_TYPES (twin test).
+    'sync_freezes_retry_dropped',
+    'sync_user_progress_retry_dropped',
+    'sync_freezes_row_absent_after_conflict',
+    'sync_user_progress_row_absent_after_conflict',
   ];
 
   /// Returns true when [opType] should bypass client-side rate-limit

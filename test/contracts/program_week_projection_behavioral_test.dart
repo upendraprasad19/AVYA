@@ -238,10 +238,19 @@ void main() {
           reason: 'sync must write the column via the behaviorally-tested helper');
       expect(src.contains(flagKey), isTrue,
           reason: 'sync projection must be behind the kill-switch');
-      // The `!= null` guard on the frozen field must be gone (review F1) — the
-      // write is now on the computed `currentWeekOut`.
-      expect(src.contains("if (currentWeekOut != null) 'current_week'"), isTrue,
-          reason: 'column write must key off the computed value, not p[...]');
+      // Unit 3b (e6b9c4, 2026-07-30) moved this from a conditional-omit
+      // upsert map to the update_user_progress_snapshot RPC's always-
+      // present params (every declared RPC parameter must be sent by
+      // name — the server-side COALESCE now does what the client-side
+      // `if (x != null)` omission used to do). The review-F1 contract this
+      // test pins is unchanged: the write must key off the COMPUTED
+      // `currentWeekOut`, never the raw frozen `p['current_week']` field.
+      expect(src.contains("'p_current_week': currentWeekOut,"), isTrue,
+          reason: 'column write must key off the computed value, not '
+              'p[\'current_week\'] (the raw frozen field)');
+      expect(src.contains("'p_current_week': p['current_week']"), isFalse,
+          reason: 'would regress to writing the raw frozen field instead '
+              'of the projected program week');
     });
 
     test('the boot replay does NOT write current_week (F1: no second writer)',
