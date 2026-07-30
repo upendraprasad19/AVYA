@@ -37,6 +37,7 @@ import 'package:icanbefitter/features/profile/screens/submissions_screen.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/features/profile/screens/progress_comparison_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dart';
+import 'package:icanbefitter/features/profile/screens/saved_coach_photos_screen.dart';
 import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
 import 'package:icanbefitter/features/profile/screens/settings_screen.dart';
 import 'package:icanbefitter/features/profile/screens/notifications_screen.dart';
@@ -482,6 +483,14 @@ class AppRouter {
                     path: 'progress-photos',
                     name: 'progressPhotos',
                     builder: (context, state) => const ProgressPhotosScreen(),
+                  ),
+                  // Unit 8 (coach-media-consent, OI-25) — photos the user
+                  // chose to save from AI Coach chat via the consent chip.
+                  GoRoute(
+                    path: 'saved-coach-photos',
+                    name: 'savedCoachPhotos',
+                    builder: (context, state) =>
+                        const SavedCoachPhotosScreen(),
                   ),
                   GoRoute(
                     // APK Test #6 / Plan F-11 — Progress Comparison row in

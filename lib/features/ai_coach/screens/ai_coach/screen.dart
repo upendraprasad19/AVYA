@@ -24,6 +24,8 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../providers/ai_coach_provider.dart';
+import '../../repositories/ai_coach_repository.dart';
+import '../../repositories/coach_media_repository.dart';
 import '../../widgets/chat_bubble.dart';
 import '../../widgets/completion_prompt_card.dart';
 import '../../widgets/prompt_chip.dart';
@@ -130,6 +132,13 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   final _imagePicker = ImagePicker();
   bool _isUploadingMedia = false;
   double _uploadProgress = 0.0;
+
+  // Unit 8 (coach-media-consent, OI-25) — in-flight guard against a rapid
+  // double-tap firing two concurrent Storage.copy calls for the same
+  // coachKey. Mirrors the `_saving` double-tap guard pattern documented in
+  // lib/features/ai_coach/CLAUDE.md's common-pitfalls table (AI breakdown
+  // card save action).
+  final Set<String> _savingCoachMediaKeys = {};
 
   // Speech-to-text — null on web (plugin not supported)
   SpeechToText? _speech;

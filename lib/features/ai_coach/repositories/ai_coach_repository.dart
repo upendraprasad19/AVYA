@@ -87,13 +87,21 @@ class AiCoachRepository {
     required String mode,
     String? mediaUrl,
     String? mediaType,
+    String? mediaStoragePath,
   }) =>
       CoachInteractionRepository.instance.saveUserMessagePending(
         userMessage: userMessage,
         mode: mode,
         mediaUrl: mediaUrl,
         mediaType: mediaType,
+        mediaStoragePath: mediaStoragePath,
       );
+
+  /// Unit 8 (coach-media-consent, OI-25) — thin forwarder, mirrors the
+  /// shape above. See CoachInteractionRepository.recordMediaSaveDecision.
+  Future<void> recordMediaSaveDecision(String key, {required bool saved}) =>
+      CoachInteractionRepository.instance
+          .recordMediaSaveDecision(key, saved: saved);
 
   /// Back-compat forwarder for the dedup contract test. New code should
   /// call `CoachInteractionRepository.instance.findRecentDuplicateMessageKey`

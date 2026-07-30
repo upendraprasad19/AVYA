@@ -278,6 +278,9 @@ extension _MediaPicker on _AiCoachScreenState {
             messageText,
             mediaUrl: publicUrl,
             mediaType: 'image',
+            // Unit 8 (coach-media-consent) — the raw chat-media Storage
+            // path, stable beyond publicUrl's 600s signed-URL TTL.
+            mediaStoragePath: storagePath,
           ));
       _scrollToBottom();
     } catch (e) {

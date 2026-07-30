@@ -115,7 +115,7 @@ NOT among them — it sends the "recap ready" push and calls no model.
 | Function | Model | Tier | Notes |
 |---|---|---|---|
 | `ai-proxy` | Gemini 2.5 Flash (`MODEL_FLASH`) + Gemini 2.5 Flash Lite (`MODEL_FLASH_LITE`) for the vision types | Free 10/day forever (no trial), PRO unlimited | Single chat entry, and the ONLY host of the food/scan/cart AI. Inserts placeholder row BEFORE Gemini call (rate-limit trigger SoT). 60s client dedup + placeholder dedup + 3-strike circuit breaker (APK Test #16.1 / Theme B). Per-`type` routing table below. |
-| `ai-media-proxy` | Gemini 2.5 Flash **Lite** (Vision) — `MODEL_FLASH_LITE`, self-labelled at `ai-media-proxy/index.ts:119` | PRO only | Photo/video chat. SSRF allowlist: `progress-photos` + `chat-attachments` Storage buckets only + user-scope assertion on path (OI-28). |
+| `ai-media-proxy` | Gemini 2.5 Flash **Lite** (Vision) — `MODEL_FLASH_LITE`, self-labelled at `ai-media-proxy/index.ts:119` | PRO only | Photo/video chat. SSRF allowlist (`ALLOWED_BUCKETS`, `ai-media-proxy/index.ts:170-174`, verified live 2026-07-30): `chat-media`, `coach-media`, `progress-photos` Storage buckets only + user-scope assertion on path (OI-28). Corrected in the coach-media-consent batch — this row previously said `progress-photos` + `chat-attachments`, a bucket name (`chat-attachments`) that has never existed in this codebase and was stale from before `coach-media` (migration 070) was added to the allowlist. |
 | `weekly-report` | Gemini 2.5 Pro (`MODEL_PRO`) — deepest reasoning | PRO only | The Weekly Report deep-dive. **This is the Gemini 2.5 Pro function** — not `weekly-recap-ready`, which only sends the "recap ready" push and calls no model at all. |
 
 ### `ai-proxy` request types (NOT separate Edge Functions)

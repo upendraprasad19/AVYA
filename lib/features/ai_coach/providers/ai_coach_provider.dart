@@ -52,6 +52,24 @@ class ChatMessage {
   final String? mediaUrl; // URL of attached photo (Supabase Storage)
   final String? mediaType; // 'image'
 
+  /// Unit 8 (coach-media-consent, OI-25) — raw Storage path of the attached
+  /// photo (e.g. `<uid>/<ms>.jpg` in the `chat-media` bucket), captured at
+  /// upload time. [mediaUrl] is a SHORT-TTL (600s) signed URL that expires
+  /// long before a user decides whether to save the photo — this field is
+  /// the stable handle `CoachMediaRepository.saveForLater` copies from.
+  final String? mediaStoragePath;
+
+  /// Unit 8 — true once the AI's analysis of this photo has returned
+  /// (mirrors the SAME coach_* row's ai_response/pending/failed state).
+  /// Gates when the save-consent chip may appear — never before analysis
+  /// completes, per the founder's migration-070 design note.
+  final bool mediaAnalysisComplete;
+
+  /// Unit 8 — the user's save/decline decision for this photo, or null if
+  /// undecided. Persisted in place on the coach_* row's
+  /// `media_save_state` field so the chip doesn't re-prompt on rebuild.
+  final String? mediaSaveState; // null | 'saved' | 'declined'
+
   /// Unit 1 (coach-completion-tap-card) — non-null tags this row as a
   /// special coach action tile rather than a plain user/AI turn. Currently
   /// only 'completion_prompt' (the two-button early-finish card). When set,
@@ -91,7 +109,39 @@ class ChatMessage {
     this.mediaFailed = false,
     this.kind,
     this.promptData,
+    this.mediaStoragePath,
+    this.mediaAnalysisComplete = false,
+    this.mediaSaveState,
   });
+
+  /// Unit 8 — returns a copy with media-consent fields overridden. Used by
+  /// [ChatHistoryNotifier.updateMessageMediaState] to flip
+  /// `mediaAnalysisComplete`/`mediaSaveState` on the live in-memory bubble
+  /// without a full Hive rebuild (mirrors [ChatHistoryNotifier.replaceLastMessage]'s
+  /// in-place list-splice style).
+  ChatMessage copyWithMediaState({
+    bool? mediaAnalysisComplete,
+    String? mediaSaveState,
+  }) {
+    return ChatMessage(
+      text: text,
+      isUser: isUser,
+      timestamp: timestamp,
+      isLoading: isLoading,
+      isError: isError,
+      mode: mode,
+      mediaUrl: mediaUrl,
+      mediaType: mediaType,
+      retryUserMessage: retryUserMessage,
+      coachKey: coachKey,
+      mediaFailed: mediaFailed,
+      kind: kind,
+      promptData: promptData,
+      mediaStoragePath: mediaStoragePath,
+      mediaAnalysisComplete: mediaAnalysisComplete ?? this.mediaAnalysisComplete,
+      mediaSaveState: mediaSaveState ?? this.mediaSaveState,
+    );
+  }
 }
 
 // ── Chat History ─────────────────────────────────────────────────
@@ -176,10 +226,16 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
       final aiResponse = interaction['ai_response'] as String?;
       final mediaUrl = interaction['media_url'] as String?;
       final mediaType = interaction['media_type'] as String?;
+      final mediaStoragePath = interaction['media_storage_path'] as String?;
+      final mediaSaveState = interaction['media_save_state'] as String?;
       final mode = interaction['mode'] as String?;
       final isPending = interaction['pending'] == true;
       final isFailed = interaction['failed'] == true;
       final createdAt = DateTime.tryParse(entry.createdAt) ?? DateTime.now();
+      // Unit 8 — analysis is "complete" once this row's AI half has resolved
+      // successfully. Same row, same flags the AI-bubble branch below uses.
+      final mediaAnalysisComplete =
+          !isPending && !isFailed && aiResponse != null && aiResponse.isNotEmpty;
 
       if (userMsg != null && userMsg.isNotEmpty) {
         messages.add(ChatMessage(
@@ -189,6 +245,14 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
           mediaUrl: mediaUrl,
           mediaType: mediaType,
           mode: mode,
+          // Unit 8 — previously omitted on the success path (only the
+          // error/pending AI bubble carried coachKey, for Retry). The user
+          // bubble needs it too so the save-consent chip can key its Hive
+          // write back to this exact row.
+          coachKey: entry.key,
+          mediaStoragePath: mediaStoragePath,
+          mediaAnalysisComplete: mediaAnalysisComplete,
+          mediaSaveState: mediaSaveState,
         ));
       }
 
@@ -361,6 +425,29 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
     state = [...state.sublist(0, state.length - 1), message];
   }
 
+  /// Unit 8 (coach-media-consent) — flips the LIVE in-memory user photo
+  /// bubble's `mediaAnalysisComplete`/`mediaSaveState` in place, by
+  /// [coachKey]. [replaceLastMessage] only swaps the trailing AI bubble
+  /// when a reply lands, so without this the user's own photo bubble
+  /// (added earlier, mid-list) would never see `mediaAnalysisComplete`
+  /// flip to true until the next full Hive rebuild (app restart / auth
+  /// change) — the save-consent chip would silently never appear during
+  /// the live send that triggered it. No-op if [coachKey] isn't found
+  /// (e.g. the message already scrolled out of an older session's state).
+  void updateMessageMediaState(
+    String coachKey, {
+    bool? mediaAnalysisComplete,
+    String? mediaSaveState,
+  }) {
+    final idx = state.indexWhere((m) => m.isUser && m.coachKey == coachKey);
+    if (idx == -1) return;
+    final updated = state[idx].copyWithMediaState(
+      mediaAnalysisComplete: mediaAnalysisComplete,
+      mediaSaveState: mediaSaveState,
+    );
+    state = [...state.sublist(0, idx), updated, ...state.sublist(idx + 1)];
+  }
+
   void removeLastMessage() {
     if (state.isEmpty) return;
     state = [...state.sublist(0, state.length - 1)];
@@ -523,6 +610,7 @@ class SendMessageNotifier extends Notifier<bool> {
     String message, {
     required String mediaUrl,
     String mediaType = 'image',
+    String? mediaStoragePath,
   }) async {
     if (state) return; // Already sending
 
@@ -538,15 +626,21 @@ class SendMessageNotifier extends Notifier<bool> {
       mode: 'media',
       mediaUrl: mediaUrl,
       mediaType: mediaType,
+      mediaStoragePath: mediaStoragePath,
     );
 
-    // Add user message with media thumbnail
+    // Add user message with media thumbnail. coachKey is threaded through
+    // (Unit 8) so updateMessageMediaState can find this exact bubble again
+    // once the AI reply lands, and so the save-consent chip's Hive write
+    // targets the right row.
     chatNotifier.addMessage(ChatMessage(
       text: captionForLog,
       isUser: true,
       timestamp: DateTime.now(),
       mediaUrl: mediaUrl,
       mediaType: mediaType,
+      coachKey: coachKey,
+      mediaStoragePath: mediaStoragePath,
     ));
 
     // Add loading placeholder
@@ -581,6 +675,18 @@ class SendMessageNotifier extends Notifier<bool> {
         aiResponse: aiResponse.reply,
         modelUsed: aiResponse.modelUsed,
       );
+
+      // Unit 8 — analysis just completed; flip the LIVE user photo bubble
+      // (not just the Hive row) so the save-consent chip can render this
+      // session, without waiting for a full rebuild. See
+      // updateMessageMediaState's doc for why replaceLastMessage alone
+      // (which only touches the trailing AI bubble) isn't enough here.
+      if (mediaStoragePath != null) {
+        chatNotifier.updateMessageMediaState(
+          coachKey,
+          mediaAnalysisComplete: true,
+        );
+      }
 
       await repo.extractCoachingNotes();
       ref.invalidate(coachInsightProvider);

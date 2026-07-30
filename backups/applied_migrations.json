@@ -771,5 +771,13 @@
     "applier": "claude-via-mcp",
     "diagnose": "e6b9c4",
     "slug": "user_progress_snapshot_optimistic_lock"
+  },
+  {
+    "migration": "116",
+    "applied_at": "2026-07-30T23:30:08+05:30",
+    "hash": "sha256:88a477111bfa8921acb845e59dce690e6436023151d9928d5de0a660e9fd41e7",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4a7c2",
+    "slug": "chat_media_delete_own_policy"
   }
 ]
