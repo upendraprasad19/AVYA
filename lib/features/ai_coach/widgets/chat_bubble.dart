@@ -56,6 +56,36 @@ class ChatBubble extends StatelessWidget {
   /// degrades to a non-tappable failure state when null.
   final VoidCallback? onMediaRetry;
 
+  /// Unit 8 (coach-media-consent, OI-25) — true once the AI has finished
+  /// analysing this bubble's attached photo. The save-consent chip only
+  /// ever appears after analysis completes (founder's migration-070
+  /// design note: "After AI analysis returns, app prompts").
+  final bool mediaAnalysisComplete;
+
+  /// Unit 8 — the user's prior save/decline decision for this photo, or
+  /// null if undecided. Non-null suppresses the consent chip (replaced by
+  /// a small "Saved" badge when `'saved'`; nothing when `'declined'`).
+  final String? mediaSaveState;
+
+  /// Unit 8 — invoked when the user taps "Save" on the consent chip. Null
+  /// when no save path is wired (e.g. no coachKey to write the decision
+  /// against) — the chip does not render without it.
+  final VoidCallback? onSaveMedia;
+
+  /// Unit 8 — invoked when the user taps "No thanks" on the consent chip.
+  final VoidCallback? onDeclineMedia;
+
+  /// Round-2 review (2026-07-30) — true while a save is in flight for this
+  /// bubble's photo (the network round-trip copying the Storage object).
+  /// Swaps the bookmark icon for a spinner and disables both tap targets,
+  /// so a slow connection reads as "working," not as "nothing happened" —
+  /// closing the repo's own documented save-confirmation pitfall (every
+  /// save action needs a visible signal; see
+  /// `lib/features/ai_coach/CLAUDE.md` common-pitfalls) and, as a side
+  /// effect, making a decline tap physically unreachable during the window
+  /// the handler-level `_savingCoachMediaKeys` guard also covers.
+  final bool isSavingMedia;
+
   const ChatBubble({
     super.key,
     required this.text,
@@ -70,6 +100,11 @@ class ChatBubble extends StatelessWidget {
     this.onRetry,
     this.mediaFailed = false,
     this.onMediaRetry,
+    this.mediaAnalysisComplete = false,
+    this.mediaSaveState,
+    this.onSaveMedia,
+    this.onDeclineMedia,
+    this.isSavingMedia = false,
   });
 
   @override
@@ -193,6 +228,23 @@ class ChatBubble extends StatelessWidget {
             ),
           )),
           if (text.isNotEmpty) const SizedBox(height: 6),
+        ],
+
+        // Unit 8 (coach-media-consent, OI-25) — save-for-later consent chip.
+        // Only on the user's OWN photo bubble, once analysis has completed
+        // and no decision has been made yet. Visual language mirrors the
+        // Retry chip below (same padding/border/icon-size conventions).
+        if (isUser &&
+            hasMediaUrl &&
+            !showFailedSlot &&
+            mediaAnalysisComplete &&
+            mediaSaveState == null &&
+            onSaveMedia != null) ...[
+          const SizedBox(height: 8),
+          _buildMediaConsentChip(),
+        ] else if (isUser && hasMediaUrl && mediaSaveState == 'saved') ...[
+          const SizedBox(height: 8),
+          _buildMediaSavedBadge(),
         ],
 
         // Main message text
@@ -422,6 +474,103 @@ class ChatBubble extends StatelessWidget {
     );
     if (onMediaRetry == null) return tile;
     return GestureDetector(onTap: onMediaRetry, child: tile);
+  }
+
+  /// Unit 8 (coach-media-consent, OI-25) — "Save this photo?" consent chip.
+  /// Only ever rendered on a USER bubble (gold [AppColors.accent] fill), so
+  /// — unlike the Retry chip (an AI-bubble-only affordance, styled for the
+  /// dark card background) — this uses black-on-gold, matching how the
+  /// bullet list / subtext / timestamp above all switch to black when
+  /// `isUser`. Two tap targets: Save (filled) and No thanks (outline only,
+  /// lower visual weight — declining is the lower-emphasis action).
+  Widget _buildMediaConsentChip() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: isSavingMedia ? null : onSaveMedia,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: isSavingMedia ? 0.06 : 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
+              border: Border.all(
+                color: Colors.black.withValues(alpha: isSavingMedia ? 0.3 : 0.55),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isSavingMedia)
+                  const SizedBox(
+                    width: 13,
+                    height: 13,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.6,
+                      color: Colors.black54,
+                    ),
+                  )
+                else
+                  const Icon(
+                    Icons.bookmark_add_outlined,
+                    size: 13,
+                    color: Colors.black,
+                  ),
+                const SizedBox(width: 6),
+                Text(
+                  isSavingMedia ? 'SAVING…' : 'SAVE PHOTO',
+                  style: AppTypography.monoXs.copyWith(
+                    color: isSavingMedia ? Colors.black54 : Colors.black,
+                    letterSpacing: 2.0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: isSavingMedia ? null : onDeclineMedia,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+            child: Text(
+              'NO THANKS',
+              style: AppTypography.monoXs.copyWith(
+                color: Colors.black.withValues(alpha: isSavingMedia ? 0.3 : 0.55),
+                letterSpacing: 2.0,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Unit 8 — small non-interactive confirmation once a photo has been
+  /// saved to coach-media, so the user has feedback the decision stuck
+  /// (mirrors the save-confirmation-signal pattern from the AI breakdown
+  /// card — every save action needs a visible confirmation, per
+  /// `lib/features/ai_coach/CLAUDE.md`'s common-pitfalls table).
+  Widget _buildMediaSavedBadge() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.check_circle_outline,
+          size: 13,
+          color: Colors.black.withValues(alpha: 0.55),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          'SAVED FOR LATER',
+          style: AppTypography.monoXs.copyWith(
+            color: Colors.black.withValues(alpha: 0.55),
+            letterSpacing: 1.4,
+          ),
+        ),
+      ],
+    );
   }
 
   /// Opens a full-screen image viewer for the attached photo.

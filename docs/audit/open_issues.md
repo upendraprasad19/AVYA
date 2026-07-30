@@ -77,9 +77,10 @@ shipped).
 
 ## OI-25 — Coach-media consent UI flow (client follow-up)
 
-- **Status**: OPEN
+- **Status**: CLOSED
 - **Blocked on**: none
 - **Verified**: 2026-07-26
+- **Closed**: 2026-07-30 — Unit 8 of the OI-25/44/45/46/48/50 batch
 - **Identified**: 2026-05-17 · OI-23 closure spawned this follow-up
 - **Risk class**: feature work
 - **Estimated effort**: TBD (~3-4 hours estimate)
@@ -108,6 +109,42 @@ shipped).
   server-side work beyond ensuring `delete-account` Edge Function's
   Storage purge step lists `coach-media/<uid>/` (already does per
   CLAUDE.md §16).
+
+**CLOSED 2026-07-30** (coach-media-consent batch, Unit 8 — diagnose
+`f4a7c2`). All four missing pieces shipped, matching this plan closely with
+one mechanism deviation: consent persists as two new fields
+(`media_storage_path`, `media_save_state`) written in place on the same
+`coach_<ms>` interaction row that already carries `media_url`, rather than
+a separate coachBox key hashed on the chat-media path — same outcome (no
+re-prompt on rebuild, no new metadata table), one fewer bookkeeping
+mechanism, reusing this row's own established UPDATE-not-INSERT idiom.
+Investigation before implementation found and fixed a genuine prerequisite
+bug this feature depended on: the success-path user photo bubble never
+carried `coachKey` (only the AI/error bubble did, for Retry) — without it
+nothing could key the consent write back to the right row. Also folded in
+the one-line doc fix the plan flagged: `supabase/functions/CLAUDE.md`'s
+SSRF-allowlist bucket names were stale (said `progress-photos` +
+`chat-attachments`; live code has always been `chat-media`, `coach-media`,
+`progress-photos`) — fixed, plus a new test assertion pinning the real set
+so this can't drift stale again unnoticed. `scripts/blast_radius_from_diff.dart`
+classified the shipped diff `platform` (higher than this batch's own
+`account` pre-diff estimate). Round-1 review found the media reference on
+a chat photo message (mediaUrl/mediaStoragePath, and now also
+mediaSaveState) has never round-tripped through cloud sync/restore, before
+or after this batch — a pre-existing, not newly-introduced, gap. Practical
+effect: a historical photo message degrades to caption-only text after a
+restore on a second device (no image, no consent chip render at all — not
+"the chip re-offers"). The photo itself is never lost (still in Storage;
+an already-saved copy still lists correctly in Saved Photos, which reads
+Storage directly). Out of scope for this unit (would need to extend both
+the push and restore payloads in sync_coach.dart). **B-pass correction**: this
+paragraph's own first draft said the gap was "flagged as a separate follow-up
+task" without a durable, independently-verifiable citation — a
+`mcp__ccd_session__spawn_task` chip was raised, but a chip is ephemeral
+session UI state, not a git-tracked artifact, so once this OI closed there
+was nothing left in the repo pointing at the gap. Filed as **OI-77** instead,
+which is the actual, durable record. Full account:
+`docs/diagnoses/2026-07-30-coach-media-consent-f4a7c2.md`.
 
 ---
 
@@ -861,3 +898,37 @@ cloud sessions; **this file is the cross-session backlog.**
   the subtitle permanently reads at least 2/10 "enabled" for notifications that will never fire.
 - **Related**: the paywall callback passes `AppConstants.featureProgressPhotos` for notification
   rows — wrong copy, and §4.4 r19 keys server-side verification off that id.
+
+## OI-77 — AI-coach chat photo references never round-trip through cloud sync/restore
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-07-30 (B-pass, coach-media-consent / Unit 8) — read the actual push and
+  restore payloads directly, not inferred.
+- **Identified**: 2026-07-30 · round-1 review of Unit 8 (coach-media-consent, OI-25). A
+  `mcp__ccd_session__spawn_task` chip (`task_e8b00d00`) was also raised in that session for
+  convenience, but a chip is ephemeral session UI state, not a durable repo artifact — this entry
+  is the authoritative, git-tracked record; the chip is not required for this to be actionable.
+- **What's wrong**: `lib/core/services/sync/sync_coach.dart`'s push payload
+  (`_syncCoachInteractions`, `:149-157`: `id, user_id, channel, user_message, ai_response,
+  model_used, created_at`) and restore payload (`_restoreCoachInteractions`, `:204-217`: `id,
+  user_message, ai_response, model_used, mode, is_user_message, created_at, channel, source`) have
+  never included ANY `media_*` field — not `media_url`/`media_type` (pre-existing, predates OI-25
+  entirely), and not the two OI-25/Unit-8 fields (`media_storage_path`, `media_save_state`), which
+  simply inherit the same pre-existing gap rather than introduce a new one.
+- **Failure shape**: on a cross-device (or post-reinstall) restore, a HISTORICAL AI-coach chat
+  message that had a photo degrades to caption-only text — `ChatBubble`'s `hasMediaUrl` gate and
+  `chat_area.dart`'s `onSaveMedia` wiring are both null-gated on fields that never survived the
+  restore, so neither the image thumbnail nor the save-consent chip render at all. The photo
+  itself is NOT lost (it still exists in `chat-media`/`coach-media` Storage, and an
+  already-saved copy still renders correctly in `SavedCoachPhotosScreen`, which lists directly
+  from Storage, not from restored Hive state) — only its appearance in that one historical chat
+  bubble on the second device.
+- **Fix shape**: extend both `_syncCoachInteractions`'s push payload and
+  `_restoreCoachInteractions`'s restore payload to include `media_url`, `media_type`,
+  `media_storage_path`, `media_save_state`. Needs its own scoping pass first: whether this was a
+  deliberate scope-limit on what channel gets cloud-synced (vs. an oversight) was not determined —
+  distinguishing the two is exactly the judgment call this OI exists to hold, not a guess to bake
+  into a fix.
+- **Blast radius estimate**: `account` (touches `sync_coach.dart`'s push/restore contract for an
+  existing table, no new migration).

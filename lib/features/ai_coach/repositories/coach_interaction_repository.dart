@@ -90,6 +90,7 @@ class CoachInteractionRepository {
     required String mode,
     String? mediaUrl,
     String? mediaType,
+    String? mediaStoragePath,
   }) async {
     // Run cheap on-device identity heuristics on every outbound user message.
     // Patches Hive coach_memory in place; no-op if no signals detected.
@@ -120,8 +121,29 @@ class CoachInteractionRepository {
       'created_at': DateTime.now().toIso8601String(),
       'media_url': ?mediaUrl,
       'media_type': ?mediaType,
+      // Unit 8 (coach-media-consent, OI-25) — raw Storage path, stable
+      // beyond media_url's 600s signed-URL TTL. CoachMediaRepository.
+      // saveForLater copies from this path, not from media_url.
+      'media_storage_path': ?mediaStoragePath,
     });
     return id;
+  }
+
+  /// Unit 8 (coach-media-consent, OI-25) — records the user's save/decline
+  /// decision for a photo message's coach-media copy, in place on the same
+  /// coach_* row that carries media_url/media_storage_path. Mirrors
+  /// [updateInteractionWithResponse]'s UPDATE-not-INSERT shape. Local-only
+  /// field — `_syncCoachInteractions` (sync_coach.dart) pushes a fixed
+  /// column subset that does not include media_save_state, so this never
+  /// reaches the cloud `ai_coach_interactions` table.
+  Future<void> recordMediaSaveDecision(String key, {required bool saved}) async {
+    // gate16-exempt: in-place mutation + write-back, mirrors
+    // updateInteractionWithResponse/updateInteractionWithError above.
+    final raw = _hive.coachBox.get(key);
+    if (raw is! Map) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['media_save_state'] = saved ? 'saved' : 'declined';
+    await _hive.coachBox.put(key, entry);
   }
 
   /// Returns the Hive key of an existing `coach_*` entry that is a

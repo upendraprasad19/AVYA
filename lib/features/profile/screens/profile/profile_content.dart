@@ -333,13 +333,26 @@ extension _ProfileContent on _ProfileScreenState {
                         ? 'Track your transformation visually'
                         : 'PRO \u2014 visual progress timeline',
                     trailing: const ProfileRowChevron(),
-                    showBorder: false,
+                    showBorder: true,
                     onTap: () => SubscriptionService.instance.gate(
                       AppConstants.featureProgressPhotos,
                       onPro: () => context.go('/profile/progress-photos'),
                       onFree: () =>
                           showPaywallSheet(context, feature: 'Progress Photos'),
                     ),
+                  ),
+                  // Unit 8 (coach-media-consent, OI-25) \u2014 photos the user
+                  // chose to save from AI Coach chat. Not PRO-gated at this
+                  // row: only PRO users can send chat photos in the first
+                  // place (featurePhotoAnalysis gates that upstream), so a
+                  // free user just sees an empty screen, which is harmless.
+                  ProfileRow(
+                    icon: Icons.bookmark_border,
+                    title: 'Saved Photos',
+                    subtitle: 'Photos you saved from AI Coach chat',
+                    trailing: const ProfileRowChevron(),
+                    showBorder: false,
+                    onTap: () => context.go('/profile/saved-coach-photos'),
                   ),
                 ]);
               }),

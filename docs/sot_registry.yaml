@@ -3942,9 +3942,14 @@ concepts:
       uuid_v5 id keyed on (user_id, created_at). Rate-limit counters
       also live in ai_coach_interactions (channel field: 'chat', 'food_text_analysis',
       'scan_meal', 'cart_auditor', 'verify_payment_attempt').
+      Unit 8 (coach-media-consent, OI-25, 2026-07-30) added two LOCAL-ONLY
+      fields to the same row: media_storage_path (raw chat-media Storage
+      path, stable beyond media_url's 600s signed-URL TTL) and
+      media_save_state (null | 'saved' | 'declined'). Neither reaches
+      cloud — see sync_methods notes below.
     writers:
       - file: lib/features/ai_coach/repositories/coach_interaction_repository.dart
-        line_range: 40-110
+        line_range: 39-130
         method: CoachInteractionRepository.saveInteraction + saveUserMessagePending
         notes: |
           Tech-debt audit 2026-05-20 finding A10 — canonical writer for
@@ -3964,18 +3969,28 @@ concepts:
           that no longer exists). The two-write orchestration
           (saveUserMessagePending → chat → updateInteractionWithResponse,
           incl. the auth-retry path) lives in `send`.
+      - file: lib/features/ai_coach/repositories/coach_interaction_repository.dart
+        line_range: 139-147
+        method: recordMediaSaveDecision
+        notes: |
+          Unit 8 (coach-media-consent, OI-25, 2026-07-30) — in-place
+          UPDATE of media_save_state on an existing coach_<ms> row.
+          Mirrors updateInteractionWithResponse's write shape. Local-only
+          field; never reaches cloud (see sync_methods notes).
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 76-130
+        line_range: 164-309
         method: ChatHistoryNotifier.build (chat scroll buffer)
         semantic: historical-series
-        fields_read: [created_at, user_message, ai_response, model_used, channel, tool_calls]
+        fields_read: [created_at, user_message, ai_response, model_used, channel, tool_calls, media_url, media_type, media_storage_path, media_save_state]
         notes: |
           Iterates coachBox.keys; skips 'coaching_notes' singleton key
           (NOT a coach_* row). Sorts by created_at ascending and
           projects into ChatMessage UI objects. Captures the Hive key
-          so failed/pending retry hits the right row.
+          so failed/pending retry hits the right row (Unit 8: now also
+          on the success-path USER bubble, not just the AI error bubble
+          — needed so the save-consent chip can target the right row).
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
         line_range: 61-64
         method: buildAiContext is_first_ever_message count
@@ -4020,7 +4035,7 @@ concepts:
       # individual coach_<ms> rows. Distinct concept; see coaching_notes.
       - { file: lib/features/ai_coach/models/coach_memory.dart, reason: "reads coach_memory singleton — not a coach_* interaction row" }
       - { file: lib/features/ai_coach/services/tool_dispatcher.dart, reason: "reads coach_memory singleton (proactive trigger state) — not a coach_* row" }
-      - { file: lib/features/ai_coach/repositories/coach_interaction_repository.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — canonical write + read surface for coach_<ms> rows (saveInteraction, saveUserMessagePending, updateInteractionWithResponse/Error, getTodayUserMessageCount, getLatestInsight, findRecentDuplicateMessageKey). Split out of ai_coach_repository.dart." }
+      - { file: lib/features/ai_coach/repositories/coach_interaction_repository.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — canonical write + read surface for coach_<ms> rows (saveInteraction, saveUserMessagePending, updateInteractionWithResponse/Error, getTodayUserMessageCount, getLatestInsight, findRecentDuplicateMessageKey, recordMediaSaveDecision). Split out of ai_coach_repository.dart." }
     regression_test: test/sync/coach_uuid_format_test.dart
     hive:
       box: coachBox
@@ -4031,6 +4046,10 @@ concepts:
       # Audit 2026-05-12 P3-G — `assistant_response` renamed `ai_response`
       # in live schema (verified information_schema 2026-05-12). Other
       # 8 phantom claims fixed in same audit pass.
+      # Unit 8 (2026-07-30): media_storage_path/media_save_state are
+      # DELIBERATELY absent — _syncCoachInteractions pushes exactly this
+      # column list, so both new local-only fields are structurally
+      # excluded from every push, not just by convention.
       columns: [id, user_id, channel, user_message, ai_response, model_used, tokens_used, tool_calls, created_at]
     sync_methods: [_syncCoachInteractions]
     forbidden_legacy_patterns:
@@ -4088,7 +4107,7 @@ concepts:
           (returns success WITHOUT rewriting when already 'completed') + stamps
           completed_via on the schedule + wlog rows.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 254-337
+        line_range: 341-392
         method: completeWorkoutFromPrompt
         notes: |
           [Complete workout] re-reads schedule_<date>; if not completed/rest →
@@ -4101,15 +4120,18 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 114-175
+        line_range: 164-223
         method: build
         semantic: flag-check
         fields_read: [kind, resolved_at, date, planned_count, logged_count]
         notes: |
-          ChatHistoryNotifier.build (declared ~114). The completion_prompt
-          handling is the tight sub-branch: the entry-collection filter ~136-139
-          skips a resolved row (resolved_at != null); the render branch ~158-173
-          emits a kind:'completion_prompt' ChatMessage(promptData) for unresolved
+          ChatHistoryNotifier.build (declared 164; re-based 2026-07-30 —
+          Unit 8 / coach-media-consent inserted ~60 lines above it for the
+          new ChatMessage fields, shifting every line number below). The
+          completion_prompt handling is the tight sub-branch: the
+          entry-collection filter 187-189 skips a resolved row (resolved_at
+          != null); the render branch 208-223 emits a
+          kind:'completion_prompt' ChatMessage(promptData) for unresolved
           ones — never misreads them as user/ai turns (they carry no
           user_message / ai_response).
       - file: lib/features/ai_coach/screens/ai_coach/chat_area.dart
@@ -5130,13 +5152,22 @@ concepts:
           within 60s of an existing entry UPDATEs instead of inserting.
           Companion to the server-side placeholder dedup.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 76-130
+        line_range: 164-309
         method: ChatHistoryNotifier (display surface)
         semantic: historical-series
-        fields_read: [model_used, ai_response, created_at]
+        fields_read: [failed, error_text, pending, ai_response, created_at]
         notes: |
-          Consumer of resolved placeholder rows. failed_gemini / failed_parse
-          terminal model_used values render as error bubbles with retry CTA.
+          Corrected 2026-07-30 (Unit 8 round-2 review — caught while fixing
+          this entry's batch-shifted line_range, pre-existing and unrelated
+          to that batch): `build()` never reads `model_used` (grepped —
+          zero occurrences in this file; it's written by
+          CoachInteractionRepository but has no in-app reader). The actual
+          mechanism: a resolved placeholder row with `failed: true` renders
+          as an error bubble using `error_text` (falling back to
+          `ai_response` if `error_text` is absent), with the same Retry CTA
+          a `pending` leftover-from-crash row gets. Whatever terminal
+          `model_used` marker the server writes (e.g. failed_gemini /
+          failed_parse) is consumed upstream of this reader, not here.
     regression_test: test/contracts/ai_proxy_placeholder_resolution_test.dart
     cloud:
       table: ai_coach_interactions
