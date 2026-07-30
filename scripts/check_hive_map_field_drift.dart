@@ -370,4 +370,13 @@ const _alwaysOk = <String>{
   // _maybeCompleteScheduledDay. Sibling completion_prompt fields (kind /
   // planned_count / logged_count) already suppressed via emit set / this list.
   'resolved_at',
+  // Unit 3b (cross-device-progress-lock, e6b9c4) — `streak_progress_version`
+  // is a canonical userBox['progress'] field (the whole-row optimistic-lock
+  // counter shared by `update_streak_progress` / `update_user_progress_snapshot`),
+  // read/written by `SyncService._stampProgressVersion` (sync_service.dart:2158)
+  // off `box.get('progress')`. NOT an exlog_*/wlog_* field (neither emit set
+  // carries it); the prefix heuristic mis-attributes it because sync_service.dart
+  // also walks those prefixes elsewhere for restore/sync — same mechanism as
+  // `current_streak_days`/`current_phase` above.
+  'streak_progress_version',
 };

@@ -8,9 +8,17 @@ extension SyncServiceRestoreCompleteness on SyncService {
   // ── Restore-completeness push (Theme A push side) ─────────
 
   /// Pushes the user's streak-freeze state to the three new columns on
-  /// `user_progress` (migration 048). One upsert per call — cheap and
-  /// idempotent. Called fire-and-forget from every Hive mutation site
-  /// in WorkoutRepository + home_provider per CLAUDE.md §15.
+  /// `user_progress` (migration 048). Called fire-and-forget from every
+  /// Hive mutation site in WorkoutRepository + home_provider per CLAUDE.md
+  /// §15.
+  ///
+  /// Unit 3b (OI-45 cross-device half, e6b9c4): routes through the
+  /// `update_streak_progress` optimistic-lock RPC (migration 056/090/091/096
+  /// — live, correct, was dormant: zero callers before this fix) instead of
+  /// a raw version-blind upsert. Device A consumes a freeze (available: 1->0)
+  /// while device B has a stale read (available: 1) and refills (->2) was
+  /// the exact race migration 056's own header names; the RPC existed but
+  /// nothing called it.
   Future<void> syncFreezes() async {
     try {
       final userId = _supabase.currentUser?.id;
@@ -35,13 +43,54 @@ extension SyncServiceRestoreCompleteness on SyncService {
       // with false on first sync.
       final grantDone =
           p['streak_freezes_first_pro_grant_done'] as bool? ?? false;
-      await _supabase.client.from('user_progress').upsert({
-        'user_id': userId,
-        'streak_freezes_available': available,
-        'streak_freezes_used_dates': used,
-        if (lastRefill != null) 'streak_freezes_last_refill': lastRefill,
-        if (grantDone) 'streak_freezes_first_pro_grant_done': true,
-      }, onConflict: 'user_id');
+
+      // expected_version defaults to 0 for a local install that has never
+      // seen a version back from the cloud yet — matches the RPC's own
+      // fresh-row contract (p_expected_version <> 0 on a NOT-FOUND row
+      // returns NULL, forcing a re-read rather than a phantom insert).
+      final expectedVersion =
+          (p['streak_progress_version'] as num?)?.toInt() ?? 0;
+      final firstAttempt = await _supabase.client.rpc(
+        'update_streak_progress',
+        params: {
+          'p_user_id': userId,
+          'p_expected_version': expectedVersion,
+          'p_freezes_available': available,
+          'p_freeze_used_dates': used,
+          'p_freezes_last_refill': lastRefill,
+        },
+      );
+      final firstVersion = (firstAttempt as num?)?.toInt();
+      if (firstVersion != null) {
+        SyncService._stampProgressVersion(firstVersion, userId: userId);
+      } else {
+        // Version mismatch — a concurrent device's write landed first.
+        // Bounded: one re-fetch + reconcile + retry, then drop (matches
+        // this codebase's fire-and-forget-self-heals-on-next-write
+        // philosophy, not a new queue).
+        await _retrySyncFreezesOnceAfterConflict(
+          userId: userId,
+          localAvailable: available,
+          localUsed: used,
+          localLastRefill: lastRefill,
+        );
+      }
+
+      // streak_freezes_first_pro_grant_done is deliberately NOT in
+      // update_streak_progress's signature — excluded from the optimistic
+      // lock. It is monotonic one-directional (false -> true, never
+      // regresses) and only ever pushed when locally true, so a
+      // cross-device race on it is provably harmless: worst case is a
+      // redundant "true" write that doesn't change the final state.
+      // Extending the RPC signature would add migration risk for a field
+      // that structurally cannot lose data from a race. Kept as a plain
+      // upsert, same as before this fix.
+      if (grantDone) {
+        await _supabase.client.from('user_progress').upsert({
+          'user_id': userId,
+          'streak_freezes_first_pro_grant_done': true,
+        }, onConflict: 'user_id');
+      }
     } catch (e, st) {
       debugPrint('[SyncService.syncFreezes] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -50,6 +99,147 @@ extension SyncServiceRestoreCompleteness on SyncService {
       try {
         await _reportSyncFailure(opType: 'sync_freezes', error: e);
       } catch (_) {}
+    }
+  }
+
+  /// Unit 3b (e6b9c4) — bounded retry for `syncFreezes` after a version
+  /// mismatch. Re-fetches the fresh cloud row, reconciles via the SAME pure
+  /// merge the restore path already uses ([StreakProgressService.
+  /// mergeFreezeProgress] — tested, established), retries ONCE against the
+  /// fresh version, then drops (logs telemetry, does not loop). On success,
+  /// writes the MERGED values back to local Hive too — not just the cloud —
+  /// so local state doesn't stay diverged from what the cloud now holds.
+  Future<void> _retrySyncFreezesOnceAfterConflict({
+    required String userId,
+    required int localAvailable,
+    required List<String> localUsed,
+    required String? localLastRefill,
+  }) async {
+    final Object? rawRes = await _supabase.client
+        .from('user_progress')
+        .select(
+          'streak_freezes_available, streak_freezes_used_dates, '
+          'streak_freezes_last_refill, streak_progress_version',
+        )
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (rawRes == null) {
+      // Hermes C7 (2026-07-30): was a silent return — see the twin fix in
+      // sync_profile.dart's _retrySyncUserProgressOnceAfterConflict for the
+      // full reasoning (both RPCs return NULL for row-absent, so this does
+      // NOT prove the row doesn't exist; self-perpetuating if silent).
+      unawaited(ErrorTelemetry.logEvent(
+        'sync_freezes_row_absent_after_conflict',
+        message: 'user=$userId — cloud row absent on retry re-fetch, '
+            'dropped whole freeze snapshot',
+      ));
+      return;
+    }
+    final res = rawRes as Map;
+
+    final cloudVersion = (res['streak_progress_version'] as num?)?.toInt();
+    if (cloudVersion == null) return;
+
+    // Hermes C2 (2026-07-30): re-read LOCAL freeze state fresh here rather
+    // than trusting localAvailable/localUsed/localLastRefill — those were
+    // captured in syncFreezes() BEFORE its own RPC round-trip and this
+    // helper's cloud re-fetch above, so a same-device write landing in
+    // that window (routine — commitConsume/commitRefill/etc. all fire
+    // unawaited(syncFreezes())) would otherwise be invisible to this merge
+    // and then silently undone by the write-back below (Hermes L27 F1 —
+    // the single most severe finding in that pass: this retry path was
+    // reproducing, inside the fix, the exact same-device race class the
+    // whole batch exists to close). Falls back to the captured params
+    // only if Hive genuinely has no progress map yet.
+    final freshLocal = _hive.userBox.get('progress');
+    final freshLocalMap =
+        freshLocal is Map ? Map<String, dynamic>.from(freshLocal) : null;
+    final freshAvailable =
+        (freshLocalMap?['streak_freezes_available'] as int?) ?? localAvailable;
+    final freshUsedRaw = freshLocalMap?['streak_freeze_used_dates'];
+    final freshUsed = (freshUsedRaw is List)
+        ? freshUsedRaw.map((e) => e.toString()).toList()
+        : localUsed;
+    final freshLastRefill =
+        freshLocalMap?['streak_freezes_last_refill'] as String? ??
+            localLastRefill;
+
+    final cloudUsedRaw = res['streak_freezes_used_dates'];
+    final merged = StreakProgressService.mergeFreezeProgress(
+      localAvailable: freshAvailable,
+      localUsed: freshUsed,
+      localLastRefill: freshLastRefill,
+      cloudAvailable: (res['streak_freezes_available'] as int?) ?? 1,
+      cloudUsed: (cloudUsedRaw is List)
+          ? cloudUsedRaw.map((e) => e.toString()).toList()
+          : const <String>[],
+      cloudLastRefill: res['streak_freezes_last_refill']?.toString(),
+    );
+
+    final retryResult = await _supabase.client.rpc(
+      'update_streak_progress',
+      params: {
+        'p_user_id': userId,
+        'p_expected_version': cloudVersion,
+        'p_freezes_available': merged.available,
+        'p_freeze_used_dates': merged.usedDates,
+        'p_freezes_last_refill': merged.lastRefill,
+      },
+    );
+    final retryVersion = (retryResult as num?)?.toInt();
+    if (retryVersion == null) {
+      // Second consecutive mismatch — drop rather than loop. The next
+      // mutation site's own syncFreezes call (or the next restore) will
+      // reconcile from a fresher snapshot.
+      unawaited(ErrorTelemetry.logEvent(
+        'sync_freezes_retry_dropped',
+        message: 'user=$userId expected=$cloudVersion — dropped after '
+            'one retry',
+      ));
+      return;
+    }
+
+    SyncService._stampProgressVersion(retryVersion, userId: userId);
+    // Hermes C2: the RPC round-trip just above is itself another await
+    // window a same-device write could land in. Re-merge whatever's fresh
+    // in Hive RIGHT NOW against what the cloud now definitively holds
+    // (`merged`, just confirmed by the RPC as the new cloud state) instead
+    // of blindly overwriting with `merged` — folds in any write that
+    // landed during this retry using the SAME reconciliation logic the
+    // first merge pass (and _restoreFreezes) already rely on, rather than
+    // a raw overwrite. The read-merge-put below is await-free so it's
+    // atomic on the event loop (same reasoning _restoreFreezes's own
+    // comment already documents for that method).
+    //
+    // B-pass round-2 (2026-07-30): ownership guard, same as
+    // _stampProgressVersion's — that call above only protects the version
+    // stamp, not THIS separate write. Without it, a sign-out/sign-in-as-
+    // different-user race landing inside the single RPC await above would
+    // write device-A-derived freeze data into whatever account is live now.
+    if (HiveUserSession.currentOwnerFullId != userId) return;
+    final box = _hive.userBox;
+    final existing = box.get('progress');
+    if (existing is Map) {
+      final p = Map<String, dynamic>.from(existing);
+      final finalUsedRaw = p['streak_freeze_used_dates'];
+      final finalMerge = StreakProgressService.mergeFreezeProgress(
+        localAvailable:
+            (p['streak_freezes_available'] as int?) ?? merged.available,
+        localUsed: (finalUsedRaw is List)
+            ? finalUsedRaw.map((e) => e.toString()).toList()
+            : merged.usedDates,
+        localLastRefill:
+            p['streak_freezes_last_refill'] as String? ?? merged.lastRefill,
+        cloudAvailable: merged.available,
+        cloudUsed: merged.usedDates,
+        cloudLastRefill: merged.lastRefill,
+      );
+      p['streak_freezes_available'] = finalMerge.available;
+      p['streak_freeze_used_dates'] = finalMerge.usedDates;
+      if (finalMerge.lastRefill != null) {
+        p['streak_freezes_last_refill'] = finalMerge.lastRefill;
+      }
+      await box.put('progress', p);
     }
   }
 
@@ -147,7 +337,11 @@ extension SyncServiceRestoreCompleteness on SyncService {
               .select(
                 'streak_freezes_available, streak_freezes_used_dates, '
                 'streak_freezes_last_refill, '
-                'streak_freezes_first_pro_grant_done',
+                'streak_freezes_first_pro_grant_done, '
+                // Unit 3b (e6b9c4) — the cross-device optimistic-lock version.
+                // Must stay in sync with restore-user-snapshot/index.ts's
+                // "freezes" bundle projection (H-1 shape contract).
+                'streak_progress_version',
               )
               .eq('user_id', userId)
               .maybeSingle()
@@ -204,6 +398,15 @@ extension SyncServiceRestoreCompleteness on SyncService {
           res['streak_freezes_first_pro_grant_done'] as bool? ?? false;
       if (cloudGrantDone) {
         existingMap['streak_freezes_first_pro_grant_done'] = true;
+      }
+      // Unit 3b (e6b9c4) — streak_progress_version is a pure server-side
+      // monotonic counter; the client never invents one, only ever adopts
+      // the freshest value it has seen. A fresh restore read is always at
+      // least as new as whatever's local, so cloud unconditionally wins
+      // (no merge needed, unlike available/used_dates/last_refill above).
+      final cloudVersion = (res['streak_progress_version'] as num?)?.toInt();
+      if (cloudVersion != null) {
+        existingMap['streak_progress_version'] = cloudVersion;
       }
       await box.put('progress', existingMap);
       if (merged.scheduleSyncUp) {

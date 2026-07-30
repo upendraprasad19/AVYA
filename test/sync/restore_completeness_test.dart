@@ -19,8 +19,19 @@ import '../contracts/_sync_service_source.dart';
 /// Default raised 2000 → 4000 chars in batch 2026-05-19 / diagnose 9c4a17
 /// after the max-merge fix grew `_restoreFreezes` body past 2000 chars
 /// while preserving all required contract markers (`try {`, `catch (e`,
-/// `'user_progress'`).
-String _methodBody(String src, String methodName, {int maxChars = 4000}) {
+/// `'user_progress'`). Raised again 4000 → 5000 in Unit 3b (B-pass round-2,
+/// 2026-07-30) after the Hermes-C2 second-merge-pass fix pushed
+/// `_restoreFreezes`'s `catch (e` clause to offset 4330 — past the old
+/// 4000 window, so this exact test was silently checking a body that had
+/// been truncated before its own catch clause. 5000 was chosen to land
+/// comfortably past that (headroom for near-term growth) while staying
+/// short of the next method's signature at offset 5485, so the window
+/// still describes ONLY `_restoreFreezes`, not a neighbor. This class of
+/// bug (a fixed-size text window silently outliving its own margin) has
+/// now recurred twice on this same method — if it recurs a third time,
+/// replace this with a brace-balance extractor instead of raising the
+/// constant again.
+String _methodBody(String src, String methodName, {int maxChars = 5000}) {
   final sig = 'Future<void> $methodName(';
   final start = src.indexOf(sig);
   if (start == -1) return '';

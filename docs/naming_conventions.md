@@ -96,6 +96,7 @@ Every Hive key composed from a prefix lives here. **Never reuse a prefix for a d
 | `hydration_`                  | `hydration_<istdate>`               | healthBox     | Hydration aggregate snapshot               |
 | `steps_today` / `steps_date`  | (literal keys, not prefixed)        | healthBox     | Today's step count + the IST date it covers |
 | `streak_freezes_*`            | `streak_freezes_available` / `streak_freezes_used_dates` / `streak_freezes_last_refill` | userBox (via `user_progress`) | Streak-freeze state |
+| `streak_progress_version` (literal) | `streak_progress_version` | userBox (via `user_progress`) | Unit 3b (e6b9c4) — whole-row optimistic-lock counter shared by BOTH `update_streak_progress` and `update_user_progress_snapshot` RPCs (one row per user). Written by `SyncService._stampProgressVersion` after either RPC succeeds; read as `expected_version` on the next call. |
 | `pending_sync_`               | `pending_sync_<opId>`               | syncBox       | Outbox row in pending sync queue           |
 | `last_*` (literal)            | `last_community_sync` etc.          | syncBox       | Last-sync timestamps per surface           |
 | `coach_memory` (literal)      | `coach_memory`                      | coachBox      | Single-row coach memory blob               |
@@ -169,6 +170,7 @@ Phase-B / pgvector / video-render / promo-codes used a date-stamped style (`YYYY
 | Sleep log       | `sleep_log_*` (healthBox) | `hours`   | `sleep_logs`           | `duration_hours` |
 | Water log       | `water_ml_*` (healthBox) | (int)      | `water_logs`           | `total_ml`       |
 | Streak          | `streak_freezes_*` (userBox) | `available` | `user_progress`     | `streak_freezes_available` |
+| Streak/progress version | `progress` map (userBox) | `streak_progress_version` | `user_progress` | `streak_progress_version` |
 | Subscription    | `configBox['isPro']` | (bool)         | `subscriptions`        | `status` (active/cancelled) |
 | Profile         | `userBox['profile']` | `full_name`    | `user_profile`         | `full_name`      |
 | Profile         | `userBox['profile']` | `injuries`     | `user_profile`         | `injuries` (text[]) |

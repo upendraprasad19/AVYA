@@ -41,6 +41,28 @@ UNION ALL
 SELECT 'extend_subscription service_role retained',
        has_function_privilege('service_role', 'public.extend_subscription(uuid, integer)', 'EXECUTE') = true
 UNION ALL
+-- Unit 3b (OI-45 cross-device half, e6b9c4, migration 115) — the new sibling
+-- RPC needs the SAME anon-blocked / authenticated-retained shape as
+-- update_streak_progress above.
+SELECT 'update_user_progress_snapshot anon revoked',
+       has_function_privilege('anon',
+         'public.update_user_progress_snapshot(uuid, bigint, integer, integer, timestamptz, timestamptz, integer, integer, text, integer, integer, date, integer)',
+         'EXECUTE') = false
+UNION ALL
+SELECT 'update_user_progress_snapshot authenticated retained',
+       has_function_privilege('authenticated',
+         'public.update_user_progress_snapshot(uuid, bigint, integer, integer, timestamptz, timestamptz, integer, integer, text, integer, integer, date, integer)',
+         'EXECUTE') = true
+UNION ALL
+SELECT 'update_user_progress_snapshot service_role retained',
+       has_function_privilege('service_role',
+         'public.update_user_progress_snapshot(uuid, bigint, integer, integer, timestamptz, timestamptz, integer, integer, text, integer, integer, date, integer)',
+         'EXECUTE') = true
+UNION ALL
+SELECT 'update_user_progress_snapshot cross-account guard present',
+       pg_get_functiondef('public.update_user_progress_snapshot(uuid, bigint, integer, integer, timestamptz, timestamptz, integer, integer, text, integer, integer, date, integer)'::regprocedure)
+         ILIKE '%cross-account progress write blocked%'
+UNION ALL
 -- search_path no longer mutable on the 10 flagged functions (spot-check 3).
 SELECT 'match_memories search_path set',
        EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace

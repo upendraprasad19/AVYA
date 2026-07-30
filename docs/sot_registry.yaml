@@ -992,7 +992,7 @@ concepts:
           Builds planData map → calls saveDietPlan → fires
           syncSavedDietPlan to cloud → invalidates dietPlanProvider.
       - file: lib/core/services/sync/sync_restore_completeness.dart
-        line_range: 281-301
+        line_range: 494-526
         method: _restoreSavedDietPlan
         notes: |
           Pulls plan_json from cloud saved_diet_plans table on restore
@@ -3293,6 +3293,40 @@ concepts:
       count when gated off. The grant denominator + first-PRO grant live in the
       sibling concept [[streak_freeze_first_pro_grant]].
 
+      Unit 3b / OI-45 cross-device half, diagnose e6b9c4 — cross-device
+      optimistic lock. syncFreezes() now calls the update_streak_progress RPC
+      (migration 056/090/091/096 — was live and correct but dormant, zero
+      callers) instead of a raw upsert. The RPC's own p_expected_version /
+      streak_progress_version optimistic-lock pair closes the exact race
+      migration 056's own header names: device A consumes (available 1->0),
+      device B has a stale read (available 1) and refills (->2), the raw
+      upsert let whichever landed last silently win. On a version mismatch
+      syncFreezes() re-fetches + reconciles via mergeFreezeProgress (same pure
+      merge the restore path already used) + retries once, then drops.
+      streak_progress_version is a NEW field in userBox['progress'] / a new
+      user_progress column (already present, migration 056) — shared as ONE
+      whole-row optimistic counter with the sibling
+      [[program_week_projection]] concept's update_user_progress_snapshot RPC
+      (migration 115), since user_progress is one row per user. Local writer:
+      SyncService._stampProgressVersion (lib/core/services/sync_service.dart,
+      static, shared by both RPCs' call sites).
+
+      Round-1-review fixes (2026-07-30, before this landed): (1) P0 —
+      update_user_progress_snapshot's grant block originally only did
+      `REVOKE EXECUTE ... FROM PUBLIC`, which is a no-op against Supabase's
+      per-role default ACL (the postgres role grants EXECUTE on new
+      public-schema functions directly to anon/authenticated, bypassing
+      PUBLIC) — live-reproduced (anon_can_exec=true), fixed to an explicit
+      `FROM PUBLIC, anon, authenticated`, matching update_streak_progress's
+      own already-correct live ACL. (2) P1 — a THIRD writer,
+      UserRepository.syncOnboardingToSupabase, raw-upserted the same 11
+      program_week_projection-concept fields; now routes through the same
+      RPC via new SyncService.pushOnboardingProgressSnapshot. (3) P2 — the
+      RPC's fresh-insert branch left 4 schema-defaulted columns unwrapped;
+      wrapped in COALESCE, closing a gap the P1 fix made newly reachable.
+      See docs/diagnoses/2026-07-30-cross-device-progress-optimistic-lock-e6b9c4.md's
+      "Round-1 review findings" table for full detail.
+
   - concept: streak_freeze_first_pro_grant
     domain: workout
     description: |
@@ -3319,11 +3353,14 @@ concepts:
           Clamps streak_freezes_available to 1 on lapse. Does NOT touch
           the flag — preserving grant history across lapse+re-buy cycles.
       - file: lib/core/services/sync/sync_restore_completeness.dart
-        line_range: 130-192
+        line_range: 324-433
         method: _restoreFreezes
         notes: |
           On restore: reads flag from cloud, writes true to Hive if cloud
-          is true (never regresses a local true back to false).
+          is true (never regresses a local true back to false). Unit 3b
+          (e6b9c4) added streak_progress_version to the select + a local
+          stamp, shifting the method to 324-433 (see line_range above) —
+          range verified against the live file in the same commit.
     # Narrow single-field concept within the shared userBox['progress'] map
     # (only streak_freezes_first_pro_grant_done). The `streaks` concept owns the
     # exhaustive reader manifest for the 'progress' prefix — Gate 18's
@@ -3340,7 +3377,7 @@ concepts:
           First read before any write — the gate that makes the grant
           idempotent on every boot-refresh.
       - file: lib/core/services/sync/sync_restore_completeness.dart
-        line_range: 14-54
+        line_range: 22-103
         method: syncFreezes
         semantic: pass-through
         fields_read: [streak_freezes_first_pro_grant_done]
@@ -3517,7 +3554,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 210-275
+        line_range: 445-528
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [full_name, email]
@@ -3642,13 +3679,26 @@ concepts:
           Passes the stored URL to ProfileIdentity via ProfileImageUrl.forDisplay
           (verbatim). Was _addCacheBuster (per-build ?t= timestamp) — removed.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 100-300
-        method: _syncUserProfile / _restoreUserProfile
+        line_range: 145-266
+        method: _syncUserProfile
         semantic: pass-through
         fields_read: [avatar_url, banner_url]
         notes: |
           avatar_url / banner_url round-trip to cloud user_profile; the versioned
           URL persists so a 2nd device cache-misses the new version exactly once.
+          Split from a single combined _syncUserProfile/_restoreUserProfile entry
+          into two precise per-method ranges (Unit 3b round-2 review, 2026-07-30)
+          — a single range could not accurately bracket both non-adjacent methods
+          after Unit 3b's own P1 fix (pushOnboardingProgressSnapshot, inserted
+          earlier in the file) shifted both down ~80 lines each.
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 445-528
+        method: _restoreUserProfile
+        semantic: pass-through
+        fields_read: [avatar_url, banner_url]
+        notes: |
+          avatar_url / banner_url round-trip FROM cloud user_profile on restore.
+          See the sibling _syncUserProfile entry above for the write side.
     reader_allow_files:
       - { file: lib/features/profile/widgets/profile_identity.dart, reason: "renders avatarUrl/bannerUrl props via CachedNetworkImage; receives the already-forDisplay'd URL, not a write surface" }
 
@@ -3680,7 +3730,7 @@ concepts:
           onboarding_completed_at) to cloud fire-and-forget; preserves the
           sync-before-referral order.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 82-135
+        line_range: 145-266
         method: _syncUserProfile (via syncProfileNow)
         notes: |
           DURABLE recurring writer (c4d8a2). Pre-fix this canonical profile->cloud
@@ -7934,7 +7984,7 @@ concepts:
       the banner is week-model work, out of scope here.
     writers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 167-231
+        line_range: 267-363
         method: _syncUserProgress
         notes: |
           THE canonical writer. Projects the program week into the current_week
@@ -7942,7 +7992,12 @@ concepts:
           — UNCONDITIONALLY when the kill-switch is OFF (the `!= null` guard on
           the frozen field is dropped — B-pass F1 — so a restore/null-Hive
           user's column can't stay stale). The projection decision is behaviorally
-          tested via the helper (rule 21), not just source-grepped.
+          tested via the helper (rule 21), not just source-grepped. Unit 3b
+          (e6b9c4): now routes through the update_user_progress_snapshot RPC
+          (migration 115) instead of a raw upsert — current_week is passed as
+          `p_current_week` (always explicit, never omitted; NULL means
+          "don't touch" via the RPC's own COALESCE), same value + same
+          projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
         line_range: 1092-1107
         method: currentWeekColumnProjection
@@ -7965,6 +8020,24 @@ concepts:
           OMITTED from its progressData — the column keeps its projected value on
           update / schema-defaults to 1 on a fresh insert. Listed as a REMOVED
           writer so the drift class stays documented.
+
+          Unit 3b round-1-review P1 fix (e6b9c4, 2026-07-30):
+          UserRepository.syncOnboardingToSupabase (the method this call site and
+          onboarding_provider.dart's first-ever sync both funnel through) now
+          routes user_progress through the update_user_progress_snapshot RPC via
+          new SyncService.pushOnboardingProgressSnapshot, instead of a raw
+          version-blind upsert — closing a THIRD unprotected-writer race round-1
+          review found (the original pass fixed _syncUserProgress and syncFreezes
+          only). This made the "schema-defaults to 1 on a fresh insert" claim
+          above ACTUALLY TRUE for the first time: pre-P1-fix it was a raw upsert
+          (genuinely defaults via the omitted column); immediately post-P1-fix but
+          pre-P2-fix, an RPC call with p_current_week=NULL on a brand-new user's
+          fresh-insert branch would have inserted a bare NULL, not the schema
+          default — round-1's own P2 finding, fixed in the same batch by wrapping
+          current_phase/current_week/total_workouts_done/current_streak_weeks in
+          COALESCE(param, schema_default) on migration 115's fresh-insert branch.
+          Both fixes landed together specifically because the P1 fix newly made
+          the P2 gap reachable.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
         line_range: 86-101
         method: buildAiContext (progress block)

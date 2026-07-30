@@ -62,14 +62,27 @@ void main() {
 
   group('#3 user_progress.updated_at frozen (a2d8f4)', () {
     test('_syncUserProgress stamps updated_at on every push', () {
-      // The user_progress upsert (no DB trigger) must set updated_at to now.
+      // Unit 3b (e6b9c4, 2026-07-30) moved this from a client-side upsert
+      // to the update_user_progress_snapshot RPC — the stamp is now set
+      // SERVER-SIDE (now()) in both the RPC's INSERT and UPDATE branches,
+      // not sent as a client param. The contract (updated_at is stamped on
+      // every push) is unchanged; only the mechanism moved. Verified live
+      // in migration 115 directly, not just asserted.
       expect(syncProfileSrc.contains('_syncUserProgress'), isTrue);
+      final migrationSrc = File(
+        'supabase/migrations/115_user_progress_snapshot_optimistic_lock.sql',
+      ).readAsStringSync();
+      expect(migrationSrc.contains('updated_at = now()'), isTrue,
+          reason: 'update_user_progress_snapshot\'s UPDATE branch must set '
+              'updated_at = now() server-side — otherwise the column stays '
+              'frozen at created_at and changed-since logic breaks');
       expect(
-          syncProfileSrc.contains(
-              "'updated_at': DateTime.now().toUtc().toIso8601String()"),
+          migrationSrc
+              .contains('COALESCE(p_longest_gap_days, 0), 1, now()'),
           isTrue,
-          reason: 'user_progress upsert must stamp updated_at — otherwise the '
-              'column stays frozen at created_at and changed-since logic breaks');
+          reason: 'the fresh-insert branch\'s VALUES list must also stamp '
+              'updated_at (the trailing now(), paired with the '
+              'streak_progress_version=1 literal), not just the UPDATE branch');
     });
   });
 

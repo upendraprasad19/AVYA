@@ -31,6 +31,11 @@ void main() {
         // H1b Part B1 (Unit H, 2026-06-27) — non-coalesced variant for the
         // eager/durable callers (onboarding first-context, checkAndSync backstop).
         'pushSnapshotNow',
+        // Unit 3b round-1-review P1 fix (2026-07-30, diagnose e6b9c4) —
+        // UserRepository.syncOnboardingToSupabase's onboarding-time explicit-
+        // params path into update_user_progress_snapshot, replacing a THIRD
+        // unprotected raw-upsert writer to user_progress found by review.
+        'pushOnboardingProgressSnapshot',
         'reportSyncFailure',
         'restoreFromCloud',
         'restoreFromCloudForUser',

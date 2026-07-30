@@ -147,6 +147,13 @@ const HIGH_PRIORITY_OP_TYPES: readonly string[] = [
   // f9d2e7). MUST stay in sync with the client highPriorityOpTypes (twin test).
   "streak_freeze_first_pro_grant",
   "streak_freeze_lapse_reset",
+
+  // Cross-device optimistic-lock drop events (Hermes C8, 2026-07-30) — MUST
+  // stay in sync with the client highPriorityOpTypes (twin test).
+  "sync_freezes_retry_dropped",
+  "sync_user_progress_retry_dropped",
+  "sync_freezes_row_absent_after_conflict",
+  "sync_user_progress_row_absent_after_conflict",
 ];
 
 function isHighPriority(opType: string | null): boolean {

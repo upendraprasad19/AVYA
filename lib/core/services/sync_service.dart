@@ -2128,6 +2128,77 @@ class SyncService {
     return true;
   }
 
+  /// Unit 3b (OI-45 cross-device half, e6b9c4) — stamps the cloud-returned
+  /// `streak_progress_version` into the local `progress` map after a
+  /// successful `update_streak_progress` / `update_user_progress_snapshot`
+  /// RPC call, so the NEXT call on either RPC has the right expected_version.
+  /// Shared by both `syncFreezes` and `_syncUserProgress` — they push
+  /// disjoint column sets but share ONE whole-row version counter (one row
+  /// per user), so either RPC's returned version is equally authoritative.
+  /// Sync (matches the established "Hive write is sync" pattern in
+  /// `streak_progress_service.dart`); does a fresh `get` right before the
+  /// `put` rather than reusing a caller's earlier snapshot, so a concurrent
+  /// same-device write landed in between isn't clobbered.
+  ///
+  /// Hermes C1/C5/C6 (2026-07-30): [userId] must match the caller's own
+  /// identity — checked against the LIVE session owner right before the
+  /// write (not just at call time, several awaits earlier) so a
+  /// sign-out/sign-in-as-different-user race can't land this device's stamp
+  /// into a different account's box (Hermes L15). Creates the `progress`
+  /// map instead of no-op'ing when absent — `pushOnboardingProgressSnapshot`
+  /// and `_replayPendingOnboardingSync` both explicitly declare a missing
+  /// map a supported state, so silently dropping the version here left
+  /// every later writer starting from `expectedVersion = 0` against a cloud
+  /// version the server had already advanced (Hermes C1 — L1/L11/L34/L37
+  /// independently converged on this). Only writes when [newVersion] is
+  /// strictly greater than whatever is already stamped — 3 overlapping
+  /// same-device writers (routine; 5+ call sites fire
+  /// `unawaited(syncFreezes())` / `_syncUserProgress`) could otherwise
+  /// regress an already-newer stamp (Hermes C6).
+  static void _stampProgressVersion(int newVersion, {required String userId}) {
+    if (HiveUserSession.currentOwnerFullId != userId) return;
+    final box = HiveService.instance.userBox;
+    final progress = box.get('progress');
+    final p = progress is Map
+        ? Map<String, dynamic>.from(progress)
+        : <String, dynamic>{};
+    final existingVersion =
+        (p['streak_progress_version'] as num?)?.toInt() ?? 0;
+    if (newVersion <= existingVersion) return;
+    p['streak_progress_version'] = newVersion;
+    box.put('progress', p);
+  }
+
+  /// Merges two already-built RPC-param maps key-by-key, preferring
+  /// [preferred]'s value for any key where it is non-null, else falling
+  /// back to [fallback]'s value for that same key (B-pass round-3,
+  /// 2026-07-30). Used by `_retrySyncUserProgressOnceAfterConflict`
+  /// (sync_profile.dart) to combine a fresh-Hive rebuild with the caller's
+  /// original params: some fields Hive's `progress` map doesn't carry for
+  /// every caller (e.g. `detected_experience_level` for the onboarding-
+  /// time explicit-params path — see that method's own comment), and an
+  /// all-or-nothing swap would silently regress those to NULL instead of
+  /// keeping the real value the original attempt already had. Safe against
+  /// every field the progress-snapshot RPC accepts because its SQL treats
+  /// a NULL param as "no fresher info, don't touch this column" (COALESCE)
+  /// for all of them — none of these params is ever meant to mean
+  /// "actively clear this column" — so "prefer non-null" can never
+  /// suppress an intentional clear that doesn't exist in the first place.
+  /// Pure + `@visibleForTesting` so this is pinned by a behavioral test
+  /// rather than a source-grep (feedback_source_grep_false_confidence —
+  /// the ORIGINAL version of this exact retry-rebuild fix was itself only
+  /// source-grep-tested, and the test didn't catch the silent-drop bug
+  /// this function fixes).
+  @visibleForTesting
+  static Map<String, dynamic> mergeRpcParamsPreferringNonNull(
+      Map<String, dynamic> preferred, Map<String, dynamic> fallback) {
+    final merged = <String, dynamic>{};
+    for (final key in fallback.keys) {
+      merged[key] = preferred[key] ?? fallback[key];
+    }
+    return merged;
+  }
+
   // ── Paginated Fetch Helper ──────────────────────────────────
 
   /// Fetches all rows from a Supabase table using offset-based pagination.

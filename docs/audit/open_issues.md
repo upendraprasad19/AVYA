@@ -158,9 +158,11 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 ## OI-45 — L27 concurrency races: 4 unguarded getX→modify→setX patterns (P1)
 
 - **Status**: OPEN
-- **Blocked on**: Unit 3b (cross-device optimistic-lock RPC wiring for the progress map — not yet
-  started) + Unit 3c (`graduation_screen.dart` stale-`nextPhase`-across-`generateAndSchedule`-await
-  fix, found by Unit 3a's round-1 review — not yet started)
+- **Blocked on**: Unit 3c (`graduation_screen.dart` stale-`nextPhase`-across-`generateAndSchedule`-await
+  fix, found by Unit 3a's round-1 review — not yet started) + a behavioral-test gap for
+  `advanceProPhaseIfExpired`/`_maybeAdvancePhase` (found by Unit 3a's B-pass, tracked separately,
+  not yet started). Unit 3b (cross-device optimistic-lock RPC wiring) is DONE — see the correction
+  block below.
 - **Verified**: 2026-07-30
 - **Identified**: 2026-05-17 · OI-43 / L27 lens scan
 - **Risk class**: lost-update race on shared state
@@ -368,6 +370,36 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   **This OI stays OPEN — findings 2-4's SAME-DEVICE / no-live-race / dedup halves are closed;
   finding 2's CROSS-DEVICE half is Unit 3b's scope, and the round-1-review-found
   `graduation_screen.dart` stale-write bug is Unit 3c's scope — neither started.**
+- **CLOSED 2026-07-30** (cross-device-progress-lock batch, Unit 3b — finding 2's CROSS-DEVICE half,
+  the item this OI's own text names above): the dormant `update_streak_progress` RPC (migration
+  056, built 2026-05-11, never wired — see finding 4 in the prior correction block) is now wired
+  into `syncFreezes()`; a new sibling RPC (migration 115, `update_user_progress_snapshot`) covers
+  the 11 fields `_syncUserProgress` pushes that `update_streak_progress` doesn't. All 3 previously
+  version-blind writers (`syncFreezes`, `_syncUserProgress`,
+  `UserRepository.syncOnboardingToSupabase`'s onboarding-replay path via
+  `pushOnboardingProgressSnapshot`) now route through version-aware writes with bounded
+  retry-on-conflict. Full account: `docs/diagnoses/2026-07-30-cross-device-progress-optimistic-lock-e6b9c4.md`.
+  Review pipeline converged before landing — 3 independent context-blind rounds + 3 B-pass
+  dispatches + 1 11-lens Hermes pass, every single one found a real defect, severity strictly
+  decreasing each round (the genuine-convergence signal per §4.12.1, not a unit too large):
+  a P0 anon-executable grant on the new RPC (Postgres default-privileges bypass PUBLIC entirely —
+  same class as diagnose a9d3f1); a stale pre-await Hive snapshot in both retry helpers that could
+  clobber a concurrent same-device write (mirroring Unit 3a's own central bug, caught here by
+  Hermes then again by round-3 review after the first fix only covered one of the two retry
+  helpers); GREATEST-guards added to 3 monotonic "record" fields (`total_workouts_done`,
+  `deployments_complete`, `longest_gap_days`) that were plain `COALESCE` and could silently regress
+  on a stale-value retry — `longest_gap_days`'s guard is currently dormant (no live writer
+  populates it yet) but closed proactively rather than left as a known gap for whenever one does.
+  Migration 115 applied live against `dedsavbjuwgarrhphgnl` (2026-07-30T17:35:29+05:30), ACL
+  independently re-verified post-apply via `has_function_privilege` (anon blocked, authenticated +
+  service_role executable, matching the P0 fix). 21/21 live-Postgres regression cases (rollback
+  transaction, run against the exact content subsequently applied), 46 wiring/contract tests, 6
+  behavioral tests for the round-3-added `mergeRpcParamsPreferringNonNull` helper. Residual, NOT
+  closed here: `restore-user-snapshot` Edge Function needs a redeploy for its freezes projection's
+  new 5th column (`streak_progress_version`) — self-healing in the meantime (client degrades
+  safely on an absent key, pinned by its own parity test), tracked as a separate follow-up
+  requiring its own deploy authorization, not bundled into this merge. **OI-45 stays OPEN — only
+  Unit 3c (`graduation_screen.dart`) and the Unit 3a behavioral-test-coverage gap remain.**
 
 ## OI-48 — L31 cron efficiency: 3 functions are O(all users), recompute-everything (P2)
 

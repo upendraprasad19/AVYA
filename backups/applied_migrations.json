@@ -763,5 +763,13 @@
     "applier": "claude-via-mcp",
     "diagnose": "c9e3b1",
     "slug": "raise_vision_analysis_cap_to_20"
+  },
+  {
+    "migration": "115",
+    "applied_at": "2026-07-30T17:35:29+05:30",
+    "hash": "sha256:ff51d373ab730b86fcdb2b94a9c7e9848f84e1a7e487a0674580552a5c844608",
+    "applier": "claude-via-mcp",
+    "diagnose": "e6b9c4",
+    "slug": "user_progress_snapshot_optimistic_lock"
   }
 ]
