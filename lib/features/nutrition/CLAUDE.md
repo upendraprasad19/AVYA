@@ -20,7 +20,7 @@ Screens / sections:
 - `nutrition_screen.dart` — top targets + today's macros + 2-tab Log Food (AI text + Scan meal) + saved meals + water + today's meals card (from saved diet plan).
 - `food_search_sheet.dart` — 5K-food search (Hive `food_database` box) + per-serving math + save to meal slot.
 - `food_logger_section.dart` — AI text analysis ("2 chapatis and dal") via `ai-proxy` with `type: 'food_text_analysis'` (gemini-2.5-flash) → AI breakdown card. NOT a `food-text-analysis` Edge Function — no such function exists.
-- `scan_meal_section.dart` — photo capture → `ai-proxy` with `type: 'scan_meal'` (gemini-2.5-flash-lite vision, 15/day server cap) → editable result via `_ScanResultEditor`.
+- `scan_meal_section.dart` — photo capture → `ai-proxy` with `type: 'scan_meal'` (gemini-2.5-flash-lite vision, 20/day server cap combined with cart_auditor) → editable result via `_ScanResultEditor`.
 - `cart_auditor_section.dart` — paste / photograph grocery cart → AI macro/cost audit.
 - `diet_plan_screen.dart` — generated diet plan + PDF export.
 - `water_section.dart` — `WardGlassGrid` 8-cell tracker.

@@ -755,5 +755,13 @@
     "applier": "claude-via-mcp",
     "diagnose": "f4a19c",
     "slug": "fix_food_text_trigger_ist_boundary"
+  },
+  {
+    "migration": "114",
+    "applied_at": "2026-07-30T06:06:57+05:30",
+    "hash": "sha256:acf7b17ad47d4a2cd2fcca6948976f4aebef0bbe79d4e87d5da696593111a383",
+    "applier": "claude-via-mcp",
+    "diagnose": "c9e3b1",
+    "slug": "raise_vision_analysis_cap_to_20"
   }
 ]

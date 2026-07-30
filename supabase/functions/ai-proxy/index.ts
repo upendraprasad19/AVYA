@@ -12,8 +12,8 @@
  *
  * Routing table (set by request body `type`):
  *   food_text_analysis  → gemini-2.5-flash, JSON mode, 50/day free · 200/day PRO
- *   scan_meal           → gemini-2.5-flash-lite (vision), JSON mode, 15/day server cap
- *   cart_auditor        → gemini-2.5-flash-lite (vision), JSON mode, 15/day server cap
+ *   scan_meal           → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ cart_auditor)
+ *   cart_auditor        → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ scan_meal)
  *   prediction          → gemini-2.5-flash, JSON mode, no daily cap (onboarding/monthly)
  *   (default)           → gemini-2.5-flash, chat — 10/day free forever, PRO unlimited
  *
@@ -409,7 +409,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
       }
     }
 
-    // ── Vision abuse cap (scan_meal + cart_auditor: 15/day per user) ─────
+    // ── Vision abuse cap (scan_meal + cart_auditor: 20/day per user) ─────
     //
     // OI-46 (2026-07-29) — was a check-then-insert TOCTOU: the SELECT
     // count() below ran, then Gemini was called, then the interaction

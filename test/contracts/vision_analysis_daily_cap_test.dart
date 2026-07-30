@@ -1,12 +1,19 @@
-// Source-grep contract for the combined scan_meal + cart_auditor 15/day cap.
+// Source-grep contract for the combined scan_meal + cart_auditor daily cap.
 //
 // OI-46 (2026-07-29) — was worse than a TOCTOU: the interaction row was
 // inserted AFTER Gemini succeeded, wrapped in a swallowed `catch (_) {}`,
 // so even a capped user's request completed successfully with the
 // row-insert failure silently discarded. Fixed with an insert-first
 // reservation pattern (mirroring food_text_analysis), backed by the
-// trg_vision_analysis_rate_limit Postgres trigger (migration 111).
+// trg_vision_analysis_rate_limit Postgres trigger (migration 111, cap=15).
 // Behavioral proof lives in test/sql/oi46_daily_cap_triggers_live_verify.sql.
+//
+// usage-counter-race batch (2026-07-29, same day) — migration 114
+// CREATE OR REPLACEs the function, raising the combined cap 15->20 to match
+// the documented PRO product promise (10 scan-meals/day + 10 cart-audits/day
+// independently, docs/architecture/business-rules.md) rather than silently
+// under-delivering it once migration 111 made the pre-existing 15 value a
+// real, always-enforced trigger for the first time.
 
 import 'dart:io';
 
@@ -15,7 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 String _src(String relPath) => File(relPath).readAsStringSync();
 
 void main() {
-  group('OI-46 vision (scan_meal + cart_auditor) combined 15/day cap', () {
+  group('OI-46 vision (scan_meal + cart_auditor) combined daily cap', () {
     test('migration 111 defines trg_vision_analysis_rate_limit as a '
         'combined-channel BEFORE INSERT trigger', () {
       final src = _src(
@@ -25,9 +32,32 @@ void main() {
         src.contains("NEW.channel NOT IN ('scan_meal', 'cart_auditor')"),
         isTrue,
         reason: 'the cap must be a single shared budget across both '
-            'channels, not two independent 15/day caps.',
+            'channels, not two independent per-channel caps.',
       );
       expect(src.contains("USING ERRCODE = 'P0001'"), isTrue);
+    });
+
+    test('migration 114 raises the combined cap from 15 to 20 via '
+        'CREATE OR REPLACE on the same function', () {
+      final src = _src(
+          'supabase/migrations/114_raise_vision_analysis_cap_to_20.sql');
+      expect(
+        src.contains('CREATE OR REPLACE FUNCTION '
+            'enforce_vision_analysis_daily_limit()'),
+        isTrue,
+        reason: 'must replace the migration-111 function in place, not '
+            'create a second competing trigger.',
+      );
+      expect(src.contains('daily_count >= 20'), isTrue);
+      expect(
+        src.contains("'vision_analysis_daily_limit_reached (cap=20)'"),
+        isTrue,
+      );
+      expect(
+        src.contains("NEW.channel NOT IN ('scan_meal', 'cart_auditor')"),
+        isTrue,
+        reason: 'the raised cap must still be a single shared budget.',
+      );
     });
 
     test('ai-proxy reserves a row before calling Gemini for scan_meal and '
@@ -61,13 +91,19 @@ void main() {
     });
 
     test('supabase/functions/CLAUDE.md documents the combined cap, not two '
-        'independent 15/day caps', () {
+        'independent per-channel caps', () {
       final doc = _src('supabase/functions/CLAUDE.md');
       expect(
         doc.contains('COMBINED with'),
         isTrue,
         reason: 'the doc must state scan_meal and cart_auditor share one '
-            '15/day budget (OI-46 correction), not two separate caps.',
+            'combined daily budget (OI-46 correction), not two separate caps.',
+      );
+      expect(
+        doc.contains('20/day COMBINED'),
+        isTrue,
+        reason: 'the doc must reflect the raised 20/day cap (migration 114), '
+            'not the superseded migration-111 value of 15.',
       );
     });
 

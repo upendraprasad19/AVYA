@@ -56,6 +56,49 @@ void main() {
         reason: 'Riverpod state should reflect the incremented count');
   });
 
+  // B-pass finding (usage-counter-race batch, 2026-07-30): this class's
+  // sibling UsageCounterService.increment() has a behavioral concurrent-
+  // dispatch test proving no lost update under Future.wait;
+  // incrementToday()'s own defensive lock (added the same batch, same
+  // shape) had only a source-grep presence test — this closes that
+  // COVERAGE gap with the same behavioral standard.
+  //
+  // HONEST RESULT, same as the sibling test: verified by reverting the
+  // lock and re-running — this construction did NOT fail without it either.
+  // Same mechanism as UsageCounterService.increment() (see
+  // usage_counter_service_race_behavioral_test.dart's header): the read is
+  // synchronous and Hive's Box.put() lands in-memory before its own first
+  // await, so a same-device Future.wait([a, b]) can't actually interleave
+  // two identical-shape read-then-write calls. This test therefore pins the
+  // INVARIANT (never a lost update — true today, now explicit via the lock
+  // rather than an implicit execution-order coincidence a future refactor
+  // could break), not a bug-catch. The lock stays as defense-in-depth,
+  // matching its own doc comment.
+  test(
+      '2 concurrent incrementToday() calls both land — no lost update',
+      () async {
+    final box = HiveService.instance.userBox;
+    await box.delete(todayKey());
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    expect(container.read(messageLimitProvider), 0);
+    final notifier = container.read(messageLimitProvider.notifier);
+
+    await Future.wait([
+      notifier.incrementToday(),
+      notifier.incrementToday(),
+    ]);
+
+    expect(box.get(todayKey()), 2,
+        reason: 'both concurrent increments must be counted. True today '
+            'even without the lock (verified by reverting it) — this pins '
+            'the invariant so a future change to the read/write shape that '
+            'reopens the window gets caught.');
+    expect(container.read(messageLimitProvider), 2);
+  });
+
   test('build() returns cached value O(1) when entry already exists', () async {
     final box = HiveService.instance.userBox;
     await box.put(todayKey(), 7); // Pre-seed the cache.

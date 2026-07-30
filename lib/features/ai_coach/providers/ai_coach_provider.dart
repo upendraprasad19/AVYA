@@ -429,6 +429,16 @@ final chatHistoryProvider =
 class MessageLimitNotifier extends Notifier<int> {
   static const _keyPrefix = 'msg_count_';
 
+  /// OI-45 (usage-counter-race batch, 2026-07-29) — same read-modify-write
+  /// shape as `UsageCounterService.increment`. Verified there (see that
+  /// class's own `_locks` doc comment) that this specific same-device
+  /// interleaving is structurally impossible under Dart's single-threaded
+  /// event loop + Hive's synchronous-in-memory `Box.put()` — kept as
+  /// defense-in-depth, not a reproducible-bug fix. Chat's real 10/day
+  /// free-tier cap is enforced server-side regardless, by
+  /// `trg_chat_app_rate_limit` (migration 111).
+  Completer<void>? _lock;
+
   @override
   int build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
@@ -445,13 +455,27 @@ class MessageLimitNotifier extends Notifier<int> {
 
   /// Increments the today counter in Hive and updates Riverpod state.
   /// Must be called exactly once per successful user-sent message.
+  /// Serialized via [_lock] so two same-device concurrent sends never lose
+  /// an increment to a stale read.
   Future<void> incrementToday() async {
-    final today = istDateStr(DateTime.now());
-    final box = HiveService.instance.userBox;
-    final current = box.get('$_keyPrefix$today') as int? ?? 0;
-    final next = current + 1;
-    await box.put('$_keyPrefix$today', next);
-    state = next;
+    while (_lock != null) {
+      try {
+        await _lock!.future;
+      } catch (_) {/* swallowed; holder will release */}
+    }
+    final c = Completer<void>();
+    _lock = c;
+    try {
+      final today = istDateStr(DateTime.now());
+      final box = HiveService.instance.userBox;
+      final current = box.get('$_keyPrefix$today') as int? ?? 0;
+      final next = current + 1;
+      await box.put('$_keyPrefix$today', next);
+      state = next;
+    } finally {
+      _lock = null;
+      if (!c.isCompleted) c.complete();
+    }
   }
 
   /// Removes `msg_count_*` keys older than 7 IST days. Call fire-and-forget

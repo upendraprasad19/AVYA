@@ -164,7 +164,7 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 - **Risk class**: lost-update race on shared state
 - **Effort**: ~1-2 days (each needs a mutex / RPC / version field)
 - **Top findings:**
-  - **CRITICAL** `UsageCounterService.increment()` (line 74-79) — cross-device race could let users bypass daily caps. Two simultaneous scan-meal requests → only 1 counted. Pattern: `final c = read(); write(c+1)` with no atomicity. Fix: Postgres RPC with FOR UPDATE row lock (mirror `update_streak_progress`).
+  - ~~**CRITICAL**~~ **[CORRECTED 2026-07-29, usage-counter-race batch: downgraded to LOW — this rating does not hold, see the second correction block below]** `UsageCounterService.increment()` (line 74-79) — cross-device race could let users bypass daily caps. Two simultaneous scan-meal requests → only 1 counted. Pattern: `final c = read(); write(c+1)` with no atomicity. Fix: Postgres RPC with FOR UPDATE row lock (mirror `update_streak_progress`).
   - **HIGH** `UserRepository.updateProgress()` (line 75-84) — 4 writers (updateProgress, updateProfileFields, StreakProgressService.commitRefill, commitConsume) all do read-modify-write on the same `progress` map. Lost updates likely.
   - **HIGH** `BadgeService.checkAndUnlock()` — 2 writers (checkAndUnlock + checkAll). Rapid-fire achievement triggers can lose newly-unlocked badges.
   - **MEDIUM** `HealthSyncService.syncToHive()` line 190-192 — TOCTOU between `existing == null` check and `put()`.
@@ -172,6 +172,10 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 - **CORRECTED 2026-07-29** (oi-board-corrections batch), re-verified against live code:
   1. **`increment()` CONFIRMED exactly as described** — `usage_counter_service.dart:100-106`,
      still a raw `read; write(current+1)` with zero atomicity. CRITICAL rating stands.
+     **[SUPERSEDED same day by the usage-counter-race batch correction further below — this
+     pass re-confirmed the code SHAPE but never tested whether that shape actually produces a
+     lost update at runtime. It doesn't. See the later correction block for the full
+     verification.]**
   2. **`UserRepository.updateProgress()` race is real but 3x UNDER-counted.** Real writer set
      is **12+ callsites across 9 files**: `user_repository.dart` `updateProgress:133` +
      `saveProgress:89`; `streak_progress_service.dart` `commitRefill:61`, `commitConsume:126`,
@@ -193,6 +197,86 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
      which is likely the source of the mix-up).
   5. **`HealthSyncService.syncToHive()` CONFIRMED**, citation refreshed to `:148` (check at
      `:197`, put at `:199`).
+- **CORRECTED 2026-07-29** (usage-counter-race batch, Unit 2 of the same 8-unit batch as the
+  correction above — same day, later pass) — **finding 1's "CRITICAL rating stands" was itself
+  wrong, on two independent axes, both now closed/verified:**
+  1. **The same-device race does not exist — verified, not assumed.** A behavioral test firing
+     two concurrent `increment()` calls via `Future.wait` (not sequentially awaited) against the
+     UNMODIFIED pre-fix code still counted both — no lost update. Root cause of the non-race:
+     `MigratedKey.read` is fully SYNCHRONOUS, and Hive's `Box.put()` mutates its in-memory
+     keystore SYNCHRONOUSLY before its own first internal `await` (only the disk flush is
+     actually async). Since `increment()`'s only `await` comes AFTER its read, and Dart is
+     single-threaded/cooperative, nothing can preempt a caller between its read and its write's
+     in-memory landing. This is the SAME structural-safety class already identified above for
+     finding 3 (`checkAndUnlock`/`checkAll`) — it just wasn't checked for `increment()` in the
+     prior pass, which re-confirmed the CODE SHAPE (`read; write(current+1)`, still true) but
+     not the actual RUNTIME interleaving behavior that shape implies.
+  2. **The cap-bypass concern is now server-enforced regardless.** All three features this
+     service gates now have an authoritative Postgres trigger backstop on `ai_coach_interactions`
+     (ai-text-log: migration 026, pre-existing; scan_meal + cart_auditor combined: migration 111,
+     2026-07-29, same-day Unit 4 of this batch) — a lost or stale local counter can no longer let
+     a request past the real cap, cross-device or same-device; worst case is a stale "X remaining"
+     display or a request the server correctly 429s.
+  **Downgraded CRITICAL → LOW (display-accuracy only, not a cap-bypass).** A per-key `Completer`
+  mutex was added anyway as defense-in-depth (matching the `ProfileWriteService`/
+  `WorkoutWriteService` convention for shared Hive-backed state) — not because a reproducible bug
+  was found on `increment()` itself, since none was. Same fix applied to the sibling
+  `MessageLimitNotifier.incrementToday()` (chat's display counter, `ai_coach_provider.dart:460`),
+  found while investigating this finding — identical shape, identical structural non-race, chat's
+  real cap also now server-enforced (`trg_chat_app_rate_limit`, migration 111).
+  **Independent round-1 review of this correction raised a second, distinct mechanism the
+  "structurally impossible" analysis above hadn't considered:** `checkAndResetCounters()`
+  (`usage_counter_service.dart:209`) is a SECOND, previously-unlocked writer of the same 3 keys —
+  fired on every app-resume, not just cold boot (`day_rollover_service.dart:140`) — with 4
+  genuinely-yielding sequential `await` writes unlike `increment()`'s single-await-after-mutation
+  shape, a plausible mechanism for a reset-vs-increment race. **Applying the exact same rigor
+  demanded of finding 1 (test the actual pre-fix/unlocked code, don't reason from the mechanism
+  alone):** a `Future.wait([checkAndResetCounters(), increment()])` concurrent-dispatch test was
+  run against BOTH the locked and unlocked reset code — **the corrupted outcome did not reproduce
+  either way, and round-2 review sharpened why: this is provably DETERMINISTIC, not merely
+  "not observed."** A list literal `[a(), b()]` invokes `a()` then `b()` in that fixed order, and
+  calling an async function runs synchronously to its first true suspend point, so
+  `checkAndResetCounters()` (listed first)'s reset write lands in Hive's in-memory keystore
+  (synchronous, inside `Box.put()`) before `increment()` (listed second) is even invoked.
+  Reversing the argument order reverses the outcome (verified empirically, 20/20 runs each
+  direction). The lock was added anyway, same per-key `_withLock` as `increment()`, as
+  defense-in-depth against a dispatch shape this specific guarantee doesn't reach (independently
+  event-loop-scheduled callers, should a future refactor add a genuine `await` before either
+  read) — not because a reproducible bug was confirmed today. An earlier draft of this correction
+  briefly claimed "a narrow race was real, fixed" before this verification step was run against
+  the unlocked code; that claim did not survive the check and is corrected here rather than left
+  standing.
+  **B-pass review (the mandatory pre-merge 5-lens pass, §4.3) then found a THIRD shape that IS a
+  genuine, reproducible bug — unlike every other race investigated in this correction:**
+  `DayRolloverObserver` (`day_rollover_service.dart`) has no re-entrancy guard, and its staleness
+  gate is written well after `checkAndResetCounters()` returns — a duplicate `resumed` lifecycle
+  event before the first rollover completes dispatches a SECOND, independently-scheduled
+  `checkAndResetCounters()` call, which (unlike the single-resetter case above) is NOT gated
+  against observing stale state. Verified as real by reverting the fix: a synchronous
+  `Future.wait([reset, increment, reset])` construction reliably lost the increment 20/20 runs.
+  Closed with an outer double-checked-locking guard (`_dailyResetLockKey`) wrapping the entire
+  staleness-check-and-reset body, staleness re-checked after acquiring the lock — verified closed
+  20/20 runs across 3 orderings post-fix. This is the one fix in this whole investigation that is
+  a confirmed-bug fix, not defense-in-depth; see
+  `docs/diagnoses/2026-07-29-usage-counter-race-c9e3b1.md`'s "B-pass review" section for the full
+  mechanism. Same B-pass round also closed a test-coverage gap: `MessageLimitNotifier.incrementToday()`'s
+  lock had only a source-grep test, not a behavioral one — added, and honestly found to NOT
+  discriminate (same non-race as `increment()` itself), so documented as invariant-pinning like
+  its sibling.
+  **Unplanned finding, also closed in the same batch:** the combined scan_meal+cart_auditor
+  server cap (15/day, migration 111) undershot the documented PRO product promise
+  (`docs/architecture/business-rules.md`: 10 scan-meals/day + 10 cart-audits/day independently =
+  20 combined) — a compliant PRO user following the client's own displayed "remaining" counts
+  could hit a live 429 well within their documented allowance. Founder decision: raise the server
+  to match the documented promise (migration 114, 15→20), not lower the promise to match the
+  server. Not a NEW bug introduced by this batch — the 15 value pre-dates it (an existing
+  check-then-insert pre-check in `ai-proxy/index.ts`); migration 111 just made it, for the first
+  time, an unconditionally-enforced trigger. **Applied live 2026-07-30T06:06:57+05:30** —
+  verified via `pg_proc` source + the full live-Postgres behavioral test (20 rows succeed, 21st
+  correctly rejected with `cap=20`). The mismatch is closed, not just designed.
+  **Findings 2-4 (`UserRepository.updateProgress`, `BadgeService.checkAndUnlock`/`checkAll`,
+  `HealthSyncService.syncToHive`) are UNCHANGED by this pass — still open, still Unit 3's scope.**
+  This OI stays OPEN; only finding 1 (+ the newly-discovered cap-value mismatch) closes here.
 
 ## OI-48 — L31 cron efficiency: 3 functions are O(all users), recompute-everything (P2)
 
@@ -320,7 +404,7 @@ with a gate holds; everything on intention decays. Same disease §4.12 records f
 | OI | Verified 2026-07-26 | Citation |
 |---|---|---|
 | OI-44 | **STILL OPEN** — `checkAndUnlock` at `badge_service.dart:18` | `getCurrentRank()` 176 → **`rank_service.dart:217`**. NOT refreshed: `isPro` `sub.service.dart:233` → **`subscription_service.dart:320`**; `gate()` 306 → **:420** |
-| OI-45 | **STILL OPEN** — `increment()` body is still `final current = read(); await write(current + 1)` | 74-79 → **`usage_counter_service.dart:100-106`**. NOT refreshed: `UserRepository.updateProgress` 75-84 → **:133**; `HealthSyncService.syncToHive` 190-192 → **:148** |
+| OI-45 | **STILL OPEN** — `increment()` body is still `final current = read(); await write(current + 1)` **[SUPERSEDED 2026-07-29 by the usage-counter-race batch correction in OI-45's own entry above — this row re-confirmed the CODE SHAPE only; the RUNTIME behavior it implies does not reproduce, downgraded CRITICAL → LOW]** | 74-79 → **`usage_counter_service.dart:100-106`**. NOT refreshed: `UserRepository.updateProgress` 75-84 → **:133**; `HealthSyncService.syncToHive` 190-192 → **:148** |
 | OI-46 | **STILL OPEN** — migration 026 explicitly scopes to `food_text_analysis`; no daily-cap trigger on `ai_coach_interactions` | — |
 | OI-47 | **STILL OPEN** — `_shared/sanitize_for_prompt.ts` **absent**; raw `User name: ${name}` live | 243 → **`morning-alert/index.ts:278`** |
 | OI-48 | **MATERIALLY STALE — the stated harm no longer describes the code.** `e78e2c7e` (2026-07-08, OPT-E) batched the per-user reads via chunked `.in()`. The outer `from("users").select(...)` remains, so the O(all users) *shape* survives, but "~5 Postgres reads × N users" does not. **Needs re-scoping, not carrying forward.** | — |
