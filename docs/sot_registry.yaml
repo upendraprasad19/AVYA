@@ -2316,7 +2316,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 166-185
+        line_range: 221-229
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -3068,8 +3068,20 @@ concepts:
           entry point UI callers fire, and it adds the companion
           ProfileWriteService current_weight_kg update.
       - file: lib/core/services/health_sync_service.dart
-        line_range: 178-185
-        method: HealthSyncService (Health Connect import)
+        line_range: 205-262
+        method: _syncToHiveLocked
+        notes: |
+          Health Connect import (weight portion). Unit 3a (progress-map-
+          consolidation, 2026-07-30, OI-45 finding 4): the old public
+          syncToHive body — this write block included — was renamed private
+          (_syncToHiveLocked) and wrapped in a new public syncToHive() that
+          adds an in-flight-Future dedup guard, closing a genuine double-
+          invocation TOCTOU (launch + Settings toggle can overlap). The
+          write itself (weightKey build, existing==null guard, the put) is
+          UNCHANGED — only the enclosing method's name/visibility and the
+          new wrapper around it changed. Line range shifted from 178-185
+          purely due to the new field/wrapper/doc-comments preceding it in
+          the file, not a semantic change to this block.
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
@@ -3678,7 +3690,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 166-185
+        line_range: 231-234
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 1-450

@@ -158,16 +158,19 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 ## OI-45 — L27 concurrency races: 4 unguarded getX→modify→setX patterns (P1)
 
 - **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-07-29
+- **Blocked on**: Unit 3b (cross-device optimistic-lock RPC wiring for the progress map — not yet
+  started) + Unit 3c (`graduation_screen.dart` stale-`nextPhase`-across-`generateAndSchedule`-await
+  fix, found by Unit 3a's round-1 review — not yet started)
+- **Verified**: 2026-07-30
 - **Identified**: 2026-05-17 · OI-43 / L27 lens scan
 - **Risk class**: lost-update race on shared state
-- **Effort**: ~1-2 days (each needs a mutex / RPC / version field)
+- **Effort**: Unit 3b ~1-2 days (new migration + RPC + local version tracking) + Unit 3c ~0.5 day
+  (needs its own conflict-resolution design, not a mechanical fix)
 - **Top findings:**
   - ~~**CRITICAL**~~ **[CORRECTED 2026-07-29, usage-counter-race batch: downgraded to LOW — this rating does not hold, see the second correction block below]** `UsageCounterService.increment()` (line 74-79) — cross-device race could let users bypass daily caps. Two simultaneous scan-meal requests → only 1 counted. Pattern: `final c = read(); write(c+1)` with no atomicity. Fix: Postgres RPC with FOR UPDATE row lock (mirror `update_streak_progress`).
-  - **HIGH** `UserRepository.updateProgress()` (line 75-84) — 4 writers (updateProgress, updateProfileFields, StreakProgressService.commitRefill, commitConsume) all do read-modify-write on the same `progress` map. Lost updates likely.
-  - **HIGH** `BadgeService.checkAndUnlock()` — 2 writers (checkAndUnlock + checkAll). Rapid-fire achievement triggers can lose newly-unlocked badges.
-  - **MEDIUM** `HealthSyncService.syncToHive()` line 190-192 — TOCTOU between `existing == null` check and `put()`.
+  - ~~**HIGH**~~ **[CLOSED 2026-07-30, progress-map-consolidation batch Unit 3a — see the third correction block below]** `UserRepository.updateProgress()` (line 75-84) — 4 writers (updateProgress, updateProfileFields, StreakProgressService.commitRefill, commitConsume) all do read-modify-write on the same `progress` map. Lost updates likely.
+  - ~~**HIGH**~~ **[DOWNGRADED + CLOSED 2026-07-30, Unit 3a — no live race; see third correction block]** `BadgeService.checkAndUnlock()` — 2 writers (checkAndUnlock + checkAll). Rapid-fire achievement triggers can lose newly-unlocked badges.
+  - ~~**MEDIUM**~~ **[CLOSED 2026-07-30, Unit 3a — see third correction block]** `HealthSyncService.syncToHive()` line 190-192 — TOCTOU between `existing == null` check and `put()`.
 - **Already mitigated**: StreakProgressService uses migration 056 `update_streak_progress` RPC (the canonical pattern). WorkoutWriteService uses per-(date,exerciseName) `synchronized` mutex.
 - **CORRECTED 2026-07-29** (oi-board-corrections batch), re-verified against live code:
   1. **`increment()` CONFIRMED exactly as described** — `usage_counter_service.dart:100-106`,
@@ -177,7 +180,10 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
      lost update at runtime. It doesn't. See the later correction block for the full
      verification.]**
   2. **`UserRepository.updateProgress()` race is real but 3x UNDER-counted.** Real writer set
-     is **12+ callsites across 9 files**: `user_repository.dart` `updateProgress:133` +
+     is **12+ callsites across 9 files** `[CORRECTED 2026-07-30, Unit 3a round-2 review, via a
+     fresh grep: 15 write callsites (13 updateProgress + 2 saveProgress) across 11 files — the
+     "9 files" figure was set early and never recounted as the list below grew; see item 6 of
+     the third correction block below]`: `user_repository.dart` `updateProgress:133` +
      `saveProgress:89`; `streak_progress_service.dart` `commitRefill:61`, `commitConsume:126`,
      `grantFirstProFreezes:213`, `resetToFreeCapOnLapse:245`; `workout_repository.dart:247`
      (`_persistCurrentStreakDays`); plus callers in `simulation_service.dart`,
@@ -277,6 +283,91 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   **Findings 2-4 (`UserRepository.updateProgress`, `BadgeService.checkAndUnlock`/`checkAll`,
   `HealthSyncService.syncToHive`) are UNCHANGED by this pass — still open, still Unit 3's scope.**
   This OI stays OPEN; only finding 1 (+ the newly-discovered cap-value mismatch) closes here.
+- **CORRECTED 2026-07-30** (progress-map-consolidation batch, Unit 3a — findings 2-4, same
+  investigate-then-verify discipline as the two corrections above):
+  1. **Finding 2 (`UserRepository.updateProgress`) — SAME-DEVICE half closed; CROSS-DEVICE half
+     is NOT (that's Unit 3b, not started).** A `Completer`-based mutex mirroring
+     `ProfileWriteService._withLock` was built first, matching the established codebase
+     convention — then tested with the same rigor as `increment()`'s own investigation: disabled,
+     full suite re-run, compared. Two findings: (a) it gave NO correctness benefit for any
+     concurrent `updateProgress`/`saveProgress` pairing tested via `Future.wait` (identical
+     structural-safety class to `increment()` — Hive's `Box.put()` lands synchronously, list-order
+     dispatch determinism); (b) it ACTIVELY BROKE 2 pre-existing tests
+     (`streak_decay_reckon_permanent_ledger_test.dart`) by serializing two previously-independent
+     UNAWAITED fire-and-forget writers (`StreakProgressService.commitConsume` +
+     `WorkoutRepository._persistCurrentStreakDays`, both fired within one
+     `reckonStreakDecayAndPersist()` flow) into a genuine queue — a real timing regression, no
+     offsetting correctness gain. **The mutex was removed, not patched around.** The GENUINE,
+     confirmed bug is different and simpler: `pro_phase_advance.dart` and `simulation_service.dart`
+     read `progress`, awaited REAL plan-generation work (tens-hundreds of ms), then wrote the WHOLE
+     map back from that pre-await snapshot — clobbering anything else that landed during the gap.
+     Reproduced directly (not argued) and fixed by converting both to `updateProgress(delta)`,
+     which re-reads fresh state at write time regardless of lock. Full account:
+     `docs/diagnoses/2026-07-30-progress-map-stale-snapshot-d5c8a3.md`.
+  2. **Finding 3 (`BadgeService`) — CONFIRMED no live race, same as the earlier pass already
+     found; left unlocked, pinned with a synchronous-invariant tripwire test instead of adding
+     lock machinery for a race that cannot occur today.**
+  3. **Finding 4 (`HealthSyncService.syncToHive`) — CONFIRMED genuine, closed.** Called both on
+     app launch and via the Settings health-sync toggle; its only real await gap sits BEFORE the
+     weight read-check-write (inside `fetchLatestWeight`), not between them, so two overlapping
+     calls can both pass the `existing == null` guard before either writes. Closed with a
+     whole-method in-flight-`Future` dedup guard — a second concurrent caller now awaits the
+     first call's result instead of independently re-running the fetch and the unguarded
+     check-write. **Round-1 review found a P2 in this exact fix**: the dedup guard's `Completer`
+     called `complete()` unconditionally in `finally`, so a deduped follower would see "success"
+     even when the leader's sync actually threw — fixed to propagate the real outcome
+     (`completeError` + `rethrow`) to every waiter. **Round-2 review then found a P1 in THAT
+     fix** (exactly the risk this repo's §4.12 names — "the corrections themselves can introduce
+     new defects"): in the common case (no concurrent follower ever calls `syncToHive()` while
+     one is in flight), nobody ever attaches a listener to `completer.future` — Dart treats a
+     `completeError()` on an unlistened `Future` as an unhandled error and reports it a SECOND
+     time to the current `Zone`, which this app's `main.dart` wiring turns into a duplicate FATAL
+     Crashlytics report on every ordinary (non-concurrent) sync failure. Independently reproduced
+     via a `runZonedGuarded` repro script, not taken on the reviewing agent's word. Fixed by
+     attaching a no-op `completer.future.catchError((_) {})` immediately, before the first
+     `await` — verified (a second repro) this silences the phantom duplicate without preventing a
+     real follower from observing the true outcome via its own listener on the same `Future`.
+  4. **Unplanned finding, NOT closed here, spun out as Unit 3b:** `update_streak_progress`
+     (migration 056, built 2026-05-11 specifically for this OI's cross-device concern) has been
+     **dormant for 2.5 months** — confirmed via its own migration-096 header comment AND an
+     exhaustive `.rpc(` grep across `lib/` (one hit, unrelated to progress). Both cloud-push paths
+     for the `progress` map (`syncFreezes()`, `_syncUserProgress()`) are plain unversioned
+     upserts with zero optimistic-lock protection today. Closing this requires: wiring the
+     already-built RPC into `syncFreezes()`, a new sibling RPC for the ~10-11 fields
+     `_syncUserProgress` doesn't cover, local version tracking, and bounded retry-on-mismatch —
+     none of which exist in this codebase's progress-sync path today. Scoped out of Unit 3a as a
+     separable, higher-risk piece (new migration + new local state vs. Unit 3a's already-shipped,
+     fully local, empirically-verified fix) rather than folded in or silently dropped.
+  5. **Second unplanned finding, found by round-1 review of Unit 3a's own diff, NOT closed here,
+     spun out as Unit 3c:** `graduation_screen.dart`'s `_onPro()` (lines 560-670) has the SAME
+     general bug class this OI is about — `currentPhase`/`nextPhase` are computed at
+     lines 568/573, BEFORE the slow `await scheduleSvc.generateAndSchedule(...)` (lines 642-659),
+     then the pre-await `nextPhase` is written via `updateProgress({'current_phase': nextPhase,
+     ...})` at line 665. Narrower blast radius than the fixed bug — already `updateProgress`
+     (delta), not a whole-map `saveProgress`, so only `current_phase`/`current_week`/
+     `phase_started_at`/`plan_generated_at` are at risk, and only if an independent concurrent
+     advance (e.g. `pro_phase_advance.dart`'s splash-time auto-advance) lands during the window.
+     Not a mechanical copy of Unit 3a's fix: `generateAndSchedule` has already produced real
+     schedule rows for `nextPhase` by the time of the stale write, so the correct resolution
+     needs its own conflict-resolution design, not a delta-conversion. Full account:
+     `docs/diagnoses/2026-07-30-progress-map-stale-snapshot-d5c8a3.md`'s "Round-1 review" section.
+  6. **Round-2 review of Unit 3a's own diff, 3 more findings, all fixed here (no new open
+     residual):** (a) the P1 named above in finding 4's own entry — a duplicate-Zone-error
+     footgun in round-1's completer fix, fixed with a silencing listener. (b) A stale line
+     citation (`_syncToHiveLocked` is at line 189, not 177). (c) The "12+ callsites across 9
+     files" figure quoted at the top of finding 2 above was itself stale — a number set early
+     and copy-pasted forward without being recounted as the enumerated writer list grew across
+     three separate correction passes. Freshly re-counted via `grep -rn
+     '\.updateProgress(\|\.saveProgress('` across `lib/`: **15 write callsites (13
+     updateProgress + 2 saveProgress) across 11 files** (10 external callers +
+     `user_repository.dart` itself, where `saveProgress`'s own body performs the actual Hive
+     `put`) — this is now the correct figure, superseding "12+ / 9" everywhere it appears on
+     this board. Full account of all 4 round-2 findings (a P3 test-scoping bug in
+     `badge_service_synchronous_invariant_test.dart` also fixed, not board-relevant):
+     `docs/diagnoses/2026-07-30-progress-map-stale-snapshot-d5c8a3.md`'s "Round-2 review" section.
+  **This OI stays OPEN — findings 2-4's SAME-DEVICE / no-live-race / dedup halves are closed;
+  finding 2's CROSS-DEVICE half is Unit 3b's scope, and the round-1-review-found
+  `graduation_screen.dart` stale-write bug is Unit 3c's scope — neither started.**
 
 ## OI-48 — L31 cron efficiency: 3 functions are O(all users), recompute-everything (P2)
 

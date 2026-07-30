@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### progress_map_writer_consolidation (1 bugs)
+- 2026-07-30 d5c8a3 — OI-45 named UserRepository's progress-map writers (updateProgress/saveProgress, user_repository.dart) as a HIGH lost-update race, originally citing 4 writers; a prior board-correction pass (Unit 1 of…
+
 ### ai_coach_daily_cap_enforcement (1 bugs)
 - 2026-07-29 f4a19c — OI-46 (audit finding, re-verified 2026-07-29) named a `channel='in_app'` gap that does not exist as a live value. The real gaps, found during re-verification: (1) chat's free-tier 10/day cap…
 
@@ -886,6 +889,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-07-30 | d5c8a3 | OI-45 named UserRepository's progress-map writers (updateProgress/saveProgress, user_repository.dart) as a HIGH lost-update race, originally citing 4 writers; a prior board-correction pass (Unit 1 of… | progress_map_writer_consolidation | test/contracts/user_repository_progress_stale_snapshot_test.dart (NEW — "OLD pattern documents the bug" / "NEW pattern proves the fix" pair, plus 3 concurrent-dispatch invariant tests carried over from the removed-mutex design). test/contracts/badge_service_synchronous_invariant_test.dart (NEW — source-grep tripwire: checkAndUnlock/checkAll must never become async). test/contracts/ health_sync_service_dedup_test.dart (NEW — source-grep contract for the _syncInFlight dedup guard's structure; kept at source-grep level, matching the sibling unit3_web_ux_gates_test.dart's own established restraint for this exact file — HealthSyncService reaches the unmocked `health` plugin platform channel, and _ensureConfigured's unawaited Health().configure() call risks an unhandled async rejection if actually invoked in this test suite). |
 | 2026-07-29 | f4a19c | OI-46 (audit finding, re-verified 2026-07-29) named a `channel='in_app'` gap that does not exist as a live value. The real gaps, found during re-verification: (1) chat's free-tier 10/day cap… | ai_coach_daily_cap_enforcement | test/contracts/chat_app_daily_cap_test.dart, test/contracts/vision_analysis_daily_cap_test.dart, test/contracts/onboarding_required_fields_test.dart, test/onboarding/resume_route_resolver_test.dart |
 | 2026-07-29 | d7a3f9 | CI's Audit Gates job failed on 96c6fac2 — the enforcement-infra merge commit that had already landed on main — with "Gate failed: check_closes_oi_cited.dart". The same commit's local pre-commit hook… | gate_fail_closed_discipline | test/contracts/gate_wiring_args_required_test.dart |
 | 2026-07-29 | a9f2c6 | Three gates shipped in this batch exited 0 while doing nothing. An OI whose status read `BLOCKED` vanished from OPEN_INDEX.md with no error; an OI whose status line read `- **Status:** CLOSED` escaped… | gate_fail_closed_discipline | test/contracts/oi_index_test.dart |
