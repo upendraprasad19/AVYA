@@ -188,6 +188,32 @@ paths:
   - { glob: "supabase/functions/redeem-referral/**", tier: account }
   - { glob: "supabase/functions/verify-subscription/**", tier: account }
   - { glob: "supabase/functions/beat-my-coach/**", tier: account }
+  # B-pass finding, progress-map-consolidation batch (2026-07-30): the catch-all
+  # comment at the bottom of this file has said "lib/shared/repositories ... is
+  # account" since this registry was written, but no rule ever implemented it —
+  # lib/shared/repositories/** fell through to the lib/shared/** -> feature
+  # catch-all (first-match-wins, declaration order), so a diff touching ONLY
+  # user_repository.dart (owner of the progress/profile Hive maps' writer
+  # contracts) cleared zero review gate. Verified live via the classifier's own
+  # stdin mode before fixing: `printf 'lib/shared/repositories/user_repository.dart\n'
+  # | dart run scripts/blast_radius_from_diff.dart -` returned `feature`. This
+  # rule finally implements the comment's already-stated intent — repositories
+  # own writer/reader contracts by this repo's own architecture rule (lib/CLAUDE.md
+  # "Repository pattern"), so a change to one is account-tier by default. Declared
+  # here (before the feature overrides below) so it wins over lib/shared/** at
+  # the bottom of this file. lib/shared/repositories/plan_engine/** stays platform
+  # via its own more-specific, earlier-declared rule above — unaffected.
+  - { glob: "lib/shared/repositories/**", tier: account }
+  # Same B-pass pass, same mechanism: graduation_screen.dart contains a
+  # confirmed direct write to the progress map (`_onPro()`, OI-45 finding 5 /
+  # Unit 3c — a stale-nextPhase-across-a-slow-await bug in the same family this
+  # batch fixed elsewhere) but lib/features/train/** is feature-tier below, so a
+  # diff touching ONLY this file would clear zero review gate despite writing
+  # the same at-risk Hive key this whole batch exists to protect. Scoped to the
+  # single file, not the whole lib/features/train/** tree, since the rest of
+  # that tree is ordinary Train-tab UI with no equivalent risk — a blanket
+  # promotion would over-gate routine UI changes for no safety gain.
+  - { glob: "lib/features/train/screens/graduation_screen.dart", tier: account }
 
   # ----- feature (explicit overrides over default) -----
   - { glob: "lib/features/profile/**", tier: feature }

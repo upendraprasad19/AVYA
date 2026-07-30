@@ -558,12 +558,16 @@ class SimulationService {
     );
 
     if (result.generated) {
-      final updated = Map<String, dynamic>.from(progress);
-      updated['current_phase'] = currentPhase + 1;
-      updated['current_week'] = 1;
-      updated['plan_generated_at'] = nowWall().toIso8601String();
-      updated['phase_started_at'] = nowWall().toIso8601String();
-      await UserRepository.instance.saveProgress(updated);
+      // Unit 3a (OI-45 finding 2): same stale-snapshot fix as
+      // pro_phase_advance.dart — was saveProgress(wholeMapReadAtLine535), a
+      // snapshot carried across the autoGenerateNextPhaseIfNeeded await
+      // above. updateProgress(delta) calls getProgress() fresh at write time.
+      await UserRepository.instance.updateProgress({
+        'current_phase': currentPhase + 1,
+        'current_week': 1,
+        'plan_generated_at': nowWall().toIso8601String(),
+        'phase_started_at': nowWall().toIso8601String(),
+      });
       unawaited(ref.read(syncServiceProvider).pushSnapshot());
       report.phasesGenerated++;
       report.events.add(

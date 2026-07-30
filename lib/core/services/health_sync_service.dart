@@ -138,6 +138,60 @@ class HealthSyncService {
     }
   }
 
+  /// In-flight dedup guard (Unit 3a, OI-45 finding 4). [syncToHive] is
+  /// called both on app launch AND when the health-sync toggle is turned on
+  /// — on a slow device these can genuinely overlap (a launch-time sync
+  /// still awaiting [fetchLatestWeight] when the user opens Settings and
+  /// re-triggers via the toggle). The weight write below guards with a
+  /// plain `existing == null` read-then-write, no lock — safe within ONE
+  /// call (nothing else runs between the read and the `put`), but not
+  /// across two independently-dispatched calls, where both can pass their
+  /// own read before either reaches its write. A second concurrent caller
+  /// now awaits the FIRST call's in-flight future instead of starting an
+  /// independent, overlapping run.
+  Future<void>? _syncInFlight;
+
+  Future<void> syncToHive() async {
+    final inFlight = _syncInFlight;
+    if (inFlight != null) return inFlight;
+    final completer = Completer<void>();
+    _syncInFlight = completer.future;
+    // Round-2 review P1: in the common case (no concurrent follower ever
+    // calls syncToHive() while this is in flight), nobody ever attaches a
+    // listener to completer.future — the leader observes the real
+    // success/failure via the try/catch below instead, through a SEPARATE
+    // Future (this async function's own). An unlistened Future that later
+    // has completeError() called on it is treated by Dart as an unhandled
+    // error and reported a SECOND time to the current Zone (verified
+    // empirically: runZonedGuarded's onError fires a duplicate for every
+    // ordinary, non-concurrent sync failure) — in this app that means a
+    // spurious extra FATAL Crashlytics report (main.dart's zone forwards to
+    // FlutterError.onError -> recordFlutterFatalError) on top of whatever
+    // the real caller already does. Attaching a no-op listener immediately
+    // silences that duplicate report; Future listeners fan out rather than
+    // consume, so a REAL follower awaiting this SAME future via
+    // _syncInFlight still independently observes the real outcome below.
+    unawaited(completer.future.catchError((_) {}));
+    try {
+      await _syncToHiveLocked();
+      completer.complete();
+    } catch (e, st) {
+      // Round-1 review P2: completer.complete() was previously called
+      // unconditionally in `finally`, regardless of whether the sync
+      // succeeded. A deduped follower caller (one that got `return
+      // inFlight` above) would then silently observe SUCCESS even when the
+      // leader's sync actually threw — e.g. the Settings toggle handler
+      // (biometric_sync_card.dart's onTap) landing behind an in-flight
+      // launch-time sync that fails would believe it succeeded and never
+      // record telemetry. Propagate the SAME error to every follower via
+      // completeError, and rethrow so the leader's own caller sees it too.
+      completer.completeError(e, st);
+      rethrow;
+    } finally {
+      _syncInFlight = null;
+    }
+  }
+
   /// Fetches all supported health data and writes to Hive healthBox.
   /// Called on app launch (if enabled) and when the toggle is turned on.
   ///
@@ -145,7 +199,10 @@ class HealthSyncService {
   /// are reset. This method first tries a quiet permission check (no dialog)
   /// to recover previously-granted access. If that fails it falls back to
   /// [requestPermissions] which may show the system dialog.
-  Future<void> syncToHive() async {
+  ///
+  /// Callers MUST go through the public [syncToHive] wrapper, not this
+  /// method directly — the wrapper is what closes the double-invocation gap.
+  Future<void> _syncToHiveLocked() async {
     if (kIsWeb) return; // Unit 3 obs 2b — native-only; no-op on web
     _lastSyncWroteData = false;
 

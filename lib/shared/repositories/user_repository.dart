@@ -76,6 +76,45 @@ class UserRepository {
 
   /// Saves/replaces the user progress map.
   ///
+  /// ⚠ REPLACE, not merge — this OVERWRITES the whole `progress` key with
+  /// exactly the map passed in. B-pass review, Unit 3a: if this races a
+  /// concurrent [updateProgress] delta call and lands second, it silently
+  /// drops whatever field the delta call had just merged in (confirmed
+  /// empirically, not theoretical — see the "REPLACE semantics dropping a
+  /// field" test in `user_repository_progress_stale_snapshot_test.dart`).
+  /// Only call this when you hold the COMPLETE authoritative state you want
+  /// written (e.g. a one-shot reset, or the very first write to a brand-new
+  /// account) — never a partial map, and never in a flow where something
+  /// else might concurrently be merging a delta via [updateProgress]. If you
+  /// only have a delta, call [updateProgress] instead — it merges onto a
+  /// fresh read rather than replacing. Today's only 2 real callers
+  /// (`simulation_service.dart`'s dev-only `resetJourney`,
+  /// `onboarding_provider.dart`'s first-ever write to a new account) satisfy
+  /// this by construction, which is why this isn't locked — see below.
+  ///
+  /// NO LOCK (OI-45 finding 2 / Unit 3a, diagnose TBD) — a `Completer`-based
+  /// mutex mirroring `ProfileWriteService._withLock` was tried and REMOVED
+  /// after empirical testing, not skipped on assumption. Two findings, both
+  /// verified directly (temporarily added/disabled the lock, re-ran the
+  /// suite each way — same discipline as the usage-counter-race batch):
+  /// (1) it provided NO correctness benefit — every concurrent
+  /// updateProgress/saveProgress pairing tested via `Future.wait` landed
+  /// correctly with or without it (same structural-safety class as
+  /// `UsageCounterService.increment()`: Hive's `Box.put()` lands its
+  /// in-memory mutation synchronously, and `Future.wait([a(), b()])` runs
+  /// `a()` to its own first suspend point before `b()` is even invoked); (2)
+  /// it actively BROKE 2 existing tests
+  /// (`streak_decay_reckon_permanent_ledger_test.dart`) by serializing what
+  /// were previously two independently-landing UNAWAITED fire-and-forget
+  /// calls (`StreakProgressService.commitConsume` and
+  /// `WorkoutRepository._persistCurrentStreakDays` both fire un-awaited
+  /// `updateProgress` calls within one `reckonStreakDecayAndPersist()` flow)
+  /// into a genuine queue — the second call now had to suspend waiting for
+  /// the first to release the lock, a real timing change neither caller nor
+  /// the pre-existing tests expected. Net: no proven benefit, one concrete
+  /// regression — removed. The genuine fix for the real bug (see
+  /// [updateProgress]'s doc comment) does not depend on a lock.
+  ///
   /// Deployment counter (F18 wiring, 2026-05-31 diagnose b9f4d2): 1 deployment
   /// = 1 completed phase, so deployments_complete = current_phase - 1. Stamped
   /// HERE — the lowest-level progress writer that EVERY phase-advance path
@@ -130,6 +169,23 @@ class UserRepository {
   /// Fix: fire-and-forget `unawaited(syncProgressNow())` after the Hive
   /// write — matches the canonical WriteService pattern from
   /// lib/core/services/CLAUDE.md (Hive first → invalidate → sync).
+  ///
+  /// OI-45 finding 2 / Unit 3a fix (diagnose TBD): [getProgress] is called
+  /// fresh, right here, every time this method runs — so a caller passing
+  /// just the fields it wants to change (instead of a whole map it read
+  /// earlier, across its own real `await`) always merges onto whatever is
+  /// in Hive AT THE MOMENT this method is called, never a stale snapshot.
+  /// This is what fixed pro_phase_advance.dart and simulation_service.dart,
+  /// which used to read `progress`, await real (slow) plan generation, then
+  /// write the WHOLE map back from that pre-await snapshot via
+  /// [saveProgress] — silently clobbering anything an independent writer
+  /// landed during the gap. Converting both to `updateProgress(delta)`
+  /// closes that gap, proven directly (not just argued) in
+  /// `user_repository_progress_stale_snapshot_test.dart`'s "OLD pattern
+  /// documents the bug" / "NEW pattern proves the fix" pair — the same test
+  /// file also confirms this fix does NOT depend on any lock (a `Completer`
+  /// mutex was tried here and removed; see [saveProgress]'s doc comment for
+  /// why).
   Future<void> updateProgress(Map<String, dynamic> fields) async {
     final current = getProgress() ?? {
       'current_phase': 1,

@@ -102,12 +102,24 @@ Future<bool> _advanceProPhaseIfExpired(WidgetRef ref) async {
 
   if (result.generated) {
     // Bump user_progress.current_phase + plan_generated_at (monotonic advance).
-    final updated = Map<String, dynamic>.from(progress);
-    updated['current_phase'] = currentPhase + 1;
-    updated['current_week'] = 1;
-    updated['plan_generated_at'] = DateTime.now().toIso8601String();
-    updated['phase_started_at'] = DateTime.now().toIso8601String();
-    await UserRepository.instance.saveProgress(updated);
+    //
+    // Unit 3a (OI-45 finding 2): was saveProgress(wholeMapReadAtLine65) — a
+    // STALE snapshot carried across the autoGenerateNextPhaseIfNeeded await
+    // above (real plan-gen work, tens-hundreds of ms). Any OTHER progress
+    // writer landing during that window would have been silently clobbered
+    // by this whole-map overwrite. updateProgress(delta) calls getProgress()
+    // fresh at write time instead — same safe idiom
+    // graduation_screen.dart / phase_progress_reconciler.dart already use.
+    // Side effect (also a real fix): saveProgress does NOT sync cloud
+    // internally, so this path left user_progress stale in the cloud after
+    // every PRO phase advance until some unrelated updateProgress call
+    // happened to sync it. updateProgress fires syncProgressNow() itself.
+    await UserRepository.instance.updateProgress({
+      'current_phase': currentPhase + 1,
+      'current_week': 1,
+      'plan_generated_at': DateTime.now().toIso8601String(),
+      'phase_started_at': DateTime.now().toIso8601String(),
+    });
     // Fire-and-forget snapshot push so the AI coach sees the new Phase.
     unawaited(ref.read(syncServiceProvider).pushSnapshot());
 

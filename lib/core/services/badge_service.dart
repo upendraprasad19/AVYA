@@ -15,6 +15,16 @@ class BadgeService {
 
   /// Checks milestones and unlocks any newly earned badges.
   /// Returns the list of newly unlocked BadgeIds (empty if none).
+  ///
+  /// OI-45 finding 3 / Unit 3a: downgraded from a claimed HIGH-severity race
+  /// — confirmed by reading the body that there is genuinely no `await`
+  /// between the `_getUnlocked()` read and the `_box.put()` write, so under
+  /// Dart's single-threaded event loop nothing can interleave TODAY. This
+  /// method and [checkAll] MUST stay fully synchronous (not `async`, no
+  /// `await` in the body) to preserve that guarantee — adding one would
+  /// reopen a real read-modify-write race with no lock to catch it.
+  /// `test/contracts/badge_service_synchronous_invariant_test.dart` fails
+  /// loudly if either method's signature ever becomes `async`.
   List<BadgeId> checkAndUnlock({
     required int totalWorkouts,
     required int totalPrs,
