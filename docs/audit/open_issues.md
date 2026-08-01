@@ -489,13 +489,118 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   the `SECURITY DEFINER` content-rule will NOT fire here since none of these are SECURITY
   DEFINER, so don't assume catastrophic without checking.
 
-## OI-79 — Un-ranged PostgREST reads silently truncate at db-max-rows (1000) in cron candidate scans (P1)
+## OI-80 — check_snapshot_contract silently skips one reader citation while counting it (P2)
 
 - **Status**: OPEN
 - **Blocked on**: none
+- **Verified**: 2026-08-01 (Unit 9, `oi79-paged-cron-reads`) — measured, not inferred.
+- **Identified**: 2026-08-01, while correcting reader citations that OI-79's paging refactor moved.
+- **What's wrong**: `scripts/check_snapshot_contract.dart` reports `8 reader citations checked` and
+  exits 0, but the `_shared/notification_prefs` entry under `extra_server_written_keys` →
+  `notification_preferences` → `readers:` is **never validated**. Setting its `line:` to `700`
+  (600+ lines past EOF) still PASSES, while the identical mutation on the `streak-guardian` entry
+  *directly below it in the same list* correctly FAILS. So the gate counts a citation it does not
+  check — the a9f2c6 "gate exits 0 while doing nothing" class, in miniature.
+- **Cause NOT diagnosed.** The obvious theory (comment lines between `readers:` and the first
+  `- {` entry breaking the parser) was **tested and refuted** — moving the comments below the
+  entries changed nothing. Recorded as unknown rather than guessed.
+- **Why it matters**: that citation is the one most likely to drift, since `notification_prefs.ts`
+  is the file OI-79 rewrote most heavily (+67 lines, the reader moved 77 → 106). A stale pointer
+  sends the next audit to a function parameter and invites the conclusion that the reader is gone.
+- **Compounding**: `check_snapshot_contract.dart` is in the skip allowlist of BOTH
+  `scripts/pre-commit.sh:169` and `.github/workflows/test.yml:171`; it runs only via
+  `test/contracts/snapshot_contract_consolidated_test.dart`.
+- **Interim mitigation (already shipped in `337bf6eb`)**: the YAML carries an inline ⚠ warning at
+  that entry, and its `line: 106` was verified BY HAND. Nothing currently depends on the gate
+  maintaining it.
+- **Fix**: find why that entry is skipped (start by instrumenting `_Key.readers` parsing for the
+  `extra_server_written_keys` block), add a negative-control test that a deliberately-wrong
+  citation FAILS for every reader entry, and remove the gate from both skip allowlists.
+
+## OI-81 — 10 per-user reads still destructure `data` without `error` in 4 cron functions (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-08-01 (Unit 9) — counted during the OI-79 sweep; NOT re-verified since.
+- **Identified**: 2026-08-01, while fixing the same class in `streak-guardian` (F16) and
+  `weekly-recalc:326` (F37).
+- **What's wrong**: `const { data } = await supabase.from(...)` with no `error` destructure coerces
+  a FAILED query to `data ?? []`, which downstream reads as a legitimate empty result. Two live
+  instances found in this batch were not theoretical: `streak-guardian` turned a failed
+  "who trained today" read into "nobody trained" (⇒ alert everyone), and `weekly-recalc:326` left
+  the monotonic guard's comparison map empty, silently re-opening diagnose `3a7b9f` (every user's
+  LIFETIME `total_workouts_done` overwritten by a 4-week count).
+- **Scope**: ~10 further sites across 4 cron functions this batch did not otherwise touch. The
+  count is from a sweep, not a per-site audit — re-derive before fixing rather than trusting it.
+- **Why not fixed here**: OI-79's scope was row-count bounding. These sites are correctly bounded;
+  the defect is error handling. Fixing them means auditing each caller's intended failure mode
+  (abort the tick vs. skip the user), which is a different judgement per site.
+- **Fix**: per site, decide abort-vs-skip, then either destructure and handle `error` or route
+  through `paged_fetch` (which throws). Gate candidate: extend
+  `scripts/check_unbounded_cron_reads.dart` to flag `const { data }` with no `error` in the same
+  chain — it already parses these chains.
+
+## OI-82 — `promote-community-item` calls an RPC that does not exist on this project (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-08-01 (Unit 9) — `community_votes_summary` is absent from `pg_proc` in EVERY
+  schema on `dedsavbjuwgarrhphgnl`, confirmed twice (once by me during the sweep, once
+  independently by the round-1 reviewer).
+- **Identified**: 2026-08-01, while waiving RPC reads for the OI-79 gate.
+- **What's wrong**: `supabase/functions/promote-community-item/index.ts:128` and `:197` both call
+  `.rpc("community_votes_summary")`. The function does not exist, so every call errors and the
+  code proceeds down its fallback path — meaning the primary vote-summary path has never executed
+  in production. The OI-79 gate waives these reads as "cannot truncate", which is true and
+  irrelevant: they cannot return rows at all.
+- **Why not fixed here**: determining the intent (create the missing RPC vs. delete the dead call
+  and promote the fallback to primary) is a product/data decision about how community promotion is
+  meant to rank items, not a paging fix.
+- **Fix**: decide intent; if the fallback is correct, delete the dead RPC calls and their waivers
+  so the gate stops reporting them as waived reads.
+
+## OI-79 — Un-ranged PostgREST reads silently truncate at db-max-rows (1000) in cron candidate scans (P1)
+
+- **Status**: CLOSED (2026-08-01, Unit 9 — branch `oi79-paged-cron-reads`, commits `cda5b62c`
+  → `017014f1` → `337bf6eb`)
+- **Blocked on**: none
 - **Verified**: 2026-08-01 (Hermes L31, Unit 5 re-engagement-prefilter) — empirically confirmed
   live, not inferred: an unbounded `GET /rest/v1/food_database?select=id` returns
-  `HTTP/1.1 206 Partial Content` with `Content-Range: 0-999/1431`.
+  ~~`HTTP/1.1 206 Partial Content` with `Content-Range: 0-999/1431`~~.
+
+- **CORRECTION 1 (2026-08-01, Unit 9 — the response is 200, not 206).** Re-measured live against
+  `food_database`: the bare read returns **`HTTP 200 OK`**, `Content-Range: 0-999/*`, 1000 rows,
+  `error === null`. A 206 requires `Prefer: count=exact`, which supabase-js does not send. This
+  matters and is not pedantry — the original text implied a status code a caller could branch on.
+  There is none, and the total is `*`, so the response does not even carry what you would need to
+  detect the loss. The only signal is the row count, and it is ambiguous.
+- **CORRECTION 2 (same pass).** The `morning-alert` pagination precedent cited at `:583-594` is a
+  *different and better* pattern than the `.range()` loop this OI implied: it passes `p_offset`/
+  `p_limit` into an RPC so ordering and paging both happen server-side. The `.range()` loop is at
+  `:790-810`. Also: `.range()` CANNOT raise the cap (a `Range: 0-1499` still yields 1000), and no
+  per-role override exists (`pg_db_role_setting` → 0 rows), so `service_role` — what every cron
+  uses — is capped like everyone else.
+- **Path B resolved.** This OI left "does the cap apply to RPCs?" as *very likely, not proven*. It
+  is now irrelevant rather than answered: the helpers page unconditionally, so the behaviour is
+  correct either way.
+- **Scope found to be larger than filed.** OI-79 named 2 sites. Re-running the lens across the
+  whole cron fleet found **21 reads in 4 distinct classes**, one WORSE than the under-coverage
+  filed here: truncated `.in()` joins that decide who is EXCLUDED, which do not skip a user but
+  *misclassify* one — e.g. `protein-gap-alert` sending "you're short on protein" to someone who hit
+  their target (bites at ~250 active-PRO users), and `_shared/notification_prefs` clipping the
+  preference tail so every notification toggle past ~175 users was silently ignored under its own
+  ABSENT⇒SEND rule.
+- **Fix**: `supabase/functions/_shared/paged_fetch.ts` (`fetchAllPages`/`fetchAllByIds`; `orderBy`
+  required with no default, since a pagination loop without a stable sort key is its own bug),
+  every site routed through it, plus gate `scripts/check_unbounded_cron_reads.dart`.
+- **Nothing was truncating live.** 18 users; largest per-user table 565 rows. This was a latent
+  correctness fix landed before growth, not an outage — stated so the closure does not overclaim.
+- **Evidence**: diagnose `docs/diagnoses/2026-08-01-unbounded-cron-reads-d3f7b2.md`; ledger
+  `docs/audit/2026_08_01_oi79_paged_cron_reads_closures.yaml` (41/41 terminal); behavioral proof
+  end-to-end against live PostgREST (bare read 1000/`error===null` vs `fetchAllPages` 1431 = exact
+  server count, no duplicates across page boundaries); 316 Deno tests; ×2 context-blind review +
+  B-pass per §4.12 (`docs/plan-reviews/oi79-paged-cron-reads.md`).
+- **Spawned**: OI-80 (below).
 - **Identified**: 2026-08-01 · Hermes lens L31 (cron efficiency) during Unit 5's catastrophic-tier
   review.
 - **What's wrong**: PostgREST caps an un-ranged response at `db-max-rows` (1000 on this project).

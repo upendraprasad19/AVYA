@@ -20,8 +20,8 @@ diagnose_doc: docs/diagnoses/2026-08-01-unbounded-cron-reads-d3f7b2.md
 plan_review_record: docs/plan-reviews/oi79-paged-cron-reads.md
 contract_test: supabase/functions/_shared/paged_fetch_test.ts
 gate: scripts/check_unbounded_cron_reads.dart
-total_findings: 41
-closed_count: 41
+total_findings: 43
+closed_count: 43
 
 findings:
   # ── Class 1 — silently WRONG (truncation inverts a classification) ─────────
@@ -132,6 +132,22 @@ findings:
     terminal_state: closed_in_commit
     commit: "oi79-paged-cron-reads branch (uncommitted at authoring; SHA back-filled at commit)"
     verification: "_stripComments() blanks comment bodies while preserving offsets so reported line numbers stay correct; waivers are matched against the raw text since they live in comments."
+  # ── B-PASS (§4.3, self-triggered before merge) ────────────────────────────
+  # All 5 lenses clean, zero P0/P1. Both P2s below. The pass also independently
+  # re-derived 316 Deno tests, 39 files / 5 waivers, 41 terminal ledger entries
+  # and four line citations — the numbers in this ledger are corroborated, not
+  # self-reported. Report: docs/reviews/337bf6eb-review.md
+  - id: F42
+    title: "B-pass P2 — diagnose-doc tier 6 used `status: pending_explicit_authorization`, a value outside CLAUDE.md §6's enum (verified/fixed_in_this_batch/not_applicable/deferred). The validator does not enforce the enum, so it passed silently"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (B-pass fixes; SHA back-filled)"
+    verification: "Rewritten to `status: verified`, stating the VERIFIED DELTA (functions differ between git and the deployed fleet, so the fix is inert in production) rather than an outstanding task. `not_applicable` would have been false; `deferred` both false and a banned semantic per §4.2. CHASING THIS FOUND A MATERIAL DEPLOY-SCOPE ERROR: the deploy set is 16, not the 15 I had been stating in every prior message — the 15 changed directories PLUS proactive-coach-promotion, which changes no file of its own but imports the genuinely-changed _shared/notification_prefs.ts and therefore consumes the fix. A deploy plan keyed on changed directories would have skipped it silently. ai-proxy is deliberately EXCLUDED despite also importing a changed _shared file: its only changed dependency is memory_retrieval.ts, whose entire diff is three comment lines, so redeploying the highest-traffic client-facing function would be risk with no fix."
+  - id: F43
+    title: "B-pass P2 — reviewer could not re-derive the blast radius; `blast_radius_from_diff.dart` printed nothing on a piped diff. FALSE ALARM, but a real footgun: the stdin form requires a trailing `-`"
+    terminal_state: verified_clean
+    evidence: "Without the `-` the script reads `git diff --cached`, which is empty once everything is committed, and correctly prints nothing (its header documents this; exit 0 always, it is informational). Re-run correctly — `git diff --name-only d229c012..HEAD | dart run scripts/blast_radius_from_diff.dart -` — yields `Blast-radius: platform`, matching the tier declared throughout. Recorded rather than dismissed because the same footgun produced THREE wrong readings in this batch: twice mine and once the reviewer's, each time reading as 'the tool is broken' rather than 'the invocation is wrong'."
+    notes: "Sibling of feedback_mistake_blast_radius_positional_mode (positional args are PATHS). Both failure modes are silent and both read as tool malfunction. The correct invocation is now recorded in the plan-review record so it stops costing a diagnosis each time."
+
   # ── ROUND-2 REVIEW, on the HARDENED diff (§4.12: #2 runs post-#1) ─────────
   # 5 REAL findings, EVERY ONE introduced by a round-1 correction — the exact
   # reason §4.12 requires round 2 to review the fixes rather than the original.
