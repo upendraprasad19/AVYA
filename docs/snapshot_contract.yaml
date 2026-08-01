@@ -545,8 +545,10 @@ extra_server_written_keys:
       # to today / yesterday and were therefore inert for ~16 of 17 live users.
       - { fn: _shared/notification_prefs, file: supabase/functions/_shared/notification_prefs.ts, line: 77 }
       # These four already read latest-desc and keep their own direct reads.
-      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 146 }
-      - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 216 }
+      # Lines moved by OI-79's paging refactor (the reads themselves are
+      # unchanged; the paged_fetch call sites above them are longer).
+      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 177 }
+      - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 233 }
       - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 107 }
       - { fn: weekly-recap-ready, file: supabase/functions/weekly-recap-ready/index.ts, line: 53 }
     status: connected

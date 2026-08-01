@@ -81,7 +81,18 @@ void main() {
     final s = _read('supabase/functions/pr-detection/index.ts');
     test('F43: the PR window filters + orders by completed_at', () {
       expect(s.contains('.gte("completed_at"'), isTrue);
-      expect(s.contains('.order("completed_at"'), isTrue);
+      // Ordering is expressed in one of two equivalent shapes since OI-79:
+      //   literal      .order("completed_at", { ascending: false })
+      //   descriptor   { column: "completed_at", ascending: false }
+      // The descriptor is `_shared/paged_fetch.ts`'s required `orderBy:`, which
+      // emits exactly that `.order()` per page (`paged_fetch_test.ts` :152/:164).
+      // Accept both — F43's contract is "recency by completed_at", not a literal
+      // call shape. `created_at` staying absent (asserted below) is what actually
+      // pins the F43 fix; this assertion pins that SOME completed_at ordering
+      // exists so the PR window can't fall back to arbitrary row order.
+      final ordersByCompletedAt = s.contains('.order("completed_at"') ||
+          RegExp(r'\{\s*column:\s*"completed_at"\s*,').hasMatch(s);
+      expect(ordersByCompletedAt, isTrue);
       expect(s.contains('created_at'), isFalse,
           reason: 'F43: no code ref to created_at remains (only the explanatory comment)');
     });

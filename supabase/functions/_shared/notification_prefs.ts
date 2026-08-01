@@ -33,7 +33,32 @@
  * One query per run, not one per user. `re-engagement` already runs a
  * multi-query loop per candidate; adding a per-user `.single()` there would
  * multiply the round-trips on the function with the largest candidate set.
+ *
+ * WHY PAGED (OI-79)
+ * -----------------
+ * The batched read used to be a bare `.in(userIds)`, which PostgREST caps at
+ * `db-max-rows` (1000) — returning HTTP 200 with `error === null`, so a clipped
+ * result is indistinguishable from a complete one. `user_daily_snapshots` holds
+ * MANY rows per user (97 rows across 17 users live, ~5.7 each), so the cap bites
+ * at roughly 175 users, not 1000.
+ *
+ * That interacts badly with everything above. Rows arrive `snapshot_date DESC`
+ * and the first row per user wins, so truncation removes the TAIL — precisely
+ * the users whose newest snapshot is oldest. Under the ABSENT ⇒ SEND rule those
+ * users' preferences then read as absent, and **every toggle they set is
+ * silently ignored**. That is the same "toggles look implemented but do nothing"
+ * failure this file's own header was written to prevent, reached by a different
+ * route.
+ *
+ * `fetchAllByIds` fixes it and preserves the semantics: chunking is BY user id,
+ * so all of one user's rows stay in a single chunk, and the compound sort key
+ * (`snapshot_date DESC`, then `id`) keeps the global order stable across pages —
+ * so "first row per user wins = most recent" still holds. `id` is the tiebreaker
+ * because `snapshot_date` is not unique and a non-unique page key can shuffle
+ * ties between requests.
  */
+
+import { fetchAllByIds } from "./paged_fetch.ts";
 
 // deno-lint-ignore no-explicit-any
 type SupabaseLike = any;
@@ -56,19 +81,23 @@ export async function fetchNotificationPrefs(
   if (!userIds || userIds.length === 0) return out;
 
   try {
-    const { data, error } = await client
-      .from("user_daily_snapshots")
-      .select("user_id, snapshot_json")
-      .in("user_id", userIds)
-      .order("snapshot_date", { ascending: false });
-
-    if (error) {
-      console.error(
-        "[notification_prefs] fetch failed, defaulting to SEND:",
-        error.message,
-      );
-      return out;
-    }
+    const data = await fetchAllByIds<Record<string, unknown>>(
+      (chunk) =>
+        client
+          .from("user_daily_snapshots")
+          .select("user_id, snapshot_json")
+          .in("user_id", chunk),
+      userIds,
+      {
+        // snapshot_date DESC preserves "first row per user wins = most recent";
+        // `id` is the unique tiebreaker that makes the paging stable (OI-79).
+        orderBy: [
+          { column: "snapshot_date", ascending: false },
+          { column: "id", ascending: true },
+        ],
+        label: "notification_prefs",
+      },
+    );
 
     for (const row of (data ?? []) as Record<string, unknown>[]) {
       const uid = row.user_id as string | undefined;
@@ -84,11 +113,13 @@ export async function fetchNotificationPrefs(
     }
     return out;
   } catch (err) {
-    // Transport-level rejection (DNS, reset, timeout before any HTTP
-    // response) rejects the promise rather than returning { error }. Same
-    // reasoning as _shared/subscription.ts — without this, one network blip
-    // aborts the entire cron run instead of degrading to "send to everyone".
-    console.error("[notification_prefs] threw, defaulting to SEND:", err);
+    // Catches BOTH a transport-level rejection (DNS, reset, timeout before any
+    // HTTP response) AND a query error, which `fetchAllByIds` now raises rather
+    // than returning as `{ error }`. Either way this degrades to "send to
+    // everyone" instead of aborting the whole cron run — the N2 fail-safe
+    // direction, and the reason this function's contract is "never throws".
+    // Same reasoning as _shared/subscription.ts.
+    console.error("[notification_prefs] failed, defaulting to SEND:", err);
     return out;
   }
 }

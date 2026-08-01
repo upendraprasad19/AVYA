@@ -3,15 +3,24 @@
 // for every active user and writes them to coach_memory.
 // Pure SQL — no AI cost.
 //
-// Known limitation (v1): per-user RPC round-trip. With the 5000-user
+// Known limitation (v1): per-user RPC round-trip, one per user returned by
+// active_users_for_signals().
+//
+// CORRECTED (OI-79, 2026-08-01) — this header used to say "with the 5000-user
 // safety ceiling in active_users_for_signals(), worst-case is 5000
-// round-trips. Acceptable for current scale; revisit when active user
-// count exceeds ~2000.
+// round-trips". That was never reachable. active_users_for_signals() does carry
+// an internal `limit 5000` (migration 028), but the function is called over
+// PostgREST, which caps ANY response at db-max-rows (1000) — so the SQL limit
+// of 5000 could never be observed and the real worst case was 1000, with the
+// other 4000 users silently unprocessed and no error. The read is now paged
+// (below), so the SQL `limit 5000` is once again the binding constraint and the
+// worst case genuinely is 5000 round-trips.
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { upsertCoachMemory } from "../_shared/coach_memory.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
+import { fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,8 +61,12 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const { data: users, error } = await supabase.rpc("active_users_for_signals");
-    if (error) throw error;
+    // OI-79: paged — see the corrected header note. Without this the RPC's own
+    // `limit 5000` was unreachable and the batch silently stopped at 1000 users.
+    const users = await fetchAllPages<{ user_id: string }>(
+      () => supabase.rpc("active_users_for_signals"),
+      { orderBy: "user_id", label: "compute-coach-signals active-users" },
+    );
 
     let processed = 0;
     let failed = 0;
@@ -112,6 +125,8 @@ async function computeSignalsForUser(
   plateau_risk_score: number | null;
   pro_upgrade_probability: number | null;
 }> {
+  // oi79-ok: single-user RPC — computes the three signals for ONE user_id and
+  // returns one row. Called inside the per-user loop; cannot approach the cap.
   const { data, error } = await supabase.rpc("compute_coach_signals_for_user", {
     p_user_id: userId,
   });

@@ -64,6 +64,32 @@ String _strip(String src) => src
 String _code(String fn) =>
     _strip(File('$_fnDir/$fn/index.ts').readAsStringSync());
 
+/// True when [src] orders a `user_daily_snapshots` read by `snapshot_date`
+/// DESCENDING — i.e. most-recent-known preferences win.
+///
+/// Two equivalent shapes are in the tree and this must accept both, or it pins
+/// SYNTAX where the contract is BEHAVIOUR (`feedback_source_grep_false_confidence`):
+///
+///   literal      `.order("snapshot_date", { ascending: false })`
+///   descriptor   `{ column: "snapshot_date", ascending: false }`  <- paged_fetch
+///
+/// The descriptor is `_shared/paged_fetch.ts`'s `orderBy:` option (OI-79), which
+/// turns every key into exactly that `.order(col, {ascending})` call before each
+/// `.range()` page — pinned by `_shared/paged_fetch_test.ts` ("fetchAllPages
+/// applies the requested sort column and direction" :152, "…applies a compound
+/// sort key in order" :164). Ordering also became UNSKIPPABLE there: `orderBy` is
+/// required with no default and a missing/blank key throws (:214, :199), so a
+/// paged read cannot silently lose its sort the way a dropped `.order()` could.
+///
+/// `ascending: false` is load-bearing in BOTH forms. An ORDER BY that is merely
+/// present but ASCENDING returns the OLDEST row first, and the "first row per
+/// user wins" reduction downstream then reads stale preferences — inverting the
+/// guard just as thoroughly as a date pin would.
+bool _latestDescSnapshot(String src) =>
+    src.contains('.order("snapshot_date", { ascending: false })') ||
+    RegExp(r'\{\s*column:\s*"snapshot_date"\s*,\s*ascending:\s*false\s*,?\s*\}')
+        .hasMatch(src);
+
 void main() {
   group('Unit E — every notification key has a server-side guard', () {
     test('the shared helper exists and exports both entry points', () {
@@ -76,7 +102,7 @@ void main() {
 
     test('the helper reads LATEST-desc, never a pinned snapshot_date', () {
       final src = _strip(File(_helper).readAsStringSync());
-      expect(src, contains('.order("snapshot_date", { ascending: false })'),
+      expect(_latestDescSnapshot(src), isTrue,
           reason: 'the whole point — most-recent-known preferences, however '
               'old. Live, only 1 of 91 rows is dated today.');
       expect(src.contains('.eq("snapshot_date"'), isFalse,
@@ -141,9 +167,7 @@ void main() {
                     .hasMatch(src);
         if (handRolled && !src.contains('isNotificationEnabled(')) {
           // Allowed only when the function's own snapshot read is latest-desc.
-          final latestDesc =
-              src.contains('.order("snapshot_date", { ascending: false })');
-          if (!latestDesc) offenders.add(fn);
+          if (!_latestDescSnapshot(src)) offenders.add(fn);
         }
       }
       expect(offenders, isEmpty,

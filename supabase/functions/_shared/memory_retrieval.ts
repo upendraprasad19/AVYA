@@ -111,6 +111,9 @@ export async function retrieveRelevantMemories(
 
   // 2. Call the existing RPC — match_memories filters by user_id then uses
   //    the IVFFlat index on embedding column. Fast even on large corpora.
+  // oi79-ok: bounded by its own `p_match_count` argument (a top-K vector
+  // search, callers pass single digits). The RPC cannot return more than
+  // matchCount rows, so PostgREST's 1000-row cap is unreachable here.
   const { data, error } = await supabaseClient.rpc("match_memories", {
     p_user_id: userId,
     p_query_embedding: queryEmbedding,

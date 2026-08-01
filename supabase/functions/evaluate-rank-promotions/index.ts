@@ -33,6 +33,7 @@ import {
 } from "../_shared/ceremony_text.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,18 +75,31 @@ async function fetchInChunks(
   table: string,
   columns: string,
   userIds: string[],
+  orderBy: string,
 ): Promise<{ data: Array<Record<string, unknown>>; error: unknown }> {
-  const allRows: Array<Record<string, unknown>> = [];
-  for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
-    const chunk = userIds.slice(i, i + BATCH_SIZE);
-    const { data, error } = await supabase.from(table).select(columns).in(
-      "user_id",
-      chunk,
+  // OI-79 — this used to chunk `userIds` into BATCH_SIZE groups and issue one
+  // bare .in() per chunk. Chunking bounds the REQUEST (URL length); it does
+  // nothing about the RESPONSE, which PostgREST still caps at db-max-rows
+  // (1000) with HTTP 200 and error===null. For a table holding N rows per user
+  // a 100-id chunk returns 100xN rows, so `rank_promotions` (one row per rank
+  // achieved) clips at ~10 ranks/user regardless of how small the chunk is —
+  // and clipped rank history reads as "never promoted", re-firing a promotion
+  // ceremony the user already had. `fetchAllByIds` pages WITHIN each chunk, so
+  // both dimensions are bounded.
+  //
+  // The {data, error} return shape is kept deliberately: the three call sites
+  // funnel into one `prefetchErr` check that aborts the whole tick, and that
+  // Unit C (§2.24) contract is unchanged.
+  try {
+    const data = await fetchAllByIds<Record<string, unknown>>(
+      (chunk) => supabase.from(table).select(columns).in("user_id", chunk),
+      userIds,
+      { orderBy, chunkSize: BATCH_SIZE, label: `evaluate-rank-promotions ${table}` },
     );
-    if (error) return { data: allRows, error };
-    allRows.push(...((data ?? []) as Array<Record<string, unknown>>));
+    return { data, error: null };
+  } catch (err) {
+    return { data: [], error: err };
   }
-  return { data: allRows, error: null };
 }
 
 serve(async (req: Request) => {
@@ -114,9 +128,19 @@ serve(async (req: Request) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // 1. Pull the user roster (id + signup time).
-    const { data: users, error: usersErr } = await supabase
-      .from("users")
-      .select("id, created_at");
+    //    OI-79: paged. This is the WHOLE roster with no filter, so it is the
+    //    first read in this function to hit db-max-rows — at 1000 users every
+    //    later signup would silently stop being evaluated for promotion.
+    let users: Array<Record<string, unknown>> | null = null;
+    let usersErr: unknown = null;
+    try {
+      users = await fetchAllPages<Record<string, unknown>>(
+        () => supabase.from("users").select("id, created_at"),
+        { orderBy: "id", label: "evaluate-rank-promotions roster" },
+      );
+    } catch (e) {
+      usersErr = e;
+    }
 
     if (usersErr || !users) {
       console.error(`[evaluate-rank-promotions] request_id=${requestId}`, usersErr);
@@ -150,9 +174,12 @@ serve(async (req: Request) => {
         "user_progress",
         "user_id, current_streak_days, deployments_complete, longest_gap_days, last_workout_date",
         userIds,
+        "id",
       ),
-      fetchInChunks(supabase, "rank_promotions", "user_id, rank_code", userIds),
-      fetchInChunks(supabase, "user_profile", "user_id, current_rank_code", userIds),
+      // rank_promotions is the multi-row-per-user one — see the note in
+      // fetchInChunks for why chunking alone did not bound it.
+      fetchInChunks(supabase, "rank_promotions", "user_id, rank_code", userIds, "id"),
+      fetchInChunks(supabase, "user_profile", "user_id, current_rank_code", userIds, "id"),
     ]);
     const prefetchErr = progressBatch.error ?? ranksBatch.error ?? profileBatch.error;
     if (prefetchErr) {

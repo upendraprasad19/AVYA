@@ -16,6 +16,7 @@ import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { fetchAllByIds } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -131,6 +132,9 @@ serve(async (req: Request) => {
         .from("users")
         .select("id, full_name")
         .gte("last_active_at", cutoff)
+        // OI-79: stable sort key required — see the note in morning-alert. An
+        // unordered .range() loop can duplicate or skip users between pages.
+        .order("id", { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1);
 
       if (usersErr) {
@@ -161,34 +165,73 @@ serve(async (req: Request) => {
 
       // ── Batch fetch snapshots + progress for this page ──────
       // Two parallel bulk queries instead of 2N sequential queries
+      // OI-79 — found by check_unbounded_cron_reads.dart, not by the manual
+      // sweep. `user_daily_snapshots` holds ~5.7 rows per user (97 rows / 17
+      // users live), so a 200-user page yields ~1140 rows and clipped at 1000
+      // with no error. The rows dropped are the OLDEST-dated ones, and the
+      // "first row per user wins" reduction below reads that as "this user has
+      // no snapshot" — so users at the tail of a page silently lost their recap
+      // data. Chunked + paged; the compound sort key keeps snapshot_date DESC
+      // authoritative with `id` as the unique tiebreaker.
       const [snapshotResult, progressResult] = await Promise.allSettled([
-        supabase
-          .from("user_daily_snapshots")
-          .select("user_id, snapshot_json")
-          .in("user_id", userIds)
-          .order("snapshot_date", { ascending: false }),
-        supabase
-          .from("user_progress")
-          .select("user_id, current_week")
-          .in("user_id", userIds),
+        fetchAllByIds<Record<string, unknown>>(
+          (chunk) =>
+            supabase
+              .from("user_daily_snapshots")
+              .select("user_id, snapshot_json")
+              .in("user_id", chunk),
+          userIds,
+          {
+            orderBy: [
+              { column: "snapshot_date", ascending: false },
+              { column: "id", ascending: true },
+            ],
+            label: "weekly-recap-ready snapshots",
+          },
+        ),
+        fetchAllByIds<Record<string, unknown>>(
+          (chunk) =>
+            supabase.from("user_progress").select("user_id, current_week").in(
+              "user_id",
+              chunk,
+            ),
+          userIds,
+          { orderBy: "id", label: "weekly-recap-ready progress" },
+        ),
       ]);
 
       // Build lookup maps
+      // `fetchAllByIds` resolves to the row array itself (and rejects on a page
+      // error), so `.value` IS the rows — there is no `{ data, error }` wrapper
+      // to unpack any more. Promise.allSettled still absorbs a rejection into
+      // `status: "rejected"`, preserving this loop's existing "degrade to an
+      // empty map rather than abort the page" behaviour.
       const snapshotMap = new Map<string, Record<string, unknown>>();
-      if (snapshotResult.status === "fulfilled" && snapshotResult.value.data) {
-        for (const row of snapshotResult.value.data) {
+      if (snapshotResult.status === "fulfilled") {
+        for (const row of snapshotResult.value) {
+          const uid = row.user_id as string;
           // Only keep the first (most recent) per user
-          if (!snapshotMap.has(row.user_id)) {
-            snapshotMap.set(row.user_id, row.snapshot_json ?? {});
+          if (!snapshotMap.has(uid)) {
+            snapshotMap.set(uid, (row.snapshot_json ?? {}) as Record<string, unknown>);
           }
         }
+      } else {
+        console.error(
+          "weekly-recap-ready: snapshot batch failed:",
+          snapshotResult.reason,
+        );
       }
 
       const progressMap = new Map<string, number>();
-      if (progressResult.status === "fulfilled" && progressResult.value.data) {
-        for (const row of progressResult.value.data) {
-          progressMap.set(row.user_id, (row.current_week as number) ?? 1);
+      if (progressResult.status === "fulfilled") {
+        for (const row of progressResult.value) {
+          progressMap.set(row.user_id as string, (row.current_week as number) ?? 1);
         }
+      } else {
+        console.error(
+          "weekly-recap-ready: progress batch failed:",
+          progressResult.reason,
+        );
       }
 
       // ── Process with bounded concurrency ─────────────────

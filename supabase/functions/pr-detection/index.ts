@@ -17,6 +17,7 @@ import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { fetchAllPages } from "../_shared/paged_fetch.ts";
 import {
   fetchNotificationPrefs,
   isNotificationEnabled,
@@ -75,13 +76,26 @@ Deno.serve(async (req) => {
     // when the workout actually happened, so the recency window is honest.
     const since = new Date(Date.now() - 20 * 60_000).toISOString();
 
-    const { data: rows, error } = await supabase
-      .from("workout_log_exercises")
-      .select("user_id, exercise_id, weight_kg, reps, completed_at")
-      .eq("is_pr", true)
-      .gte("completed_at", since)
-      .order("completed_at", { ascending: false });
-    if (error) throw error;
+    // OI-79: paged. `completed_at` alone was NOT a safe page key — it is not
+    // unique (a whole workout's exercises share one timestamp), so ties could
+    // shuffle between page requests and drop or duplicate a PR. `id` is added as
+    // the unique tiebreaker; completed_at DESC stays first so the existing
+    // newest-first ordering the grouping below relies on is unchanged.
+    const rows = await fetchAllPages<PRRow>(
+      () =>
+        supabase
+          .from("workout_log_exercises")
+          .select("user_id, exercise_id, weight_kg, reps, completed_at")
+          .eq("is_pr", true)
+          .gte("completed_at", since),
+      {
+        orderBy: [
+          { column: "completed_at", ascending: false },
+          { column: "id", ascending: true },
+        ],
+        label: "pr-detection prs",
+      },
+    );
 
     if (!rows || rows.length === 0) {
       console.log(

@@ -36,10 +36,14 @@
  * `subscriptions` table is the source of truth; the column is a stale cache.
  */
 
+import { fetchAllPages } from "./paged_fetch.ts";
+
 // deno-lint-ignore no-explicit-any
 type SupabaseLike = any;
 
-/// Explicit row cap on the batch fetch — see the canary in fetchProUserIds.
+/// Sanity ceiling on the batch fetch — see the canary in fetchProUserIds.
+/// NOT a query limit: the read is paged (OI-79), so this is a "that number
+/// looks wrong" tripwire rather than a cap that silently discards rows.
 const _proFetchCap = 5000;
 
 /**
@@ -56,28 +60,36 @@ export async function fetchProUserIds(
   client: SupabaseLike,
 ): Promise<Set<string>> {
   try {
-    const { data, error } = await client
-      .from("subscriptions")
-      .select("user_id")
-      .eq("status", "active")
-      .gt("end_date", new Date().toISOString())
-      .limit(_proFetchCap);
-
-    if (error) {
-      console.error("[subscription] fetchProUserIds failed:", error.message);
-      return new Set<string>();
-    }
+    // OI-79 — the `.limit(_proFetchCap)` (5000) this replaces was UNREACHABLE:
+    // PostgREST caps every response at db-max-rows (1000), so the read silently
+    // stopped at 1000 active PRO users and every one past that was treated as
+    // free. Worse, the `rows.length >= _proFetchCap` guard below could never
+    // fire — a saturation detector that is structurally always false is more
+    // dangerous than none, because it reads as "we would have been told".
+    // Paged, so `_proFetchCap` is now a real ceiling the loop can actually reach.
+    const data = await fetchAllPages<{ user_id: string }>(
+      () =>
+        client
+          .from("subscriptions")
+          .select("user_id")
+          .eq("status", "active")
+          .gt("end_date", new Date().toISOString()),
+      { orderBy: "id", pageSize: 1000, label: "subscription pro-user-ids" },
+    );
 
     const rows = data ?? [];
-    // Canary. PostgREST silently truncates an unbounded select at the project's
-    // max-rows setting, so without an explicit cap a scale-up would quietly
-    // start misclassifying everyone past the cutoff as free — no error, no log.
-    // The explicit .limit() above makes the ceiling ours rather than the
-    // platform's, and this warns before it bites. (Inert today: 0 active PRO.)
+    // Canary — now genuinely reachable. Before OI-79 this compared against a
+    // 5000 cap on a read PostgREST clipped at 1000, so it could never fire
+    // however many PRO users existed: the very truncation it was written to
+    // announce would silently happen 4000 rows below the threshold. Paging
+    // removes the 1000 ceiling, so exceeding _proFetchCap is once again a real
+    // condition worth shouting about (an unexpectedly huge PRO base, or a
+    // filter that stopped filtering).
     if (rows.length >= _proFetchCap) {
       console.warn(
-        `[subscription] fetchProUserIds hit the ${_proFetchCap}-row cap — ` +
-          `PRO users beyond it are being treated as free. Paginate this query.`,
+        `[subscription] fetchProUserIds returned ${rows.length} rows, at or ` +
+          `above the ${_proFetchCap} sanity ceiling — check the status/end_date ` +
+          `filter before trusting this PRO set.`,
       );
     }
     return new Set<string>(rows.map((r: { user_id: string }) => r.user_id));

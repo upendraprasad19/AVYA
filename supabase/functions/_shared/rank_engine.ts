@@ -128,6 +128,11 @@ export async function completionRateOverWindow(
   if (windowWeeks <= 0) return 0.0;
   const sinceIso = new Date(Date.now() - windowWeeks * 7 * 24 * 3600 * 1000)
     .toISOString();
+  // oi79-ok: per-user window read. Bounded by `windowWeeks` (callers pass a
+  // per-rank window, max ~52) x at most one scheduled workout per user per day,
+  // so ~365 rows worst case — well under PostgREST's 1000-row cap. Reviewed
+  // rather than paged because paging a read that cannot reach the cap adds a
+  // round-trip to the hottest loop in the rank cron for no correctness gain.
   const { data, error } = await supabase
     .from('scheduled_workouts')
     .select('status, scheduled_date')

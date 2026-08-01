@@ -114,7 +114,16 @@ function calculateExperienceLevel(
 
 /**
  * Fetches all rows from a table with pagination to handle large datasets.
- * Supabase JS client returns max 1000 rows by default; this fetches all pages.
+ *
+ * The 1000-row ceiling is PostgREST's server-side `db-max-rows`, not a client
+ * default — `.range()` cannot raise it (measured: requesting 0-1499 still
+ * returns 1000). So PAGE_SIZE must stay <= 1000; a larger value would make the
+ * first full page look short and end the loop early.
+ *
+ * `orderColumn` must be unique and immutable (a primary key). OI-79: Postgres
+ * guarantees no row order without ORDER BY and PostgREST adds none, so an
+ * unordered .range() loop can return overlapping or disjoint pages —
+ * double-counting one user's workouts and missing another's.
  */
 async function fetchAllRows<T>(
   supabaseClient: SupabaseClient,
@@ -122,6 +131,7 @@ async function fetchAllRows<T>(
   selectCols: string,
   dateColumn: string,
   dateGte: string,
+  orderColumn: string,
 ): Promise<T[]> {
   const PAGE_SIZE = 1000;
   const allRows: T[] = [];
@@ -133,6 +143,7 @@ async function fetchAllRows<T>(
       .from(table)
       .select(selectCols)
       .gte(dateColumn, dateGte)
+      .order(orderColumn, { ascending: true })
       .range(offset, offset + PAGE_SIZE - 1);
 
     if (error) {
@@ -219,6 +230,7 @@ serve(async (req: Request) => {
         "user_id, exercise_id, exercise_name, weight_kg, reps, completed_at",
         "completed_at",
         fourWeeksAgoStr + "T00:00:00Z",
+        "id", // OI-79: PK — the only stable page key (completed_at is not unique).
       ),
       fetchAllRows<ScheduledWorkout>(
         supabaseClient,
@@ -226,6 +238,7 @@ serve(async (req: Request) => {
         "user_id, status, scheduled_date",
         "scheduled_date",
         fourWeeksAgoStr,
+        "id", // OI-79: PK — scheduled_date repeats across users.
       ),
     ]);
 

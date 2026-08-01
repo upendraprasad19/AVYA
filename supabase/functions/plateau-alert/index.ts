@@ -42,6 +42,7 @@ import {
   fetchNotificationPrefs,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
+import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,14 +89,21 @@ Deno.serve(async (req: Request) => {
     // 1. Pull all coach_memory rows above threshold whose signals have
     //    actually been computed (signals_computed_at IS NOT NULL guards
     //    against reading default/uncomputed rows).
-    const { data: highRisk, error: memError } = await supabase
-      .from("coach_memory")
-      .select(
-        "user_id, plateau_risk_score, preferred_name, private_mode, signals_computed_at",
-      )
-      .gte("plateau_risk_score", PLATEAU_THRESHOLD)
-      .not("signals_computed_at", "is", null);
-    if (memError) throw memError;
+    //    OI-79: paged. `coach_memory` is one row per user, so this caps at 1000
+    //    at-risk users — past that the tail silently stops being alerted.
+    //    orderBy is `user_id` here, not `id`: coach_memory's PK IS user_id
+    //    (verified live) — it has no `id` column.
+    const highRisk = await fetchAllPages<Record<string, unknown>>(
+      () =>
+        supabase
+          .from("coach_memory")
+          .select(
+            "user_id, plateau_risk_score, preferred_name, private_mode, signals_computed_at",
+          )
+          .gte("plateau_risk_score", PLATEAU_THRESHOLD)
+          .not("signals_computed_at", "is", null),
+      { orderBy: "user_id", label: "plateau-alert high-risk" },
+    );
 
     if (!highRisk || highRisk.length === 0) {
       console.log(
@@ -117,13 +125,22 @@ Deno.serve(async (req: Request) => {
 
     // 2. Filter to active PRO subscribers. Mirrors weekly-report /
     //    protein-gap-alert PRO gate.
-    const { data: subs, error: subError } = await supabase
-      .from("subscriptions")
-      .select("user_id")
-      .eq("status", "active")
-      .gt("end_date", new Date().toISOString())
-      .in("user_id", candidateIds);
-    if (subError) throw subError;
+    //    OI-79 — Class 1 (silently WRONG). `proSet` is an INCLUSION set: a row
+    //    missing from it means a paying PRO user is read as free and their
+    //    plateau alert is silently suppressed. A user can have multiple
+    //    subscription rows (9 rows / 4 users live), so this is not 1:1 with the
+    //    id list and truncates sooner than the user count suggests.
+    const subs = await fetchAllByIds<Record<string, unknown>>(
+      (chunk) =>
+        supabase
+          .from("subscriptions")
+          .select("user_id")
+          .eq("status", "active")
+          .gt("end_date", new Date().toISOString())
+          .in("user_id", chunk),
+      candidateIds,
+      { orderBy: "id", label: "plateau-alert pro-subs" },
+    );
 
     const proSet = new Set(
       (subs ?? []).map((s: Record<string, unknown>) => s.user_id as string),

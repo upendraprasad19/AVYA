@@ -17,6 +17,7 @@ import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,12 +65,27 @@ serve(async (req: Request) => {
     const todayIST = getTodayIST();
 
     // 1. Find users with active streaks > 2 weeks.
-    const { data: streakUsers, error: streakErr } = await supabase
-      .from("user_progress")
-      .select("user_id, current_streak_weeks")
-      .gte("current_streak_weeks", 2);
+    //    OI-79: paged — an un-ranged read caps at 1000 with no error, so past
+    //    1000 users on a streak the tail would silently stop being guarded.
+    //
+    //    The old guard here was `if (streakErr || !streakUsers || length === 0)`
+    //    → log cron "success", return 200 "No users with streak > 2 weeks".
+    //    That conflated a FAILED read with an EMPTY one: a broken query reported
+    //    a healthy tick and nobody's streak got guarded, invisibly. Same class as
+    //    diagnose a7e2c4 (Edge-Function reads coercing a failure into empty
+    //    data). `fetchAllPages` throws, so the error now propagates to the outer
+    //    catch → cron telemetry "failed" → next tick retries. The genuinely-empty
+    //    case still exits 200.
+    const streakUsers = await fetchAllPages<Record<string, unknown>>(
+      () =>
+        supabase
+          .from("user_progress")
+          .select("user_id, current_streak_weeks")
+          .gte("current_streak_weeks", 2),
+      { orderBy: "id", label: "streak-guardian streak-users" },
+    );
 
-    if (streakErr || !streakUsers || streakUsers.length === 0) {
+    if (streakUsers.length === 0) {
       await logCronEnd(logId, "success", { httpStatus: 200 });
       return new Response(
         JSON.stringify({
@@ -87,11 +103,25 @@ serve(async (req: Request) => {
     const userIds = streakUsers.map((u: Record<string, unknown>) => u.user_id as string);
 
     // 2. Check which of these users have logged a workout today.
-    const { data: todayLogs } = await supabase
-      .from("workout_logs")
-      .select("user_id")
-      .in("user_id", userIds)
-      .eq("date", todayIST);
+    //    OI-79 — Class 1 (silently WRONG). This set EXCLUDES users who already
+    //    trained, so anything missing from it becomes a false "your streak is at
+    //    risk" push to someone who worked out hours ago.
+    //    Two independent routes produced that outcome and both are closed here:
+    //    (a) truncation past db-max-rows — no error, just a short list; and
+    //    (b) the read did not destructure `error` at all, so a genuine query
+    //        failure coerced to `?? []` = "nobody logged today" = alert everyone.
+    //        That is the a7e2c4 bug class; this site was missed by that sweep.
+    //    `fetchAllByIds` pages, chunks, and throws — all three routes closed.
+    const todayLogs = await fetchAllByIds<Record<string, unknown>>(
+      (chunk) =>
+        supabase
+          .from("workout_logs")
+          .select("user_id")
+          .in("user_id", chunk)
+          .eq("date", todayIST),
+      userIds,
+      { orderBy: "id", label: "streak-guardian today-logs" },
+    );
 
     const loggedUserIds = new Set(
       (todayLogs ?? []).map((l: Record<string, unknown>) => l.user_id as string),

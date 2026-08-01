@@ -798,6 +798,11 @@ serve(async (req: Request) => {
         .from("users")
         .select("id, full_name")
         .gte("last_active_at", sevenDaysAgoISO)
+        // OI-79: a .range() loop needs a stable, unique sort key. Postgres
+        // guarantees no row order without ORDER BY and PostgREST adds none, so
+        // without this two pages can overlap or leave a gap — silently
+        // double-alerting one user and skipping another. `users.id` is the PK.
+        .order("id", { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1);
 
       if (usersError) {
