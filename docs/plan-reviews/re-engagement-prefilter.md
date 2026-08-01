@@ -6,7 +6,7 @@ review_rounds: 2
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
-bpass_review: docs/reviews/6d2c1d8cc8da-review.md
+bpass_review: docs/reviews/76d44c9b4967-review.md
 hermes: accepted
 hermes_review: docs/audit/2026-08-01-hermes-reengagement-prefilter.md
 ---
