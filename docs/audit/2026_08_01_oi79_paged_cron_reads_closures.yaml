@@ -20,8 +20,8 @@ diagnose_doc: docs/diagnoses/2026-08-01-unbounded-cron-reads-d3f7b2.md
 plan_review_record: docs/plan-reviews/oi79-paged-cron-reads.md
 contract_test: supabase/functions/_shared/paged_fetch_test.ts
 gate: scripts/check_unbounded_cron_reads.dart
-total_findings: 25
-closed_count: 25
+total_findings: 34
+closed_count: 34
 
 findings:
   # ── Class 1 — silently WRONG (truncation inverts a classification) ─────────
@@ -132,6 +132,56 @@ findings:
     terminal_state: closed_in_commit
     commit: "oi79-paged-cron-reads branch (uncommitted at authoring; SHA back-filled at commit)"
     verification: "_stripComments() blanks comment bodies while preserving offsets so reported line numbers stay correct; waivers are matched against the raw text since they live in comments."
+  # ── ROUND-1 CONTEXT-BLIND REVIEW (2 parallel reviewers, §4.12) ────────────
+  # 9 REAL findings on the landed commit cda5b62c. Every one verified against
+  # the file/live DB before acting (feedback_audit_verifier_cannot_trust_own_
+  # subagent) — one reviewer claim was over-stated and is corrected in F34.
+  - id: F26
+    title: "GATE P1 — `_helperCallRanges` spanned the helper's WHOLE argument list, so a `.from()` in a LATER argument counted as paged. fetchAllByIds' 2nd argument is an id list callers compute inline, so an unbounded id-source read passed the gate"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-1 fixes; SHA back-filled)"
+    verification: "Range now ends at the first top-level comma (`_firstArgEnd`, strings skipped) so only the makeQuery lambda is blessed. Reviewer's bypass reproduced then re-run: `fetchAllByIds(c => sb.from(\"subscriptions\")…, ((await sb.from(\"users\").select(\"id\")).data||[]).map(…))` now FAILS the gate; clean tree still passes."
+  - id: F27
+    title: "GATE — `_stripComments` was string-literal-unaware, so the `//` in any URL blanked the rest of that physical line. These files are full of `https://`, and a `/*` in a literal would have blanked to the next `*/`, voiding many reads at once"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-1 fixes; SHA back-filled)"
+    verification: "String literals are now copied verbatim (offsets still preserved). Control: a read placed after `const base = \"https://example.com\";` on one line now FAILS; previously exit 0."
+  - id: F28
+    title: "GATE — `_chainFrom` counted parens inside string literals, so `.eq(\"note\", \"(\")` left depth > 0 forever, the chain swallowed the rest of the FILE, and a later `.range(`/`.limit(`/`.insert(`/`fetchAllPages(` whitewashed a genuinely unbounded read"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-1 fixes; SHA back-filled)"
+    verification: "Chain scan now skips string literals. Control: that exact statement above expiry-reminder's fetchAllPages now FAILS; previously exit 0."
+  - id: F29
+    title: "GATE — `.from(tbl)` with a VARIABLE table name is invisible to the gate and the SCOPE/LIMITS block did not say so, unlike the multi-statement limit it does disclose"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-1 fixes; SHA back-filled)"
+    verification: "Disclosed in the header, explicitly flagging that this limit fails in the DANGEROUS direction (silent pass, not loud fail). Documented rather than implemented because no such call site exists in the cron fleet today — stated in the header so the choice is auditable."
+  - id: F30
+    title: "GATE — any `.range(` counted as bounded, so the gate could not detect this batch's OWN Class 4 (a `.range()` loop with no `.order()`, whose pages can skip or duplicate rows)"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-1 fixes; SHA back-filled)"
+    verification: "`.range(` now requires a sibling `.order(`/`orderBy:` or it reports a distinct violation naming the skip/duplicate failure. Clean tree still passes (all 3 Class-4 loops got their `.order()` earlier in this batch, and i-see-you-callout already had one)."
+  - id: F31
+    title: "RUNTIME — `new Date().toISOString()` sat INSIDE the per-page closure at 3 sites. fetchAllPages re-invokes the closure per page, so each page was offset into a DIFFERENT result set: a subscription expiring mid-scan shifts every later row down one and the row at the boundary is never returned"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-1 fixes; SHA back-filled)"
+    verification: "Cutoff pinned once outside the closure in _shared/subscription.ts:76, protein-gap-alert:104, plateau-alert:139. This dropped a PAYING user from a PRO *inclusion* set — the Class-1 silently-wrong outcome this batch exists to remove, re-entered through the predicate instead of the sort key. Found by round-1, not by me."
+  - id: F32
+    title: "RUNTIME — the paging loop assumed the server cap equals POSTGREST_MAX_ROWS: `from = page * pageSize` plus a short-page break. `db-max-rows` is a dashboard setting, so lowering it to 500 made page 0 return 500, read as end-of-data, and EVERY converted read would silently return 500 rows with error === null"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-1 fixes; SHA back-filled)"
+    verification: "Offset now advances by rows ACTUALLY received (`from = all.length`) and only an EMPTY page terminates. Correct at any cap without knowing it; costs one extra round-trip per read, the same one the exact-multiple case already paid. New regression test 'fetchAllPages survives a server cap BELOW pageSize' (total 2300, serverCap 500) fails without the fix. 3 existing call-count assertions updated to the new correct counts (2->3, 1->2, 6->9) and the 'stops after one request' test renamed, since 'short page = done' was precisely the wrong belief. 19 Deno tests pass; live end-to-end re-verified after the rewrite (1431/1431, no duplicates)."
+  - id: F33
+    title: "WAIVER — rank_engine's oi79-ok waiver claimed windows are 'max ~52' weeks / '~365 rows'. RANK_GATES ships `'Capt': completionRateWindowWeeks: 104` = 728 days, so real headroom is 1.37x, not the 2.7x implied"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-1 fixes; SHA back-filled)"
+    verification: "Waiver corrected with the true numbers and a stated breaking point (>142 weeks). The 1-row-per-user-per-day premise is now cited to live evidence rather than assumed: `uq_scheduled_workouts_user_date` UNIQUE(user_id, scheduled_date) confirmed via pg_index on dedsavbjuwgarrhphgnl. Conclusion (do not page) survives; the numbers justifying it did not."
+  - id: F34
+    title: "docs/snapshot_contract.yaml — `_shared/notification_prefs` cited line 77 (a function parameter); the reader is at 106. Worse: that entry is NOT VALIDATED BY THE GATE AT ALL"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-1 fixes; SHA back-filled)"
+    verification: "Citation corrected to 106 by hand. The gate blind spot is measured, not inferred: setting that entry's line to 700 (600+ past EOF) PASSES, while the identical mutation on the streak-guardian entry directly below it correctly FAILS — so the gate counts a citation it never checks (a9f2c6 class). Cause NOT diagnosed; my leading-comment theory was tested and REFUTED. Flagged inline in the YAML so nobody trusts that line number as gate-maintained, and filed as OI-80 in this branch's board update (which lands with the OI-79 closure, before merge). Corrects the reviewer's claim that three citations were stale: expiry-reminder (107 vs 118) and weekly-recap-ready (53 vs 54) are inside the gate's +/-15 tolerance and passed legitimately; both were tightened to the exact lines anyway."
+
   # ── Gate defects the PRE-COMMIT RUN caught, after the gate had run clean ──
   # These 3 only surfaced because the commit was attempted. The gate had
   # reported OK against the same tree earlier — it was the pre-commit

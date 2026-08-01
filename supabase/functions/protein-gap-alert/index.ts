@@ -95,13 +95,18 @@ serve(async (req: Request) => {
     //    OI-79: paginated. An un-ranged read stops at PostgREST's db-max-rows
     //    (1000) with HTTP 200 and error===null, so past 1000 active subs the
     //    tail of the PRO base would silently stop receiving this alert.
+    // Pinned once, outside the per-page closure — an inline `new Date()` is
+    // re-evaluated on every page request, so pages get offset into different
+    // result sets and a subscription expiring mid-scan silently drops the row
+    // at the page boundary. See _shared/subscription.ts for the full note.
+    const cutoffIso = new Date().toISOString();
     const proSubs = await fetchAllPages<{ user_id: string }>(
       () =>
         supabase
           .from("subscriptions")
           .select("user_id")
           .eq("status", "active")
-          .gt("end_date", new Date().toISOString()),
+          .gt("end_date", cutoffIso),
       { orderBy: "id", label: "protein-gap-alert pro-subs" },
     );
 

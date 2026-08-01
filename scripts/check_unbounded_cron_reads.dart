@@ -52,6 +52,12 @@
 //     read as unbounded and fail loudly rather than pass silently, which is the
 //     correct direction for a gate.
 //   - `supabase.storage.from(<bucket>)` is skipped (not a PostgREST table read).
+//   - The table name must be a STRING LITERAL. `.from(tbl)` where `tbl` is a
+//     variable is INVISIBLE to this gate — it will not be reported at all.
+//     Disclosed because the failure direction here is the dangerous one (a
+//     silent pass, not a loud fail), unlike the multi-statement case above.
+//     Found by round-1 review 2026-08-01; no such call site exists in the cron
+//     fleet today, which is why this is documented rather than implemented.
 //   - It cannot verify that a `.limit(n)` is *semantically* right, only that it
 //     is a real ceiling PostgREST can honour.
 //
@@ -72,6 +78,9 @@ final _pagedHelper = RegExp(r'fetchAll(Pages|ByIds)\b');
 final _single = RegExp(r'\.(maybeSingle|single)\s*\(');
 final _headCount = RegExp(r'head\s*:\s*true');
 final _range = RegExp(r'\.range\s*\(');
+/// `.order("col"…)` in a hand-rolled chain, or a `paged_fetch` `orderBy:`
+/// option. A `.range()` loop needs one of these or its pages are unstable.
+final _orderBy = RegExp(r'\.order\s*\(|\borderBy\s*:');
 final _limit = RegExp(r'\.limit\s*\(\s*(\d+)\s*\)');
 
 /// A write, not a read — PostgREST's row cap does not apply.
@@ -213,6 +222,32 @@ String _stripComments(String src) {
   final out = StringBuffer();
   var i = 0;
   while (i < src.length) {
+    // A string literal is copied VERBATIM, never scanned for comment markers.
+    // Without this, the `//` in any URL blanks the rest of its physical line —
+    // and these files are full of `https://…`. Verified as a live bypass: a
+    // statement placed after a URL on the same line vanished from the scan and
+    // the gate exited 0. A `/*` inside a literal was worse still: it blanked
+    // everything to the next `*/`, potentially voiding many reads at once.
+    final q = src[i];
+    if (q == '"' || q == "'" || q == '`') {
+      out.write(q);
+      i++;
+      while (i < src.length) {
+        out.write(src[i]);
+        if (src[i] == r'\' && i + 1 < src.length) {
+          i++;
+          out.write(src[i]);
+          i++;
+          continue;
+        }
+        if (src[i] == q) {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
     if (i + 1 < src.length && src[i] == '/' && src[i + 1] == '/') {
       while (i < src.length && src[i] != '\n') {
         out.write(' ');
@@ -265,7 +300,26 @@ List<Violation> _scan(File file, String root) {
     }
     if (_single.hasMatch(chain)) continue;
     if (_headCount.hasMatch(chain)) continue;
-    if (_range.hasMatch(chain)) continue;
+    // A hand-rolled `.range()` loop bounds the ROW COUNT but not the row
+    // ORDER. Postgres gives no cross-page ordering guarantee without ORDER BY,
+    // so pages can skip or duplicate rows — this batch's own Class 4, which the
+    // gate could not previously see because any `.range(` counted as bounded.
+    // `paged_fetch` makes `orderBy` mandatory so the pairing is unconstructible
+    // there; outside it (weekly-recalc, i-see-you-callout) it must be checked.
+    if (_range.hasMatch(chain)) {
+      if (_orderBy.hasMatch(chain)) continue;
+      out.add(Violation(
+        rel,
+        _lineOf(src, m.start),
+        kind,
+        name,
+        '.range() without .order() — Postgres gives no cross-page row-order '
+        'guarantee, so pages can skip or duplicate rows (one user alerted '
+        'twice, another never). Add a stable .order() ending in a unique '
+        'column, or route through paged_fetch (orderBy is mandatory there)',
+      ));
+      continue;
+    }
     if (_rpcPaged.hasMatch(chain) && _rpcPagedLimit.hasMatch(chain)) continue;
     if (_waiver.hasMatch(rawCtx)) {
       waived++;
@@ -305,11 +359,28 @@ List<Violation> _scan(File file, String root) {
 /// statements is not tracked and will read as unbounded.
 String _chainFrom(String src, int start) {
   var depth = 0;
-  for (var i = start; i < src.length; i++) {
+  var i = start;
+  while (i < src.length) {
     final c = src[i];
+    // Skip string literals. Counting parens inside them is how a chain used to
+    // run away: `.eq("note", "(")` left depth permanently > 0, the `;` never
+    // terminated the chain, and it swallowed the rest of the FILE — so a later
+    // `.range(`, `.limit(`, `.insert(` or `fetchAllPages(` matched and
+    // whitewashed a genuinely unbounded read. Verified as a live bypass.
+    if (c == '"' || c == "'" || c == '`') {
+      final quote = c;
+      i++;
+      while (i < src.length && src[i] != quote) {
+        if (src[i] == r'\') i++;
+        i++;
+      }
+      i++;
+      continue;
+    }
     if (c == '(') depth++;
     if (c == ')') depth--;
     if (c == ';' && depth <= 0) return src.substring(start, i);
+    i++;
   }
   return src.substring(start);
 }
@@ -377,9 +448,46 @@ List<List<int>> _helperCallRanges(String src) {
     }
     if (!isCall) continue;
     final close = _matchingParen(src, i);
-    if (close > i) ranges.add([i, close]);
+    if (close <= i) continue;
+    // ONLY the first argument (the `makeQuery` lambda) is paged. Spanning the
+    // whole argument list would bless a `.from()` appearing in a LATER
+    // argument — and `fetchAllByIds`'s second argument is an id list that
+    // callers routinely compute inline, e.g.
+    //   fetchAllByIds(chunk => …, (await sb.from("users").select("id")).data…)
+    // where the id-source read is itself unbounded. Verified as a live bypass
+    // of the whole-arg-list version: injecting exactly that into
+    // streak-guardian made the gate exit 0.
+    final firstArgEnd = _firstArgEnd(src, i, close);
+    ranges.add([i, firstArgEnd]);
   }
   return ranges;
+}
+
+/// Offset of the top-level `,` ending the first argument of the call whose
+/// `(` is at [open] and whose `)` is at [close]; [close] when there is only one
+/// argument. Strings are skipped so a comma inside a literal cannot end it.
+int _firstArgEnd(String src, int open, int close) {
+  var depth = 0;
+  var i = open;
+  while (i < close) {
+    final c = src[i];
+    if (c == '"' || c == "'" || c == '`') {
+      final quote = c;
+      i++;
+      while (i < close && src[i] != quote) {
+        if (src[i] == r'\') i++;
+        i++;
+      }
+    } else if (c == '(' || c == '[' || c == '{') {
+      depth++;
+    } else if (c == ')' || c == ']' || c == '}') {
+      depth--;
+    } else if (c == ',' && depth == 1) {
+      return i;
+    }
+    i++;
+  }
+  return close;
 }
 
 /// Index of the `)` closing the `(` at [open], skipping string literals so a

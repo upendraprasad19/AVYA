@@ -130,13 +130,17 @@ Deno.serve(async (req: Request) => {
     //    plateau alert is silently suppressed. A user can have multiple
     //    subscription rows (9 rows / 4 users live), so this is not 1:1 with the
     //    id list and truncates sooner than the user count suggests.
+    // Pinned once, outside the per-chunk/per-page closure — an inline
+    // `new Date()` is re-evaluated on every request, so pages get offset into
+    // different result sets. See _shared/subscription.ts for the full note.
+    const cutoffIso = new Date().toISOString();
     const subs = await fetchAllByIds<Record<string, unknown>>(
       (chunk) =>
         supabase
           .from("subscriptions")
           .select("user_id")
           .eq("status", "active")
-          .gt("end_date", new Date().toISOString())
+          .gt("end_date", cutoffIso)
           .in("user_id", chunk),
       candidateIds,
       { orderBy: "id", label: "plateau-alert pro-subs" },

@@ -119,26 +119,51 @@ Deno.test("fetchAllPages recovers every row past the db-max-rows cap", async () 
   assertEquals(rows.length, 1431);
   assertEquals(rows[0].id, 0);
   assertEquals(rows[1430].id, 1430);
-  assertEquals(calls.length, 2);
+  // 3 requests: 1000 rows, then 431, then an empty page to prove the end.
+  // Only an EMPTY page proves end-of-data — a short page is equally the
+  // signature of a server cap below pageSize.
+  assertEquals(calls.length, 3);
   assertEquals(calls[0].from, 0);
   assertEquals(calls[0].to, 999);
   assertEquals(calls[0].orderTerms, [{ column: "id", ascending: true }]);
   assertEquals(calls[1].from, 1000);
   assertEquals(calls[1].to, 1999);
   assertEquals(calls[1].orderTerms, [{ column: "id", ascending: true }]);
+  assertEquals(calls[2].from, 1431, "offset advances by rows RECEIVED");
 });
 
-Deno.test("fetchAllPages stops after one request when the first page is short", async () => {
+Deno.test("fetchAllPages confirms a short page with one more request", async () => {
+  // Deliberately NOT "stops after one request". A short page is ambiguous —
+  // end-of-data, or a server cap below pageSize — so it costs one confirming
+  // request to tell those apart. See the serverCap test below for the case
+  // that ambiguity used to break.
   const calls: RecordedCall[] = [];
   const rows = await fetchAllPages<Row>(makeFake({ total: 18, calls }), { orderBy: "id" });
   assertEquals(rows.length, 18);
-  assertEquals(calls.length, 1);
+  assertEquals(calls.length, 2);
+  assertEquals(calls[1].from, 18);
+});
+
+Deno.test("fetchAllPages survives a server cap BELOW pageSize", async () => {
+  // REGRESSION (round-1 review): `db-max-rows` is a dashboard setting, not a
+  // platform invariant. With the old `from = page * pageSize` + short-page
+  // break, a cap of 500 under a pageSize of 1000 made page 0 return 500,
+  // which read as end-of-data — every converted read would have silently
+  // returned 500 of 2300 rows with error === null. Fails without the fix.
+  const calls: RecordedCall[] = [];
+  const rows = await fetchAllPages<Row>(
+    makeFake({ total: 2300, serverCap: 500, calls }),
+    { orderBy: "id" },
+  );
+  assertEquals(rows.length, 2300, "must recover every row despite the lower cap");
+  assertEquals(new Set(rows.map((r) => r.id)).size, 2300, "no duplicates");
+  assertEquals(calls[1].from, 500, "offset follows the SERVER's page size, not ours");
 });
 
 Deno.test("fetchAllPages handles a total that is an exact multiple of pageSize", async () => {
-  // The boundary that a naive `if (rows.length === 0) break` gets wrong in the
-  // other direction: page 1 is exactly full, so a second request is required to
-  // learn there is nothing left.
+  // An exactly-full final page looks identical to "there is more", so one
+  // extra request is needed to discover the end. This is the cost the
+  // empty-page termination rule pays on every read, not just this boundary.
   const calls: RecordedCall[] = [];
   const rows = await fetchAllPages<Row>(makeFake({ total: 20, calls }), {
     orderBy: "id",
@@ -298,15 +323,17 @@ Deno.test("fetchAllByIds pages within each chunk, not just across chunks", async
     { orderBy: "id", chunkSize: 100 },
   );
 
-  // 3 chunks (100/100/50), each needing 2 pages to drain 1500 rows.
+  // 3 chunks (100/100/50), each needing 3 requests to drain 1500 rows:
+  // 1000, then 500, then an empty page to prove that chunk is exhausted.
   assertEquals(rows.length, perChunkRows * 3);
-  assertEquals(calls.length, 6);
+  assertEquals(calls.length, 9);
   assertEquals(calls[0].idChunk?.length, 100);
   assertEquals(calls[0].from, 0);
   assertEquals(calls[1].from, 1000, "second page of the SAME chunk");
-  assertEquals(calls[2].idChunk?.length, 100);
-  assertEquals(calls[2].from, 0, "offset resets per chunk");
-  assertEquals(calls[4].idChunk?.length, 50, "final chunk is the remainder");
+  assertEquals(calls[2].from, 1500, "confirming page of the SAME chunk");
+  assertEquals(calls[3].idChunk?.length, 100);
+  assertEquals(calls[3].from, 0, "offset resets per chunk");
+  assertEquals(calls[6].idChunk?.length, 50, "final chunk is the remainder");
 });
 
 Deno.test("fetchAllByIds issues no request for an empty id list", async () => {

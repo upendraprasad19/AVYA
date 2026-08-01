@@ -67,13 +67,22 @@ export async function fetchProUserIds(
     // fire — a saturation detector that is structurally always false is more
     // dangerous than none, because it reads as "we would have been told".
     // Paged, so `_proFetchCap` is now a real ceiling the loop can actually reach.
+    // Pin the cutoff ONCE, outside the per-page closure. `fetchAllPages` calls
+    // the closure again for every page, so an inline `new Date()` would re-run
+    // per request and each page would be offset into a DIFFERENT result set: a
+    // subscription expiring mid-scan shrinks the set, every later row shifts
+    // down one, and the row at that boundary is never returned. That silently
+    // drops a paying user from a PRO *inclusion* set — the same Class-1
+    // "silently wrong" outcome this batch exists to remove, re-entered through
+    // the predicate instead of the sort key.
+    const cutoffIso = new Date().toISOString();
     const data = await fetchAllPages<{ user_id: string }>(
       () =>
         client
           .from("subscriptions")
           .select("user_id")
           .eq("status", "active")
-          .gt("end_date", new Date().toISOString()),
+          .gt("end_date", cutoffIso),
       { orderBy: "id", pageSize: 1000, label: "subscription pro-user-ids" },
     );
 

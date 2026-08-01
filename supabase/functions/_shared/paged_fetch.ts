@@ -206,7 +206,15 @@ export async function fetchAllPages<T>(
       );
     }
 
-    const from = page * pageSize;
+    // Offset by rows ACTUALLY received, never by `page * pageSize`. The two
+    // agree only while the server serves full pages, and `db-max-rows` is a
+    // dashboard setting (Settings -> API -> Max rows), not a platform
+    // invariant. Lower it to 500 and the old arithmetic broke completely:
+    // page 0 asked 0-999, got 500, and `500 < pageSize` read as end-of-data —
+    // so every one of the reads this module was written to fix would silently
+    // return 500 rows with error === null. Advancing by `all.length` makes the
+    // loop correct for ANY server cap without having to know what it is.
+    const from = all.length;
     const to = from + pageSize - 1;
 
     let q = makeQuery() as RangeableBuilder;
@@ -224,8 +232,13 @@ export async function fetchAllPages<T>(
     const rows = (data ?? []) as T[];
     all.push(...rows);
 
-    // A short page is the only reliable end-of-data signal — see header note 1.
-    if (rows.length < pageSize) break;
+    // Only an EMPTY page proves end-of-data. A SHORT page does not: it is
+    // equally the signature of a server cap below `pageSize` (see the offset
+    // note above), and treating it as "done" is exactly the silent truncation
+    // this module exists to prevent. Costs one extra round-trip per read — the
+    // same one the exact-multiple case already paid — in exchange for being
+    // correct at any `db-max-rows`.
+    if (rows.length === 0) break;
   }
 
   return all;
