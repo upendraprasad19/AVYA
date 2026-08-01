@@ -538,17 +538,31 @@ extra_server_written_keys:
       Connected 2026-07-27 by d4e8b2; before that no writer existed anywhere and
       the key appeared in 0 of 91 rows.
     readers:
+      # ⚠ UNVERIFIED BY THE GATE — see OI-80. Measured 2026-08-01: setting the
+      # `_shared/notification_prefs` entry's `line:` to 700 (600+ past EOF)
+      # still PASSES `check_snapshot_contract.dart`, while the identical
+      # mutation on the `streak-guardian` entry directly below it correctly
+      # FAILS. So this one citation is silently unchecked while the gate counts
+      # it — the a9f2c6 "gate reports work it did not do" class. The cause is
+      # NOT diagnosed (moving the surrounding comments changed nothing, so the
+      # leading-comment theory is refuted). Its `line: 106` below was therefore
+      # verified BY HAND against the file, not by the gate. Do not trust this
+      # entry's line number to be gate-maintained until OI-80 closes.
+      - { fn: _shared/notification_prefs, file: supabase/functions/_shared/notification_prefs.ts, line: 106 }
+      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 177 }
+      - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 233 }
+      - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 118 }
+      - { fn: weekly-recap-ready, file: supabase/functions/weekly-recap-ready/index.ts, line: 54 }
       # Unit E: morning-alert and protein-gap-alert no longer read the key
-      # directly. They delegate to the shared helper, which is the single
-      # server-side reader for them — and, unlike their own snapshot reads, is
-      # latest-desc rather than date-pinned. Their old direct reads were pinned
-      # to today / yesterday and were therefore inert for ~16 of 17 live users.
-      - { fn: _shared/notification_prefs, file: supabase/functions/_shared/notification_prefs.ts, line: 77 }
-      # These four already read latest-desc and keep their own direct reads.
-      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 146 }
-      - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 216 }
-      - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 107 }
-      - { fn: weekly-recap-ready, file: supabase/functions/weekly-recap-ready/index.ts, line: 53 }
+      # directly. They delegate to the shared helper (the first entry above),
+      # which is the single server-side reader for them — and, unlike their own
+      # snapshot reads, is latest-desc rather than date-pinned. Their old direct
+      # reads were pinned to today / yesterday and were therefore inert for ~16
+      # of 17 live users.
+      # The other four already read latest-desc and keep their own direct reads.
+      # All five `line:` values were re-derived from the files on 2026-08-01
+      # after OI-79's paging refactor moved them (the reads themselves are
+      # unchanged; the paged_fetch call sites above them are longer).
     status: connected
     notes: |
       CONNECTED 2026-07-27 (d4e8b2 = storage + emission, Unit E = server

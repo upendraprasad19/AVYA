@@ -128,6 +128,25 @@ export async function completionRateOverWindow(
   if (windowWeeks <= 0) return 0.0;
   const sinceIso = new Date(Date.now() - windowWeeks * 7 * 24 * 3600 * 1000)
     .toISOString();
+  // ⚠ ADDING A RANK: a window > 142 weeks (≈1000 days) breaks the waiver
+  // below. `completionRateOverWindow` would then sum a denominator clipped at
+  // 1000, return an inflated completion rate, and promote a user who did not
+  // qualify — silently, HTTP 200, with the gate still green because the waiver
+  // suppresses it. Route this read through paged_fetch at that point.
+  //
+  // The numbers: largest window actually shipped is `'Capt':
+  // completionRateWindowWeeks: 104` (RANK_GATES, :56) = 728 days, so worst
+  // case is 728 rows against the 1000-row cap — real headroom 1.37x, NOT the
+  // 2.7x an earlier version of this waiver implied by citing "max ~52" weeks /
+  // "~365 rows". Corrected 2026-08-01 (round-1 review): the numbers were
+  // wrong, the conclusion survives. The 1-row-per-user-per-day premise is
+  // evidence, not assumption — live UNIQUE index
+  // `uq_scheduled_workouts_user_date` on (user_id, scheduled_date), confirmed
+  // via pg_index on dedsavbjuwgarrhphgnl.
+  //
+  // oi79-ok: per-user window read, bounded to 728 rows worst case (see above);
+  // paging a read that cannot reach the cap would add a round-trip to the
+  // hottest loop in the rank cron for no correctness gain.
   const { data, error } = await supabase
     .from('scheduled_workouts')
     .select('status, scheduled_date')

@@ -7,6 +7,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { isAuthorizedCronCall } from '../_shared/cron_auth.ts';
 import { logCronStart, logCronEnd } from '../_shared/cron_telemetry.ts';
+import { fetchAllPages } from '../_shared/paged_fetch.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -56,9 +57,21 @@ serve(async (req: Request) => {
     // which would silently delete consented saves. Migration 071 renamed
     // the RPC + flipped the bucket filter; the old function is dropped to
     // make any stale caller fail loudly.
-    const { data: candidates, error } = await supabaseClient.rpc('find_orphan_chat_media', {
-      p_cutoff: cutoff,
-    });
+    // OI-79: paged. Truncation here failed SAFE (orphans survive rather than
+    // live objects being deleted), which is why it is not Class 1 — but it
+    // still meant the cleanup silently stopped at 1000 objects per tick and
+    // never caught up, growing the orphan backlog without any signal.
+    // Shape matches the RPC's live signature: TABLE(user_id uuid, path text).
+    let candidates: Array<{ user_id: string; path: string }> | null = null;
+    let error: unknown = null;
+    try {
+      candidates = await fetchAllPages<{ user_id: string; path: string }>(
+        () => supabaseClient.rpc('find_orphan_chat_media', { p_cutoff: cutoff }),
+        { orderBy: 'path', label: 'clean-orphan-media orphans' },
+      );
+    } catch (e) {
+      error = e;
+    }
 
     if (error) {
       console.error(`[clean-orphan-media] request_id=${requestId} rpc_error`, error);

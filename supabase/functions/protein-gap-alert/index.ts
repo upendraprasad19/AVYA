@@ -44,6 +44,7 @@ import {
   fetchNotificationPrefs,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
+import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,12 +92,23 @@ serve(async (req: Request) => {
 
     // 1. All active PRO users (status='active' AND end_date > now()).
     //    Mirrors weekly-report's PRO gate.
-    const { data: proSubs, error: subErr } = await supabase
-      .from("subscriptions")
-      .select("user_id")
-      .eq("status", "active")
-      .gt("end_date", new Date().toISOString());
-    if (subErr) throw subErr;
+    //    OI-79: paginated. An un-ranged read stops at PostgREST's db-max-rows
+    //    (1000) with HTTP 200 and error===null, so past 1000 active subs the
+    //    tail of the PRO base would silently stop receiving this alert.
+    // Pinned once, outside the per-page closure — an inline `new Date()` is
+    // re-evaluated on every page request, so pages get offset into different
+    // result sets and a subscription expiring mid-scan silently drops the row
+    // at the page boundary. See _shared/subscription.ts for the full note.
+    const cutoffIso = new Date().toISOString();
+    const proSubs = await fetchAllPages<{ user_id: string }>(
+      () =>
+        supabase
+          .from("subscriptions")
+          .select("user_id")
+          .eq("status", "active")
+          .gt("end_date", cutoffIso),
+      { orderBy: "id", label: "protein-gap-alert pro-subs" },
+    );
 
     if (!proSubs || proSubs.length === 0) {
       console.log(
@@ -120,12 +132,25 @@ serve(async (req: Request) => {
 
     // 2. Sum today's protein per user from nutrition_logs (one row per
     //    meal_type per day; column is `total_protein`, NOT `total_protein_g`).
-    const { data: nutritionRows, error: nutErr } = await supabase
-      .from("nutrition_logs")
-      .select("user_id, total_protein")
-      .eq("date", todayIST)
-      .in("user_id", proUserIds);
-    if (nutErr) throw nutErr;
+    //
+    //    OI-79 — this is the single most exposed read in the cron fleet, and
+    //    truncating it is worse than missing a user: it produces a WRONG push.
+    //    nutrition_logs holds up to 4 rows per user per day (one per meal
+    //    type, live-verified), so a bare .in() read clips at ~250 active PRO
+    //    users. The rows that fall off are meals the user DID log, so their
+    //    protein sums low, and someone who hit their target gets told they are
+    //    short. Paged + chunked: fetchAllByIds bounds the URL (chunk) AND the
+    //    row count (page) — chunking alone bounds only the former.
+    const nutritionRows = await fetchAllByIds<Record<string, unknown>>(
+      (chunk) =>
+        supabase
+          .from("nutrition_logs")
+          .select("user_id, total_protein")
+          .eq("date", todayIST)
+          .in("user_id", chunk),
+      proUserIds,
+      { orderBy: "id", label: "protein-gap-alert nutrition" },
+    );
 
     const proteinByUser = new Map<string, number>();
     for (const row of nutritionRows ?? []) {
@@ -138,24 +163,34 @@ serve(async (req: Request) => {
     //    Primary: user_profile.protein_grams (the canonical column).
     //    Defensive: snapshot_json.daily_targets.protein (not currently
     //    populated by the snapshot writer — kept for forward compat).
-    const [{ data: profiles, error: profErr }, { data: snapshots, error: snapErr }] =
-      await Promise.all([
-        supabase
-          .from("user_profile")
-          .select("user_id, protein_grams, diet_preference")
-          .in("user_id", proUserIds),
-        supabase
-          .from("user_daily_snapshots")
-          .select("user_id, snapshot_json")
-          .eq("snapshot_date", todayIST)
-          .in("user_id", proUserIds),
-      ]);
-    if (profErr) throw profErr;
-    // Unit C (§2.24) — the snapshots batch feeds the per-user notification-preference
-    // check below; a silent failure here would coerce EVERY snapshot to empty and
-    // push protein alerts to users who DISABLED them (most-permissive default). Throw
-    // → the outer catch closes cron telemetry "failed"; next tick retries.
-    if (snapErr) throw snapErr;
+    //    OI-79 — both reads are paged as well as chunked. The snapshots read in
+    //    particular is the exact failure the Unit C note below describes,
+    //    arriving by a different route: truncation past db-max-rows drops
+    //    snapshot rows with NO error, the preference lookup then falls through
+    //    to its most-permissive default, and users who DISABLED protein alerts
+    //    get pushed. `fetchAllByIds` throws on a page error, so the Unit C
+    //    "throw → cron telemetry failed → next tick retries" contract holds.
+    const [profiles, snapshots] = await Promise.all([
+      fetchAllByIds<Record<string, unknown>>(
+        (chunk) =>
+          supabase
+            .from("user_profile")
+            .select("user_id, protein_grams, diet_preference")
+            .in("user_id", chunk),
+        proUserIds,
+        { orderBy: "id", label: "protein-gap-alert profiles" },
+      ),
+      fetchAllByIds<Record<string, unknown>>(
+        (chunk) =>
+          supabase
+            .from("user_daily_snapshots")
+            .select("user_id, snapshot_json")
+            .eq("snapshot_date", todayIST)
+            .in("user_id", chunk),
+        proUserIds,
+        { orderBy: "id", label: "protein-gap-alert snapshots" },
+      ),
+    ]);
 
     const profileByUser = new Map<string, Record<string, unknown>>(
       (profiles ?? []).map((p: Record<string, unknown>) => [

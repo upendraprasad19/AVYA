@@ -53,6 +53,7 @@ import {
   fetchNotificationPrefs,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
+import { fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,13 +73,10 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DROPOUT_THRESHOLD = 0.5;
 const SILENCE_DAYS_FALLBACK = 3;
 
-/**
- * PostgREST's `db-max-rows` on this project. An un-ranged response is
- * silently truncated to this many rows (HTTP 206 + Content-Range, which
- * supabase-js does NOT surface as an error). Used only to detect and LOG
- * saturation — it is not a fix for it; see OI-79 for the pagination work.
- */
-const POSTGREST_MAX_ROWS = 1000;
+// The local POSTGREST_MAX_ROWS constant and the two saturation warnings that
+// used it are gone: both candidate paths now page via `_shared/paged_fetch.ts`,
+// so saturation can no longer occur and there is nothing left to warn about.
+// The cap itself lives in that module (OI-79 closed).
 
 /**
  * Pure projection of find_reengagement_silent_candidates' RPC rows into the
@@ -128,19 +126,30 @@ Deno.serve(async (req: Request) => {
     // ──────────────────────────────────────────────────────────
     // PATH A — coach_memory.dropout_risk_score >= 0.5
     // ──────────────────────────────────────────────────────────
-    const { data: highRisk, error: memError } = await supabase
-      .from("coach_memory")
-      .select(
-        "user_id, dropout_risk_score, preferred_name, private_mode, signals_computed_at",
-      )
-      .gte("dropout_risk_score", DROPOUT_THRESHOLD)
-      .not("signals_computed_at", "is", null);
-    // Tagged so a Path A failure is distinguishable from Path B's in
-    // cron_call_log.error_summary (Hermes L34 F2) — the two throws otherwise
-    // land in one catch and serialize identically, making a regression in
-    // either path invisible without manual edge-log archaeology. Tagging
-    // convention mirrors morning-alert:809 / rolling-context:161.
-    if (memError) {
+    // OI-79 CLOSED: paged. This read previously stopped at db-max-rows and only
+    // logged a saturation warning (added by Unit 5, which detected the condition
+    // without fixing it). `orderBy` is `user_id` because coach_memory's PK IS
+    // user_id — it has no `id` column (verified live).
+    //
+    // The Path A / Path B error tagging (Hermes L34 F2) is preserved: the two
+    // throws otherwise land in one catch and serialize identically, making a
+    // regression in either path invisible without manual edge-log archaeology.
+    // `fetchAllPages` already prefixes its own label, and the re-throw below
+    // keeps the `path_a` token that cron_call_log.error_summary is read for.
+    let memoryRows: Record<string, unknown>[];
+    try {
+      memoryRows = await fetchAllPages<Record<string, unknown>>(
+        () =>
+          supabase
+            .from("coach_memory")
+            .select(
+              "user_id, dropout_risk_score, preferred_name, private_mode, signals_computed_at",
+            )
+            .gte("dropout_risk_score", DROPOUT_THRESHOLD)
+            .not("signals_computed_at", "is", null),
+        { orderBy: "user_id", label: "re-engagement path_a" },
+      );
+    } catch (memError) {
       throw new Error(
         `path_a coach_memory fetch failed: ${
           (memError as { message?: string } | null)?.message ?? String(memError)
@@ -148,16 +157,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const memoryRows = (highRisk ?? []) as Record<string, unknown>[];
-    // Same un-ranged PostgREST truncation exposure as Path B below, same
-    // reason it is detected-and-logged rather than fixed here (OI-79).
-    if (memoryRows.length >= POSTGREST_MAX_ROWS) {
-      console.warn(
-        `[re-engagement] request_id=${requestId} PATH A SATURATED: got ${memoryRows.length} high-risk rows, ` +
-          `at or above the PostgREST db-max-rows ceiling (${POSTGREST_MAX_ROWS}). The candidate set is ` +
-          `almost certainly TRUNCATED. See OI-79.`,
-      );
-    }
     const candidatesFromMemory = new Set<string>(
       memoryRows.map((r) => r.user_id as string),
     );
@@ -189,24 +188,39 @@ Deno.serve(async (req: Request) => {
     const cutoffIso = new Date(cutoffMs).toISOString();
     const cutoffDate = cutoffIso.slice(0, 10); // YYYY-MM-DD
 
-    const { data: fallbackRows, error: fallbackErr } = await supabase.rpc(
-      "find_reengagement_silent_candidates",
-      {
-        p_cutoff_date: cutoffDate,
-        p_cutoff_ts: cutoffIso,
-        p_exclude_user_ids: Array.from(candidatesFromMemory),
-      },
-    );
-    // Tagged + .message-unwrapped for the same reason as Path A above, and
-    // load-bearing HERE specifically: this batch converted Path B's old
-    // per-user "skip this user on read error" handling into a single
-    // whole-invocation throw (one SQL statement cannot partially fail
-    // per-row), so cron_call_log.error_summary is now the ONLY durable
-    // record of a Path B failure. A bare String(err) on a supabase-js
-    // PostgrestError (a plain {message,details,hint,code} object, NOT an
-    // Error subclass) yields "[object Object]" — the catalogued bug-class
-    // fixed at compute-coach-signals/index.ts:92-98 (Hermes 2026-07-26 F3).
-    if (fallbackErr) {
+    // OI-79 CLOSED: paged. Unit 5 added a saturation WARNING here and left the
+    // truncation itself in place, tracked as OI-79; this closes it. `.order()`
+    // and `.range()` are accepted on /rpc/ set-returning functions, and paging
+    // is correct whether or not db-max-rows applies to RPC responses (if it does
+    // not, the loop simply ends on the first short page).
+    //
+    // Two corrections to what the removed comment here asserted, both measured
+    // live 2026-08-01: the truncated response is **HTTP 200, not 206** (206 only
+    // appears when the caller sends `Prefer: count=exact`, which supabase-js does
+    // not do here) and its Content-Range total is `*`, so there is nothing in the
+    // response to compare against; and the cited `morning-alert:583-594`
+    // precedent is not a `.range()` loop at all — it passes p_offset/p_limit INTO
+    // an RPC. The `.range()` precedent is morning-alert:790-810.
+    //
+    // The `path_b` error tag is load-bearing and preserved: this leg converted
+    // Path B's old per-user "skip this user on read error" handling into a
+    // single whole-invocation throw (one SQL statement cannot partially fail
+    // per-row), so cron_call_log.error_summary is the ONLY durable record of a
+    // Path B failure. A bare String(err) on a supabase-js PostgrestError (a
+    // plain {message,details,hint,code} object, NOT an Error subclass) yields
+    // "[object Object]" — the bug-class fixed at compute-coach-signals:92-98.
+    let fallbackRows: Record<string, unknown>[];
+    try {
+      fallbackRows = await fetchAllPages<Record<string, unknown>>(
+        () =>
+          supabase.rpc("find_reengagement_silent_candidates", {
+            p_cutoff_date: cutoffDate,
+            p_cutoff_ts: cutoffIso,
+            p_exclude_user_ids: Array.from(candidatesFromMemory),
+          }),
+        { orderBy: "user_id", label: "re-engagement path_b" },
+      );
+    } catch (fallbackErr) {
       throw new Error(
         `path_b find_reengagement_silent_candidates rpc failed: ${
           (fallbackErr as { message?: string } | null)?.message ??
@@ -217,33 +231,6 @@ Deno.serve(async (req: Request) => {
 
     const { candidates: fallbackCandidates, names: fallbackNames } =
       mapFallbackCandidates(fallbackRows ?? []);
-
-    // PostgREST caps an un-ranged response at db-max-rows (1000 on this
-    // project — verified live: an unbounded /rest/v1 select returns HTTP
-    // 206 + Content-Range 0-999/N). supabase-js does NOT throw on a 206:
-    // `error` is null and `data` is silently short. Neither this call nor
-    // Path A above paginates, so at >1000 candidates each silently
-    // processes a truncated set.
-    //
-    // This is PRE-EXISTING and this batch strictly IMPROVES it — the old
-    // Path B truncated an UNORDERED, UNFILTERED all-users fetch at 1000
-    // before any activity filtering, so it could return ~0 genuinely-silent
-    // users; the RPC returns up to 1000 ALREADY-FILTERED ones. The real fix
-    // is a .range() pagination loop over BOTH paths (precedent:
-    // morning-alert/index.ts:583-594, PAGE_SIZE + offset loop), which is a
-    // distinct concern from OI-48's per-user-query-loop finding and is
-    // tracked as its own board item (OI-79) rather than bolted on here.
-    //
-    // What IS in scope: making saturation LOUD instead of silent for the
-    // leg this batch writes. A short read is indistinguishable from a small
-    // one without this.
-    if (fallbackCandidates.length >= POSTGREST_MAX_ROWS) {
-      console.warn(
-        `[re-engagement] request_id=${requestId} PATH B SATURATED: got ${fallbackCandidates.length} candidates, ` +
-          `at or above the PostgREST db-max-rows ceiling (${POSTGREST_MAX_ROWS}). The candidate set is ` +
-          `almost certainly TRUNCATED — silent users beyond the cap were not nudged this tick. See OI-79.`,
-      );
-    }
 
     const allCandidates = [
       ...Array.from(candidatesFromMemory),

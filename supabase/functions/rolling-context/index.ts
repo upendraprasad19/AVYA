@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEmbedding } from "../_shared/embeddings.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { fetchAllPages } from "../_shared/paged_fetch.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import {
   asAuthoredPrompt, fenceAsData, sanitizeBlock
@@ -133,10 +134,20 @@ serve(async (req: Request) => {
 
     // Find users with >50 messages in ai_coach_interactions
     // Use a raw count query grouped by user_id
-    const { data: userCounts, error: countError } = await supabaseClient.rpc(
-      "get_users_with_message_count",
-      { min_count: MESSAGE_THRESHOLD },
-    );
+    // OI-79: paged.
+    let userCounts: { user_id: string; msg_count: number }[] | null = null;
+    let countError: { message?: string } | null = null;
+    try {
+      userCounts = await fetchAllPages<{ user_id: string; msg_count: number }>(
+        () =>
+          supabaseClient.rpc("get_users_with_message_count", {
+            min_count: MESSAGE_THRESHOLD,
+          }),
+        { orderBy: "user_id", label: "rolling-context user-counts" },
+      );
+    } catch (e) {
+      countError = e as { message?: string };
+    }
 
     // Fallback: if RPC doesn't exist, query all users and count manually
     let usersToProcess: { user_id: string; msg_count: number }[] = [];
@@ -147,12 +158,23 @@ serve(async (req: Request) => {
         countError?.message,
       );
 
-      // Get distinct user_ids from ai_coach_interactions
-      const { data: distinctUsers, error: distinctError } =
-        await supabaseClient
-          .from("ai_coach_interactions")
-          .select("user_id")
-          .limit(10000);
+      // Get distinct user_ids from ai_coach_interactions.
+      //
+      // OI-79 — the `.limit(10000)` this replaces was UNREACHABLE. PostgREST
+      // caps any response at db-max-rows (1000), so the code asked for 10000,
+      // silently received at most 1000, and computed its "users with >= 50
+      // messages" set from a fraction of the table with no error. Paged now, so
+      // the intent the 10000 expressed is actually achieved.
+      let distinctUsers: { user_id: string }[] | null = null;
+      let distinctError: unknown = null;
+      try {
+        distinctUsers = await fetchAllPages<{ user_id: string }>(
+          () => supabaseClient.from("ai_coach_interactions").select("user_id"),
+          { orderBy: "id", label: "rolling-context distinct-users" },
+        );
+      } catch (e) {
+        distinctError = e;
+      }
 
       if (distinctError || !distinctUsers) {
         console.error("Failed to fetch users:", distinctError);
@@ -220,12 +242,44 @@ serve(async (req: Request) => {
 
     for (const { user_id: userId, msg_count: msgCount } of usersToProcess) {
       try {
-        // Fetch all messages ordered by created_at ascending
-        const { data: allMessages, error: msgError } = await supabaseClient
-          .from("ai_coach_interactions")
-          .select("id, user_message, ai_response, created_at")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: true });
+        // Fetch all messages ordered by created_at ascending.
+        // OI-79: paged. This is per-user, but "all messages ever" for a heavy
+        // user is exactly the unbounded shape — and this function only runs for
+        // users with >50 messages, i.e. the ones most likely to exceed 1000. A
+        // truncated history produces a rolling-context summary built from a
+        // fraction of the conversation, with no error. `created_at` is not
+        // unique (a user can send two messages in the same instant), so `id` is
+        // the tiebreaker; ascending order is preserved for the summarizer.
+        let allMessages: {
+          id: string;
+          user_message: string;
+          ai_response: string;
+          created_at: string;
+        }[] = [];
+        let msgError: unknown = null;
+        try {
+          allMessages = await fetchAllPages<{
+            id: string;
+            user_message: string;
+            ai_response: string;
+            created_at: string;
+          }>(
+            () =>
+              supabaseClient
+                .from("ai_coach_interactions")
+                .select("id, user_message, ai_response, created_at")
+                .eq("user_id", userId),
+            {
+              orderBy: [
+                { column: "created_at", ascending: true },
+                { column: "id", ascending: true },
+              ],
+              label: "rolling-context user-messages",
+            },
+          );
+        } catch (e) {
+          msgError = e;
+        }
 
         if (msgError || !allMessages || allMessages.length < MESSAGE_THRESHOLD) {
           skipped++;

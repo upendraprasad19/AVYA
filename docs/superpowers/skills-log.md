@@ -7,3 +7,18 @@
 > carrying the skill; the "parallel subagent dispatch returned" condition has never
 > fired once. Worth watching whether it ever does before treating it as a real
 > trigger rather than an aspirational one.
+
+- 2026-08-01 ~09:15 IST — trigger: **batch ship** (Unit 5 merged `d229c012`, CI green,
+  follow-up units continuing in-session) + long session. Founder ACCEPTED (ran /compact).
+  Note: the skill's own step-6 logging was blocked that round because plan mode was active
+  and only the plan file was writable — this line is the retroactive entry.
+- 2026-08-01 ~11:40 IST — trigger: **explicit** (`/strategic-compact`) + context pressure,
+  mid-batch with **nothing committed**. Distinct from every prior invocation: previous ones
+  fired at a clean boundary where git history WAS the durable record. Here `HEAD` is
+  unchanged and the batch lives only as 24 staged files in a worktree + a failure log in
+  /tmp, so the preserve-list is load-bearing rather than a convenience. Founder decision:
+  pending at time of writing.
+  → Tuning signal: the skill's trigger list assumes a *clean* boundary ("last commit landed",
+    "batch has shipped"). It has no entry for "context exhausted mid-batch with a red suite",
+    which is the riskiest moment to compact and the one most needing a curated preserve-list.
+    Worth adding as an explicit trigger.

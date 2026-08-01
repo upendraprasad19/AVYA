@@ -23,6 +23,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { clientError, corsHeaders, ok, serverError } from "../_shared/error.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -118,6 +119,12 @@ async function promoteFoods(
   admin: SupabaseClient,
 ): Promise<number> {
   // Count approve votes per food item and pick those with ≥ threshold.
+  // oi79-ok: `community_votes_summary` does not exist on this project (verified
+  // live across all schemas), so this call errors on every tick and the paged
+  // `fallbackCount` below is the only path that ever returns rows. Waived
+  // rather than paged because paging a call that always fails would be
+  // ceremony around dead code; the live path IS bounded. The missing RPC is
+  // recorded separately — this waiver is not a claim that it is fine.
   const { data: candidates, error: countErr } = await admin.rpc(
     "community_votes_summary",
     { p_item_type: "food" },
@@ -181,6 +188,12 @@ async function promoteFoods(
 async function promoteExercises(
   admin: SupabaseClient,
 ): Promise<number> {
+  // oi79-ok: `community_votes_summary` does not exist on this project (verified
+  // live across all schemas), so this call errors on every tick and the paged
+  // `fallbackCount` below is the only path that ever returns rows. Waived
+  // rather than paged because paging a call that always fails would be
+  // ceremony around dead code; the live path IS bounded. The missing RPC is
+  // recorded separately — this waiver is not a claim that it is fine.
   const { data: candidates, error: countErr } = await admin.rpc(
     "community_votes_summary",
     { p_item_type: "exercise" },
@@ -236,17 +249,42 @@ async function promoteExercises(
   return promoted;
 }
 
-/** Fallback count query if the RPC helper doesn't exist yet. */
+/**
+ * Fallback count query if the RPC helper doesn't exist yet.
+ *
+ * ⚠️ This is NOT a fallback in practice — it is the ONLY live path.
+ * `community_votes_summary` does not exist in any schema on this project
+ * (verified live 2026-08-01 via pg_proc across all schemas), so the `.rpc()`
+ * call in promoteFoods/promoteExercises errors on every tick and always lands
+ * here. Treat this function as the primary implementation when reasoning about
+ * promotion behaviour.
+ *
+ * OI-79: paged. This reads one row per VOTE, not per item, so an un-ranged read
+ * clipped at 1000 votes and every count derived after it was too low — items at
+ * or above the approval threshold silently never got promoted, with no error.
+ * That made it a wrong-result path, not just an incomplete one.
+ */
 async function fallbackCount(
   admin: SupabaseClient,
   itemType: "food" | "exercise",
 ): Promise<Array<{ item_id: string; approves: number }>> {
-  const { data, error } = await admin
-    .from("community_reviews")
-    .select("item_id")
-    .eq("item_type", itemType)
-    .eq("vote", "approve");
-  if (error || !data) return [];
+  let data: Array<{ item_id: string }>;
+  try {
+    data = await fetchAllPages<{ item_id: string }>(
+      () =>
+        admin
+          .from("community_reviews")
+          .select("item_id")
+          .eq("item_type", itemType)
+          .eq("vote", "approve"),
+      { orderBy: "id", label: `promote-community-item votes:${itemType}` },
+    );
+  } catch (err) {
+    // Preserves the existing contract: this helper returns [] on failure and
+    // the caller treats that as "nothing to promote this tick".
+    console.warn(`[promote:${itemType}] vote count failed`, err);
+    return [];
+  }
   const counts = new Map<string, number>();
   for (const r of data as Array<{ item_id: string }>) {
     counts.set(r.item_id, (counts.get(r.item_id) ?? 0) + 1);

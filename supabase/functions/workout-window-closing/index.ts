@@ -31,6 +31,7 @@ import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -80,13 +81,18 @@ serve(async (req: Request) => {
     //    skipped/rest. (In prod today only 'planned' and 'rest' exist;
     //    we explicitly exclude the terminal/non-actionable ones to stay
     //    forward-compatible with new statuses.)
-    const { data: scheduled, error: schedErr } = await supabase
-      .from("scheduled_workouts")
-      .select("user_id, template_id, scheduled_date, status")
-      .eq("scheduled_date", todayIST)
-      .not("status", "in", "(completed,paused,skipped,rest)");
-
-    if (schedErr) throw schedErr;
+    // OI-79: paged. `scheduled_workouts` is already the largest per-user table
+    // on the project (565 rows at 18 users), so this scan is the closest in the
+    // fleet to the 1000-row ceiling.
+    const scheduled = await fetchAllPages<Record<string, unknown>>(
+      () =>
+        supabase
+          .from("scheduled_workouts")
+          .select("user_id, template_id, scheduled_date, status")
+          .eq("scheduled_date", todayIST)
+          .not("status", "in", "(completed,paused,skipped,rest)"),
+      { orderBy: "id", label: "workout-window-closing scheduled" },
+    );
 
     if (!scheduled || scheduled.length === 0) {
       console.log(
@@ -112,13 +118,22 @@ serve(async (req: Request) => {
         scheduled.map((s: Record<string, unknown>) => s.user_id as string),
       ),
     ];
-    const { data: todayLogs, error: logErr } = await supabase
-      .from("workout_logs")
-      .select("user_id")
-      .in("user_id", userIds)
-      .eq("date", todayIST);
+    // OI-79 — Class 1 (silently WRONG, not merely incomplete). This set is used
+    // to EXCLUDE users who already trained. A truncated read drops users who
+    // DID log, so they fall through to the at-risk branch and get pushed
+    // "your training window is closing" hours after they finished their
+    // workout. Paged + chunked so the exclusion set is always complete.
+    const todayLogs = await fetchAllByIds<Record<string, unknown>>(
+      (chunk) =>
+        supabase
+          .from("workout_logs")
+          .select("user_id")
+          .in("user_id", chunk)
+          .eq("date", todayIST),
+      userIds,
+      { orderBy: "id", label: "workout-window-closing today-logs" },
+    );
 
-    if (logErr) throw logErr;
     const loggedUserIds = new Set(
       (todayLogs ?? []).map((l: Record<string, unknown>) => l.user_id as string),
     );
@@ -160,23 +175,24 @@ serve(async (req: Request) => {
       ),
     ];
 
-    const [{ data: users, error: usersErr }, { data: templates, error: templatesErr }] =
-      await Promise.all([
-        supabase.from("users").select("id, full_name").in("id", atRiskUserIds),
-        templateIds.length > 0
-          ? supabase
-              .from("workout_templates")
-              .select("id, name")
-              .in("id", templateIds)
-          : Promise.resolve(
-              { data: [] as { id: string; name: string }[], error: null },
-            ),
-      ]);
-    // Unit C (§2.24) — batch read: surface a failure instead of coercing to empty
-    // Maps (which silently drops every user's name/template personalization). The
-    // outer try/catch closes cron telemetry as "failed".
-    const batchErr = usersErr ?? templatesErr;
-    if (batchErr) throw batchErr;
+    // OI-79 — paged + chunked. Same Unit C (§2.24) contract as before: a failed
+    // batch read must surface rather than coerce to an empty Map (which
+    // silently drops every user's name/template personalization).
+    // `fetchAllByIds` throws on a page error, so the outer try/catch still
+    // closes cron telemetry as "failed". The explicit empty-`templateIds`
+    // branch is gone because `fetchAllByIds` already short-circuits to [].
+    const [users, templates] = await Promise.all([
+      fetchAllByIds<Record<string, unknown>>(
+        (chunk) => supabase.from("users").select("id, full_name").in("id", chunk),
+        atRiskUserIds,
+        { orderBy: "id", label: "workout-window-closing users" },
+      ),
+      fetchAllByIds<Record<string, unknown>>(
+        (chunk) => supabase.from("workout_templates").select("id, name").in("id", chunk),
+        templateIds,
+        { orderBy: "id", label: "workout-window-closing templates" },
+      ),
+    ]);
 
     const userById = new Map(
       (users ?? []).map((u: Record<string, unknown>) => [
