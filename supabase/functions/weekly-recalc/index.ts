@@ -3,6 +3,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { istDateStr } from "../_shared/ist_date.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
+import { fetchAllByIds } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -319,19 +320,33 @@ serve(async (req: Request) => {
     // silently DECREASE their lifetime counter every Sunday. Defense:
     // pre-fetch existing values and apply GREATEST in the upsert payload.
     // Same monotonic-field-recompute class as the rank demotion fix.
+    // OI-79 round-2: this read destructured `data` but NOT `error`, so a failed
+    // query coerced to `rows ?? []`, `existingProgress` stayed EMPTY, and the
+    // GREATEST guard directly below had nothing to compare against — silently
+    // re-opening diagnose 3a7b9f (every user's LIFETIME total_workouts_done
+    // overwritten with a 4-week count each Sunday). The defense against a
+    // monotonic demotion was itself unguarded.
+    //
+    // Truncation was never the risk here — BATCH_SIZE=100 against a
+    // one-row-per-user table is 100 rows — so this is routed through
+    // fetchAllByIds for its THROW-on-error semantics, not for paging. A
+    // failure now reaches the outer catch, the tick is recorded failed, and
+    // next Sunday retries, instead of quietly demoting every user.
+    const progressRows = await fetchAllByIds<Record<string, unknown>>(
+      (chunk) =>
+        supabaseClient
+          .from("user_progress")
+          .select("user_id, total_workouts_done")
+          .in("user_id", chunk),
+      userIds,
+      { orderBy: "id", chunkSize: BATCH_SIZE, label: "weekly-recalc existing-progress" },
+    );
     const existingProgress = new Map<string, number>();
-    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
-      const chunk = userIds.slice(i, i + BATCH_SIZE);
-      const { data: rows } = await supabaseClient
-        .from("user_progress")
-        .select("user_id, total_workouts_done")
-        .in("user_id", chunk);
-      for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
-        existingProgress.set(
-          row.user_id as string,
-          (row.total_workouts_done as number | null) ?? 0,
-        );
-      }
+    for (const row of progressRows) {
+      existingProgress.set(
+        row.user_id as string,
+        (row.total_workouts_done as number | null) ?? 0,
+      );
     }
 
     for (let i = 0; i < userIds.length; i += BATCH_SIZE) {

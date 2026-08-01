@@ -132,9 +132,41 @@ void main(List<String> args) {
   }
 
   final targets = <File>[];
+  final seen = <String>{};
+  void addTarget(File f) {
+    // NORMALISE before de-duping. The registry branch builds paths with `/`
+    // while Directory.listSync() returns platform paths (`\` on Windows), so
+    // keying on the raw string let the SAME file enter twice — inflating the
+    // scanned-file count, double-counting waivers, and (worse) reporting any
+    // real violation twice. Caught by printing the waived SITES: three of them
+    // appeared as exact duplicates, which a bare tally of "8" concealed.
+    final key = f.absolute.path.replaceAll('\\', '/').toLowerCase();
+    if (seen.add(key)) targets.add(f);
+  }
+
   for (final slug in cronFns) {
     final f = File('$root/supabase/functions/$slug/index.ts');
-    if (f.existsSync()) targets.add(f);
+    if (f.existsSync()) addTarget(f);
+  }
+  // UNION with every CRON-SHAPED function — one importing `_shared/cron_auth.ts`
+  // — even if CRON_REGISTRY.md does not list it. The registry alone was NOT
+  // enough: `weekly-recalc` imports both cron_auth and cron_telemetry yet has
+  // zero entries in the registry, so it was never scanned, and it holds one of
+  // the three hand-rolled `.range()` loops this batch fixed. Found by round-2
+  // review 2026-08-01, after the round-1 fix comment had already named
+  // weekly-recalc as a case the new `.range()` rule covered — it did not.
+  // Deriving from the registry alone means a function missing from a
+  // hand-maintained doc is silently exempt from the gate; the import is the
+  // structural fact, so it is the better roster key.
+  final fnRoot = Directory('$root/supabase/functions');
+  if (fnRoot.existsSync()) {
+    for (final dir in fnRoot.listSync().whereType<Directory>()) {
+      final idx = File('${dir.path}/index.ts');
+      if (!idx.existsSync()) continue;
+      if (idx.readAsStringSync().contains('_shared/cron_auth.ts')) {
+        addTarget(idx);
+      }
+    }
   }
   // Shared helpers run inside those same cron ticks, and a batch read hidden in
   // one of them is exactly as exposed (notification_prefs.ts was: it clipped at
@@ -146,7 +178,7 @@ void main(List<String> args) {
           e.path.endsWith('.ts') &&
           !e.path.contains('_test') &&
           !e.path.endsWith('.test.ts')) {
-        targets.add(e);
+        addTarget(e);
       }
     }
   }
@@ -159,9 +191,17 @@ void main(List<String> args) {
   if (violations.isEmpty) {
     stdout.writeln(
       'check_unbounded_cron_reads: OK — ${targets.length} files scanned '
-      '(${cronFns.length} cron functions + shared helpers), no unbounded reads'
+      '(${cronFns.length} in CRON_REGISTRY.md + cron-shaped functions + shared '
+      'helpers), no unbounded reads'
       '${waived > 0 ? ", $waived explicitly waived (// oi79-ok:)" : ""}.',
     );
+    // Print every waived SITE, not just a tally. A count cannot be audited:
+    // 5 markers in the tree suppress 8 reads, because one marker covers every
+    // read within the lookback beneath it. Listing them is what made that
+    // visible, and keeps a waiver from quietly widening later.
+    for (final s in waivedSites) {
+      stdout.writeln('  waived: $s');
+    }
     exit(0);
   }
 
@@ -206,9 +246,16 @@ Set<String> _cronFunctionSlugs(String md) {
   return out;
 }
 
-/// Count of reads suppressed by an explicit `// oi79-ok:` waiver, reported so
-/// the waivers stay visible instead of accumulating silently.
-int waived = 0;
+/// Reads suppressed by an explicit `// oi79-ok:` waiver, each PRINTED on a
+/// clean run so the waivers stay auditable instead of accumulating silently.
+///
+/// The count alone was not enough: 5 markers in the tree suppress 8 reads,
+/// because one marker inside the 15-line lookback covers every read beneath
+/// it — a waiver written for one query silently blessing its neighbours. That
+/// is the same inherit-bounded-ness shape as F24/F26, just via prose, and a
+/// bare tally hid it. Printing the sites is what surfaced it.
+final waivedSites = <String>[];
+int get waived => waivedSites.length;
 
 /// Blanks out `//` and `/* */` comment bodies, preserving newlines and length
 /// so reported line numbers stay correct.
@@ -308,6 +355,15 @@ List<Violation> _scan(File file, String root) {
     // there; outside it (weekly-recalc, i-see-you-callout) it must be checked.
     if (_range.hasMatch(chain)) {
       if (_orderBy.hasMatch(chain)) continue;
+      // Honour the documented `// oi79-ok:` escape hatch HERE. This branch
+      // `continue`s before the shared waiver check further down, so without
+      // this the hatch was inoperative for this one class alone — a reviewed
+      // per-user `.range()` loop would have been unblockable except by
+      // --no-verify, which §4.3 forbids. (Round-2 review 2026-08-01.)
+      if (_waiver.hasMatch(rawCtx)) {
+        waivedSites.add('$rel:${_lineOf(src, m.start)}  .from("$name") [.range() without .order()]');
+        continue;
+      }
       out.add(Violation(
         rel,
         _lineOf(src, m.start),
@@ -322,7 +378,7 @@ List<Violation> _scan(File file, String root) {
     }
     if (_rpcPaged.hasMatch(chain) && _rpcPagedLimit.hasMatch(chain)) continue;
     if (_waiver.hasMatch(rawCtx)) {
-      waived++;
+      waivedSites.add('$rel:${_lineOf(src, m.start)}  $kind("$name")');
       continue;
     }
 
@@ -357,10 +413,30 @@ List<Violation> _scan(File file, String root) {
 /// The query chain starting at [start]: forward to the terminating `;` at
 /// paren-depth 0 (or EOF). Deliberately conservative — a chain split across
 /// statements is not tracked and will read as unbounded.
+/// Longest plausible single statement. The longest real chain in the cron
+/// fleet measures 683 chars, so 4000 is ~6x headroom.
+const _maxChainChars = 4000;
+
 String _chainFrom(String src, int start) {
   var depth = 0;
   var i = start;
+  // FAIL CLOSED on a runaway. The string-skipping below is not a real JS
+  // tokenizer — it does not know about regex literals, so `/'/g` (an odd
+  // number of quote chars inside a regex) opens string mode that never closes,
+  // `;` never terminates, and the chain swallows the rest of the FILE,
+  // inheriting a distant `.limit()` / `.range()` / `fetchAllPages(` and
+  // whitewashing a genuinely unbounded read. That is F28's bug re-entered
+  // through a different token — the THIRD token class to defeat this scanner
+  // (comments, strings, now regexes), which is the signal to stop patching
+  // token-by-token and bound the blast radius instead.
+  //
+  // Returning '' makes every bounded-ness pattern fail to match, so the read is
+  // REPORTED rather than silently blessed. A structurally paged read is still
+  // recognised, because `_insideAny` works on offsets and never consults the
+  // chain. Loud false positive, never a silent false negative.
+  final limit = start + _maxChainChars;
   while (i < src.length) {
+    if (i > limit) return '';
     final c = src[i];
     // Skip string literals. Counting parens inside them is how a chain used to
     // run away: `.eq("note", "(")` left depth permanently > 0, the `;` never

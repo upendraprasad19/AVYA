@@ -22,7 +22,9 @@
  *    response is a plain `200 OK` with a short body and `error === null`. There
  *    is no status, no error, and no total (`/*`) to compare against — a
  *    truncated read is *byte-for-byte indistinguishable* from a small one. The
- *    only available signal is `rows.length === pageSize`.
+ *    only signal is the row count, and it is AMBIGUOUS: a page shorter than
+ *    `pageSize` means either end-of-data or a server cap below `pageSize`.
+ *    That is why the loop terminates on an EMPTY page, never a short one.
  * 2. **`.range()` cannot raise the cap.** Asking for 0-1499 still yields 1000.
  *    So `pageSize` MUST be <= the cap; a larger value does not fetch more, it
  *    silently breaks the loop (you ask for 1500, get 1000, read that as a short
@@ -53,7 +55,7 @@
  * set-returning functions on this project are not `SECURITY DEFINER`, so RLS
  * returns 0 rows to `anon` and the probe is inconclusive. It does not change
  * anything — these helpers page unconditionally, which is correct either way
- * (if the cap does not apply, the loop simply ends on the first short page).
+ * (if the cap does not apply, the loop simply ends on the first empty page).
  *
  * @see docs/audit/open_issues.md OI-79
  */
@@ -155,9 +157,12 @@ function validate(opts: PagedFetchOptions): { pageSize: number; maxPages: number
   if (pageSize > POSTGREST_MAX_ROWS) {
     throw new Error(
       `paged_fetch: pageSize ${pageSize} exceeds PostgREST's db-max-rows ` +
-        `(${POSTGREST_MAX_ROWS}). A larger page does not fetch more rows — it makes the ` +
-        `first full page look short and silently ends the loop, dropping everything after ` +
-        `it. Use a pageSize <= ${POSTGREST_MAX_ROWS} (OI-79).`,
+        `(${POSTGREST_MAX_ROWS}). A larger page cannot fetch more rows — the server ` +
+        `silently clamps it — so every page costs a full round-trip for at most ` +
+        `${POSTGREST_MAX_ROWS} rows while the arithmetic implies more. The loop itself is ` +
+        `SAFE at any cap (it advances by rows received and stops only on an empty page), ` +
+        `so this is a wrong-configuration guard, not a correctness one. ` +
+        `Use a pageSize <= ${POSTGREST_MAX_ROWS} (OI-79).`,
     );
   }
   const maxPages = opts.maxPages ?? DEFAULT_MAX_PAGES;
@@ -168,7 +173,7 @@ function validate(opts: PagedFetchOptions): { pageSize: number; maxPages: number
 }
 
 /**
- * Reads **every** row matching a query, paging until a short page arrives.
+ * Reads **every** row matching a query, paging until an EMPTY page arrives.
  *
  * `makeQuery` must return a fresh builder each call — supabase-js builders are
  * single-use thenables, so reusing one across pages does not work. Apply your
@@ -235,9 +240,21 @@ export async function fetchAllPages<T>(
     // Only an EMPTY page proves end-of-data. A SHORT page does not: it is
     // equally the signature of a server cap below `pageSize` (see the offset
     // note above), and treating it as "done" is exactly the silent truncation
-    // this module exists to prevent. Costs one extra round-trip per read — the
-    // same one the exact-multiple case already paid — in exchange for being
-    // correct at any `db-max-rows`.
+    // this module exists to prevent.
+    //
+    // COST, stated honestly. For `fetchAllPages` this is one extra round-trip
+    // per read. For `fetchAllByIds` it is one extra per CHUNK, and with
+    // DEFAULT_CHUNK_SIZE = 100 a chunk essentially never fills a 1000-row
+    // page — so the confirming request lands on ~every chunk, not on a rare
+    // boundary. 12 chunked call sites; at ~10k PRO users protein-gap-alert
+    // goes from roughly 300 to 600 sequential round-trips per tick. Accepted
+    // deliberately: these are daily cron jobs where wall-clock is cheap, and
+    // the alternative is a read that silently returns half its rows with
+    // error === null. If round-trips ever become the constraint, learn the
+    // server's real page size once per process instead. (Corrected after
+    // round-2 review — the earlier note claimed "the same one the
+    // exact-multiple case already paid", true of fetchAllPages and NOT of the
+    // chunked path that dominates.)
     if (rows.length === 0) break;
   }
 

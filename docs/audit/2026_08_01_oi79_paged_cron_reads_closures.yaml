@@ -20,8 +20,8 @@ diagnose_doc: docs/diagnoses/2026-08-01-unbounded-cron-reads-d3f7b2.md
 plan_review_record: docs/plan-reviews/oi79-paged-cron-reads.md
 contract_test: supabase/functions/_shared/paged_fetch_test.ts
 gate: scripts/check_unbounded_cron_reads.dart
-total_findings: 34
-closed_count: 34
+total_findings: 41
+closed_count: 41
 
 findings:
   # ── Class 1 — silently WRONG (truncation inverts a classification) ─────────
@@ -132,6 +132,47 @@ findings:
     terminal_state: closed_in_commit
     commit: "oi79-paged-cron-reads branch (uncommitted at authoring; SHA back-filled at commit)"
     verification: "_stripComments() blanks comment bodies while preserving offsets so reported line numbers stay correct; waivers are matched against the raw text since they live in comments."
+  # ── ROUND-2 REVIEW, on the HARDENED diff (§4.12: #2 runs post-#1) ─────────
+  # 5 REAL findings, EVERY ONE introduced by a round-1 correction — the exact
+  # reason §4.12 requires round 2 to review the fixes rather than the original.
+  # F37 and F41 then produced a 21st real bug and a real gate defect that no
+  # reviewer saw.
+  - id: F35
+    title: "GATE — my F28 string-skip has no REGEX-literal awareness, so `/'/g` (odd quote count inside a regex) opens string mode that never closes; `;` never terminates and the chain swallows the rest of the FILE, inheriting a distant bound. F28's bug re-entered through a different token"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-2 fixes; SHA back-filled)"
+    verification: "Third token class to defeat this scanner (comments, strings, now regexes), so it is bounded rather than patched again: `_chainFrom` FAILS CLOSED past 4000 chars (longest real chain measured 683), returning '' so every bounded-ness pattern misses and the read is REPORTED. Loud false positive, never a silent false negative; a structurally paged read is unaffected because `_insideAny` uses offsets and never consults the chain."
+  - id: F36
+    title: "GATE — my new `.range()`-without-`.order()` branch emitted and continued BEFORE the shared waiver check, so the documented `// oi79-ok:` hatch was inoperative for that one class. A reviewed per-user .range() loop would have been unblockable except by --no-verify, which §4.3 forbids"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-2 fixes; SHA back-filled)"
+    verification: "Waiver consulted inside the branch before reporting. Confirmed by reading the emit order (`.range` branch :309, shared waiver :324)."
+  - id: F37
+    title: "GATE ROSTER — deriving the roster from CRON_REGISTRY.md alone meant `weekly-recalc` was NEVER SCANNED: it imports cron_auth + cron_telemetry but has zero registry entries. My own round-1 comment had named it as a case the new .range() rule covered — it did not. A function missing from a hand-maintained doc was silently exempt from the gate"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-2 fixes; SHA back-filled)"
+    verification: "Roster is now the UNION of registry slugs and every function importing `_shared/cron_auth.ts` — the import is a structural fact, a doc entry is not. Scanned files 36 -> 39. THIS IMMEDIATELY FOUND A 21st REAL BUG: weekly-recalc/index.ts:326 read user_progress with `const { data: rows }` and NO error destructure, so a failed read left `existingProgress` EMPTY and the GREATEST guard below it had nothing to compare — silently re-opening diagnose 3a7b9f (every user's LIFETIME total_workouts_done overwritten by a 4-week count each Sunday). Truncation was never the risk there (BATCH_SIZE=100 on a one-row-per-user table); it is routed through fetchAllByIds for THROW-on-error semantics, stated as such in the code rather than dressed up as a paging fix."
+  - id: F38
+    title: "DOCS — the loop rewrite (F32) left four places describing the OLD short-page contract, including validate()'s LIVE throw text, which justified the pageSize>cap rejection with a failure mode the new loop no longer has"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-2 fixes; SHA back-filled)"
+    verification: "paged_fetch.ts :25, :56, :158-160, :171 all rewritten to the empty-page contract; the throw now says plainly that it is a wrong-configuration guard, not a correctness one."
+  - id: F39
+    title: "DOCS — the cost note claimed the extra round-trip was 'the same one the exact-multiple case already paid'. True of fetchAllPages, FALSE of fetchAllByIds, where the confirming page is paid per CHUNK and a 100-id chunk essentially never fills a 1000-row page — so it lands on ~every chunk"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-2 fixes; SHA back-filled)"
+    verification: "Comment rewritten with the real figure (12 chunked call sites; protein-gap-alert ~300 -> ~600 sequential round-trips per tick at ~10k PRO users) and an explicit statement that it is accepted deliberately for daily crons, with the cheaper alternative named. The cost is real and unchanged — only the description was wrong."
+  - id: F40
+    title: "GATE — the waiver tally was unauditable: it printed '8 waived' with no indication of WHICH reads, so a waiver silently covering neighbouring reads (or anything else) was invisible"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-2 fixes; SHA back-filled)"
+    verification: "Every waived SITE is now printed on a clean run. This is what exposed F41 — the tally alone concealed it, which is the argument for the change."
+  - id: F41
+    title: "GATE — the F37 roster union de-duplicated on the RAW path string, but the registry branch builds `/` paths while Directory.listSync() returns `\\` paths on Windows, so files in BOTH sets were scanned TWICE: inflated file count, double-counted waivers, and any real violation would have been reported twice"
+    terminal_state: closed_in_commit
+    commit: "oi79-paged-cron-reads branch (round-2 fixes; SHA back-filled)"
+    verification: "De-dup key normalised (absolute, forward slashes, lower-cased). 55 files -> 39, waived 8 -> 5 which now matches the 5 `oi79-ok:` markers in the tree exactly. Found by F40's site printing (three sites appeared as exact duplicates), not by a reviewer — a defect introduced by a round-2 fix and caught by another round-2 fix."
+
   # ── ROUND-1 CONTEXT-BLIND REVIEW (2 parallel reviewers, §4.12) ────────────
   # 9 REAL findings on the landed commit cda5b62c. Every one verified against
   # the file/live DB before acting (feedback_audit_verifier_cannot_trust_own_
