@@ -22,3 +22,18 @@
     "batch has shipped"). It has no entry for "context exhausted mid-batch with a red suite",
     which is the riskiest moment to compact and the one most needing a curated preserve-list.
     Worth adding as an explicit trigger.
+
+- 2026-08-01 — /strategic-compact — trigger: batch shipped (Unit 9 / OI-79 complete end-to-end:
+  merge `0545f0a5`, CI green on that SHA, 16 Edge Functions deployed + version-verified) plus
+  context pressure. A genuinely clean boundary, unlike the same day's earlier invocation where
+  nothing was committed. **Founder ACCEPTED** (ran `/compact` after the list was surfaced in chat).
+  → Tuning signal (SECOND occurrence): the skill was invoked while **plan mode was active**, which
+    forbids writes — so step 6's own logging step could not run, exactly as it could not run
+    earlier the same day. Both times it had to be back-filled afterwards. The skill should either
+    state that its log entry is deferred under plan mode, or the log-append should not be step 6
+    of a skill that is frequently invoked from a read-only context.
+  → Process error worth recording: under plan mode I ended the turn with `ExitPlanMode`, treating
+    the preserve/drop list as an implementation plan needing approval. It is not — ExitPlanMode's
+    own guidance excludes non-code/research tasks. Founder rejected it. The skill's step 4 wants a
+    plain chat message and an explicit go-ahead, nothing more. If this skill is invoked in plan
+    mode again: surface the list in chat, do not route it through ExitPlanMode.
