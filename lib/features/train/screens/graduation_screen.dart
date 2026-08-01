@@ -588,93 +588,180 @@ class _GenerateNextPhaseButtonState
       if (offerChoice) {
         choice = await showAdvanceChoiceSheet(context) ?? AdvanceChoice.advance;
         if (!mounted) return;
-        // abort-if-changed: if a concurrent splash/coach advance bumped the
-        // phase while the sheet was open, DON'T recompute nextPhase (that would
-        // SKIP a phase) — the user already advanced, so route to /train.
-        final live =
-            (UserRepository.instance.getProgress()?['current_phase'] as int?) ??
-                1;
-        if (live >= nextPhase) {
-          // The concurrent advancer bumped the phase — refresh the plan views
-          // before routing so /train doesn't briefly show the pre-advance plan.
-          ref.invalidate(currentPlanProvider);
-          ref.invalidate(todayWorkoutProvider);
-          context.go('/train');
-          return;
-        }
       }
 
       if (!mounted) return;
+      // abort-if-changed: if a concurrent splash/card/coach advance bumped the
+      // phase — while the choice sheet was open, or at any point before this
+      // tap — DON'T recompute nextPhase (that would SKIP a phase), and don't
+      // regenerate a plan for a phase the user is already on. Route to /train.
+      //
+      // Unit 3c (OI-45 finding 5): this check used to sit INSIDE the
+      // `if (offerChoice)` block above, and `offerChoice` requires
+      // PlanEngineFlags.adherenceGateEnabled — ship-dark, DEFAULT OFF
+      // (plan_engine_flags.dart) — so on the production default path it never
+      // executed at all. Hoisted out so it runs on every unlock.
+      //
+      // Precise about what that buys, because round-1 review caught the
+      // over-claim: on the flag-OFF path there is NO await between the
+      // `progress` read above and this line, so `live == currentPhase` always
+      // and this early-out cannot fire. It is load-bearing only across the
+      // choice-sheet await (flag ON) — and it becomes so the moment that flag
+      // flips. The default path's real protection is the shared advance lock
+      // below plus commitPhaseAdvance's re-read at write time.
+      final live =
+          (UserRepository.instance.getProgress()?['current_phase'] as int?) ?? 1;
+      if (live >= nextPhase) {
+        // The concurrent advancer bumped the phase — refresh the plan views
+        // before routing so /train doesn't briefly show the pre-advance plan.
+        ref.invalidate(currentPlanProvider);
+        ref.invalidate(todayWorkoutProvider);
+        context.go('/train');
+        return;
+      }
+
       setState(() => _isGenerating = true);
 
-      // graduation's OWN profile defaults — the SAME values MUST feed both the
-      // pin-build and the generate, or repeatPinsFrom's G5 gate validates a
-      // different frame-shape than the one generated (writer/reader value drift).
-      final goal = profile['primary_goal'] as String? ?? 'general_fitness';
-      final equipment = profile['equipment_access'] as String? ?? 'basic_gym';
-      final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
-      final experienceLevel =
-          profile['fitness_experience'] as String? ?? 'beginner';
+      // Unit 3c (OI-45 finding 5): generation + the progress write run under the
+      // SHARED phase-advance mutex, the same one advanceProPhaseIfExpired uses.
+      // Before this, graduation generated entirely outside that guard, so the
+      // splash's unawaited pass (or the Home/Train card CTA) could be generating
+      // this very phase concurrently — two generateAndSchedule runs writing
+      // overlapping schedule_* rows and each moving plan_start, the second
+      // silently overwriting the first under a user already looking at the plan.
+      //
+      // The lock is taken AFTER the choice sheet closes, never across it: a
+      // modal waiting on human input must not block the splash's advance.
+      // `null` (not `false`) means "someone else holds it" — distinct from
+      // `false`, which means we generated but the monotonic writer declined.
+      final advanced = await withPhaseAdvanceLock<bool?>(
+        () async {
+          // B-pass F1: re-check the live phase ONCE MORE, now that the lock is
+          // actually held. The check above ran before acquisition, and the
+          // restore-path writers tracked as OI-83 do not take this lock at all
+          // — so a bump could have landed in between. Catching it HERE avoids
+          // running a full plan generation whose schedule_* rows would then be
+          // written for a phase the user is already past, with commitPhaseAdvance
+          // correctly declining the counter write afterwards and nothing
+          // reconciling the rows. Cheap (one Hive read) versus a generate.
+          final liveInLock =
+              (UserRepository.instance.getProgress()?['current_phase'] as int?) ??
+                  1;
+          if (liveInLock >= nextPhase) {
+            // Distinct from the post-generate decline below: nothing was
+            // generated here, so the two must not share one event name.
+            unawaited(ErrorTelemetry.logEvent(
+                'phase_unlock_preempted_before_generate',
+                message: 'live=$liveInLock intended=$nextPhase'));
+            return false;
+          }
 
-      final savedDays = MigratedKey.read<List>('preferred_training_days');
-      final preferredDays = savedDays is List ? savedDays.cast<int>() : null;
+          // graduation's OWN profile defaults — the SAME values MUST feed both the
+          // pin-build and the generate, or repeatPinsFrom's G5 gate validates a
+          // different frame-shape than the one generated (writer/reader value drift).
+          final goal = profile['primary_goal'] as String? ?? 'general_fitness';
+          final equipment =
+              profile['equipment_access'] as String? ?? 'basic_gym';
+          final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
+          final experienceLevel =
+              profile['fitness_experience'] as String? ?? 'beginner';
 
-      // Theme H fix — nextPhaseStartDate computes max(today, currentPhaseEnd + 1)
-      // Monday-normalized (was DateTime.now() → overwrote the current W4 rows).
-      final startDate = scheduleSvc.nextPhaseStartDate();
+          final savedDays = MigratedKey.read<List>('preferred_training_days');
+          final preferredDays =
+              savedDays is List ? savedDays.cast<int>() : null;
 
-      // Build repeat pins BEFORE generateAndSchedule overwrites plan_start
-      // (getWeek reads the just-finished window). Only on an explicit "repeat".
-      final pins = choice == AdvanceChoice.repeat
-          ? scheduleSvc.buildRepeatPinsForAdvance(
-              goal: goal,
-              equipment: equipment,
-              daysPerWeek: daysPerWeek,
-              experienceLevel: experienceLevel,
-              newPhase: nextPhase,
-            )
-          : null;
+          // Theme H fix — nextPhaseStartDate computes max(today, currentPhaseEnd + 1)
+          // Monday-normalized (was DateTime.now() → overwrote the current W4 rows).
+          final startDate = scheduleSvc.nextPhaseStartDate();
 
-      // W3.4 (Batch 11-B): variety avoid-names on a fresh advance (reader self-gates on the flag; read before plan_start moves, like pins).
-      final previousPhaseByDay =
-          pins == null ? scheduleSvc.previousPhaseNamesByDay() : null;
+          // Build repeat pins BEFORE generateAndSchedule overwrites plan_start
+          // (getWeek reads the just-finished window). Only on an explicit "repeat".
+          final pins = choice == AdvanceChoice.repeat
+              ? scheduleSvc.buildRepeatPinsForAdvance(
+                  goal: goal,
+                  equipment: equipment,
+                  daysPerWeek: daysPerWeek,
+                  experienceLevel: experienceLevel,
+                  newPhase: nextPhase,
+                )
+              : null;
 
-      await scheduleSvc.generateAndSchedule(
-        goal: goal,
-        equipment: equipment,
-        daysPerWeek: daysPerWeek,
-        startDate: startDate,
-        phase: nextPhase,
-        // U4: thread injuries so the graduated next-phase plan excludes
-        // contraindicated exercises (vocab canonicalized in generateV4).
-        injuries: InjuryVocab.fromProfile(profile['injuries']),
-        experienceLevel: experienceLevel,
-        preferredDays: preferredDays,
-        pinnedExercisesByDay: pins,
-        // W2.7 (Batch 9): titrate ONLY a FRESH advance (pins == null) — a
-        // low-adherence "repeat" (pins != null) must not gain volume.
-        applyVolumeTitration: pins == null,
-        previousPhaseByDay: previousPhaseByDay,
-        applyPlateauEscalation: pins == null, // W3.5 12-A: fresh-advance-only
+          // W3.4 (Batch 11-B): variety avoid-names on a fresh advance (reader self-gates on the flag; read before plan_start moves, like pins).
+          final previousPhaseByDay =
+              pins == null ? scheduleSvc.previousPhaseNamesByDay() : null;
+
+          await scheduleSvc.generateAndSchedule(
+            goal: goal,
+            equipment: equipment,
+            daysPerWeek: daysPerWeek,
+            startDate: startDate,
+            phase: nextPhase,
+            // U4: thread injuries so the graduated next-phase plan excludes
+            // contraindicated exercises (vocab canonicalized in generateV4).
+            injuries: InjuryVocab.fromProfile(profile['injuries']),
+            experienceLevel: experienceLevel,
+            preferredDays: preferredDays,
+            pinnedExercisesByDay: pins,
+            // W2.7 (Batch 9): titrate ONLY a FRESH advance (pins == null) — a
+            // low-adherence "repeat" (pins != null) must not gain volume.
+            applyVolumeTitration: pins == null,
+            previousPhaseByDay: previousPhaseByDay,
+            applyPlateauEscalation:
+                pins == null, // W3.5 12-A: fresh-advance-only
+          );
+          unawaited(ErrorTelemetry.logEvent('phase_unlock_plan_generated',
+              message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));
+
+          // Theme F — stamp plan_generated_at; UserRepository.updateProgress
+          // fires syncProgressNow so this push lands on cloud.
+          //
+          // Unit 3c (OI-45 finding 5): `nextPhase` was computed at the TOP of
+          // this method, before the tens-to-hundreds-of-ms generateAndSchedule
+          // above. commitPhaseAdvance re-reads the live phase HERE and refuses
+          // to write a lower one — `current_phase` has no monotonic guard in
+          // saveProgress, so a concurrent advancer landing in that window used
+          // to be silently demoted.
+          final committed = await commitPhaseAdvance(
+            intendedPhase: nextPhase,
+            source: 'graduation_screen',
+          );
+
+          // ⑧ 3-b: a chosen "repeat" (pins applied) flags the Home "step it up
+          // next time" nudge (cross-account gated in the shared writer) +
+          // invalidates the provider so it surfaces this session, not only
+          // after an app relaunch.
+          if (pins != null) {
+            await markPhaseRepeatNudgePending();
+            ref.invalidate(phaseRepeatNudgeProvider);
+          }
+          return committed;
+        },
+        ifBusy: null,
       );
-      unawaited(ErrorTelemetry.logEvent('phase_unlock_plan_generated',
-          message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));
 
-      // Theme F — stamp plan_generated_at; UserRepository.updateProgress fires
-      // syncProgressNow so this push lands on cloud.
-      await UserRepository.instance.updateProgress({
-        'current_phase': nextPhase,
-        'current_week': 1,
-        'phase_started_at': DateTime.now().toIso8601String(),
-        'plan_generated_at': DateTime.now().toIso8601String(),
-      });
-
-      // ⑧ 3-b: a chosen "repeat" (pins applied) flags the Home "step it up next
-      // time" nudge (cross-account gated in the shared writer) + invalidates the
-      // provider so it surfaces this session, not only after an app relaunch.
-      if (pins != null) {
-        await markPhaseRepeatNudgePending();
-        ref.invalidate(phaseRepeatNudgeProvider);
+      if (!mounted) return;
+      if (advanced == null) {
+        // Another advance path holds the lock and is generating this same phase
+        // right now. Same recourse the PhaseGeneratingCard already gives on its
+        // own busy path — tell the user plainly and put them on /train, where
+        // the plan appears the moment that pass lands.
+        unawaited(ErrorTelemetry.logEvent('phase_unlock_advance_busy',
+            message: 'phase=$nextPhase'));
+        ref.invalidate(currentPlanProvider);
+        ref.invalidate(todayWorkoutProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.card,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+            content: Text(
+              'Still finishing up your next phase — opening your plan…',
+              style: AppTypography.bodySm.copyWith(color: AppColors.accent),
+            ),
+          ),
+        );
+        context.go('/train');
+        return;
       }
 
       // Theme F — provider invalidation set. Matches the canonical post-
@@ -691,7 +778,16 @@ class _GenerateNextPhaseButtonState
       ref.invalidate(aiInsightProvider);
       ref.invalidate(graduationStatsProvider);
 
-      unawaited(ErrorTelemetry.logEvent('phase_unlock_completed',
+      // Unit 3c: `advanced == false` means the plan rows for nextPhase WERE
+      // generated but commitPhaseAdvance declined the counter write, because a
+      // concurrent advancer had already moved it to this phase or past it.
+      // Firing phase_unlock_completed there would assert a write that never
+      // happened — the false-signal class this whole batch exists to remove —
+      // so the two outcomes get distinct events and distinct copy.
+      unawaited(ErrorTelemetry.logEvent(
+          advanced
+              ? 'phase_unlock_completed'
+              : 'phase_unlock_counter_already_advanced',
           message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));
 
       if (!mounted) return;
@@ -708,7 +804,9 @@ class _GenerateNextPhaseButtonState
                 color: AppColors.accent.withValues(alpha: 0.5)),
           ),
           content: Text(
-            'Phase $nextPhase unlocked — opening your new plan…',
+            advanced
+                ? 'Phase $nextPhase unlocked — opening your new plan…'
+                : 'Your new plan is ready — opening it now…',
             style: AppTypography.bodySm
                 .copyWith(color: AppColors.accent),
           ),

@@ -6,6 +6,7 @@ import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'workout_schedule_read_service.dart';
 import '../../shared/repositories/user_repository.dart';
+import '../../shared/services/pro_phase_advance.dart';
 
 /// Heals + maintains the phase-progress invariant:
 ///
@@ -62,7 +63,58 @@ class PhaseProgressReconciler {
   /// blocks. [scheduleService] is injected so this is callable from the boot
   /// path (via the Riverpod provider) and from tests (via a ProviderContainer)
   /// without the deprecated singleton.
+  /// c8f3d1 / Unit 3c — runs under the SHARED [withPhaseAdvanceLock], with a
+  /// bounded retry.
+  ///
+  /// **Why the lock:** this heal derives `completedBlocks` from
+  /// [WorkoutScheduleReadService.pastPhaseBlocks] — the `schedule_*` rows that a
+  /// concurrent phase advance is at that moment rewriting, along with
+  /// `plan_start`, which is what decides "past" vs "current". Bucketing a
+  /// half-written window can over-count blocks, and [reconciledPhase]'s own
+  /// header says a monotonic over-advance is unrecoverable.
+  ///
+  /// **Why the retry, and not a bare skip:** [withPhaseAdvanceLock] is a
+  /// TRY-lock — it returns `ifBusy` immediately rather than queueing. A single
+  /// attempt would mean a contended boot silently drops the heal, and this
+  /// method's only callers are on the restore path (`restoring_screen.dart`),
+  /// which may not run again for months. Idempotence makes *re-running* safe;
+  /// it does not make *skipping* safe. Round-2 review caught exactly that in
+  /// round-1's own remediation. Three attempts, 1.5s apart, cover the realistic
+  /// contention (a plan generation is tens-to-hundreds of ms); the delay is
+  /// paid ONLY when contended, and in that case the user is already waiting on
+  /// the advance that holds the lock.
+  ///
+  /// **Worst-case added latency is 2 s, and it lands on a foreground path.**
+  /// `restoring_screen.dart:384` awaits this so the corrected counter is in
+  /// place before /home reads `currentPlanProvider` (its own comment says so),
+  /// so the retry budget is deliberately small: 3 attempts with 2 gaps of 1 s,
+  /// not more. B-pass review flagged the latency and quoted ~4.5 s for the
+  /// original 1.5 s gap; the arithmetic is 2 gaps, not 3, so that was 3 s — and
+  /// it is 2 s now. Bounded in any case by the restore screen's documented 15 s
+  /// CONTINUE escape hatch.
+  static const int _lockAttempts = 3;
+  static const Duration _lockRetryGap = Duration(seconds: 1);
+
   static Future<void> reconcile(
+      WorkoutScheduleReadService scheduleService) async {
+    for (var attempt = 1; attempt <= _lockAttempts; attempt++) {
+      final ran = await withPhaseAdvanceLock<bool>(
+        () async {
+          await _reconcileLocked(scheduleService);
+          return true;
+        },
+        ifBusy: false,
+      );
+      if (ran) return;
+      if (attempt < _lockAttempts) await Future<void>.delayed(_lockRetryGap);
+    }
+    // Never a silent drop — the whole point of this batch is that a phase
+    // conflict stops being invisible.
+    unawaited(ErrorTelemetry.logEvent('phase_reconcile_skipped_advance_busy',
+        message: 'attempts=$_lockAttempts'));
+  }
+
+  static Future<void> _reconcileLocked(
       WorkoutScheduleReadService scheduleService) async {
     try {
       if (HiveService.instance.configBox.get(killSwitchKey) == true) return;
