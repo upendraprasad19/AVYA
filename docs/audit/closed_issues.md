@@ -1199,3 +1199,80 @@ board.
     would otherwise have put into a permanent doomed-retry loop for a narrow legacy cohort —
     fixed in the same batch.
 - **Diagnose-doc**: `docs/diagnoses/2026-07-29-ai-coach-daily-caps-toctou-f4a19c.md`.
+
+## OI-48 — L31 cron efficiency: 3 functions are O(all users), recompute-everything (P2)
+
+- **Status**: CLOSED · 2026-08-01 · branch `re-engagement-prefilter`, commit `221567e2`, diagnose `a4e1c9`
+- **Blocked on**: none
+- **Verified**: 2026-08-01
+- **Identified**: 2026-05-17 · OI-43 / L31 lens scan
+- **Risk class**: cost scaling (billing alert at 10K users)
+- **Effort**: ~1-2 days (actual: 1 migration + an Edge Function rewrite, ×2 review + B-pass + an 8-lens Hermes pass)
+- **CLOSED 2026-08-01** (re-engagement-prefilter batch). `re-engagement` — the last genuinely
+  open instance after this entry's own two prior corrections — now computes its Path B
+  silent-user candidate set in ONE Postgres round-trip via
+  `find_reengagement_silent_candidates` (migration 117, live 2026-08-01T07:05+05:30), an
+  anti-join over the three activity tables, replacing the `.from("users")` scan plus the
+  per-user 3-query loop. Edge Function deployed v11, boot-verified. Live `EXPLAIN` confirms
+  Hash/Nested-Loop Anti Joins with index scans on all three `(user_id, date)` composites, so
+  work scales with recent activity rather than total log volume.
+  - **Found and fixed in passing:** `find_orphan_chat_media` — the very RPC used as the
+    reference pattern — had been anon+authenticated-executable since migration 071 (never
+    revoked the PUBLIC-default grant). Narrowed to service_role-only in the same migration.
+    Not a live leak (RLS backstop verified), but the exact gap the new RPC was designed not to
+    replicate.
+  - **Filed, not folded in:** OI-78 (3 more RPCs with the same unrevoked-grant class) and
+    OI-79 (P1 — un-ranged PostgREST reads truncate at db-max-rows=1000 on BOTH candidate paths;
+    pre-existing, this batch strictly improves the Path B case and ships loud saturation
+    detection on both, but the pagination fix spans cron functions this batch doesn't touch).
+- **RE-SCOPED 2026-07-27** (gate-input-family batch). The 2026-07-26 pass flagged this entry as
+  *"MATERIALLY STALE — needs re-scoping, not carrying forward"* and then carried it forward
+  unchanged. Re-read all three functions rather than re-asserting the 2026-05-17 text; **one of the
+  three is genuinely fixed and two are not**:
+  - **evaluate-rank-promotions — NO LONGER MATCHES THE FINDING.** `e78e2c7e` (2026-07-08, OPT-E)
+    replaced the per-user reads with chunked `.in("user_id", chunk)` batch pre-fetches
+    (`index.ts:47-53` chunk-size comment + BATCH_SIZE, `:81` the batched `.in(`, `:136`
+    — *"Reduces N*3 queries/tick to 3"*). The outer
+    `.from("users")` scan at `:118` survives, so the O(all users) *shape* is intact, but
+    "~5 Postgres reads × N users / 50K reads a day" is simply no longer true of this code.
+  - **i-see-you-callout — STILL OPEN.** `.from("users")` at `:98` with per-user `.limit(...)`
+    queries at `:202`, `:236`, `:289`.
+  - **re-engagement — STILL OPEN.** `.from("users")` at `:131` with three per-user `.limit(1)`
+    verification queries at `:164`, `:173`, `:182`.
+- ~~**Revised scope**: two functions, not three~~ — **SUPERSEDED** by the 2026-07-29 correction
+  below, which found `i-see-you-callout` was already fixed too, leaving ONE. Struck rather than
+  deleted (this entry's own history of stale "still open" claims is the useful part). Kept for
+  the still-true half: `evaluate-rank-promotions` is the in-repo example of the fix, not an
+  instance of the bug.
+- **Already efficient (pattern to copy):**
+  - `clean-orphan-media` — RPC pre-filter → small working set
+  - `pr-detection` — 20-min time window filter
+  - `expiry-reminder` — single indexed SELECT with date range
+  - `i-see-you-callout` — F45 active-user pre-filter (`ACTIVE_WINDOW_DAYS=28`) + `PAGE_SIZE=1000`
+    pagination. **Moved here 2026-08-01**, executing the instruction the 2026-07-29 correction
+    below gave ("Move it to the 'already efficient' list") but never actually carried out —
+    caught by Hermes L31/N6 during the closing batch. Bounded per-active-user queries remain,
+    which is why the *pagination* concern is filed separately as OI-79.
+  - `re-engagement` — **as of 2026-08-01**, one anti-join RPC (migration 117); the entry this
+    finding was ultimately about.
+- **Fix shape**: add pre-filter SELECT (last_active_at, signals_computed_at, or other "interesting users today" predicate). Compare to plateau-alert/protein-gap-alert which already use coach_memory scores.
+- **CORRECTED 2026-07-29** (oi-board-corrections batch) — **the 2026-07-27 re-scope pass's
+  "i-see-you-callout — STILL OPEN" is ITSELF wrong, the second stale miss on this same
+  function.** Verified live: `i-see-you-callout/index.ts:26-100` carries an
+  `F45 (2026-06-07 audit)` active-user pre-filter (`ACTIVE_WINDOW_DAYS=28`,
+  `.gte("last_active_at", activeCutoffIso)` at `:100`) plus `PAGE_SIZE=1000` pagination —
+  landed over 7 weeks before this "STILL OPEN" line was written and over a month before the
+  2026-07-26 pass that also missed it. **Move it to the "already efficient" list below;** only
+  `re-engagement` remains a real, open instance now.
+  `re-engagement`'s citation is off by one — `.from("users")` is actually at `:132`, not `:131`
+  (region otherwise correct). Its Path B scan carries only an `is_deleted` filter, genuinely
+  O(all non-deleted users), then a per-user 3-table (`workout_logs`/`nutrition_logs`/
+  `weight_logs`) sequential-query loop at `:140-185` checking for the *absence* of recent
+  activity (an anti-join, not a batchable positive-filter check).
+  **"plateau-alert/protein-gap-alert already use coach_memory scores" is only half true.**
+  `plateau-alert` does (`index.ts:96`, `plateau_risk_score >= 0.7`). `protein-gap-alert` does
+  NOT — it pre-filters on `subscriptions.status='active'` then issues already-batched `.in()`
+  queries (`index.ts:94-99,123-150`), no score involved. This is actually the **better**
+  structural precedent for `re-engagement`'s fix (batched positive-filter pattern), though the
+  anti-join shape of `re-engagement`'s actual check fits `clean-orphan-media`'s RPC pattern
+  more directly.
