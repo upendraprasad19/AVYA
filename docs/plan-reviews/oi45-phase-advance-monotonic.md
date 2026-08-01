@@ -5,6 +5,7 @@ review_rounds: 2
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
+bpass_review: docs/reviews/6584fc31ad5b-review.md
 hermes_report: not_required
 ---
 
