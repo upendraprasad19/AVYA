@@ -438,56 +438,6 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   requiring its own deploy authorization, not bundled into this merge. **OI-45 stays OPEN — only
   Unit 3c (`graduation_screen.dart`) and the Unit 3a behavioral-test-coverage gap remain.**
 
-## OI-48 — L31 cron efficiency: 3 functions are O(all users), recompute-everything (P2)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-07-29
-- **Identified**: 2026-05-17 · OI-43 / L31 lens scan
-- **Risk class**: cost scaling (billing alert at 10K users)
-- **Effort**: ~1-2 days (per-function pre-filter design)
-- **RE-SCOPED 2026-07-27** (gate-input-family batch). The 2026-07-26 pass flagged this entry as
-  *"MATERIALLY STALE — needs re-scoping, not carrying forward"* and then carried it forward
-  unchanged. Re-read all three functions rather than re-asserting the 2026-05-17 text; **one of the
-  three is genuinely fixed and two are not**:
-  - **evaluate-rank-promotions — NO LONGER MATCHES THE FINDING.** `e78e2c7e` (2026-07-08, OPT-E)
-    replaced the per-user reads with chunked `.in("user_id", chunk)` batch pre-fetches
-    (`index.ts:47-53` chunk-size comment + BATCH_SIZE, `:81` the batched `.in(`, `:136`
-    — *"Reduces N*3 queries/tick to 3"*). The outer
-    `.from("users")` scan at `:118` survives, so the O(all users) *shape* is intact, but
-    "~5 Postgres reads × N users / 50K reads a day" is simply no longer true of this code.
-  - **i-see-you-callout — STILL OPEN.** `.from("users")` at `:98` with per-user `.limit(...)`
-    queries at `:202`, `:236`, `:289`.
-  - **re-engagement — STILL OPEN.** `.from("users")` at `:131` with three per-user `.limit(1)`
-    verification queries at `:164`, `:173`, `:182`.
-- **Revised scope**: two functions, not three, and the remaining work is the pre-filter SELECT —
-  `evaluate-rank-promotions` is now the in-repo example of the fix rather than an instance of the bug.
-- **Already efficient (pattern to copy):**
-  - `clean-orphan-media` — RPC pre-filter → small working set
-  - `pr-detection` — 20-min time window filter
-  - `expiry-reminder` — single indexed SELECT with date range
-- **Fix shape**: add pre-filter SELECT (last_active_at, signals_computed_at, or other "interesting users today" predicate). Compare to plateau-alert/protein-gap-alert which already use coach_memory scores.
-- **CORRECTED 2026-07-29** (oi-board-corrections batch) — **the 2026-07-27 re-scope pass's
-  "i-see-you-callout — STILL OPEN" is ITSELF wrong, the second stale miss on this same
-  function.** Verified live: `i-see-you-callout/index.ts:26-100` carries an
-  `F45 (2026-06-07 audit)` active-user pre-filter (`ACTIVE_WINDOW_DAYS=28`,
-  `.gte("last_active_at", activeCutoffIso)` at `:100`) plus `PAGE_SIZE=1000` pagination —
-  landed over 7 weeks before this "STILL OPEN" line was written and over a month before the
-  2026-07-26 pass that also missed it. **Move it to the "already efficient" list below;** only
-  `re-engagement` remains a real, open instance now.
-  `re-engagement`'s citation is off by one — `.from("users")` is actually at `:132`, not `:131`
-  (region otherwise correct). Its Path B scan carries only an `is_deleted` filter, genuinely
-  O(all non-deleted users), then a per-user 3-table (`workout_logs`/`nutrition_logs`/
-  `weight_logs`) sequential-query loop at `:140-185` checking for the *absence* of recent
-  activity (an anti-join, not a batchable positive-filter check).
-  **"plateau-alert/protein-gap-alert already use coach_memory scores" is only half true.**
-  `plateau-alert` does (`index.ts:96`, `plateau_risk_score >= 0.7`). `protein-gap-alert` does
-  NOT — it pre-filters on `subscriptions.status='active'` then issues already-batched `.in()`
-  queries (`index.ts:94-99,123-150`), no score involved. This is actually the **better**
-  structural precedent for `re-engagement`'s fix (batched positive-filter pattern), though the
-  anti-join shape of `re-engagement`'s actual check fits `clean-orphan-media`'s RPC pattern
-  more directly.
-
 ## OI-78 — 3 more public-schema RPCs retain the PUBLIC-default-ACL anon/authenticated EXECUTE gap (P3)
 
 - **Status**: OPEN
