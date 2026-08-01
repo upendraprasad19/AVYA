@@ -42,6 +42,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
 
 /// Aggregated outcome of a simulation run. All fields mutable so the run
 /// loop can tally as it goes.
@@ -562,12 +563,16 @@ class SimulationService {
       // pro_phase_advance.dart — was saveProgress(wholeMapReadAtLine535), a
       // snapshot carried across the autoGenerateNextPhaseIfNeeded await
       // above. updateProgress(delta) calls getProgress() fresh at write time.
-      await UserRepository.instance.updateProgress({
-        'current_phase': currentPhase + 1,
-        'current_week': 1,
-        'plan_generated_at': nowWall().toIso8601String(),
-        'phase_started_at': nowWall().toIso8601String(),
-      });
+      //
+      // Unit 3c (OI-45 finding 5): `currentPhase` is still the PRE-await read,
+      // so the same shared monotonic writer the other two advance paths use
+      // applies here too — `nowWall()` threaded through so the sim keeps
+      // stamping simulated time, not wall time.
+      await commitPhaseAdvance(
+        intendedPhase: currentPhase + 1,
+        source: 'simulation_service',
+        now: nowWall(),
+      );
       unawaited(ref.read(syncServiceProvider).pushSnapshot());
       report.phasesGenerated++;
       report.events.add(

@@ -194,13 +194,10 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-45 — L27 concurrency races: 4 unguarded getX→modify→setX patterns (P1)
 
-- **Status**: OPEN
-- **Blocked on**: Unit 3c (`graduation_screen.dart` stale-`nextPhase`-across-`generateAndSchedule`-await
-  fix, found by Unit 3a's round-1 review — not yet started) + a behavioral-test gap for
-  `advanceProPhaseIfExpired`/`_maybeAdvancePhase` (found by Unit 3a's B-pass, tracked separately,
-  not yet started). Unit 3b (cross-device optimistic-lock RPC wiring) is DONE — see the correction
-  block below.
-- **Verified**: 2026-07-30
+- **Status**: CLOSED
+- **Blocked on**: none — Unit 3a (`6258622b`), Unit 3b (`fa05aa88`) and Unit 3c + the
+  behavioral-test gap (2026-08-01, `c8f3d1`) have all landed. See the final closure block below.
+- **Verified**: 2026-08-01
 - **Identified**: 2026-05-17 · OI-43 / L27 lens scan
 - **Risk class**: lost-update race on shared state
 - **Effort**: Unit 3b ~1-2 days (new migration + RPC + local version tracking) + Unit 3c ~0.5 day
@@ -437,6 +434,52 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   safely on an absent key, pinned by its own parity test), tracked as a separate follow-up
   requiring its own deploy authorization, not bundled into this merge. **OI-45 stays OPEN — only
   Unit 3c (`graduation_screen.dart`) and the Unit 3a behavioral-test-coverage gap remain.**
+- **CLOSED 2026-08-01** (oi45-phase-advance-monotonic batch, Unit 3c + the Unit 3a
+  behavioral-test-coverage gap — the last two items this OI's own text named above; shipped
+  together because both needed the same test seam). Full account:
+  `docs/diagnoses/2026-08-01-phase-advance-stale-target-c8f3d1.md`.
+  1. **Unit 3c is BROADER than finding 5 described, and the description's core premise was
+     wrong in the user's favour.** Finding 5 called it "narrower blast radius than the fixed
+     bug — already `updateProgress` (delta)". The delta form is indeed safer for the OTHER
+     fields, but the `current_phase` VALUE in that delta was still the pre-await one — so the
+     residual was not unique to `graduation_screen` at all: `pro_phase_advance.dart:117` and
+     `simulation_service.dart:565`, the two callsites Unit 3a "fixed", carried the identical
+     stale value. All three now route through one monotonic writer
+     (`pro_phase_advance.dart` `commitPhaseAdvance`) that re-reads `current_phase` at write
+     time and refuses a lower-or-equal value. Verified root fact: `current_phase` had **no
+     monotonic guard anywhere** — `saveProgress` guards `deployments_complete` and writes
+     `current_phase` straight through (`user_repository.dart:128-135`).
+  2. **A second, likelier defect finding 5 did not name:** `graduation_screen` ran
+     `generateAndSchedule` entirely OUTSIDE the module-private advance mutex, so a splash pass
+     and a graduation unlock could each generate the same phase — the second overwriting the
+     first's `schedule_*` rows and `plan_start` under a user already looking at the plan. The
+     mutex is now shared (`withPhaseAdvanceLock`) and graduation takes it around generation +
+     write, never across the choice sheet.
+  3. **The guard that existed never ran.** `graduation_screen`'s live-phase abort re-check sat
+     inside `if (offerChoice)`, and `offerChoice` requires
+     `PlanEngineFlags.adherenceGateEnabled` — ship-dark, DEFAULT OFF — so on the production
+     default path it had never executed. Hoisted out. **Round-1 review then corrected the
+     credit given to that hoist:** on the flag-OFF path there is no `await` between the
+     `progress` read and the re-check, so it is provably unreachable today and buys nothing
+     until the adherence gate flips ON. What actually closes the default-path hole is the
+     shared lock plus `commitPhaseAdvance`'s write-time re-read. Recorded because the first
+     draft of this closure claimed the hoist "guards every unlock".
+  4. **Task #41 (the Unit-3a B-pass coverage gap) closed, and that B-pass's diagnosis
+     corrected.** It attributed the gap to needing "genuinely novel test infrastructure";
+     really, driving real plan generation in a test was already established
+     (`repeat_content_scheduling_test.dart:154-195`) and no provider override is needed. The
+     actual blocker was the auth seam — `ensureOpenedForCurrentSession()` returns null with no
+     Supabase, so the function returned `false` on its second line. Those two lines moved into
+     the public wrapper; the core is now `@visibleForTesting` and driven for real.
+  5. **14 tests, both behavioral ones proven to discriminate by negative control** (reverting
+     the guard fails the demotion test; reverting to a whole-map `saveProgress` fails the
+     unrelated-field test). An early draft of the demotion test was a **false green** — a 20 ms
+     delay let generation finish first, making the interposed write simply the last writer;
+     replaced with a single event-loop yield plus an explicit ordering precondition so a miss
+     fails loudly. Recorded because the failure mode is generic to every interposition test.
+  6. **Not fixed, not applicable:** no data repair. A phase demoted by this in the past leaves
+     no trace distinguishing it from a legitimate value, so the historical incidence is
+     unknown rather than clean — stated as unknown.
 
 ## OI-78 — 3 more public-schema RPCs retain the PUBLIC-default-ACL anon/authenticated EXECUTE gap (P3)
 
@@ -1077,3 +1120,80 @@ cloud sessions; **this file is the cross-session backlog.**
   into a fix.
 - **Blast radius estimate**: `account` (touches `sync_coach.dart`'s push/restore contract for an
   existing table, no new migration).
+
+## OI-83 — cloud→Hive `progress` restore merges bypass every monotonic guard, and can demote `current_phase` (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none — needs a scoping decision (below) before a fix shape can be chosen.
+- **Verified**: 2026-08-01 (round-1 review of Unit 3c, `c8f3d1`, by direct read of all 7 writers)
+- **Identified**: 2026-08-01 · round-1 context-blind review of the oi45-phase-advance-monotonic
+  batch, while checking whether that batch's claim "`current_phase` is now monotonic" holds
+  end-to-end. It does not — it holds for the ADVANCE operation only.
+- **Risk class**: monotonic-field demotion via a cloud-wins restore
+  (`feedback_monotonic_field_recompute_demotion.md`; siblings 3a7b9f, c8f3d1)
+- **What's wrong**: `grep -rn "put('progress'" lib/` returns **7** direct writers of the whole
+  `progress` map. Exactly one is `UserRepository.saveProgress`. Two of the others are cloud→Hive
+  merges that copy the PostgREST row's values verbatim, cloud-wins, straight into `userBox`:
+  `sync/sync_profile.dart:612-622` (`_restoreUserProgress`) and
+  `auth_session_bootstrapper.dart:322-328`, both shaped
+  `{...existingMap, for (final e in cloud.entries) if (e.value != null) e.key: e.value}`.
+  A stale cloud row restored over a locally-advanced Hive value therefore demotes `current_phase`
+  (and any other monotonic field in that map) with no guard, no telemetry, and no trace — the
+  advance-side guard `c8f3d1` added sits on `commitPhaseAdvance`, which these do not go through.
+  Two more (`sync_restore_completeness.dart:242,411`) write the map directly as well and want the
+  same audit.
+- **Why it is NOT folded into c8f3d1**: that batch's scope is the advance operation, and its own
+  `restore_methods: not_applicable` is scoped-correct. This is a different operation with a
+  different correct answer, and choosing it is a product/architecture call, not a mechanical fix:
+  a restore that refuses to lower `current_phase` is right for a second device that is behind, and
+  WRONG for a genuine account restore where the cloud row is the only truth left. Guessing between
+  those would be exactly the kind of unverified premise this board exists to catch.
+- **Fix shape (needs the scoping pass first)**: decide per-field whether the progress map's
+  monotonic fields (`current_phase`, `deployments_complete`, `total_workouts_done`,
+  `longest_gap_days`) are local-max-wins or cloud-authoritative on restore; then either route all
+  4 map writers through one merge helper that applies that rule, or document why verbatim
+  cloud-wins is correct and add telemetry when a restore lowers one.
+- **Second-order effect, named so it is not rediscovered as a fresh incident** (B-pass F1 of the
+  same batch): because these writers bypass `withPhaseAdvanceLock` entirely, one of them can bump
+  `current_phase` *while* `graduation_screen._onPro` is inside the lock running
+  `generateAndSchedule`. The counter then behaves correctly — `commitPhaseAdvance` declines the
+  stale write — but the `schedule_*` rows and `plan_start` already written for that phase are NOT
+  rolled back or reconciled against whatever the restore delivered. c8f3d1 narrowed this by
+  re-checking the live phase inside the lock immediately before generating (so a bump that lands
+  *before* generation no longer causes a wasted generate); the window that remains is a bump
+  landing *during* generation, which is this OI's to close.
+- **Blast radius estimate**: `account` (touches `lib/core/services/sync/**` +
+  `auth_session_bootstrapper.dart`; no migration).
+
+## OI-84 — `graduation_screen.dart` added to the Gate 43 allow-list; split owed (P3)
+
+- **Status**: OPEN
+- **Blocked on**: none — this is scheduled work, not a blocked investigation.
+- **Verified**: 2026-08-01 (Gate 43 run: `ALLOW … (892 lines)`)
+- **Identified**: 2026-08-01 · Gate 43 blocked the `oi45-phase-advance-monotonic` commit
+  (`c8f3d1`, Unit 3c).
+- **Risk class**: god-screen / tech-debt ladder regression
+- **What happened**: `lib/features/train/screens/graduation_screen.dart` was **794 lines — six
+  under Gate 43's 800 ceiling** — so Unit 3c's phase-advance monotonic fix could not touch that
+  file at all without tripping the gate. It is now 892 (of the +98, 77 are comment lines added at
+  the direct request of the three review rounds). The file was added to the gate's transitional
+  allow-list (`scripts/check_god_screen_max_lines.dart`) **on explicit founder authorization**,
+  after being shown that (a) the gate has no per-run exception — no env var, no `--warn-only`, it
+  exits 1 unconditionally — and (b) the allow-list is a one-way ratchet whose every prior movement
+  was a *removal*. This is the first entry ever added to it.
+- **Why this is tracked rather than closed**: the allow-list's own header says it "MUST shrink to
+  empty when the audit ladder closes". A seventh entry with no owed-work record would quietly
+  reverse that direction. This OI is that record.
+- **Not a C3/C4 reopening**: `graduation_screen.dart` was never a C3 or C4 target (those were
+  `active_workout`, `train`, `profile`, `ai_coach`, all closed by splitting). It was simply under
+  the ceiling until this batch.
+- **Fix shape (recommended, from the c8f3d1 review)**: rather than a pure part-file split, hoist
+  the locked generate + `commitPhaseAdvance` + repeat-nudge block (~120 lines) out of `_onPro` and
+  into the shared advance service next to `commitPhaseAdvance`, where the other three advance
+  paths already live. That lands the screen at ~770 (under the ceiling honestly, not by
+  exemption), leaves the screen doing UI only — choice sheet, snackbars, navigation, provider
+  invalidation — and completes the "one place owns the phase advance" thesis c8f3d1 started.
+  Reference layout for the alternative pure split: `lib/features/train/screens/active_workout/`.
+  **Remove the allow-list entry in the same commit.**
+- **Blast radius estimate**: `account` (`graduation_screen.dart` has its own file-scoped account
+  rule in `docs/blast_radius.yaml`); no migration, no schema.

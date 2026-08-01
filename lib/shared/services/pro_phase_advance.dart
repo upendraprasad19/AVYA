@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
@@ -30,31 +33,107 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 /// → a retry snackbar + telemetry). The `isPro` / `isPhaseExpired` guards below
 /// make it safe to call redundantly: once a phase has been generated,
 /// `isPhaseExpired()` is false, so a second call returns `false` without
-/// generating again. And the [_advanceInFlight] mutex closes the narrow
+/// generating again. And the [withPhaseAdvanceLock] mutex closes the narrow
 /// concurrency window where the splash's unawaited pass and a card tap could
 /// BOTH pass the expiry gate before either writes → a double-generate.
 bool _advanceInFlight = false;
 
-Future<bool> advanceProPhaseIfExpired(WidgetRef ref) async {
-  // Single-isolate mutex: the check+set is atomic (no await between them), so a
-  // concurrent splash-pass + card-tap can never both proceed to generation.
-  if (_advanceInFlight) return false;
+/// Single-isolate advance **TRY-lock**, SHARED across every surface that
+/// generates or heals a phase — the splash's unawaited pass, the Home/Train
+/// `PhaseGeneratingCard` retry CTA, (Unit 3c) `graduation_screen`'s explicit
+/// unlock, and `PhaseProgressReconciler.reconcile`. The check+set is atomic (no
+/// `await` between them), so two of those can never both proceed to generation.
+///
+/// **Try-lock, not a queueing mutex** — round-2 review flagged that calling it a
+/// "mutex" misleads, because a busy caller is turned away rather than made to
+/// wait. That is the right semantic for the three advance surfaces ("somebody is
+/// already advancing you — stop"), and the WRONG one for the reconciler, which
+/// needs to run eventually; the reconciler therefore supplies its own bounded
+/// retry rather than this primitive growing a queue. The required [ifBusy]
+/// argument is the signature-level reminder: every caller must decide what
+/// "busy" means for it.
+///
+/// It was module-private and covered only the first two until Unit 3c: the
+/// graduation screen ran its own `generateAndSchedule` outside this guard
+/// entirely, so a splash pass and a graduation unlock could each generate the
+/// SAME phase, the second overwriting the first's `schedule_*` rows and
+/// `plan_start` under a user already looking at the plan.
+///
+/// [ifBusy] is what the caller gets when someone else holds the lock — a value,
+/// not an exception, because "somebody is already advancing you" is a normal
+/// outcome for every one of these surfaces, not an error.
+/// Kill-switch (`configBox`). Set `true` to make [withPhaseAdvanceLock] a
+/// pass-through — every caller runs its body, nobody is turned away.
+///
+/// §4.6 / the platform-tier `feature_flag` requirement in `docs/blast_radius.yaml`.
+/// It gates the LOCK ONLY, deliberately, and it is default-OFF-meaning-active —
+/// the same `disable_*` shape as `disable_phase_reconciler`,
+/// `disable_plan_integrity_reconciler` and `disable_bg_restore`. Two halves,
+/// two answers:
+///   - The **lock** is the genuinely risky new primitive: round-2 review already
+///     found one starvation bug in it (the reconciler's bare try-lock), so a
+///     runtime escape hatch for "the lock is wedging a surface in the field" is
+///     real value, not ceremony.
+///   - The **monotonic guard** ([phaseAdvanceTarget] / [commitPhaseAdvance]) has
+///     NO switch. It is pure, cannot deadlock, starve or wedge anything, and the
+///     only thing disabling it could achieve is re-enabling the demotion bug
+///     this batch exists to fix. A kill-switch whose only effect is to restore a
+///     defect is not a safety valve.
+const String kDisablePhaseAdvanceLockKey = 'disable_phase_advance_lock';
+
+bool get _lockDisabled {
+  try {
+    return HiveService.instance.configBox.get(kDisablePhaseAdvanceLockKey) ==
+        true;
+  } catch (_) {
+    // Box not open (pre-boot / test) — the lock stays ACTIVE. Failing closed
+    // here is right: an unopened box must not silently disable a guard.
+    return false;
+  }
+}
+
+Future<T> withPhaseAdvanceLock<T>(
+  Future<T> Function() body, {
+  required T ifBusy,
+}) async {
+  if (_lockDisabled) return await body();
+  if (_advanceInFlight) return ifBusy;
   _advanceInFlight = true;
   try {
-    return await _advanceProPhaseIfExpired(ref);
+    return await body();
   } finally {
     _advanceInFlight = false;
   }
 }
 
-Future<bool> _advanceProPhaseIfExpired(WidgetRef ref) async {
-  // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap. The splash
-  // fires this before `_ensureLocalUser` has opened the per-user namespaced
-  // boxes; without this the profile/progress reads below throw
-  // `HiveUserSession not opened`.
-  final uid = await HiveUserSession.ensureOpenedForCurrentSession();
-  if (uid == null) return false;
+Future<bool> advanceProPhaseIfExpired(WidgetRef ref) async =>
+    withPhaseAdvanceLock<bool>(
+      () async {
+        // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap. The
+        // splash fires this before `_ensureLocalUser` has opened the per-user
+        // namespaced boxes; without this the profile/progress reads below throw
+        // `HiveUserSession not opened`.
+        //
+        // Unit 3c: hoisted OUT of the body and into this wrapper (order is
+        // unchanged — still after the in-flight check, still before any read)
+        // so [runProPhaseAdvance] is drivable from a test. It reads
+        // `SupabaseService.instance.currentUser`, which is null whenever
+        // Supabase was never initialised, so a unit test calling the public
+        // entry point returned `false` here and never reached the write this
+        // function exists to perform — the reason task #41's behavioral
+        // coverage did not exist.
+        final uid = await HiveUserSession.ensureOpenedForCurrentSession();
+        if (uid == null) return false;
+        return runProPhaseAdvance(ref);
+      },
+      ifBusy: false,
+    );
 
+/// The advance itself, minus the session bootstrap. Public + `@visibleForTesting`
+/// ONLY so the behavioral test can drive the real read → slow-generate → write
+/// path (task #41 / OI-45). Production code calls [advanceProPhaseIfExpired].
+@visibleForTesting
+Future<bool> runProPhaseAdvance(WidgetRef ref) async {
   // A7 / B5 D9-D10 — canonical provider path (imperative isPro() gate is a
   // point-in-time check inside an action; the UI RENDER guard uses the reactive
   // subscriptionInfoProvider instead — H-1).
@@ -114,12 +193,16 @@ Future<bool> _advanceProPhaseIfExpired(WidgetRef ref) async {
     // internally, so this path left user_progress stale in the cloud after
     // every PRO phase advance until some unrelated updateProgress call
     // happened to sync it. updateProgress fires syncProgressNow() itself.
-    await UserRepository.instance.updateProgress({
-      'current_phase': currentPhase + 1,
-      'current_week': 1,
-      'plan_generated_at': DateTime.now().toIso8601String(),
-      'phase_started_at': DateTime.now().toIso8601String(),
-    });
+    //
+    // Unit 3c (OI-45 finding 5): that fix closed the whole-map clobber of OTHER
+    // fields but left `current_phase`'s own VALUE pre-await — `currentPhase` is
+    // still read at the top of this function, before the generate. Routed
+    // through [commitPhaseAdvance], which re-reads the live phase at write time
+    // and refuses to write a lower one.
+    await commitPhaseAdvance(
+      intendedPhase: currentPhase + 1,
+      source: 'pro_phase_advance',
+    );
     // Fire-and-forget snapshot push so the AI coach sees the new Phase.
     unawaited(ref.read(syncServiceProvider).pushSnapshot());
 
@@ -149,4 +232,104 @@ Future<void> markPhaseRepeatNudgePending() async {
   if (HiveUserSession.currentOwnerFullId != null) {
     await MigratedKey.write('phase_repeat_nudge_pending', true);
   }
+}
+
+/// PURE decision behind [commitPhaseAdvance] (visible for testing — no Hive, no
+/// clock). Returns the phase to write, or `null` when the write must be SKIPPED
+/// because another advancer already moved the counter to [intendedPhase] or past
+/// it.
+///
+/// **Why this exists (Unit 3c / OI-45 finding 5).** `current_phase` is the one
+/// progress field with NO monotonic guard anywhere: `UserRepository.saveProgress`
+/// guards `deployments_complete` (`max(prior, phase-1)`) and writes
+/// `current_phase` straight through. Every advance path computes its target
+/// BEFORE a real, slow plan-generation `await` and writes it after, so a
+/// concurrent advancer landing inside that window gets overwritten by a stale,
+/// LOWER number. Concurrent higher-phase writers that reach it:
+/// [advanceProPhaseIfExpired] (reached from `splash_screen.dart:225`'s
+/// `unawaited(_autoGenerateNextPhaseForPro())`, and on tap from
+/// `phase_generating_card.dart`), `PhaseProgressReconciler.reconcile` (called
+/// from `restoring_screen.dart`, can jump more than +1),
+/// `graduation_screen._onPro`, and the dev sim. That is the
+/// `feedback_monotonic_field_recompute_demotion` class — same shape as diagnose
+/// `3a7b9f`'s rank demotion.
+///
+/// Deliberately mirrors `PhaseProgressReconciler.reconciledPhase`: monotonic,
+/// `null` for a no-op, pure so it can be tested without a widget tree.
+///
+/// The guard does NOT belong in `saveProgress`, which looks like the right choke
+/// point because that is where `deployments_complete` is stamped: a blanket
+/// monotonic `current_phase` there would break the two legitimate resets to
+/// phase 1 (`onboarding_provider.dart`'s first write, the dev `resetJourney`),
+/// both of which call `saveProgress` directly. The guard belongs to the ADVANCE
+/// operation, not to the storage primitive.
+@visibleForTesting
+int? phaseAdvanceTarget({required int livePhase, required int intendedPhase}) {
+  if (livePhase >= intendedPhase) return null; // already advanced — never demote
+  return intendedPhase;
+}
+
+/// The SINGLE writer for a phase advance's progress delta. Used by all three
+/// advance paths: [advanceProPhaseIfExpired] (splash + card),
+/// `graduation_screen._onPro`, and `simulation_service._maybeAdvancePhase`.
+///
+/// Re-reads `current_phase` from Hive HERE, at write time, so the decision is
+/// made against live state rather than against the snapshot the caller took
+/// before its plan-generation await. Returns `true` iff the delta was written.
+///
+/// A skip skips the WHOLE delta, not just `current_phase`: `current_week: 1` and
+/// `phase_started_at` written against somebody else's advance would reset the
+/// week and the phase-start date under them, which is the same class of damage
+/// as the demotion.
+///
+/// [now] is threaded so the dev sim can pass its time-travel seam (`nowWall()`);
+/// production callers omit it. Both timestamps come from ONE instant — the
+/// previous code called `DateTime.now()` twice, microseconds apart, for two
+/// fields that describe the same event.
+Future<bool> commitPhaseAdvance({
+  required int intendedPhase,
+  required String source,
+  DateTime? now,
+}) async {
+  // `as int?`, matching the other two advance-path readers of this field
+  // (graduation_screen `_onPro`, phase_progress_reconciler `_reconcileLocked`).
+  // A `num?)?.toInt()` hardening was written here and REMOVED after the
+  // hypothesis behind it was tested rather than assumed: the guarantee is the
+  // SCHEMA — `user_progress.current_phase` is `integer`/`int4`, verified by live
+  // `information_schema` query 2026-08-01 — so PostgREST cannot deliver a
+  // double for it and no writer can land one.
+  //
+  // Round-2 review corrected the FIRST rationale written here, which said
+  // `saveProgress` (user_repository.dart:129) would throw on a double before
+  // this read ran. That is true only for writers that go through
+  // `saveProgress`, and four do not: sync_profile.dart:613-622,
+  // auth_session_bootstrapper.dart:323-328 and
+  // sync_restore_completeness.dart:242,411 all `put('progress', …)` directly
+  // (see OI-83). The column type is what holds, not the repository.
+  //
+  // Note `sync_profile.dart:100,289,301` DO use `as num?)?.toInt()` for this
+  // field — on the cloud-payload side, where the value has been through JSON.
+  final livePhase =
+      (UserRepository.instance.getProgress()?['current_phase'] as int?) ?? 1;
+  final target =
+      phaseAdvanceTarget(livePhase: livePhase, intendedPhase: intendedPhase);
+
+  if (target == null) {
+    // Not silent: a skip means two advancers raced, which is exactly the
+    // condition nobody could see before this fix existed.
+    unawaited(ErrorTelemetry.logEvent(
+      'phase_advance_conflict_skipped',
+      message: 'source=$source live=$livePhase intended=$intendedPhase',
+    ));
+    return false;
+  }
+
+  final stamp = (now ?? DateTime.now()).toIso8601String();
+  await UserRepository.instance.updateProgress({
+    'current_phase': target,
+    'current_week': 1,
+    'plan_generated_at': stamp,
+    'phase_started_at': stamp,
+  });
+  return true;
 }

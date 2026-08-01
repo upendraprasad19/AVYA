@@ -6405,7 +6405,12 @@ concepts:
 
   - concept: phase_progress_current_phase
     domain: workout
-    behavioral_test_path: test/contracts/phase_progress_reconciler_test.dart
+    # c8f3d1 / Unit 3c: was phase_progress_reconciler_test.dart, which is a PURE
+    # test of reconciledPhase(int,int) and never touches the write path — the
+    # gated field pointed at the one test that could not fail if the writer
+    # broke. Now points at the behavioral test that drives the real advance
+    # (the reconciler's own pure test is still cited on its writer entry below).
+    behavioral_test_path: test/contracts/pro_phase_advance_behavioral_test.dart
     description: |
       The user's current phase number (user_progress.current_phase). The Train
       week-selector phase labels MUST derive from this single SoT (not hardcoded
@@ -6417,10 +6422,50 @@ concepts:
     writers:
       - file: lib/shared/repositories/user_repository.dart
         method: saveProgress / updateProgress
-        notes: stamps deployments_complete = max(prior, current_phase-1), monotonic.
+        notes: >
+          stamps deployments_complete = max(prior, current_phase-1), monotonic —
+          and NOTHING guards current_phase itself here, deliberately: a blanket
+          monotonic guard at this level would break the two legitimate resets to
+          phase 1 (onboarding_provider.dart's first-ever write, the dev
+          resetJourney). The guard lives on the ADVANCE operation instead (c8f3d1).
       - file: lib/core/services/phase_progress_reconciler.dart
         method: reconcile (uses pure reconciledPhase)
-        notes: boot-time monotonic heal; advances current_phase to completedBlocks+1.
+        notes: >
+          monotonic heal; advances current_phase to completedBlocks+1. Called from
+          restoring_screen.dart (post-auth restore), NOT from the splash boot path —
+          the "boot heal" shorthand used elsewhere is imprecise. Its pure decision is
+          pinned by test/contracts/phase_progress_reconciler_test.dart. c8f3d1: its
+          body now runs under withPhaseAdvanceLock, because it derives completedBlocks
+          from pastPhaseBlocks() — the schedule_* rows a concurrent locked
+          generateAndSchedule is mid-rewrite of — and reconciledPhase's own header
+          notes a monotonic over-advance is unrecoverable.
+      - file: lib/shared/services/pro_phase_advance.dart
+        method: commitPhaseAdvance (+ pure phaseAdvanceTarget) — THE single advance writer
+        notes: >
+          Unit 3c / c8f3d1 (2026-08-01). Re-reads current_phase from Hive AT WRITE
+          TIME and refuses a lower-or-equal value; a skip skips the WHOLE delta
+          (current_week + phase_started_at + plan_generated_at), never a partial.
+          Emits phase_advance_conflict_skipped on a skip. Added because all three
+          advance callers computed their target BEFORE a slow plan-generation await
+          and wrote it after — the monotonic-demotion class
+          (feedback_monotonic_field_recompute_demotion.md, 3a7b9f).
+      - file: lib/shared/services/pro_phase_advance.dart
+        method: runProPhaseAdvance (splash unawaited + PhaseGeneratingCard CTA)
+        notes: >
+          calls commitPhaseAdvance(intendedPhase: currentPhase + 1). The session
+          bootstrap (ensureOpenedForCurrentSession) lives in the public
+          advanceProPhaseIfExpired wrapper, under withPhaseAdvanceLock; the core is
+          @visibleForTesting so the write path is behaviorally drivable (task #41).
+      - file: lib/features/train/screens/graduation_screen.dart
+        method: _onPro (the explicit unlock)
+        notes: >
+          generation + commit run under the SHARED withPhaseAdvanceLock (taken after
+          the choice sheet closes, never across it); live-phase abort re-check hoisted
+          out of the ship-dark `offerChoice` branch onto the default path; busy path
+          emits phase_unlock_advance_busy and routes to /train.
+      - file: lib/features/dev/simulation_service.dart
+        method: _maybeAdvancePhase (kDebugMode dev harness)
+        notes: commitPhaseAdvance(now: nowWall()) — keeps the sim clock seam.
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/widgets/week_selector.dart
@@ -6431,6 +6476,15 @@ concepts:
       - file: lib/features/train/providers/train_provider.dart
         method: CurrentPlanNotifier.build
         semantic: pass-through
+      - file: test/contracts/pro_phase_advance_behavioral_test.dart
+        method_or_widget: the advance write path (c8f3d1 / task #41)
+        semantic: >
+          pure monotonic decision · commitPhaseAdvance writes/skips against real Hive
+          (a skip leaves current_week AND phase_started_at untouched) · the shared lock
+          excludes a second entrant and releases on throw · the REAL runProPhaseAdvance
+          with real plan generation and a concurrent interposed write is neither demoted
+          nor whole-map-clobbered. Both behavioral cases proven to fail against
+          deliberately reverted code (negative controls recorded in the diagnose-doc).
     contract_test_path: test/contracts/week_selector_reads_current_phase_test.dart
 
   - concept: weekly_report_target_and_freshness

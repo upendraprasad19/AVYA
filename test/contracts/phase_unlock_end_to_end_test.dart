@@ -80,14 +80,32 @@ void main() {
       }
     });
 
-    test('updateProgress write includes plan_generated_at', () {
+    test('the unlock still stamps plan_generated_at — now via the shared '
+        'monotonic writer', () {
+      // ec4d27's original assertion was `stripped.contains("'plan_generated_at'")`
+      // against THIS file. Unit 3c (c8f3d1) moved the progress write into the
+      // one shared advance writer, so the literal no longer appears here — but
+      // the guarantee ec4d27 exists to protect (the unlock stamps
+      // plan_generated_at, which sync_profile.dart pushes to
+      // user_progress.plan_generated_at) is unchanged. Following the writer
+      // instead of the literal: assert graduation routes through
+      // commitPhaseAdvance AND that commitPhaseAdvance stamps the field. A
+      // location-pinning grep would have had to be deleted here; this one
+      // survives the refactor and still fails if either half breaks.
       expect(
-        stripped.contains("'plan_generated_at'"),
+        stripped.contains('commitPhaseAdvance('),
         isTrue,
-        reason: 'graduation unlock must stamp plan_generated_at in the '
-            'updateProgress call — cloud user_progress.plan_generated_at '
-            'column already accepts it via sync_profile.dart:165 but the '
-            'caller never wrote it.',
+        reason: 'graduation unlock must commit through the shared advance '
+            'writer (Unit 3c / c8f3d1).',
+      );
+      final advanceSrc = _stripComments(
+          File('lib/shared/services/pro_phase_advance.dart').readAsStringSync());
+      expect(
+        advanceSrc.contains("'plan_generated_at': stamp"),
+        isTrue,
+        reason: 'commitPhaseAdvance must stamp plan_generated_at — cloud '
+            'user_progress.plan_generated_at accepts it via sync_profile.dart '
+            'and this is now the only advance path that writes it.',
       );
     });
 

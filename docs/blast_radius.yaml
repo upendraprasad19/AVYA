@@ -214,6 +214,16 @@ paths:
   # that tree is ordinary Train-tab UI with no equivalent risk — a blanket
   # promotion would over-gate routine UI changes for no safety gain.
   - { glob: "lib/features/train/screens/graduation_screen.dart", tier: account }
+  # Unit 3c / c8f3d1 (2026-08-01), same one-file argument as the two rules above:
+  # pro_phase_advance.dart became THE single writer for the phase advance
+  # (commitPhaseAdvance) and owns the shared advance mutex every generating
+  # surface now takes. It sits under lib/shared/**, which is feature-tier at the
+  # bottom of this file, so a diff touching only it would clear zero review gate
+  # while changing the monotonic guard on `current_phase`. Scoped to the file
+  # rather than lib/shared/services/** because that directory currently holds
+  # exactly this one file (verified by ls) — a directory glob would silently
+  # promote whatever lands there next, which is a claim this rule cannot make.
+  - { glob: "lib/shared/services/pro_phase_advance.dart", tier: account }
 
   # ----- feature (explicit overrides over default) -----
   - { glob: "lib/features/profile/**", tier: feature }
