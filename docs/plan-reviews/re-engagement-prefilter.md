@@ -8,7 +8,7 @@ verdict: converged
 bpass: accepted
 bpass_review: docs/reviews/76d44c9b4967-review.md
 hermes: accepted
-hermes_review: docs/audit/2026-08-01-hermes-reengagement-prefilter.md
+hermes_report: docs/audit/2026-08-01-hermes-reengagement-prefilter.md
 ---
 
 # Plan review — re-engagement-prefilter
