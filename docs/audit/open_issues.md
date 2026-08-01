@@ -488,6 +488,96 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   anti-join shape of `re-engagement`'s actual check fits `clean-orphan-media`'s RPC pattern
   more directly.
 
+## OI-78 — 3 more public-schema RPCs retain the PUBLIC-default-ACL anon/authenticated EXECUTE gap (P3)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-07-31 (round-1 review of Unit 5, re-engagement-prefilter) — live
+  `has_function_privilege` query against `dedsavbjuwgarrhphgnl` for every non-trigger
+  `public`-schema function.
+- **Identified**: 2026-07-31 · round-1 review of Unit 5 (OI-48, re-engagement-prefilter), while
+  independently re-verifying migration 117's claim that `find_orphan_chat_media` was the only
+  instance of the migrations-090/091 gap class still live. The same `has_function_privilege`
+  query applied repo-wide surfaced 3 more.
+- **What's wrong**: none of these three ever had their PUBLIC-default grant revoked. Migrations
+  090/091 (2026-06-11) fixed 9 SECURITY DEFINER functions (live-verified prosecdef=true); migration
+  117 fixed the sibling `find_orphan_chat_media` (created by migration 071, 2026-05-17 — ~25 days
+  BEFORE 090/091, not after as an earlier draft of this entry said). None of the 4 functions this OI
+  and migration 117 cover were missed for timing reasons — 090/091's REVOKE pass specifically
+  targeted SECURITY DEFINER functions, and all 4 (these 3 plus `find_orphan_chat_media`) are plain
+  SQL/STABLE, categorically outside that scope regardless of creation order:
+  - `get_users_with_message_count(int)` — created `010_...sql:76`, never revoked. Sole caller:
+    `rolling-context/index.ts:137` (service_role).
+  - `match_memories(uuid,vector,int,float8)` — created `20260331000001_...sql:70`, never
+    revoked. Sole caller: `_shared/memory_retrieval.ts:114` (service_role).
+  - `morning_alert_pick_quarter(...)` — `046_...sql:50` grants `authenticated, service_role`
+    explicitly but never revokes the PUBLIC-default grant anon still inherits. Sole caller:
+    `morning-alert/index.ts:577` (service_role).
+  None are `SECURITY DEFINER` (all run with the caller's own privileges), and each table they
+  touch has an RLS backstop consistent with the reasoning migration 117 documents for
+  `find_orphan_chat_media` (verify per-function before treating that as established rather than
+  assumed) — so this is unwanted attack surface, not a confirmed live data leak. Severity is P3
+  for that reason, matching the pre-fix `find_orphan_chat_media` classification.
+  **Not in scope, seen and deliberately excluded (round-2 review N7):** `email_is_registered`
+  is also anon+authenticated-executable and SECURITY DEFINER, but that is an intentional,
+  reviewed exception (migration 106, pre-auth sign-in flow — `revoke all from public; grant
+  execute to anon, authenticated;` explicitly) documented as the "15/16" carve-out in the
+  2026-06-11 audit closure. Noted here so a future sweep doesn't rediscover it as a "4th
+  instance" of this OI's class.
+- **Fix shape**: same pattern as migrations 090/091/117 — `REVOKE EXECUTE ... FROM PUBLIC, anon,
+  authenticated` + `GRANT EXECUTE ... TO service_role` (or `TO authenticated, service_role` where
+  a real authenticated caller exists — confirm per function, don't assume service-role-only).
+  Given this is the fourth time this exact gap class has been found by whichever unit happens to
+  be using one of these functions as a reference pattern, the more durable fix is a structural
+  gate: a live query enumerating every `public`-schema function's `anon`/`authenticated` EXECUTE
+  privilege against an explicit allowlist (mirroring how `check_schema_column_refs.dart` already
+  does this for column references), run at `/build-apk` or in CI, so a 5th instance can't ship
+  silently. Whether to fix the 3 functions one-by-one or build the gate first is a scoping call
+  for whoever picks this up — not pre-decided here.
+- **Blast radius estimate**: likely `platform` (migration touching 3 existing functions' grants
+  only, no DDL/table change) — confirm via `scripts/blast_radius_from_diff.dart` at diff time;
+  the `SECURITY DEFINER` content-rule will NOT fire here since none of these are SECURITY
+  DEFINER, so don't assume catastrophic without checking.
+
+## OI-79 — Un-ranged PostgREST reads silently truncate at db-max-rows (1000) in cron candidate scans (P1)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-08-01 (Hermes L31, Unit 5 re-engagement-prefilter) — empirically confirmed
+  live, not inferred: an unbounded `GET /rest/v1/food_database?select=id` returns
+  `HTTP/1.1 206 Partial Content` with `Content-Range: 0-999/1431`.
+- **Identified**: 2026-08-01 · Hermes lens L31 (cron efficiency) during Unit 5's catastrophic-tier
+  review.
+- **What's wrong**: PostgREST caps an un-ranged response at `db-max-rows` (1000 on this project).
+  **supabase-js does NOT treat a 206 as an error** — `error` is null and `data` is simply short, so
+  a truncated read is indistinguishable from a small one. `re-engagement/index.ts` has no `.range(`
+  or `.limit(` on either candidate path:
+  - **Path A** (`.from("coach_memory").select(...).gte("dropout_risk_score", 0.5)`) — REAL,
+    empirically confirmed class. At >1000 high-risk users it silently processes a truncated set.
+  - **Path B** (the `find_reengagement_silent_candidates` RPC added by migration 117) — PARTIAL.
+    PostgREST documents `db-max-rows` as applying to "table, view, or **stored procedure**" (same
+    code path), but this could NOT be empirically proven on this project: no anon-executable
+    set-returning function here can return >1000 rows (only 18 live users). Treat as very likely,
+    not proven.
+  - Same exposure very likely applies to the other unpaginated cron candidate scans — `i-see-you-callout`
+    paginates (`PAGE_SIZE=1000`), `morning-alert` paginates (`:583-594`), but the rest were not
+    audited under this lens. **Scope the fix by re-running the lens across all cron functions, not
+    just the two named here.**
+- **NOT introduced by Unit 5 — Unit 5 strictly improved it.** The pre-migration-117 Path B
+  truncated an *unordered, unfiltered* `.from("users")` fetch at 1000 rows *before* any activity
+  filtering, so it could yield ~0 genuinely-silent users; the RPC returns up to 1000
+  *already-filtered* ones. Unit 5 added saturation DETECTION (a loud `console.warn` naming this OI
+  when either path returns >= 1000 rows, `re-engagement/index.ts:154` and `:240`) so the condition
+  is no longer silent — but detection is not a fix.
+- **Fix shape**: a `.range(offset, offset + PAGE_SIZE - 1)` pagination loop over both paths, with
+  in-repo precedent at `morning-alert/index.ts:583-594` (`PAGE_SIZE` + offset loop, `hasMore`
+  termination on a short page). `.range()` works on `.rpc()` calls as well as table selects.
+  Cross-check while doing this: `active_users_for_signals()` carries an internal `limit 5000`,
+  which is UNREACHABLE through PostgREST if the cap applies to RPCs — contradicting
+  `compute-coach-signals/index.ts:6-8`'s "worst-case is 5000" comment. Same class; resolve together.
+- **Blast radius estimate**: `account` (Edge Function logic only, no migration, no client) —
+  confirm via `scripts/blast_radius_from_diff.dart` at diff time.
+
 ## OI-50 — L37 empty/null-shape readers: 23 risky accesses across 6 files (P2)
 
 - **Status**: OPEN

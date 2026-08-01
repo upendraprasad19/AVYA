@@ -63,6 +63,46 @@ SELECT 'update_user_progress_snapshot cross-account guard present',
        pg_get_functiondef('public.update_user_progress_snapshot(uuid, bigint, integer, integer, timestamptz, timestamptz, integer, integer, text, integer, integer, date, integer)'::regprocedure)
          ILIKE '%cross-account progress write blocked%'
 UNION ALL
+-- Unit 5 (OI-48, 2026-07-31, diagnose a4e1c9, migration 117) — new RPC needs
+-- the SAME service-role-only shape (no legitimate client caller exists;
+-- re-engagement is cron-dispatched, always service_role).
+SELECT 'find_reengagement_silent_candidates anon revoked',
+       has_function_privilege('anon',
+         'public.find_reengagement_silent_candidates(date, timestamptz, uuid[])', 'EXECUTE') = false
+UNION ALL
+SELECT 'find_reengagement_silent_candidates authenticated revoked',
+       has_function_privilege('authenticated',
+         'public.find_reengagement_silent_candidates(date, timestamptz, uuid[])', 'EXECUTE') = false
+UNION ALL
+SELECT 'find_reengagement_silent_candidates service_role retained',
+       has_function_privilege('service_role',
+         'public.find_reengagement_silent_candidates(date, timestamptz, uuid[])', 'EXECUTE') = true
+UNION ALL
+-- Unit 5's sibling fix (migration 117 Part 2) — find_orphan_chat_media
+-- (migration 071) was anon+authenticated-executable live since its creation;
+-- this migration narrows it to match its always-documented service-role-only
+-- intent (clean-orphan-media is its one caller, always service_role).
+SELECT 'find_orphan_chat_media anon revoked',
+       has_function_privilege('anon', 'public.find_orphan_chat_media(timestamptz)', 'EXECUTE') = false
+UNION ALL
+SELECT 'find_orphan_chat_media authenticated revoked',
+       has_function_privilege('authenticated', 'public.find_orphan_chat_media(timestamptz)', 'EXECUTE') = false
+UNION ALL
+SELECT 'find_orphan_chat_media service_role retained',
+       has_function_privilege('service_role', 'public.find_orphan_chat_media(timestamptz)', 'EXECUTE') = true
+UNION ALL
+-- Unit 5 round-2 review (N2) — find_reengagement_silent_candidates must set
+-- search_path like every other directly-callable public RPC (confirmed live:
+-- find_orphan_chat_media's own proconfig is search_path=public,extensions,
+-- vault,private; migration 115's RPC sets search_path TO 'public'). Omitting
+-- it would have been the first directly-callable public RPC to regress the
+-- function_search_path_mutable lint category the 2026-06-11 audit closed 9/9.
+SELECT 'find_reengagement_silent_candidates search_path set',
+       EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+               WHERE n.nspname='public' AND p.proname='find_reengagement_silent_candidates'
+                 AND p.proconfig IS NOT NULL
+                 AND EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%'))
+UNION ALL
 -- search_path no longer mutable on the 10 flagged functions (spot-check 3).
 SELECT 'match_memories search_path set',
        EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace

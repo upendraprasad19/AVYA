@@ -14,10 +14,12 @@
  *   per-table check.
  *
  *   Path B (fallback) — for users without a coach_memory row yet (the
- *   warmup gap before the nightly cron has run for them), we fall back
- *   to a direct `max(activity)` check across workout_logs, nutrition_logs
- *   and weight_logs. If `users.last_active_at` is recent (<3d) we skip
- *   the per-table queries entirely — fast path for the engaged majority.
+ *   warmup gap before the nightly cron has run for them), one RPC
+ *   (find_reengagement_silent_candidates, migration 117) computes the
+ *   absence-of-activity set across workout_logs/nutrition_logs/weight_logs
+ *   plus the last_active_at fast-path, all inside Postgres in one
+ *   round-trip (OI-48, 2026-07-31 — was an O(all users) fetch + per-user
+ *   3-table sequential-query loop before this).
  *
  * Tier: BOTH free + PRO. Re-engagement matters for everyone — there is
  * no monetisation logic gating the nudge. (Distinct from plateau-alert,
@@ -70,6 +72,34 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DROPOUT_THRESHOLD = 0.5;
 const SILENCE_DAYS_FALLBACK = 3;
 
+/**
+ * PostgREST's `db-max-rows` on this project. An un-ranged response is
+ * silently truncated to this many rows (HTTP 206 + Content-Range, which
+ * supabase-js does NOT surface as an error). Used only to detect and LOG
+ * saturation — it is not a fix for it; see OI-79 for the pagination work.
+ */
+const POSTGREST_MAX_ROWS = 1000;
+
+/**
+ * Pure projection of find_reengagement_silent_candidates' RPC rows into the
+ * same {candidates, names} shape the old per-user loop built inline —
+ * exported so it can be unit-tested independently of the live-DB serve
+ * handler, following the buildSnapshotRow / log-client-error convention
+ * (see index_test.ts).
+ */
+export function mapFallbackCandidates(
+  rows: Record<string, unknown>[],
+): { candidates: string[]; names: Map<string, string | null> } {
+  const candidates: string[] = [];
+  const names = new Map<string, string | null>();
+  for (const row of rows) {
+    const userId = row.user_id as string;
+    candidates.push(userId);
+    names.set(userId, (row.full_name as string | null) ?? null);
+  }
+  return { candidates, names };
+}
+
 // Audit C-4 (2026-05-11, closes-diagnose 7ad0c4): added CRON_SECRET / service-role-key gate.
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -105,9 +135,29 @@ Deno.serve(async (req: Request) => {
       )
       .gte("dropout_risk_score", DROPOUT_THRESHOLD)
       .not("signals_computed_at", "is", null);
-    if (memError) throw memError;
+    // Tagged so a Path A failure is distinguishable from Path B's in
+    // cron_call_log.error_summary (Hermes L34 F2) — the two throws otherwise
+    // land in one catch and serialize identically, making a regression in
+    // either path invisible without manual edge-log archaeology. Tagging
+    // convention mirrors morning-alert:809 / rolling-context:161.
+    if (memError) {
+      throw new Error(
+        `path_a coach_memory fetch failed: ${
+          (memError as { message?: string } | null)?.message ?? String(memError)
+        }`,
+      );
+    }
 
     const memoryRows = (highRisk ?? []) as Record<string, unknown>[];
+    // Same un-ranged PostgREST truncation exposure as Path B below, same
+    // reason it is detected-and-logged rather than fixed here (OI-79).
+    if (memoryRows.length >= POSTGREST_MAX_ROWS) {
+      console.warn(
+        `[re-engagement] request_id=${requestId} PATH A SATURATED: got ${memoryRows.length} high-risk rows, ` +
+          `at or above the PostgREST db-max-rows ceiling (${POSTGREST_MAX_ROWS}). The candidate set is ` +
+          `almost certainly TRUNCATED. See OI-79.`,
+      );
+    }
     const candidatesFromMemory = new Set<string>(
       memoryRows.map((r) => r.user_id as string),
     );
@@ -118,74 +168,81 @@ Deno.serve(async (req: Request) => {
     // ──────────────────────────────────────────────────────────
     // PATH B — fallback for users without coach_memory rows.
     //
-    // Pull all active users; skip those already in path A or whose
-    // `last_active_at` is fresh; then verify per-table activity.
-    // Per-user query cost is small (3 indexed point queries) and
-    // user count is bounded — this is fine for daily cron at our
-    // current scale.
+    // OI-48 (2026-07-31, diagnose a4e1c9): replaced the O(all users) fetch +
+    // per-user 3-table sequential-query loop (1 initial fetch + 3 per
+    // silent user = 37 round-trips at 12 silent users, unbounded at scale)
+    // with one Postgres RPC
+    // (find_reengagement_silent_candidates, migration 117) expressing the
+    // identical absence-check as NOT EXISTS anti-joins in one round-trip —
+    // mirrors clean-orphan-media's find_orphan_chat_media shape (migration
+    // 071), the closer structural precedent than protein-gap-alert's
+    // batched positive-filter for an absence check specifically (this is an
+    // anti-join, not a batchable positive filter). The per-row "on a read
+    // error, skip this user" fail-closed behavior the old per-user loop
+    // needed no longer has a direct analog — a single SQL statement cannot
+    // partially fail per-row, so an RPC error now fails the whole Path B
+    // fallback (and the whole cron invocation, matching the ALREADY-existing
+    // behavior of the old code's initial batched `.from("users")` fetch
+    // erroring, which also threw before reaching path A's candidates).
     // ──────────────────────────────────────────────────────────
     const cutoffMs = Date.now() - SILENCE_DAYS_FALLBACK * 86_400_000;
     const cutoffIso = new Date(cutoffMs).toISOString();
     const cutoffDate = cutoffIso.slice(0, 10); // YYYY-MM-DD
 
-    const { data: allUsers, error: userError } = await supabase
-      .from("users")
-      .select("id, last_active_at, full_name, is_deleted")
-      .or("is_deleted.is.null,is_deleted.eq.false");
-    if (userError) throw userError;
+    const { data: fallbackRows, error: fallbackErr } = await supabase.rpc(
+      "find_reengagement_silent_candidates",
+      {
+        p_cutoff_date: cutoffDate,
+        p_cutoff_ts: cutoffIso,
+        p_exclude_user_ids: Array.from(candidatesFromMemory),
+      },
+    );
+    // Tagged + .message-unwrapped for the same reason as Path A above, and
+    // load-bearing HERE specifically: this batch converted Path B's old
+    // per-user "skip this user on read error" handling into a single
+    // whole-invocation throw (one SQL statement cannot partially fail
+    // per-row), so cron_call_log.error_summary is now the ONLY durable
+    // record of a Path B failure. A bare String(err) on a supabase-js
+    // PostgrestError (a plain {message,details,hint,code} object, NOT an
+    // Error subclass) yields "[object Object]" — the catalogued bug-class
+    // fixed at compute-coach-signals/index.ts:92-98 (Hermes 2026-07-26 F3).
+    if (fallbackErr) {
+      throw new Error(
+        `path_b find_reengagement_silent_candidates rpc failed: ${
+          (fallbackErr as { message?: string } | null)?.message ??
+            String(fallbackErr)
+        }`,
+      );
+    }
 
-    const fallbackCandidates: string[] = [];
-    const fallbackNames = new Map<string, string | null>();
+    const { candidates: fallbackCandidates, names: fallbackNames } =
+      mapFallbackCandidates(fallbackRows ?? []);
 
-    for (const u of (allUsers ?? []) as Record<string, unknown>[]) {
-      const userId = u.id as string;
-
-      // Already covered by path A — skip.
-      if (candidatesFromMemory.has(userId)) continue;
-
-      // Fast-path: if last_active_at is recent, definitely not silent.
-      const lastActiveRaw = u.last_active_at as string | null;
-      if (lastActiveRaw) {
-        const lastActiveMs = new Date(lastActiveRaw).getTime();
-        if (Number.isFinite(lastActiveMs) && lastActiveMs >= cutoffMs) {
-          continue;
-        }
-      }
-
-      // Per-table verification — any activity in the window kicks them out.
-      // Unit C (§2.24) — on a read error, CONTINUE (skip this user): we cannot
-      // confirm inactivity, so we must NOT push a "we miss you" nudge to a
-      // possibly-active user. Pre-fix a silent failure coerced to []→length 0→
-      // fell through to `fallbackCandidates.push` and mis-nudged active users.
-      const { data: anyWorkout, error: workoutErr } = await supabase
-        .from("workout_logs")
-        .select("date")
-        .eq("user_id", userId)
-        .gte("date", cutoffDate)
-        .limit(1);
-      if (workoutErr) continue;
-      if ((anyWorkout ?? []).length > 0) continue;
-
-      const { data: anyNutrition, error: nutritionErr } = await supabase
-        .from("nutrition_logs")
-        .select("date")
-        .eq("user_id", userId)
-        .gte("date", cutoffDate)
-        .limit(1);
-      if (nutritionErr) continue;
-      if ((anyNutrition ?? []).length > 0) continue;
-
-      const { data: anyWeight, error: weightErr } = await supabase
-        .from("weight_logs")
-        .select("date")
-        .eq("user_id", userId)
-        .gte("date", cutoffDate)
-        .limit(1);
-      if (weightErr) continue;
-      if ((anyWeight ?? []).length > 0) continue;
-
-      fallbackCandidates.push(userId);
-      fallbackNames.set(userId, (u.full_name as string | null) ?? null);
+    // PostgREST caps an un-ranged response at db-max-rows (1000 on this
+    // project — verified live: an unbounded /rest/v1 select returns HTTP
+    // 206 + Content-Range 0-999/N). supabase-js does NOT throw on a 206:
+    // `error` is null and `data` is silently short. Neither this call nor
+    // Path A above paginates, so at >1000 candidates each silently
+    // processes a truncated set.
+    //
+    // This is PRE-EXISTING and this batch strictly IMPROVES it — the old
+    // Path B truncated an UNORDERED, UNFILTERED all-users fetch at 1000
+    // before any activity filtering, so it could return ~0 genuinely-silent
+    // users; the RPC returns up to 1000 ALREADY-FILTERED ones. The real fix
+    // is a .range() pagination loop over BOTH paths (precedent:
+    // morning-alert/index.ts:583-594, PAGE_SIZE + offset loop), which is a
+    // distinct concern from OI-48's per-user-query-loop finding and is
+    // tracked as its own board item (OI-79) rather than bolted on here.
+    //
+    // What IS in scope: making saturation LOUD instead of silent for the
+    // leg this batch writes. A short read is indistinguishable from a small
+    // one without this.
+    if (fallbackCandidates.length >= POSTGREST_MAX_ROWS) {
+      console.warn(
+        `[re-engagement] request_id=${requestId} PATH B SATURATED: got ${fallbackCandidates.length} candidates, ` +
+          `at or above the PostgREST db-max-rows ceiling (${POSTGREST_MAX_ROWS}). The candidate set is ` +
+          `almost certainly TRUNCATED — silent users beyond the cap were not nudged this tick. See OI-79.`,
+      );
     }
 
     const allCandidates = [
@@ -199,11 +256,15 @@ Deno.serve(async (req: Request) => {
       );
       await logCronEnd(logId, "success", { httpStatus: 200, requestId });
       return new Response(
+        // Same key set as the main-path response below (Hermes L34 F4) —
+        // prefs_off was missing here, so any consumer parsing both shapes
+        // saw an inconsistent contract.
         JSON.stringify({
           status: "success",
           from_memory: 0,
           from_fallback: 0,
           sent: 0,
+          prefs_off: 0,
           dedup_skipped: 0,
           errors: 0,
         }),
@@ -308,6 +369,20 @@ Deno.serve(async (req: Request) => {
           screen: "/ai_coach",
         });
         if (ok) {
+          // No local try around markProactiveSent, and none is needed: it
+          // is non-throwing BY CONTRACT — `_shared/proactive_dedup.ts:87-95`
+          // wraps its whole body in try/catch and only console.warns ("Non-
+          // fatal on failure (the push already went out)"). All 9 sibling
+          // cron functions call it bare after `sent++` for the same reason.
+          // Hermes L34 F3 proposed wrapping it to stop a `sent`/`errors`
+          // double-count; that double-count is UNREACHABLE (nothing can
+          // throw here), and the wrapper was reverted after verifying the
+          // helper rather than trusting the finding — a `mark_failures`
+          // counter would have been a permanent 0, affirmatively asserting
+          // "dedup bookkeeping never failed" while real failures are
+          // swallowed inside the helper. That swallowing is a genuine
+          // pre-existing observability gap, but it lives in the shared
+          // helper's deliberate contract across 9 callers, not here.
           sent++;
           await markProactiveSent(supabase, userId, "re_engagement");
         } else {
@@ -344,7 +419,13 @@ Deno.serve(async (req: Request) => {
     await logCronEnd(logId, "failed", {
       httpStatus: 500,
       requestId,
-      errorSummary: String(err),
+      // NOT a bare String(err): a supabase-js PostgrestError is a plain
+      // {message, details, hint, code} object, not an Error subclass, so
+      // String() yields "[object Object]" and the telemetry carries no
+      // diagnostic content for exactly the failure it exists to surface.
+      // Same guard as compute-coach-signals/index.ts:92-98 (Hermes L34 F1).
+      errorSummary: (err as { message?: string } | null)?.message ??
+        String(err),
     });
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
