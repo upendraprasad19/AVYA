@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### auth_password_reset_post_success_navigation (1 bugs)
+- 2026-08-01 c8f1d3 — A user requests a password reset from the web app, gets the email, clicks the link, lands on the "SET NEW PASSWORD" screen (Wardroom-branded, "RECRUIT REGISTRY" / "SET NEW PASSWORD", two password…
+
 ### unbounded_postgrest_reads_in_cron (1 bugs)
 - 2026-08-01 d3f7b2 — Every fan-out read in the cron Edge Function fleet silently stopped at 1000 rows. PostgREST caps an un-ranged response at db-max-rows and returns HTTP 200 with error===null, so a truncated candidate…
 
@@ -901,6 +904,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-01 | c8f1d3 | A user requests a password reset from the web app, gets the email, clicks the link, lands on the "SET NEW PASSWORD" screen (Wardroom-branded, "RECRUIT REGISTRY" / "SET NEW PASSWORD", two password… | auth_password_reset_post_success_navigation | test/contracts/password_reset_redirect_flow_test.dart |
 | 2026-08-01 | d3f7b2 | Every fan-out read in the cron Edge Function fleet silently stopped at 1000 rows. PostgREST caps an un-ranged response at db-max-rows and returns HTTP 200 with error===null, so a truncated candidate… | unbounded_postgrest_reads_in_cron | supabase/functions/_shared/paged_fetch_test.ts |
 | 2026-07-31 | a4e1c9 | OI-48 (audit finding, corrected twice — 2026-07-27 re-scope, 2026-07-29 board correction — down to a single real remaining instance): the `re-engagement` cron-dispatched Edge Function's Path B… | reengagement_silent_candidate_detection | supabase/functions/re-engagement/index_test.ts |
 | 2026-07-30 | f4a7c2 | OI-25 (2026-05-17, founder's own product note in migration 070's header: "i intend to store coach uploaded media. We ask user does he want to store the pic for future reference and on consent we save… | coach_media_consent | test/contracts/coach_media_consent_test.dart, test/contracts/coach_media_repository_test.dart, test/widgets/chat_bubble_media_consent_test.dart, test/router/saved_coach_photos_route_test.dart, test/contracts/ai_media_proxy_ssrf_allowlist_test.dart (extended), test/widgets/saved_coach_photos_screen_test.dart (NEW, B-pass finding 2) |

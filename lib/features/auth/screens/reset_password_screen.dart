@@ -67,31 +67,59 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         UserAttributes(password: _newPwCtrl.text),
       );
 
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Password updated. Sign in with your new password.',
-            style: AppTypography.bodySm.copyWith(color: Colors.white),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Password updated. Sign in with your new password.',
+              style: AppTypography.bodySm.copyWith(color: Colors.white),
+            ),
+            backgroundColor: AppColors.ok,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
+            ),
           ),
-          backgroundColor: AppColors.ok,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.sharp),
-          ),
-        ),
-      );
+        );
+      }
 
-      // Sign out so GoRouter redirects to /sign-in.
-      await Supabase.instance.client.auth.signOut();
+      // Sign out — the user re-authenticates with the new password. Runs
+      // even if the widget already unmounted (plan-review round 1, Finding
+      // 3) and swallows its own failure (Finding 2): updateUser above
+      // already succeeded, so a transient signOut error must not surface as
+      // "password update failed" nor block the navigation below.
+      try {
+        await Supabase.instance.client.auth.signOut();
+      } catch (e) {
+        unawaited(
+          ErrorTelemetry.logEvent(
+            'auth_password_reset_cleanup_failed',
+            message: '$e',
+          ),
+        );
+      }
       // OI-51 round 2: a password reset ends the session too. Same user
       // re-authenticates seconds later, but leaving the binding set means a
-      // push aimed at the old session can still land in the gap.
+      // push aimed at the old session can still land in the gap. Called
+      // UNCONDITIONALLY, outside signOut()'s try — plan-review round 2,
+      // Finding 1: nesting it inside that try meant a signOut() throw
+      // skipped the release too, same shape as the sibling call sites this
+      // mirrors (auth_provider.dart:573-579, perform_sign_out.dart,
+      // settings_screen.dart, main.dart) which all call it unconditionally
+      // after a swallowed signOut() failure. releaseDeviceSessionIdentity()
+      // has no Supabase session dependency and try/catches its own two
+      // steps internally, so it's always safe to call here.
       await releaseDeviceSessionIdentity();
       // Reset the recovery flag so the guard on next mount works.
       AppRouter.isPasswordRecovery = false;
-      // The router's _authRedirect handles the navigation automatically.
+      // Navigate explicitly. GoRouter has no refreshListenable tied to
+      // Supabase auth state, and /reset is deliberately exempt from
+      // _authRedirect (recovery has no normal session) — nothing
+      // re-evaluates the route on sign-out, so without this the screen
+      // sits on /reset forever after a successful reset (stuck-screen bug).
+      // Mirrors the explicit-navigation pattern SignInScreen already uses
+      // on success (sign_in_screen.dart, ref.listen → context.go).
+      if (mounted) context.go('/sign-in');
     } on AuthException catch (e) {
       setState(() {
         _sending = false;

@@ -24,10 +24,13 @@ enum _SignInView { main, email, phone }
 // Phone OTP disabled — Twilio not wired to Supabase Auth (AUTH-04). Flip true once wired.
 const bool _kEnablePhoneEnlist = false;
 
-/// Steps within the email sub-view. `enterEmail` gates a server-side
-/// registration check (`AuthNotifier.checkEmailRegistered`) before branching
-/// automatically to `signIn` or `signUp` — no manual toggle.
-enum _EmailStep { enterEmail, signIn, signUp }
+/// Steps within the email sub-view, reached once the merged main view's
+/// CONTINUE button has run the server-side registration check
+/// (`AuthNotifier.checkEmailRegistered`) and branched automatically — no
+/// manual toggle. (Sign-in redesign, 2026-08: email entry used to be its
+/// own `enterEmail` step here; it now lives inline on the main view so the
+/// funnel is 2 screens instead of 3.)
+enum _EmailStep { signIn, signUp }
 
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
@@ -59,11 +62,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   int _resendSecondsRemaining = 0;
   static const int _resendCooldownSeconds = 30;
 
-  _EmailStep _emailStep = _EmailStep.enterEmail;
+  // Overwritten by the main view's CONTINUE handler before _currentView
+  // ever switches to .email — the initial value is never read.
+  _EmailStep _emailStep = _EmailStep.signIn;
   bool _obscurePassword = true;
   _SignInView _currentView = _SignInView.main;
 
-  /// Synchronous reentrancy guard for the enterEmail CONTINUE button.
+  /// Synchronous reentrancy guard for the main view's CONTINUE button.
   /// `isLoading` (derived from provider state) only disables the button on
   /// the NEXT frame after `checkEmailRegistered` sets AuthStatus.loading, so
   /// a same-frame double-tap can start the RPC twice. This field is set
@@ -153,16 +158,22 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             final configBox = HiveService.instance.configBox;
             configBox.put('pending_referral_code', code);
           } catch (_) {}
-          SupabaseService.instance.callFunction(
-            'redeem-referral',
-            body: {'code': code},
-          ).then((_) {
-            debugPrint('[SignIn] Referral code redeemed: $code');
-            // Clear pending code on success
-            try { HiveService.instance.configBox.delete('pending_referral_code'); } catch (_) {}
-          }).catchError((e) {
-            debugPrint('[SignIn] Referral redemption failed (will retry on next launch): $e');
-          });
+          SupabaseService.instance
+              .callFunction('redeem-referral', body: {'code': code})
+              .then((_) {
+                debugPrint('[SignIn] Referral code redeemed: $code');
+                // Clear pending code on success
+                try {
+                  HiveService.instance.configBox.delete(
+                    'pending_referral_code',
+                  );
+                } catch (_) {}
+              })
+              .catchError((e) {
+                debugPrint(
+                  '[SignIn] Referral redemption failed (will retry on next launch): $e',
+                );
+              });
         }
         // Q1: Route through RestoringScreen instead of /splash.
         // RestoringScreen runs the post-auth decision tree:
@@ -190,11 +201,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           _SignInView.main => _buildRootWithHero(authNotifier, isLoading),
           _SignInView.email => _buildEmailRoot(authNotifier, isLoading),
           _SignInView.phone => SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding,
-              ),
-              child: _buildPhoneView(authState, authNotifier, isLoading),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding,
             ),
+            child: _buildPhoneView(authState, authNotifier, isLoading),
+          ),
         },
       ),
     );
@@ -250,139 +261,204 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   // - Vertical spacing tightened ~20%
 
   Widget _buildMainView(AuthNotifier authNotifier, bool isLoading) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const SizedBox(height: 18),
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 18),
 
-        // Tagline — Direction B: discipline-first
-        Text(
-          'FITNESS · NUTRITION · DISCIPLINE',
-          style: AppTypography.mono.copyWith(
-            color: AppColors.accent,
-            letterSpacing: 2.0,
-            fontSize: 10,
+          // Tagline — Direction B: discipline-first
+          Text(
+            'FITNESS · NUTRITION · DISCIPLINE',
+            style: AppTypography.mono.copyWith(
+              color: AppColors.accent,
+              letterSpacing: 2.0,
+              fontSize: 10,
+            ),
+            textAlign: TextAlign.center,
           ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'BUILT FOR INDIAN LIFESTYLES',
-          style: AppTypography.mono.copyWith(
-            color: AppColors.textMute,
-            letterSpacing: 2,
-            fontSize: 9,
+          const SizedBox(height: 4),
+          Text(
+            'BUILT FOR INDIAN LIFESTYLES',
+            style: AppTypography.mono.copyWith(
+              color: AppColors.textMute,
+              letterSpacing: 2,
+              fontSize: 9,
+            ),
+            textAlign: TextAlign.center,
           ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 18),
+          const SizedBox(height: 18),
 
-        // Captain-voice manifesto
-        Text(
-          'Discipline. Honest data.\nTwelve months. We change the man.',
-          textAlign: TextAlign.center,
-          style: AppTypography.body.copyWith(
-            fontSize: 13,
-            height: 1.5,
-            fontStyle: FontStyle.italic,
-            color: AppColors.textDim,
-          ),
-        ),
-        const SizedBox(height: 18),
-
-        // ── ENLIST VIA GOOGLE — all buttons unified dark+gold-outline ──
-        _buildEnlistButton(
-          label: 'ENLIST VIA GOOGLE',
-          icon: Icons.g_mobiledata,
-          iconSize: 26,
-          onPressed: isLoading
-              ? null
-              : () => authNotifier.signInWithGoogle(),
-          isLoading: isLoading,
-        ),
-        const SizedBox(height: 10),
-
-        if (_kEnablePhoneEnlist) ...[
-          // ── ENLIST VIA PHONE ────────────────────────────────
-          _buildEnlistButton(
-            label: 'ENLIST VIA PHONE',
-            icon: Icons.phone_outlined,
-            iconSize: 18,
-            onPressed: isLoading
-                ? null
-                : () => setState(() => _currentView = _SignInView.phone),
-            isLoading: false,
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        // ── AUX divider (replaces OR) ────────────────────────
-        _buildAuxDivider(),
-        const SizedBox(height: 16),
-
-        // ── ENLIST VIA EMAIL ─────────────────────────────────
-        _buildEnlistButton(
-          label: 'ENLIST VIA EMAIL',
-          icon: Icons.email_outlined,
-          iconSize: 18,
-          onPressed: isLoading
-              ? null
-              : () => setState(() => _currentView = _SignInView.email),
-          isLoading: false,
-        ),
-        const SizedBox(height: 8),
-
-        // ── RESET ACCESS (formerly Forgot password?) ────────
-        GestureDetector(
-          onTap: isLoading ? null : () => ForgotPasswordSheet.show(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Text(
-              'RESET ACCESS',
-              style: AppTypography.mono.copyWith(
-                color: AppColors.accent,
-                fontSize: 10,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.center,
+          // Captain-voice manifesto
+          Text(
+            'Discipline. Honest data.\nTwelve months. We change the man.',
+            textAlign: TextAlign.center,
+            style: AppTypography.body.copyWith(
+              fontSize: 13,
+              height: 1.5,
+              fontStyle: FontStyle.italic,
+              color: AppColors.textDim,
             ),
           ),
-        ),
-        const SizedBox(height: 18),
+          const SizedBox(height: 18),
 
-        // U8 fix (Test #4 hotfix): referral code input REMOVED from welcome
-        // landing view. Referral entry now lives in sign-up form + Profile.
-
-        // ── Honest belonging cue (F21) ───────────────────────
-        // No fabricated head-count: the app is pre-public-launch, so "18,866
-        // sailors active" was invented. An integrity-led brand never fakes
-        // social proof (psychology-pass ethical line). "Founding cohort /
-        // enlistment open" is true (early enrolment) and still confers honest
-        // belonging + honest scarcity.
-        Text(
-          'FOUNDING COHORT · ENLISTMENT OPEN',
-          style: AppTypography.monoXs.copyWith(
-            color: AppColors.textDim,
-            letterSpacing: 1.6,
-            fontSize: 9,
+          // ── ENLIST VIA GOOGLE — all buttons unified dark+gold-outline ──
+          // Gated on _checkingEmail too (B-pass finding, 03a8ce7c088d-review.md
+          // #2): pre-redesign, Google and the email-check button lived on
+          // separate _SignInView states and could never be interacted with
+          // concurrently. Merging them onto one view opened a same-frame
+          // window (isLoading only reflects AuthStatus.loading on the NEXT
+          // frame) where Google could fire while checkEmailRegistered is
+          // still in flight, racing two auth operations against the same
+          // AuthNotifier. The `isLoading || _checkingEmail` ternary below
+          // only disables the button on the NEXT build — it doesn't stop a
+          // tap that lands in the same frame as CONTINUE's tap, before that
+          // rebuild runs (plan-review round 1, Finding 1). The `if
+          // (_checkingEmail) return;` guard inside the callback itself reads
+          // the field live at call time, so it closes that window too.
+          _buildEnlistButton(
+            label: 'ENLIST VIA GOOGLE',
+            icon: Icons.g_mobiledata,
+            iconSize: 26,
+            onPressed: isLoading
+                ? null
+                : () {
+                    if (_checkingEmail) return;
+                    authNotifier.signInWithGoogle();
+                  },
+            isLoading: isLoading,
           ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-        // ── Mil-stamp footer ─────────────────────────────────
-        Text(
-          'AVYA · v${AppConstants.appVersion} · ISSUED 2026',
-          textAlign: TextAlign.center,
-          style: AppTypography.mono.copyWith(
-            fontSize: 8,
-            letterSpacing: 1.4,
-            color: AppColors.textMute,
+          if (_kEnablePhoneEnlist) ...[
+            // ── ENLIST VIA PHONE ─────────────────────────────────
+            // Same guard as Google above, same reason.
+            _buildEnlistButton(
+              label: 'ENLIST VIA PHONE',
+              icon: Icons.phone_outlined,
+              iconSize: 18,
+              onPressed: isLoading
+                  ? null
+                  : () {
+                      if (_checkingEmail) return;
+                      setState(() => _currentView = _SignInView.phone);
+                    },
+              isLoading: false,
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── AUX divider (replaces OR) ────────────────────────
+          _buildAuxDivider(),
+          const SizedBox(height: 16),
+
+          // ── Email entry, inline (sign-in redesign 2026-08) ───
+          // Was its own "ENLIST VIA EMAIL" → tap → separate screen with just
+          // this field. Now the field lives directly on the entry screen so
+          // Google-or-email is a single step; CONTINUE runs the same
+          // server-side registration check as before and branches straight
+          // to the sign-in or sign-up step.
+          _buildTextField(
+            controller: _emailController,
+            hintText: 'Email address',
+            keyboardType: TextInputType.emailAddress,
+            prefixIcon: Icons.email_outlined,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter your email';
+              }
+              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(value.trim())) {
+                return 'Please enter a valid email';
+              }
+              return null;
+            },
           ),
-        ),
-        const SizedBox(height: 18),
-      ],
+          const SizedBox(height: 6),
+          Text(
+            "We'll take you to sign-in or enlistment.",
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
+          ),
+          const SizedBox(height: 12),
+          _buildPrimaryButton(
+            label: 'CONTINUE',
+            isLoading: isLoading || _checkingEmail,
+            onPressed: () async {
+              if (_checkingEmail) return;
+              if (!_formKey.currentState!.validate()) return;
+              _checkingEmail = true;
+              try {
+                final email = _emailController.text.trim();
+                final registered = await authNotifier.checkEmailRegistered(
+                  email,
+                );
+                if (!mounted || registered == null) return;
+                setState(() {
+                  _emailStep = registered
+                      ? _EmailStep.signIn
+                      : _EmailStep.signUp;
+                  _currentView = _SignInView.email;
+                });
+              } finally {
+                if (mounted) setState(() => _checkingEmail = false);
+              }
+            },
+          ),
+          const SizedBox(height: 8),
+
+          // ── RESET ACCESS (formerly Forgot password?) ────────
+          GestureDetector(
+            onTap: isLoading ? null : () => ForgotPasswordSheet.show(context),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                'RESET ACCESS',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.accent,
+                  fontSize: 10,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // U8 fix (Test #4 hotfix): referral code input REMOVED from welcome
+          // landing view. Referral entry now lives in sign-up form + Profile.
+
+          // ── Honest belonging cue (F21) ───────────────────────
+          // No fabricated head-count: the app is pre-public-launch, so "18,866
+          // sailors active" was invented. An integrity-led brand never fakes
+          // social proof (psychology-pass ethical line). "Founding cohort /
+          // enlistment open" is true (early enrolment) and still confers honest
+          // belonging + honest scarcity.
+          Text(
+            'FOUNDING COHORT · ENLISTMENT OPEN',
+            style: AppTypography.monoXs.copyWith(
+              color: AppColors.textDim,
+              letterSpacing: 1.6,
+              fontSize: 9,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+
+          // ── Mil-stamp footer ─────────────────────────────────
+          Text(
+            'AVYA · v${AppConstants.appVersion} · ISSUED 2026',
+            textAlign: TextAlign.center,
+            style: AppTypography.mono.copyWith(
+              fontSize: 8,
+              letterSpacing: 1.4,
+              color: AppColors.textMute,
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+      ),
     );
   }
 
@@ -484,8 +560,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   Widget _buildEmailView(AuthNotifier authNotifier, bool isLoading) {
     switch (_emailStep) {
-      case _EmailStep.enterEmail:
-        return _buildEmailStepEnterEmail(authNotifier, isLoading);
       case _EmailStep.signIn:
         return _buildEmailStepSignIn(authNotifier, isLoading);
       case _EmailStep.signUp:
@@ -493,12 +567,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
-  /// Returns to the email-entry step, clearing the password and any stale
-  /// auth error — mirrors the same reset `_buildPhoneView`'s back handler
-  /// already does when backing out of OTP entry.
-  void _backToEnterEmail(AuthNotifier authNotifier) {
+  /// Returns to the merged main view (Google button + email entry),
+  /// clearing the password and any stale auth error — mirrors the same
+  /// reset `_buildPhoneView`'s back handler already does when backing out
+  /// of OTP entry. Pre-redesign this returned to a separate `enterEmail`
+  /// step; that step no longer exists, so this now targets `.main` directly.
+  void _backToMain(AuthNotifier authNotifier) {
     setState(() {
-      _emailStep = _EmailStep.enterEmail;
+      _currentView = _SignInView.main;
       _passwordController.clear();
     });
     authNotifier.resetState();
@@ -508,7 +584,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   /// Deliberately not a live TextFormField — editing it here would let a
   /// user swap emails post-check without re-triggering the registration
   /// check, bypassing the whole gate. Changing email routes through
-  /// [_backToEnterEmail] instead.
+  /// [_backToMain] instead.
   Widget _buildEmailDisplay() {
     return Container(
       width: double.infinity,
@@ -539,7 +615,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   Widget _buildChangeEmailLink(AuthNotifier authNotifier, bool isLoading) {
     return TextButton(
-      onPressed: isLoading ? null : () => _backToEnterEmail(authNotifier),
+      onPressed: isLoading ? null : () => _backToMain(authNotifier),
       child: Text(
         'CHANGE EMAIL',
         style: AppTypography.monoXs.copyWith(
@@ -633,81 +709,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     );
   }
 
-  /// Step 1 — email only. On CONTINUE, checks registration status
-  /// server-side and branches automatically to sign-in or sign-up; no
-  /// manual toggle. Never shows password/referral/privacy fields here.
-  Widget _buildEmailStepEnterEmail(AuthNotifier authNotifier, bool isLoading) {
-    return Column(
-      children: [
-        _buildEmailBrandMark(
-          title: 'Continue with email',
-          onBack: isLoading
-              ? null
-              : () => setState(() => _currentView = _SignInView.main),
-        ),
-        Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              _buildTextField(
-                controller: _emailController,
-                hintText: 'Email address',
-                keyboardType: TextInputType.emailAddress,
-                prefixIcon: Icons.email_outlined,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter your email';
-                  }
-                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$')
-                      .hasMatch(value.trim())) {
-                    return 'Please enter a valid email';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpacing.stackM),
-              Text(
-                "We'll take you to sign-in or enlistment.",
-                textAlign: TextAlign.center,
-                style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
-              ),
-              const SizedBox(height: AppSpacing.sectionGap),
-              _buildPrimaryButton(
-                label: 'CONTINUE',
-                isLoading: isLoading || _checkingEmail,
-                onPressed: () async {
-                  if (_checkingEmail) return;
-                  if (!_formKey.currentState!.validate()) return;
-                  _checkingEmail = true;
-                  try {
-                    final email = _emailController.text.trim();
-                    final registered =
-                        await authNotifier.checkEmailRegistered(email);
-                    if (!mounted || registered == null) return;
-                    setState(() {
-                      _emailStep =
-                          registered ? _EmailStep.signIn : _EmailStep.signUp;
-                    });
-                  } finally {
-                    if (mounted) setState(() => _checkingEmail = false);
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 40),
-      ],
-    );
-  }
-
   /// Step 2a — password-only sign-in for an already-registered email.
   Widget _buildEmailStepSignIn(AuthNotifier authNotifier, bool isLoading) {
     return Column(
       children: [
         _buildEmailBrandMark(
           title: 'Sign in',
-          onBack: isLoading ? null : () => _backToEnterEmail(authNotifier),
+          onBack: isLoading ? null : () => _backToMain(authNotifier),
         ),
         Form(
           key: _formKey,
@@ -760,8 +768,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               // committed to email couldn't see it.
               const SizedBox(height: 10),
               GestureDetector(
-                onTap:
-                    isLoading ? null : () => ForgotPasswordSheet.show(context),
+                onTap: isLoading
+                    ? null
+                    : () => ForgotPasswordSheet.show(context),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Text(
@@ -791,7 +800,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       children: [
         _buildEmailBrandMark(
           title: 'Sign up',
-          onBack: isLoading ? null : () => _backToEnterEmail(authNotifier),
+          onBack: isLoading ? null : () => _backToMain(authNotifier),
         ),
         Form(
           key: _formKey,
@@ -869,15 +878,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.card),
-                    borderSide: BorderSide(
-                      color: AppColors.border,
-                    ),
+                    borderSide: BorderSide(color: AppColors.border),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.card),
-                    borderSide: BorderSide(
-                      color: AppColors.border,
-                    ),
+                    borderSide: BorderSide(color: AppColors.border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.card),
@@ -972,12 +977,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           onBack: isLoading
               ? null
               : () => setState(() {
-                    _currentView = _SignInView.main;
-                    _otpController.clear();
-                    _resendTimer?.cancel();
-                    _resendSecondsRemaining = 0;
-                    authNotifier.resetState();
-                  }),
+                  _currentView = _SignInView.main;
+                  _otpController.clear();
+                  _resendTimer?.cancel();
+                  _resendSecondsRemaining = 0;
+                  authNotifier.resetState();
+                }),
         ),
 
         // Phone input / OTP section.
@@ -1070,9 +1075,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ] else ...[
           Text(
             'Enter the OTP sent to $_phoneE164',
-            style: AppTypography.body.copyWith(
-              color: AppColors.textDim,
-            ),
+            style: AppTypography.body.copyWith(color: AppColors.textDim),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 10),
@@ -1182,9 +1185,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       cursorColor: AppColors.accent,
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: AppTypography.body.copyWith(
-          color: AppColors.textDisabled,
-        ),
+        hintStyle: AppTypography.body.copyWith(color: AppColors.textDisabled),
         prefixIcon: prefixIcon != null
             ? Icon(prefixIcon, color: AppColors.textDim, size: 20)
             : null,
@@ -1270,7 +1271,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       ),
     );
   }
-
 }
 
 /// Privacy/Terms checkbox row shown above the CREATE ACCOUNT button
@@ -1278,10 +1278,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 /// in the external browser. The tappable link areas are handled by
 /// [TapGestureRecognizer] to avoid nesting [GestureDetector] inside the row.
 class _PrivacyCheckboxRow extends StatefulWidget {
-  const _PrivacyCheckboxRow({
-    required this.value,
-    required this.onChanged,
-  });
+  const _PrivacyCheckboxRow({required this.value, required this.onChanged});
 
   final bool value;
   final ValueChanged<bool?> onChanged;
@@ -1298,13 +1295,13 @@ class _PrivacyCheckboxRowState extends State<_PrivacyCheckboxRow> {
   void initState() {
     super.initState();
     _privacyRecognizer.onTap = () => launchUrl(
-          Uri.parse('https://icanbefitter.com/privacy'),
-          mode: LaunchMode.externalApplication,
-        );
+      Uri.parse('https://icanbefitter.com/privacy'),
+      mode: LaunchMode.externalApplication,
+    );
     _termsRecognizer.onTap = () => launchUrl(
-          Uri.parse('https://icanbefitter.com/terms'),
-          mode: LaunchMode.externalApplication,
-        );
+      Uri.parse('https://icanbefitter.com/terms'),
+      mode: LaunchMode.externalApplication,
+    );
   }
 
   @override
@@ -1399,10 +1396,7 @@ class _HeroLogoBand extends StatelessWidget {
                     height: 82,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppColors.accent,
-                        width: 2,
-                      ),
+                      border: Border.all(color: AppColors.accent, width: 2),
                       gradient: RadialGradient(
                         colors: [
                           AppColors.accent.withValues(alpha: 0.15),
