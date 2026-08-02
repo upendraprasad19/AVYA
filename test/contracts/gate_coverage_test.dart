@@ -28,11 +28,13 @@ void main() {
   group('Audit-2026-05-16 / E.8 + F8.1 — gate coverage + dead code', () {
     test('featurePhotoAnalysis HAS a client gate() callsite', () {
       // F8.1 fix — entry point at _pickImage in ai_coach_screen.dart now
-      // routes through SubscriptionService.gate(featurePhotoAnalysis, ...).
+      // routes through SubscriptionService.gateAndVerify(featurePhotoAnalysis, ...).
+      // OI-44 Unit 6 renamed gate() -> gateAndVerify(); the regex accepts BOTH
+      // so it pins the GATE, not the spelling.
       final src =
           readScreenSource('ai_coach');
       final hasGate =
-          RegExp(r'\.gate\([^)]*featurePhotoAnalysis').hasMatch(src);
+          RegExp(r'\.gate(AndVerify)?\([^)]*featurePhotoAnalysis').hasMatch(src);
       expect(hasGate, isTrue,
           reason:
               'Pre-fix _pickImage had no client paywall — free users could '

@@ -264,15 +264,22 @@ class WorkoutRepository {
     return false;
   }
 
-  /// Legacy entry — kept for back-compat. Now a thin wrapper that
-  /// preserves the prior mutating behaviour. New callers should use
-  /// `currentStreak()` for pure reads or
-  /// `consumeMissedDayIfFreezeAvailable()` for explicit consumes.
-  @Deprecated(
-      'C-14 audit-2026-05-11: use `currentStreak()` for pure reads or '
-      '`consumeMissedDayIfFreezeAvailable()` to explicitly consume. '
-      'The unsplit method silently consumed freezes on every render.')
-  int calculateCurrentStreak() => consumeMissedDayIfFreezeAvailable();
+  // `calculateCurrentStreak()` was DELETED here (OI-44 Unit 6, 2026-08-02).
+  //
+  // It was the C-14 (audit-2026-05-11) back-compat shim: a query-named method
+  // delegating straight to the mutating `consumeMissedDayIfFreezeAvailable()`,
+  // which is what silently consumed a streak freeze on every render — three
+  // display surfaces called it, so three renders could burn three freezes for
+  // one missed day. The shim carried that name (and therefore that trap)
+  // forward for three months with zero remaining `lib/` callers.
+  //
+  // Reintroduction is blocked by `scripts/check_cqrs_query_naming.dart`, which
+  // resolves same-file delegation transitively — this exact two-hop shape
+  // (`calculate* -> consume* -> _calculateStreak(consume: true)`) is the gate's
+  // worked example.
+  //
+  // Use `currentStreak()` for a pure read, or
+  // `consumeMissedDayIfFreezeAvailable()` when you actually mean to consume.
 
   /// Calculates the current workout streak by scanning the schedule backwards.
   ///

@@ -206,7 +206,8 @@ class RankServiceRecordSheet extends ConsumerWidget {
     // Freezes refill weekly: PRO=3, FREE=1. Total tile shows the
     // capacity, not historical count, so the user reads "X of Y left
     // this week".
-    final isPro = SubscriptionService.instance.isPro();
+    // OI-44 Unit 6 — PURE read: _statusTilesRow runs during build.
+    final isPro = SubscriptionService.instance.proStateSnapshot();
     final maxFreezes = isPro ? 3 : 1;
 
     return Row(

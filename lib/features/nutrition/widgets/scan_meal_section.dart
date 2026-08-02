@@ -163,7 +163,7 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
 
   Future<void> _handleScan(BuildContext context, int remaining) async {
     if (remaining <= 0) {
-      SubscriptionService.instance.gate(
+      await SubscriptionService.instance.gateAndVerify(
         AppConstants.featureScanMealPro,
         onPro: () {
           ScaffoldMessenger.of(context).showSnackBar(

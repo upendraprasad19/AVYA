@@ -66,8 +66,20 @@ CLAUDE.md §4.1.
 - `test/contracts/` — 100+ writer→reader pinning tests, one per SoT concept.
 - `test/lints/` — analyzer-driven checks (no raw `Hive.box(`, no `setState` of
   shared keys, no hard-coded colors outside Wardroom palette).
-- `scripts/check_*.dart` — pre-commit gates (`check_writer_reader_drift.dart`,
-  `check_subscription_gate.dart`, `check_nested_claude_md_content.dart` — Gate 44).
+- `scripts/check_*.dart` — pre-commit gates. Relevant to `lib/`:
+  `check_cqrs_query_naming.dart` (a `get*`/`is*`/`has*`/`calculate*` member
+  must not mutate — OI-44 / rule 5's companion; negative-controlled by
+  `test/contracts/cqrs_query_naming_gate_test.dart`),
+  `check_container_color_decoration.dart`, `check_schema_column_refs.dart`,
+  `check_nested_claude_md_content.dart` (Gate 44).
+  > ⚠ **Corrected 2026-08-02 (Unit 6).** This line previously cited
+  > `check_writer_reader_drift.dart` and `check_subscription_gate.dart` as
+  > live gates. **Neither script has ever existed** — the writer/reader-drift
+  > and `subscription.gate()` rules above are enforced by `test/contracts/`
+  > tests and review, not by a pre-commit gate. Same class as the OI board's
+  > own "fixed by `check_open_issues_reconciled.dart`" note, which likewise
+  > described a script nobody wrote (root CLAUDE.md §7). Citing a gate that
+  > does not exist is worse than citing none: it reads as coverage.
 - `integration_test/flows/` — end-to-end golden flows that exercise every WriteService.
 
 ## See also

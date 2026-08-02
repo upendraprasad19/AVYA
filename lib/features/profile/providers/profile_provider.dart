@@ -367,7 +367,17 @@ class SubscriptionInfoNotifier extends Notifier<SubscriptionInfoData> {
   SubscriptionInfoData build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final sub = SubscriptionService.instance;
-    final localIsPro = sub.isPro();
+    // OI-44 Unit 6 — PURE read inside a provider build. `isPro()` enforces the
+    // entitlement invariants, and on expiry / cross-account it calls
+    // `_downgradeLocally()` → `onStateChanged` → `app.dart:47`
+    // `ref.invalidate(subscriptionInfoProvider)` — i.e. THIS provider's build
+    // invalidating itself. It terminated (the second pass reads isPro=false and
+    // returns before mutating) and the invalidation lands a microtask later
+    // rather than synchronously, so it was one wasted rebuild rather than a
+    // crash — but a build method must not mutate. Enforcement now runs at boot
+    // (`splash_screen`) and on account swap (`_onUserChanged`), which are the
+    // only two moments the state can actually become stale or cross-account.
+    final localIsPro = sub.proStateSnapshot();
     final inFlight = sub.isPaymentInFlight;
 
     // APK Test #12.8 — pro_pill_state_mismatch_observed probe.

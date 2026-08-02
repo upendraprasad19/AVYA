@@ -546,7 +546,7 @@ class _GenerateNextPhaseButtonState
     // even when the gate routes onFree (paywall) or onPro (continue).
     unawaited(ErrorTelemetry.logEvent('phase_unlock_initiated',
         message: 'tap=GENERATE_NEXT_PHASE'));
-    SubscriptionService.instance.gate(
+    SubscriptionService.instance.gateAndVerify(
       AppConstants.featurePhases2To12,
       onPro: _onPro,
       onFree: () {

@@ -65,7 +65,7 @@ void main() {
           });
         }
       }
-      expect(WorkoutRepository.instance.calculateCurrentStreak(), 8);
+      expect(WorkoutRepository.instance.currentStreak(), 8);
     });
 
     test('reset on missed scheduled workout (no freeze)', () async {
@@ -84,7 +84,7 @@ void main() {
         'status': 'scheduled',
         'date': dateStr(yesterday),
       });
-      expect(WorkoutRepository.instance.calculateCurrentStreak(), 1);
+      expect(WorkoutRepository.instance.currentStreak(), 1);
     });
 
     test('walk-back stops at user onboarding anchor', () async {
@@ -112,7 +112,7 @@ void main() {
         'status': 'scheduled',
         'date': dateStr(yesterday),
       });
-      expect(WorkoutRepository.instance.calculateCurrentStreak(), 1);
+      expect(WorkoutRepository.instance.currentStreak(), 1);
     });
   });
 }

@@ -39,7 +39,7 @@ void main() {
         'streak_freeze_used_dates': <String>[],
       });
 
-      final streak = WorkoutRepository.instance.calculateCurrentStreak();
+      final streak = WorkoutRepository.instance.consumeMissedDayIfFreezeAvailable();
 
       expect(streak, 0);
 
@@ -70,7 +70,7 @@ void main() {
         'streak_freeze_used_dates': <String>[],
       });
 
-      final streak = WorkoutRepository.instance.calculateCurrentStreak();
+      final streak = WorkoutRepository.instance.consumeMissedDayIfFreezeAvailable();
 
       expect(streak, 3);
       final progress = HiveService.instance.userBox.get('progress') as Map;

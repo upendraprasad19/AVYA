@@ -50,7 +50,13 @@ void main() {
     });
 
     test('reader gate() exists in subscription_service', () {
-      expect(subSvcSrc.contains('Future gate') || subSvcSrc.contains('void gate'),
+      // OI-44 Unit 6: gate() -> gateAndVerify(), returning Future<void>.
+      // Accept the new name (and the retained @Deprecated shim) so this pins
+      // the READER's existence rather than one signature spelling.
+      expect(
+          subSvcSrc.contains('gateAndVerify(') ||
+              subSvcSrc.contains('Future gate') ||
+              subSvcSrc.contains('void gate'),
           isTrue,
           reason: 'subscription_service must define gate() method');
     });

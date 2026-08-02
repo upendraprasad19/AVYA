@@ -1521,7 +1521,8 @@ final cartAuditorProvider =
 final aiTextLogRemainingProvider = Provider<int>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   // A7 / B5 D9-D10 — canonical provider path.
-  final isPro = ref.read(subscriptionServiceProvider).isPro();
+  // OI-44 Unit 6 — PURE read: this is a Provider build body.
+  final isPro = ref.read(subscriptionServiceProvider).proStateSnapshot();
   return ref
       .read(usageCounterServiceProvider)
       .remaining(AppConstants.featureAiTextLogPro, isPro);
@@ -1531,7 +1532,8 @@ final aiTextLogRemainingProvider = Provider<int>((ref) {
 final scanMealRemainingProvider = Provider<int>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   // A7 / B5 D9-D10 — canonical provider path.
-  final isPro = ref.read(subscriptionServiceProvider).isPro();
+  // OI-44 Unit 6 — PURE read: this is a Provider build body.
+  final isPro = ref.read(subscriptionServiceProvider).proStateSnapshot();
   return ref
       .read(usageCounterServiceProvider)
       .remaining(AppConstants.featureScanMealPro, isPro);
@@ -1541,7 +1543,8 @@ final scanMealRemainingProvider = Provider<int>((ref) {
 final cartAuditorRemainingProvider = Provider<int>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   // A7 / B5 D9-D10 — canonical provider path.
-  final isPro = ref.read(subscriptionServiceProvider).isPro();
+  // OI-44 Unit 6 — PURE read: this is a Provider build body.
+  final isPro = ref.read(subscriptionServiceProvider).proStateSnapshot();
   return ref
       .read(usageCounterServiceProvider)
       .remaining(AppConstants.featureCartAuditorPro, isPro);

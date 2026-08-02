@@ -77,12 +77,37 @@ void main() {
     final widgetSrc = File('lib/shared/widgets/subscription_expiry_banner.dart')
         .readAsStringSync();
 
-    test('lapsed marker is stamped on the genuine-expiry path in isPro()', () {
-      final slice = _methodSlice(subSrc, 'isPro');
+    test('lapsed marker is stamped on the genuine-expiry downgrade path', () {
+      // OI-44 Unit 6 — the stamp still happens on exactly the same branch, but
+      // that branch was EXTRACTED out of isPro() into
+      // _enforceEntitlementInvariants() (isPro() now = enforce, then pure
+      // read). The contract is "the genuine-expiry downgrade stamps the
+      // marker", not "the text lives inside a method spelled isPro".
+      // Both lookups are ANCHORED AT THE DECLARATION. `_methodSlice`'s regex
+      // makes its type prefix optional, so it cannot tell a CALL from a
+      // DECLARATION: isPro()'s own call to _enforceEntitlementInvariants()
+      // appears ~65 lines ABOVE that method's declaration, so an unanchored
+      // lookup sliced from the callsite and returned the wrong body. (Exactly
+      // the call-vs-declaration problem scripts/cqrs_query_naming_lib.dart has
+      // to solve; this helper predates it and stays as-is for its other users.)
+      final enforceDecl = subSrc.indexOf('void _enforceEntitlementInvariants(');
+      expect(enforceDecl, greaterThan(0),
+          reason: 'the extracted enforcement half must exist');
+      final slice =
+          _methodSlice(subSrc.substring(enforceDecl), '_enforceEntitlementInvariants');
       expect(slice, isNotNull);
       expect(slice!.contains('_proLapsedAtKey'), isTrue,
-          reason: 'isPro must stamp pro_lapsed_at when it downgrades on expiry, '
-              'so the banner survives the expiresAt wipe');
+          reason: 'the expiry downgrade must stamp pro_lapsed_at so the banner '
+              'survives the expiresAt wipe');
+
+      // ...and isPro() must still REACH it, or the decision path lost the stamp.
+      final proDecl = subSrc.indexOf('bool isPro()');
+      expect(proDecl, greaterThan(0));
+      final proSlice = _methodSlice(subSrc.substring(proDecl), 'isPro');
+      expect(proSlice, isNotNull);
+      expect(proSlice!.contains('_enforceEntitlementInvariants'), isTrue,
+          reason: 'isPro() must still run the enforcement — the split must not '
+              'have narrowed the decision path');
     });
 
     test('lapsed marker is cleared on renewal (writeSubscriptionState)', () {

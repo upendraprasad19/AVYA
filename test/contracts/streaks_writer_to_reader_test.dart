@@ -56,15 +56,38 @@ void main() {
           reason: 'completeWorkout must update the streaks key in healthBox');
     });
 
-    test('calculateCurrentStreak exists and reads streak freeze state', () {
-      expect(workoutRepoSrc.contains('calculateCurrentStreak'), isTrue,
-          reason:
-              'workout_repository must define calculateCurrentStreak — '
-              'must be called fresh for rank gates (never cached)');
+    test('the streak CQRS split pair exists, and the merged name does not', () {
+      // OI-44 Unit 6 (2026-08-02) — this assertion used to require the symbol
+      // `calculateCurrentStreak` to be PRESENT. That was a
+      // feedback_source_grep_false_confidence instance twice over: it pinned a
+      // NAME rather than a behaviour, and the name it pinned was the
+      // @Deprecated shim whose whole problem was that a query-shaped name
+      // delegated to a mutator (it silently consumed a streak freeze on every
+      // render — C-14, audit-2026-05-11). A test demanding the presence of the
+      // defect is worse than no test. Now it pins the SPLIT.
+      expect(workoutRepoSrc.contains('int currentStreak()'), isTrue,
+          reason: 'workout_repository must define the PURE read '
+              'currentStreak() — every display surface calls it, and it must '
+              'never consume a freeze as a side effect of rendering');
+      expect(
+          workoutRepoSrc.contains('int consumeMissedDayIfFreezeAvailable()'),
+          isTrue,
+          reason: 'workout_repository must define the explicitly-named '
+              'mutating half consumeMissedDayIfFreezeAvailable()');
+      // Comments stripped first (feedback_source_grep_strip_comments_first):
+      // workout_repository.dart carries a deliberate tombstone comment naming
+      // the deleted symbol, and the file's older doc comments reference it too.
+      final strippedRepoSrc = workoutRepoSrc
+          .replaceAll(RegExp(r'//.*'), '')
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/', multiLine: true), '');
+      expect(strippedRepoSrc.contains('int calculateCurrentStreak()'), isFalse,
+          reason: 'the merged query-named mutator was deleted in OI-44 Unit 6 '
+              'and must not return. scripts/check_cqrs_query_naming.dart '
+              'blocks the shape; this pins the specific symbol.');
       expect(
           workoutRepoSrc.contains('streak_freezes'), isTrue,
-          reason:
-              'calculateCurrentStreak must read streak freeze state to apply freezes');
+          reason: 'the streak walk must read streak freeze state to apply '
+              'freezes');
     });
 
     test('StreakFreezeNotifier._refillIfNewWeek exists in home_provider', () {
