@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### auth_password_reset_post_success_navigation (1 bugs)
+- 2026-08-01 c8f1d3 — A user requests a password reset from the web app, gets the email, clicks the link, lands on the "SET NEW PASSWORD" screen (Wardroom-branded, "RECRUIT REGISTRY" / "SET NEW PASSWORD", two password…
+
 ### phase_progress_current_phase (2 bugs)
 - 2026-08-01 c8f3d1 — Every path that advances a user to the next training phase computed the new phase number BEFORE a real, slow plan generation and wrote it after. A concurrent advancer landing inside that window was…
 - 2026-06-02 a3f8c1 — On the Train screen the week-selector strip showed TWO "PHASE I" sections — a completed "PHASE I (DONE)" with weeks W1 (Apr 27–May 3) … W4 (May 18–24) AND a second, current "PHASE I" with fresh weeks.…
@@ -902,6 +905,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-01 | c8f1d3 | A user requests a password reset from the web app, gets the email, clicks the link, lands on the "SET NEW PASSWORD" screen (Wardroom-branded, "RECRUIT REGISTRY" / "SET NEW PASSWORD", two password… | auth_password_reset_post_success_navigation | test/contracts/password_reset_redirect_flow_test.dart |
 | 2026-08-01 | c8f3d1 | Every path that advances a user to the next training phase computed the new phase number BEFORE a real, slow plan generation and wrote it after. A concurrent advancer landing inside that window was… | phase_progress_current_phase | test/contracts/pro_phase_advance_behavioral_test.dart |
 | 2026-08-01 | d3f7b2 | Every fan-out read in the cron Edge Function fleet silently stopped at 1000 rows. PostgREST caps an un-ranged response at db-max-rows and returns HTTP 200 with error===null, so a truncated candidate… | unbounded_postgrest_reads_in_cron | supabase/functions/_shared/paged_fetch_test.ts |
 | 2026-07-31 | a4e1c9 | OI-48 (audit finding, corrected twice — 2026-07-27 re-scope, 2026-07-29 board correction — down to a single real remaining instance): the `re-engagement` cron-dispatched Edge Function's Path B… | reengagement_silent_candidate_detection | supabase/functions/re-engagement/index_test.ts |

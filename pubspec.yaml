@@ -109,6 +109,11 @@ dev_dependencies:
   # separately for the widget-finder DSL.
   patrol: ^3.15.2
   patrol_finders: ^2.7.0
+  # Test-only direct dependency (was transitive via supabase_flutter) —
+  # test/contracts/password_reset_redirect_flow_test.dart uses
+  # package:http/testing.dart's MockClient to fake the GoTrue HTTP
+  # transport for a behavioral widget test with no real network.
+  http: ^1.6.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
