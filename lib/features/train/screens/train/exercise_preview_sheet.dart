@@ -114,17 +114,17 @@ extension _ExercisePreviewSheet on _TrainScreenState {
                           // array. The cloud projection prefers the array
                           // length, so cloud is correct (set_number=4)
                           // while local readers showed "0 sets · 26 reps".
-                          final setNum = (log['set_number'] as num?)?.toInt() ?? 0;
-                          final setsCompleted = (log['sets_completed'] as num?)?.toInt() ?? 0;
-                          final setsArr = log['sets'];
-                          final setsArrLen = setsArr is List ? setsArr.length : 0;
-                          final setsDetail = log['sets_detail'];
-                          final setsDetailLen = setsDetail is List ? setsDetail.length : 0;
-                          final sets = [setNum, setsCompleted, setsArrLen, setsDetailLen]
-                              .reduce((a, b) => a > b ? a : b);
+                          // Unit 7 / OI-50 — the 4-source MAX described above
+                          // now lives in ONE place; this was a hand-rolled copy.
+                          final sets = WorkoutReadService.aggregateSetCount(log);
                           final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
                           final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-                          final duration = WorkoutReadService.bestPerSetDuration(log);
+                          // Unit 7 / OI-50 — the fallback label below calls
+                          // itself "cumulative", but this read was the per-set
+                          // MAX, which is wrong for multi-set rows and returns
+                          // 0 outright for a cloud-restored row.
+                          final duration =
+                              WorkoutReadService.aggregateDurationSeconds(log) ?? 0;
                           // APK Test #12.4 / Task #1b — reverted defensive
                           // re-inference. Migrator v2 fixes the type+data
                           // pair correctly at splash; reader trusts stored

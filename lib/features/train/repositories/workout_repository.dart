@@ -933,7 +933,12 @@ class WorkoutRepository {
           'date': dateStr,
           'weight_kg': weight,
           'reps': (log['reps_completed'] as num?)?.toInt() ?? 0,
-          'sets': (log['sets_completed'] as num?)?.toInt() ?? 0,
+          // Unit 7 / OI-50 round-2 — this read ONLY the legacy key, so every
+          // cloud-restored `exlog_*` row (which carries `set_number`, never
+          // `sets_completed` — sync_workout.dart:762-763) reported 0 sets.
+          // Consumers are the AI snapshot builder and the pattern detector,
+          // so a restored user's coach reasoned over zeroed set history.
+          'sets': WorkoutReadService.aggregateSetCount(log),
         };
       }
     }

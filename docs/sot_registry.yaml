@@ -60,7 +60,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/widgets/workout_receipt_card.dart
-        line_range: 288-497
+        line_range: 287-509
         method: WorkoutReceiptData.fromExerciseLogs
         semantic: aggregated
         fields_read: [exercise_name, logging_type, weight_kg, reps_completed, set_number, sets_completed, sets, sets_detail, duration_seconds, distance_km, is_pr, volume_kg, workout_log_id, updated_at_ms, logged_at_ms, date]
@@ -72,6 +72,27 @@ concepts:
           Computes sessionLabel "SESSION N" when >1 workout_log_id per day.
           PHASE label resolves via WorkoutScheduleReadService.phaseForDate
           (Obs 1 6f1a2c — was hardcoded to 1); see concept phase_blocks_bucketing.
+          Unit 7 / OI-50 (d4e7c2): the set-count MAX and the duration total are
+          NO LONGER hand-rolled here — both delegate to WorkoutReadService
+          (below), so this reader and the edit sheet cannot disagree again.
+      - file: lib/core/services/workout_read_service.dart
+        line_range: 134-238
+        method: aggregateSetCount (:186) / hasAggregateSetCount (:202) / aggregateDurationSeconds (:227)
+        semantic: aggregated
+        fields_read: [set_number, sets_completed, sets, sets_detail, duration_seconds, duration_sec]
+        notes: |
+          Unit 7 / OI-50, diagnose d4e7c2 — the SHARED aggregate reader for
+          `exlog_*` rows. Exists because the two writers emit different subsets:
+          the modern writer (workout_write_service.dart:180) emits `sets[]` +
+          `set_number` and NO top-level duration, while the restore writer
+          (sync/sync_workout.dart:763,766) emits `set_number` + top-level
+          `duration_seconds` and writes `sets[]` ONLY when the workout_log_sets
+          join is non-empty (:777). Two readers hand-rolled different
+          reconciliations of that; one rendered 0 duration and the other a blank
+          sets box for every restored row.
+          aggregateDurationSeconds returns null (not 0) when there is no signal
+          so callers can distinguish "no duration" from "zero duration".
+          Behavioral: test/contracts/exlog_aggregate_read_behavioral_test.dart
       - file: lib/features/home/screens/home_screen.dart
         line_range: 670-695
         method: home "View Card" button handler
@@ -177,7 +198,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/widgets/workout_receipt_card.dart
-        line_range: 288-497
+        line_range: 287-509
         method: WorkoutReceiptData.fromExerciseLogs
         semantic: aggregated
         fields_read: [exercise_name, logging_type, weight_kg, reps_completed, set_number, sets_completed, sets, sets_detail, duration_seconds, distance_km, volume_kg, is_pr]
@@ -185,6 +206,24 @@ concepts:
           Reads the edited Hive log row immediately after EditWorkoutLogSheet.save
           writes back; field names must match the WorkoutWriteService contract
           (set_number, sets[], reps_completed, weight_kg, volume_kg).
+      - file: lib/features/train/widgets/edit_workout_log_sheet.dart
+        line_range: 977-1079
+        method: EditLogExerciseRow.fromLog (aggregate reads at :1033 and :1042; save guards at :195 and :255)
+        semantic: aggregated
+        fields_read: [sets, sets_detail, set_number, sets_completed, reps_completed, weight_kg, duration_seconds, distance_km, logging_type, exercise_name]
+        notes: |
+          The sheet is its OWN reader as well as the writer — it re-reads the row
+          to populate the edit controls. Unit 7 / OI-50 (d4e7c2): the aggregate
+          fallback branch read only the legacy `sets_completed`, so every
+          cloud-restored row (which carries `set_number` instead) rendered a
+          blank SETS box; and it used bestPerSetDuration (a per-set MAX) for a
+          box whose value `save` writes to top-level `duration_seconds` (a SUM),
+          so a restored multi-set timed row rendered blank and saving WIPED the
+          real total. Both now delegate to WorkoutReadService's aggregate
+          helpers. `hasAggregateData` (:255) additionally stops `save` stamping a
+          fabricated `sets_completed: 0` over an absent count while preserving a
+          deliberately-typed 0.
+          Behavioral: test/contracts/exlog_aggregate_read_behavioral_test.dart
       - file: lib/features/train/widgets/edit_workout_log_sheet.dart
         line_range: 44-65
         method: _EditWorkoutLogSheetState._loadRows
@@ -1183,7 +1222,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/widgets/workout_receipt_card.dart
-        line_range: 288-497
+        line_range: 287-509
         method: WorkoutReceiptData.fromExerciseLogs
         semantic: aggregated
         fields_read: [exercise_name, logging_type, weight_kg, reps_completed, set_number, sets_completed, sets, sets_detail, duration_seconds, distance_km, is_pr, volume_kg, workout_log_id, updated_at_ms, logged_at_ms, date]

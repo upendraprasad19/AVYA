@@ -130,6 +130,113 @@ class WorkoutReadService {
     return (log['weight_kg'] as num?)?.toDouble() ?? 0.0;
   }
 
+  // ─────────────────────────────────────────────────────────────
+  //  Aggregate semantic primitives  (Unit 7 / OI-50)
+  //
+  //  Distinct from the per-set MAX block above: these answer "how many
+  //  sets in TOTAL" and "how long in TOTAL".
+  //
+  //  They exist because the two writers of an `exlog_*` row emit
+  //  DIFFERENT subsets of the aggregate fields:
+  //
+  //    modern  (`workout_write_service.dart:177-181`)
+  //        → `sets[]` + `set_number`; NO top-level `duration_seconds`
+  //    restore (`sync/sync_workout.dart:733-767`)
+  //        → `set_number` + top-level `duration_seconds` (:765-766),
+  //          and `sets[]` ONLY when the `workout_log_sets` join came
+  //          back non-empty (:777)
+  //
+  //  Two readers each hand-rolled their own reconciliation of that and
+  //  one of them got it wrong, which is what OI-50 actually was. Every
+  //  reader that needs a TOTAL delegates here so a third cannot drift
+  //  again — the workout-domain equivalent of
+  //  `NutritionReadService.deriveMealDisplayName`.
+  // ─────────────────────────────────────────────────────────────
+
+  /// The per-set array for [log] — the LONGER of canonical `sets[]` and
+  /// legacy `sets_detail[]`. Empty list when neither is a populated List.
+  ///
+  /// Deliberately NOT `log['sets'] ?? log['sets_detail']`: `??` is
+  /// null-coalescing, so a row carrying `sets: []` alongside a populated
+  /// `sets_detail` would resolve to the EMPTY list and silently lose the
+  /// legacy array. The receipt's pre-Unit-7 code measured both lengths
+  /// independently and MAXed them, and the two remaining train-screen
+  /// readers still do; taking the longer preserves that exactly.
+  static List<Map> _perSetList(Map<String, dynamic> log) {
+    final canonical = log['sets'];
+    final legacy = log['sets_detail'];
+    final a = canonical is List ? canonical.whereType<Map>().toList() : const <Map>[];
+    final b = legacy is List ? legacy.whereType<Map>().toList() : const <Map>[];
+    return a.length >= b.length ? a : b;
+  }
+
+  /// TOTAL completed sets for an `exlog_*` row.
+  ///
+  /// MAX across every field that can carry the count, because no single
+  /// one is reliably present:
+  ///   - `set_number`           canonical (modern AND restore writer)
+  ///   - `sets_completed`       legacy pre-Test-#6 alias
+  ///   - `sets[]`/`sets_detail[]` length
+  ///
+  /// MAX rather than first-non-null is deliberate (APK Test #12.1/#12.2,
+  /// founder observation 2026-05-06): rows exist where BOTH `set_number`
+  /// and `sets_completed` are 0 while the per-set array is populated —
+  /// the receipt rendered "0 sets" while the cloud projection, which
+  /// prefers array length, had shipped 4.
+  static int aggregateSetCount(Map<String, dynamic> log) {
+    final candidates = <int>[
+      (log['set_number'] as num?)?.toInt() ?? 0,
+      (log['sets_completed'] as num?)?.toInt() ?? 0,
+      _perSetList(log).length,
+    ];
+    return candidates.reduce((a, b) => a > b ? a : b);
+  }
+
+  /// Whether [log] carries ANY set-count signal at all.
+  ///
+  /// Distinguishes "genuinely zero sets" from "every count key is
+  /// absent". The edit sheet needs the distinction so it doesn't present
+  /// an absent value as a user-entered 0 and then write that 0 back on
+  /// save. [aggregateSetCount] alone cannot express it — it returns 0
+  /// for both cases.
+  static bool hasAggregateSetCount(Map<String, dynamic> log) =>
+      log['set_number'] is num ||
+      log['sets_completed'] is num ||
+      _perSetList(log).isNotEmpty;
+
+  /// TOTAL duration in seconds for an `exlog_*` row, or `null` when the
+  /// row carries no duration signal at all.
+  ///
+  /// Precedence:
+  ///   1. SUM across the per-set array (`duration_sec` canonical,
+  ///      `duration_seconds` the restore-path per-set alias at
+  ///      `sync_workout.dart:792`) — canonical, and the only source a
+  ///      modern-writer row can supply.
+  ///   2. Top-level `duration_seconds` — the documented exlog aggregate
+  ///      (see the field contract in this class's doc comment). The
+  ///      MODERN writer does not emit it, but the RESTORE writer does
+  ///      (`sync_workout.dart:765-766`), so for a restored row whose
+  ///      `workout_log_sets` join came back empty this is the ONLY
+  ///      surviving duration. Reading 0 instead is the OI-50 defect.
+  ///   3. `null` — genuinely no signal. Caller renders nothing and
+  ///      should emit telemetry rather than display a fabricated 0.
+  ///
+  /// A per-set sum of 0 falls through to the top-level value on purpose:
+  /// a restored row can carry per-set rows with no `duration_secs` while
+  /// the summary row still holds the true total.
+  static int? aggregateDurationSeconds(Map<String, dynamic> log) {
+    var sum = 0;
+    for (final s in _perSetList(log)) {
+      sum += (s['duration_sec'] as num?)?.toInt() ??
+          (s['duration_seconds'] as num?)?.toInt() ??
+          0;
+    }
+    if (sum > 0) return sum;
+    final topLevel = (log['duration_seconds'] as num?)?.toInt();
+    if (topLevel != null && topLevel > 0) return topLevel;
+    return null;
+  }
+
   /// Extracts the IST date (`YYYY-MM-DD`) for an `exlog_*` Hive row.
   ///
   /// Preferred source: top-level `date` field stamped by the writer.
