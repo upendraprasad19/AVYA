@@ -310,7 +310,12 @@ class AuthNotifier extends Notifier<AuthState2> {
     try {
       await _supabase.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'io.supabase.icanbefitter://login-callback/',
+        // Web must redirect to the prod SPA origin, NOT the mobile custom
+        // scheme — same bug class as diagnose e9f2a4 (redirectTo not
+        // matching the platform / Supabase's allowed redirect list).
+        redirectTo: kIsWeb
+            ? 'https://app.icanbefitter.com'
+            : 'io.supabase.icanbefitter://login-callback/',
       );
     } on AuthException catch (e) {
       state = state.copyWith(
