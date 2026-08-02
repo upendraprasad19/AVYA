@@ -141,7 +141,11 @@ extension _MediaPicker on _AiCoachScreenState {
     // callsites — free users could silently upload photos to chat (server-
     // side ai-media-proxy enforced a separate PRO check, but the client UX
     // never surfaced the paywall). Gate at the entry point.
-    SubscriptionService.instance.gate(
+    // OI-44 Unit 6 — awaited so `_pickImage`'s own Future completes only once
+    // the gate has routed. It is the last statement here, so nothing races it;
+    // `gateAndVerify` returning a Future (rather than the old `void`) is what
+    // makes this expressible at all.
+    await SubscriptionService.instance.gateAndVerify(
       AppConstants.featurePhotoAnalysis,
       onPro: () => _doPickImage(source),
       onFree: () {

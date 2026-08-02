@@ -192,7 +192,7 @@ Three additional ad-hoc sync methods exist outside the workout/nutrition
 domain fan-outs. These cover surfaces that were Hive-only before Test #11
 and silently lost on reinstall:
 
-- `SyncService.syncFreezes()` — pushes `streak_freezes_{available, used_dates, last_refill}` into `user_progress`. Called from `WorkoutRepository.calculateCurrentStreak` (consume freeze) + `home_provider.StreakFreezeNotifier._refillIfNewWeek` (weekly refill).
+- `SyncService.syncFreezes()` — pushes `streak_freezes_{available, used_dates, last_refill}` into `user_progress`. Called from `WorkoutRepository.consumeMissedDayIfFreezeAvailable` (consume freeze; the query-named `calculateCurrentStreak` shim was deleted in OI-44 Unit 6) + `home_provider.StreakFreezeNotifier._refillIfNewWeek` (weekly refill).
 - `SyncService.syncNotificationsInboxEntry(Map entry)` — upserts a single inbox entry to `notifications_inbox`. Called from `NotificationInboxService.record` after every Hive write.
 - `SyncService.syncSavedDietPlan(Map planJson)` — upserts to `saved_diet_plans` (one row per user). Called from `diet_plan_screen._savePlan` after `UserRepository.saveDietPlan`.
 

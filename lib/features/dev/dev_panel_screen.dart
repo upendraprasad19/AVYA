@@ -288,7 +288,7 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
 
     bool isPro = false;
     try {
-      isPro = SubscriptionService.instance.isPro();
+      isPro = SubscriptionService.instance.proStateSnapshot(); // OI-44 U6: build
     } catch (_) {}
 
     final simCursor = SimulationService.instance.cursor;

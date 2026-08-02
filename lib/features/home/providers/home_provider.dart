@@ -461,7 +461,7 @@ class SubscriptionExpiryBannerNotifier extends Notifier<ExpiryBannerState> {
     }
 
     final sub = SubscriptionService.instance;
-    final isProNow = sub.isPro();
+    final isProNow = sub.proStateSnapshot(); // OI-44 U6: PURE — build method
     final daysLeft = sub.daysUntilExpiry();
     final severity = SubscriptionService.expiryBannerSeverity(
       isPro: isProNow,

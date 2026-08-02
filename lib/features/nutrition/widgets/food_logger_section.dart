@@ -52,7 +52,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
     if (!usage.canUse(AppConstants.featureAiTextLogPro, isPro)) {
       if (!mounted) return;
       // Free user exhausted daily limit -> show paywall
-      SubscriptionService.instance.gate(
+      await SubscriptionService.instance.gateAndVerify(
         AppConstants.featureAiTextLogPro,
         onPro: () {
           // PRO user exhausted daily limit -> inform them

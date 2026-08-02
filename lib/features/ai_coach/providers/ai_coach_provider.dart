@@ -1274,7 +1274,8 @@ class PredictionNotifier extends Notifier<PredictionData> {
     final isStale = MigratedKey.read<bool>('prediction_stale') == true;
 
     // A7 / B5 D9-D10 — canonical provider path.
-    final isPro = ref.read(subscriptionServiceProvider).isPro();
+    // OI-44 Unit 6 — PURE read: this is a Notifier build().
+    final isPro = ref.read(subscriptionServiceProvider).proStateSnapshot();
 
     bool canRefresh = false;
     if (isPro && predDate != null) {

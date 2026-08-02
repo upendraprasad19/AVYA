@@ -154,11 +154,12 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 # OI-43 lens-scan findings (filed 2026-05-17, ready for follow-up batches)
 
-## OI-44 — L26 CQRS violations: 10 query-named methods with side effects (P2)
+## OI-44 — L26 CQRS violations: 3 real query-named mutators, one causing a provider self-invalidation (P2)
 
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-07-29
+- **Status**: CLOSED
+- **Blocked on**: none — Unit 6 landed the split, the deletion, and the gate that makes the
+  shape unconstructible. See the closure block at the end of this entry.
+- **Verified**: 2026-08-02
 - **Identified**: 2026-05-17 · OI-43 / L26 lens scan
 - **Risk class**: CQRS / pure-function discipline
 - **Effort**: ~6-8 hours (10 methods × ~30-45 min each for migration + tests)
@@ -191,6 +192,54 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
      deletion, optional getOrCreateReferralCode rename) — not 10 methods. A sweep across
      `nutrition_repository.dart`, `ai_coach_repository.dart`, `coach_interaction_repository.dart`,
      `water_target_service.dart`, `sync_service.dart` found no further live instances.
+
+- **CLOSED 2026-08-02 — Unit 6.** Diagnose `a9c4e1`. Blast radius `platform`.
+
+  **The finding that justified the work was not the naming.** Traced end to end:
+  `profile_provider.dart:380` `SubscriptionInfoNotifier.build()` → `isPro()` →
+  `subscription_service.dart:1048` `_downgradeLocally()` → `:1072` `onStateChanged` →
+  `app.dart:47` `ref.invalidate(subscriptionInfoProvider)` — **a provider build invalidating
+  itself.** Precision matters: it terminated (the second pass returns before mutating) and the
+  invalidation landed a microtask after `build()` returned, so it cost one wasted rebuild rather
+  than crashing. It was fixed because a build method must not mutate, not because it was on fire.
+
+  **Fix.** `_enforceEntitlementInvariants()` (`:414`) holds the cross-account + expiry branches
+  verbatim; `proStateSnapshot()` (`:367`) is a genuinely pure read; `isPro()` (`:338`) keeps its
+  name and behaviour (enforce, then report) so all 32 decision callsites are byte-identical.
+  Only build methods and the 8 re-entrant reads inside `verifyFromServer()` use the pure read.
+  `evaluateEntitlement()` (`:481`) is called explicitly at boot (`splash_screen.dart:220`) and on
+  account swap (`:56`). §4.6 kill-switch `disable_cqrs_pure_pro_read`.
+
+  **Three of this entry's own claims were wrong** and are corrected here rather than closed over:
+  - `gate()` is **10** callsites, not "15+".
+  - `calculateCurrentStreak()` did **not** have "zero live callers" — `lib/` yes, but
+    `test/train/streak_anchor_test.dart:42,73` called it and
+    `test/contracts/streaks_writer_to_reader_test.dart:59` *source-grepped that the symbol
+    exists*. That test demanded the presence of the defect; it now pins the split pair.
+  - A fourth item, found while building the gate: `lib/CLAUDE.md` cited
+    `check_writer_reader_drift.dart` and `check_subscription_gate.dart` as live pre-commit
+    gates. **Neither has ever existed** — same class as this board's own
+    `check_open_issues_reconciled.dart` note. Corrected.
+
+  **`getOrCreateReferralCode()` → `verified_clean`, deliberately not renamed.** The hidden write
+  is real (a live Postgres upsert via `_generateNewCode`), but "get-or-create" already announces
+  the create, and there is exactly one callsite (`invite_friends_sheet.dart:64`). The decision is
+  recorded as a reasoned entry in the gate's exemption ledger rather than in prose, so it cannot
+  rot silently.
+
+  **The gate (§4.11, shipped in an earlier commit than the refactor):**
+  `scripts/check_cqrs_query_naming.dart` + `scripts/cqrs_query_naming_lib.dart`, negative-
+  controlled by `test/contracts/cqrs_query_naming_gate_test.dart` against the committed fixture
+  `test/fixtures/cqrs_gate/violations.dart`. It deliberately does NOT implement this entry's own
+  proposed test (grep bodies for `recordNonFatal`) — that pattern is what forced the 2026-07-29
+  removal of `getCurrentRank()`, so catch blocks are stripped first. It also needed a
+  writer-verb layer (rule 4 routes writes through repositories, so `box.put(` is the rare shape)
+  and TRANSITIVE same-file delegation resolution, without which it missed its own worked example.
+  `lib/`: 135 members scanned, 2 mutate, both exempted with reasons, 0 unexempted.
+
+  Behavioral: `test/contracts/subscription_cqrs_behavioral_test.dart` (11 tests). Groups A and B
+  are a controlled pair — identical seed and hook counter, differing only in which read is
+  called: pure fires 0 invalidations and leaves Hive byte-identical, decision fires ≥1 and wipes.
 
 ## OI-45 — L27 concurrency races: 4 unguarded getX→modify→setX patterns (P1)
 

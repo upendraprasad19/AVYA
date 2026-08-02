@@ -73,7 +73,7 @@ extension _PhaseUnlockCard on _TrainScreenState {
                   context.go('/train/graduation');
                   return;
                 }
-                SubscriptionService.instance.gate(
+                SubscriptionService.instance.gateAndVerify(
                   AppConstants.featurePhases2To12,
                   onPro: () {
                     context.go('/train/graduation');

@@ -205,6 +205,32 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // milestone while the app was uninstalled / signed out.
     unawaited(RankService.instance.evaluateAndPromote());
 
+    // OI-44 Unit 6 · Enforce local entitlement invariants at boot, BEFORE the
+    // server refresh. `refreshFromSupabase` decides from the SERVER response
+    // and never compares the Hive `profile.id` against the session, so it does
+    // NOT cover the cross-account case: an Android Auto Backup restore of
+    // another account's Hive leaves a PRO entitlement that only this guard
+    // catches. Pre-split that guard fired incidentally inside every `isPro()`
+    // read (including `SubscriptionInfoNotifier.build()`, which renders the PRO
+    // pill); build methods now use the pure `proStateSnapshot()`, so boot is
+    // one of the two explicit invocation points (the other is an account swap,
+    // via `SingletonLifecycleRegistry.notifyUserChanged` → `_onUserChanged`).
+    // AWAITED, and it opens the session itself (round-2 P0). Two reasons:
+    //   1. At cold start no `openForUser` has run yet — the C-6 note at :127
+    //      documents that a guard placed here without the session preamble is
+    //      a NO-OP. `evaluateEntitlementAtBoot` awaits
+    //      `ensureOpenedForCurrentSession()` exactly like every sibling
+    //      initializer fired from this point.
+    //   2. Awaiting makes the ordering against `refreshFromSupabase` below
+    //      DETERMINISTIC rather than a microtask race. That order matters:
+    //      only the enforcement path stamps `pro_lapsed_at`, and
+    //      `_downgradeLocally` (which `refreshFromSupabase` calls) does not —
+    //      so if the server refresh wiped `isPro` first, the local-expiry
+    //      branch would short-circuit and the Home "your PRO expired" banner
+    //      would never surface (round-2 P1).
+    // Cost is one Hive session-open that the very next line pays anyway.
+    await ref.read(subscriptionServiceProvider).evaluateEntitlementAtBoot();
+
     // F1 · Refresh subscription state on every app launch so PRO survives
     // logout/login and cross-device sessions without requiring a PRO-feature
     // tap to trigger verifyFromServer().

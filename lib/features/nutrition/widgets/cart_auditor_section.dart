@@ -149,7 +149,7 @@ class CartAuditorSection extends ConsumerWidget {
   Future<void> _handleUpload(
       BuildContext context, WidgetRef ref, int remaining) async {
     if (remaining <= 0) {
-      SubscriptionService.instance.gate(
+      await SubscriptionService.instance.gateAndVerify(
         AppConstants.featureCartAuditorPro,
         onPro: () {
           ScaffoldMessenger.of(context).showSnackBar(

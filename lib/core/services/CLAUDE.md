@@ -28,7 +28,18 @@ Also in this directory:
 - `hive_service.dart` — boot, lifecycle compaction, user-session swap.
 - `hive_user_session.dart` — cross-account ownership lock (`auth_hive_owner_agreement`).
 - `auth_session_bootstrapper.dart` — post-auth decision tree owner.
-- `subscription_service.dart` — `isPro()` + `gate()` + server verify with cache.
+- `subscription_service.dart` — entitlement. **Three entry points, and the difference matters
+  (OI-44 Unit 6, diagnose `a9c4e1`):** `isPro()` is the DECISION path — it enforces the
+  invariants (cross-account guard + expiry downgrade) and then reports, so it may WRITE;
+  `proStateSnapshot()` is the PURE read and is **required in every Riverpod build method**;
+  `evaluateEntitlement()` enforces without asking, and is called at boot
+  (`splash_screen.dart:220`) and on account swap (`_onUserChanged`). Calling `isPro()` from a
+  provider build made that provider invalidate ITSELF (build → `isPro` → `_downgradeLocally` →
+  `onStateChanged` → `app.dart:47` `ref.invalidate(subscriptionInfoProvider)`). Gating goes
+  through `gateAndVerify()` (returns `Future<void>` so the decision is awaitable — `gate()`
+  survives as a `@Deprecated` shim). Kill-switch `disable_cqrs_pure_pro_read`; gate
+  `scripts/check_cqrs_query_naming.dart` blocks a `get*`/`is*`/`has*`/`calculate*` member that
+  mutates.
 - `error_telemetry.dart` — `recordNonFatal` (the helper every catch block must use).
 - `usage_counter_service.dart` — increment-at-API-call counters (post Test #11).
 - Migrators: `exlog_key_migrator.dart`, `nlog_key_migrator.dart`, `hive_field_rename_migrator.dart`, `user_config_migrator.dart`, `body_fat_default_healer.dart` (Unit 4 c3f2d8 — nulls a legacy fabricated onboarding body-fat `18.0` where `body_fat_percent==18.0 && body_fat_assessed_at==null`; clears the CLOUD column FIRST under a fresh token, THEN local, so the omit-null profile sync + re-hydrating restore can't silently revert it; idempotent, kill-switch `disable_bodyfat_heal`; wired in `auth_provider._ensureLocalUser` after the cross-account guard), etc.

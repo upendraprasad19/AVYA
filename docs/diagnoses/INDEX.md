@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### subscription_state (isPro/gate CQRS split) (1 bugs)
+- 2026-08-02 a9c4e1 — A Riverpod provider's build method invalidates itself. `SubscriptionInfoNotifier.build()` — the data source behind the PRO pill — calls `isPro()`, which on an expired or cross-account row calls…
+
 ### workout_receipt_rendering + workout_log_edit_surface (exlog aggregate read) (1 bugs)
 - 2026-08-02 d4e7c2 — A cloud-restored workout renders wrong on two surfaces. The receipt shows 0 duration for a timed/cardio exercise that has a real total, and the Edit Workout Log sheet shows a BLANK sets box and a…
 
@@ -908,6 +911,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-02 | a9c4e1 | A Riverpod provider's build method invalidates itself. `SubscriptionInfoNotifier.build()` — the data source behind the PRO pill — calls `isPro()`, which on an expired or cross-account row calls… | subscription_state (isPro/gate CQRS split) | test/contracts/subscription_cqrs_behavioral_test.dart |
 | 2026-08-02 | d4e7c2 | A cloud-restored workout renders wrong on two surfaces. The receipt shows 0 duration for a timed/cardio exercise that has a real total, and the Edit Workout Log sheet shows a BLANK sets box and a… | workout_receipt_rendering + workout_log_edit_surface (exlog aggregate read) | test/contracts/exlog_aggregate_read_behavioral_test.dart |
 | 2026-08-01 | c8f1d3 | A user requests a password reset from the web app, gets the email, clicks the link, lands on the "SET NEW PASSWORD" screen (Wardroom-branded, "RECRUIT REGISTRY" / "SET NEW PASSWORD", two password… | auth_password_reset_post_success_navigation | test/contracts/password_reset_redirect_flow_test.dart |
 | 2026-08-01 | c8f3d1 | Every path that advances a user to the next training phase computed the new phase number BEFORE a real, slow plan generation and wrote it after. A concurrent advancer landing inside that window was… | phase_progress_current_phase | test/contracts/pro_phase_advance_behavioral_test.dart |

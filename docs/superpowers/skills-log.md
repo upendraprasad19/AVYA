@@ -60,3 +60,23 @@
     survives, consolidation decides what cross-session state survives, and both want the same
     "what's actually still open?" answer. Retrospective:
     `memory/project_memory_consolidation_2026_08_02.md`.
+
+- 2026-08-02 — /strategic-compact — trigger: **batch ship** (Unit 7 / OI-50 merged `4a994071`,
+  CI green on that SHA, board at 25 open) with follow-up work (Unit 6) continuing in-session ·
+  founder: **ACCEPTED** (ran `/compact`).
+  → Preserve list led with the *owed* item rather than the shipped one: Unit 7's §5 per-batch
+    maintenance (retrospective + `MEMORY.md` line) had NOT been written, and compaction would have
+    discarded exactly the material that memory file is made of. Surfacing "what this compaction
+    would destroy that has no durable home yet" ahead of "what shipped" is the more useful ordering
+    — the shipped facts are already in git. Recommended writing the retrospective first; founder
+    compacted immediately instead, so the preserve list carried it and it was written on the first
+    writeable turn after.
+  → Durable-lesson category earned its keep again: the highest-value preserve item was a **process
+    hazard**, not a fact — a round-2 reviewer ran its own gate negative control by injecting a
+    violation into `week_selector.dart` and "reverting" it, which restored the file to git HEAD and
+    silently wiped that batch's edit. Nothing in git records that, because the recovery landed
+    before the commit. Now in `memory/project_unit7_exlog_aggregate_read_2026_08_02.md`.
+  → **Third** invocation in a row where plan mode blocked this skill's own step 6 (append to this
+    file). The skill's logging step is unreachable from the mode the skill is most often invoked
+    in. Not a one-off any more — worth changing the skill to log on the first writeable turn *by
+    design* rather than treating it as a deferred exception each time.

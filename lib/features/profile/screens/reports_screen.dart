@@ -1012,7 +1012,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               onPressed: _isGeneratingReport
                   ? null
                   : () {
-                      SubscriptionService.instance.gate(
+                      SubscriptionService.instance.gateAndVerify(
                         AppConstants.featureWeeklyAiReport,
                         onPro: () => _generateReport(),
                         onFree: () {

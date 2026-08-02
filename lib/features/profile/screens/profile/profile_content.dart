@@ -298,7 +298,7 @@ extension _ProfileContent on _ProfileScreenState {
                   context.go('/profile/reports');
                 },
                 onUpgradeTap: () {
-                  SubscriptionService.instance.gate(
+                  SubscriptionService.instance.gateAndVerify(
                     AppConstants.featureWeeklyAiReport,
                     onPro: () => context.go('/profile/reports'),
                     onFree: () => showPaywallSheet(context, feature: 'Weekly AI Report'),
@@ -334,7 +334,7 @@ extension _ProfileContent on _ProfileScreenState {
                         : 'PRO \u2014 visual progress timeline',
                     trailing: const ProfileRowChevron(),
                     showBorder: true,
-                    onTap: () => SubscriptionService.instance.gate(
+                    onTap: () => SubscriptionService.instance.gateAndVerify(
                       AppConstants.featureProgressPhotos,
                       onPro: () => context.go('/profile/progress-photos'),
                       onFree: () =>
@@ -483,7 +483,7 @@ extension _ProfileContent on _ProfileScreenState {
                       'isPro': subInfo.isPro,
                       // Locked PRO rows open the paywall (§4.4 r7 — PaywallSheet
                       // is the only paywall UI). Passed as a callback because
-                      // subscription.gate() is an action dispatcher and cannot
+                      // subscription.gateAndVerify() is an action dispatcher and cannot
                       // render a chip (round-3 F9).
                       'onProLockedTap': () => showPaywallSheet(
                             context,

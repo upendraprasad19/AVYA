@@ -1482,7 +1482,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   void _assessBodyFat() {
-    SubscriptionService.instance.gate(
+    SubscriptionService.instance.gateAndVerify(
       'ai_body_composition',
       onPro: _runBfAssessment,
       onFree: () => showPaywallSheet(
