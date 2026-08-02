@@ -678,9 +678,10 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-50 — L37 empty/null-shape readers: 23 risky accesses across 6 files (P2)
 
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-07-29
+- **Status**: CLOSED
+- **Blocked on**: none — Unit 7 (2026-08-02, diagnose `d4e7c2`) landed both confirmed
+  silent-wrong sites. See the final closure block below.
+- **Verified**: 2026-08-02
 - **Identified**: 2026-05-17 · OI-43 / L37 lens scan
 - **Risk class**: runtime crash OR silent-wrong on malformed/empty Hive shapes
 - **Effort**: ~1-2 days (8 contract tests + null-guard refactors)
@@ -717,6 +718,47 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   reads scalar profile fields). The sole verified canonical example is
   `workout_read_service.dart` (`bestPerSetReps:64-83`, `bestPerSetDuration:91-112`,
   `bestPerSetWeight:118-131`, all three using the idiom).
+
+  **CLOSED 2026-08-02 — Unit 7, diagnose `d4e7c2`.** Both remaining silent-wrong sites are
+  fixed, and the fix is structural rather than two local null-guards, because the 2026-07-29
+  correction — accurate on the count — still described them as independent. They are **one**
+  bug: the cloud-restore writer (`sync/sync_workout.dart:733-767`) emits a different subset of
+  the exlog aggregate fields than the client-side writer, and each reader hand-rolled its own
+  reconciliation.
+
+  What was actually wrong, beyond the board text:
+  - `workout_receipt_card.dart` did not merely render an empty per-set breakdown. It rendered
+    **0 duration** for a restored timed/cardio exercise, because a 2026-05-24 drift-fix had
+    hardcoded `const int duration = 0` on the reasoning that the modern writer never emits a
+    top-level `duration_seconds` — true of that writer, false of the restore writer (`:766`),
+    which is the only one that produces the affected rows.
+  - `edit_workout_log_sheet.dart` read only the legacy `sets_completed`, so the SETS box was
+    **blank on every cloud-restored row** (restore stamps `set_number`), and its duration box
+    used a per-set MAX for a value `save` writes back as a SUM — so saving a restored multi-set
+    timed row **wiped the real total to 0**. That is local data loss, not just display drift.
+
+  Fix: one shared reader — `WorkoutReadService.aggregateSetCount` /
+  `hasAggregateSetCount` / `aggregateDurationSeconds` — with both surfaces delegating, a
+  `hasAggregateData` flag so an absent count is distinguishable from a logged zero, and
+  `exlog_no_aggregate_signal` telemetry. Behavioral coverage:
+  `test/contracts/exlog_aggregate_read_behavioral_test.dart` (23 tests; 5 verified to fail
+  against the pre-fix readers; 63 green across the 10 affected contract files).
+
+  **Three review rounds corrected the scope, in the board's favour.** There were not 2
+  hand-rolled aggregate readers but **7**. Round 1 found `week_selector.dart`,
+  `exercise_preview_sheet.dart` and `expanded_exercises.dart`; round 2 found
+  `workout_repository.dart:941` (`getExercisePRHistory` — it feeds the AI coach via
+  `ai_snapshot_builder` and `pattern_detector`, so a restored user's coach reasoned over zeroed
+  set history); the B-pass found `train_provider.dart:1556` (the workout-finish PR banner, whose
+  hand-rolled divisor collapses to 0 on the APK Test #12.1 shape and silently suppresses a
+  genuine PR). All seven now delegate. The gate that should have caught the class,
+  `no_top_level_duration_seconds_reads_test.dart`, scanned only `lib/features/train/` and its
+  failure message recommended the exact call that causes the bug; it was rewritten to scan
+  `lib/core/services/` as well and to pick by semantic.
+
+  The refuted count ("23 risky accesses across 6 files") is left in the heading deliberately —
+  the body already corrects it, the wrong claim is useful history, and a CLOSED issue no longer
+  appears in `OPEN_INDEX.md`, so nothing surfaces the stale number any more.
 
 # Reconciliation 2026-07-26 — board revived after 70 dormant days
 

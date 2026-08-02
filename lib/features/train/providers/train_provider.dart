@@ -1553,12 +1553,18 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       // emits canonical `set_number`; legacy `sets_completed` lingers on
       // older rows only. Dual-name read with canonical-first preference
       // (same pattern as line 86 + ExerciseSet.fromMap duration_sec/_seconds).
+      // Unit 7 / OI-50 B-pass F1 — the divisor was a hand-rolled FIRST-NON-NULL
+      // of set_number/sets_completed, blind to the per-set array length. For the
+      // documented APK Test #12.1 shape (BOTH count keys present AND 0 while
+      // `sets[]` is populated) `??` never fires, the divisor is 0, the `> 0`
+      // gate fails, and `r` collapses to 0 — silently suppressing a genuine PR
+      // from the workout-finish banner. `best_single_set_reps` is written ONLY
+      // by the edit sheet, so this fallback is the COMMON path, not an edge
+      // case. Now the same shared reader every other surface uses.
+      final setCount = WorkoutReadService.aggregateSetCount(log);
+      final totalReps = (log['reps_completed'] as int?) ?? 0;
       final r = bestSetReps ??
-          (((log['reps_completed'] as int?) ?? 0) > 0 &&
-                  (((log['set_number'] as int?) ?? (log['sets_completed'] as int?)) ?? 1) > 0
-              ? ((log['reps_completed'] as int?) ?? 0) ~/
-                  (((log['set_number'] as int?) ?? (log['sets_completed'] as int?)) ?? 1)
-              : 0);
+          (totalReps > 0 && setCount > 0 ? totalReps ~/ setCount : 0);
       if (r > (bestRepsMap[name] ?? 0)) bestRepsMap[name] = r;
       // Per-set best duration: canonical helper reads `sets[].duration_sec`
       // first, falls back to top-level `duration_seconds` for single-set

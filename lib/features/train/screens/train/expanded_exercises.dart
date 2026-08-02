@@ -38,14 +38,10 @@ extension _ExpandedExercises on _TrainScreenState {
       // `set_number`); Test #12.2 patched the bottom sheet but missed
       // this inline calendar-row expansion. Same drift class as the
       // founder's "0 sets · 26 reps · 85kg" screenshot 2026-05-06.
-      final setNum = (log['set_number'] as num?)?.toInt() ?? 0;
-      final setsCompleted = (log['sets_completed'] as num?)?.toInt() ?? 0;
-      final setsArr = log['sets'];
-      final setsArrLen = setsArr is List ? setsArr.length : 0;
-      final setsDetail = log['sets_detail'];
-      final setsDetailLen = setsDetail is List ? setsDetail.length : 0;
-      final sets = [setNum, setsCompleted, setsArrLen, setsDetailLen]
-          .reduce((a, b) => a > b ? a : b);
+      // Unit 7 / OI-50 — the 4-source MAX described above now lives in ONE
+      // place (WorkoutReadService.aggregateSetCount). Semantics identical;
+      // this was the third hand-rolled copy of it.
+      final sets = WorkoutReadService.aggregateSetCount(log);
       final loggingType = log['logging_type'] as String? ?? 'weight_reps';
       final isPr = log['is_pr'] == true;
 
@@ -66,16 +62,26 @@ extension _ExpandedExercises on _TrainScreenState {
       final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
       // For weight_reps the writer's top-level `weight_kg` is already
       // MAX, so it's safe to use directly.
-      final totalDuration = WorkoutReadService.bestPerSetDuration(log);
+      // Unit 7 / OI-50 — this is a TOTAL (the cardio branch below renders it
+      // as "N min · X km"), but it called the per-set MAX helper, which is
+      // both wrong for multi-set rows and returns 0 for a cloud-restored row.
+      // `perSetMaxDur` above is deliberately left as the per-set MAX — the
+      // timed branch labels it "best".
+      final totalDuration = WorkoutReadService.aggregateDurationSeconds(log) ?? 0;
 
       String detail;
       if (loggingType == 'timed') {
-        final secs = perSetMaxDur > 0 ? perSetMaxDur : totalDuration;
+        // Unit 7 / OI-50 round-2 \u2014 the label must follow the VALUE. Both arms
+        // used to be the per-set MAX, so "best" was always truthful; once the
+        // fallback became the aggregate TOTAL (for restored rows with no
+        // per-set array) a total would have been rendered as "best".
+        final hasPerSetBest = perSetMaxDur > 0;
+        final secs = hasPerSetBest ? perSetMaxDur : totalDuration;
         final mins = secs ~/ 60;
         final tail = secs % 60;
         final dur = '${mins > 0 ? '${mins}m ' : ''}${tail}s';
         detail = sets > 1
-            ? '$sets sets \u00b7 best $dur'
+            ? '$sets sets \u00b7 ${hasPerSetBest ? 'best' : 'total'} $dur'
             : dur;
       } else if (loggingType == 'cardio') {
         final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;

@@ -176,6 +176,25 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
               updates['volume_kg'] = volumeKg;
           }
 
+          // Unit 7 / OI-50 round-1 F5 — a RESTORED row can carry `sets[]`
+          // entries with no per-set durations alongside a real top-level
+          // total (`sync_workout.dart:766` writes the aggregate; `:792`
+          // only carries a per-set duration when the cloud row had one).
+          // The computed total is then 0, and writing it over the
+          // surviving aggregate is data loss — visibly so now that the
+          // receipt renders that aggregate: the user would watch the
+          // duration vanish the moment they saved an unrelated edit.
+          // Round-2: `!row.hadPerSetDuration` is load-bearing. Without it a
+          // row carrying BOTH per-set durations and a top-level total could
+          // never be cleared — the user zeroes every box, this guard drops the
+          // write, `editLog` merges (it does not replace), and the stale
+          // top-level value is read back forever.
+          if (totalDuration == 0 &&
+              row.hasAggregateDuration &&
+              !row.hadPerSetDuration) {
+            updates.remove('duration_seconds');
+          }
+
           updates['sets_detail'] = setsDetail;
           updates['best_single_set_reps'] = bestSingleSetReps;
           updates['best_single_set_duration'] = bestSingleSetDuration;
@@ -226,6 +245,28 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
               updates['weight_kg'] = weight;
               updates['volume_kg'] = weight * reps;
           }
+
+          // Unit 7 / OI-50 — never stamp a fabricated `sets_completed: 0`
+          // over a count that was simply ABSENT. `hasAggregateData` is
+          // false only when the row carried no set-count signal at all;
+          // combined with a still-blank box that means "unknown", not
+          // "zero". A user who deliberately types 0 leaves the text
+          // non-empty, so an explicit zero is still written.
+          if (!row.hasAggregateData && row.setsCtrl.text.trim().isEmpty) {
+            updates.remove('sets_completed');
+          }
+          if (!row.hasAggregateDuration &&
+              row.durationCtrl.text.trim().isEmpty) {
+            updates.remove('duration_seconds');
+          }
+          // NOTE (round-1 F5, scoped deliberately): `reps_completed`,
+          // `weight_kg` and `distance_km` are still written as 0 from an
+          // empty box on a row that never carried them. That is cosmetic,
+          // not data loss — unlike sets and duration, no OTHER key holds a
+          // surviving value for them (nothing reads a second source), so a
+          // fabricated 0 destroys nothing. Guarding sets + duration is the
+          // proportionate fix; widening to all five would add three more
+          // flags for no behavioural gain.
         }
 
         updates['edited_at'] = DateTime.now().toIso8601String();
@@ -867,6 +908,34 @@ class EditLogExerciseRow {
   final String loggingType;
   final bool hasPerSetData;
 
+  /// Whether the source row carried ANY set-count signal at all
+  /// (`set_number`, `sets_completed`, or a per-set array).
+  ///
+  /// Unit 7 / OI-50 — distinguishes "the user logged 0 sets" from "every
+  /// count key was absent on this row". Both render as an empty box, so
+  /// without this flag `save` stamped a fabricated `sets_completed: 0`
+  /// over a genuine gap.
+  final bool hasAggregateData;
+
+  /// Whether the source row carried ANY duration signal (a per-set duration
+  /// to sum, or a top-level `duration_seconds`).
+  ///
+  /// Unit 7 / OI-50 round-1 F5 — separate from [hasAggregateData] because
+  /// duration is the one aggregate whose fabrication is real DATA LOSS: a
+  /// restored row's top-level total is the only surviving copy, and both
+  /// save branches would otherwise write a computed 0 straight over it.
+  final bool hasAggregateDuration;
+
+  /// Whether the ORIGINAL row's per-set entries carried durations.
+  ///
+  /// Unit 7 / OI-50 round-2 — without this, [hasAggregateDuration] alone made
+  /// a duration permanently un-clearable on any row holding BOTH per-set
+  /// durations and a top-level total (a restored row whose workout_log_sets
+  /// join was non-empty carries both). The user clears every per-set box, the
+  /// save guard fires, `editLog` merges rather than replaces, and the stale
+  /// top-level value is resurrected on the very next read — forever.
+  final bool hadPerSetDuration;
+
   // Per-set rows (populated when per-set array exists on the log)
   final List<EditLogSetRow> setRows;
 
@@ -882,6 +951,9 @@ class EditLogExerciseRow {
     required this.exerciseName,
     required this.loggingType,
     required this.hasPerSetData,
+    required this.hasAggregateData,
+    required this.hasAggregateDuration,
+    required this.hadPerSetDuration,
     required this.setRows,
     required this.setsCtrl,
     required this.repsCtrl,
@@ -909,6 +981,19 @@ class EditLogExerciseRow {
     // Canonical `'sets'` first (post-Test-#6); legacy `'sets_detail'`
     // fallback for pre-Test-#6 rows.
     final setsListRaw = log['sets'] ?? log['sets_detail'];
+    // Unit 7 / OI-50 — computed once, carried into BOTH branches.
+    final hasAggregate = WorkoutReadService.hasAggregateSetCount(log);
+    final hasAggregateDur =
+        WorkoutReadService.aggregateDurationSeconds(log) != null;
+    // Round-2 — did the ORIGINAL per-set entries carry any duration? If they
+    // did, clearing them all is a deliberate user action and the save guard
+    // must not resurrect the top-level aggregate behind their back.
+    final hadPerSetDur = setsListRaw is List &&
+        setsListRaw.whereType<Map>().any((s) =>
+            (((s['duration_sec'] as num?)?.toInt() ??
+                    (s['duration_seconds'] as num?)?.toInt() ??
+                    0)) >
+                0);
 
     // Check if per-set data exists and is a non-empty list
     if (setsListRaw is List && setsListRaw.isNotEmpty) {
@@ -924,6 +1009,9 @@ class EditLogExerciseRow {
           exerciseName: name,
           loggingType: type,
           hasPerSetData: true,
+          hasAggregateData: hasAggregate,
+          hasAggregateDuration: hasAggregateDur,
+          hadPerSetDuration: hadPerSetDur,
           setRows: setRows,
           // Aggregate controllers unused but need to be initialized
           setsCtrl: TextEditingController(),
@@ -936,16 +1024,22 @@ class EditLogExerciseRow {
     }
 
     // Fallback: legacy aggregate view
-    final sets = (log['sets_completed'] as num?)?.toInt() ?? 0;
+    // Unit 7 / OI-50 — was `log['sets_completed']` alone, which is only
+    // the LEGACY key. The restore writer (`sync/sync_workout.dart:762-763`)
+    // stamps `set_number` and NEVER `sets_completed`, so every
+    // cloud-restored aggregate row rendered a BLANK sets box while the
+    // receipt — which already MAXed both keys — showed the real count.
+    // Both surfaces now share one reader so they cannot disagree.
+    final sets = WorkoutReadService.aggregateSetCount(log);
     final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
     final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-    // Drift-fix 2026-05-24 / T6 — `WorkoutWriteService` does NOT emit
-    // a top-level `duration_seconds` on exlog rows; per-set duration
-    // lives at `sets[].duration_sec`. The canonical helper reads
-    // `sets[]` first and falls back to top-level for single-set
-    // legacy rows (the exact same semantic this aggregate fallback
-    // wants).
-    final duration = WorkoutReadService.bestPerSetDuration(log);
+    // Unit 7 / OI-50 — was `bestPerSetDuration`, which is a per-set MAX.
+    // This box is the TOTAL: `save` writes it straight to top-level
+    // `duration_seconds`, which the writer contract defines as the SUM
+    // across sets. `bestPerSetDuration` gates its top-level fallback on
+    // `setCount <= 1`, so on a restored MULTI-set timed row it returned 0
+    // — the box rendered blank and saving then WIPED the real total to 0.
+    final duration = WorkoutReadService.aggregateDurationSeconds(log) ?? 0;
     final distance = (log['distance_km'] as num?)?.toDouble() ?? 0;
 
     String fmtDouble(double v) =>
@@ -956,6 +1050,9 @@ class EditLogExerciseRow {
       exerciseName: name,
       loggingType: type,
       hasPerSetData: false,
+      hasAggregateData: hasAggregate,
+      hasAggregateDuration: hasAggregateDur,
+      hadPerSetDuration: hadPerSetDur,
       setRows: [],
       setsCtrl: TextEditingController(text: sets > 0 ? sets.toString() : ''),
       repsCtrl: TextEditingController(text: reps > 0 ? reps.toString() : ''),

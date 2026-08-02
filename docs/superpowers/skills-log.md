@@ -37,3 +37,26 @@
     own guidance excludes non-code/research tasks. Founder rejected it. The skill's step 4 wants a
     plain chat message and an explicit go-ahead, nothing more. If this skill is invoked in plan
     mode again: surface the list in chat, do not route it through ExitPlanMode.
+
+- 2026-08-02 — /strategic-compact — trigger: **batch ship** at a genuinely clean boundary (Unit 3c +
+  task #41 merged `87ddfd0a`, CI green on that SHA, **OI-45 closed**; Units 7 and 6 still to come
+  in-session). **Founder ACCEPTED** (ran `/compact`), then immediately chained
+  `/consolidate-memory`.
+  → Tuning signal RESOLVED — the plan-mode one logged twice above. Plan mode was NOT active this
+    round, so step 6 ran inline instead of being back-filled, and step 4 went to plain chat with no
+    ExitPlanMode temptation. Both prior occurrences were plan-mode artifacts, **not** a defect in
+    where step 6 sits. Leaving step 6 where it is; the fix that actually worked was "don't invoke
+    this skill from plan mode."
+  → New tuning signal: the highest-value preserve-list entries were NOT the git facts — `main`, the
+    SHA, and CI state are all durable in git and in the retrospective, so preserving them is nearly
+    free. What genuinely only existed in conversation were the **founder decisions** (the Gate 43
+    allow-list call; the Edge Function deploy authorization) and the two open OIs with their
+    *scoping questions* (OI-83's "is a restore allowed to lower the phase?" is a product call that
+    no artifact records). Worth promoting "founder decisions made this session, and the reasoning
+    behind them" from an implicit sub-bullet of step 2 to its own named preserve category — it is
+    the one category with no durable home outside the transcript.
+  → Follow-on: `/consolidate-memory` ran straight after and took `MEMORY.md` 18,408 → 17,130 bytes.
+    Pairing the two at a batch boundary works well — compaction decides what conversation state
+    survives, consolidation decides what cross-session state survives, and both want the same
+    "what's actually still open?" answer. Retrospective:
+    `memory/project_memory_consolidation_2026_08_02.md`.

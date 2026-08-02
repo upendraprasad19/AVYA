@@ -5,7 +5,10 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/widgets/shareable_card.dart';
@@ -282,11 +285,34 @@ class WorkoutReceiptData {
   /// with multiple workout sessions yields a per-session receipt.
   /// When absent, legacy behavior: aggregates ALL exercises logged that
   /// IST date (matches pre-Test-#12 receipts).
+  /// Unit 7 / OI-50 round-1 F4 — process-lifetime dedupe key set for the
+  /// `exlog_no_aggregate_signal` event. `fromExerciseLogs` runs inside a
+  /// build path, so this keeps a shape regression observable without
+  /// turning it into a per-frame telemetry flood.
+  static final Set<String> _noAggregateSignalReported = <String>{};
+
+  /// B-pass F5 — the dedupe set is process-lifetime static state, so without
+  /// this it would survive an account switch and silently suppress a genuine
+  /// signal for a second user whose row collides on `(date, exercise)`. Uses
+  /// the repo's established cross-account primitive: `HiveUserSession` fires
+  /// `notifyUserChanged()` on every switch/logout. Registered lazily because
+  /// this is a data class with no init hook. Clearing also bounds growth.
+  static bool _dedupeLifecycleRegistered = false;
+  static void _ensureDedupeLifecycleRegistered() {
+    if (_dedupeLifecycleRegistered) return;
+    _dedupeLifecycleRegistered = true;
+    SingletonLifecycleRegistry.register(
+      'WorkoutReceiptData.noAggregateSignalDedupe',
+      _noAggregateSignalReported.clear,
+    );
+  }
+
   static WorkoutReceiptData? fromExerciseLogs(
     DateTime date, {
     String? workoutLogId,
     int? phase,
   }) {
+    _ensureDedupeLifecycleRegistered();
     final Box wb = HiveService.instance.workoutBox;
     final dateKey = formatDateKey(date);
 
@@ -326,6 +352,10 @@ class WorkoutReceiptData {
     for (final logId in logIds) {
       final log = wb.get(logId);
       if (log == null || log is! Map) continue;
+      // Hive hands back `Map<dynamic, dynamic>`; the shared
+      // `WorkoutReadService` helpers take the typed row shape the rest of
+      // the codebase uses. One copy per row, a handful of rows per receipt.
+      final typedLog = Map<String, dynamic>.from(log);
 
       // APK Test #12 / Task A-3 — workout_log_id scoping. If caller
       // supplied a workoutLogId AND this row has one, skip rows that
@@ -346,33 +376,43 @@ class WorkoutReceiptData {
       final loggingType = log['logging_type'] as String? ?? 'weight_reps';
       final weightKg = (log['weight_kg'] as num?)?.toDouble() ?? 0.0;
       final reps = (log['reps_completed'] as num?)?.toInt() ?? 0;
-      // Theme A · Test #8 — WorkoutWriteService writes `set_number`; older
-      // logs use `sets_completed`. Read new key first, fall back to legacy.
-      // APK Test #12.1 — take the MAX of both rather than first-non-null.
-      // APK Test #12.2 — extend MAX with the array length too (sets[]
-      // OR sets_detail[]). Cloud audit revealed local rows where ALL of
-      // (set_number=0, sets_completed=0) but the per-set arrays are
-      // populated. Cloud projection prefers array length, so cloud
-      // shipped set_number=4 to the server while the receipt still
-      // rendered "0 sets". Founder observation 2026-05-06.
-      final setNum = (log['set_number'] as num?)?.toInt() ?? 0;
-      final setsCompletedField = (log['sets_completed'] as num?)?.toInt() ?? 0;
-      final setsArrRaw = log['sets'];
-      final setsArrLen = setsArrRaw is List ? setsArrRaw.length : 0;
-      final setsDetailRaw = log['sets_detail'];
-      final setsDetailLen = setsDetailRaw is List ? setsDetailRaw.length : 0;
-      final sets = [setNum, setsCompletedField, setsArrLen, setsDetailLen]
-          .reduce((a, b) => a > b ? a : b);
-      // Drift-fix 2026-05-24 / T6 — `WorkoutWriteService` does NOT emit
-      // a top-level `duration_seconds` on exlog rows. The receipt's
-      // semantic for "total time held" is the SUM across per-set
-      // entries, which gets computed below as `perSetDurationSum`.
-      // The pre-fix top-level read was dead — always 0 for modern rows,
-      // so the `duration > 0 ? duration : perSetDurationSum` ternary
-      // (line ~417 below) silently always took the sum branch anyway.
-      // Setting `duration = 0` here keeps the sum path canonical and
-      // removes the dead read without changing receipt rendering.
-      const int duration = 0;
+      // Unit 7 / OI-50 — the MAX-across-every-count-field semantic
+      // (Theme A · Test #8; APK Test #12.1/#12.2, where rows existed with
+      // set_number == 0 AND sets_completed == 0 while the per-set array
+      // was populated — founder observation 2026-05-06) now lives in ONE
+      // place, `WorkoutReadService`, so this reader and the edit sheet
+      // cannot drift apart on it again. Semantics unchanged; only home.
+      final sets = WorkoutReadService.aggregateSetCount(typedLog);
+      // Unit 7 / OI-50 — a row carrying NO set signal at all (no
+      // `set_number`, no `sets_completed`, no per-set array) previously
+      // rendered as a silent zero. Mirrors the `food_log_unknown_name`
+      // pattern so a future shape regression is visible instead of mute.
+      //
+      // Round-1 F4 — DEDUPED, unlike the cited precedent. That one
+      // (home_provider.dart) sits in a provider and fires once per
+      // invalidation; `fromExerciseLogs` is reached from `build`
+      // (home_screen.dart `_buildTodayRow`), so an un-deduped call would
+      // post once per no-signal row per rebuild. This repo has a
+      // documented free-tier telemetry collapse (c4f8d2 / b4f7e2), so the
+      // event fires at most once per (date, exercise) per process.
+      final noSetSignal = !WorkoutReadService.hasAggregateSetCount(typedLog);
+      // B-pass F2 — the set-count signal alone is not enough. A timed/cardio
+      // row can carry a perfectly good set count while EVERY per-set entry
+      // omits its duration (the edit sheet writes `duration_seconds` into a set
+      // map only `if (duration > 0)`) and the modern writer never stamps a
+      // top-level one. `?? 0` then renders "0m 0s" for a logging type whose
+      // primary metric IS duration — the same silent-zero class this event
+      // exists to surface, and previously uninstrumented.
+      final noDurationSignal =
+          (loggingType == 'timed' || loggingType == 'cardio') &&
+              WorkoutReadService.aggregateDurationSeconds(typedLog) == null;
+      if ((noSetSignal || noDurationSignal) &&
+          _noAggregateSignalReported.add('$dateKey|$name')) {
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent('exlog_no_aggregate_signal',
+            message: 'source=receipt date=$dateKey type=$loggingType '
+                'set_signal=${!noSetSignal} duration_signal=${!noDurationSignal}');
+      }
       final distance = (log['distance_km'] as num?)?.toDouble() ?? 0.0;
       final isPr = log['is_pr'] as bool? ?? false;
 
@@ -386,7 +426,6 @@ class WorkoutReceiptData {
       // `sets_detail`. Read new key first, fall back to legacy.
       final setsDetail = log['sets'] ?? log['sets_detail'];
       final perSetBreakdown = <ReceiptSet>[];
-      int perSetDurationSum = 0;
       if (setsDetail is List && setsDetail.isNotEmpty) {
         double sum = 0;
         for (final s in setsDetail) {
@@ -399,7 +438,6 @@ class WorkoutReceiptData {
               ?? (s['duration_seconds'] as num?)?.toInt()
               ?? 0;
           sum += w * r;
-          perSetDurationSum += d;
           perSetBreakdown.add(ReceiptSet(
             weightKg: w > 0 ? w : null,
             reps: r > 0 ? r : null,
@@ -411,10 +449,19 @@ class WorkoutReceiptData {
         final storedVolume = (log['volume_kg'] as num?)?.toDouble();
         exerciseVolume = storedVolume ?? (weightKg * reps);
       }
-      // Theme A · Test #8 — WorkoutWriteService doesn't store a top-level
-      // `duration_seconds` aggregate. Sum from per-set breakdown when the
-      // top-level field is missing/zero.
-      final effectiveDuration = duration > 0 ? duration : perSetDurationSum;
+      // Unit 7 / OI-50 — this was `duration > 0 ? duration : perSetDurationSum`
+      // with `duration` hardcoded to 0 by the 2026-05-24/T6 drift-fix. That
+      // fix reasoned only about MODERN writer rows (which genuinely carry no
+      // top-level aggregate) and so also discarded the one the RESTORE writer
+      // DOES emit — `sync_workout.dart:765-766` copies cloud
+      // `workout_log_exercises.duration_seconds` onto the exlog row, while
+      // `sets[]` is written ONLY when the `workout_log_sets` join came back
+      // non-empty (:777). A restored timed/cardio exercise with an empty join
+      // therefore rendered 0 while the row held the true total. The shared
+      // helper keeps the per-set SUM canonical and falls back to the top-level
+      // aggregate only when there is no per-set duration to sum.
+      final effectiveDuration =
+          WorkoutReadService.aggregateDurationSeconds(typedLog) ?? 0;
 
       if (isPr) {
         if (weightKg > 0) {
