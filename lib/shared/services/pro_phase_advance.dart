@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/plan_integrity_reconciler.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
+import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -263,7 +264,7 @@ Future<void> markPhaseRepeatNudgePending() async {
 /// `unawaited(_autoGenerateNextPhaseForPro())`, and on tap from
 /// `phase_generating_card.dart`), `PhaseProgressReconciler.reconcile` (called
 /// from `restoring_screen.dart`, can jump more than +1),
-/// `graduation_screen._onPro`, and the dev sim. That is the
+/// `runGraduationPhaseAdvance` (this file), and the dev sim. That is the
 /// `feedback_monotonic_field_recompute_demotion` class — same shape as diagnose
 /// `3a7b9f`'s rank demotion.
 ///
@@ -284,7 +285,7 @@ int? phaseAdvanceTarget({required int livePhase, required int intendedPhase}) {
 
 /// The SINGLE writer for a phase advance's progress delta. Used by all three
 /// advance paths: [advanceProPhaseIfExpired] (splash + card),
-/// `graduation_screen._onPro`, and `simulation_service._maybeAdvancePhase`.
+/// `runGraduationPhaseAdvance` (below, Unit B), and `simulation_service._maybeAdvancePhase`.
 ///
 /// Re-reads `current_phase` from Hive HERE, at write time, so the decision is
 /// made against live state rather than against the snapshot the caller took
@@ -305,7 +306,7 @@ Future<bool> commitPhaseAdvance({
   DateTime? now,
 }) async {
   // `as int?`, matching the other two advance-path readers of this field
-  // (graduation_screen `_onPro`, phase_progress_reconciler `_reconcileLocked`).
+  // (runGraduationPhaseAdvance below, phase_progress_reconciler `_reconcileLocked`).
   // A `num?)?.toInt()` hardening was written here and REMOVED after the
   // hypothesis behind it was tested rather than assumed: the guarantee is the
   // SCHEMA — `user_progress.current_phase` is `integer`/`int4`, verified by live
@@ -408,4 +409,242 @@ Future<void> reportDeclinedAdvanceLeftStaleRows({
     unawaited(ErrorTelemetry.recordNonFatal(e, st,
         reason: 'phase_advance_declined_report_failed'));
   }
+}
+
+/// What [runGraduationPhaseAdvance] actually did.
+///
+/// Unit B / OI-84 replaced a `bool?` return whose three states the graduation
+/// screen had to decode positionally (`null` busy / `false` two different
+/// things / `true` committed). `false` genuinely covered TWO outcomes that
+/// already had distinct telemetry events, so the type was lossier than the
+/// instrumentation.
+enum GraduationAdvanceOutcome {
+  /// Another advance surface holds [withPhaseAdvanceLock]. Nothing was read,
+  /// generated or written here. Was `null`.
+  busy,
+
+  /// The lock was held, but the live phase had ALREADY reached the intended
+  /// phase, so no generation ran. Fires `phase_unlock_preempted_before_generate`.
+  preemptedBeforeGenerate,
+
+  /// Plan rows WERE generated, but [commitPhaseAdvance] refused the counter
+  /// write because a concurrent advancer got there first. The stale-rows
+  /// condition is reported via [reportDeclinedAdvanceLeftStaleRows] (OI-85).
+  generatedButDeclined,
+
+  /// Generated and the counter advanced. The only success.
+  committed,
+}
+
+/// Result of [runGraduationPhaseAdvance].
+///
+/// [repeatNudgeFlagged] exists for a LAYERING reason, not a stylistic one.
+/// The old in-screen closure called `ref.invalidate(phaseRepeatNudgeProvider)`
+/// itself, but that provider lives in `lib/features/home/providers/
+/// home_provider.dart:957` — a FEATURE file, and this is `lib/shared/**`.
+///
+/// **Precise about the strength of that constraint** (round-1 review corrected
+/// an overstatement here). `lib/shared → lib/features` is a layering
+/// CONVENTION, not a hard rule: it is not gated by any `check_*.dart`, and
+/// FOUR imports already breach it —
+/// `lib/shared/mixins/hive_tab_scaffold.dart:75`,
+/// `lib/shared/repositories/user_repository.dart:10`,
+/// `lib/shared/widgets/video_share_button.dart:5`, and
+/// `lib/shared/widgets/wardroom/ward_status_strip.dart:3`. The first draft
+/// said THREE: its grep matched only `package:icanbefitter/features/`, and the
+/// fourth uses the RELATIVE form `../../../features/...`. Grep both spellings. The first draft of this
+/// comment cited `lib/CLAUDE.md` rule 7 as the authority; rule 7 is about
+/// import STYLE (relative within a feature, `package:` for shared/core), not
+/// direction, so that citation was wrong. Claiming a rule that does not say
+/// what you need it to say is the same defect as citing a gate that does not
+/// exist.
+///
+/// The design still stands on its own merits, which is why it was kept: the
+/// nudge's Hive WRITE is shared-layer work and belongs here beside the
+/// cross-account belt in [markPhaseRepeatNudgePending]; a provider INVALIDATION
+/// is widget-layer work and belongs in the widget. Returning the flag keeps
+/// each on the side that owns it and adds one more shared→feature edge to a
+/// list that should be shrinking, not growing.
+class GraduationAdvanceResult {
+  final GraduationAdvanceOutcome outcome;
+
+  /// `true` iff repeat pins were actually built AND `phase_repeat_nudge_pending`
+  /// was written. NOT the same as the `repeat` argument: `buildRepeatPinsForAdvance`
+  /// returns null when its G5 frame-shape gate rejects the pins, and the old code
+  /// keyed the nudge on `pins != null`, not on the user's choice.
+  final bool repeatNudgeFlagged;
+
+  const GraduationAdvanceResult(
+    this.outcome, {
+    this.repeatNudgeFlagged = false,
+  });
+}
+
+/// The graduation screen's phase advance — generation + the progress write,
+/// under the SHARED [withPhaseAdvanceLock].
+///
+/// **Unit B / OI-84.** Hoisted verbatim out of `graduation_screen._onPro`, where
+/// it was a ~120-line closure inside a 909-line file that survived Gate 43 only
+/// on an allow-list entry. It now sits beside [commitPhaseAdvance] with the
+/// other three advance paths ([advanceProPhaseIfExpired],
+/// `PhaseProgressReconciler`, the dev sim), completing the "one place owns the
+/// phase advance" thesis `c8f3d1` started. The screen keeps UI only.
+///
+/// Behaviour is unchanged by the move. Two argument choices are forced by the
+/// new home rather than chosen:
+///  - **[repeat] is a `bool`, not the `AdvanceChoice` enum.** That enum lives in
+///    `lib/features/train/widgets/advance_choice_sheet.dart:14`; importing it
+///    here would be the same `shared/ → features/` inversion described on
+///    [GraduationAdvanceResult]. The closure only ever asked
+///    `choice == AdvanceChoice.repeat`, so the boolean loses nothing.
+///  - **[profile] is passed in, not re-read.** The caller reads it before the
+///    choice sheet opens; re-reading it here would introduce a fresh Hive read
+///    across that human-time await and silently change which profile the pins
+///    and the generate agree on. They MUST agree — see the G5 note below.
+///
+/// [stopwatch] is the caller's, so `phase_unlock_plan_generated` keeps measuring
+/// from the tap rather than from lock acquisition.
+Future<GraduationAdvanceResult> runGraduationPhaseAdvance({
+  required WidgetRef ref,
+  required Map<dynamic, dynamic> profile,
+  required int nextPhase,
+  required bool repeat,
+  required Stopwatch stopwatch,
+}) async {
+  final scheduleSvc = ref.read(workoutScheduleReadServiceProvider);
+
+  // Unit 3c (OI-45 finding 5): generation + the progress write run under the
+  // SHARED phase-advance mutex, the same one advanceProPhaseIfExpired uses.
+  // Before this, graduation generated entirely outside that guard, so the
+  // splash's unawaited pass (or the Home/Train card CTA) could be generating
+  // this very phase concurrently — two generateAndSchedule runs writing
+  // overlapping schedule_* rows and each moving plan_start, the second
+  // silently overwriting the first under a user already looking at the plan.
+  //
+  // The lock is taken AFTER the choice sheet closes, never across it: a modal
+  // waiting on human input must not block the splash's advance. That ordering
+  // is the CALLER's to keep — this function is already past the sheet.
+  return withPhaseAdvanceLock<GraduationAdvanceResult>(
+    () async {
+      // B-pass F1: re-check the live phase ONCE MORE, now that the lock is
+      // actually held. The caller's check ran before acquisition, and the
+      // restore-path writers tracked as OI-83 do not take this lock at all
+      // — so a bump could have landed in between. Catching it HERE avoids
+      // running a full plan generation whose schedule_* rows would then be
+      // written for a phase the user is already past, with commitPhaseAdvance
+      // correctly declining the counter write afterwards and nothing
+      // reconciling the rows. Cheap (one Hive read) versus a generate.
+      final liveInLock =
+          (UserRepository.instance.getProgress()?['current_phase'] as int?) ?? 1;
+      if (liveInLock >= nextPhase) {
+        // Distinct from the post-generate decline below: nothing was
+        // generated here, so the two must not share one event name.
+        unawaited(ErrorTelemetry.logEvent(
+            'phase_unlock_preempted_before_generate',
+            message: 'live=$liveInLock intended=$nextPhase'));
+        return const GraduationAdvanceResult(
+            GraduationAdvanceOutcome.preemptedBeforeGenerate);
+      }
+
+      // graduation's OWN profile defaults — the SAME values MUST feed both the
+      // pin-build and the generate, or repeatPinsFrom's G5 gate validates a
+      // different frame-shape than the one generated (writer/reader value drift).
+      final goal = profile['primary_goal'] as String? ?? 'general_fitness';
+      final equipment = profile['equipment_access'] as String? ?? 'basic_gym';
+      final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
+      final experienceLevel =
+          profile['fitness_experience'] as String? ?? 'beginner';
+
+      final savedDays = MigratedKey.read<List>('preferred_training_days');
+      final preferredDays = savedDays is List ? savedDays.cast<int>() : null;
+
+      // Theme H fix — nextPhaseStartDate computes max(today, currentPhaseEnd + 1)
+      // Monday-normalized (was DateTime.now() → overwrote the current W4 rows).
+      final startDate = scheduleSvc.nextPhaseStartDate();
+
+      // Build repeat pins BEFORE generateAndSchedule overwrites plan_start
+      // (getWeek reads the just-finished window). Only on an explicit "repeat".
+      final pins = repeat
+          ? scheduleSvc.buildRepeatPinsForAdvance(
+              goal: goal,
+              equipment: equipment,
+              daysPerWeek: daysPerWeek,
+              experienceLevel: experienceLevel,
+              newPhase: nextPhase,
+            )
+          : null;
+
+      // W3.4 (Batch 11-B): variety avoid-names on a fresh advance (reader self-gates on the flag; read before plan_start moves, like pins).
+      final previousPhaseByDay =
+          pins == null ? scheduleSvc.previousPhaseNamesByDay() : null;
+
+      await scheduleSvc.generateAndSchedule(
+        goal: goal,
+        equipment: equipment,
+        daysPerWeek: daysPerWeek,
+        startDate: startDate,
+        phase: nextPhase,
+        // U4: thread injuries so the graduated next-phase plan excludes
+        // contraindicated exercises (vocab canonicalized in generateV4).
+        injuries: InjuryVocab.fromProfile(profile['injuries']),
+        experienceLevel: experienceLevel,
+        preferredDays: preferredDays,
+        pinnedExercisesByDay: pins,
+        // W2.7 (Batch 9): titrate ONLY a FRESH advance (pins == null) — a
+        // low-adherence "repeat" (pins != null) must not gain volume.
+        applyVolumeTitration: pins == null,
+        previousPhaseByDay: previousPhaseByDay,
+        applyPlateauEscalation: pins == null, // W3.5 12-A: fresh-advance-only
+      );
+      unawaited(ErrorTelemetry.logEvent('phase_unlock_plan_generated',
+          message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));
+
+      // Theme F — stamp plan_generated_at; UserRepository.updateProgress
+      // fires syncProgressNow so this push lands on cloud.
+      //
+      // Unit 3c (OI-45 finding 5): `nextPhase` was computed at the TOP of the
+      // caller, before the tens-to-hundreds-of-ms generateAndSchedule above.
+      // commitPhaseAdvance re-reads the live phase HERE and refuses to write a
+      // lower one — `current_phase` has no monotonic guard in saveProgress, so
+      // a concurrent advancer landing in that window used to be silently
+      // demoted.
+      final committed = await commitPhaseAdvance(
+        intendedPhase: nextPhase,
+        source: 'graduation_screen',
+      );
+
+      // ⑧ 3-b: a chosen "repeat" (pins applied) flags the Home "step it up
+      // next time" nudge (cross-account gated in the shared writer). The
+      // provider invalidation that surfaces it THIS session is the caller's —
+      // see [GraduationAdvanceResult.repeatNudgeFlagged].
+      final repeatNudgeFlagged = pins != null;
+      if (repeatNudgeFlagged) {
+        await markPhaseRepeatNudgePending();
+      }
+
+      // OI-83: `committed == false` means the rows above were generated
+      // for a phase the counter did not move to — a concurrent advancer or
+      // a cloud restore (which does NOT take this lock, deliberately) got
+      // there first. REPORT it; the repair itself is not attempted here —
+      // see reportDeclinedAdvanceLeftStaleRows for the three mechanisms
+      // that were designed and refuted, and why a correct one needs the
+      // losing generation's own key set.
+      if (!committed) {
+        await reportDeclinedAdvanceLeftStaleRows(
+          source: 'graduation_screen',
+          intendedPhase: nextPhase,
+          livePhase:
+              (UserRepository.instance.getProgress()?['current_phase'] as int?) ??
+                  1,
+        );
+      }
+      return GraduationAdvanceResult(
+        committed
+            ? GraduationAdvanceOutcome.committed
+            : GraduationAdvanceOutcome.generatedButDeclined,
+        repeatNudgeFlagged: repeatNudgeFlagged,
+      );
+    },
+    ifBusy: const GraduationAdvanceResult(GraduationAdvanceOutcome.busy),
+  );
 }

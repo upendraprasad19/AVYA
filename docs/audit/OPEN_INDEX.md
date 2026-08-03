@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**25 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**24 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -31,5 +31,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-80 | check_snapshot_contract silently skips one reader citation while counting… | none | 2026-08-01 (Unit 9, `oi79-paged-cron-reads`) — measured, not inferred. | [:584](open_issues.md#L584) |
 | OI-81 | 10 per-user reads still destructure `data` without `error` in 4 cron… | none | 2026-08-01 (Unit 9) — counted during the OI-79 sweep; NOT re-verified since. | [:612](open_issues.md#L612) |
 | OI-82 | `promote-community-item` calls an RPC that does not exist on this project… | none | 2026-08-01 (Unit 9) — `community_votes_summary` is absent from `pg_proc` in EVERY | [:635](open_issues.md#L635) |
-| OI-84 | `graduation_screen.dart` added to the Gate 43 allow-list; split owed (P3) | none — this is scheduled work, not a blocked investigation. | 2026-08-01 (Gate 43 run: `ALLOW … (892 lines)`) | [:1358](open_issues.md#L1358) |
 | OI-85 | repair the `schedule_*` rows a DECLINED phase advance leaves behind (P2) | none — but three mechanisms are already refuted (below). The next attempt needs | 2026-08-03 (Unit A, diagnose `d1f6b3` — both refutations reproduced from code) | [:1321](open_issues.md#L1321) |

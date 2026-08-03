@@ -1357,9 +1357,12 @@ presence-only by construction). 31 total, all green; 87 across the 7 affected su
 
 ## OI-84 — `graduation_screen.dart` added to the Gate 43 allow-list; split owed (P3)
 
-- **Status**: OPEN
-- **Blocked on**: none — this is scheduled work, not a blocked investigation.
-- **Verified**: 2026-08-01 (Gate 43 run: `ALLOW … (892 lines)`)
+- **Status**: CLOSED
+- **Blocked on**: none — it was scheduled work and Unit B did it. Closure block at the end of
+  this entry.
+- **Verified**: 2026-08-03 (Unit B, diagnose `b4e9c7` — Gate 43 run with the allow-list entry
+  DELETED: `OK — no screen exceeds 800 lines`, and `graduation_screen.dart` no longer appears
+  in the `ALLOW` output at all)
 - **Identified**: 2026-08-01 · Gate 43 blocked the `oi45-phase-advance-monotonic` commit
   (`c8f3d1`, Unit 3c).
 - **Risk class**: god-screen / tech-debt ladder regression
@@ -1387,3 +1390,55 @@ presence-only by construction). 31 total, all green; 87 across the 7 affected su
   **Remove the allow-list entry in the same commit.**
 - **Blast radius estimate**: `account` (`graduation_screen.dart` has its own file-scoped account
   rule in `docs/blast_radius.yaml`); no migration, no schema.
+  MEASURED at ship time: **`platform`** — but only because the B-pass fix edited
+  `docs/blast_radius.yaml` itself (`:171`, a platform-tier path). Per-file, the
+  runtime code is `account` (`graduation_screen.dart`, `pro_phase_advance.dart`)
+  and everything else is `feature`. The estimate was right about the CODE.
+
+### CLOSURE — Unit B, 2026-08-03, diagnose `b4e9c7`
+
+**909 → 552 lines. The allow-list entry is deleted and the ratchet is shrinking again** (six
+entries, all original C4 targets).
+
+Two moves, one deletion, one commit:
+
+1. The ~120-line locked generate + `commitPhaseAdvance` block → `runGraduationPhaseAdvance` in
+   `lib/shared/services/pro_phase_advance.dart`, beside the other three advance paths. Its
+   `bool?` return became `GraduationAdvanceResult` — a four-case outcome enum plus
+   `repeatNudgeFlagged`. The old `false` had covered TWO outcomes that already emitted
+   *different* telemetry, so the type was lossier than the instrumentation next to it.
+2. The ~250-line phase-2 preview UI → `lib/features/train/widgets/phase2_preview_card.dart`
+   (`Phase2PreviewCard` / `Phase2BenefitsCard`). Both builders already took no `ref` and no
+   `BuildContext`, so this was a move, not a refactor.
+3. The `_allowList` entry deleted from `scripts/check_god_screen_max_lines.dart` in the same
+   commit.
+
+**Step 2 was NOT this item's recommended shape, and the reason is worth keeping.** The hoist
+alone landed the file at ~791 — **nine lines of margin**. That is the identical condition that
+*created* OI-84: the file sat six under the ceiling, so Unit 3c could not touch it at all. This
+item's own "~770" estimate had gone stale, because Unit A grew the file from 892 to 909 after
+the estimate was written. Founder chose the fuller split once shown the arithmetic. **A board
+item's numbers age; re-measure before planning against them.**
+
+Two second-order findings, both fixed in the same commit:
+
+- `docs/blast_radius.yaml:207-216` justified this file's `account` rule with "contains a
+  confirmed direct write to the progress map (`_onPro()`)" — **false after the hoist**. The tier
+  is unchanged and still correct (the screen is the UI entry point for the PRO advance and gates
+  `phases_2_to_12`), but the justification was restated. Same class as the
+  `check_writer_reader_drift.dart` citation corrected in `lib/CLAUDE.md` on 2026-08-02: a rule
+  whose stated reason is false reads as coverage it does not have.
+- The hoist could have relocated the progress write into a path classified BELOW `account`,
+  silently weakening the review gate while every other test stayed green. It did not —
+  `docs/blast_radius.yaml:226` gives `pro_phase_advance.dart` its own `account` rule — but that
+  is now **asserted in a test** rather than assumed, so the next move cannot regress it.
+
+**Verification.** Six pre-existing test files source-grep `graduation_screen.dart` by path;
+moving code out of it turns such assertions vacuously true, which is worse than deleting them
+(`feedback_source_grep_false_confidence.md`). All six were re-pointed, and ten assertions were
+then individually PROVEN to discriminate by perturbing the source and watching each fail —
+files restored from copies afterwards and verified byte-identical by md5, never `git checkout`
+(the Unit 7 incident). `pro_phase_advance_behavioral_test.dart` gains group D2: four behavioral
+tests, one per outcome arm, against real Hive and real plan generation — coverage that could not
+previously exist, because the code was a closure inside a widget callback that nothing could
+call.

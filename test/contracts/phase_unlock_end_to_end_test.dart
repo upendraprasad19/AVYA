@@ -31,6 +31,36 @@ String _stripComments(String src) => src
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
     .replaceAll(RegExp(r'//[^\n]*'), '');
 
+/// Substring from [decl] to end-of-file, used as "this declaration's body".
+///
+/// Only valid when [decl] is the LAST top-level declaration in the file, so
+/// this asserts exactly that rather than assuming it (round-2 review: the
+/// numeric window it replaces could not bound anything, because the function
+/// sits 3593 chars from EOF and the window was 6000).
+String _bodyToEof(String stripped, String decl) {
+  final i = stripped.indexOf(decl);
+  expect(i, greaterThan(-1), reason: 'declaration not found: $decl');
+  final body = stripped.substring(i);
+  // Any further TOP-LEVEL declaration at column 0 means this is NOT the last
+  // one and the substring spills into a sibling. B-pass finding 3: the first
+  // version matched only `^Future<`, so a later non-Future helper (a `void`, a
+  // `class`, a sync getter) that happened to mention the searched string would
+  // have silently made this vacuous again — the same shape as the numeric
+  // window this helper replaced. Match any top-level declaration start.
+  final later = RegExp(
+          r'^(Future<|void |class |enum |mixin |extension |String |int |bool |double |List<|Map<|Set<|final |const |@)',
+          multiLine: true)
+      .allMatches(body)
+      .where((m) => m.start > 0)
+      .toList();
+  expect(later, isEmpty,
+      reason: '$decl must remain the file\'s last top-level declaration for '
+          'this body extraction to be sound — a new function was added after '
+          'it, so re-scope this assertion instead of letting it silently span '
+          'into the sibling');
+  return body;
+}
+
 void main() {
   group('graduation_screen — _GenerateNextPhaseButton + telemetry + invalidations', () {
     final src = File('lib/features/train/screens/graduation_screen.dart')
@@ -63,6 +93,15 @@ void main() {
     });
 
     test('emits all 4 lifecycle telemetry events', () {
+      // Unit B / OI-84 (2026-08-03): `phase_unlock_plan_generated` fires from
+      // inside the generate block, which moved to runGraduationPhaseAdvance.
+      // The EVENT SET is the contract, not which file emits it — so assert the
+      // union across both halves of the unlock path rather than dropping the
+      // one that moved. Same "follow the writer, not the literal" reasoning the
+      // plan_generated_at test below already applies.
+      final advanceStripped = _stripComments(
+          File('lib/shared/services/pro_phase_advance.dart').readAsStringSync());
+      final unlockPath = stripped + advanceStripped;
       const required = [
         'phase_unlock_initiated',
         'phase_unlock_gate_routed_pro',
@@ -72,11 +111,22 @@ void main() {
       ];
       for (final ev in required) {
         expect(
-          stripped.contains("'$ev'"),
+          unlockPath.contains("'$ev'"),
           isTrue,
           reason: 'must emit $ev telemetry — needed to debug the next '
               '"button did nothing" report.',
         );
+      }
+      // The three that are purely about the TAP must stay on the screen — if
+      // they drifted into the shared advance they would stop firing on the
+      // paywall branch, which never reaches it.
+      for (final ev in [
+        'phase_unlock_initiated',
+        'phase_unlock_gate_routed_pro',
+        'phase_unlock_gate_routed_free',
+      ]) {
+        expect(stripped.contains("'$ev'"), isTrue,
+            reason: '$ev is a tap-time event and must stay in the screen');
       }
     });
 
@@ -92,14 +142,38 @@ void main() {
       // commitPhaseAdvance AND that commitPhaseAdvance stamps the field. A
       // location-pinning grep would have had to be deleted here; this one
       // survives the refactor and still fails if either half breaks.
-      expect(
-        stripped.contains('commitPhaseAdvance('),
-        isTrue,
-        reason: 'graduation unlock must commit through the shared advance '
-            'writer (Unit 3c / c8f3d1).',
-      );
+      //
+      // Unit B / OI-84 (2026-08-03): one more hop. The screen no longer calls
+      // commitPhaseAdvance directly — it calls runGraduationPhaseAdvance, which
+      // does. Chain BOTH links; asserting only the second would pass even if
+      // the screen stopped invoking the advance entirely.
       final advanceSrc = _stripComments(
           File('lib/shared/services/pro_phase_advance.dart').readAsStringSync());
+      expect(
+        stripped.contains('runGraduationPhaseAdvance('),
+        isTrue,
+        reason: 'graduation unlock must go through the shared graduation '
+            'advance (Unit B / OI-84).',
+      );
+      expect(
+        // Round-1 review B4 asked for a bound; round-2 measured the first
+        // attempt and showed `{0,6000}` bounds NOTHING — signature→EOF is only
+        // 3593 chars, so any window ≥ that is unbounded in effect. A number
+        // tuned to the real 2678-char distance would discriminate today and
+        // become brittle the moment the function grows.
+        //
+        // Structural instead of numeric: take the substring from the signature
+        // to EOF and assert the call is in it, AND separately assert this
+        // function really is the file's LAST top-level declaration — which is
+        // what makes "substring to EOF" equal "this function's body". The
+        // second assertion is the one the magic number was standing in for, and
+        // it cannot rot silently: reorder the file and it fails immediately.
+        _bodyToEof(advanceSrc, 'Future<GraduationAdvanceResult> runGraduationPhaseAdvance')
+            .contains('commitPhaseAdvance('),
+        isTrue,
+        reason: 'and that advance must commit through the shared monotonic '
+            'writer (Unit 3c / c8f3d1).',
+      );
       expect(
         advanceSrc.contains("'plan_generated_at': stamp"),
         isTrue,

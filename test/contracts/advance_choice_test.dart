@@ -121,17 +121,55 @@ void main() {
           reason: 'a concurrent advance while the sheet is open must ROUTE to '
               '/train, not recompute nextPhase (that skips a phase)');
     });
+    // Unit B / OI-84 (2026-08-03): the two assertions below used to match a
+    // single regex inside graduation_screen._onPro. The hoist SPLIT that chain
+    // across two files — the screen decides `repeat`, the shared advance turns
+    // it into pins — so each half is now pinned where it actually lives, plus
+    // the seam between them. Keeping the old single-file regex would have left
+    // both silently unmatched.
+    final advanceSrc = _strip(
+        File('lib/shared/services/pro_phase_advance.dart').readAsStringSync());
+
+    test('the screen passes the repeat CHOICE to the shared advance', () {
+      expect(
+          RegExp(r'repeat:\s*choice == AdvanceChoice\.repeat').hasMatch(src),
+          isTrue,
+          reason: 'the AdvanceChoice enum stays in the feature layer; the '
+              'shared advance takes a plain bool. NB: lib/shared -> lib/features '
+              'is a CONVENTION, not a gated rule (four imports already breach '
+              'it) — this pins the chosen design, it does not claim an '
+              'invariant');
+    });
     test('pins built ONLY on an explicit repeat choice', () {
       expect(
-          RegExp(r'choice == AdvanceChoice\.repeat[\s\S]{0,120}?buildRepeatPinsForAdvance')
-              .hasMatch(src),
+          RegExp(r'final pins = repeat[\s\S]{0,120}?buildRepeatPinsForAdvance')
+              .hasMatch(advanceSrc),
           isTrue);
     });
     test('the repeat nudge is flagged on pins != null (the actual repeat)', () {
+      // `pins != null`, NOT the user's `repeat` choice —
+      // buildRepeatPinsForAdvance returns null when its G5 frame-shape gate
+      // rejects, and the nudge must follow what actually happened.
       expect(
-          RegExp(r'if \(pins != null\)[\s\S]{0,160}?markPhaseRepeatNudgePending')
+          RegExp(r'repeatNudgeFlagged = pins != null[\s\S]{0,200}?markPhaseRepeatNudgePending')
+              .hasMatch(advanceSrc),
+          isTrue);
+    });
+    test('the nudge PROVIDER invalidation stays in the widget layer', () {
+      // The Hive write moved to shared/; the provider invalidate could not,
+      // because phaseRepeatNudgeProvider lives in lib/features/home/. The
+      // result flag is the seam — if it were dropped, the nudge would still be
+      // written but would not surface until an app relaunch.
+      expect(
+          RegExp(r'result\.repeatNudgeFlagged[\s\S]{0,120}?invalidate\(phaseRepeatNudgeProvider\)')
               .hasMatch(src),
           isTrue);
+      expect(advanceSrc.contains('phaseRepeatNudgeProvider'), isFalse,
+          reason: 'the shared advance must not reach into this lib/features '
+              'provider — it returns repeatNudgeFlagged and the widget '
+              'invalidates. (A convention, not a gated invariant: four '
+              'lib/shared -> lib/features imports already exist. This pins the '
+              'seam this unit chose, not a repo-wide law.)');
     });
   });
 }
