@@ -24,18 +24,11 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 
-/// Gate screen shown immediately after sign-in success.
-///
-/// Parallel: queries [user_profile.onboarding_completed_at] + starts
-/// [SyncService.restoreFromCloudForUser].
-///
-/// Decision tree:
-///   row + onboarding_completed_at IS NOT NULL → await restore → /home
-///   row + onboarding_completed_at IS NULL     → cancel restore → resume onboarding
-///   no row                                    → cancel restore → /onboarding/mission-brief
-///
-/// 15-second safety net: if restore is still running, shows an escape CTA
-/// that lets the user skip straight to /home.
+/// Gate screen shown immediately after sign-in success. Runs
+/// [AuthSessionBootstrapper.resolveDestination] + [SyncService.restoreFromCloudForUser]
+/// in parallel, then routes to /home, resume-onboarding, or mission-brief.
+/// Full decision tree + timeout UX (15s soft hint, 30s escape CTA):
+/// `lib/features/auth/CLAUDE.md` "Post-auth flow".
 class RestoringScreen extends ConsumerStatefulWidget {
   const RestoringScreen({super.key, this.next});
 
@@ -74,16 +67,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   String _statusLabel = 'Getting you ready…';
   bool _useRestoreLabel = false;
 
-  // Theme D (diagnose 2026-05-22 4a3b08) — threshold bumped from 15s to
-  // 30s based on +30 APK telemetry showing the founder's restore total
-  // is 35.9s every cold start (Step A 23.8s alone exceeded the old 15s
-  // gate, hitting every user every launch). Two-stage UX: a soft "Almost
-  // there…" hint surfaces at 15s for users who got an old-vs-new mental
-  // model of "should this take a few seconds?", and the actual escape-
-  // hatch CONTINUE button surfaces at 30s. Background-restore (A5) is
-  // a bigger refactor needing per-provider "loading" handling; this
-  // batch ships the threshold fix and leaves A5 for the operational-
-  // observability work.
+  // Theme D two-stage timeout UX (soft hint at 15s, CONTINUE at 30s).
+  // Full reasoning + telemetry: docs/diagnoses/2026-05-22-restoring-timeout-threshold-4a3b08.md.
   static const Duration _softHintAfter = Duration(seconds: 15);
   static const Duration _ctaAfter = Duration(seconds: 30);
 
@@ -201,22 +186,11 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     }
   }
 
-  /// Navigate to /home. A RETURNING user (Hive profile already populated) takes
-  /// the background-restore path: establish ownership (BLOCKING — cross-account
-  /// safety, APK #15.4) + fresh-paint rollover, go to home IMMEDIATELY, and let
-  /// the in-flight cloud restore finish + heal in the background. A fresh install
-  /// (no local profile) OR the `disable_bg_restore` kill-switch falls through to
-  /// the default path: await the full restore + ownership/heals, then go.
-  ///
-  /// Slow-boot guard (4e8b1d): this was an opt-IN flag (`bg_restore_enabled`,
-  /// default OFF) so returning users blocked >1 min on the full 2020-history
-  /// restore on every cold start. Flipped to opt-OUT — returning users default
-  /// to the bg path; the kill-switch preserves the old blocking path, reachable
-  /// per §4.6. The in-flight restore is NOT cancelled → single restore, no
-  /// double-write race; bg heals are ref-free (singletons). The loss-sensitive
-  /// restore writers are additive / local-wins (skip-if-local-exists) so a
-  /// background restore never overwrites a just-logged local row; the heal's
-  /// reconcileExlogIndexes repairs any index drift post-restore (c5a1f2).
+  /// Navigate to /home. Returning users (Hive profile populated) take the
+  /// background-restore path (home immediately, restore/heal continues in
+  /// background); fresh installs or `disable_bg_restore` await the full
+  /// restore first. Full reasoning: `lib/features/auth/CLAUDE.md` "Post-auth
+  /// flow" + "Returning user waits >1 min" pitfall row; diagnoses 4e8b1d, c5a1f2.
   Future<void> _goHome(
       String userId, Future<RestoreResult> restoreFuture) async {
     // Obs#1: a returning user (GoHome) has real cloud data — show the live
@@ -417,15 +391,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
           'migrator=plan_integrity ms=${swPlanIntegrity.elapsedMilliseconds}',
     ));
 
-    // Bug 2026-05-22 / diagnose dc52a4 — three pieces of post-auth bootstrap
-    // that used to live in splash_screen._runDeferredInit. They touch the
-    // user-scoped GuardedBox (`userBox`) and so MUST run AFTER
-    // HiveUserSession.openForUser, which happened above as part of
-    // restoreFromCloudForUser → _ensureOwnershipBeforeHome. Splash hit a
-    // pre-openForUser race that made `day_rollover_streak_freeze_refill`
-    // fail on every cold start since at least 2026-05-06 — universally,
-    // every user, every launch. Moving here finally lets the rollover +
-    // weekly refill actually execute.
+    // Relocated from splash_screen._runDeferredInit (diagnose dc52a4) --
+    // touches userBox, so MUST run AFTER HiveUserSession.openForUser above.
 
     // (1) Cold-start clear of the session-scoped `streak_freeze_just_used`
     // UI flag. Set by commitConsume(), read+cleared by

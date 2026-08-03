@@ -1,0 +1,44 @@
+# Closure ledger — Unit 2: repo-wide sweep for the 3 gate-tripping content
+# patterns diagnose b3f9e7 hit. Gate 40 (validate_audit_closure.dart). One
+# terminal_state per finding; no `deferred:` key. Under the §4.2 "≥4
+# findings" mandatory-closure-YAML threshold (5 findings, but only 4 real
+# fixes + 1 verified-clean) -- used anyway for clarity, spanning 3
+# independently-gated patterns, matching how b3f9e7's own 3 bugs were
+# tracked. Branch: repo-gate-pattern-sweep. Diagnose e7c3b9.
+
+batch: repo-gate-pattern-sweep
+diagnose: docs/diagnoses/2026-08-03-repo-gate-pattern-sweep-e7c3b9.md
+total_findings: 5
+closed_count: 5
+
+_commit: &wip "repo-gate-pattern-sweep (uncommitted at authoring)"
+
+findings:
+  - id: P1-1
+    title: "wardroom/CLAUDE.md:94 bare §3 U7 resolves against root's unrelated §3 SCREENS by coincidence"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "dart run scripts/check_claude_md_citations.dart -- PASS"
+    notes: "reworded to name docs/superpowers/specs/2026-04-28-apk-test-4-hotfix-batch-design.md explicitly."
+  - id: P1-2
+    title: "debugging/SKILL.md:56,80 cite a CLAUDE.md §19 that has not existed since a prior renumbering"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "grep -n \"^## 19\" CLAUDE.md -- no match (confirms the citation was dead); both sites reworded"
+    notes: "outside Gate 26's scan set (.claude/skills/ not walked) so no gate caught it; reworded to cite docs/playbook/common-pitfalls.md per the file's own bug-class 2.17 prescription."
+  - id: P1-3
+    title: "Gate 26 heading/citation regexes have no letter-suffix support -- §2a citations validate only by accidental collision with §2, zero real protection"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "dart run scripts/check_claude_md_citations.dart -- PASS, negative-control-confirmed discriminating (temporarily renamed the 2a heading, gate correctly FAILed with 4 broken citations, then restored -- git diff CLAUDE.md empty after)"
+    notes: "widened both regexes in scripts/check_claude_md_citations.dart from \\d+(?:\\.\\d+)? to \\d+[a-z]?(?:\\.\\d+)?."
+  - id: P2
+    title: "restoring_screen.dart at exactly 800/800 lines, zero margin, 28.75% comments"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "dart run scripts/check_god_screen_max_lines.dart -- PASS, no screen exceeds 800; wc -l confirms 767"
+    notes: "extracted/trimmed 4 narrative comment blocks to short pointers at CLAUDE.md/diagnose-docs; 2 of the 4 also corrected content that had drifted stale (15s-vs-30s CTA timing) relative to the code."
+  - id: P3
+    title: "SoT registry enclosing-method-name-vs-interior-range (the 3rd b3f9e7 bug) -- sweep for siblings"
+    terminal_state: verified_clean
+    evidence: "562 entries checked across the 8438-line registry; zero recurrences. The 7 other _ensureLocalUser-adjacent entries are already correctly phrased as prose, confirming the original b3f9e7 fix generalized rather than being a one-off patch."

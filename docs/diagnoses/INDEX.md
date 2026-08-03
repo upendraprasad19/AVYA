@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### repo_gate_content_hygiene (1 bugs)
+- 2026-08-03 e7c3b9 — The terms-accepted-fix batch (b3f9e7) hit 3 pre-existing gate-tripping content bugs only when its commit finally reached the full gate loop for the first time (earlier attempts failed before reaching…
+
 ### phase_progress_current_phase (cloud→Hive restore merge half) (1 bugs)
 - 2026-08-03 d1f6b3 — A cloud→Hive `progress` restore silently LOWERS `current_phase` (and two other lifetime counters) on a device that advanced locally and has not yet pushed. No guard, no telemetry, no trace: the user…
 
@@ -920,6 +923,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-03 | e7c3b9 | The terms-accepted-fix batch (b3f9e7) hit 3 pre-existing gate-tripping content bugs only when its commit finally reached the full gate loop for the first time (earlier attempts failed before reaching… | repo_gate_content_hygiene | Gate 26 (scripts/check_claude_md_citations.dart) has no dedicated test file today — verified by glob, none existed before this fix either. The regex fix was proven by negative control instead (see regression_test_planned) rather than adding a new permanent test file for a 2-line regex widening, per the no-gold-plating principle — a full test harness would be new scope beyond what this sweep called for. |
 | 2026-08-03 | d1f6b3 | A cloud→Hive `progress` restore silently LOWERS `current_phase` (and two other lifetime counters) on a device that advanced locally and has not yet pushed. No guard, no telemetry, no trace: the user… | phase_progress_current_phase (cloud→Hive restore merge half) | test/contracts/progress_restore_monotonic_behavioral_test.dart |
 | 2026-08-02 | a9c4e1 | A Riverpod provider's build method invalidates itself. `SubscriptionInfoNotifier.build()` — the data source behind the PRO pill — calls `isPro()`, which on an expired or cross-account row calls… | subscription_state (isPro/gate CQRS split) | test/contracts/subscription_cqrs_behavioral_test.dart |
 | 2026-08-02 | f2b8a1 | Google sign-in was never live in prod despite functionality-flow.md asserting "Email + Google OAuth work normally" — no Google OAuth client existed in Google Cloud Console (google-services.json… | auth_google_oauth_redirect | test/contracts/google_oauth_redirect_flow_test.dart |

@@ -53,7 +53,7 @@ Before proposing ANY fix, grep memory + project retrospectives:
 ```
 Grep MEMORY.md (~/.claude/projects/.../memory/) for feedback_* files matching the symptom
 Grep memory/ for project_apk_test_*.md retrospectives — same class likely shipped before
-Grep CLAUDE.md §19 "COMMON BUGS TO AVOID" table for an exact-match entry
+Grep docs/playbook/common-pitfalls.md for an exact-match entry
 ```
 
 - If a prior incident matches: read its diagnose-doc (`docs/diagnoses/`), its regression test (`test/contracts/` or equivalent), and the fix commit. The bug may be a regression of THAT fix.
@@ -77,7 +77,7 @@ Per CLAUDE.md rules 21 + 22:
 1. **Diagnose-doc** at `docs/diagnoses/<date>-<slug>-<6hex>.md` (validated by `dart run scripts/validate_diagnose_doc.dart`).
 2. **Regression test** under `test/contracts/`, `test/<service>/`, or alongside the fix that FAILS on `main` without the fix and PASSES with it.
 3. **Memory-file update** if the bug is a NEW class, a NEW methodology refinement, or a NEW recurring mistake. Append to existing `feedback_mistake_*.md` if the class already has one.
-4. **CLAUDE.md update** to §19 "COMMON BUGS TO AVOID" only if the bug introduces a new invariant the codebase must enforce forever.
+4. **`docs/playbook/common-pitfalls.md` update** only if the bug introduces a new invariant the codebase must enforce forever.
 5. **This skill file** updated per §5 self-evolution rule below.
 
 ---

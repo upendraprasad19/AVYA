@@ -91,7 +91,7 @@ Barrel: `lib/shared/widgets/wardroom/wardroom.dart` — 36 export lines. Counts 
 | WardDispatchHeader | ward_dispatch_header.dart | Double gold rule + eyebrow + italic-gold emphasis + context line (reports / coach dispatch) |
 | WardEyebrow | ward_eyebrow.dart | Standalone mono eyebrow label |
 | WardRule | ward_rule.dart | Gold rule with configurable weight / dash pattern |
-| WardTabHeader | ward_tab_header.dart | Unified 56dp top-row header for all 5 tab screens — `[avatar][TAB EYEBROW][spacer][streak chip][freeze chip]`. APK Test #4 hotfix §3 U7. |
+| WardTabHeader | ward_tab_header.dart | Unified 56dp top-row header for all 5 tab screens — `[avatar][TAB EYEBROW][spacer][streak chip][freeze chip]`. `docs/superpowers/specs/2026-04-28-apk-test-4-hotfix-batch-design.md` U7 (§3, "Unified tab headers"). |
 | **Surface** | | |
 | WardCard | ward_card.dart | `WardCardVariant.standard` / `hero` (gold border) / `inset` (no border, for nested rails) |
 | WardAvatar | ward_avatar.dart | Circular monogram or photo w/ gold ring at 40% alpha |

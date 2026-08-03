@@ -29,8 +29,9 @@ void main(List<String> args) async {
     exit(warnOnly ? 0 : 1);
   }
   final rootLines = rootClaude.readAsLinesSync();
-  // Headings: lines like "## N. Title" or "### N.M Title"
-  final headingRegex = RegExp(r'^#{2,3}\s+(\d+(?:\.\d+)?)\.?\s');
+  // Headings: lines like "## N. Title", "### N.M Title", or "## Na. Title"
+  // (single-letter-suffixed sections, e.g. root CLAUDE.md's "## 2a.").
+  final headingRegex = RegExp(r'^#{2,3}\s+(\d+[a-z]?(?:\.\d+)?)\.?\s');
   final knownSections = <String>{};
   for (final line in rootLines) {
     final m = headingRegex.firstMatch(line);
@@ -48,8 +49,12 @@ void main(List<String> args) async {
     if (entity is File && entity.path.endsWith('CLAUDE.md')) files.add(entity);
   }
 
-  // Citation pattern: §N or §N.M (allow trailing punctuation/text).
-  final citeRegex = RegExp(r'§(\d+(?:\.\d+)?)');
+  // Citation pattern: §N, §N.M, or §Na (allow trailing punctuation/text).
+  // The letter suffix MUST be captured here too, not just in headingRegex --
+  // otherwise `§2a` truncates to captured group "2", which coincidentally
+  // collides with an unrelated real section "2" instead of being validated
+  // as "2a" specifically (repo-gate-pattern-sweep Unit 2, 2026-08-03).
+  final citeRegex = RegExp(r'§(\d+[a-z]?(?:\.\d+)?)');
 
   // External-statute pattern: skip `§N` when preceded on the same line by a
   // statute/act token (e.g., `DPDP §17` refers to India's DPDP Act §17, not
