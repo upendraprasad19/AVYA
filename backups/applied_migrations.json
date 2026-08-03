@@ -787,5 +787,13 @@
     "applier": "claude-via-mcp",
     "diagnose": "a4e1c9",
     "slug": "reengagement_silent_candidates_rpc"
+  },
+  {
+    "migration": "118",
+    "applied_at": "2026-08-03T10:04:53+05:30",
+    "hash": "sha256:16c8afcb323a1d2b3f58c775996da0f7a81c09e0321223239913a57c90f28332",
+    "applier": "claude-via-mcp",
+    "diagnose": "b3f9e7",
+    "slug": "backfill_terms_accepted_historical_rows"
   }
 ]
