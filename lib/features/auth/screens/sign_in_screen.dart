@@ -921,34 +921,27 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   if (!_formKey.currentState!.validate()) return;
                   final email = _emailController.text.trim();
                   final password = _passwordController.text;
-                  // E.3 fix (audit 2026-05-16, F3-1.2 DPDP gap):
-                  // Stamp ToS/Privacy acceptance to Hive BEFORE signUp.
-                  // The pre-checked checkbox + visible link affordance is
-                  // the affirmative-action signal per DPDP §11; this write
-                  // captures the timestamp + version so `_ensureLocalUser`
-                  // (auth_provider.dart:505-516) can project upward to
-                  // `users.terms_accepted_at` / `users.terms_version`
-                  // on the first post-auth sync. UTC ISO8601 because the
-                  // cloud column is `timestamptz` (IST applies to date-keys
-                  // only, not timestamps — see CLAUDE.md §15 IST contract).
-                  // closes-diagnose: 2026-05-16-terms-accepted-at-dpdp
-                  try {
-                    HiveService.instance.userBox.put(
-                      'terms_accepted_at',
-                      DateTime.now().toUtc().toIso8601String(),
-                    );
-                    HiveService.instance.userBox.put(
-                      'terms_version',
-                      AppConstants.termsVersion,
-                    );
-                  } catch (_) {
-                    // Hive write failure is non-fatal — the upward sync
-                    // is gated on Hive presence, so a failure here just
-                    // means terms_accepted_at stays NULL in cloud (same
-                    // as pre-fix state). The auth flow itself must not
-                    // block on telemetry-side writes.
-                  }
-                  authNotifier.signUpWithEmail(email, password);
+                  // closes-diagnose: b3f9e7
+                  // The pre-checked checkbox + visible link affordance is the
+                  // affirmative-action signal per DPDP §11. The original E.3 fix
+                  // (audit 2026-05-16, F3-1.2) wrote ToS/Privacy acceptance
+                  // straight to `HiveService.instance.userBox` HERE, before
+                  // signUp — but no Supabase session (and therefore no open
+                  // user-scoped Hive box) exists yet at this point, so that
+                  // write threw `HiveOwnershipException`/`StateError` every
+                  // single time and was silently swallowed. Passing the
+                  // captured values through instead — `_ensureLocalUser`
+                  // (auth_provider.dart) writes them to Hive AFTER
+                  // `HiveUserSession.openForUser` has actually opened the box,
+                  // where the write can succeed. UTC ISO8601 because the cloud
+                  // column is `timestamptz` (IST applies to date-keys only,
+                  // not timestamps — see CLAUDE.md §15 IST contract).
+                  authNotifier.signUpWithEmail(
+                    email,
+                    password,
+                    termsAcceptedAt: DateTime.now().toUtc().toIso8601String(),
+                    termsVersion: AppConstants.termsVersion,
+                  );
                 },
               ),
               const SizedBox(height: 12),

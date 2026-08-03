@@ -19,8 +19,11 @@ sequence. Three screens:
 - `sign_in_screen.dart` — Email + Google OAuth + Phone OTP entry surface.
 - `splash_screen.dart` — Initial decision: signed-in → restore route, signed-out → Welcome.
 - `restoring_screen.dart` — The post-auth branded gate added in APK Test #2. Waits
-  for `AuthSessionBootstrapper.hydrateFromCloud()` + `SyncService.restoreFromCloud()`
-  in parallel, then routes to home / resume-onboarding / mission-brief based on
+  for `AuthSessionBootstrapper.resolveDestination()` + `SyncService.restoreFromCloudForUser()`
+  in parallel (**CORRECTED 2026-08-02, diagnose b3f9e7 plan-review round 1** — this
+  previously said `hydrateFromCloud()`, which `RestoringScreen` does NOT call; see the
+  "Post-auth flow" section below for why that distinction matters), then routes to
+  home / resume-onboarding / mission-brief based on
   the user_profile row classification. **2026-07-16 (b3f9a1):** also accepts an
   allowlisted `next` query param (`/restoring?next=…`, currently only `/admin`)
   so a cold-tab bookmark of the founder dashboard returns there instead of
@@ -51,11 +54,11 @@ The core service-layer pieces that this feature wires through:
   ↓
 splash_screen.dart routes to /restoring
   ↓
-RestoringScreen mounts:
-  - AuthSessionBootstrapper.hydrateFromCloud() (in parallel)
-  - SyncService.restoreFromCloud() (in parallel; cancellable)
+RestoringScreen._kickoffRestore mounts, runs in parallel:
+  - AuthSessionBootstrapper.resolveDestination(userId)   — pure read, no Hive writes
+  - SyncService.restoreFromCloudForUser()                — cancellable
   ↓
-AuthSessionBootstrapper.resolveDestination(row) returns one of:
+resolveDestination(row) returns one of:
   - GoHome                         — onboarding_completed_at != NULL
   - GoHome (Plan A self-heal)      — onboarding_completed_at NULL, Hive profile populated → re-stamp NOW
   - ResumeOnboarding(firstMissingStep) — onboarding_completed_at NULL, Hive partially populated
@@ -63,6 +66,21 @@ AuthSessionBootstrapper.resolveDestination(row) returns one of:
   ↓
 15-second timeout safety: CONTINUE button surfaces; restore continues in background
 ```
+
+**`hydrateFromCloud()` is a DIFFERENT, easily-confused method — `RestoringScreen`
+never calls it (corrected 2026-08-02, diagnose b3f9e7 plan-review round 1; this
+section previously said it did).** `hydrateFromCloud` has exactly one call site in
+the whole repo: inside `auth_provider.dart`'s `_ensureLocalUser`, itself called only
+from `signInWithEmail` / `signUpWithEmail` ×2 / `verifyOtp` — i.e. only email and
+phone-OTP, which get a synchronous `response.user` right after `auth.signIn/signUp`.
+**`signInWithGoogle()` never calls `_ensureLocalUser`** (OAuth is a redirect flow with
+no synchronous response.user) — so anything wired only into `hydrateFromCloud`,
+believing it to be "the place every post-auth path converges on," silently never runs
+for Google OAuth. `RestoringScreen` — specifically `_goHome`'s fast branch and the end
+of `_ensureOwnershipBeforeHome`, both AFTER `HiveUserSession.openForUser` is confirmed
+— is the actual OAuth convergence point for anything that needs a live Hive session.
+This was the second-round finding that caught Part B of diagnose b3f9e7 not actually
+fixing Google OAuth's consent gap despite fixing phone OTP's identical-looking one.
 
 Cross-account guard (race scenario — user A signs out, user B signs in
 before all Hive boxes finish swapping):
@@ -97,6 +115,8 @@ read user-scoped Hive without going through `wrapUserScopedBox`.
 | Password-reset link recognized for one Supabase auth-flow shape but not another | Recovery detection lives in `lib/core/utils/password_recovery_detector.dart` (`PasswordRecoveryDetector.detect`), called from `main.dart` before `runApp()`. It must recognize BOTH the implicit-flow fragment (`#type=recovery&access_token=...`) AND the PKCE query-param shape (`?code=...`, scoped to the `/reset` path) — supabase_flutter defaults to PKCE since 2.x, and a detector built for only one shape silently misroutes the other to `/restoring` → `/onboarding` instead of `/reset`. Re-verify both branches against a live link after any Supabase SDK upgrade. See diagnose b7d4e2. | `docs/diagnoses/2026-07-23-password-reset-pkce-code-not-detected-b7d4e2.md` |
 | Screen ends a Supabase session in place and expects `_authRedirect` to notice | GoRouter has NO `refreshListenable` tied to `Supabase.auth.onAuthStateChange` anywhere in this app (`app_router.dart:84-89` / `app.dart:105`) — `signOut()` alone never re-runs `_authRedirect`. `/reset` is also deliberately exempt from the guard. `ResetPasswordScreen._updatePassword` used to comment "the router handles the navigation automatically" and just sat on `/reset` forever after a successful reset. Any screen that signs out in place must navigate explicitly (`context.go`), same pattern `sign_in_screen.dart`'s `ref.listen` already uses on success. See diagnose c8f1d3. | `docs/diagnoses/2026-08-01-password-reset-stuck-screen-c8f1d3.md` |
 | Google sign-in stuck / never returns to the app | Two independent gaps, both required for the flow to complete: (1) `AndroidManifest.xml` needs a `BROWSABLE`/`VIEW` intent-filter for `io.supabase.icanbefitter://login-callback/`, or Android has nowhere to hand control back after Google consent; (2) `AuthNotifier.signInWithGoogle`'s `redirectTo` must branch on `kIsWeb` — a browser cannot resolve the mobile custom scheme, and the web value must be on Supabase's Redirect URLs allowlist (same class as the e9f2a4 password-reset bug below). Activating the provider ALSO requires account-side setup outside this repo: a Google Cloud OAuth 2.0 Web client (redirect URI = Supabase's `/auth/v1/callback`) linked into Supabase Auth → Providers → Google, and both redirect URLs added to the allowlist. See diagnose f2b8a1. | `docs/diagnoses/2026-08-02-google-oauth-web-redirect-mobile-scheme-f2b8a1.md` |
+| A Hive write inside `catch (_) {}` never actually lands, forever | `terms_accepted_at`/`terms_version` were 100% NULL for every user for 2.5 months — the 2026-05-16 fix wrote to `HiveService.instance.userBox` at CREATE ACCOUNT tap time, before any Supabase session existed, so `HiveUserSession.openForUser` had never run and the box getter itself threw `StateError` (`guarded_box.dart:335`), silently swallowed. Any write to a user-scoped box (`userBox`/`coachBox`/etc.) MUST happen after `HiveUserSession.openForUser` has resolved for this session — verify the call site, don't assume a `try/catch` means "it's fine either way." Source-grep regression tests cannot catch this class; the write call being present and correctly ordered relative to sibling calls says nothing about whether the box was actually writable yet. See diagnose b3f9e7 + debugging skill bug-class 2.47 (write-side sibling of bug-class 2.21). | `docs/diagnoses/2026-08-02-terms-accepted-dead-write-b3f9e7.md` |
+| "Every post-auth path converges on `hydrateFromCloud`" is FALSE for Google OAuth | `hydrateFromCloud` has exactly one call site in the repo — inside `_ensureLocalUser`, reachable only from email/OTP (methods that get a synchronous `response.user`). `signInWithGoogle()` returns immediately after starting the redirect and never reaches it; the post-redirect re-entry (`RestoringScreen`) calls `resolveDestination` + `restoreFromCloudForUser`, neither of which is `hydrateFromCloud`. A fallback/heal wired only into `hydrateFromCloud` silently never runs for Google OAuth users. Verify with `grep -rn "hydrateFromCloud(" lib` (expect exactly 1 real call site) before assuming it's a universal hook; `RestoringScreen`'s `_goHome`/`_ensureOwnershipBeforeHome` (after `HiveUserSession.openForUser`) is the actual OAuth convergence point. Caught only by an independent plan-review round, not the B-pass (which reviews line-level bugs, not call-graph reachability) — see `feedback_plan_review_twice.md`. | diagnose b3f9e7 plan-review round 1 (`docs/plan-reviews/terms-accepted-fix.md`) |
 
 ## Tests pinning the rules here
 
@@ -108,6 +128,7 @@ read user-scoped Hive without going through `wrapUserScopedBox`.
 - `test/contracts/auth_session_bootstrapper_test.dart` — pure-logic `resolveDestination` table.
 - `test/contracts/auth_provider_error_surfacing_test.dart`
 - `test/contracts/full_name_backfill_test.dart`
+- `test/contracts/terms_acceptance_behavioral_test.dart` — real Hive round-trip (throws before `HiveUserSession.openForUser`, persists after) + pure-logic `shouldStampFallbackTermsConsent` table.
 
 ## See also
 

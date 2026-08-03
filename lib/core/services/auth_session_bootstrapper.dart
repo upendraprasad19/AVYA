@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -167,6 +168,96 @@ class AuthSessionBootstrapper {
     return const ResumeOnboarding('plan');
   }
 
+  /// Pure decision function for the Google OAuth / phone-OTP consent
+  /// fallback (closes-diagnose b3f9e7).
+  /// Extracted from [hydrateFromCloud] for testability — the same pattern
+  /// as [classifyDestination] — since the surrounding method makes live
+  /// Supabase network calls a unit test can't exercise.
+  ///
+  /// Returns true only when the cloud row has no consent value yet, so a
+  /// returning user's real historical timestamp is never clobbered on a
+  /// later login. (The caller only reaches this helper at all when Hive
+  /// also has no value — see the `if (termsAcceptedAt is String...)` guard
+  /// immediately above the call site.)
+  @visibleForTesting
+  static bool shouldStampFallbackTermsConsent({
+    required String? cloudTermsAcceptedAt,
+  }) {
+    return cloudTermsAcceptedAt == null || cloudTermsAcceptedAt.isEmpty;
+  }
+
+  /// Google OAuth / phone-OTP consent-fallback stamp (closes-diagnose
+  /// b3f9e7). Extracted to its own public method (plan-review round 1,
+  /// 2026-08-02) — `hydrateFromCloud` is NOT actually reachable for a real
+  /// Google OAuth sign-in: `signInWithGoogle()` never calls
+  /// `_ensureLocalUser` (it only starts the OAuth redirect and returns), and
+  /// the post-redirect re-entry path (`RestoringScreen._kickoffRestore` →
+  /// `resolveDestination` + `SyncService.restoreFromCloudForUser`) never
+  /// calls `hydrateFromCloud` either — confirmed by `grep -rn
+  /// "hydrateFromCloud(" lib` returning exactly one real call site
+  /// (`auth_provider.dart`'s `_ensureLocalUser`, reachable only from
+  /// email/OTP). The original design's "hydrateFromCloud is the single
+  /// place every post-auth path converges on" premise was wrong for OAuth.
+  /// This method is now called from TWO places: `hydrateFromCloud`'s own
+  /// else-branch (still correct for phone OTP, which DOES reach
+  /// `_ensureLocalUser`) and `RestoringScreen`'s returning-user path (the
+  /// actual OAuth convergence point) — see `restoring_screen.dart`.
+  ///
+  /// PRECONDITION: caller must have already confirmed a Hive session is
+  /// open for [userId] (this reads/writes `_hive.userBox`, which throws
+  /// `StateError` if `HiveUserSession.openForUser` hasn't run yet — the
+  /// exact bug class this diagnose-doc is about). Safe to call more than
+  /// once per session — a no-op once Hive already has a value.
+  Future<void> ensureTermsConsentFallback(String userId) async {
+    try {
+      // Plan-review round 2 (2026-08-02): the userBox access used to sit
+      // OUTSIDE this try block. A caller violating this method's own
+      // documented precondition (Hive session open) would throw an
+      // unhandled async StateError from an unawaited() call site instead
+      // of routing through ErrorTelemetry.recordNonFatal like every
+      // sibling method in this file — inconsistent, and an easy trap for
+      // a future call site given this file's whole subject is exactly
+      // "precondition not met at the call site." Not currently reachable
+      // (both existing call sites are verified safe by construction), but
+      // hardened defensively.
+      final userBox = _hive.userBox;
+      final localTermsAcceptedAt = userBox.get('terms_accepted_at');
+      if (localTermsAcceptedAt is String && localTermsAcceptedAt.isNotEmpty) {
+        // Primary path (email/OTP Hive write, or a prior run of this same
+        // fallback) already has a value — nothing to do.
+        return;
+      }
+      final row = await _supabase.client
+          .from('users')
+          .select('terms_accepted_at, created_at')
+          .eq('id', userId)
+          .maybeSingle();
+      if (shouldStampFallbackTermsConsent(
+          cloudTermsAcceptedAt: row?['terms_accepted_at'] as String?)) {
+        // Stamp `created_at`, not `now()` — converges with migration 118's
+        // backfill value for the 19 pre-fix legacy rows regardless of which
+        // one runs first (B-pass review finding 2, 2026-08-02).
+        final stamp = (row?['created_at'] as String?) ??
+            DateTime.now().toUtc().toIso8601String();
+        await _supabase.client.from('users').update({
+          'terms_accepted_at': stamp,
+          'terms_version': AppConstants.termsVersion,
+        }).eq('id', userId);
+        await userBox.put('terms_accepted_at', stamp);
+        await userBox.put('terms_version', AppConstants.termsVersion);
+      }
+    } catch (e, st) {
+      debugPrint('[AuthSessionBootstrapper.ensureTermsConsentFallback] '
+          'failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(
+        e,
+        st,
+        reason: 'terms_fallback_stamp_failed',
+        extra: {'user_id': userId},
+      ));
+    }
+  }
+
   /// Long-running post-sign-in cloud hydration.
   ///
   /// Extracted verbatim from the inline block at
@@ -234,7 +325,8 @@ class AuthSessionBootstrapper {
           }
         }
 
-        // Sync ToS/Privacy acceptance from Hive (stamped by TermsModal).
+        // Sync ToS/Privacy acceptance from Hive (stamped by the email
+        // sign-up flow — see sign_in_screen.dart / auth_provider.dart).
         final termsAcceptedAt = userBox.get('terms_accepted_at');
         final termsVersion = userBox.get('terms_version');
         if (termsAcceptedAt is String && termsAcceptedAt.isNotEmpty) {
@@ -243,6 +335,13 @@ class AuthSessionBootstrapper {
             if (termsVersion is String && termsVersion.isNotEmpty)
               'terms_version': termsVersion,
           }).eq('id', user.id);
+        } else {
+          // closes-diagnose: b3f9e7
+          // Phone-OTP fallback (verifyOtp DOES reach _ensureLocalUser →
+          // hydrateFromCloud, unlike Google OAuth — see
+          // ensureTermsConsentFallback's doc comment for why OAuth needs a
+          // SEPARATE call site, wired in RestoringScreen instead).
+          await ensureTermsConsentFallback(user.id);
         }
       } catch (e, st) {
         // Bug A defense (2026-04-26): silent-swallow let an orphan
