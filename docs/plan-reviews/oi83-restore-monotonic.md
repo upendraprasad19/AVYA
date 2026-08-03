@@ -5,7 +5,7 @@ review_rounds: 2
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
-bpass_review: docs/reviews/f01e47438d16-review.md
+bpass_review: docs/reviews/108ba4f867b7-review.md
 hermes_report: not_required
 ---
 
@@ -91,7 +91,7 @@ and a prose sweep where "4 fields" survived in eight places after the set became
 5 findings, all fixed. The material one is another **writer/reader drift the guard exposed rather
 than caused**: the login restore's plan regeneration read the raw cloud `current_phase` instead of
 the post-merge value, so a refused demotion would still reach the generated plan. Record:
-`docs/reviews/f01e47438d16-review.md`.
+`docs/reviews/108ba4f867b7-review.md`.
 
 ## Convergence
 
