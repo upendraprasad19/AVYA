@@ -3855,7 +3855,7 @@ concepts:
       completeOnboarding() stamps both Hive and cloud.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 271-551
+        line_range: 272-567
         method: completeOnboarding
         notes: |
           Stamps onboarding_completed_at in the Hive profile map (durable BEFORE
@@ -3865,7 +3865,7 @@ concepts:
           missed, pending_onboarding_sync + the RestoringScreen Plan-A self-heal
           (cloud NULL + Hive onboarded -> re-stamp) recover it.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 553-617
+        line_range: 576-643
         method: _syncOnboardingAndPostActions
         notes: |
           Background cloud catch-up (a1f9c4) — syncs the profile (incl.
