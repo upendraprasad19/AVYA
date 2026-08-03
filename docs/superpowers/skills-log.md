@@ -80,3 +80,29 @@
     file). The skill's logging step is unreachable from the mode the skill is most often invoked
     in. Not a one-off any more — worth changing the skill to log on the first writeable turn *by
     design* rather than treating it as a deferred exception each time.
+
+- 2026-08-03 — /strategic-compact — trigger: **batch ship** (Unit A / OI-83 merged `ca4ef2c3`,
+  OI-85 opened, board at 25) with Unit B continuing in-session · founder: **ACCEPTED** (ran
+  `/compact`).
+  → **The single most valuable thing this invocation did was disprove its own headline.** Step 2
+    says preserve "last commit SHA" + CI state. While gathering that, checking CI with the FULL
+    40-char SHA returned `conclusion: "failure"` — `main` was red, on a plan-review-record job
+    failing against the *earlier* merge `b8e9bf3b`, whose embedded `bpass_review:` pointer is
+    stale at that commit. A preserve list written from the assumed-good state would have said
+    "shipped, CI green" and compaction would have made that the durable record of a red `main`.
+    **Tuning: step 2 must VERIFY the git/CI facts at gather time, not transcribe them from
+    earlier in the session.** They are the entries most likely to be assumed rather than checked
+    precisely because they feel free to preserve (the 2026-08-02 entry above says exactly that —
+    "nearly free" — and this is its counter-example).
+  → Same root cause as two other misses this session, now three instances of one class: **a green
+    check is only as wide as its input set.** A `| head -20` completeness grep, a staged-scoped
+    gate run on a clean tree, and here a local `check_plan_review_record_exists.dart` run over
+    `HEAD^1..HEAD` while CI walks the whole pushed range. All three passed vacuously.
+  → **Fourth** consecutive plan-mode block of step 6 — but logged on the first writeable turn *by
+    design* this time, per the previous entry's own recommendation, rather than as a deferred
+    exception. Treating that as the resolution: the skill's step 6 stays where it is, and
+    "unreachable in plan mode → log on first writeable turn" is now the expected path, not a miss.
+  → Also carried: founder's scope decision on Unit B (hoist + extract the phase-2 preview card,
+    not the OI-84-literal hoist alone) and the arithmetic behind it — OI-84's own "~770 lines"
+    estimate went stale when Unit A grew the file to 909. A board item's numbers age; re-measure
+    before planning against them.
