@@ -1539,3 +1539,31 @@ call.
   prospective push range before pushing — never `HEAD^1..HEAD`. That is what caught this. Failing
   to do so on 2026-08-03 morning is what put `ca4ef2c3` on `origin` red.
 - **Blast radius estimate**: `feature` (a hook + docs); no runtime code, no migration, no schema.
+
+## OI-88 — `restoring_screen.dart` added to the Gate 43 allow-list; split owed (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nobody yet — no session has picked up the split.
+- **Verified**: never
+- **Identified**: 2026-08-03 · `restore-onboarding-signin-fix` batch. Diagnose `a3f6d9`'s fix
+  (local-onboarded-flag stamp at all three paths to `/home` in `RestoringScreen`) added 24 lines
+  net after comment-trimming, pushing the file from 800 to 824 lines — 24 over Gate 43's ceiling.
+- **Risk class**: god-screen / tech-debt ladder regression — same class as OI-84
+  (`graduation_screen.dart`).
+- **What happened**: `restoring_screen.dart` sat exactly at the 800-line ceiling pre-diff (never a
+  C3/C4 target). The a3f6d9 fix could not land without tripping Gate 43. Comments were trimmed to
+  the minimum non-obvious "why" first (saved ~15 lines); the remainder is irreducible without
+  either restructuring the file or resorting to single-line `if` statements inconsistent with the
+  rest of the file's style. Added to the gate's transitional allow-list
+  (`scripts/check_god_screen_max_lines.dart`) on explicit founder authorization in chat.
+- **Why this is tracked rather than closed**: same rationale as OI-84 — the allow-list's own header
+  says it "MUST shrink to empty when the audit ladder closes". An eighth entry with no owed-work
+  record would quietly reverse that direction. This OI is that record.
+- **Fix shape (not yet attempted)**: split into a sibling folder, reference layout
+  `lib/features/train/screens/active_workout/` — candidates for extraction: the three key-migrator
+  imports + `_healAfterRestoreInBackground`'s reconciler/migrator fan-out (currently inline), and/or
+  the `_AnimatedDotsState` loading-indicator widget at the bottom of the file, which has no
+  dependency on `_RestoringScreenState`'s fields and could move to its own widget file outright.
+  **Remove the allow-list entry in the same commit.**
+- **Blast radius estimate**: `account` (`restoring_screen.dart` is on the auth post-auth-boot path);
+  no migration, no schema.

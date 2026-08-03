@@ -3892,10 +3892,52 @@ concepts:
           read + Hive-merge + onboarding_completed flag write. Replaces
           the inline block at auth_provider._ensureLocalUser (was
           lines 477-770).
+      - file: lib/features/auth/screens/restoring_screen.dart
+        line_range: 226-278
+        method: _goHome (both branches — bg-restore fast path at 242-244 +
+          default blocking path at 273-275)
+        notes: |
+          Diagnose a3f6d9 (2026-08-03) — the plain app-reopen restore path
+          (resolveDestination classifies GoHome from a live cloud read,
+          NOT via hydrateFromCloud, which only fresh sign-in reaches) had
+          NO writer for the local onboarding_completed boolean at all.
+          _restoreUserProfile only merges onboarding_completed_at into
+          userBox['profile'], a different key. A device/browser with no
+          prior local Hive state (cleared storage, fresh browser context)
+          reached /home via _goHome's own context.go, but _authRedirect
+          re-evaluating on that navigation read the still-default-false
+          flag and bounced back to /onboarding. Fix: idempotent
+          UserRepository.setOnboarded() guard placed immediately after
+          each branch's own ownership-establishing step (openForUser /
+          _ensureOwnershipBeforeHome), since _goHome is only reached once
+          the destination is already classified "treat as onboarded".
+      - file: lib/features/auth/screens/restoring_screen.dart
+        line_range: 524-556
+        method: _onContinueAnyway (30s CONTINUE timeout escape hatch)
+        notes: |
+          Diagnose a3f6d9, B-pass round 1 Finding 1 (1dcc14cdbf32-review.md,
+          2026-08-03) — a THIRD path to /home that bypasses _goHome
+          entirely and was missed by the initial fix above. Round 1 gated
+          the stamp on `ownershipOpen` alone, reasoning this path can only
+          be tapped once _goHome is already in-flight (classification
+          already resolved).
+
+          B-pass round 2 (1cf9f51d2565-round2-review.md Finding 1)
+          DISPROVED that: the 30s CTA timer is wall-clock, independent of
+          _kickoffRestore's progress, and resolveDestination is a live
+          un-timed-out network call — on a slow connection the CTA can
+          surface before classification has happened at all. Fixed by
+          tracking classification explicitly: a `_committedToGoHome` bool
+          (default false, set true only immediately before _goHome runs in
+          the GoHome / ResumeOnboarding-self-heal branches) now also gates
+          the stamp, alongside `ownershipOpen` (openForUser is
+          best-effort/non-fatal on this path). If classification hasn't
+          resolved to "treat as onboarded" yet, the flag is never stamped
+          and the pre-existing unconditional navigation is unchanged.
     reader_manifest_complete: true
     readers:
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 49-117
+        line_range: 106-208
         method: RestoringScreen._kickoffRestore (post-auth gate)
         semantic: flag-check
         fields_read: [user_id, onboarding_completed_at]

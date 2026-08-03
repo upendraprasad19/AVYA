@@ -192,7 +192,7 @@ void main() {
   );
 
   testWidgets(
-    'a same-frame tap on ENLIST VIA GOOGLE right after CONTINUE does not '
+    'a same-frame tap on Sign in with Google right after CONTINUE does not '
     'fire signInWithGoogle (plan-review round 1, Finding 1)',
     (tester) async {
       final notifier = _CountingDelayedAuthNotifier();
@@ -209,14 +209,14 @@ void main() {
       await tester.enterText(emailField, 'racer2@example.com');
       await tester.ensureVisible(find.text('CONTINUE'));
 
-      // Tap CONTINUE, then tap ENLIST VIA GOOGLE before any pump — both
+      // Tap CONTINUE, then tap Sign in with Google before any pump — both
       // land in the same frame, before the `_checkingEmail = true` write
       // has a chance to trigger a rebuild that would disable Google's
       // `onPressed` via the (isLoading || _checkingEmail) ternary. Google's
       // callback must reject the tap on its own via the live field read,
       // not rely on the button having been disabled by then.
       await tester.tap(find.text('CONTINUE'));
-      await tester.tap(find.text('ENLIST VIA GOOGLE'));
+      await tester.tap(find.text('Sign in with Google'));
       await tester.pumpAndSettle();
 
       expect(
