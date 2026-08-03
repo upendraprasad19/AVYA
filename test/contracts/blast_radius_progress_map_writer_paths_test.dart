@@ -53,14 +53,77 @@ void main() {
 
     test(
         'lib/features/train/screens/graduation_screen.dart is account '
-        '(OI-45 finding 5 / Unit 3c)', () {
+        '(OI-45 finding 5 / Unit 3c; re-justified Unit B / OI-84)', () {
       expect(
         tierFor('lib/features/train/screens/graduation_screen.dart'),
         'account',
-        reason: 'graduation_screen.dart writes the progress map directly '
-            '(_onPro()) — Unit 3c will fix a confirmed stale-value bug '
-            'there, and that diff must not silently classify as feature.',
+        reason: 'graduation_screen.dart is the UI entry point for the PRO '
+            'phase advance and gates phases_2_to_12 — a diff touching only '
+            'this file must clear the account-tier gate, not classify as '
+            'feature.\n'
+            'NOTE (Unit B / OI-84, 2026-08-03): the original justification was '
+            '"writes the progress map directly (_onPro())". That is no longer '
+            'true — the write moved to runGraduationPhaseAdvance in '
+            'pro_phase_advance.dart. The TIER is unchanged (see next test for '
+            'why the gate did not weaken), but the reason had to be restated: '
+            'a rule whose stated justification is false reads as coverage it '
+            'does not have.',
       );
+    });
+
+    test(
+        'the hoist did not move the progress write into a weaker tier '
+        '(Unit B / OI-84)', () {
+      // The real risk of that hoist: relocating the write into a path that
+      // classifies BELOW account would have silently downgraded the gate while
+      // every other test still passed. pro_phase_advance.dart carries its own
+      // file-scoped account rule (docs/blast_radius.yaml), so it did not — but
+      // that has to be asserted, not assumed, or the next move can regress it.
+      expect(
+        tierFor('lib/shared/services/pro_phase_advance.dart'),
+        'account',
+        reason: 'pro_phase_advance.dart now owns the graduation progress '
+            'write as well as the other three advance paths; it must be at '
+            'least as gated as the screen the code came from.',
+      );
+      // Round-1 review B1: the assertion above covered only ONE of the unit's
+      // two extraction targets while claiming to cover "the hoist". The preview
+      // card is the other, and it lands at `feature` — CORRECT, not an
+      // oversight: it is pure read-only UI. Promoting it would over-gate
+      // routine Train-tab edits for no safety gain, the same argument the
+      // `train_screen.dart stays feature` case below makes.
+      expect(
+        tierFor('lib/features/train/widgets/phase2_preview_card.dart'),
+        'feature',
+        reason: 'the extracted preview card is read-only UI, so feature tier '
+            'is right',
+      );
+      // Round-2 review: the first version of this block claimed "if a WRITE is
+      // ever added there, this test says the tier must be revisited". FALSE —
+      // tierFor() resolves globs from docs/blast_radius.yaml and never reads
+      // file CONTENT, so adding saveProgress(...) to that card would leave it
+      // matching lib/features/train/** -> feature and this test green. Rather
+      // than only softening the comment, make the promise TRUE with an actual
+      // content check: the `feature` tier above is only defensible while the
+      // card stays read-only, so assert exactly that.
+      final card = File('lib/features/train/widgets/phase2_preview_card.dart')
+          .readAsStringSync()
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      for (final write in [
+        'saveProgress(',
+        'updateProgress(',
+        'MigratedKey.write',
+        '.put(',
+        'WriteService',
+      ]) {
+        expect(card.contains(write), isFalse,
+            reason: 'phase2_preview_card.dart must stay READ-ONLY — its '
+                'feature tier is justified by having no progress-map write. '
+                'Adding $write means the tier claim above is no longer true '
+                'and the file needs its own account rule in '
+                'docs/blast_radius.yaml.');
+      }
     });
 
     test(

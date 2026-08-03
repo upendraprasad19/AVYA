@@ -2,7 +2,8 @@
 //
 // Contract — Theme J (closes-diagnose 14e8a5).
 //
-// Pins the dynamic Phase 2 preview in graduation_screen.dart. Pre-fix
+// Pins the dynamic Phase 2 preview, extracted 2026-08-03 (Unit B / OI-84)
+// from graduation_screen.dart into phase2_preview_card.dart. Pre-fix
 // the card hardcoded `5 DAYS/WEEK · WEEKS 5-8 · POWER + HYPERTROPHY`
 // + 5 day-name rows (`Day 1: Upper Power`, `Day 2: Lower Power`, …).
 // For a 4-day-per-week user, the preview misrepresented their actual
@@ -28,14 +29,41 @@ void main() {
   late String src;
 
   setUpAll(() {
+    // Unit B / OI-84 (2026-08-03): the preview card moved OUT of
+    // graduation_screen.dart into its own widget file. Re-pointed rather than
+    // deleted — every assertion below is about the preview's DATA FLOW, which
+    // the move did not touch. Reading the old path would have made all of them
+    // vacuously true against a file that no longer contains the code.
     src = _strip(
-        File('lib/features/train/screens/graduation_screen.dart')
+        File('lib/features/train/widgets/phase2_preview_card.dart')
             .readAsStringSync());
   });
 
-  test('_buildPhase2Preview reads UserRepository.getProfile + getProgress',
+  test('graduation_screen actually RENDERS the extracted card', () {
+    // The guard that keeps this whole file honest after the extraction. Every
+    // other test here reads phase2_preview_card.dart, so they would all still
+    // pass if the widget were perfect but ORPHANED — never rendered by the
+    // screen it exists for. This is the only assertion that can catch that,
+    // and it is why the extraction did not simply re-point the greps.
+    final screen = _strip(
+        File('lib/features/train/screens/graduation_screen.dart')
+            .readAsStringSync());
+    expect(screen.contains('const Phase2PreviewCard()'), isTrue,
+        reason: 'graduation_screen must render Phase2PreviewCard');
+    expect(screen.contains('const Phase2BenefitsCard()'), isTrue,
+        reason: 'graduation_screen must render Phase2BenefitsCard');
+    expect(
+      screen.contains(
+          "import 'package:icanbefitter/features/train/widgets/phase2_preview_card.dart'"),
+      isTrue,
+      reason: 'and must import them — a render without the import will not '
+          'compile, but pinning both makes the failure legible.',
+    );
+  });
+
+  test('Phase2PreviewCard reads UserRepository.getProfile + getProgress',
       () {
-    final idx = src.indexOf('Widget _buildPhase2Preview()');
+    final idx = src.indexOf('class Phase2PreviewCard');
     expect(idx, greaterThan(-1));
     // Take a window for the method body.
     final body = src.substring(idx, idx + 5000);
@@ -54,9 +82,9 @@ void main() {
     );
   });
 
-  test('_buildPhase2Preview calls PlanGenerator.generateV4 (pure, no Hive)',
+  test('Phase2PreviewCard calls PlanGenerator.generateV4 (pure, no Hive)',
       () {
-    final idx = src.indexOf('Widget _buildPhase2Preview()');
+    final idx = src.indexOf('class Phase2PreviewCard');
     final body = src.substring(idx, idx + 5000);
     expect(
       body.contains('PlanGenerator.instance.generateV4'),
@@ -101,7 +129,7 @@ void main() {
   test('day rows render WorkoutDay.name from the generator output', () {
     // The new render uses `previewDays[i].title` which is populated from
     // `d.name` of the WorkoutDay. Pin the data-flow shape.
-    final idx = src.indexOf('Widget _buildPhase2Preview()');
+    final idx = src.indexOf('class Phase2PreviewCard');
     final body = src.substring(idx, idx + 5000);
     expect(
       body.contains('.workoutDays'),
@@ -119,7 +147,7 @@ void main() {
   });
 
   test('meta line uses dynamic daysPerWeek + nextPhase week range', () {
-    final idx = src.indexOf('Widget _buildPhase2Preview()');
+    final idx = src.indexOf('class Phase2PreviewCard');
     final body = src.substring(idx, idx + 5000);
     expect(
       body.contains('\$daysPerWeek DAYS/WEEK'),
@@ -140,7 +168,7 @@ void main() {
 
   test('phase chip label + phase title come from the next phase number',
       () {
-    final idx = src.indexOf('Widget _buildPhase2Preview()');
+    final idx = src.indexOf('class Phase2PreviewCard');
     final body = src.substring(idx, idx + 5000);
     expect(
       body.contains('phaseLabel'),

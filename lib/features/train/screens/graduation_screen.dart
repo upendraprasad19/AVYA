@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,13 +8,11 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/core/services/migrated_key.dart';
-import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/features/train/widgets/keep_training_phase1_action.dart';
+import 'package:icanbefitter/features/train/widgets/phase2_preview_card.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
-import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
@@ -116,11 +113,11 @@ class GraduationScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
 
                 // Phase 2 Preview (blurred)
-                _buildPhase2Preview(),
+                const Phase2PreviewCard(),
                 const SizedBox(height: 24),
 
                 // What Phase 2 unlocks
-                _buildPhase2Benefits(),
+                const Phase2BenefitsCard(),
                 const SizedBox(height: 24),
 
                 // CTA — Continue Your Journey
@@ -290,211 +287,6 @@ class GraduationScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildPhase2Preview() {
-    // Theme J (diagnose 2026-05-23 14e8a5) — pre-fix this was hardcoded to
-    // '5 DAYS/WEEK · WEEKS 5-8 · POWER + HYPERTROPHY' + a static 5-day
-    // template (Day 1: Upper Power, …). For a 4-day-per-week user, the
-    // preview misrepresents what they're about to unlock — the actual
-    // generateAndSchedule call at line 533 uses their real days_per_week
-    // and generates a different split. Fix: dry-run PlanGenerator.generateV4
-    // with the user's actual profile + next phase number, then render the
-    // returned WeekPlan.workoutDays. Pure call (no Hive writes, no side
-    // effects); same code path previewPlanProvider uses.
-    final profile = UserRepository.instance.getProfile() ?? {};
-    final progress = UserRepository.instance.getProgress() ?? {};
-    final currentPhase = (progress['current_phase'] as int?) ?? 1;
-    // 2026-05-31 (post-12 deployment cycles): phase number is MONOTONIC so
-    // deployments_complete keeps counting. The plan engine recycles the
-    // advanced phase-9-12 CONTENT internally (PlanGenerator._getPhaseMeta +
-    // periodization) — the number itself never cycles back.
-    final nextPhase = currentPhase + 1;
-    final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
-    final goal =
-        profile['primary_goal'] as String? ?? 'general_fitness';
-    final equipment =
-        profile['equipment_access'] as String? ?? 'basic_gym';
-    final experienceLevel =
-        profile['fitness_experience'] as String? ?? 'intermediate';
-    final injuries = (profile['injuries'] as List?)
-            ?.whereType<String>()
-            .where((s) => s != 'none')
-            .toList() ??
-        const <String>[];
-
-    // Phase title + focus line. Phase 2 (Progressive Overload) was the
-    // canonical pre-fix copy; later phases extend the same pattern.
-    final phaseLabel = 'PHASE $nextPhase';
-    final weekRange =
-        'WEEKS ${(nextPhase - 1) * 4 + 1}-${nextPhase * 4}';
-
-    // Try the real plan generator; fall back to a single summary line
-    // if the call throws (defensive — never block graduation render).
-    List<_PreviewDay>? previewDays;
-    String? phaseTitle;
-    String? focus;
-    try {
-      final phase = PlanGenerator.instance.generateV4(
-        goal: goal,
-        equipment: equipment,
-        daysPerWeek: daysPerWeek,
-        phase: nextPhase,
-        experienceLevel: experienceLevel,
-        injuries: injuries,
-      );
-      phaseTitle = _phaseDisplayName(nextPhase);
-      focus = _phaseFocus(nextPhase);
-      final firstWeek = phase.weekPlans.isNotEmpty
-          ? phase.weekPlans.first
-          : null;
-      final days = firstWeek?.workoutDays ?? phase.workouts;
-      previewDays = days
-          .take(5)
-          .map((d) => _PreviewDay(
-                title: d.name,
-                exercises: d.exercises
-                    .take(3)
-                    .map((e) => e.exerciseName)
-                    .join(', '),
-              ))
-          .toList();
-    } catch (e, st) {
-      debugPrint('[GraduationScreen._buildPhase2Preview] $e\n$st');
-      unawaited(ErrorTelemetry.logEvent('graduation_phase2_preview_failed',
-          message: 'phase=$nextPhase err=${e.toString().substring(0, e.toString().length.clamp(0, 200))}'));
-    }
-
-    return WardCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              WardChip(label: phaseLabel, tone: WardChipTone.gold),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  phaseTitle ?? 'Progressive Overload',
-                  style: AppTypography.h3,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '$daysPerWeek DAYS/WEEK · $weekRange · '
-            '${focus ?? "Power + Hypertrophy".toUpperCase()}',
-            style: AppTypography.monoXs.copyWith(
-              color: AppColors.textDim,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Day names visible (actual generator output), exercise names blurred.
-          // Local non-nullable alias so List.generate closure captures a
-          // promoted type (Dart flow analysis doesn't promote across
-          // closure boundaries).
-          if (previewDays != null && previewDays.isNotEmpty) ...[
-            for (final entry in previewDays.asMap().entries)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: AppColors.accent,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Day ${entry.key + 1}: ${entry.value.title}',
-                      style: AppTypography.h3.copyWith(fontSize: 13),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ImageFiltered(
-                        imageFilter:
-                            ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                        child: Text(
-                          entry.value.exercises.isNotEmpty
-                              ? entry.value.exercises
-                              : 'Exercises personalised to you...',
-                          style: AppTypography.bodySm.copyWith(
-                            color: AppColors.textDim,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ]
-          else
-            // Defensive fallback when generateV4 throws — single
-            // descriptive line keeps the surface meaningful.
-            Text(
-              '$daysPerWeek workout days personalised to your goal + equipment',
-              style: AppTypography.bodySm.copyWith(
-                color: AppColors.textDim,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPhase2Benefits() {
-    const benefits = [
-      'New exercises with progressive overload',
-      'Power + hypertrophy split for faster gains',
-      'AI-personalised workout adjustments',
-      'Advanced coaching cues and PRO tips',
-      'Phases 2-12 unlock full 48-week journey',
-    ];
-
-    return WardCard(
-      variant: WardCardVariant.inset,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'WHAT PHASE 2 UNLOCKS',
-            style: AppTypography.mono.copyWith(
-              color: AppColors.textMute,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...benefits.map((benefit) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.check_circle_rounded,
-                      color: AppColors.accent,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        benefit,
-                        style: AppTypography.body,
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCta(BuildContext context, WidgetRef ref) {
     return const _GenerateNextPhaseButton();
   }
@@ -622,142 +414,33 @@ class _GenerateNextPhaseButtonState
 
       setState(() => _isGenerating = true);
 
-      // Unit 3c (OI-45 finding 5): generation + the progress write run under the
-      // SHARED phase-advance mutex, the same one advanceProPhaseIfExpired uses.
-      // Before this, graduation generated entirely outside that guard, so the
-      // splash's unawaited pass (or the Home/Train card CTA) could be generating
-      // this very phase concurrently — two generateAndSchedule runs writing
-      // overlapping schedule_* rows and each moving plan_start, the second
-      // silently overwriting the first under a user already looking at the plan.
+      // Unit B (OI-84): the locked generate + commitPhaseAdvance block that used
+      // to live here inline is now `runGraduationPhaseAdvance` in
+      // pro_phase_advance.dart, beside the other three advance paths. This
+      // screen is UI only — choice sheet, snackbars, navigation, invalidation.
       //
-      // The lock is taken AFTER the choice sheet closes, never across it: a
-      // modal waiting on human input must not block the splash's advance.
-      // `null` (not `false`) means "someone else holds it" — distinct from
-      // `false`, which means we generated but the monotonic writer declined.
-      final advanced = await withPhaseAdvanceLock<bool?>(
-        () async {
-          // B-pass F1: re-check the live phase ONCE MORE, now that the lock is
-          // actually held. The check above ran before acquisition, and the
-          // restore-path writers tracked as OI-83 do not take this lock at all
-          // — so a bump could have landed in between. Catching it HERE avoids
-          // running a full plan generation whose schedule_* rows would then be
-          // written for a phase the user is already past, with commitPhaseAdvance
-          // correctly declining the counter write afterwards and nothing
-          // reconciling the rows. Cheap (one Hive read) versus a generate.
-          final liveInLock =
-              (UserRepository.instance.getProgress()?['current_phase'] as int?) ??
-                  1;
-          if (liveInLock >= nextPhase) {
-            // Distinct from the post-generate decline below: nothing was
-            // generated here, so the two must not share one event name.
-            unawaited(ErrorTelemetry.logEvent(
-                'phase_unlock_preempted_before_generate',
-                message: 'live=$liveInLock intended=$nextPhase'));
-            return false;
-          }
-
-          // graduation's OWN profile defaults — the SAME values MUST feed both the
-          // pin-build and the generate, or repeatPinsFrom's G5 gate validates a
-          // different frame-shape than the one generated (writer/reader value drift).
-          final goal = profile['primary_goal'] as String? ?? 'general_fitness';
-          final equipment =
-              profile['equipment_access'] as String? ?? 'basic_gym';
-          final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
-          final experienceLevel =
-              profile['fitness_experience'] as String? ?? 'beginner';
-
-          final savedDays = MigratedKey.read<List>('preferred_training_days');
-          final preferredDays =
-              savedDays is List ? savedDays.cast<int>() : null;
-
-          // Theme H fix — nextPhaseStartDate computes max(today, currentPhaseEnd + 1)
-          // Monday-normalized (was DateTime.now() → overwrote the current W4 rows).
-          final startDate = scheduleSvc.nextPhaseStartDate();
-
-          // Build repeat pins BEFORE generateAndSchedule overwrites plan_start
-          // (getWeek reads the just-finished window). Only on an explicit "repeat".
-          final pins = choice == AdvanceChoice.repeat
-              ? scheduleSvc.buildRepeatPinsForAdvance(
-                  goal: goal,
-                  equipment: equipment,
-                  daysPerWeek: daysPerWeek,
-                  experienceLevel: experienceLevel,
-                  newPhase: nextPhase,
-                )
-              : null;
-
-          // W3.4 (Batch 11-B): variety avoid-names on a fresh advance (reader self-gates on the flag; read before plan_start moves, like pins).
-          final previousPhaseByDay =
-              pins == null ? scheduleSvc.previousPhaseNamesByDay() : null;
-
-          await scheduleSvc.generateAndSchedule(
-            goal: goal,
-            equipment: equipment,
-            daysPerWeek: daysPerWeek,
-            startDate: startDate,
-            phase: nextPhase,
-            // U4: thread injuries so the graduated next-phase plan excludes
-            // contraindicated exercises (vocab canonicalized in generateV4).
-            injuries: InjuryVocab.fromProfile(profile['injuries']),
-            experienceLevel: experienceLevel,
-            preferredDays: preferredDays,
-            pinnedExercisesByDay: pins,
-            // W2.7 (Batch 9): titrate ONLY a FRESH advance (pins == null) — a
-            // low-adherence "repeat" (pins != null) must not gain volume.
-            applyVolumeTitration: pins == null,
-            previousPhaseByDay: previousPhaseByDay,
-            applyPlateauEscalation:
-                pins == null, // W3.5 12-A: fresh-advance-only
-          );
-          unawaited(ErrorTelemetry.logEvent('phase_unlock_plan_generated',
-              message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));
-
-          // Theme F — stamp plan_generated_at; UserRepository.updateProgress
-          // fires syncProgressNow so this push lands on cloud.
-          //
-          // Unit 3c (OI-45 finding 5): `nextPhase` was computed at the TOP of
-          // this method, before the tens-to-hundreds-of-ms generateAndSchedule
-          // above. commitPhaseAdvance re-reads the live phase HERE and refuses
-          // to write a lower one — `current_phase` has no monotonic guard in
-          // saveProgress, so a concurrent advancer landing in that window used
-          // to be silently demoted.
-          final committed = await commitPhaseAdvance(
-            intendedPhase: nextPhase,
-            source: 'graduation_screen',
-          );
-
-          // ⑧ 3-b: a chosen "repeat" (pins applied) flags the Home "step it up
-          // next time" nudge (cross-account gated in the shared writer) +
-          // invalidates the provider so it surfaces this session, not only
-          // after an app relaunch.
-          if (pins != null) {
-            await markPhaseRepeatNudgePending();
-            ref.invalidate(phaseRepeatNudgeProvider);
-          }
-
-          // OI-83: `committed == false` means the rows above were generated
-          // for a phase the counter did not move to — a concurrent advancer or
-          // a cloud restore (which does NOT take this lock, deliberately) got
-          // there first. REPORT it; the repair itself is not attempted here —
-          // see reportDeclinedAdvanceLeftStaleRows for the three mechanisms
-          // that were designed and refuted, and why a correct one needs the
-          // losing generation's own key set.
-          if (!committed) {
-            await reportDeclinedAdvanceLeftStaleRows(
-              source: 'graduation_screen',
-              intendedPhase: nextPhase,
-              livePhase: (UserRepository.instance
-                      .getProgress()?['current_phase'] as int?) ??
-                  1,
-            );
-          }
-          return committed;
-        },
-        ifBusy: null,
+      // The lock is still taken AFTER the choice sheet closes, never across it:
+      // a modal waiting on human input must not block the splash's advance.
+      // That ordering is enforced HERE, by where this call sits.
+      final result = await runGraduationPhaseAdvance(
+        ref: ref,
+        profile: profile,
+        nextPhase: nextPhase,
+        repeat: choice == AdvanceChoice.repeat,
+        stopwatch: stopwatch,
       );
 
+      // ⑧ 3-b: surface the low-adherence "you repeated — step it up?" Home nudge
+      // this session rather than only after a relaunch. The Hive write happens
+      // inside the shared advance (which owns the cross-account belt); the
+      // provider invalidation is UI work and stays here — `lib/shared/**` cannot
+      // import this feature provider.
+      if (result.repeatNudgeFlagged) {
+        ref.invalidate(phaseRepeatNudgeProvider);
+      }
+
       if (!mounted) return;
-      if (advanced == null) {
+      if (result.outcome == GraduationAdvanceOutcome.busy) {
         // Another advance path holds the lock and is generating this same phase
         // right now. Same recourse the PhaseGeneratingCard already gives on its
         // own busy path — tell the user plainly and put them on /train, where
@@ -795,14 +478,23 @@ class _GenerateNextPhaseButtonState
       ref.invalidate(aiInsightProvider);
       ref.invalidate(graduationStatsProvider);
 
-      // Unit 3c: `advanced == false` means the plan rows for nextPhase WERE
-      // generated but commitPhaseAdvance declined the counter write, because a
-      // concurrent advancer had already moved it to this phase or past it.
-      // Firing phase_unlock_completed there would assert a write that never
+      // Unit 3c: anything other than `committed` means the counter did NOT move
+      // to nextPhase — either a concurrent advancer had already moved it past
+      // us before we generated (preemptedBeforeGenerate) or commitPhaseAdvance
+      // declined the write after we generated (generatedButDeclined). Firing
+      // phase_unlock_completed for either would assert a write that never
       // happened — the false-signal class this whole batch exists to remove —
       // so the two outcomes get distinct events and distinct copy.
+      //
+      // Unit B (OI-84): the two non-busy failure modes are now DISTINCT enum
+      // cases rather than one overloaded `false`, and each already fires its own
+      // event inside the shared advance. They deliberately still share this
+      // screen's copy and this summary event — that is the pre-hoist behaviour,
+      // and this unit changes structure, not behaviour. The enum is what makes a
+      // future divergence expressible; nothing here diverges yet.
+      final committed = result.outcome == GraduationAdvanceOutcome.committed;
       unawaited(ErrorTelemetry.logEvent(
-          advanced
+          committed
               ? 'phase_unlock_completed'
               : 'phase_unlock_counter_already_advanced',
           message: 'phase=$nextPhase ms=${stopwatch.elapsedMilliseconds}'));
@@ -821,7 +513,7 @@ class _GenerateNextPhaseButtonState
                 color: AppColors.accent.withValues(alpha: 0.5)),
           ),
           content: Text(
-            advanced
+            committed
                 ? 'Phase $nextPhase unlocked — opening your new plan…'
                 : 'Your new plan is ready — opening it now…',
             style: AppTypography.bodySm
@@ -857,53 +549,4 @@ class _GenerateNextPhaseButtonState
       if (mounted) setState(() => _isGenerating = false);
     }
   }
-}
-
-/// Theme J — preview day cell used by graduation phase 2 card. Holds the
-/// generated workout-day name + a comma-joined string of the first 3
-/// exercises (rendered behind a blur to tease without revealing).
-class _PreviewDay {
-  final String title;
-  final String exercises;
-  const _PreviewDay({required this.title, required this.exercises});
-}
-
-/// Display name per phase. Mirrors the canonical plan-generator copy.
-/// Falls back to `'Phase $n'` if the phase number is outside 1-12.
-String _phaseDisplayName(int phase) {
-  const names = {
-    1: 'Foundation',
-    2: 'Progressive Overload',
-    3: 'Intensification',
-    4: 'Power Build',
-    5: 'Hypertrophy Peak',
-    6: 'Strength Cycle',
-    7: 'Conditioning Push',
-    8: 'Power Hypertrophy',
-    9: 'Specialisation',
-    10: 'Strength Peak',
-    11: 'Conditioning Peak',
-    12: 'Mastery',
-  };
-  return names[phase] ?? 'Phase $phase';
-}
-
-/// Per-phase focus subtitle. Used in the meta line. Uppercased at the
-/// callsite.
-String _phaseFocus(int phase) {
-  const focus = {
-    1: 'Foundation + technique',
-    2: 'Power + hypertrophy',
-    3: 'Volume + intensification',
-    4: 'Power build',
-    5: 'Hypertrophy peak',
-    6: 'Strength cycle',
-    7: 'Conditioning + power',
-    8: 'Power + hypertrophy',
-    9: 'Specialisation',
-    10: 'Strength peak',
-    11: 'Conditioning peak',
-    12: 'Mastery',
-  };
-  return (focus[phase] ?? 'Progressive overload').toUpperCase();
 }

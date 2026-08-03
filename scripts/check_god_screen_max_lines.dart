@@ -44,25 +44,23 @@ const Set<String> _allowList = <String>{
   'lib/features/onboarding/screens/onboarding_chat_screen.dart',
   'lib/features/profile/screens/edit_profile_screen.dart',
   'lib/features/profile/screens/reports_screen.dart',
-  // ADDED 2026-08-01 — the FIRST addition this list has ever taken; every prior
-  // movement was a removal (C3: active_workout 2430→456; C4: train/profile/
-  // ai_coach 2419/2274/1906 → 312/376/357). Founder-authorized in chat, after
-  // being shown that the list is a one-way ratchet and that no per-run
-  // exception exists in this gate (no env var, no --warn-only; it exits 1
-  // unconditionally).
+  // REMOVED 2026-08-03 (Unit B, closes OI-84) —
+  // lib/features/train/screens/graduation_screen.dart. It was the FIRST entry
+  // this list ever took (2026-08-01, founder-authorized) and it is now gone, so
+  // the one-way ratchet is back in the removal direction it has always had.
   //
-  // Trigger: graduation_screen.dart sat at 794 lines — SIX under the ceiling —
-  // so Unit 3c's phase-advance monotonic fix (c8f3d1) could not touch it at all
-  // without tripping Gate 43. It is now 892. Note this screen was never a C3/C4
-  // target; it was simply under the ceiling until now.
+  // The split that earned the removal: the ~120-line locked generate +
+  // commitPhaseAdvance block moved to runGraduationPhaseAdvance in
+  // lib/shared/services/pro_phase_advance.dart (beside the other three advance
+  // paths), and the ~250-line phase-2 preview UI moved to
+  // lib/features/train/widgets/phase2_preview_card.dart. 909 → 552 lines, under
+  // the ceiling honestly rather than by exemption.
   //
-  // Split owed, tracked as OI-84 — remove this entry when that lands. The
-  // reference layout is lib/features/train/screens/active_workout/ and the
-  // recommended shape (from the c8f3d1 review) is to hoist the locked
-  // generate+commit block out of _onPro into the shared advance service, which
-  // is where the other three advance paths already live, rather than a pure
-  // part-file split.
-  'lib/features/train/screens/graduation_screen.dart',
+  // The preview extraction was NOT in OI-84's recommended shape. The hoist
+  // alone landed the file at ~791 — nine lines of margin, which is the same
+  // condition that created OI-84 in the first place (it sat SIX under, so a fix
+  // could not touch it at all). OI-84's own "~770" estimate had gone stale when
+  // Unit A grew the file to 909.
 };
 
 void main() {
