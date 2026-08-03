@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/ai_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
@@ -398,6 +399,20 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         'onboarding_completed_at': DateTime.now().toUtc().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };
+
+      // Defensive guard (Unit 1, follow-up to diagnose b3f9e7, 2026-08-03):
+      // today RestoringScreen's parallel restoreFromCloudForUser() always
+      // opens the Hive session before onboarding can be reached, but that
+      // is an INCIDENTAL ordering property of RestoringScreen, not an
+      // invariant this method enforces itself. Idempotent no-op on the
+      // already-safe path (see docs/diagnoses -- onboarding-oauth-session-order).
+      // Defensive guard (Unit 1, follow-up to diagnose b3f9e7, 2026-08-03):
+      // today RestoringScreen's parallel restoreFromCloudForUser() always
+      // opens the Hive session before onboarding can be reached, but that
+      // is an INCIDENTAL ordering property of RestoringScreen, not an
+      // invariant this method enforces itself. Idempotent no-op on the
+      // already-safe path (see docs/diagnoses -- onboarding-oauth-session-order).
+      await HiveUserSession.ensureOpenedForCurrentSession();
 
       // Use saveProfile (not updateProfileFields) to guarantee a clean
       // slate. updateProfileFields merges onto existing data, which would

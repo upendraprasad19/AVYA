@@ -193,7 +193,10 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
 
 - `test/contracts/onboarding_completed_at_writer_to_reader_test.dart`
 - `test/contracts/auth_session_bootstrapper_test.dart` — pure-logic destination table.
-- `test/contracts/muster_to_profile_bridge_test.dart`
+- `test/contracts/muster_to_profile_bridge_behavioral_test.dart` (corrected
+  2026-08-03 — this line cited `muster_to_profile_bridge_test.dart`, which
+  does not exist; same phantom-citation class as the `check_writer_reader_drift.dart`
+  entry `lib/CLAUDE.md` corrected in Unit 6, caught while verifying diagnose d4e8a2)
 - `test/contracts/full_name_backfill_test.dart`
 - `test/contracts/plan_screen_targets_match_completeOnboarding_test.dart`
 - `test/contracts/onboarding_injuries_chip_wiring_test.dart` — Ship 3: plan_screen reads the
