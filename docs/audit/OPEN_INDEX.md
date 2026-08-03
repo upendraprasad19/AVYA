@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**25 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**26 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -33,3 +33,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-82 | `promote-community-item` calls an RPC that does not exist on this project… | none | 2026-08-01 (Unit 9) — `community_votes_summary` is absent from `pg_proc` in EVERY | [:635](open_issues.md#L635) |
 | OI-85 | repair the `schedule_*` rows a DECLINED phase advance leaves behind (P2) | none — but three mechanisms are already refuted (below). The next attempt needs | 2026-08-03 (Unit A, diagnose `d1f6b3` — both refutations reproduced from code) | [:1321](open_issues.md#L1321) |
 | OI-86 | two concurrent `flutter test` runs on this machine corrupt each other's… | none — the mechanism is understood and was reproduced twice; scheduled work. | 2026-08-03 (twice in one day, both times the same tests passed standalone | [:1446](open_issues.md#L1446) |
+| OI-87 | one session's non-compliant merge into local `main` blocks every other… | none for the ANALYSIS; the concrete instance below needs a plan-review record | 2026-08-03 (reproduced by the blocked push described below; both worktrees and | [:1490](open_issues.md#L1490) |
