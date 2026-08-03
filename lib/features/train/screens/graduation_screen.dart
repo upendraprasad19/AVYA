@@ -734,6 +734,23 @@ class _GenerateNextPhaseButtonState
             await markPhaseRepeatNudgePending();
             ref.invalidate(phaseRepeatNudgeProvider);
           }
+
+          // OI-83: `committed == false` means the rows above were generated
+          // for a phase the counter did not move to — a concurrent advancer or
+          // a cloud restore (which does NOT take this lock, deliberately) got
+          // there first. REPORT it; the repair itself is not attempted here —
+          // see reportDeclinedAdvanceLeftStaleRows for the three mechanisms
+          // that were designed and refuted, and why a correct one needs the
+          // losing generation's own key set.
+          if (!committed) {
+            await reportDeclinedAdvanceLeftStaleRows(
+              source: 'graduation_screen',
+              intendedPhase: nextPhase,
+              livePhase: (UserRepository.instance
+                      .getProgress()?['current_phase'] as int?) ??
+                  1,
+            );
+          }
           return committed;
         },
         ifBusy: null,

@@ -591,12 +591,22 @@ extension SyncServiceProfile on SyncService {
     try {
       // Bare .select() = SELECT * — this is intentional (Unit 3b, e6b9c4):
       // it means streak_progress_version rides along for free and the
-      // generic cloud-non-null-wins merge below already adopts it
-      // correctly (a fresh restore read is always at least as new as
-      // whatever's local, same reasoning as _restoreFreezes's explicit
-      // cloud-always-wins version handling). No column list to keep in
-      // sync here, unlike _restoreFreezes / restore-user-snapshot's
-      // "freezes" projection.
+      // merge below adopts it correctly (cloud-always-wins is right for a
+      // server-owned optimistic-lock counter the client only ever adopts —
+      // same reasoning as _restoreFreezes's explicit version handling). No
+      // column list to keep in sync here, unlike _restoreFreezes /
+      // restore-user-snapshot's "freezes" projection.
+      //
+      // ⚠ OI-83 correction. This comment used to justify the merge as
+      // cloud-non-null-wins for EVERY key on the grounds that "a fresh restore
+      // read is always at least as new as whatever's local." That holds for
+      // streak_progress_version — the field it was actually written about —
+      // and is FALSE for a client-advanced field: a device that advanced
+      // locally and has not yet pushed has state strictly newer than the row
+      // this read returns. The premise justified the demotion, so it is
+      // corrected here rather than left to re-justify it for the next reader.
+      // The three monotonic fields now go through
+      // UserRepository.mergeCloudProgress; everything else is unchanged.
       final rows = identical(preFetched, _kNoInject)
           ? await _supabase.client
               .from('user_progress')
@@ -609,17 +619,18 @@ extension SyncServiceProfile on SyncService {
       final cloud = Map<String, dynamic>.from(rows.first as Map);
       cloud.remove('user_id');
 
-      // F6 · Merge semantics (same as _restoreUserProfile).
+      // F6 · Merge semantics (same as _restoreUserProfile), plus the OI-83
+      // monotonic guard on the 3 lifetime/phase fields.
       final existing = _hive.userBox.get('progress');
       final existingMap = existing is Map
           ? Map<String, dynamic>.from(existing)
           : <String, dynamic>{};
-      final merged = <String, dynamic>{
-        ...existingMap,
-        for (final e in cloud.entries)
-          if (e.value != null) e.key: e.value,
-      };
-      await _hive.userBox.put('progress', merged);
+      final result = UserRepository.mergeCloudProgress(
+        local: existingMap,
+        cloud: cloud,
+      );
+      await _hive.userBox.put('progress', result.merged);
+      reportProgressDemotionsDeclined(result, source: 'restore_user_progress');
     } catch (e, st) {
       debugPrint('[SyncService._restoreUserProgress] $e');
       // audit-2026-05-11 H-42 — telemetry pair.

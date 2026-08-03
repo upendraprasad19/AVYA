@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Sealed-class-ish destination resolution for the post-sign-in router.
 ///
@@ -320,12 +321,20 @@ class AuthSessionBootstrapper {
                   : <String, dynamic>{};
               final cloudProgress =
                   Map<String, dynamic>.from(progressRows.first);
-              final mergedProgress = <String, dynamic>{
-                ...existingProgressMap,
-                for (final e in cloudProgress.entries)
-                  if (e.value != null) e.key: e.value,
-              };
-              await userBox.put('progress', mergedProgress);
+              // OI-83: the 3 monotonic fields are local-max-wins. This merge
+              // used to be cloud-non-null-wins for EVERY key, which silently
+              // demoted current_phase / the lifetime counters on a device that
+              // had advanced locally and not yet pushed. Shared with
+              // sync_profile.dart's _restoreUserProgress so the two restore
+              // writers cannot drift — they had already drifted from each
+              // other's telemetry (neither had any).
+              final progressMerge = UserRepository.mergeCloudProgress(
+                local: existingProgressMap,
+                cloud: cloudProgress,
+              );
+              await userBox.put('progress', progressMerge.merged);
+              reportProgressDemotionsDeclined(progressMerge,
+                  source: 'auth_session_bootstrapper');
             }
 
             // Hydrate terms acceptance.
@@ -361,9 +370,21 @@ class AuthSessionBootstrapper {
                   (merged['days_per_week'] as num?)?.toInt() ?? 4;
               final experience =
                   merged['fitness_experience'] as String? ?? 'beginner';
-              final phase = progressRows.isNotEmpty
-                  ? ((progressRows.first['current_phase'] as int?) ?? 1)
-                  : 1;
+              // OI-83 / d1f6b3 (B-pass finding 1): read the phase from HIVE —
+              // the post-merge, monotonically-guarded value — not from the raw
+              // cloud row. `progressRows.first['current_phase']` is the
+              // PRE-merge cloud value, so on a restore that just refused a
+              // demotion (local ahead of cloud, not yet pushed) this block
+              // would generate a plan for the LOWER phase while
+              // `userBox['progress']` correctly holds the higher one: the
+              // counter and the plan content would disagree, which is the
+              // same failure shape OI-85 tracks, reached by a third path.
+              // Falling back to the local value when the cloud row is absent
+              // is also strictly better than the previous hardcoded 1.
+              final phase =
+                  (UserRepository.instance.getProgress()?['current_phase']
+                          as int?) ??
+                      1;
               // U4: thread injuries so the login-restore plan regen excludes
               // contraindicated exercises (vocab canonicalized in generateV4).
               final injuries = InjuryVocab.fromProfile(merged['injuries']);

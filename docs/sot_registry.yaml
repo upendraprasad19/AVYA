@@ -2403,7 +2403,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 221-229
+        line_range: 469-475
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -3827,7 +3827,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 231-234
+        line_range: 477-480
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 1-450
@@ -6553,6 +6553,64 @@ concepts:
       - file: lib/features/dev/simulation_service.dart
         method: _maybeAdvancePhase (kDebugMode dev harness)
         notes: commitPhaseAdvance(now: nowWall()) — keeps the sim clock seam.
+      - file: lib/shared/repositories/user_repository.dart
+        method: mergeCloudProgress (+ monotonicProgressFields) — THE single RESTORE merge
+        notes: >
+          Unit A / d1f6b3 (2026-08-03), closes OI-83. The five writers above are all
+          ADVANCE-side; this is the RESTORE side, and until now it had no guard at all.
+          Pure local-max-wins over exactly 3 monotonic fields (current_phase,
+          deployments_complete, total_workouts_done); every other key
+          keeps the prior cloud-non-null-wins semantics. §4.6 kill-switch
+          `disable_progress_restore_monotonic_merge` (platform tier requires a
+          feature_flag, blast_radius.yaml:25). Deliberately EXCLUDES `longest_gap_days`
+          — INVERTED (higher is worse, gates a rank at rank_service.dart:506, no client
+          writer, already GREATESTed server-side by migration 115), so max-wins there
+          could only refuse a server correction; removed by round-1 review. Also the streak
+          counters (a streak legitimately resets to 0), the freeze family (already merged
+          by StreakProgressService.mergeFreezeProgress) and streak_progress_version
+          (server-owned optimistic-lock counter — cloud always wins, Unit 3b e6b9c4).
+          Refusals are emitted by the shared reportProgressDemotionsDeclined as
+          progress_restore_demotion_declined, one event per field.
+      - file: lib/core/services/sync/sync_profile.dart
+        method: _restoreUserProgress
+        notes: >
+          Cloud→Hive restore writer. Was a wholesale cloud-non-null-wins merge that
+          demoted current_phase on any device running ahead of its last push; now routes
+          through mergeCloudProgress. Its own comment used to justify the wholesale merge
+          with "a fresh restore read is always at least as new as whatever's local" —
+          true for streak_progress_version, false for a client-advanced field; corrected
+          in the same commit.
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        method: post-auth user_progress pull
+        notes: >
+          The second demotion vector, identical shape, now routed through the same
+          helper. Two independent inline copies of one merge rule is how the next one
+          gets fixed and the other does not — hence one shared helper + one shared
+          telemetry emitter.
+      - file: lib/shared/services/pro_phase_advance.dart
+        method: reportDeclinedAdvanceLeftStaleRows
+        notes: >
+          NOT a current_phase writer and NOT a repair — it REPORTS what a DECLINED
+          advance leaves behind (OI-83's second-order half, repair tracked as OI-85).
+          Because the restore writers do not take withPhaseAdvanceLock, one can bump the
+          phase mid-generation; commitPhaseAdvance then declines, correctly, but the
+          schedule_* rows already written for the un-advanced phase are stale. Three
+          repair mechanisms were designed and each refuted — restore-takes-the-lock
+          (TRY-lock, would DROP the restore), force-past-needsHeal (INERT, the per-row
+          predicate re-applies), and preferSnapshot+orphan-sweep (DATA LOSS, plan_json is
+          only daily-fresh and spans every schedule_* key). Full reasoning in that
+          function's doc comment and OI-85; the event
+          `phase_advance_declined_rows_stale` exists so the frequency can be measured
+          before more machinery is built.
+      - file: lib/core/services/sync/sync_restore_completeness.dart
+        method: "_restoreFreezes and its sibling (2 sites) — audited, NOT vectors"
+        notes: >
+          Both read-modify-write a freshly-read progress map and mutate only freeze keys
+          + streak_progress_version, so they preserve whatever current_phase is present.
+          Recorded because OI-83 flagged them as "wants the same audit"; this is that
+          audit's result, so the next pass does not re-derive it. Same for
+          sync_service.dart _stampProgressVersion (version only, already monotonic per
+          Hermes C6) and streak_freeze_clamp_migrator.dart (freeze keys only).
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/widgets/week_selector.dart
@@ -6563,6 +6621,19 @@ concepts:
       - file: lib/features/train/providers/train_provider.dart
         method: CurrentPlanNotifier.build
         semantic: pass-through
+      - file: test/contracts/progress_restore_monotonic_behavioral_test.dart
+        method_or_widget: the RESTORE merge path (d1f6b3 / OI-83)
+        semantic: >
+          pure merge refuses a lower cloud value on all 3 monotonic fields while a HIGHER
+          one still wins · longest_gap_days is NOT guarded (a server correction downward
+          must land) · non-monotonic fields still take cloud INCLUDING a genuine 0 · an
+          empty-local reinstall adopts cloud verbatim, and an ABSENT local value is not
+          treated as malformed (a P0 the round-1 fixes introduced and this test caught) ·
+          the kill-switch reproduces the pre-fix expression byte-for-byte · the
+          merge→Hive→read chain holds · a refusal emits exactly one telemetry event per
+          field · needsHeal is proven blind to the stale-phase rows (why force: exists) and
+          preferSnapshot: is proven load-bearing with the default mode as its negative
+          control. Group A carries the pre-fix merge expression inline as the control.
       - file: test/contracts/pro_phase_advance_behavioral_test.dart
         method_or_widget: the advance write path (c8f3d1 / task #41)
         semantic: >

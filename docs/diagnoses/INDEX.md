@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### phase_progress_current_phase (cloud→Hive restore merge half) (1 bugs)
+- 2026-08-03 d1f6b3 — A cloud→Hive `progress` restore silently LOWERS `current_phase` (and two other lifetime counters) on a device that advanced locally and has not yet pushed. No guard, no telemetry, no trace: the user…
+
 ### subscription_state (isPro/gate CQRS split) (1 bugs)
 - 2026-08-02 a9c4e1 — A Riverpod provider's build method invalidates itself. `SubscriptionInfoNotifier.build()` — the data source behind the PRO pill — calls `isPro()`, which on an expired or cross-account row calls…
 
@@ -914,6 +917,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-03 | d1f6b3 | A cloud→Hive `progress` restore silently LOWERS `current_phase` (and two other lifetime counters) on a device that advanced locally and has not yet pushed. No guard, no telemetry, no trace: the user… | phase_progress_current_phase (cloud→Hive restore merge half) | test/contracts/progress_restore_monotonic_behavioral_test.dart |
 | 2026-08-02 | a9c4e1 | A Riverpod provider's build method invalidates itself. `SubscriptionInfoNotifier.build()` — the data source behind the PRO pill — calls `isPro()`, which on an expired or cross-account row calls… | subscription_state (isPro/gate CQRS split) | test/contracts/subscription_cqrs_behavioral_test.dart |
 | 2026-08-02 | f2b8a1 | Google sign-in was never live in prod despite functionality-flow.md asserting "Email + Google OAuth work normally" — no Google OAuth client existed in Google Cloud Console (google-services.json… | auth_google_oauth_redirect | test/contracts/google_oauth_redirect_flow_test.dart |
 | 2026-08-02 | d4e7c2 | A cloud-restored workout renders wrong on two surfaces. The receipt shows 0 duration for a timed/cardio exercise that has a real total, and the Edit Workout Log sheet shows a BLANK sets box and a… | workout_receipt_rendering + workout_log_edit_surface (exlog aggregate read) | test/contracts/exlog_aggregate_read_behavioral_test.dart |

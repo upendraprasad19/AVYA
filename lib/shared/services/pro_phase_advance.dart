@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/plan_integrity_reconciler.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -199,10 +200,22 @@ Future<bool> runProPhaseAdvance(WidgetRef ref) async {
     // still read at the top of this function, before the generate. Routed
     // through [commitPhaseAdvance], which re-reads the live phase at write time
     // and refuses to write a lower one.
-    await commitPhaseAdvance(
+    // OI-83: this return used to be DISCARDED. A decline here means the
+    // generation above wrote schedule_* rows + a plan window for a phase the
+    // user is no longer advancing to — see [reconcileAfterDeclinedAdvance].
+    final committed = await commitPhaseAdvance(
       intendedPhase: currentPhase + 1,
       source: 'pro_phase_advance',
     );
+    if (!committed) {
+      await reportDeclinedAdvanceLeftStaleRows(
+        source: 'pro_phase_advance',
+        intendedPhase: currentPhase + 1,
+        livePhase:
+            (UserRepository.instance.getProgress()?['current_phase'] as int?) ??
+                1,
+      );
+    }
     // Fire-and-forget snapshot push so the AI coach sees the new Phase.
     unawaited(ref.read(syncServiceProvider).pushSnapshot());
 
@@ -332,4 +345,67 @@ Future<bool> commitPhaseAdvance({
     'phase_started_at': stamp,
   });
   return true;
+}
+
+/// SHARED reporter for the one outcome [commitPhaseAdvance] cannot fix by
+/// itself: it DECLINED, but the caller had already run a full
+/// `generateAndSchedule` before asking (OI-83's second-order effect).
+///
+/// The counter is correct — the decline is what keeps it correct. What is left
+/// wrong is the `schedule_*` rows and the plan window that generation already
+/// wrote for the phase we did NOT advance to. Nothing rolls them back.
+///
+/// **This function REPORTS that condition. It does not repair it, deliberately.**
+/// Three repair mechanisms were designed and each was refuted, the last two by
+/// context-blind review, and the refutations are recorded here so the fourth
+/// attempt does not repeat them:
+///
+///  1. *Make the restore writers take [withPhaseAdvanceLock].* Refuted: it is a
+///     TRY-lock (returns `ifBusy` immediately, no queue), so a restore arriving
+///     mid-generation would be turned away entirely and the user's cloud
+///     progress would never land — a dropped restore is worse than stale rows.
+///  2. *Force [PlanIntegrityReconciler.reconcile] past its `needsHeal` gate.*
+///     Refuted as INERT: `mergeScheduleEntry` then applies the same
+///     "local already has exercises → keep local" predicate per row, and these
+///     rows have their exercises. Only rest days would have healed.
+///  3. *Add a `preferSnapshot` override plus deletion of rows past the
+///     re-anchored `plan_end`.* Refuted as DATA-LOSS: cloud `plan_json` is
+///     pushed only by the DAILY full sync (`sync_service.dart` `_fullSyncInterval`
+///     = 1 day), so the snapshot can be 24h stale and describe the PREVIOUS
+///     phase window — the sweep would then delete the winner's freshly-generated
+///     rows. And `_syncWorkoutPlan` snapshots every `schedule_*` key box-wide,
+///     so `preferSnapshot` would also revert an un-synced local exercise swap on
+///     any planned day.
+///
+/// What a correct repair needs is the set of keys the LOSING generation wrote —
+/// which only the caller knows, and which nothing currently records. That is
+/// real, separate engineering, tracked as its own board item rather than
+/// guessed at a fourth time (CLAUDE.md §4.12.1: when successive reviews keep
+/// surfacing new material issues, ship the smallest converged piece).
+///
+/// Reporting alone is a real improvement on `main`: today this condition is
+/// completely invisible, so nobody can tell how often it happens or whether it
+/// is worth the repair. Never throws — the advance itself already succeeded or
+/// was correctly declined, and a telemetry call must not turn that into an
+/// error the user sees.
+Future<void> reportDeclinedAdvanceLeftStaleRows({
+  required String source,
+  required int intendedPhase,
+  required int livePhase,
+}) async {
+  try {
+    // AWAITED inside the try, deliberately. `unawaited(...)` would put the
+    // failure OUTSIDE this catch — the future rejects after the synchronous
+    // body has already returned, so the "never throws" guarantee would have
+    // been false. This unit's own test caught exactly that. The path is rare
+    // (a declined advance) and the caller is already async, so awaiting costs
+    // nothing worth optimising.
+    await ErrorTelemetry.logEvent(
+      'phase_advance_declined_rows_stale',
+      message: 'source=$source intended=$intendedPhase live=$livePhase',
+    );
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st,
+        reason: 'phase_advance_declined_report_failed'));
+  }
 }

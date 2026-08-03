@@ -129,6 +129,23 @@ class ErrorTelemetry {
     'sync_user_progress_retry_dropped',
     'sync_freezes_row_absent_after_conflict',
     'sync_user_progress_row_absent_after_conflict',
+
+    // Restore-side monotonic guard (OI-83 / d1f6b3, 2026-08-03, round-1 review
+    // P2). Same reasoning as the two blocks above: a refused demotion is only
+    // discoverable via this exact event, and the condition that produces it in
+    // bulk — a degraded backend serving stale user_progress rows to a wave of
+    // restores — is precisely when a cooldown is most likely to be active
+    // (feedback_backend_collapse_blinds_telemetry.md, c4f8d2). MUST stay in
+    // sync with the server HIGH_PRIORITY_OP_TYPES (twin test).
+    'progress_restore_demotion_declined',
+    'progress_restore_field_malformed',
+
+    // The declined-advance stale-rows signal (OI-85). B-pass finding 4: OI-85's
+    // whole plan is "measure the frequency before building a repair", and a
+    // LOW-priority event is dropped by the client cooldown — so the measurement
+    // would be biased exactly when the condition is most likely. MUST stay in
+    // sync with the server HIGH_PRIORITY_OP_TYPES (twin test).
+    'phase_advance_declined_rows_stale',
   ];
 
   /// Returns true when [opType] should bypass client-side rate-limit
