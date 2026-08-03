@@ -141,8 +141,8 @@ touched_layers_checked:
   - { tier: 1, layer: client_code, status: fixed_in_this_batch, evidence: "sign_in_screen.dart / auth_provider.dart / auth_session_bootstrapper.dart edited; flutter analyze run this batch." }
   - { tier: 2, layer: hive_local_state, status: fixed_in_this_batch, evidence: "test/contracts/terms_acceptance_behavioral_test.dart proves a real userBox write now succeeds after HiveUserSession.openForUser, and throws before it (reproducing the exact pre-fix defect) — a genuine Hive round-trip, not source-grep." }
   - { tier: 3, layer: postgres_schema, status: not_applicable, evidence: "terms_accepted_at/terms_version columns already exist (migration 032, 2026-04-20). No schema change in this fix." }
-  - { tier: 4, layer: postgres_data, status: verified, evidence: "Live SQL this session: 10 most recent users (through 2026-08-02 13:11:55) all NULL on both columns pre-fix, confirming the defect is live and total, not partial." }
-  - { tier: 5, layer: migrations_applied, status: fixed_in_this_batch, evidence: "Backfill SQL designed + founder-approved for the 19 pre-existing NULL rows (verbatim in 'Prepared backfill SQL' section below); the standalone migration FILE is deliberately not committed this batch — Gate 14 (check_migrations_applied.dart) + Gate 39 (check_applied_migrations_ledger.dart) both hard-fail pre-commit on a migration file with no real non-null applied_at ledger entry, discovered live when the first commit attempt failed. Ships together with the actual apply + ledger entry in one future commit, once authorized per CLAUDE.md §4.3." }
+  - { tier: 4, layer: postgres_data, status: verified, evidence: "Live SQL 2026-08-02: 10 most recent users all NULL on both columns pre-fix, confirming the defect was live and total, not partial. Live SQL 2026-08-03T10:04:53+05:30 (immediately post-migration-118 apply): a fresh `count(*) WHERE terms_accepted_at IS NULL` returned 0, down from the pre-apply count of 19." }
+  - { tier: 5, layer: migrations_applied, status: fixed_in_this_batch, evidence: "Backfill migration 118 applied live 2026-08-03T10:04:53+05:30 (project dedsavbjuwgarrhphgnl), backfilling all 19 pre-existing NULL rows to created_at/'v1'. Ledger entry recorded in backups/applied_migrations.json (hash sha256:16c8afcb...28332). File committed to supabase/migrations/118_backfill_terms_accepted_historical_rows.sql in the same follow-up commit as this doc update, per the file+ledger+apply atomicity Gate 14/39 require — see 'Prepared backfill SQL' section below, now updated to reflect apply." }
   - { tier: 6, layer: edge_function_deploy, status: not_applicable, evidence: "No Edge Function touched by this fix." }
   - { tier: 7, layer: cron_jobs, status: not_applicable, evidence: "No cron job touched." }
   - { tier: 8, layer: rls_policies, status: not_applicable, evidence: "No RLS policy change — the fix is client-side write timing plus an existing authenticated-user upsert path." }
@@ -331,14 +331,30 @@ against a plain static site, which also failed identically). Not claimed
 as verified; flagged explicitly per the instruction to say so rather than
 claim success.
 
-## Prepared backfill SQL — designed, NOT committed this batch
+## Backfill SQL — applied live 2026-08-03, staged for commit
+
+**UPDATE (2026-08-03T10:04:53+05:30):** applied live to production
+(`dedsavbjuwgarrhphgnl`) via `mcp__supabase__apply_migration`, per explicit
+founder authorization ("apply backfill") separate from this batch's original
+commit/merge/push go-ahead. Pre-apply live count was 19 NULL rows (matching
+this doc's earlier audit); post-apply count is 0. The file was authored at
+`supabase/migrations/118_backfill_terms_accepted_historical_rows.sql`
+(verbatim match to the SQL preserved below) and a real ledger entry recorded
+in `backups/applied_migrations.json` (hash `sha256:16c8afcb...28332`,
+`applier: claude-via-mcp`). Both are staged in this worktree, not yet
+committed — commit/merge/push of this follow-up requires its own separate
+explicit go per CLAUDE.md §4.3, same boundary as the original fix.
+
+The paragraph below is preserved verbatim from before the apply, for the
+audit trail of the reasoning that led here (the migration-file/ledger-gate
+conflict that forced the original commit to ship without this file):
 
 The Part-C backfill SQL below is fully designed, founder-approved (proxy =
 `created_at`, version = `'v1'`), and its value semantics are already
 load-bearing in shipped code (`AuthSessionBootstrapper`'s OAuth/OTP fallback
 converges to the identical `created_at` value — B-pass Finding 2). The
-**standalone migration file itself is deliberately not committed in this
-batch**, discovered live at commit time: `check_migrations_applied.dart`
+**standalone migration file itself was deliberately not committed in the
+original batch**, discovered live at commit time: `check_migrations_applied.dart`
 (Gate 14) and `check_applied_migrations_ledger.dart` (Gate 39) both hard-fail
 pre-commit, and Gate 39 explicitly requires every ledger entry's `applied_at`
 to be non-null/non-empty — there is no "prepared but not applied" state this
@@ -346,9 +362,10 @@ repo's gate infrastructure recognizes. `supabase/migrations/CLAUDE.md` confirms
 this is the established convention, not a gap: "Every `apply_migration` call
 MUST be paired with a `backups/applied_migrations.json` update in the same git
 commit." Filing a real ledger entry with a fabricated timestamp to satisfy the
-gate was rejected as dishonest bookkeeping. The file below ships together with
-the actual live apply + a real ledger entry, in one future commit, once
-explicitly authorized (CLAUDE.md §4.3) — verbatim, not re-derived from memory:
+gate was rejected as dishonest bookkeeping. The file below shipped together
+with the actual live apply + a real ledger entry, in this follow-up commit,
+once explicitly authorized (CLAUDE.md §4.3) — verbatim, not re-derived from
+memory:
 
 ```sql
 -- Intent: One-time backfill of the 19 pre-fix NULL terms_accepted_at/terms_version rows using created_at as a founder-approved best-effort consent-timestamp proxy.
@@ -390,15 +407,15 @@ WHERE terms_accepted_at IS NULL;
 --   AND terms_version = 'v1';
 ```
 
-Next migration number at apply-time must be re-checked (118 may no longer be
-next once other migrations land before this one is applied).
+Confirmed at apply-time: 118 was still next (no intervening migrations
+landed between this doc's drafting and the live apply).
 
 ## Follow-ups (tracked, not deferred)
 
-- Author `supabase/migrations/<next>_backfill_terms_accepted_historical_rows.sql`
-  from the verbatim SQL above, apply it, and record it in
-  `backups/applied_migrations.json` — all in one commit, once authorized
-  (live prod data write, CLAUDE.md §4.3).
+- ~~Author the backfill migration file, apply it, and record it in
+  `backups/applied_migrations.json`~~ — **done 2026-08-03**, see the UPDATE
+  note above. Still owed: commit/merge/push of this staged follow-up work,
+  its own separate explicit go per CLAUDE.md §4.3.
 - Investigate the onboarding-completion / Hive-session-timing gap for
   brand-new Google OAuth signups described above — potentially urgent
   (Google OAuth is live in prod today) but a distinct root cause and unit

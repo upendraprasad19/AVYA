@@ -1,15 +1,15 @@
 ---
 branch: terms-accepted-fix
 date: 2026-08-02
-blast_radius: account
+blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
-bpass_review: docs/reviews/69feb22879b4-review.md
+bpass_review: docs/reviews/eff3780d437a-review.md
 ---
 
-# Plan-review record — terms-accepted-fix (account)
+# Plan-review record — terms-accepted-fix (platform)
 
 Keystone record for the §4.12 merge gate (`check_plan_review_record_exists.dart`).
 Account-tier — auth/service code only (confirmed live via
@@ -32,6 +32,21 @@ findings depended on the migration file's mere presence in the commit — Findin
 concerned value-semantics convergence between the migration and the runtime fallback, which
 the already-shipped code fix preserves regardless of when the file itself lands. `bpass:
 accepted` was earned at the higher tier and remains accurate. Not catastrophic → no Hermes.
+
+**Re-elevated back to `platform` (2026-08-03, follow-up commit):** the migration file
+described above was subsequently authored, applied live to production, and staged again in
+a follow-up commit on this same branch — re-triggering the same unconditional
+`supabase/migrations/**` → `platform` rule (confirmed live via
+`dart run scripts/blast_radius_from_diff.dart` against the follow-up's staged set). Per
+§4.3, this follow-up got its own self-initiated B-pass rather than reusing the original
+(now content-stale) review — see `docs/reviews/eff3780d437a-review.md` (verdict: accepted,
+1 finding: this exact frontmatter staleness, fixed in the same commit that introduced it).
+The two review ROUNDS below were never re-run — their findings concerned the code fix
+(Parts A/B) and the SQL's value-semantics, none of which changed; only the mechanical
+apply+ledger+doc-annotation step happened in the follow-up, which is what the fresh B-pass
+covers. `bpass_review:` above now points at that fresh review, superseding (not deleting)
+`docs/reviews/69feb22879b4-review.md`, which remains the accurate record of the original
+commit's own review.
 
 ## Scope
 
@@ -118,7 +133,9 @@ against live tooling by at least one of the two review rounds (not taken on the 
 `guarded_box.dart`'s actual throw condition, the live `blast_radius_from_diff.dart` classifier
 output, `docs/blast_radius.yaml`'s literal glob rule, the full call graph for every auth method
 (`signInWithEmail`/`signUpWithEmail`×2/`verifyOtp`/`signInWithGoogle`), `backups/applied_migrations.json`
-(migration 118 confirmed NOT applied), and `flutter test`/`flutter analyze` run independently by
+(migration 118 confirmed NOT applied at review time — **UPDATE 2026-08-03: applied live under a
+separate explicit founder authorization, post-merge; see the diagnose-doc's "Backfill SQL — applied
+live" section**), and `flutter test`/`flutter analyze` run independently by
 each reviewer rather than trusting a prior "green" claim.
 
 ## Known, honestly-scoped residual (not part of this batch)
