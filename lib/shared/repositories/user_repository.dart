@@ -27,6 +27,74 @@ class ClearResult {
       : 'ClearResult(failures=${failures.keys.join(", ")})';
 }
 
+/// One monotonic field a cloud restore tried to LOWER and was refused
+/// (OI-83). Carried out of the pure [UserRepository.mergeCloudProgress] so the
+/// callers can emit `progress_restore_demotion_declined` without the merge
+/// itself touching telemetry.
+class ProgressDemotion {
+  final String field;
+  final int localValue;
+  final int cloudValue;
+  const ProgressDemotion({
+    required this.field,
+    required this.localValue,
+    required this.cloudValue,
+  });
+
+  @override
+  String toString() => '$field local=$localValue cloud=$cloudValue';
+}
+
+/// Result of [UserRepository.mergeCloudProgress] — the map to persist plus the
+/// demotions that were refused. Mirrors the shape of
+/// `StreakProgressService.mergeFreezeProgress`'s result, the existing
+/// pure-merge-helper precedent for this same Hive map.
+class ProgressMergeResult {
+  final Map<String, dynamic> merged;
+  final List<ProgressDemotion> declinedFields;
+
+  /// Monotonic fields where one side was non-numeric, so the comparison could
+  /// not be made and the LOCAL value was kept. Reported separately from
+  /// [declinedFields] because "we refused a demotion" and "we could not tell"
+  /// are different facts and only the second indicates corrupt data.
+  final List<String> malformedFields;
+
+  const ProgressMergeResult({
+    required this.merged,
+    required this.declinedFields,
+    this.malformedFields = const <String>[],
+  });
+
+  bool get hasDeclined => declinedFields.isNotEmpty;
+}
+
+/// SHARED telemetry emitter for a refused restore demotion (OI-83). Both
+/// restore writers call this rather than each rolling its own `logEvent`, so
+/// the event name and payload cannot drift between them — the same reason
+/// `markPhaseRepeatNudgePending` exists as one writer for two advance paths.
+///
+/// One event PER declined field, not one per restore: a restore that would
+/// have lowered both `current_phase` and `total_workouts_done` is two distinct
+/// facts, and collapsing them would hide the second.
+void reportProgressDemotionsDeclined(
+  ProgressMergeResult result, {
+  required String source,
+}) {
+  for (final d in result.declinedFields) {
+    unawaited(ErrorTelemetry.logEvent(
+      'progress_restore_demotion_declined',
+      message: 'source=$source field=${d.field} '
+          'local=${d.localValue} cloud=${d.cloudValue}',
+    ));
+  }
+  for (final f in result.malformedFields) {
+    unawaited(ErrorTelemetry.logEvent(
+      'progress_restore_field_malformed',
+      message: 'source=$source field=$f',
+    ));
+  }
+}
+
 /// User CRUD operations via Hive userBox (offline-first).
 ///
 /// All reads/writes go to Hive. Supabase sync is handled separately
@@ -132,6 +200,184 @@ class UserRepository {
     progress['deployments_complete'] =
         derivedDeployments > priorDeployments ? derivedDeployments : priorDeployments;
     await _hive.userBox.put('progress', progress);
+  }
+
+  /// The progress-map fields that are MONOTONIC — a lifetime/earned counter or
+  /// the phase index — where a cloud→Hive restore must never lower the local
+  /// value. Founder decision 2026-08-03: **local-max-wins**, with telemetry.
+  ///
+  /// Deliberately NOT in this set, each for a reason:
+  ///   - `current_streak_days` / `current_streak_weeks` — a streak legitimately
+  ///     RESETS to 0. Max-wins would make a genuinely broken streak
+  ///     un-resettable from the cloud, which is a worse bug than the one this
+  ///     list fixes.
+  ///   - the `streak_freezes_*` family — already merged by the dedicated
+  ///     `StreakProgressService.mergeFreezeProgress`
+  ///     (`sync_restore_completeness.dart:225`). Two merge rules over one field
+  ///     is how writer/reader drift starts.
+  ///   - `streak_progress_version` — cloud-ALWAYS-wins is deliberate (Unit 3b,
+  ///     `e6b9c4`): it is a server-owned optimistic-lock counter the client
+  ///     only ever adopts, and adopting a stale-but-higher local value would
+  ///     make the next RPC write fail its version check.
+  ///   - `longest_gap_days` — **removed by round-1 review**, and OI-83 had
+  ///     listed it. It looks monotonic ("longest ever") but it is INVERTED:
+  ///     higher is WORSE, and it gates a rank
+  ///     (`rank_service.dart:506` — `s.longestGapDays > gate.maxGapDays` fails
+  ///     the rung, and a failed rung blocks every rung above it). No client
+  ///     writer populates it — `grep -rn longest_gap_days lib/` finds one
+  ///     reader (`rank_service.dart:448`) and two cloud pushes
+  ///     (`sync_profile.dart:115,320`), no Hive writer — and migration 115
+  ///     already GREATESTs it server-side. So local-max-wins here could only
+  ///     ever REFUSE a server correction, permanently pinning a bad value and
+  ///     blocking the rank ladder. Max-wins on a field where the maximum is
+  ///     the bad outcome is a guard pointed the wrong way.
+  @visibleForTesting
+  static const List<String> monotonicProgressFields = <String>[
+    'current_phase',
+    'deployments_complete',
+    'total_workouts_done',
+  ];
+
+  /// §4.6 / the `platform`-tier `feature_flag` requirement in
+  /// `docs/blast_radius.yaml:25`. Set `true` in `configBox` to make
+  /// [mergeCloudProgress] return the pre-OI-83 expression verbatim.
+  ///
+  /// A kill-switch IS warranted here, unlike the pure `phaseAdvanceTarget`
+  /// guard whose doc argues one would only re-enable a defect. The difference:
+  /// that guard is a total order on one field, while this is a per-field
+  /// JUDGEMENT LIST, and round-1 review proved the list can be wrong — it
+  /// caught `longest_gap_days` pointing the guard backwards. A wrong entry
+  /// needs a runtime escape hatch, not a rebuild.
+  static const String kDisableProgressRestoreMonotonicMergeKey =
+      'disable_progress_restore_monotonic_merge';
+
+  static bool get _monotonicMergeDisabled {
+    try {
+      return HiveService.instance.configBox
+              .get(kDisableProgressRestoreMonotonicMergeKey) ==
+          true;
+    } catch (_) {
+      // Box not open (pre-boot / test) — the guard stays ACTIVE. Failing
+      // closed is right: an unopened box must not silently disable a guard.
+      return false;
+    }
+  }
+
+  /// PURE merge for a cloud→Hive `progress` restore (OI-83). No Hive, no
+  /// telemetry, no clock — the callers fire the telemetry from [declinedFields]
+  /// so this stays testable, mirroring `phaseAdvanceTarget` /
+  /// `PhaseProgressReconciler.reconciledPhase`.
+  ///
+  /// **What was wrong.** Two restore writers —
+  /// `sync/sync_profile.dart` `_restoreUserProgress` and
+  /// `auth_session_bootstrapper.dart` — built the merged map as
+  /// `{...local, for (e in cloud.entries) if (e.value != null) e.key: e.value}`,
+  /// i.e. cloud-non-null-wins for EVERY key. A device that advanced locally and
+  /// had not yet pushed would have `current_phase` (and the three other
+  /// lifetime counters) silently lowered by its own restore — no guard, no
+  /// telemetry, no trace. That is the
+  /// `feedback_monotonic_field_recompute_demotion` class; siblings `3a7b9f`
+  /// (rank demoted after a recompute) and `c8f3d1` (the advance-side guard,
+  /// which sits on `commitPhaseAdvance` and these writers never reach).
+  ///
+  /// **Why a reinstall is unaffected.** The demotion only bites when local is
+  /// AHEAD of cloud. On a genuine restore local is empty, so `max` is the cloud
+  /// value and this is byte-identical to the old merge.
+  ///
+  /// Values are read with `(v as num?)?.toInt()` — the CLOUD-payload idiom
+  /// (`sync_profile.dart:100,289,301`), because this map has been through JSON.
+  /// `commitPhaseAdvance` reads the same field as `as int?` and is also right:
+  /// it reads the HIVE side, where the `int4` schema guarantee holds.
+  /// A field that is non-numeric on either side falls through to
+  /// cloud-non-null-wins rather than throwing — a malformed row must not break
+  /// the whole restore.
+  ///
+  /// NOT `@visibleForTesting`, unlike the same-file `phaseAdvanceTarget`
+  /// precedent it otherwise mirrors: this has two PRODUCTION callers in other
+  /// libraries, and the annotation would make both an
+  /// `invalid_use_of_visible_for_testing_member` warning.
+  static ProgressMergeResult mergeCloudProgress({
+    required Map<String, dynamic> local,
+    required Map<String, dynamic> cloud,
+  }) {
+    final merged = <String, dynamic>{...local};
+    final declined = <ProgressDemotion>[];
+    final malformed = <String>[];
+    // §4.6 kill-switch: verbatim pre-OI-83 behaviour, cloud-non-null-wins for
+    // EVERY key including the monotonic ones.
+    final guardOff = _monotonicMergeDisabled;
+
+    for (final entry in cloud.entries) {
+      if (entry.value == null) continue; // unchanged: cloud null never wins
+      if (guardOff || !monotonicProgressFields.contains(entry.key)) {
+        merged[entry.key] = entry.value;
+        continue;
+      }
+      // `is num` TEST, not an `as num?` cast. The cast form THROWS on a
+      // non-numeric value rather than yielding null, so the "malformed row
+      // must not break the whole restore" intent below would have been a lie —
+      // the first bad row would have thrown out of the merge and aborted the
+      // restore. Caught by this unit's own malformed-row test.
+      final localRaw = local[entry.key];
+      final cloudRaw = entry.value;
+
+      // ⚠ ORDER IS LOAD-BEARING, and both orderings have already been wrong.
+      //
+      // Cloud non-numeric is checked FIRST (round-2 review P2): when it was
+      // checked second, `local absent × cloud garbage` short-circuited into
+      // "adopt cloud" and wrote the garbage through reporting nothing — the
+      // exact hop-the-crash-downstream case the malformed guard exists to stop.
+      if (cloudRaw is! num) {
+        malformed.add(entry.key);
+        continue; // keep whatever local had (possibly nothing)
+      }
+
+      // ABSENT local is not malformed — it is the fresh-reinstall case, and the
+      // single most common path through this function. Take cloud.
+      //
+      // ⚠ This branch exists because its absence was a P0, caught by this
+      // unit's own reinstall test during round-1 fixes: the first attempt at
+      // the malformed-value guard treated `null is! num` as malformed and
+      // `continue`d, which DROPPED current_phase / deployments_complete /
+      // total_workouts_done from the merged map entirely — a reinstalling user
+      // would have restored with no phase at all. The guard against corrupt
+      // data must not fire on the ordinary absence of data.
+      if (localRaw == null) {
+        merged[entry.key] = cloudRaw;
+        continue;
+      }
+
+      if (localRaw is! num) {
+        // LOCAL is present but not numeric, so the comparison cannot be made.
+        // Cloud is already known-numeric (checked above), so take it — a good
+        // cloud value REPAIRS a corrupt local one — and report the corruption.
+        //
+        // Round-1 review P3: the earlier version wrote the cloud value through
+        // unconditionally and reported nothing, so "a malformed row must not
+        // break the restore" was only half true — the merge didn't throw, but
+        // every downstream reader does (`pro_phase_advance.dart` and
+        // `rank_service.dart:448` both read this family `as int?`, which THROWS
+        // on a String rather than yielding null). Persisting garbage silently
+        // just moves the crash one hop.
+        malformed.add(entry.key);
+        merged[entry.key] = cloudRaw;
+        continue;
+      }
+      final localValue = localRaw.toInt();
+      final cloudValue = cloudRaw.toInt();
+      if (cloudValue < localValue) {
+        declined.add(ProgressDemotion(
+          field: entry.key,
+          localValue: localValue,
+          cloudValue: cloudValue,
+        ));
+        merged[entry.key] = localValue; // local-max-wins
+      } else {
+        merged[entry.key] = cloudValue;
+      }
+    }
+    return ProgressMergeResult(
+        merged: merged, declinedFields: declined, malformedFields: malformed);
   }
 
   // ── Pending Promotion (Theme B, diagnose 2026-05-22 9aa2c1) ────

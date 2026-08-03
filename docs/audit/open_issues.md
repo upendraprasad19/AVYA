@@ -1214,9 +1214,11 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-83 — cloud→Hive `progress` restore merges bypass every monotonic guard, and can demote `current_phase` (P2)
 
-- **Status**: OPEN
-- **Blocked on**: none — needs a scoping decision (below) before a fix shape can be chosen.
-- **Verified**: 2026-08-01 (round-1 review of Unit 3c, `c8f3d1`, by direct read of all 7 writers)
+- **Status**: CLOSED
+- **Blocked on**: none — the scoping decision was made by the founder 2026-08-03
+  (**local-max-wins**, with telemetry) and Unit A shipped both halves. Closure block at the
+  end of this entry.
+- **Verified**: 2026-08-03 (Unit A, diagnose `d1f6b3` — all 7 writers re-read directly)
 - **Identified**: 2026-08-01 · round-1 context-blind review of the oi45-phase-advance-monotonic
   batch, while checking whether that batch's claim "`current_phase` is now monotonic" holds
   end-to-end. It does not — it holds for the ADVANCE operation only.
@@ -1255,6 +1257,103 @@ cloud sessions; **this file is the cross-session backlog.**
   landing *during* generation, which is this OI's to close.
 - **Blast radius estimate**: `account` (touches `lib/core/services/sync/**` +
   `auth_session_bootstrapper.dart`; no migration).
+
+### CLOSURE — Unit A, 2026-08-03, diagnose `d1f6b3`
+
+**Founder decision (the scoping call this entry was waiting on):** the monotonic progress fields
+are **local-max-wins on restore**, with telemetry when one is refused. The alternative —
+arbitrating on `updated_at` / `streak_progress_version` — is only needed if a *deliberate*
+backward move must propagate across devices, and today none does: the only two writes that lower
+the phase are onboarding's first write on a fresh account (nothing to demote) and the dev-panel
+`resetJourney` (`simulation_service.dart:108`, debug-only). Revisit if a user-facing "restart my
+journey" ever ships.
+
+**This entry's "two more want the same audit" — audited, and they are NOT vectors.**
+`sync_restore_completeness.dart:242,411`, `sync_service.dart` `_stampProgressVersion` and
+`streak_freeze_clamp_migrator.dart` all read-modify-write a freshly-read map and mutate only
+freeze keys / `streak_progress_version`, so they preserve whatever `current_phase` is present.
+**Exactly 2 of the 7 writers were demotion vectors**, both now routed through the shared
+`UserRepository.mergeCloudProgress`. Result recorded in `docs/sot_registry.yaml` so the next pass
+does not re-derive it.
+
+**The second-order half is NOT closed — it is REPORTED, and its repair is OI-85.** This closure
+originally claimed it was fixed by forcing `PlanIntegrityReconciler` past its `needsHeal` gate.
+Review refuted that (inert — `mergeScheduleEntry` re-applies the same predicate per row), then
+refuted the follow-up (`preferSnapshot` + orphan sweep — data loss, because cloud `plan_json` is
+only daily-fresh and spans every `schedule_*` key). Per §4.12.1 the smallest converged piece
+ships: a `phase_advance_declined_rows_stale` event, HIGH-priority in both twin lists so the
+frequency can actually be measured, and the repair filed with all three refutations.
+
+**Also corrected:** `sync_profile.dart:592-609` justified the wholesale merge with "a fresh
+restore read is always at least as new as whatever's local" — true of the server-owned
+`streak_progress_version` it was written about, false of a client-advanced field. Left in place it
+would have re-justified the bug for the next reader.
+
+**Round-1 review changed three things in this closure, and each is worth carrying:**
+- **`longest_gap_days` is NOT guarded**, though this entry's own fix-shape listed it. It is
+  INVERTED — higher is worse, it gates a rank (`rank_service.dart:506`), it has no client writer,
+  and migration 115 already GREATESTs it server-side — so local-max-wins could only ever refuse a
+  server correction and pin the rank ladder shut. The guarded set is **3**, not 4.
+- **A §4.6 kill-switch ships** (`disable_progress_restore_monotonic_merge`). The measured tier is
+  `platform`, where `docs/blast_radius.yaml:25` makes `feature_flag` a requirement — and the
+  `longest_gap_days` catch is itself the argument: a per-field judgement list can be wrong in a
+  way a proven total order cannot.
+- **The second-order half is REPORTED, not repaired — and its repair is now OI-85.** Three
+  mechanisms were designed and each refuted, the last two by context-blind review: (1) restore
+  takes `withPhaseAdvanceLock` → it is a TRY-lock, so the restore would be dropped entirely;
+  (2) force past `needsHeal` → INERT, because `mergeScheduleEntry` re-applies the same
+  local-has-exercises predicate per row; (3) `preferSnapshot` + deleting rows past the
+  re-anchored `plan_end` → DATA LOSS, because cloud `plan_json` is pushed only by the DAILY full
+  sync and can be 24h stale (the sweep would delete the WINNER's fresh rows), and the snapshot
+  spans every `schedule_*` key box-wide (so it would revert an un-synced local swap). Per
+  §4.12.1 the smallest converged piece ships: the demotion fix, plus a
+  `phase_advance_declined_rows_stale` event that makes the condition visible for the first time.
+
+**Not deployed, and it needs its own go:** `supabase/functions/log-client-error/index.ts` gains the
+two new events in its `HIGH_PRIORITY_OP_TYPES` twin list. The code is committed and the client half
+is live; until that function is deployed the server still classifies those events as LOW priority.
+
+Tests: `test/contracts/progress_restore_monotonic_behavioral_test.dart` (23, with the pre-fix
+merge inline as the negative control and the default `mergeScheduleEntry` mode as a second one) +
+`test/contracts/restore_progress_uses_shared_merge_test.dart` (8 executed, routing pin,
+presence-only by construction). 31 total, all green; 87 across the 7 affected suites.
+
+## OI-85 — repair the `schedule_*` rows a DECLINED phase advance leaves behind (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none — but three mechanisms are already refuted (below). The next attempt needs
+  the losing generation's own key set, which nothing currently records.
+- **Verified**: 2026-08-03 (Unit A, diagnose `d1f6b3` — both refutations reproduced from code)
+- **Identified**: 2026-08-03 · split out of OI-83 per §4.12.1 after two context-blind review
+  rounds refuted two successive repair designs, the second as a data-loss risk.
+- **Risk class**: stale local rows after a lost advance race (not a demotion — the counter is
+  correct; the plan content is not)
+- **What's wrong**: when `commitPhaseAdvance` DECLINES after `generateAndSchedule` has already
+  run, the `schedule_*` rows and plan window written for the phase we did not advance to are
+  left in place. Nothing rolls them back, so the user can read a plan for a phase they are not
+  on. Now VISIBLE via `phase_advance_declined_rows_stale` (source, intended, live) — Unit A added
+  the telemetry precisely so the frequency can be measured before more repair machinery is built.
+- **Three refuted mechanisms — do not re-propose without new evidence:**
+  1. *Make the restore writers take `withPhaseAdvanceLock`.* It is a TRY-lock
+     (`pro_phase_advance.dart` returns `ifBusy` immediately, no queue), so a restore arriving
+     mid-generation is turned away and the user's cloud progress never lands. Trades stale rows
+     for a DROPPED RESTORE.
+  2. *Force `PlanIntegrityReconciler.reconcile` past its `needsHeal` gate.* Inert:
+     `mergeScheduleEntry` then applies the same "local already has exercises → keep local"
+     predicate per row, and these rows have their exercises. Only rest days would heal.
+  3. *Add `preferSnapshot` + delete rows past the re-anchored `plan_end`.* DATA LOSS. Cloud
+     `plan_json` is pushed only by the daily full sync (`sync_service.dart` `_fullSyncInterval`),
+     so the snapshot can describe the PREVIOUS phase window and the sweep would delete the
+     winner's freshly-generated rows. Separately, `_syncWorkoutPlan` snapshots every `schedule_*`
+     key box-wide, so `preferSnapshot` would also revert an un-synced local exercise swap on any
+     planned day (`swap_service.dart` rejects only `completed`).
+- **Fix shape (what a fourth attempt needs)**: the set of keys the LOSING generation wrote.
+  `generateAndSchedule`'s caller knows its `startDate` and phase; recording that window (or the
+  written key set) and scoping the repair to it removes every dependency on a stale cloud
+  snapshot. Measure `phase_advance_declined_rows_stale` first — if the condition is rare enough,
+  the honest answer may be to keep reporting and not build the repair at all.
+- **Blast radius estimate**: `account` (`lib/shared/services/pro_phase_advance.dart` +
+  `graduation_screen.dart`); no migration.
 
 ## OI-84 — `graduation_screen.dart` added to the Gate 43 allow-list; split owed (P3)
 

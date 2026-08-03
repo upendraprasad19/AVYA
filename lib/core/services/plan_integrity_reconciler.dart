@@ -108,16 +108,21 @@ class PlanIntegrityReconciler {
   /// snapshot. [scheduleService] is injected so this is callable from the boot
   /// path (via the Riverpod provider) and from tests, mirroring
   /// [PhaseProgressReconciler.reconcile].
-  static Future<void> reconcile(
+  ///
+  static Future<PlanReconcileOutcome> reconcile(
       WorkoutScheduleReadService scheduleService) async {
     try {
       final hive = HiveService.instance;
-      if (hive.configBox.get(killSwitchKey) == true) return;
+      if (hive.configBox.get(killSwitchKey) == true) {
+        return PlanReconcileOutcome.skipped('kill_switch');
+      }
 
       // Without a known plan window we can't classify the current weeks → skip
       // (a reconcilable user always has a plan_start).
       final planStart = scheduleService.getPlanStartDate();
-      if (planStart == null) return;
+      if (planStart == null) {
+        return PlanReconcileOutcome.skipped('no_plan_start');
+      }
 
       // Cheap LOCAL symptom check first — gather the current 4-week window's
       // schedule rows and bail (no network) when every planned workout day
@@ -126,20 +131,29 @@ class PlanIntegrityReconciler {
       for (var w = 1; w <= 4; w++) {
         local.addAll(scheduleService.getWeek(w));
       }
-      if (!needsHeal(local)) return; // healthy → no-op, no fetch
+      // healthy → no-op, no fetch
+      if (!needsHeal(local)) {
+        return PlanReconcileOutcome.skipped('healthy');
+      }
 
       // Symptom present → pull the authoritative plan_json snapshot from cloud.
       final userId = SupabaseService.instance.client.auth.currentUser?.id;
-      if (userId == null) return;
+      if (userId == null) {
+        return PlanReconcileOutcome.skipped('no_user');
+      }
 
       final rows = await SupabaseService.instance.client
           .from('user_progress')
           .select('plan_json')
           .eq('user_id', userId)
           .limit(1);
-      if (rows.isEmpty) return;
+      if (rows.isEmpty) {
+        return PlanReconcileOutcome.skipped('no_cloud_row');
+      }
       final planJson = rows.first['plan_json'];
-      if (planJson is! Map) return;
+      if (planJson is! Map) {
+        return PlanReconcileOutcome.skipped('no_plan_json');
+      }
       final bundle = Map<String, dynamic>.from(planJson);
 
       // Re-anchor plan_start / plan_end from the snapshot, MONOTONICALLY +
@@ -183,10 +197,48 @@ class PlanIntegrityReconciler {
         'plan_integrity_reconciled',
         message: 'healed=$healed planStart=$pjStart',
       ));
+      return PlanReconcileOutcome.healed(healed);
     } catch (e, st) {
       // Non-fatal — never block boot on a reconciliation hiccup.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'plan_integrity_reconciler'));
+      return PlanReconcileOutcome.failed('$e');
     }
   }
+}
+
+/// What [PlanIntegrityReconciler.reconcile] actually did.
+///
+/// Added by OI-83 round-1 review P2. `reconcile` returned `void` and swallowed
+/// every exception, and it has six early-exit paths (kill-switch, no
+/// plan_start, healthy, no user, no cloud row, no plan_json). A caller could
+/// therefore report "repaired" for a run that did nothing at all — which is
+/// exactly what `reconcileAfterDeclinedAdvance` did, unconditionally, while its
+/// own catch block was unreachable. Telemetry that reports 100% success at 0%
+/// repair rate is worse than none.
+class PlanReconcileOutcome {
+  /// Rows written. 0 on every skip and on failure.
+  final int healedCount;
+
+  /// Why nothing was written — `null` when the run reached the write loop.
+  final String? skipReason;
+
+  /// Set only when the body threw; the exception, stringified.
+  final String? failure;
+
+  const PlanReconcileOutcome._(this.healedCount, this.skipReason, this.failure);
+
+  const PlanReconcileOutcome.healed(int count) : this._(count, null, null);
+  const PlanReconcileOutcome.skipped(String reason) : this._(0, reason, null);
+  const PlanReconcileOutcome.failed(String error) : this._(0, null, error);
+
+  bool get didWrite => healedCount > 0;
+  bool get didFail => failure != null;
+
+  /// Compact, PII-free telemetry payload.
+  String describe() => didFail
+      ? 'failed=$failure'
+      : skipReason != null
+          ? 'skipped=$skipReason'
+          : 'healed=$healedCount';
 }

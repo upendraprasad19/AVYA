@@ -154,6 +154,15 @@ const HIGH_PRIORITY_OP_TYPES: readonly string[] = [
   "sync_user_progress_retry_dropped",
   "sync_freezes_row_absent_after_conflict",
   "sync_user_progress_row_absent_after_conflict",
+
+  // Restore-side monotonic guard (OI-83 / d1f6b3, 2026-08-03) — MUST stay in
+  // sync with the client highPriorityOpTypes (twin test).
+  "progress_restore_demotion_declined",
+  "progress_restore_field_malformed",
+
+  // Declined-advance stale-rows signal (OI-85) — the frequency measurement that
+  // decides whether a repair gets built. MUST stay in sync with the client.
+  "phase_advance_declined_rows_stale",
 ];
 
 function isHighPriority(opType: string | null): boolean {
