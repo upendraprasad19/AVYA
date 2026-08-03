@@ -225,7 +225,20 @@ class AuthNotifier extends Notifier<AuthState2> {
   }
 
   /// Create a new account with email + password.
-  Future<void> signUpWithEmail(String email, String password) async {
+  ///
+  /// [termsAcceptedAt] / [termsVersion] (closes-diagnose
+  /// b3f9e7): the ToS/Privacy
+  /// consent captured at CREATE ACCOUNT tap time, threaded through to
+  /// `_ensureLocalUser` — which writes them to Hive AFTER
+  /// `HiveUserSession.openForUser` has opened the user-scoped box. Writing
+  /// them here directly (the pre-fix approach) is impossible: no session
+  /// exists yet at tap time, so the box can't be opened.
+  Future<void> signUpWithEmail(
+    String email,
+    String password, {
+    String? termsAcceptedAt,
+    String? termsVersion,
+  }) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     if (!await ensureSupabaseReady()) return;
     try {
@@ -258,7 +271,8 @@ class AuthNotifier extends Notifier<AuthState2> {
       if (response.session == null) {
         // Still try to set up local state, but don't require it to succeed.
         try {
-          await _ensureLocalUser(response.user!);
+          await _ensureLocalUser(response.user!,
+              termsAcceptedAt: termsAcceptedAt, termsVersion: termsVersion);
         } catch (_) {}
         state = state.copyWith(
           status: AuthStatus.error,
@@ -270,7 +284,8 @@ class AuthNotifier extends Notifier<AuthState2> {
 
       // Session present → signed in immediately (email confirmation off).
       try {
-        await _ensureLocalUser(response.user!);
+        await _ensureLocalUser(response.user!,
+            termsAcceptedAt: termsAcceptedAt, termsVersion: termsVersion);
       } on StateError catch (e) {
         // Test #10.1 — cross-account guard's verify-after-clear failed
         // (poisoned local state would leak into this session). The
@@ -512,7 +527,11 @@ class AuthNotifier extends Notifier<AuthState2> {
   ///
   /// If the user previously completed onboarding (has a profile in Supabase),
   /// restores the onboarding flag so they skip onboarding on re-login.
-  Future<void> _ensureLocalUser(User user) async {
+  Future<void> _ensureLocalUser(
+    User user, {
+    String? termsAcceptedAt,
+    String? termsVersion,
+  }) async {
     // APK Test #12.8 — entry-point trace. Most lifecycle bugs (PRO pill
     // stuck, profile name "USER") manifest after this method runs;
     // having a per-call event lets us correlate downstream failures with
@@ -663,6 +682,25 @@ class AuthNotifier extends Notifier<AuthState2> {
       await WlogTypeBackfillMigrator.runIfNeeded();
     } catch (e) {
       debugPrint('[auth/_ensureLocalUser] wlog type backfill failed: $e');
+    }
+
+    // closes-diagnose: b3f9e7
+    // ToS/Privacy consent stamp (email signup only — signInWithEmail passes
+    // no terms params, so this is a no-op on every returning-user login).
+    // MUST run here: after openForUser (box is open) AND after the
+    // cross-account clear-guard above (a write placed any earlier could be
+    // wiped by clearAllData() if this device previously held a different
+    // user's session) AND before hydrateFromCloud (so its existing,
+    // unchanged Hive→cloud upward-sync picks this up in the same pass).
+    if (termsAcceptedAt != null) {
+      try {
+        final ub = _hive.userBox;
+        await ub.put('terms_accepted_at', termsAcceptedAt);
+        if (termsVersion != null) await ub.put('terms_version', termsVersion);
+      } catch (_) {
+        // Non-fatal — a failure here just leaves cloud NULL, same as the
+        // pre-fix state. The auth flow itself must not block on it.
+      }
     }
 
     // ── Cloud hydration ────────────────────────────────────────

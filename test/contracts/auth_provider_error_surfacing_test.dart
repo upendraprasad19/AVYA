@@ -29,9 +29,13 @@ void main() {
     // verify-after-clear + UserConfigMigrator block added ~50 lines.
     // audit-2026-05-11 H-3 — bumped to 10000 because the email-prefix
     // self-heal block added another ~30 lines inside the same method.
+    // diagnose b3f9e7 (2026-08-02) — bumped to 11000: the terms-consent
+    // stamp block (Part A) added ~18 lines before the ErrorTelemetry
+    // call, pushing it past the old 10000-char cutoff (measured 10213
+    // bytes from method start to the ErrorTelemetry line).
     final body = source.substring(
       ensureStart,
-      (ensureStart + 10000).clamp(0, source.length),
+      (ensureStart + 11000).clamp(0, source.length),
     );
 
     // Must route through the canonical telemetry sink. ErrorTelemetry

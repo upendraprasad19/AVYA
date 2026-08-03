@@ -1693,32 +1693,87 @@ concepts:
   # is the email sign-in flow; the bootstrapper projects it to cloud.
   - concept: terms_acceptance
     domain: auth_profile
-    behavioral_test_path: test/contracts/terms_acceptance_writer_to_reader_test.dart
-    presence_only: true  # audit-fixwave B-pass — source-grep drift detector, NOT a Hive round-trip
+    behavioral_test_path: test/contracts/terms_acceptance_behavioral_test.dart
+    presence_only: false  # 2026-08-02 — now a real Hive round-trip + pure-function
+                           # decision test (closes-diagnose: b3f9e7). The prior
+                           # source-grep tests
+                           # (terms_signup_writes_test.dart,
+                           # terms_acceptance_writer_to_reader_test.dart) still exist
+                           # as supplementary presence checks but are NOT the
+                           # behavioral_test_path — they could not have caught (and
+                           # did not catch) the pre-fix write silently throwing on
+                           # every single signup for 2.5 months.
     description: |
-      DPDP ToS/Privacy acceptance. The email sign-in flow stamps
-      userBox['terms_accepted_at'] + ['terms_version']; auth_session_bootstrapper
-      projects them to the users cloud row and re-hydrates on returning-user restore.
+      DPDP ToS/Privacy acceptance. Email sign-up stamps
+      userBox['terms_accepted_at'] + ['terms_version'] in _ensureLocalUser,
+      AFTER HiveUserSession.openForUser has opened the box (the pre-fix write
+      at CREATE ACCOUNT tap time ran before any session existed and threw
+      every time, silently swallowed). auth_session_bootstrapper projects
+      Hive → cloud, re-hydrates cloud → Hive for returning users, and — for
+      Google OAuth / phone-OTP, which have no Hive-side write at all —
+      AuthSessionBootstrapper.ensureTermsConsentFallback stamps the cloud row
+      directly the first time it's still empty. CORRECTION (plan-review round
+      1, 2026-08-02): the fallback is called from TWO places, not one —
+      hydrateFromCloud's else-branch (phone OTP, which reaches
+      _ensureLocalUser) AND restoring_screen.dart's returning-user path
+      (Google OAuth's REAL convergence point — hydrateFromCloud itself has
+      exactly one call site in the repo and signInWithGoogle() never reaches
+      it). Wiring the fallback only into hydrateFromCloud would have left
+      Google OAuth — the urgent, live-in-prod channel — with the exact same
+      defect this concept exists to fix.
     writers:
-      - file: lib/features/auth/screens/sign_in_screen.dart
-        line_range: 775-943
-        method: _buildEmailStepSignUp
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 695-704
+        method: terms-write block inside _ensureLocalUser (not itself a named method)
         semantic: hive-write
         notes: |
           Stamps userBox terms_accepted_at (UTC ISO) + terms_version
-          (AppConstants.termsVersion) on accept. Relocated 2026-07 when the
-          email view split from one _isSignUp-toggled form (_buildEmailView)
-          into per-step builders (email-first registration-check flow) —
-          this write moved verbatim into the sign-up-only step's submit
-          handler, same lexical position (immediately before signUpWithEmail).
+          (AppConstants.termsVersion) — email signup only, sourced from
+          params threaded through from sign_in_screen.dart's CREATE ACCOUNT
+          onPressed (line ~939) via signUpWithEmail. Runs after
+          HiveUserSession.openForUser (line 526) AND after the cross-account
+          clear-guard (ends line ~588), before hydrateFromCloud (~line 706) —
+          ordering matters: any earlier and a device-swap clearAllData() could
+          wipe it; any later and the same-pass upward-sync below would miss it.
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        method: ensureTermsConsentFallback (public) + shouldStampFallbackTermsConsent (pure decision helper); called from hydrateFromCloud's else-branch for phone OTP
+        semantic: cloud-write fallback
+        notes: |
+          Phone-OTP fallback path (closes-diagnose: b3f9e7). Phone OTP has no
+          checkbox UI — relies on the Welcome screen's ambient footer
+          disclaimer as the affirmative action. Stamps terms_accepted_at
+          (= created_at, not now() — converges with migration 118's backfill
+          value regardless of apply-order) + terms_version directly on the
+          cloud row + mirrors to Hive, but ONLY when
+          shouldStampFallbackTermsConsent (pure, @visibleForTesting) says the
+          cloud row has no value yet — a returning user's real historical
+          timestamp is never clobbered.
+      - file: lib/features/auth/screens/restoring_screen.dart
+        method: "_goHome (fast branch, after HiveUserSession.openForUser) + _ensureOwnershipBeforeHome (end of method, after Hive session confirmed open)"
+        semantic: cloud-write fallback (fire-and-forget)
+        notes: |
+          Google OAuth's REAL fallback call site (plan-review round 1
+          correction, 2026-08-02) — calls the SAME
+          AuthSessionBootstrapper.instance.ensureTermsConsentFallback(userId)
+          as the phone-OTP path above. Fire-and-forget (unawaited) so a
+          compliance stamp never adds latency to /home arrival; safe
+          post-dispose since AuthSessionBootstrapper is a ref-free singleton.
+          Only covers the RETURNING-user path (GoHome) — a brand-new Google
+          OAuth signup still mid-onboarding is NOT covered (see diagnose
+          doc's "Known residual gap" section — a separate, larger
+          investigation, not folded into this fix).
     readers:
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 195-260
+        line_range: 287-579
         method: hydrateFromCloud
         semantic: cloud-projection + restore
         notes: |
           Projects userBox terms fields → users.terms_accepted_at / terms_version
-          and re-hydrates from cloud on returning-user restore.
+          and re-hydrates from cloud on returning-user restore. Line range
+          corrected plan-review round 2 (2026-08-02) — the round-1 extraction
+          of ensureTermsConsentFallback into its own method (lines 211-249)
+          shifted hydrateFromCloud's start from its pre-correction position;
+          the range was not re-derived after that shift until now.
     hive:
       box: userBox
       key_prefix: "terms_"

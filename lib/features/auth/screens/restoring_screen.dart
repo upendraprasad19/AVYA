@@ -231,6 +231,9 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     if (!killSwitch && isReturning) {
       // Ownership gate stays BLOCKING (cross-account safety, APK #15.4).
       await HiveUserSession.openForUser(userId);
+      // b3f9e7 — OAuth's real convergence point (not hydrateFromCloud).
+      unawaited(
+          AuthSessionBootstrapper.instance.ensureTermsConsentFallback(userId));
       // Fresh first paint of today-scoped providers — cheap; the in-flight
       // cloud restore keeps writing Hive in the background.
       if (mounted) {
@@ -485,6 +488,10 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'restoring_coach_memory_backfill'));
     }
+
+    // (5) b3f9e7 — same OAuth convergence-point reasoning as above.
+    unawaited(
+        AuthSessionBootstrapper.instance.ensureTermsConsentFallback(sessionUserId));
   }
 
   /// Plan A self-heal — stamps `onboarding_completed_at = NOW()` on both
