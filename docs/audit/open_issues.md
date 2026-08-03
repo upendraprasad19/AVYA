@@ -1442,3 +1442,47 @@ files restored from copies afterwards and verified byte-identical by md5, never 
 tests, one per outcome arm, against real Hive and real plan generation — coverage that could not
 previously exist, because the code was a closure inside a widget callback that nothing could
 call.
+
+## OI-86 — two concurrent `flutter test` runs on this machine corrupt each other's Hive state (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none — the mechanism is understood and was reproduced twice; scheduled work.
+- **Verified**: 2026-08-03 (twice in one day, both times the same tests passed standalone
+  immediately afterwards on the identical tree)
+- **Identified**: 2026-08-03 · Unit B (`b4e9c7`) — once during overlapping `safe_commit` runs,
+  once during a `safe_push` whose pre-push suite raced another session's suite.
+- **Risk class**: test-harness isolation / false-red on a real gate
+- **What's wrong**: Hive test boxes are opened from a **process-shared** location, so two
+  `flutter test` runs executing at the same time on this machine collide. The loser sees
+  `HiveError: Box not found. Did you forget to call Hive.openBox()?` from
+  `HiveService.userBoxGuarded` → `wrapUserScopedBox` (`guarded_box.dart:341`), and whatever
+  assertion followed the failed read then reports a *value* mismatch rather than the underlying
+  throw — which is what makes it easy to mis-diagnose.
+- **Two confirmed occurrences, same day, same test family**:
+  1. Two `safe_commit.sh` invocations overlapped (the first had not finished when a second was
+     launched after a tool timeout). `subscription_expiry_banner_behavioral_test.dart`
+     "a marker stamped under session A is NOT visible to session B" failed, then passed
+     standalone seconds later on the identical tree.
+  2. `safe_push.sh`'s pre-push full suite ran while another session had ~10 dart/flutter
+     processes live. `subscription_cqrs_behavioral_test.dart` "genuine expiry still downgrades
+     and still stamps `pro_lapsed_at`" AND the same expiry-banner test failed —
+     `Expected: null / Actual: '2026-08-02T20:05:42.435058'`, immediately preceded by
+     `[MigratedKey.delete] userBox expiresAt threw: HiveError: Box not found`. The push was
+     correctly REJECTED (`git exit 1`, `origin/main` unmoved). A retry with the machine quieter
+     passed **4188 tests, 0 failures** on the same commit with no code change.
+- **Why it is not "just flaky"**: CI is green on the same commits — an isolated single-runner
+  environment never hits it. The failure is deterministic given concurrency, and it produces a
+  **false red on a real gate**, which is the dangerous shape: it invites exactly the hook-bypass
+  reflex CLAUDE.md bans, and it trains the reader to dismiss genuine failures in that test
+  family.
+- **Fix shape (not yet attempted)**: give each test process its own Hive directory — a per-run
+  temp dir keyed on PID or the runner's shard id, set in the shared test bootstrap rather than
+  per-file. The git-index half of this exact "one machine, two sessions" problem was solved
+  structurally by §4.13 (one worktree per session → one index per session); this is the Hive
+  half.
+- **Interim discipline (already in force, and not a fix)**: never launch a second
+  `safe_commit.sh` / `safe_push.sh` while one may still be running — a Bash tool timeout does
+  NOT kill the process (`feedback_git_landing_verification.md`). Both occurrences today began
+  that way.
+- **Blast radius estimate**: `feature` (test harness + bootstrap only); no migration, no schema,
+  no runtime code.
