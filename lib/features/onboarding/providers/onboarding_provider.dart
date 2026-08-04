@@ -406,12 +406,6 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // is an INCIDENTAL ordering property of RestoringScreen, not an
       // invariant this method enforces itself. Idempotent no-op on the
       // already-safe path (see docs/diagnoses -- onboarding-oauth-session-order).
-      // Defensive guard (Unit 1, follow-up to diagnose b3f9e7, 2026-08-03):
-      // today RestoringScreen's parallel restoreFromCloudForUser() always
-      // opens the Hive session before onboarding can be reached, but that
-      // is an INCIDENTAL ordering property of RestoringScreen, not an
-      // invariant this method enforces itself. Idempotent no-op on the
-      // already-safe path (see docs/diagnoses -- onboarding-oauth-session-order).
       await HiveUserSession.ensureOpenedForCurrentSession();
 
       // Use saveProfile (not updateProfileFields) to guarantee a clean

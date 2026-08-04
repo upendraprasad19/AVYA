@@ -3855,7 +3855,7 @@ concepts:
       completeOnboarding() stamps both Hive and cloud.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 272-567
+        line_range: 272-561
         method: completeOnboarding
         notes: |
           Stamps onboarding_completed_at in the Hive profile map (durable BEFORE
@@ -3865,7 +3865,7 @@ concepts:
           missed, pending_onboarding_sync + the RestoringScreen Plan-A self-heal
           (cloud NULL + Hive onboarded -> re-stamp) recover it.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 576-643
+        line_range: 570-637
         method: _syncOnboardingAndPostActions
         notes: |
           Background cloud catch-up (a1f9c4) — syncs the profile (incl.
@@ -4486,7 +4486,7 @@ concepts:
           _reportSyncFailure(opType, error). Never call
           ErrorTelemetry.recordNonFatal directly from sync methods.
       - file: lib/core/services/hive_user_session.dart
-        line_range: 77-240
+        line_range: 83-253
         method: HiveUserSession lifecycle events (open/close/delete)
         semantic: pass-through
         fields_read: []
@@ -4610,7 +4610,7 @@ concepts:
         method: deleteAll
         notes: delegates to Hive box.deleteAll; wrapped for auto-open guard
       - file: lib/core/services/hive_user_session.dart
-        line_range: 389-410
+        line_range: 402-423
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
@@ -4645,7 +4645,7 @@ concepts:
           on auth transitions. Logout sets logout_in_progress flag in
           shared configBox before tearing down.
       - file: lib/core/services/hive_user_session.dart
-        line_range: 77-240
+        line_range: 83-253
         method: openForUser / closeAll lifecycle
         semantic: pass-through
         fields_read: []
@@ -6171,9 +6171,9 @@ concepts:
       - { file: lib/core/services/seed_service.dart, line: 36, method: "SeedService._() constructor → _registerLifecycle()", notes: "Seeds are shared-box; reset is a no-op placeholder." }
     reader_manifest_complete: true
     readers:
-      - { file: lib/core/services/hive_user_session.dart, line: 255, method: "_openForUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Fires after static owner fields + listenable flip to the new user." }
-      - { file: lib/core/services/hive_user_session.dart, line: 387, method: "_closeAllLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Sign-out path." }
-      - { file: lib/core/services/hive_user_session.dart, line: 424, method: "_deleteAllFilesForCurrentUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "DPDP delete-account / factory-reset path." }
+      - { file: lib/core/services/hive_user_session.dart, line: 268, method: "_openForUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Fires after static owner fields + listenable flip to the new user." }
+      - { file: lib/core/services/hive_user_session.dart, line: 400, method: "_closeAllLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Sign-out path." }
+      - { file: lib/core/services/hive_user_session.dart, line: 437, method: "_deleteAllFilesForCurrentUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "DPDP delete-account / factory-reset path." }
     hive:
       box: in_memory_only
       key_prefix: ""

@@ -65,7 +65,7 @@ const Map<String, String> cqrsExemptions = {
       'OI-44 Unit 6 — DELIBERATE and load-bearing. The cross-account guard '
           '(Hive profile.id != session.id => force-downgrade) is the defensive '
           'layer that catches Auto-Backup entitlement leaks the startup guard '
-          '(hive_user_session.dart:208) misses; the expiry branch stamps '
+          '(hive_user_session.dart:221) misses; the expiry branch stamps '
           'pro_lapsed_at for the Home banner. Making this pure would narrow the '
           'guard from "every entitlement decision" to "wherever someone '
           'remembered to wire it" — a leak surface on a payment path. Unit 6 '

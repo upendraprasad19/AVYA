@@ -571,8 +571,11 @@ class AppRouter {
   /// live Supabase / Hive / BuildContext. Returns true when an authenticated
   /// user has reached a session-gated route before `HiveUserSession.openForUser`
   /// has run (Hive owner still null) and we must route through /restoring to
-  /// open the session first. Onboarding self-navigates pre-session, so it is
-  /// exempt (its own writes open/own the boxes via the sign-up bootstrap).
+  /// open the session first. Onboarding is exempt because it opens the session
+  /// itself: `completeOnboarding()` awaits
+  /// `HiveUserSession.ensureOpenedForCurrentSession()` before its first
+  /// user-scoped Hive write (Unit 1, diagnose d4e8a2). Do NOT weaken that
+  /// guard on the assumption this route gates for it — it does not.
   @visibleForTesting
   static bool shouldGateOnSessionOpen({
     required bool isInitialized,
