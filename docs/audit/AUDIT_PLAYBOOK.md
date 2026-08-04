@@ -83,7 +83,7 @@ Invoke-RestMethod -Method Get -Uri 'https://api.supabase.com/v1/projects/<projec
 
 ## Discipline at end of run
 
-- Update `CLAUDE.md §19` with one entry per new bug class.
+- Update `docs/playbook/common-pitfalls.md` with one entry per new bug class.
 - Write a `feedback_<topic>.md` for any recurring pattern.
 - Write a `project_audit_<date>.md` memory file with: what shipped, false alarms closed, non-obvious decisions, follow-ups deferred (with rationale).
 - Update `MEMORY.md` index with one-line pointers.

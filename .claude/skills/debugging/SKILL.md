@@ -262,7 +262,7 @@ Plan approved at:  <timestamp / approval message>
 Diagnose-doc:      docs/diagnoses/<date>-<slug>-<6hex>.md
 Regression test:   <test path that fails-on-main / passes-with-fix>
 Memory deltas:     <new feedback_* files OR updates to existing ones>
-CLAUDE.md deltas:  <§19 entry added? new invariant codified?>
+CLAUDE.md deltas:  <docs/playbook/common-pitfalls.md entry added? new §4 invariant codified?>
 Skill deltas:      <new bug class appended to §2? new red flag in §3?>
 ```
 
@@ -499,8 +499,8 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 
 ## 6. Cross-references
 
-- `CLAUDE.md` §19 — COMMON BUGS TO AVOID table (canonical project-side bug list)
-- `CLAUDE.md` §22 — Diagnose-doc rule
+- `docs/playbook/common-pitfalls.md` — the canonical project-side bug list (migrated out of the old CLAUDE.md §19, which no longer exists)
+- `CLAUDE.md` §4.4 rule 22 — Diagnose-doc rule
 - `CLAUDE.md` rules 20 / 21 — No deferred test failures / Regression test required
 - `docs/discipline.md` — L3 checklist
 - `docs/sot_registry.yaml` — Single-source-of-truth registry
