@@ -61,6 +61,14 @@ const Set<String> _allowList = <String>{
   // condition that created OI-84 in the first place (it sat SIX under, so a fix
   // could not touch it at all). OI-84's own "~770" estimate had gone stale when
   // Unit A grew the file to 909.
+  //
+  // ADDED 2026-08-03 — restoring_screen.dart. Founder-authorized in chat
+  // (restore-onboarding-signin-fix batch). Diagnose a3f6d9's fix touches 3
+  // separate paths to /home (two _goHome branches + the 30s CONTINUE-timeout
+  // escape hatch), each needing the same local-onboarded-flag stamp; comments
+  // already trimmed to the minimum non-obvious "why". Split owed, tracked as
+  // OI-88 — same reference layout as active_workout/.
+  'lib/features/auth/screens/restoring_screen.dart',
 };
 
 void main() {

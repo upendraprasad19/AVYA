@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -13,6 +14,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 import '../providers/auth_provider.dart';
 import '../widgets/auth_header.dart';
@@ -23,6 +25,19 @@ enum _SignInView { main, email, phone }
 
 // Phone OTP disabled — Twilio not wired to Supabase Auth (AUTH-04). Flip true once wired.
 const bool _kEnablePhoneEnlist = false;
+
+// Google's official multicolor "G" mark (same paths as the approved mockup,
+// docs/mockups/2026-08-03-sign-in-google-card-v1.html) — Google's brand
+// guidelines require the mark to render unmodified, not recolored to match
+// the app's own palette.
+const String _googleGSvg = '''
+<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.9-2.26 5.36-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+  <path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1-.76-4.59c0-1.59.27-3.13.76-4.59l-7.98-6.19A24 24 0 0 0 0 24c0 3.87.92 7.53 2.56 10.78z"/>
+  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.9l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+</svg>
+''';
 
 /// Steps within the email sub-view, reached once the merged main view's
 /// CONTINUE button has run the server-side registration check
@@ -303,76 +318,119 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           ),
           const SizedBox(height: 18),
 
-          // ── ENLIST VIA GOOGLE — all buttons unified dark+gold-outline ──
-          // Gated on _checkingEmail too (B-pass finding, 03a8ce7c088d-review.md
-          // #2): pre-redesign, Google and the email-check button lived on
-          // separate _SignInView states and could never be interacted with
-          // concurrently. Merging them onto one view opened a same-frame
-          // window (isLoading only reflects AuthStatus.loading on the NEXT
-          // frame) where Google could fire while checkEmailRegistered is
-          // still in flight, racing two auth operations against the same
-          // AuthNotifier. The `isLoading || _checkingEmail` ternary below
-          // only disables the button on the NEXT build — it doesn't stop a
-          // tap that lands in the same frame as CONTINUE's tap, before that
-          // rebuild runs (plan-review round 1, Finding 1). The `if
-          // (_checkingEmail) return;` guard inside the callback itself reads
-          // the field live at call time, so it closes that window too.
-          _buildEnlistButton(
-            label: 'ENLIST VIA GOOGLE',
-            icon: Icons.g_mobiledata,
-            iconSize: 26,
-            onPressed: isLoading
-                ? null
-                : () {
-                    if (_checkingEmail) return;
-                    authNotifier.signInWithGoogle();
+          // ── Sign-in card (Google-primary redesign, 2026-08) ──────────
+          // Enclosed Wardroom card holding Google sign-in (primary CTA,
+          // styled per Google's own brand spec — NOT reskinned gold, so it
+          // reads unmistakably as Google), an OR divider, the email field,
+          // and a visually-secondary CONTINUE button. Approved mockup:
+          // docs/mockups/2026-08-03-sign-in-google-card-v1.html. Phone OTP
+          // stays out of scope — still flagged off (_kEnablePhoneEnlist),
+          // left exactly as it was, structurally unmoved.
+          WardCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // Gated on _checkingEmail too (B-pass finding, 03a8ce7c088d-review.md
+                // #2): pre-redesign, Google and the email-check button lived on
+                // separate _SignInView states and could never be interacted with
+                // concurrently. Merging them onto one view opened a same-frame
+                // window (isLoading only reflects AuthStatus.loading on the NEXT
+                // frame) where Google could fire while checkEmailRegistered is
+                // still in flight, racing two auth operations against the same
+                // AuthNotifier. The `isLoading || _checkingEmail` ternary below
+                // only disables the button on the NEXT build — it doesn't stop a
+                // tap that lands in the same frame as CONTINUE's tap, before that
+                // rebuild runs (plan-review round 1, Finding 1). The `if
+                // (_checkingEmail) return;` guard inside the callback itself reads
+                // the field live at call time, so it closes that window too.
+                _buildGoogleSignInButton(
+                  onPressed: isLoading
+                      ? null
+                      : () {
+                          if (_checkingEmail) return;
+                          authNotifier.signInWithGoogle();
+                        },
+                  isLoading: isLoading,
+                ),
+
+                if (_kEnablePhoneEnlist) ...[
+                  const SizedBox(height: 10),
+                  // ── ENLIST VIA PHONE ─────────────────────────────────
+                  // Same guard as Google above, same reason.
+                  _buildEnlistButton(
+                    label: 'ENLIST VIA PHONE',
+                    icon: Icons.phone_outlined,
+                    iconSize: 18,
+                    onPressed: isLoading
+                        ? null
+                        : () {
+                            if (_checkingEmail) return;
+                            setState(() => _currentView = _SignInView.phone);
+                          },
+                    isLoading: false,
+                  ),
+                ],
+
+                const SizedBox(height: 14),
+                _buildOrDivider(),
+                const SizedBox(height: 14),
+
+                // ── Email entry, inline (sign-in redesign 2026-08) ───
+                // Was its own "ENLIST VIA EMAIL" → tap → separate screen with just
+                // this field. Now the field lives directly on the entry screen so
+                // Google-or-email is a single step; CONTINUE runs the same
+                // server-side registration check as before and branches straight
+                // to the sign-in or sign-up step.
+                _buildTextField(
+                  controller: _emailController,
+                  hintText: 'Email address',
+                  keyboardType: TextInputType.emailAddress,
+                  prefixIcon: Icons.email_outlined,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter your email';
+                    }
+                    if (!RegExp(
+                      r'^[^@]+@[^@]+\.[^@]+$',
+                    ).hasMatch(value.trim())) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
                   },
-            isLoading: isLoading,
-          ),
-          const SizedBox(height: 10),
-
-          if (_kEnablePhoneEnlist) ...[
-            // ── ENLIST VIA PHONE ─────────────────────────────────
-            // Same guard as Google above, same reason.
-            _buildEnlistButton(
-              label: 'ENLIST VIA PHONE',
-              icon: Icons.phone_outlined,
-              iconSize: 18,
-              onPressed: isLoading
-                  ? null
-                  : () {
-                      if (_checkingEmail) return;
-                      setState(() => _currentView = _SignInView.phone);
-                    },
-              isLoading: false,
+                ),
+                const SizedBox(height: 10),
+                // CONTINUE reads as visually secondary to the Google button
+                // above (smaller height/radius/type-scale via `compact:
+                // true`) so hierarchy is unambiguously Google-first — the
+                // shared _buildPrimaryButton widget is otherwise unchanged
+                // and still used verbatim by the email sign-in/sign-up and
+                // phone OTP sub-views below.
+                _buildPrimaryButton(
+                  label: 'CONTINUE',
+                  compact: true,
+                  isLoading: isLoading || _checkingEmail,
+                  onPressed: () async {
+                    if (_checkingEmail) return;
+                    if (!_formKey.currentState!.validate()) return;
+                    _checkingEmail = true;
+                    try {
+                      final email = _emailController.text.trim();
+                      final registered = await authNotifier
+                          .checkEmailRegistered(email);
+                      if (!mounted || registered == null) return;
+                      setState(() {
+                        _emailStep = registered
+                            ? _EmailStep.signIn
+                            : _EmailStep.signUp;
+                        _currentView = _SignInView.email;
+                      });
+                    } finally {
+                      if (mounted) setState(() => _checkingEmail = false);
+                    }
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-          ],
-
-          // ── AUX divider (replaces OR) ────────────────────────
-          _buildAuxDivider(),
-          const SizedBox(height: 16),
-
-          // ── Email entry, inline (sign-in redesign 2026-08) ───
-          // Was its own "ENLIST VIA EMAIL" → tap → separate screen with just
-          // this field. Now the field lives directly on the entry screen so
-          // Google-or-email is a single step; CONTINUE runs the same
-          // server-side registration check as before and branches straight
-          // to the sign-in or sign-up step.
-          _buildTextField(
-            controller: _emailController,
-            hintText: 'Email address',
-            keyboardType: TextInputType.emailAddress,
-            prefixIcon: Icons.email_outlined,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter your email';
-              }
-              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(value.trim())) {
-                return 'Please enter a valid email';
-              }
-              return null;
-            },
           ),
           const SizedBox(height: 6),
           Text(
@@ -381,31 +439,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
           ),
           const SizedBox(height: 12),
-          _buildPrimaryButton(
-            label: 'CONTINUE',
-            isLoading: isLoading || _checkingEmail,
-            onPressed: () async {
-              if (_checkingEmail) return;
-              if (!_formKey.currentState!.validate()) return;
-              _checkingEmail = true;
-              try {
-                final email = _emailController.text.trim();
-                final registered = await authNotifier.checkEmailRegistered(
-                  email,
-                );
-                if (!mounted || registered == null) return;
-                setState(() {
-                  _emailStep = registered
-                      ? _EmailStep.signIn
-                      : _EmailStep.signUp;
-                  _currentView = _SignInView.email;
-                });
-              } finally {
-                if (mounted) setState(() => _checkingEmail = false);
-              }
-            },
-          ),
-          const SizedBox(height: 8),
 
           // ── RESET ACCESS (formerly Forgot password?) ────────
           GestureDetector(
@@ -526,32 +559,90 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     );
   }
 
-  /// AUX divider — replaces old "OR" divider.
-  Widget _buildAuxDivider() {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            height: 1,
-            color: AppColors.accent.withValues(alpha: 0.2),
+  /// "Sign in with Google" — styled per Google's own brand button spec
+  /// (white pill, official multicolor "G" mark, dark-grey text) so it reads
+  /// unmistakably as Google against the dark Wardroom card, rather than
+  /// being reskinned into Campaign Gold like the other auth buttons. This
+  /// intentionally does NOT reuse `_buildEnlistButton`'s dark+gold-outline
+  /// treatment — Google's brand guidelines are the constraint here, not
+  /// the app's own visual system. Embeds the official Google "G" SVG
+  /// inline (flutter_svg, already a project dependency) rather than
+  /// shipping a new asset file.
+  Widget _buildGoogleSignInButton({
+    required VoidCallback? onPressed,
+    required bool isLoading,
+  }) {
+    final disabled = onPressed == null;
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: Opacity(
+        opacity: disabled ? 0.6 : 1,
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: onPressed,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.googleButtonBorder),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              alignment: Alignment.center,
+              child: isLoading
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: AppColors.googleButtonText,
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SvgPicture.string(_googleGSvg, width: 18, height: 18),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Sign in with Google',
+                          style: AppTypography.body.copyWith(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.googleButtonText,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
         ),
-        const SizedBox(width: 12),
+      ),
+    );
+  }
+
+  /// "OR" divider inside the sign-in card, separating the Google button
+  /// from the email flow. Replaces the loose "AUX" divider this card
+  /// consolidated — AUX made sense between two identically-styled dark
+  /// buttons; inside the card the visual weight difference between the
+  /// Google button and the email flow already tells that story, and "AUX"
+  /// read as unexplained jargon here. Border-tinted rather than
+  /// accent-tinted so it doesn't compete with the card's own edge.
+  Widget _buildOrDivider() {
+    return Row(
+      children: [
+        Expanded(child: Container(height: 1, color: AppColors.border)),
+        const SizedBox(width: 10),
         Text(
-          'AUX',
+          'OR',
           style: AppTypography.mono.copyWith(
             fontSize: 9,
             letterSpacing: 2.0,
-            color: AppColors.textMute,
+            color: AppColors.textGhost,
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Container(
-            height: 1,
-            color: AppColors.accent.withValues(alpha: 0.2),
-          ),
-        ),
+        const SizedBox(width: 10),
+        Expanded(child: Container(height: 1, color: AppColors.border)),
       ],
     );
   }
@@ -1214,30 +1305,44 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     );
   }
 
+  // <diagnose-id> — `compact` is opt-in only, used solely by the new
+  // in-card CONTINUE button (email-secondary in the sign-in card mockup,
+  // approved 2026-08-03). It must not change the default appearance at
+  // this method's other 4 call sites (email sign-in/sign-up, phone SEND/
+  // VERIFY OTP), so every visual delta below is gated behind the flag
+  // rather than changing the shared defaults.
   Widget _buildPrimaryButton({
     required String label,
     required bool isLoading,
     required VoidCallback onPressed,
     bool enabled = true,
+    bool compact = false,
   }) {
     final isDisabled = !enabled || isLoading;
+    final radius = compact ? AppRadius.card : AppRadius.sharp;
     return SizedBox(
       width: double.infinity,
-      height: 52,
+      height: compact ? 44 : 52,
       child: Opacity(
         opacity: isDisabled ? 0.5 : 1.0,
         child: Material(
           color: AppColors.accent,
-          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          borderRadius: BorderRadius.circular(radius),
           child: InkWell(
-            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            borderRadius: BorderRadius.circular(radius),
             onTap: isDisabled ? null : onPressed,
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: AppColors.accent, width: 2),
-                borderRadius: BorderRadius.circular(AppRadius.sharp),
+                border: Border.all(
+                  color: AppColors.accent,
+                  width: compact ? 1 : 2,
+                ),
+                borderRadius: BorderRadius.circular(radius),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+              padding: EdgeInsets.symmetric(
+                vertical: compact ? 12 : 14,
+                horizontal: 28,
+              ),
               child: Center(
                 child: isLoading
                     ? const SizedBox(
@@ -1251,9 +1356,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     : Text(
                         label,
                         style: AppTypography.h3.copyWith(
-                          fontSize: 12,
+                          fontSize: compact ? 11 : 12,
                           color: AppColors.bgDeep,
-                          letterSpacing: 2.5,
+                          letterSpacing: compact ? 2.0 : 2.5,
                           height: 1,
                         ),
                       ),

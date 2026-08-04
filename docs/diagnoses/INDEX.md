@@ -9,8 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### phase_advance_write_path (1 bugs)
 - 2026-08-03 b4e9c7 — `lib/features/train/screens/graduation_screen.dart` reached 909 lines against Gate 43's 800-line ceiling and passed only because it had been added to the gate's transitional allow-list — the FIRST…
 
-### onboarding_completed_at (6 bugs)
+### onboarding_completed_at (7 bugs)
 - 2026-08-03 d4e8a2 — NOT a live incident — a static-tracing risk flagged in b3f9e7's own "Known residual gap" section, investigated and closed here. Nothing under lib/features/onboarding/ called…
+- 2026-08-03 a3f6d9 — Founder (upendraprasad19@gmail.com, auth.users.id d7a67a37-0b05-4f0a- b13c-388bff3cb59b) reported: "I was trying to access the app, but from restoring it is going to onboarding page." Confirmed via…
 - 2026-06-28 c4d8a2 — Live data (test7@gmail.com): a fully-onboarded user — users.onboarding_completed = true, a complete user_profile (date_of_birth, primary_goal, fitness_experience, days_per_week, current_weight) and a…
 - 2026-05-30 e2a4f7 — Surfaced during live web E2E (amar@gmail.com). Browser console at sign-in: "[AuthSessionBootstrapper.resolveDestination] PostgrestException(code 42703: column user_profile.full_name does not exist)".…
 - 2026-05-16 1bfeed — Onboarded users (cloud `user_profile` populated with goal/weight/phase) could land on `/onboarding/mission-brief` on fresh install when (a) cloud `user_profile.onboarding_completed_at` was NULL (cloud…
@@ -19,6 +20,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### phase_progress_current_phase (cloud→Hive restore merge half) (1 bugs)
 - 2026-08-03 d1f6b3 — A cloud→Hive `progress` restore silently LOWERS `current_phase` (and two other lifetime counters) on a device that advanced locally and has not yet pushed. No guard, no telemetry, no trace: the user…
+
+### welcome_screen_hero_layout (1 bugs)
+- 2026-08-03 e7c2a4 — Founder screenshot of app.icanbefitter.com/#/onboarding (the pre-auth welcome/marketing screen) showed the "BEGIN ENLISTMENT →" button overlapping with "03 · Coach that holds you to your own…
 
 ### subscription_state (isPro/gate CQRS split) (1 bugs)
 - 2026-08-02 a9c4e1 — A Riverpod provider's build method invalidates itself. `SubscriptionInfoNotifier.build()` — the data source behind the PRO pill — calls `isPro()`, which on an expired or cross-account row calls…
@@ -927,6 +931,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | 2026-08-03 | b4e9c7 | `lib/features/train/screens/graduation_screen.dart` reached 909 lines against Gate 43's 800-line ceiling and passed only because it had been added to the gate's transitional allow-list — the FIRST… | phase_advance_write_path | test/contracts/pro_phase_advance_behavioral_test.dart |
 | 2026-08-03 | d4e8a2 | NOT a live incident — a static-tracing risk flagged in b3f9e7's own "Known residual gap" section, investigated and closed here. Nothing under lib/features/onboarding/ called… | onboarding_completed_at | test/contracts/onboarding_hive_session_open_before_write_test.dart |
 | 2026-08-03 | d1f6b3 | A cloud→Hive `progress` restore silently LOWERS `current_phase` (and two other lifetime counters) on a device that advanced locally and has not yet pushed. No guard, no telemetry, no trace: the user… | phase_progress_current_phase (cloud→Hive restore merge half) | test/contracts/progress_restore_monotonic_behavioral_test.dart |
+| 2026-08-03 | a3f6d9 | Founder (upendraprasad19@gmail.com, auth.users.id d7a67a37-0b05-4f0a- b13c-388bff3cb59b) reported: "I was trying to access the app, but from restoring it is going to onboarding page." Confirmed via… | onboarding_completed_at | test/contracts/restoring_screen_local_onboarded_flag_stamp_test.dart |
+| 2026-08-03 | e7c2a4 | Founder screenshot of app.icanbefitter.com/#/onboarding (the pre-auth welcome/marketing screen) showed the "BEGIN ENLISTMENT →" button overlapping with "03 · Coach that holds you to your own… | welcome_screen_hero_layout | test/widgets/onboarding/welcome_screen_short_viewport_test.dart |
 | 2026-08-02 | a9c4e1 | A Riverpod provider's build method invalidates itself. `SubscriptionInfoNotifier.build()` — the data source behind the PRO pill — calls `isPro()`, which on an expired or cross-account row calls… | subscription_state (isPro/gate CQRS split) | test/contracts/subscription_cqrs_behavioral_test.dart |
 | 2026-08-02 | f2b8a1 | Google sign-in was never live in prod despite functionality-flow.md asserting "Email + Google OAuth work normally" — no Google OAuth client existed in Google Cloud Console (google-services.json… | auth_google_oauth_redirect | test/contracts/google_oauth_redirect_flow_test.dart |
 | 2026-08-02 | d4e7c2 | A cloud-restored workout renders wrong on two surfaces. The receipt shows 0 duration for a timed/cardio exercise that has a real total, and the Edit Workout Log sheet shows a BLANK sets box and a… | workout_receipt_rendering + workout_log_edit_surface (exlog aggregate read) | test/contracts/exlog_aggregate_read_behavioral_test.dart |

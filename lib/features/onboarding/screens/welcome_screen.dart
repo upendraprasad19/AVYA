@@ -98,6 +98,17 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     );
   }
 
+  // <diagnose-id> — this used to be a bare Center(child: Column(...)) with
+  // no scroll fallback. On a short viewport, the Expanded region above _cta
+  // can shrink below the Column's intrinsic content height (headline + body
+  // + 3 feature rows, ~450-500px), and a Column with no scroll ancestor
+  // paints past its bounds instead of clipping — visually overlapping the
+  // CTA section below. LayoutBuilder + SingleChildScrollView +
+  // ConstrainedBox(minHeight:) is the same idiom already used by
+  // sign_in_screen.dart's _buildEmailRoot: when the content fits the
+  // Expanded-allocated height, Center still centers it exactly as before
+  // (no visual change on normal/tall screens); when it doesn't, the content
+  // scrolls internally instead of overflowing into _cta().
   Widget _hero() {
     const features = [
       'Programmed plans that adapt week-to-week',
@@ -105,86 +116,93 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
       'Coach that holds you to your own standards',
     ];
 
-    return Center(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'PROSPECTUS',
-            style: AppTypography.monoXs.copyWith(
-              color: AppColors.textMute,
-              letterSpacing: 3,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          RichText(
-            text: TextSpan(
-              style: AppTypography.display.copyWith(
-                fontSize: 44,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textPrimary,
-                letterSpacing: -1.2,
-                height: 1.02,
-              ),
-              children: const [
-                TextSpan(text: 'Train like\nsomeone '),
-                TextSpan(
-                  text: 'serious',
-                  style: TextStyle(
-                    fontStyle: FontStyle.italic,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.accent,
-                  ),
-                ),
-                TextSpan(text: '\nis watching.'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: 320,
-            child: Text(
-              'Personalised coaching, disciplined programming, and an AI that '
-              'remembers every lift. Built around streaks, fuelled by data \u2014 your discipline, our scaffolding.',
-              style: AppTypography.body.copyWith(
-                color: AppColors.textDim,
-                height: 1.5,
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
-          for (var i = 0; i < features.length; i++) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  width: 22,
-                  child: Text(
-                    (i + 1).toString().padLeft(2, '0'),
-                    style: AppTypography.mono.copyWith(
-                      fontSize: 11,
-                      color: AppColors.accent,
-                      fontWeight: FontWeight.w700,
-                    ),
+                Text(
+                  'PROSPECTUS',
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    features[i],
-                    style: AppTypography.body.copyWith(
-                      fontSize: 13,
+                const SizedBox(height: 12),
+                RichText(
+                  text: TextSpan(
+                    style: AppTypography.display.copyWith(
+                      fontSize: 44,
+                      fontWeight: FontWeight.w400,
                       color: AppColors.textPrimary,
+                      letterSpacing: -1.2,
+                      height: 1.02,
+                    ),
+                    children: const [
+                      TextSpan(text: 'Train like\nsomeone '),
+                      TextSpan(
+                        text: 'serious',
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                      TextSpan(text: '\nis watching.'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: 320,
+                  child: Text(
+                    'Personalised coaching, disciplined programming, and an AI that '
+                    'remembers every lift. Built around streaks, fuelled by data \u2014 your discipline, our scaffolding.',
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textDim,
+                      height: 1.5,
                     ),
                   ),
                 ),
+                const SizedBox(height: 32),
+                for (var i = 0; i < features.length; i++) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        child: Text(
+                          (i + 1).toString().padLeft(2, '0'),
+                          style: AppTypography.mono.copyWith(
+                            fontSize: 11,
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          features[i],
+                          style: AppTypography.body.copyWith(
+                            fontSize: 13,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (i < features.length - 1) const SizedBox(height: 10),
+                ],
               ],
             ),
-            if (i < features.length - 1) const SizedBox(height: 10),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -286,9 +304,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               const SizedBox(height: 4),
               Text(
                 'Apply within 7 days of signup',
-                style: AppTypography.bodyS.copyWith(
-                  color: AppColors.textMute,
-                ),
+                style: AppTypography.bodyS.copyWith(color: AppColors.textMute),
               ),
             ],
           ),
@@ -315,13 +331,13 @@ class _PrivacyFooterState extends State<_PrivacyFooter> {
   void initState() {
     super.initState();
     _privacyRecognizer.onTap = () => launchUrl(
-          Uri.parse('https://icanbefitter.com/privacy'),
-          mode: LaunchMode.externalApplication,
-        );
+      Uri.parse('https://icanbefitter.com/privacy'),
+      mode: LaunchMode.externalApplication,
+    );
     _termsRecognizer.onTap = () => launchUrl(
-          Uri.parse('https://icanbefitter.com/terms'),
-          mode: LaunchMode.externalApplication,
-        );
+      Uri.parse('https://icanbefitter.com/terms'),
+      mode: LaunchMode.externalApplication,
+    );
   }
 
   @override

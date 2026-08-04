@@ -179,4 +179,12 @@ class AppColors {
   // preserve the existing visual result exactly.
   static const coachBubbleText = Color(0xFFD8D8D8);
   static const coachBubbleTextBright = Color(0xFFE8E8E8);
+
+  // ── Third-party brand colors (NOT Wardroom palette) ────────────────────
+  // a3f6d9/sign-in redesign 2026-08-03. Google's own brand button spec
+  // (white pill, dark grey text) is required verbatim by Google's brand
+  // guidelines — deliberately not reskinned into Wardroom gold. Centralized
+  // here (not inline) so check_raw_hex_in_features.dart stays hard-fail.
+  static const googleButtonBorder = Color(0xFFDADCE0);
+  static const googleButtonText = Color(0xFF3C4043);
 }
