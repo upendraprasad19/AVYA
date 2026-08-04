@@ -1442,3 +1442,100 @@ files restored from copies afterwards and verified byte-identical by md5, never 
 tests, one per outcome arm, against real Hive and real plan generation — coverage that could not
 previously exist, because the code was a closure inside a widget callback that nothing could
 call.
+
+## OI-86 — two concurrent `flutter test` runs on this machine corrupt each other's Hive state (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none — the mechanism is understood and was reproduced twice; scheduled work.
+- **Verified**: 2026-08-03 (twice in one day, both times the same tests passed standalone
+  immediately afterwards on the identical tree)
+- **Identified**: 2026-08-03 · Unit B (`b4e9c7`) — once during overlapping `safe_commit` runs,
+  once during a `safe_push` whose pre-push suite raced another session's suite.
+- **Risk class**: test-harness isolation / false-red on a real gate
+- **What's wrong**: Hive test boxes are opened from a **process-shared** location, so two
+  `flutter test` runs executing at the same time on this machine collide. The loser sees
+  `HiveError: Box not found. Did you forget to call Hive.openBox()?` from
+  `HiveService.userBoxGuarded` → `wrapUserScopedBox` (`guarded_box.dart:341`), and whatever
+  assertion followed the failed read then reports a *value* mismatch rather than the underlying
+  throw — which is what makes it easy to mis-diagnose.
+- **Two confirmed occurrences, same day, same test family**:
+  1. Two `safe_commit.sh` invocations overlapped (the first had not finished when a second was
+     launched after a tool timeout). `subscription_expiry_banner_behavioral_test.dart`
+     "a marker stamped under session A is NOT visible to session B" failed, then passed
+     standalone seconds later on the identical tree.
+  2. `safe_push.sh`'s pre-push full suite ran while another session had ~10 dart/flutter
+     processes live. `subscription_cqrs_behavioral_test.dart` "genuine expiry still downgrades
+     and still stamps `pro_lapsed_at`" AND the same expiry-banner test failed —
+     `Expected: null / Actual: '2026-08-02T20:05:42.435058'`, immediately preceded by
+     `[MigratedKey.delete] userBox expiresAt threw: HiveError: Box not found`. The push was
+     correctly REJECTED (`git exit 1`, `origin/main` unmoved). A retry with the machine quieter
+     passed **4188 tests, 0 failures** on the same commit with no code change.
+- **Why it is not "just flaky"**: CI is green on the same commits — an isolated single-runner
+  environment never hits it. The failure is deterministic given concurrency, and it produces a
+  **false red on a real gate**, which is the dangerous shape: it invites exactly the hook-bypass
+  reflex CLAUDE.md bans, and it trains the reader to dismiss genuine failures in that test
+  family.
+- **Fix shape (not yet attempted)**: give each test process its own Hive directory — a per-run
+  temp dir keyed on PID or the runner's shard id, set in the shared test bootstrap rather than
+  per-file. The git-index half of this exact "one machine, two sessions" problem was solved
+  structurally by §4.13 (one worktree per session → one index per session); this is the Hive
+  half.
+- **Interim discipline (already in force, and not a fix)**: never launch a second
+  `safe_commit.sh` / `safe_push.sh` while one may still be running — a Bash tool timeout does
+  NOT kill the process (`feedback_git_landing_verification.md`). Both occurrences today began
+  that way.
+- **Blast radius estimate**: `feature` (test harness + bootstrap only); no migration, no schema,
+  no runtime code.
+
+## OI-87 — one session's non-compliant merge into local `main` blocks every other session's push (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none for the ANALYSIS; the concrete instance below needs a plan-review record
+  from the session that did the work — nobody else can honestly attest to a review they did not
+  run.
+- **Verified**: 2026-08-03 (reproduced by the blocked push described below; both worktrees and
+  the missing file confirmed by direct inspection)
+- **Identified**: 2026-08-03 · Unit B (`b4e9c7`) push attempt
+- **Risk class**: cross-session shared mutable state / coupled compliance
+- **What happened**: with `origin/main` green at `14c7aeed`, another session merged
+  `onboarding-oauth-session-fix` into **local** `main` at 20:43 (`f0b98c8b`). That branch is
+  `>=account` (it touches `lib/features/onboarding/providers/onboarding_provider.dart`) and has
+  **no** `docs/plan-reviews/onboarding-oauth-session-fix.md` — not committed, not drafted; the
+  other worktree's tree is clean. This session then tried to push an unrelated docs-only commit
+  (OI-86) and `check_plan_review_record_exists.dart`, run over the full prospective push range,
+  correctly FAILED on the foreign merge. The push was not attempted.
+- **Why this is structural, not just someone forgetting**: §4.12.3 puts the gate at **push time
+  in CI** on purpose — a local pre-commit `MERGE_HEAD` check is bypassable and a `--no-ff` merge
+  skips the local hook entirely, so CI-at-push is the only point that cannot be evaded. Correct
+  for ENFORCEMENT. The unintended consequence is that a non-compliant merge can sit in local
+  `main` indefinitely, and because the gate is RANGE-based, it is inherited by whoever pushes
+  next. Compliance becomes coupled across otherwise-independent sessions, and the session that
+  is blocked is precisely the one that cannot fix it: the only remedy is an attestation that
+  must come from whoever actually ran the review.
+- **The dangerous incentive it creates**: the blocked session's fastest path to unblocking is to
+  author the missing record itself. That would be a FALSE ATTESTATION — a claim that a ×2
+  context-blind review and ground-truth audit happened when they did not. This is strictly worse
+  than any defect the review would have caught, and worse than the class of false-claim finding
+  this very batch fixed (a P1 where three documents said a fix "was restated" when the file had
+  not been touched). Any future automation here must not make fabrication the path of least
+  resistance.
+- **Third instance of one pattern today** — "one machine, N sessions, shared mutable state":
+  1. `.git/index` — **solved** by §4.13 (one worktree per session).
+  2. Hive test boxes — **OI-86** (concurrent `flutter test` runs corrupt each other's state).
+  3. local `main` itself — THIS item. §4.13 explicitly designates the shared main folder as
+     "INTEGRATION-ONLY: reads, `git merge <branch>` + `git push`", i.e. multi-session merging
+     into one local `main` is by design. §4.13 fixed the index facet and, by encouraging many
+     parallel session worktrees, made facets 2 and 3 more likely rather than less.
+- **Fix shape (not yet attempted)**: a LOCAL, immediate, advisory warning at merge time — a
+  `post-merge` hook (or a check inside the documented merge step) that, when a `--no-ff` merge
+  into `main` brings in a branch whose blast-radius is `>=account`, prints loudly if
+  `docs/plan-reviews/<branch>.md` is absent or non-converged. It cannot be an enforcement gate
+  (post-merge hooks do not fail the merge, and any local check is evadable — which is exactly
+  why §4.12.3 chose CI). But it would surface the problem to the session that CAUSED it, at the
+  moment it was caused, instead of to an unrelated session minutes-to-hours later. That is the
+  whole delta: same enforcement, correct attribution.
+- **Interim discipline (already in force)**: always run
+  `PUSH_BEFORE=<origin tip> dart run scripts/check_plan_review_record_exists.dart` over the FULL
+  prospective push range before pushing — never `HEAD^1..HEAD`. That is what caught this. Failing
+  to do so on 2026-08-03 morning is what put `ca4ef2c3` on `origin` red.
+- **Blast radius estimate**: `feature` (a hook + docs); no runtime code, no migration, no schema.
