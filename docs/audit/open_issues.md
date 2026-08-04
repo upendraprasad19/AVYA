@@ -1567,3 +1567,96 @@ call.
   **Remove the allow-list entry in the same commit.**
 - **Blast radius estimate**: `account` (`restoring_screen.dart` is on the auth post-auth-boot path);
   no migration, no schema.
+
+## OI-89 — the equipment tier is a SOFT preference: a "bodyweight" user is served gym lifts (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical — it needs a PRODUCT decision first (see "Product question"
+  below). The mechanism is understood and verified in code.
+- **Verified**: 2026-08-04 (root cause re-read directly in `exercise_selector.dart` +
+  `plan_engine/CLAUDE.md`; the flag default re-read in `plan_engine_flags.dart` — the source
+  commentary's claim about it did NOT match the code, see below)
+- **Identified**: 2026-07-19 · the workout-generator persona sweep (`PlanGenerator.generateV4`,
+  18 personas × phases 1-3 = 54 plans, exported by
+  `test/plan_generator/persona_matrix_export.dart` in the `persona-sweep-e2e` worktree). The
+  sweep's `.xlsx` + commentary were test artifacts and have been deleted as regenerable; this
+  entry is the durable record of the one finding inside them that was never filed.
+- **Risk class**: plan-engine correctness / user-facing safety-of-expectation
+- **What's wrong**: the **bodyweight** persona's generated plan contained **5 picks out of 28 that
+  require gym equipment** — Close-Grip Bench Press (barbell + bench), Barbell Curl (×2 slots),
+  Standing Calf Raise (barbell), Chin Up (pull-up bar). A genuine no-equipment user opens the app
+  and is prescribed exercises they physically cannot perform.
+- **Root cause (verified in code, not taken from the sweep's prose)**: `queryV4`'s cascade DROPS
+  the `equipment_tier` constraint at **attempt 4** when a muscle slot's on-tier pool is too
+  shallow. `lib/shared/repositories/plan_engine/CLAUDE.md:274` lists it plainly —
+  `4. attempt4DropEquipment — drop equipment_tier` — and
+  `lib/shared/repositories/plan_engine/exercise_selector.dart:660` calls it "the soft tier
+  heuristic the cascade itself RELAXES at attempt-4". So the tier is a preference, not a floor,
+  BY DESIGN. Contrast the equipment **exclusions** filter, which the same cascade deliberately
+  KEEPS at attempt-4 because "an excluded item is a HARD constraint, unlike the soft tier
+  heuristic att4 relaxes" (`CLAUDE.md:279`).
+- **The mitigation is weaker than the sweep commentary claimed** — worth stating because it
+  changes the severity. The commentary described the ⑥ equipment-exclusions feature as
+  "(now flag-on)". The code says otherwise: `PlanEngineFlags.equipmentExclusionsEnabled`
+  (`lib/shared/repositories/plan_engine/plan_engine_flags.dart:145-153`) reads
+  `configBox['enable_equipment_exclusions']` and returns **false** when absent — ship-dark,
+  DEFAULT OFF. So protection today requires BOTH (a) that flag switched on AND (b) the user
+  actively subtracting "barbell"/"bench"/etc. in the Customize screen. A bodyweight user who
+  never opens Customize gets no protection at all. I could not observe production config from
+  the repo, so the discrepancy is recorded rather than resolved — resolve it before sizing the
+  fix.
+- **Product question (this is the real blocker)**: should each equipment tier enforce a **hard
+  floor** — never surface a pick whose required equipment the tier cannot provide, falling back
+  to a bodyweight substitute or a safe omission — rather than leaking a barbell lift? Today the
+  answer is "only if the user manually excludes it, and only if the flag is on."
+- **Fix shape (not yet attempted, and NOT to be started before the product call)**: make the
+  tier a hard constraint at attempt-4 for the bodyweight tier specifically (the narrowest
+  version), with the per-pattern bodyweight floor already used by attempt-5's universal pool
+  providing the substitute so a slot is never empty. Needs a behavioral test asserting a
+  bodyweight persona's full plan contains zero picks whose `equipment_needed` falls outside the
+  tier.
+- **Blast radius estimate**: `account` (plan engine, `lib/shared/repositories/plan_engine/**`);
+  no migration, no schema. Rule 14 applies — `plan_generator.dart` is not to be modified without
+  explicit instruction.
+
+## OI-90 — `GuardedBox.empty`'s "reads serve empty" is bypassed by the seven plain `Box` getters (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — but the reader-vs-writer split below must be measured before a fix is
+  scoped, and that measurement is the first unit of work.
+- **Verified**: 2026-08-04 (call-site counts below produced by direct grep; the getter bodies and
+  the throw site re-read directly)
+- **Identified**: 2026-08-04 · the B-pass review of the Unit 1 onboarding session-guard batch
+  (diagnose d4e8a2). Deliberately NOT folded into that batch — adding an unrelated
+  core-services change to a diff that had just passed ×2 review + B-pass would have invalidated
+  the review it just passed.
+- **Risk class**: cross-account guard / auth-transition resilience — same family as b8e3f1
+- **What's wrong**: b8e3f1 established the contract that during the auth/Hive disagreement window
+  (authenticated, Hive owner still null) a user-scoped box **serves empty on reads and throws loud
+  on writes** — reads degrade to an empty state, only writes fail. That contract is implemented on
+  `GuardedBox`. But all seven plain `Box` getters at
+  `lib/core/services/hive_service.dart:225-231` are defined as
+  `Box get userBox => userBoxGuarded.rawBox;` (and the same for workout/nutrition/health/custom/
+  coach/notifications) — and `GuardedBox.rawBox`
+  (`lib/core/services/guarded_box.dart:170-176`) throws
+  `StateError('GuardedBox.empty: rawBox unavailable during auth/Hive disagreement')`
+  unconditionally when the stub is in play. So any caller on a plain getter gets a **throw on a
+  READ**, which is precisely what b8e3f1 exists to prevent.
+- **Scope (measured, and deliberately incomplete)**: `HiveService.instance.<box>` plain-getter
+  call sites under `lib/` — userBox 38, workoutBox 48, nutritionBox 20, healthBox 26, customBox
+  17, coachBox 22, notificationsBox 8 = **179 total**, against **14** uses of the `*Guarded`
+  getters. ⚠ That 179 counts reads AND writes together; writes SHOULD throw, so it is an upper
+  bound on the affected surface, not the finding's size. Splitting read-vs-write across those 179
+  is the first thing the fix needs and has not been done.
+- **Why it likely hasn't bitten visibly**: the disagreement window is short (~50-500 ms on
+  signOut+signUp transitions), and `app_router._authRedirect` routes an authenticated-owner-null
+  session to `/restoring` before most screens mount. So this is a latent resilience gap, not a
+  standing breakage — consistent with b8e3f1 having been found via a blank-Home crash rather than
+  a broad outage.
+- **Fix shape (not yet attempted)**: measure the read/write split across the 179 sites; then
+  either migrate read call sites to the `*Guarded` getters, or give `rawBox` a read-safe sibling
+  that returns an empty view instead of throwing. Either way it needs the same behavioral
+  treatment as b8e3f1 — a test driving a real authenticated-owner-null window and asserting reads
+  degrade rather than throw — plus a kill-switch, since this touches the cross-account guard.
+- **Blast radius estimate**: `platform` (`lib/core/services/hive_service.dart` +
+  `guarded_box.dart` are core session/auth infrastructure); no migration, no schema.
