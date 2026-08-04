@@ -204,15 +204,24 @@ paths:
   # the bottom of this file. lib/shared/repositories/plan_engine/** stays platform
   # via its own more-specific, earlier-declared rule above — unaffected.
   - { glob: "lib/shared/repositories/**", tier: account }
-  # Same B-pass pass, same mechanism: graduation_screen.dart contains a
-  # confirmed direct write to the progress map (`_onPro()`, OI-45 finding 5 /
-  # Unit 3c — a stale-nextPhase-across-a-slow-await bug in the same family this
-  # batch fixed elsewhere) but lib/features/train/** is feature-tier below, so a
-  # diff touching ONLY this file would clear zero review gate despite writing
-  # the same at-risk Hive key this whole batch exists to protect. Scoped to the
-  # single file, not the whole lib/features/train/** tree, since the rest of
-  # that tree is ordinary Train-tab UI with no equivalent risk — a blanket
-  # promotion would over-gate routine UI changes for no safety gain.
+  # graduation_screen.dart is the USER-FACING ENTRY POINT for the PRO phase
+  # advance: it gates `phases_2_to_12`, drives the choice sheet, holds the
+  # pre-lock live-phase abort, and calls `runGraduationPhaseAdvance`. A diff
+  # touching ONLY this file would otherwise clear zero review gate, because
+  # lib/features/train/** is feature-tier below. Scoped to the single file, not
+  # the whole tree, since the rest of it is ordinary Train-tab UI with no
+  # equivalent risk — a blanket promotion would over-gate routine UI changes
+  # for no safety gain.
+  #
+  # RESTATED 2026-08-03 (Unit B / b4e9c7, closes OI-84). The original reason
+  # was "contains a confirmed direct write to the progress map (`_onPro()`)".
+  # That became FALSE when Unit B hoisted the write into
+  # `runGraduationPhaseAdvance` in lib/shared/services/pro_phase_advance.dart —
+  # which carries its own account rule below, so the gate did not weaken. The
+  # TIER is unchanged and still right; only the justification moved. A rule
+  # whose stated reason is false reads as coverage it does not have (same class
+  # as the `check_writer_reader_drift.dart` citation corrected in
+  # lib/CLAUDE.md 2026-08-02, for a gate script that never existed).
   - { glob: "lib/features/train/screens/graduation_screen.dart", tier: account }
   # Unit 3c / c8f3d1 (2026-08-01), same one-file argument as the two rules above:
   # pro_phase_advance.dart became THE single writer for the phase advance

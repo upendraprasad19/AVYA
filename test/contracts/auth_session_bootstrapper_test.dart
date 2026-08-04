@@ -312,7 +312,13 @@ void main() {
             .readAsStringSync(),
       );
       expect(
-        src.contains('AuthSessionBootstrapper.instance.resolveDestination'),
+        // Tolerant of dart format wrapping the call across lines (e.g.
+        // `AuthSessionBootstrapper.instance\n    .resolveDestination(...)`)
+        // — a literal-substring match is fragile to formatter line-length
+        // decisions that have nothing to do with whether the delegation
+        // still exists. See feedback_source_grep_false_confidence.md.
+        RegExp(r'AuthSessionBootstrapper\.instance\s*\.\s*resolveDestination')
+            .hasMatch(src),
         isTrue,
         reason: 'restoring_screen.dart must delegate destination '
             'resolution to AuthSessionBootstrapper (audit A9).',

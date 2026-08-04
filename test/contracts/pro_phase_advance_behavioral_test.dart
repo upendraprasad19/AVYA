@@ -458,6 +458,232 @@ void main() {
     });
   });
 
+  // ──────── D2 — runGraduationPhaseAdvance (Unit B / OI-84 relocation) ───────
+
+  group('runGraduationPhaseAdvance (relocated from graduation_screen._onPro)',
+      () {
+    // Unit B hoisted this block out of a 909-line screen. A move is only
+    // behaviour-preserving if the behaviour is pinned, and it was NOT: the
+    // closure lived inside a widget callback, so nothing could call it. These
+    // four tests exercise every arm of the outcome enum against real Hive and
+    // real plan generation — the coverage the extraction bought.
+
+    Future<({WidgetRef ref, ProviderContainer container})> pumpRef(
+        WidgetTester tester) async {
+      final c = Completer<({WidgetRef ref, ProviderContainer container})>();
+      await tester.pumpWidget(
+          ProviderScope(child: _RefCaptureWidget(onCapture: c.complete)));
+      await tester.pump();
+      return (await tester.runAsync(() => c.future))!;
+    }
+
+    const profile = {
+      'primary_goal': 'build_muscle',
+      'equipment_access': 'full_gym',
+      'days_per_week': 4,
+      'fitness_experience': 'intermediate',
+    };
+
+    testWidgets('committed — generates and advances the counter',
+        (tester) async {
+      await tester.runAsync(() async {
+        await _seedProAndExpiredPhase();
+        await UserRepository.instance.saveProgress({'current_phase': 1});
+      });
+      final captured = await pumpRef(tester);
+
+      late GraduationAdvanceResult result;
+      await tester.runAsync(() async {
+        result = await runGraduationPhaseAdvance(
+          ref: captured.ref,
+          profile: profile,
+          nextPhase: 2,
+          repeat: false,
+          stopwatch: Stopwatch()..start(),
+        );
+      });
+
+      expect(result.outcome, GraduationAdvanceOutcome.committed);
+      expect(UserRepository.instance.getProgress()!['current_phase'], 2);
+      expect(result.repeatNudgeFlagged, isFalse,
+          reason: 'a FRESH advance builds no pins, so no repeat nudge');
+    });
+
+    testWidgets(
+        'preemptedBeforeGenerate — a phase already past us skips generation '
+        'entirely', (tester) async {
+      late String? planStartBefore;
+      await tester.runAsync(() async {
+        await _seedProAndExpiredPhase();
+        await UserRepository.instance.saveProgress({'current_phase': 5});
+        planStartBefore = MigratedKey.read<String>('plan_start_date');
+      });
+      final captured = await pumpRef(tester);
+
+      late GraduationAdvanceResult result;
+      await tester.runAsync(() async {
+        result = await runGraduationPhaseAdvance(
+          ref: captured.ref,
+          profile: profile,
+          nextPhase: 3, // already past — live is 5
+          repeat: false,
+          stopwatch: Stopwatch()..start(),
+        );
+      });
+
+      expect(result.outcome, GraduationAdvanceOutcome.preemptedBeforeGenerate);
+      expect(UserRepository.instance.getProgress()!['current_phase'], 5,
+          reason: 'the counter must not move backwards');
+      // The assertion that makes this DISTINCT from generatedButDeclined:
+      // generation never ran, so the plan window is untouched. Without it the
+      // test would pass even if the in-lock recheck were deleted and the work
+      // were done-then-declined.
+      expect(MigratedKey.read<String>('plan_start_date'), planStartBefore,
+          reason: 'generateAndSchedule must NOT have run — it re-anchors '
+              'plan_start_date');
+    });
+
+    testWidgets(
+        'generatedButDeclined — a higher write during generation loses the '
+        'counter but the rows are already written', (tester) async {
+      await tester.runAsync(() async {
+        await _seedProAndExpiredPhase();
+        await UserRepository.instance.saveProgress({'current_phase': 1});
+      });
+      final captured = await pumpRef(tester);
+
+      late GraduationAdvanceResult result;
+      await tester.runAsync(() async {
+        var done = false;
+        final running = runGraduationPhaseAdvance(
+          ref: captured.ref,
+          profile: profile,
+          nextPhase: 2,
+          repeat: false,
+          stopwatch: Stopwatch()..start(),
+        ).whenComplete(() => done = true);
+
+        // Same single event-loop yield the sibling tests above use, and the
+        // same reasoning: a longer delay risks generation finishing first and
+        // turning this into a false green. The precondition catches that.
+        await Future<void>.delayed(Duration.zero);
+        expect(done, isFalse,
+            reason: 'precondition: the interposed write must land DURING '
+                'generation');
+        await UserRepository.instance.updateProgress({'current_phase': 3});
+        result = await running;
+      });
+
+      expect(result.outcome, GraduationAdvanceOutcome.generatedButDeclined);
+      expect(UserRepository.instance.getProgress()!['current_phase'], 3,
+          reason: 'the concurrent advancer wins; no demotion to 2');
+    });
+
+    testWidgets(
+        'repeat: true with NO repeatable content flags no nudge — the seam is '
+        'pins != null, NOT the caller\'s choice', (tester) async {
+      // Round-1 review B3 said the four outcome-arm tests never exercise
+      // `repeat: true`. The FIRST attempt at this test asserted
+      // `expect(result.repeatNudgeFlagged, nudgeWritten)` — an equivalence —
+      // and a mutation negative control PROVED IT VACUOUS: substituting
+      // `repeatNudgeFlagged = repeat` for `pins != null` left the test green,
+      // because that one variable drives BOTH the Hive write and the returned
+      // flag, so any mutation moves both sides of the equivalence together.
+      // Self-consistency that is true by construction is not a test.
+      //
+      // This version asserts against INDEPENDENT ground truth instead. The
+      // seeded state has no prior phase content, so
+      // `buildRepeatPinsForAdvance`'s G5 frame-shape gate must refuse and
+      // `pins` must be null — which is precisely the case where `pins != null`
+      // and `repeat` DISAGREE. Correct code flags nothing and writes nothing;
+      // the mutation flags true and writes the nudge, and both expectations
+      // below fail.
+      //
+      // The premise (pins really is null here) is CHECKED by the test rather
+      // than assumed: if the generator ever did build pins from this state, the
+      // first expectation fails loudly instead of passing vacuously.
+      await tester.runAsync(() async {
+        await _seedProAndExpiredPhase();
+        await UserRepository.instance.saveProgress({'current_phase': 1});
+        await MigratedKey.write('phase_repeat_nudge_pending', false);
+      });
+      final captured = await pumpRef(tester);
+
+      late GraduationAdvanceResult result;
+      await tester.runAsync(() async {
+        result = await runGraduationPhaseAdvance(
+          ref: captured.ref,
+          profile: profile,
+          nextPhase: 2,
+          repeat: true,
+          stopwatch: Stopwatch()..start(),
+        );
+      });
+
+      expect(result.outcome, GraduationAdvanceOutcome.committed,
+          reason: 'a repeat still ADVANCES the phase — the phase moves either '
+              'way, repeat only changes the CONTENT');
+      expect(result.repeatNudgeFlagged, isFalse,
+          reason: 'no prior phase content → G5 refuses → pins == null → no '
+              'nudge. Returning the caller\'s `repeat` here would flag true.');
+      expect(MigratedKey.read<bool>('phase_repeat_nudge_pending') ?? false,
+          isFalse,
+          reason: 'and the Home nudge must not be written for a repeat that '
+              'never actually repeated anything');
+    });
+
+    testWidgets('busy — a held lock turns the graduation advance away',
+        (tester) async {
+      await tester.runAsync(() async {
+        await _seedProAndExpiredPhase();
+        await UserRepository.instance.saveProgress({'current_phase': 1});
+      });
+      final captured = await pumpRef(tester);
+
+      late GraduationAdvanceResult result;
+      await tester.runAsync(() async {
+        // The Completer is created, awaited AND completed entirely inside this
+        // runAsync block, deliberately. `testWidgets` runs its body in a FAKE
+        // async zone; `runAsync` escapes to the real one. A Completer created
+        // outside and completed inside straddles that boundary and its
+        // completion never propagates — the first draft did exactly that, the
+        // lock was never released, generation ran anyway and the test died on
+        // the 10-minute timeout instead of asserting.
+        //
+        // Group C's sibling lock test avoids this by being a plain `test()`
+        // with no fake zone at all. This one needs a WidgetRef, so it must use
+        // testWidgets and keep the whole handshake on one side of the boundary.
+        final release = Completer<void>();
+        final holder = withPhaseAdvanceLock<bool>(
+          () async {
+            await release.future;
+            return true;
+          },
+          ifBusy: false,
+        );
+        try {
+          result = await runGraduationPhaseAdvance(
+            ref: captured.ref,
+            profile: profile,
+            nextPhase: 2,
+            repeat: false,
+            stopwatch: Stopwatch()..start(),
+          );
+        } finally {
+          // The lock is a module-level bool: leaking it held would make every
+          // later test in this file silently take the ifBusy path. Release
+          // unconditionally, even if the call above threw.
+          if (!release.isCompleted) release.complete();
+          await holder;
+        }
+      });
+
+      expect(result.outcome, GraduationAdvanceOutcome.busy);
+      expect(UserRepository.instance.getProgress()!['current_phase'], 1,
+          reason: 'a turned-away caller must write nothing at all');
+    });
+  });
+
   // ───────────────────────── E — wiring (source) ────────────────────────────
 
   group('every advance writer routes through the shared helper', () {
@@ -471,14 +697,84 @@ void main() {
         .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
         .replaceAll(RegExp(r'//[^\n]*'), '');
 
-    test('graduation_screen._onPro commits through commitPhaseAdvance under '
+    test('the graduation advance commits through commitPhaseAdvance under '
         'the shared lock', () {
-      final s = src('lib/features/train/screens/graduation_screen.dart');
-      expect(s.contains('withPhaseAdvanceLock<bool?>('), isTrue);
+      // Unit B / OI-84 (2026-08-03): all four literals moved with the block
+      // from graduation_screen._onPro to runGraduationPhaseAdvance. Re-pointed,
+      // and the lock's type parameter changed with the richer return type.
+      final s = src('lib/shared/services/pro_phase_advance.dart');
+      expect(s.contains('withPhaseAdvanceLock<GraduationAdvanceResult>('),
+          isTrue);
       expect(s.contains('commitPhaseAdvance('), isTrue);
-      expect(s.contains("source: 'graduation_screen'"), isTrue);
+      expect(s.contains("source: 'graduation_screen'"), isTrue,
+          reason: 'the telemetry source string identifies the SURFACE, not the '
+              'file — it must not drift when the code moves, or every '
+              'phase_advance_conflict_skipped row already collected becomes '
+              'uncomparable');
       expect(s.contains("'current_phase': nextPhase"), isFalse,
           reason: 'the direct pre-await write must be gone, not merely wrapped');
+    });
+
+    test('graduation_screen retains NO advance mechanism of its own', () {
+      // The other half of the hoist: the screen must not have kept, or later
+      // regrow, a second path to the same write. Without this, the assertion
+      // above could hold while the screen ALSO wrote directly.
+      final s = src('lib/features/train/screens/graduation_screen.dart');
+      expect(s.contains('runGraduationPhaseAdvance('), isTrue,
+          reason: 'it must call the shared advance');
+      for (final banned in [
+        'withPhaseAdvanceLock',
+        'commitPhaseAdvance(',
+        'generateAndSchedule(',
+        'markPhaseRepeatNudgePending(',
+        'reportDeclinedAdvanceLeftStaleRows(',
+        // Round-1 review B2: the five above are all NAMED HELPERS, so they only
+        // catch a regrowth that politely calls the shared API. A raw map write
+        // — `updateProgress({'current_phase': ...})` — would reintroduce the
+        // exact Unit 3c / OI-45-finding-5 defect (a pre-await value written
+        // after a slow generate) and pass every one of them. The old test had a
+        // `"'current_phase': nextPhase" isFalse` guard against THIS file; when
+        // it was re-pointed at pro_phase_advance.dart it became trivially true
+        // there, because that literal has no route into a file where nextPhase
+        // is a parameter. Ban the write itself, here, where it could actually
+        // reappear.
+        "'current_phase':",
+        'updateProgress(',
+        'saveProgress(',
+      ]) {
+        expect(s.contains(banned), isFalse,
+            reason: '$banned must not appear in the screen — either it belongs '
+                'to the shared advance now, or (for the raw-write literals) it '
+                'never belonged in a widget at all. Round-2 review flagged the '
+                'previous blanket wording as inaccurate for saveProgress(, '
+                'which lives on UserRepository and deliberately NOT in the '
+                'shared advance. Any hit here is the god-screen regrowing '
+                '(OI-84) or the Unit 3c pre-await write returning (OI-45 f5).');
+      }
+      // The screen may still READ the live phase (it does, twice, for the
+      // pre-lock abort check) — reads are not the hazard and must stay legal.
+      expect(s.contains("getProgress()?['current_phase']"), isTrue,
+          reason: 'the pre-lock abort re-check is deliberately kept in the '
+              'screen; banning the write must not have banned the read');
+    });
+
+    test('graduation_screen is OFF the Gate 43 allow-list and under the '
+        'ceiling on its own merits (closes OI-84)', () {
+      const path = 'lib/features/train/screens/graduation_screen.dart';
+      final gate = src('scripts/check_god_screen_max_lines.dart');
+      expect(gate.contains("'$path'"), isFalse,
+          reason: 'OI-84 exists because this file became the FIRST entry ever '
+              'added to a one-way-ratchet allow-list. Re-adding it must break '
+              'this test, not pass quietly.');
+      // Belt: the exemption is only honestly removed if the file actually
+      // clears the ceiling. Asserting the allow-list alone would still pass
+      // with a 900-line screen and a raised _maxLines.
+      final lines = File(path).readAsLinesSync().length;
+      final max = int.parse(
+          RegExp(r'int _maxLines = (\d+)').firstMatch(gate)!.group(1)!);
+      expect(max, 800, reason: 'the ceiling itself must not have been raised');
+      expect(lines, lessThanOrEqualTo(max),
+          reason: '$path is $lines lines against a $max ceiling');
     });
 
     test('simulation_service._maybeAdvancePhase commits through '

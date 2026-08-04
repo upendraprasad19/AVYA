@@ -72,23 +72,43 @@ void main() {
         .readAsStringSync();
     final svcStripped = _stripComments(svcSrc);
 
-    test('graduation_screen calls nextPhaseStartDate (not DateTime.now)', () {
+    test('the graduation advance calls nextPhaseStartDate (not DateTime.now)',
+        () {
+      // Unit B / OI-84 (2026-08-03): the graduation generate block moved out of
+      // graduation_screen._onPro into runGraduationPhaseAdvance in
+      // pro_phase_advance.dart. FOLLOW THE CODE, don't keep grepping the old
+      // file — `gradStripped.contains('nextPhaseStartDate()')` would now be
+      // false and, worse, the negative assertion below would pass vacuously
+      // against a file that no longer contains any generate call at all.
+      final advanceStripped = _stripComments(
+          File('lib/shared/services/pro_phase_advance.dart').readAsStringSync());
       expect(
-        gradStripped.contains('nextPhaseStartDate()'),
+        advanceStripped.contains('nextPhaseStartDate()'),
         isTrue,
-        reason:
-            'graduation_screen._buildCta onPro must call '
-            'nextPhaseStartDate() before invoking generateAndSchedule. '
-            'Pre-fix `startDate: DateTime.now()` clobbered Phase 1 W4.',
+        reason: 'runGraduationPhaseAdvance must call nextPhaseStartDate() '
+            'before invoking generateAndSchedule. Pre-fix '
+            '`startDate: DateTime.now()` clobbered Phase 1 W4.',
       );
-      // The pre-fix `startDate: DateTime.now()` literal must be gone.
-      // Note: other DateTime.now() usages in this file are fine (e.g.
-      // phase_started_at stamp); we specifically pin the startDate site.
+      // The pre-fix `startDate: DateTime.now()` literal must be gone — checked
+      // in BOTH files, so the defect cannot reappear by moving back.
+      for (final entry in {
+        'pro_phase_advance.dart': advanceStripped,
+        'graduation_screen.dart': gradStripped,
+      }.entries) {
+        expect(
+          RegExp(r'startDate:\s*DateTime\.now\(\)').hasMatch(entry.value),
+          isFalse,
+          reason: '${entry.key} must not pass `startDate: DateTime.now()` '
+              '— use nextPhaseStartDate().',
+        );
+      }
+      // And the screen must still ROUTE to that advance — otherwise the
+      // assertions above describe code the unlock no longer reaches.
       expect(
-        RegExp(r'startDate:\s*DateTime\.now\(\)').hasMatch(gradStripped),
-        isFalse,
-        reason: 'graduation_screen must not pass `startDate: DateTime.now()` '
-            '— use nextPhaseStartDate().',
+        gradStripped.contains('runGraduationPhaseAdvance('),
+        isTrue,
+        reason: 'graduation_screen._onPro must route through the shared '
+            'advance that owns the start-date computation.',
       );
     });
 

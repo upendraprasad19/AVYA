@@ -72,6 +72,10 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   static const Duration _softHintAfter = Duration(seconds: 15);
   static const Duration _ctaAfter = Duration(seconds: 30);
 
+  // a3f6d9 — true once _goHome is about to run; the CTA timer above is
+  // wall-clock, independent of classification, so timing alone can't infer this.
+  bool _committedToGoHome = false;
+
   @override
   void initState() {
     super.initState();
@@ -166,6 +170,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
           }
           // Treat as fully onboarded — go home (default: await restore first;
           // bg-restore flag: a returning user reaches home immediately).
+          _committedToGoHome = true;
           await _goHome(user.id, restoreFuture);
           return;
         }
@@ -181,6 +186,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       case GoHome():
         // Fully onboarded user — go home (default: await restore first;
         // bg-restore flag: a returning user reaches home immediately).
+        _committedToGoHome = true;
         await _goHome(user.id, restoreFuture);
         return;
     }
@@ -205,6 +211,11 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     if (!killSwitch && isReturning) {
       // Ownership gate stays BLOCKING (cross-account safety, APK #15.4).
       await HiveUserSession.openForUser(userId);
+      // a3f6d9 — stamp the LOCAL onboarded flag _authRedirect gates on;
+      // restore only syncs the cloud onboarding_completed_at, a different key.
+      if (!UserRepository.instance.isOnboarded) {
+        await UserRepository.instance.setOnboarded();
+      }
       // b3f9e7 — OAuth's real convergence point (not hydrateFromCloud).
       unawaited(
           AuthSessionBootstrapper.instance.ensureTermsConsentFallback(userId));
@@ -232,6 +243,10 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     await restoreFuture;
     if (!mounted) return;
     await _ensureOwnershipBeforeHome(userId);
+    // a3f6d9 — same stamp as the bg-restore branch above.
+    if (!UserRepository.instance.isOnboarded) {
+      await UserRepository.instance.setOnboarded();
+    }
     if (!mounted) return;
     context.go(RestoringScreen.resolveRestoreDestination(widget.next));
   }
@@ -484,9 +499,11 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     // is idempotent + _sessionLock-guarded — safe even if the in-flight restore
     // already opened the boxes.
     final userId = SupabaseService.instance.currentUser?.id;
+    var ownershipOpen = false;
     if (userId != null) {
       try {
         await HiveUserSession.openForUser(userId);
+        ownershipOpen = true;
       } catch (e, st) {
         // Non-fatal for navigation — the guard re-routes to /restoring which
         // re-opens — but RECORD it so a genuinely unrecoverable openForUser
@@ -494,6 +511,13 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
             reason: 'restoring_continue_openforuser_failed'));
       }
+    }
+    // a3f6d9 — third path to /home; needs the same stamp. Gated on
+    // _committedToGoHome, not just timing — the CTA can surface pre-classification.
+    if (ownershipOpen &&
+        _committedToGoHome &&
+        !UserRepository.instance.isOnboarded) {
+      await UserRepository.instance.setOnboarded();
     }
     if (mounted) {
       context.go(RestoringScreen.resolveRestoreDestination(widget.next));

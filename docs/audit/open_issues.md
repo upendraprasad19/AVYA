@@ -1357,9 +1357,12 @@ presence-only by construction). 31 total, all green; 87 across the 7 affected su
 
 ## OI-84 — `graduation_screen.dart` added to the Gate 43 allow-list; split owed (P3)
 
-- **Status**: OPEN
-- **Blocked on**: none — this is scheduled work, not a blocked investigation.
-- **Verified**: 2026-08-01 (Gate 43 run: `ALLOW … (892 lines)`)
+- **Status**: CLOSED
+- **Blocked on**: none — it was scheduled work and Unit B did it. Closure block at the end of
+  this entry.
+- **Verified**: 2026-08-03 (Unit B, diagnose `b4e9c7` — Gate 43 run with the allow-list entry
+  DELETED: `OK — no screen exceeds 800 lines`, and `graduation_screen.dart` no longer appears
+  in the `ALLOW` output at all)
 - **Identified**: 2026-08-01 · Gate 43 blocked the `oi45-phase-advance-monotonic` commit
   (`c8f3d1`, Unit 3c).
 - **Risk class**: god-screen / tech-debt ladder regression
@@ -1387,3 +1390,273 @@ presence-only by construction). 31 total, all green; 87 across the 7 affected su
   **Remove the allow-list entry in the same commit.**
 - **Blast radius estimate**: `account` (`graduation_screen.dart` has its own file-scoped account
   rule in `docs/blast_radius.yaml`); no migration, no schema.
+  MEASURED at ship time: **`platform`** — but only because the B-pass fix edited
+  `docs/blast_radius.yaml` itself (`:171`, a platform-tier path). Per-file, the
+  runtime code is `account` (`graduation_screen.dart`, `pro_phase_advance.dart`)
+  and everything else is `feature`. The estimate was right about the CODE.
+
+### CLOSURE — Unit B, 2026-08-03, diagnose `b4e9c7`
+
+**909 → 552 lines. The allow-list entry is deleted and the ratchet is shrinking again** (six
+entries, all original C4 targets).
+
+Two moves, one deletion, one commit:
+
+1. The ~120-line locked generate + `commitPhaseAdvance` block → `runGraduationPhaseAdvance` in
+   `lib/shared/services/pro_phase_advance.dart`, beside the other three advance paths. Its
+   `bool?` return became `GraduationAdvanceResult` — a four-case outcome enum plus
+   `repeatNudgeFlagged`. The old `false` had covered TWO outcomes that already emitted
+   *different* telemetry, so the type was lossier than the instrumentation next to it.
+2. The ~250-line phase-2 preview UI → `lib/features/train/widgets/phase2_preview_card.dart`
+   (`Phase2PreviewCard` / `Phase2BenefitsCard`). Both builders already took no `ref` and no
+   `BuildContext`, so this was a move, not a refactor.
+3. The `_allowList` entry deleted from `scripts/check_god_screen_max_lines.dart` in the same
+   commit.
+
+**Step 2 was NOT this item's recommended shape, and the reason is worth keeping.** The hoist
+alone landed the file at ~791 — **nine lines of margin**. That is the identical condition that
+*created* OI-84: the file sat six under the ceiling, so Unit 3c could not touch it at all. This
+item's own "~770" estimate had gone stale, because Unit A grew the file from 892 to 909 after
+the estimate was written. Founder chose the fuller split once shown the arithmetic. **A board
+item's numbers age; re-measure before planning against them.**
+
+Two second-order findings, both fixed in the same commit:
+
+- `docs/blast_radius.yaml:207-216` justified this file's `account` rule with "contains a
+  confirmed direct write to the progress map (`_onPro()`)" — **false after the hoist**. The tier
+  is unchanged and still correct (the screen is the UI entry point for the PRO advance and gates
+  `phases_2_to_12`), but the justification was restated. Same class as the
+  `check_writer_reader_drift.dart` citation corrected in `lib/CLAUDE.md` on 2026-08-02: a rule
+  whose stated reason is false reads as coverage it does not have.
+- The hoist could have relocated the progress write into a path classified BELOW `account`,
+  silently weakening the review gate while every other test stayed green. It did not —
+  `docs/blast_radius.yaml:226` gives `pro_phase_advance.dart` its own `account` rule — but that
+  is now **asserted in a test** rather than assumed, so the next move cannot regress it.
+
+**Verification.** Six pre-existing test files source-grep `graduation_screen.dart` by path;
+moving code out of it turns such assertions vacuously true, which is worse than deleting them
+(`feedback_source_grep_false_confidence.md`). All six were re-pointed, and ten assertions were
+then individually PROVEN to discriminate by perturbing the source and watching each fail —
+files restored from copies afterwards and verified byte-identical by md5, never `git checkout`
+(the Unit 7 incident). `pro_phase_advance_behavioral_test.dart` gains group D2: four behavioral
+tests, one per outcome arm, against real Hive and real plan generation — coverage that could not
+previously exist, because the code was a closure inside a widget callback that nothing could
+call.
+
+## OI-86 — two concurrent `flutter test` runs on this machine corrupt each other's Hive state (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none — the mechanism is understood and was reproduced twice; scheduled work.
+- **Verified**: 2026-08-03 (twice in one day, both times the same tests passed standalone
+  immediately afterwards on the identical tree)
+- **Identified**: 2026-08-03 · Unit B (`b4e9c7`) — once during overlapping `safe_commit` runs,
+  once during a `safe_push` whose pre-push suite raced another session's suite.
+- **Risk class**: test-harness isolation / false-red on a real gate
+- **What's wrong**: Hive test boxes are opened from a **process-shared** location, so two
+  `flutter test` runs executing at the same time on this machine collide. The loser sees
+  `HiveError: Box not found. Did you forget to call Hive.openBox()?` from
+  `HiveService.userBoxGuarded` → `wrapUserScopedBox` (`guarded_box.dart:341`), and whatever
+  assertion followed the failed read then reports a *value* mismatch rather than the underlying
+  throw — which is what makes it easy to mis-diagnose.
+- **Two confirmed occurrences, same day, same test family**:
+  1. Two `safe_commit.sh` invocations overlapped (the first had not finished when a second was
+     launched after a tool timeout). `subscription_expiry_banner_behavioral_test.dart`
+     "a marker stamped under session A is NOT visible to session B" failed, then passed
+     standalone seconds later on the identical tree.
+  2. `safe_push.sh`'s pre-push full suite ran while another session had ~10 dart/flutter
+     processes live. `subscription_cqrs_behavioral_test.dart` "genuine expiry still downgrades
+     and still stamps `pro_lapsed_at`" AND the same expiry-banner test failed —
+     `Expected: null / Actual: '2026-08-02T20:05:42.435058'`, immediately preceded by
+     `[MigratedKey.delete] userBox expiresAt threw: HiveError: Box not found`. The push was
+     correctly REJECTED (`git exit 1`, `origin/main` unmoved). A retry with the machine quieter
+     passed **4188 tests, 0 failures** on the same commit with no code change.
+- **Why it is not "just flaky"**: CI is green on the same commits — an isolated single-runner
+  environment never hits it. The failure is deterministic given concurrency, and it produces a
+  **false red on a real gate**, which is the dangerous shape: it invites exactly the hook-bypass
+  reflex CLAUDE.md bans, and it trains the reader to dismiss genuine failures in that test
+  family.
+- **Fix shape (not yet attempted)**: give each test process its own Hive directory — a per-run
+  temp dir keyed on PID or the runner's shard id, set in the shared test bootstrap rather than
+  per-file. The git-index half of this exact "one machine, two sessions" problem was solved
+  structurally by §4.13 (one worktree per session → one index per session); this is the Hive
+  half.
+- **Interim discipline (already in force, and not a fix)**: never launch a second
+  `safe_commit.sh` / `safe_push.sh` while one may still be running — a Bash tool timeout does
+  NOT kill the process (`feedback_git_landing_verification.md`). Both occurrences today began
+  that way.
+- **Blast radius estimate**: `feature` (test harness + bootstrap only); no migration, no schema,
+  no runtime code.
+
+## OI-87 — one session's non-compliant merge into local `main` blocks every other session's push (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none for the ANALYSIS; the concrete instance below needs a plan-review record
+  from the session that did the work — nobody else can honestly attest to a review they did not
+  run.
+- **Verified**: 2026-08-03 (reproduced by the blocked push described below; both worktrees and
+  the missing file confirmed by direct inspection)
+- **Identified**: 2026-08-03 · Unit B (`b4e9c7`) push attempt
+- **Risk class**: cross-session shared mutable state / coupled compliance
+- **What happened**: with `origin/main` green at `14c7aeed`, another session merged
+  `onboarding-oauth-session-fix` into **local** `main` at 20:43 (`f0b98c8b`). That branch is
+  `>=account` (it touches `lib/features/onboarding/providers/onboarding_provider.dart`) and has
+  **no** `docs/plan-reviews/onboarding-oauth-session-fix.md` — not committed, not drafted; the
+  other worktree's tree is clean. This session then tried to push an unrelated docs-only commit
+  (OI-86) and `check_plan_review_record_exists.dart`, run over the full prospective push range,
+  correctly FAILED on the foreign merge. The push was not attempted.
+- **Why this is structural, not just someone forgetting**: §4.12.3 puts the gate at **push time
+  in CI** on purpose — a local pre-commit `MERGE_HEAD` check is bypassable and a `--no-ff` merge
+  skips the local hook entirely, so CI-at-push is the only point that cannot be evaded. Correct
+  for ENFORCEMENT. The unintended consequence is that a non-compliant merge can sit in local
+  `main` indefinitely, and because the gate is RANGE-based, it is inherited by whoever pushes
+  next. Compliance becomes coupled across otherwise-independent sessions, and the session that
+  is blocked is precisely the one that cannot fix it: the only remedy is an attestation that
+  must come from whoever actually ran the review.
+- **The dangerous incentive it creates**: the blocked session's fastest path to unblocking is to
+  author the missing record itself. That would be a FALSE ATTESTATION — a claim that a ×2
+  context-blind review and ground-truth audit happened when they did not. This is strictly worse
+  than any defect the review would have caught, and worse than the class of false-claim finding
+  this very batch fixed (a P1 where three documents said a fix "was restated" when the file had
+  not been touched). Any future automation here must not make fabrication the path of least
+  resistance.
+- **Third instance of one pattern today** — "one machine, N sessions, shared mutable state":
+  1. `.git/index` — **solved** by §4.13 (one worktree per session).
+  2. Hive test boxes — **OI-86** (concurrent `flutter test` runs corrupt each other's state).
+  3. local `main` itself — THIS item. §4.13 explicitly designates the shared main folder as
+     "INTEGRATION-ONLY: reads, `git merge <branch>` + `git push`", i.e. multi-session merging
+     into one local `main` is by design. §4.13 fixed the index facet and, by encouraging many
+     parallel session worktrees, made facets 2 and 3 more likely rather than less.
+- **Fix shape (not yet attempted)**: a LOCAL, immediate, advisory warning at merge time — a
+  `post-merge` hook (or a check inside the documented merge step) that, when a `--no-ff` merge
+  into `main` brings in a branch whose blast-radius is `>=account`, prints loudly if
+  `docs/plan-reviews/<branch>.md` is absent or non-converged. It cannot be an enforcement gate
+  (post-merge hooks do not fail the merge, and any local check is evadable — which is exactly
+  why §4.12.3 chose CI). But it would surface the problem to the session that CAUSED it, at the
+  moment it was caused, instead of to an unrelated session minutes-to-hours later. That is the
+  whole delta: same enforcement, correct attribution.
+- **Interim discipline (already in force)**: always run
+  `PUSH_BEFORE=<origin tip> dart run scripts/check_plan_review_record_exists.dart` over the FULL
+  prospective push range before pushing — never `HEAD^1..HEAD`. That is what caught this. Failing
+  to do so on 2026-08-03 morning is what put `ca4ef2c3` on `origin` red.
+- **Blast radius estimate**: `feature` (a hook + docs); no runtime code, no migration, no schema.
+
+## OI-88 — `restoring_screen.dart` added to the Gate 43 allow-list; split owed (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nobody yet — no session has picked up the split.
+- **Verified**: never
+- **Identified**: 2026-08-03 · `restore-onboarding-signin-fix` batch. Diagnose `a3f6d9`'s fix
+  (local-onboarded-flag stamp at all three paths to `/home` in `RestoringScreen`) added 24 lines
+  net after comment-trimming, pushing the file from 800 to 824 lines — 24 over Gate 43's ceiling.
+- **Risk class**: god-screen / tech-debt ladder regression — same class as OI-84
+  (`graduation_screen.dart`).
+- **What happened**: `restoring_screen.dart` sat exactly at the 800-line ceiling pre-diff (never a
+  C3/C4 target). The a3f6d9 fix could not land without tripping Gate 43. Comments were trimmed to
+  the minimum non-obvious "why" first (saved ~15 lines); the remainder is irreducible without
+  either restructuring the file or resorting to single-line `if` statements inconsistent with the
+  rest of the file's style. Added to the gate's transitional allow-list
+  (`scripts/check_god_screen_max_lines.dart`) on explicit founder authorization in chat.
+- **Why this is tracked rather than closed**: same rationale as OI-84 — the allow-list's own header
+  says it "MUST shrink to empty when the audit ladder closes". An eighth entry with no owed-work
+  record would quietly reverse that direction. This OI is that record.
+- **Fix shape (not yet attempted)**: split into a sibling folder, reference layout
+  `lib/features/train/screens/active_workout/` — candidates for extraction: the three key-migrator
+  imports + `_healAfterRestoreInBackground`'s reconciler/migrator fan-out (currently inline), and/or
+  the `_AnimatedDotsState` loading-indicator widget at the bottom of the file, which has no
+  dependency on `_RestoringScreenState`'s fields and could move to its own widget file outright.
+  **Remove the allow-list entry in the same commit.**
+- **Blast radius estimate**: `account` (`restoring_screen.dart` is on the auth post-auth-boot path);
+  no migration, no schema.
+
+## OI-89 — the equipment tier is a SOFT preference: a "bodyweight" user is served gym lifts (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical — it needs a PRODUCT decision first (see "Product question"
+  below). The mechanism is understood and verified in code.
+- **Verified**: 2026-08-04 (root cause re-read directly in `exercise_selector.dart` +
+  `plan_engine/CLAUDE.md`; the flag default re-read in `plan_engine_flags.dart` — the source
+  commentary's claim about it did NOT match the code, see below)
+- **Identified**: 2026-07-19 · the workout-generator persona sweep (`PlanGenerator.generateV4`,
+  18 personas × phases 1-3 = 54 plans, exported by
+  `test/plan_generator/persona_matrix_export.dart` in the `persona-sweep-e2e` worktree). The
+  sweep's `.xlsx` + commentary were test artifacts and have been deleted as regenerable; this
+  entry is the durable record of the one finding inside them that was never filed.
+- **Risk class**: plan-engine correctness / user-facing safety-of-expectation
+- **What's wrong**: the **bodyweight** persona's generated plan contained **5 picks out of 28 that
+  require gym equipment** — Close-Grip Bench Press (barbell + bench), Barbell Curl (×2 slots),
+  Standing Calf Raise (barbell), Chin Up (pull-up bar). A genuine no-equipment user opens the app
+  and is prescribed exercises they physically cannot perform.
+- **Root cause (verified in code, not taken from the sweep's prose)**: `queryV4`'s cascade DROPS
+  the `equipment_tier` constraint at **attempt 4** when a muscle slot's on-tier pool is too
+  shallow. `lib/shared/repositories/plan_engine/CLAUDE.md:274` lists it plainly —
+  `4. attempt4DropEquipment — drop equipment_tier` — and
+  `lib/shared/repositories/plan_engine/exercise_selector.dart:660` calls it "the soft tier
+  heuristic the cascade itself RELAXES at attempt-4". So the tier is a preference, not a floor,
+  BY DESIGN. Contrast the equipment **exclusions** filter, which the same cascade deliberately
+  KEEPS at attempt-4 because "an excluded item is a HARD constraint, unlike the soft tier
+  heuristic att4 relaxes" (`CLAUDE.md:279`).
+- **The mitigation is weaker than the sweep commentary claimed** — worth stating because it
+  changes the severity. The commentary described the ⑥ equipment-exclusions feature as
+  "(now flag-on)". The code says otherwise: `PlanEngineFlags.equipmentExclusionsEnabled`
+  (`lib/shared/repositories/plan_engine/plan_engine_flags.dart:145-153`) reads
+  `configBox['enable_equipment_exclusions']` and returns **false** when absent — ship-dark,
+  DEFAULT OFF. So protection today requires BOTH (a) that flag switched on AND (b) the user
+  actively subtracting "barbell"/"bench"/etc. in the Customize screen. A bodyweight user who
+  never opens Customize gets no protection at all. I could not observe production config from
+  the repo, so the discrepancy is recorded rather than resolved — resolve it before sizing the
+  fix.
+- **Product question (this is the real blocker)**: should each equipment tier enforce a **hard
+  floor** — never surface a pick whose required equipment the tier cannot provide, falling back
+  to a bodyweight substitute or a safe omission — rather than leaking a barbell lift? Today the
+  answer is "only if the user manually excludes it, and only if the flag is on."
+- **Fix shape (not yet attempted, and NOT to be started before the product call)**: make the
+  tier a hard constraint at attempt-4 for the bodyweight tier specifically (the narrowest
+  version), with the per-pattern bodyweight floor already used by attempt-5's universal pool
+  providing the substitute so a slot is never empty. Needs a behavioral test asserting a
+  bodyweight persona's full plan contains zero picks whose `equipment_needed` falls outside the
+  tier.
+- **Blast radius estimate**: `account` (plan engine, `lib/shared/repositories/plan_engine/**`);
+  no migration, no schema. Rule 14 applies — `plan_generator.dart` is not to be modified without
+  explicit instruction.
+
+## OI-90 — `GuardedBox.empty`'s "reads serve empty" is bypassed by the seven plain `Box` getters (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — but the reader-vs-writer split below must be measured before a fix is
+  scoped, and that measurement is the first unit of work.
+- **Verified**: 2026-08-04 (call-site counts below produced by direct grep; the getter bodies and
+  the throw site re-read directly)
+- **Identified**: 2026-08-04 · the B-pass review of the Unit 1 onboarding session-guard batch
+  (diagnose d4e8a2). Deliberately NOT folded into that batch — adding an unrelated
+  core-services change to a diff that had just passed ×2 review + B-pass would have invalidated
+  the review it just passed.
+- **Risk class**: cross-account guard / auth-transition resilience — same family as b8e3f1
+- **What's wrong**: b8e3f1 established the contract that during the auth/Hive disagreement window
+  (authenticated, Hive owner still null) a user-scoped box **serves empty on reads and throws loud
+  on writes** — reads degrade to an empty state, only writes fail. That contract is implemented on
+  `GuardedBox`. But all seven plain `Box` getters at
+  `lib/core/services/hive_service.dart:225-231` are defined as
+  `Box get userBox => userBoxGuarded.rawBox;` (and the same for workout/nutrition/health/custom/
+  coach/notifications) — and `GuardedBox.rawBox`
+  (`lib/core/services/guarded_box.dart:170-176`) throws
+  `StateError('GuardedBox.empty: rawBox unavailable during auth/Hive disagreement')`
+  unconditionally when the stub is in play. So any caller on a plain getter gets a **throw on a
+  READ**, which is precisely what b8e3f1 exists to prevent.
+- **Scope (measured, and deliberately incomplete)**: `HiveService.instance.<box>` plain-getter
+  call sites under `lib/` — userBox 38, workoutBox 48, nutritionBox 20, healthBox 26, customBox
+  17, coachBox 22, notificationsBox 8 = **179 total**, against **14** uses of the `*Guarded`
+  getters. ⚠ That 179 counts reads AND writes together; writes SHOULD throw, so it is an upper
+  bound on the affected surface, not the finding's size. Splitting read-vs-write across those 179
+  is the first thing the fix needs and has not been done.
+- **Why it likely hasn't bitten visibly**: the disagreement window is short (~50-500 ms on
+  signOut+signUp transitions), and `app_router._authRedirect` routes an authenticated-owner-null
+  session to `/restoring` before most screens mount. So this is a latent resilience gap, not a
+  standing breakage — consistent with b8e3f1 having been found via a blank-Home crash rather than
+  a broad outage.
+- **Fix shape (not yet attempted)**: measure the read/write split across the 179 sites; then
+  either migrate read call sites to the `*Guarded` getters, or give `rawBox` a read-safe sibling
+  that returns an empty view instead of throwing. Either way it needs the same behavioral
+  treatment as b8e3f1 — a test driving a real authenticated-owner-null window and asserting reads
+  degrade rather than throw — plus a kill-switch, since this touches the cross-account guard.
+- **Blast radius estimate**: `platform` (`lib/core/services/hive_service.dart` +
+  `guarded_box.dart` are core session/auth infrastructure); no migration, no schema.

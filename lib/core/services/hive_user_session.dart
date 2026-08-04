@@ -34,6 +34,12 @@ import 'supabase_service.dart';
 class HiveUserSession {
   HiveUserSession._();
 
+  /// Test-only seam for [ensureOpenedForCurrentSession]'s uid lookup. See
+  /// that method's doc comment. Mirrors `debugAuthUidResolverForTests`
+  /// (guarded_box.dart) — production leaves this null.
+  @visibleForTesting
+  static String? Function()? debugCurrentUidResolverForTests;
+
   /// APK Test #15.4 / B1 Layer B — observable mirror of
   /// [_currentOwnerFullId]. Flutter `ValueNotifier` so Riverpod's
   /// `hiveSessionOwnerProvider` can watch it without polling.
@@ -108,8 +114,15 @@ class HiveUserSession {
   /// `RankService`, `SubscriptionService`, splash startup mutations,
   /// migrators, etc. all gate on the same signal without duplicating
   /// the helper. `SyncService._ensureSessionOpen` now delegates here.
+  ///
+  /// Test-only seam: when [debugCurrentUidResolverForTests] is non-null the
+  /// uid is resolved through it instead of `SupabaseService` (which cannot be
+  /// initialised in a pure-VM unit test). Mirrors the established
+  /// `debugAuthUidResolverForTests` in guarded_box.dart. Production code MUST
+  /// leave it null; reset it in tearDown.
   static Future<String?> ensureOpenedForCurrentSession() async {
-    final userId = SupabaseService.instance.currentUser?.id;
+    final userId = debugCurrentUidResolverForTests?.call() ??
+        SupabaseService.instance.currentUser?.id;
     if (userId == null) return null;
     if (_currentOwnerFullId == userId) return userId;
     try {
