@@ -401,8 +401,14 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 1. **EVERY session that will edit/stage/commit MUST work in its OWN worktree.** Create it with
    `sh scripts/new-worktree.sh <slug>` (branches off the latest `main`, copies `.env`), then
    `cd .claude/worktrees/<slug>` and do ALL edits/commits there.
-2. **The shared main folder is INTEGRATION-ONLY:** reads, `git merge <branch>` + `git push`, and
-   `/build-apk`. Never `git add`/commit feature work there.
+2. **The shared main folder is INTEGRATION-ONLY:** reads, merging a branch into main, `git push`,
+   and `/build-apk`. Never `git add`/commit feature work there. **Prefer
+   `sh scripts/safe_merge.sh <branch>` over a raw `git merge --no-ff <branch>`** for the merge step
+   (Unit 3c, discipline-tooling-hardening, 2026-08-03) — it refuses to merge onto a local `main`
+   that is behind `origin/main`, and shares the same concurrency lock as `safe_commit.sh` /
+   `safe_push.sh`. Not yet enforced by `git_safety_hook.dart` (that hook currently has no clause
+   for `git merge` at all — a raw merge still runs unguarded); wiring a hard block is a separate,
+   explicitly-deferred decision, not assumed here.
 3. **Enforced** by `scripts/check_commit_from_worktree.dart` (pre-commit): a non-integration commit made
    in the PRIMARY worktree is BLOCKED (primary detected via `git rev-parse --git-dir` == `--git-common-dir`,
    both resolved absolute). Exempt: integration ops into main (merge/cherry-pick/revert — their

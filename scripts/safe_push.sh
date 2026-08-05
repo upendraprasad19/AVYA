@@ -16,12 +16,28 @@
 #   the original 2-positional-arg-only form had no path for these; a caller
 #   needing them would otherwise fall back to the raw (unverified) command.
 #
+#   Fixed 2026-08-03 (discipline-tooling-hardening Unit 3c round-2 review,
+#   blocking #2): this passthrough used to collapse extra args into ONE
+#   string (`EXTRA_ARGS="$*"`) and re-expand it UNQUOTED at the call site --
+#   word-splitting on whitespace, which silently shreds any multi-word extra
+#   arg (e.g. a `-m "multi word message"`) into separate argv tokens. This
+#   file's own typical extra args (-u, --force-with-lease, --tags) are
+#   single tokens, so the bug never bit here in practice, but it is the same
+#   defect the round-2 reviewer caught live in safe_merge.sh's identical
+#   pattern -- fixed the same way, same commit: keep extra args as REAL
+#   separate positional parameters (`shift` then `"$@"`, properly quoted)
+#   instead of flattening and re-splitting them.
+#
 # CLAUDE.md §4.3: this is the ONLY sanctioned push path. A PreToolUse hook
 # (scripts/git_safety_hook.dart) blocks a raw `git push` outright, and --
 # separately -- locally re-runs the plan-review-record check before any push
 # as an ADVISORY warning (review round 2, N1: never a hard block with no
 # escape hatch on the one path that lands work on main -- CI is the real,
 # authoritative backstop for this check regardless).
+#
+# Concurrency: acquires the shared scripts/_git_lock.sh lock around the
+# git-mutating section -- see that file's header for the 2026-08-03 incident
+# this closes (a stale liveness check let two safe_commit.sh attempts race).
 
 set -u
 
@@ -32,13 +48,18 @@ if [ -z "$REPO_ROOT" ]; then
 fi
 cd "$REPO_ROOT" || { echo "[safe_push] FAILED: cd \"$REPO_ROOT\" failed." >&2; exit 1; }
 
+. "$REPO_ROOT/scripts/_git_lock.sh"
+git_lock_acquire "safe_push" || exit 1
+
 REMOTE="${1:-origin}"
 BRANCH="${2:-$(git rev-parse --abbrev-ref HEAD)}"
-EXTRA_ARGS=""
-if [ "$#" -gt 2 ]; then
+if [ "$#" -ge 2 ]; then
   shift 2
-  EXTRA_ARGS="$*"
+elif [ "$#" -eq 1 ]; then
+  shift 1
 fi
+# "$@" now holds zero or more extra args as real, separate positional
+# parameters -- see the header note on why this replaced EXTRA_ARGS="$*".
 
 LOCAL_SHA="$(git rev-parse "$BRANCH" 2>/dev/null || echo "")"
 if [ -z "$LOCAL_SHA" ]; then
@@ -48,9 +69,8 @@ fi
 
 LOG="$(mktemp 2>/dev/null || echo "/tmp/safe_push_$$.log")"
 
-# shellcheck disable=SC2086 -- EXTRA_ARGS is an intentional word-split passthrough.
 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=120}" \
-  git push "$REMOTE" "$BRANCH" $EXTRA_ARGS > "$LOG" 2>&1
+  git push "$REMOTE" "$BRANCH" "$@" > "$LOG" 2>&1
 GIT_EXIT=$?
 
 cat "$LOG"

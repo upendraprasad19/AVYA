@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**32 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**31 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -38,5 +38,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-89 | the equipment tier is a SOFT preference: a "bodyweight" user is served gym… | nothing technical — it needs a PRODUCT decision first (see "Product question" | 2026-08-04 (root cause re-read directly in `exercise_selector.dart` + | [:1603](open_issues.md#L1603) |
 | OI-90 | `GuardedBox.empty`'s "reads serve empty" is bypassed by the seven plain… | nothing — but the reader-vs-writer split below must be measured before a fix is | 2026-08-04 (call-site counts below produced by direct grep; the getter bodies and | [:1654](open_issues.md#L1654) |
 | OI-91 | 138 dead `CLAUDE.md §N` citations remain in live code/test/script comments… | nothing — mechanical, but large enough that it wants its own batch rather than | 2026-08-05 (count re-derived by grep at filing time; see the exact command below) | [:1696](open_issues.md#L1696) |
-| OI-92 | `_git_lock.sh` reclaim: a failed restore destroys the lock it stole,… | a founder design decision — see "Recommended fix" below. The defect is fully | 2026-08-05 (round-4 review of the unshipped `discipline-tooling-hardening` branch; | [:1741](open_issues.md#L1741) |
-| OI-93 | a deployed Edge Function can lag the repo indefinitely; the parity test… | nothing. The mechanism is understood and was measured, not inferred. Building | 2026-08-05 (found by measuring the repo-vs-live delta of `log-client-error` during | [:1823](open_issues.md#L1823) |
+| OI-93 | a deployed Edge Function can lag the repo indefinitely; the parity test… | nothing. The mechanism is understood and was measured, not inferred. Building | 2026-08-05 (found by measuring the repo-vs-live delta of `log-client-error` during | [:1832](open_issues.md#L1832) |

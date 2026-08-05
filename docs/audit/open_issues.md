@@ -1740,10 +1740,19 @@ call.
 
 ## OI-92 — `_git_lock.sh` reclaim: a failed restore destroys the lock it stole, letting two processes hold the mutex (P1)
 
-- **Status**: OPEN
-- **Blocked on**: a founder design decision — see "Recommended fix" below. The defect is fully
-  understood and empirically reproduced; what needs ratifying is whether automatic stale-lock
-  reclaim is kept at all.
+- **Status**: CLOSED · 2026-08-05 · the automatic reclaim was DELETED, not patched a fifth time.
+  The founder ratified the recommended fix below on 2026-08-05. Shipped on branch
+  `discipline-tooling-hardening`: `_RECLAIM_MIN_AGE_SECONDS`, the age gate and the
+  steal-verify-restore block are gone; a dead-holder lock is REFUSED with the manual `rm -rf`
+  printed. The claim path (atomic `mv -T` publish) is untouched — it was never the defective part.
+  The stale-lock test was INVERTED rather than deleted and asserts
+  `isNot(contains('Reclaiming stale lock'))`, so re-adding a takeover path now fails a test;
+  negative-controlled by execution. Diagnose `c9f4e1` (Round-4 section);
+  record `docs/plan-reviews/discipline-tooling-hardening.md`.
+  **Found while fixing:** the trap handlers cleaned up but did not terminate, so a Ctrl-C released
+  the lock and let the wrapper carry on WITHOUT it — pre-existing for INT/TERM, fixed here with
+  its own regression test (see the B-pass doc).
+- **Blocked on**: nothing — closed.
 - **Verified**: 2026-08-05 (round-4 review of the unshipped `discipline-tooling-hardening` branch;
   the `mv -T` failure mode reproduced by direct execution on this exact Git-Bash/MSYS2 toolchain,
   not by reasoning)

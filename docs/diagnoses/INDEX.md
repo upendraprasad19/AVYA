@@ -9,6 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### plan_review_record_gate (1 bugs)
 - 2026-08-05 a7f3c2 — scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands…
 
+### git_safety_tooling (1 bugs)
+- 2026-08-03 c9f4e1 — Two independent, real (not hypothetical) gaps in the git-safety tooling that CLAUDE.md §4.3 already relies on. (1) A 2026-08-03 near-miss during the terms-accepted-fix backfill follow-up: a foreground…
+
 ### phase_advance_write_path (1 bugs)
 - 2026-08-03 b4e9c7 — `lib/features/train/screens/graduation_screen.dart` reached 909 lines against Gate 43's 800-line ceiling and passed only because it had been added to the gate's transitional allow-list — the FIRST…
 
@@ -935,6 +938,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-08-05 | a7f3c2 | scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands… | plan_review_record_gate | test/scripts/plan_review_record_gate_e2e_test.dart |
+| 2026-08-03 | c9f4e1 | Two independent, real (not hypothetical) gaps in the git-safety tooling that CLAUDE.md §4.3 already relies on. (1) A 2026-08-03 near-miss during the terms-accepted-fix backfill follow-up: a foreground… | git_safety_tooling | test/contracts/git_lock_concurrency_test.dart (3a — real concurrent processes, not mocked timing; 5 tests after round-2's fix round, see below), test/scripts/plan_review_record_gate_e2e_test.dart (3b — 3 new tests appended to the existing E2E suite for this gate), test/scripts/safe_merge_test.dart (3c — real bare-remote + clone E2E, including the seeded-stale-origin scenario and, after round-2, the multi-word -m passthrough), test/scripts/safe_push_test.dart (NEW in round-2's fix round — safe_push.sh had zero prior coverage; this pins only the EXTRA_ARGS fix that batch actually changed there, not the pre-existing SSH-keepalive/retry logic). |
 | 2026-08-03 | b4e9c7 | `lib/features/train/screens/graduation_screen.dart` reached 909 lines against Gate 43's 800-line ceiling and passed only because it had been added to the gate's transitional allow-list — the FIRST… | phase_advance_write_path | test/contracts/pro_phase_advance_behavioral_test.dart |
 | 2026-08-03 | d4e8a2 | NOT a live incident — a static-tracing risk flagged in b3f9e7's own "Known residual gap" section, investigated and closed here. Nothing under lib/features/onboarding/ called… | onboarding_completed_at | test/contracts/onboarding_hive_session_open_before_write_test.dart |
 | 2026-08-03 | e7c3b9 | The terms-accepted-fix batch (b3f9e7) hit 3 pre-existing gate-tripping content bugs only when its commit finally reached the full gate loop for the first time (earlier attempts failed before reaching… | repo_gate_content_hygiene | test/scripts/claude_md_citations_letter_suffix_test.dart |
