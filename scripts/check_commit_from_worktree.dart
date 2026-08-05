@@ -42,8 +42,9 @@ const _fixHint =
     '  (2 cross-session mixing incidents 2026-07-07). Work in your own worktree:\n'
     '      sh scripts/new-worktree.sh <slug>\n'
     '      cd .claude/worktrees/<slug>     # then edit + commit there\n'
-    '  The main worktree is INTEGRATION-ONLY: `git merge <branch>` + `git push`\n'
-    '  + `/build-apk` + reads.\n'
+    '  The main worktree is INTEGRATION-ONLY: merging a branch (prefer\n'
+    '  `sh scripts/safe_merge.sh <branch>` over a raw `git merge --no-ff`) + `git push`\n'
+    '  (prefer `sh scripts/safe_push.sh`) + `/build-apk` + reads.\n'
     '  Rare solo exception (you are CERTAIN no other session is active in this\n'
     '  folder): ALLOW_MAIN_COMMIT=1 git commit ...';
 

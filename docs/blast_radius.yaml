@@ -155,6 +155,17 @@ paths:
   - { glob: "scripts/commit-msg.sh", tier: platform }
   - { glob: "scripts/safe_commit.sh", tier: platform }
   - { glob: "scripts/safe_push.sh", tier: platform }
+  # Round-1 review finding #24 (blocking, Unit 3 discipline-tooling-hardening
+  # 2026-08-03): _git_lock.sh provides the mutual-exclusion safe_commit.sh and
+  # safe_push.sh (both platform above) both depend on -- without this entry a
+  # future edit gutting the lock alone falls through to the scripts/**
+  # feature-tier catch-all below and clears no review gate, the exact "fell
+  # through scripts/** to feature tier" mistake this file's own comments above
+  # (lines 84, 93) already record happening twice. safe_merge.sh is the third
+  # sanctioned git wrapper (merge-into-main), promoted alongside its siblings
+  # for the same reason.
+  - { glob: "scripts/_git_lock.sh", tier: platform }
+  - { glob: "scripts/safe_merge.sh", tier: platform }
   - { glob: "scripts/validate_audit_closure.dart", tier: platform }
   - { glob: "scripts/check_no_deferral_euphemism.dart", tier: platform }
   # The rule-22 diagnose-doc chain commit-msg.sh drives, promoted with it.
