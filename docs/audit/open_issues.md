@@ -883,9 +883,11 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-55 — Live `amar` re-verify (Unit 0)
 
 - **Status**: OPEN
-- **Verified**: never
+- **Verified**: 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
+  2026-07-27). This issue's own substance has NOT been re-checked since filing.
 - **Identified**: 2026-07-26 · Unit 0 shipped `34621203`
-- **Blocked on**: FOUNDER sign-in; sequenced after OI-52
+- **Blocked on**: FOUNDER sign-in. (The "sequenced after OI-52" half is dead — OI-52 closed
+  2026-07-27; the founder-sign-in half is real and still blocks.)
 
 ## OI-56 — Revert repo to private
 
@@ -970,23 +972,27 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-61 — Coach-UX: live-verify test7, v74 hardening, temp-PRO cleanup
 
 - **Status**: OPEN
-- **Verified**: never
+- **Verified**: 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
+  2026-07-27). This issue's own substance has NOT been re-checked since filing.
 - **Identified**: 2026-07-26 · Units 2+3+FC8 shipped `237c347`, ai-proxy v73
-- **Blocked on**: OI-52
+- **Blocked on**: none — its only blocker was OI-52, which closed 2026-07-27. Pickable now.
 
 ## OI-62 — Coach-reliability: FC6 + Unit A
 
 - **Status**: OPEN
-- **Verified**: never
+- **Verified**: 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
+  2026-07-27). This issue's own substance has NOT been re-checked since filing.
+- **Blocked on**: FC6 is unblocked — its OI-52 dependency closed 2026-07-27. Unit A: F3 anytime,
+  F1 founder-gated.
 - **Identified**: 2026-07-26 · Unit B merged `b2ea2e3`, ai-proxy v72
-- **Blocked on**: FC6 waits on OI-52. Unit A: F3 anytime, F1 founder-gated.
 
 ## OI-63 — Restore C2: 137-policy RLS initplan
 
 - **Status**: OPEN
-- **Verified**: never
+- **Verified**: 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
+  2026-07-27). This issue's own substance has NOT been re-checked since filing.
 - **Identified**: 2026-07-26 · restore-perf C3 shipped
-- **Blocked on**: sequenced after OI-52
+- **Blocked on**: none — it was sequenced after OI-52, which closed 2026-07-27. Pickable now.
 
 ## OI-64 — Discipline-overhead: the three unbuilt gates
 
@@ -1323,7 +1329,9 @@ presence-only by construction). 31 total, all green; 87 across the 7 affected su
 - **Status**: OPEN
 - **Blocked on**: none — but three mechanisms are already refuted (below). The next attempt needs
   the losing generation's own key set, which nothing currently records.
-- **Verified**: 2026-08-03 (Unit A, diagnose `d1f6b3` — both refutations reproduced from code)
+- **Verified**: 2026-08-05 (telemetry-readiness re-checked against live v11 + `pubspec.yaml`
+  `1.0.0+37` — see the measurement note below; the three refutations were reproduced from code
+  2026-08-03 in Unit A / diagnose `d1f6b3` and are unchanged)
 - **Identified**: 2026-08-03 · split out of OI-83 per §4.12.1 after two context-blind review
   rounds refuted two successive repair designs, the second as a data-loss risk.
 - **Risk class**: stale local rows after a lost advance race (not a demotion — the counter is
@@ -1331,8 +1339,17 @@ presence-only by construction). 31 total, all green; 87 across the 7 affected su
 - **What's wrong**: when `commitPhaseAdvance` DECLINES after `generateAndSchedule` has already
   run, the `schedule_*` rows and plan window written for the phase we did not advance to are
   left in place. Nothing rolls them back, so the user can read a plan for a phase they are not
-  on. Now VISIBLE via `phase_advance_declined_rows_stale` (source, intended, live) — Unit A added
-  the telemetry precisely so the frequency can be measured before more repair machinery is built.
+  on. Instrumented via `phase_advance_declined_rows_stale` — Unit A added the telemetry precisely
+  so the frequency can be measured before more repair machinery is built.
+- **⚠ THE MEASUREMENT HAS NOT STARTED (verified 2026-08-05).** Both halves were checked directly,
+  not assumed. Server: the `log-client-error` HIGH-priority lane went live 2026-08-05 as **v11**
+  (it had been v10 since ~2026-06-18, so this op-type was classified LOW — and therefore droppable
+  past the 2000/day budget — for the whole time it existed). Client: the emitter at
+  `pro_phase_advance.dart:405` landed in `5131244e` (2026-08-03), but the newest shipped APK is
+  `1.0.0+37` from `99e145d2` (**2026-07-27**), so **no installed build emits this event at all**.
+  The deploy pre-positioned the server; the clock starts at the next APK ship, not before. Reading
+  an empty `client_errors` count today as "the condition is rare" would be reading a silent
+  pipeline, which is exactly the mistake `feedback_backend_collapse_blinds_telemetry` names.
 - **Three refuted mechanisms — do not re-propose without new evidence:**
   1. *Make the restore writers take `withPhaseAdvanceLock`.* It is a TRY-lock
      (`pro_phase_advance.dart` returns `ifBusy` immediately, no queue), so a restore arriving
@@ -1490,11 +1507,14 @@ call.
 ## OI-87 — one session's non-compliant merge into local `main` blocks every other session's push (P2)
 
 - **Status**: OPEN
-- **Blocked on**: none for the ANALYSIS; the concrete instance below needs a plan-review record
-  from the session that did the work — nobody else can honestly attest to a review they did not
-  run.
-- **Verified**: 2026-08-03 (reproduced by the blocked push described below; both worktrees and
-  the missing file confirmed by direct inspection)
+- **Blocked on**: none. The concrete instance RESOLVED 2026-08-05 — the session that did the work
+  produced `docs/plan-reviews/restore-onboarding-signin-fix.md` (`review_rounds: 2`,
+  `ground_truth_verified: true`, `verdict: converged`, `bpass: accepted`), so the keystone gate is
+  satisfied by a real review rather than by anyone attesting to work they did not do. The
+  STRUCTURAL problem below is unfixed and is what this entry now tracks.
+- **Verified**: 2026-08-05 — record confirmed present by direct read of its frontmatter, and CI is
+  green on the pushed range containing that merge (`9e7d4769`), which is the gate's own verdict.
+  The 2026-08-03 reproduction of the blocked push (both worktrees + the then-missing file) stands.
 - **Identified**: 2026-08-03 · Unit B (`b4e9c7`) push attempt
 - **Risk class**: cross-session shared mutable state / coupled compliance
 - **What happened**: with `origin/main` green at `14c7aeed`, another session merged
@@ -1799,3 +1819,45 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Blast radius estimate**: `platform` (`scripts/_git_lock.sh` is promoted to platform by the
   unshipped branch's own `docs/blast_radius.yaml` entry, alongside `safe_commit.sh` /
   `safe_push.sh`); no migration, no schema. Not live on `main`.
+
+## OI-93 — a deployed Edge Function can lag the repo indefinitely; the parity test that would notice compares repo-to-repo (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing. The mechanism is understood and was measured, not inferred. Building
+  the detection is the work.
+- **Verified**: 2026-08-05 (found by measuring the repo-vs-live delta of `log-client-error` during
+  its authorized deploy; live source read directly via the management API, both before at v10 and
+  after at v11)
+- **Identified**: 2026-08-05 · while deploying `log-client-error` under explicit founder
+  authorization
+- **Risk class**: silent server/client contract drift — observability lane specifically
+- **What's wrong**: `test/contracts/high_priority_op_types_parity_test.dart` pins the Dart client
+  list (`lib/core/services/error_telemetry.dart:86`) against the Edge Function's
+  `HIGH_PRIORITY_OP_TYPES` **as it exists in the repo**. Its own header even documents the missing
+  step — "Fix path when this test fails: … 3. Server-side: redeploy `log-client-error` Edge
+  Function" — but a repo-to-repo source-grep is green whether or not that redeploy ever happened.
+  Nothing anywhere compares repo source to deployed source.
+- **The measured instance**: live `log-client-error` sat at **v10 since ~2026-06-18**. Three
+  commits landed on `index.ts` after that. At the moment of the 2026-08-05 deploy the live
+  allowlist ended at `streak_freeze_lapse_reset` and was missing **7** op-types — 4 from Hermes C8
+  (`e33c39e4`, 2026-07-30) and 3 from Unit A / OI-83 (`5131244e`, 2026-08-03). Every one of those
+  events was being classified LOW server-side, i.e. droppable once a user passed the 2000/day
+  budget, which is the exact silent-drop failure the priority lane was built to prevent.
+- **Why it is easy to miss**: the drift is invisible from inside the repo. `flutter test`, the
+  pre-commit gates and CI were all green throughout the seven weeks, because every one of them
+  reads the repo. The only witness is the live project.
+- **Two prior instances of the same class** (this is the third): OI-73 — ~10 Edge Functions still
+  running the pre-`9ab9f42b` cron auth gate; and the `restore-user-snapshot` redeploy note at
+  `open_issues.md:481`. Both are "deployed artifact lags committed source, noticed by hand."
+- **Fix shape (not yet attempted)**: a check that reads deployed Edge Function source via the
+  management API (`GET /v1/projects/<id>/functions/<slug>`) and diffs the contract-bearing
+  constants against the repo. Two honest constraints to design around: it needs a management-API
+  token, so it cannot run in the ordinary pre-commit path and probably belongs in CI with a
+  secret, or in `/build-apk`'s gate set; and it must not fail closed on unrelated formatting, so
+  the comparison should target named constants rather than whole files. A far cheaper first
+  version — a release-checklist line item that lists every Edge Function whose repo source has
+  commits newer than its deployed version — would have caught this instance and needs no new
+  parsing at all.
+- **Blast radius estimate**: the gate itself would be `feature` (a script plus CI wiring). The
+  drift it detects is not — this instance sat on the telemetry lane, and OI-73's sits on cron
+  auth.
