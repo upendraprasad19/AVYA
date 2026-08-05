@@ -671,9 +671,14 @@ void main(List<String> args) {
       continue;
     }
 
-    // One-record-one-landing (OI-58b) is NOT enforced here — it ships with
-    // OI-58a in the split unit. A branch re-landing at >=account can still
-    // satisfy the gate with the record from its first landing.
+    // One-record-one-landing (OI-58b's deferred half, gate-input-family.md
+    // lines 156-160): if `rawBranch` landed before, its record must have
+    // changed since then. Informational only for now (see the function's own
+    // doc comment for why this is a stdout NOTE, not routed through `fail`).
+    final staleness =
+        _checkOneRecordOneLanding(rawBranch, '$_recordsDir/$branch.md', sha, short, repoOwner);
+    if (staleness != null) stdout.writeln('$tag NOTE (possible stale reuse): $staleness');
+
     final err = _validateRecord(
         '$_recordsDir/$branch.md', rawBranch, branch, tier, short, sha);
     if (err != null) fail(err);
@@ -692,6 +697,86 @@ void main(List<String> args) {
   exit(warnOnly ? 0 : 1);
 }
 
+
+/// One-record-one-landing (OI-58b's deferred half). `gate-input-family.md`
+/// lines 156-160 independently reviewed and bpass-accepted a DIFFERENT,
+/// more precise predicate for this same gap ("if the branch has already
+/// landed at ≥account, the record must have been *modified in this range*"
+/// — i.e. touched by some commit between the two landings), then split it
+/// into its own unit alongside OI-58a and never implemented it. Round-1
+/// review of THIS function (Unit 3b, 2026-08-03) found it does NOT
+/// implement that predicate, despite an earlier draft of this comment
+/// claiming it did — corrected here rather than left standing. What ships
+/// instead is a simpler, related check: compare the record's blob
+/// byte-for-byte between the two landings. Two known divergences from the
+/// vetted design, stated rather than silently carried: (a) it does not
+/// check the PRIOR landing's own tier, so a coincidental record file left
+/// over from an unrelated situation could theoretically be compared against
+/// (no known live instance); (b) it is a point-in-time comparison, not a
+/// range walk, so it cannot distinguish "genuinely re-reviewed" from "byte-
+/// identical after two edits that happen to cancel out" (a narrow case).
+/// Both are acceptable for an advisory-only check; implementing the vetted
+/// design for real is a follow-up, not bundled into this landing.
+///
+/// If [rawBranch] landed on `main` before (an earlier merge, found by walking
+/// first-parent history strictly before [sha]), this compares that landing's
+/// record blob against the current one. Returns a human-readable description
+/// of the staleness when they are byte-identical, or null when there is
+/// nothing to flag (first landing of this branch name, either side
+/// unreadable, or the record's bytes changed).
+///
+/// DELIBERATELY returns a message for the caller to print via `stdout`, not
+/// `fail()`: this is new history-walking logic in a file with a documented
+/// habit of subtle bugs (four attempts at the neighbouring version-bump
+/// exemption, each caught by independent review before landing — see this
+/// file's own header). It ships informational-only so real-world NOTEs can
+/// be observed before anything here can block a merge; promoting it to
+/// `fail()` is a follow-up once that baseline exists (CLAUDE.md §4.11).
+///
+/// Matching is deliberately conservative: only [MergeSubjectKind.branchMerge]
+/// and [MergeSubjectKind.pullRequestMerge] count as a "prior landing" of the
+/// same branch. `remoteSyncMerge` and `foreignPullRequest` are excluded — a
+/// false negative here just means a missed NOTE, while a false positive
+/// erodes trust in an advisory the same way this file's own `safe_push.sh`
+/// sibling avoids crying wolf on a transient verification blip. Round-1
+/// review finding #9: this restriction is bypassable by an author who
+/// phrases a landing's own subject in the `remoteSyncMerge` shape
+/// (`Merge branch 'X' of <url>`) to dodge detection entirely — harmless
+/// while this stays advisory-only; must be closed before any promotion to
+/// `fail()`.
+String? _checkOneRecordOneLanding(
+    String rawBranch, String recordPath, String sha, String short, String? repoOwner) {
+  final historyRaw =
+      _gitOrNull(['log', '--format=%H%x09%s', '--first-parent', '$sha^1']);
+  if (historyRaw == null) return null; // can't walk history — advisory only, nothing to flag
+
+  for (final line in historyRaw.split('\n')) {
+    final tab = line.indexOf('\t');
+    if (tab < 0) continue;
+    final priorSha = line.substring(0, tab).trim();
+    final priorSubject = line.substring(tab + 1).trim();
+    if (priorSha.isEmpty) continue;
+
+    final priorMs = classifyMergeSubject(priorSubject, repoOwner: repoOwner);
+    final isTrustedLandingKind = priorMs.kind == MergeSubjectKind.branchMerge ||
+        priorMs.kind == MergeSubjectKind.pullRequestMerge;
+    if (!isTrustedLandingKind || priorMs.branch != rawBranch) continue;
+
+    // Most recent earlier landing of the SAME raw branch name found.
+    final priorContent = _gitBlob(priorSha, recordPath);
+    final currentContent = _gitBlob(sha, recordPath);
+    if (priorContent == null || currentContent == null) return null;
+    if (priorContent != currentContent) return null; // record WAS updated — fine.
+
+    final priorShort = priorSha.length >= 8 ? priorSha.substring(0, 8) : priorSha;
+    return "$short: branch '$rawBranch' also landed earlier at $priorShort, and "
+        '$recordPath is byte-identical to that landing. Nothing in the record '
+        'shows this NEW diff was reviewed — confirm bpass_review (and the '
+        'record itself) were actually re-pointed for this landing, not carried '
+        'over unchanged from the first one.';
+  }
+  return null; // first landing of this branch name — nothing to compare against.
+}
 
 /// Validates one record file. Returns null on success, or the failure message.
 /// Validates the record AS OF [atRev], not as of the working tree.
