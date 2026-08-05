@@ -72,7 +72,7 @@ Box constants live in `lib/core/services/hive_service.dart` as `static const Str
 
 ### 3.2 Per-user vs shared
 
-Since APK Test #11.1 (2026-05-05), most user-specific boxes open **per-user** via `HiveUserSession` (boxes named `<base>_<userId>` on disk; the constant still reads as the base name in code). User-scoped data MUST go through `MigratedKey.read/write/delete` (in `lib/core/services/migrated_key.dart`) — never write directly to the shared `configBox` for anything user-specific. See CLAUDE.md §15 "User-scoped Hive keys" for the 31-key migrated set and the two intentionally-shared exceptions (`pending_referral_code`, `logout_in_progress`).
+Since APK Test #11.1 (2026-05-05), most user-specific boxes open **per-user** via `HiveUserSession` (boxes named `<base>_<userId>` on disk; the constant still reads as the base name in code). User-scoped data MUST go through `MigratedKey.read/write/delete` (in `lib/core/services/migrated_key.dart`) — never write directly to the shared `configBox` for anything user-specific. See docs/architecture/sync.md "User-scoped Hive keys" for the 31-key migrated set and the two intentionally-shared exceptions (`pending_referral_code`, `logout_in_progress`).
 
 ### 3.3 Hive key prefix registry (CLOSED SET)
 
@@ -120,7 +120,7 @@ Every Hive key composed from a prefix lives here. **Never reuse a prefix for a d
 
 ### 3.4 Hive field names (within a row Map)
 
-Rows stored under prefixed keys are `Map<String, dynamic>`. The field name contract for the two highest-traffic prefixes is enumerated in CLAUDE.md §15 "Hive field-name contract". Quick reference:
+Rows stored under prefixed keys are `Map<String, dynamic>`. The field name contract for the two highest-traffic prefixes is enumerated in docs/architecture/sync.md "Hive field-name contract". Quick reference:
 
 - **`exlog_*`:** `exercise_name`, `date`, `sets[]` (List of Map), `set_number`, `reps_completed`, `weight_kg`, `volume_kg`, `logging_type`, `is_pr`, `source`, `updated_at_ms`, optional `notes`, optional `workout_log_id`.
 - **`nlog_*`:** `log_key`, `date`, `meal_type`, `total_calories`, `total_protein`, `total_carbs`, `total_fat`, `total_fiber`, `items[]` (per-item: `name`, `quantity_g`, `calories`, `protein`, `carbs`, `fat`, `fiber`), `source`, `logged_at`, `created_at`.
@@ -244,7 +244,7 @@ Every term that has SPECIFIC meaning in this app. New features that use any of t
 | **ward** | Prefix for every Wardroom design-system primitive (§6). | NOT hospital ward. |
 | **wardroom** | The design system itself. Reconciled palette + DM Sans + Fraunces, gold accent `#D4B270`. Source of truth: `Knowledgebase/Avya App redesign/design_handoff_wardroom/src/wardroom-tokens.jsx`. | NOT "common room". |
 | **captain** | The AI coach voice persona. Used in proactive triggers as `captainPrompt('proactive')` from `_shared/captain_manual.ts`. | NOT a rank label (the highest rank is Capt; the voice is captain-of-the-ship). |
-| **dispatch** | A proactive coach push sent to a user (one of the 8 server-cron triggers; see CLAUDE.md §11). UI verb: "deliver dispatch". | NOT git/CI deployment dispatch. |
+| **dispatch** | A proactive coach push sent to a user (one of the 8 server-cron triggers; see docs/architecture/ai.md). UI verb: "deliver dispatch". | NOT git/CI deployment dispatch. |
 | **ProactiveType** | THE canonical vocabulary for a notification kind, declared in `supabase/functions/_shared/proactive_dedup.ts`. Every new notification key — dedup slot, preference key, telemetry label — uses these strings: `morning_brief`, `workout_window`, `protein_gap`, `streak_protection`, `pr_celebration`, `plateau_alert`, `weekly_recap`, `re_engagement`, `subscription_expiry`. | NOT a second vocabulary. **Known drift (2026-07-26):** the 5 user-facing preference keys predate this rule and use different spellings for the same concepts (`morning_checkin`, `workout_reminders`, `streak_alerts`, `subscription_reminders`, `protein_alerts`) — only `weekly_recap` agrees. Nine concepts, two names each. Aligning them is a scheduled unit; until it lands, `ProactiveType` is authoritative and NEW keys must conform. |
 | **PRO (as a predicate)** | `subscriptions.status = 'active' AND end_date > now()`, via `fetchProUserIds()` / `isProUser()` in `supabase/functions/_shared/subscription.ts`. BOTH terms are required. | NOT `users.subscription_status` — that column has no expiry term and nothing writes it back to `'free'`, so it marks lapsed users PRO forever (live 2026-07-26: it claimed 6 PRO users; the correct predicate returned 0). NOT `status='active'` alone — `status` is never reconciled to expired. Writing the column as a cache is fine; reading it as truth is the bug. |
 | **seal** | A Wardroom badge primitive (`WardSealBadge` in 4 variants: report / subscription / phase / founder). | NOT Indian Navy SEAL ranks (which we don't model). NOT a sealed/locked record. |
@@ -254,7 +254,7 @@ Every term that has SPECIFIC meaning in this app. New features that use any of t
 | **gate** | A feature-flag PRO check via `SubscriptionService.instance.gate(featureKey, onPro: ..., onFree: ...)`. The ONLY way to PRO-gate a feature in widget code. | NOT a routing guard (those live in `app_router.dart`). |
 | **paywall** | The bottom-sheet UI shown when `gate` denies. Single implementation: `PaywallSheet`. | NOT a hard route block. |
 | **plan generator** | The LOCAL Dart V4 pipeline at `lib/shared/repositories/plan_engine/`. Read-only without explicit user approval per CLAUDE.md rule #14. | NOT an AI/LLM call — zero API cost. |
-| **proactive trigger** | A server-side cron Edge Function that fires a Captain push (8 of them; see CLAUDE.md §11 "Proactive triggers"). | NOT a client-side notification scheduler. |
+| **proactive trigger** | A server-side cron Edge Function that fires a Captain push (8 of them; see docs/architecture/ai.md "Proactive triggers"). | NOT a client-side notification scheduler. |
 | **isPaymentInFlight** | The 10-min grace window after a Razorpay success. `verifyFromServer` suppresses downgrade while open. Set by `SubscriptionService.markPaymentInFlight()`. | NOT the Razorpay polling window (that's separate). |
 | **localActivationAt** | The 10-min optimistic local PRO activation timestamp written by the success handler. | NOT subscription start date (that's `subscriptions.start_date`). |
 | **dossier** | The Profile screen. UI-name only; the route is `/profile`. | NOT a separate report. |
@@ -267,7 +267,7 @@ Every term that has SPECIFIC meaning in this app. New features that use any of t
 | **prediction card** | The 90-day forecast card from `future-prediction` Edge Function. Free: one card post-onboarding. PRO: monthly. | NOT the AI coach inline prediction. |
 | **water target** | The daily water goal. Read ONLY through `WaterTargetService.instance.currentTargetMl()` or `ref.watch(waterTargetProvider)`. Floor 2.5 L, ceiling 4.0 L. Manual override at `userBox['water_target_override_ml']`. | **NEVER hardcode `3000`** (that's the bug-class fixed in Test #11). |
 | **submission** | A user-contributed custom food or exercise that's been opted-in for community sharing (`submitted_to_library: true`). DRAFT means not yet submitted. PENDING means awaiting moderator. APPROVED means promoted to global DB. | NOT a workout log. |
-| **deletion (DPDP §17)** | Hard erasure via `delete-account` Edge Function. Razorpay sub cancel + OneSignal unsub + Storage purge + audit row in `account_deletion_log`. Five community surfaces are pseudonymized via `ON DELETE SET NULL` (see CLAUDE.md §16). | NOT soft-delete. The `softDeleteAccount` path is `@Deprecated`. |
+| **deletion (DPDP §17)** | Hard erasure via `delete-account` Edge Function. Razorpay sub cancel + OneSignal unsub + Storage purge + audit row in `account_deletion_log`. Five community surfaces are pseudonymized via `ON DELETE SET NULL` (see docs/architecture/payment.md, "DPDP delete-account"). | NOT soft-delete. The `softDeleteAccount` path is `@Deprecated`. |
 
 ---
 
@@ -281,7 +281,7 @@ Before introducing a new name:
 4. **If the name is a new Hive key prefix**, add it to §3.3 in the same PR + update `docs/sot_registry.yaml`.
 5. **If the name maps Hive ↔ cloud**, add the mapping to §4.4 in the same PR.
 6. **If the name is a new Wardroom primitive**, export it from `wardroom.dart` in the same PR.
-7. **If you rename an existing Hive field**, update the writer + every consumer in the same PR + update or add a contract test in `test/contracts/<x>_test.dart`. See CLAUDE.md §15 "Hive field-name contract".
+7. **If you rename an existing Hive field**, update the writer + every consumer in the same PR + update or add a contract test in `test/contracts/<x>_test.dart`. See docs/architecture/sync.md "Hive field-name contracts".
 
 When two writers exist for the same concept (rare; should never be the goal), one MUST be the canonical writer and the other MUST delegate. The 2026-05-06 EditWorkoutLogSheet vs WorkoutWriteService drift (memory file `feedback_source_of_truth_audit.md`) is the cautionary tale.
 
@@ -289,9 +289,9 @@ When two writers exist for the same concept (rare; should never be the goal), on
 
 ## 10. Cross-references
 
-- **`CLAUDE.md` §15** — Source of Truth Rules (NON-NEGOTIABLE), Hive field-name contract, Sync fan-out contract, Restore-completeness sync.
-- **`CLAUDE.md` §6** — Coding rules (Hive-first, Riverpod-only, gate() for all PRO features, etc.).
-- **`CLAUDE.md` §9** — Wardroom palette / typography / spacing tokens.
+- **`docs/architecture/sync.md`** + **`docs/sot_registry.yaml`** — Source of Truth rules (NON-NEGOTIABLE), Hive field-name contract, sync fan-out contract, restore-completeness.
+- **`CLAUDE.md` §4.4** — the 23 coding rules (Hive-first, Riverpod-only, gate() for all PRO features, etc.). NOTE: root §6 is MULTI-TIER COVERAGE, not the coding rules.
+- **`lib/shared/widgets/wardroom/CLAUDE.md`** — Wardroom palette / typography / spacing tokens.
 - **`docs/sot_registry.yaml`** — Machine-readable registry of every concept with multiple readers (consumed by automated audit tooling).
 - **`lib/core/utils/ist_date.dart`** — Date helpers. All date keys + cloud `date` columns + counter resets MUST go through `istDateStr(...)`. See feedback memory `feedback_use_ist_throughout.md`.
 - **`docs/reference/database-schema.md`** — Full DDL for all 37 cloud tables.

@@ -206,4 +206,109 @@ bpass_review: docs/reviews/probe.md
     expect(code, 1,
         reason: 'the record must vouch for the branch actually being merged');
   });
+
+  group('Unit 3b — one-record-one-landing (advisory NOTE)', () {
+    /// Lands `branchName` on main TWICE: first with a full valid record,
+    /// then again (new pubspec.yaml content, so there is something to land)
+    /// with the record touched only when [touchRecordOnSecondLanding]. Both
+    /// runs use a fresh `-B` checkout, so the second landing's branch starts
+    /// from the post-first-merge tip -- a real re-landing, not a rebase.
+    ({int exitCode, String out}) mergeTwice(
+        String branchName, {required bool touchRecordOnSecondLanding}) {
+      final slug = branchName.replaceAll('/', '-');
+      final recFile = File('$repo/docs/plan-reviews/$slug.md');
+
+      void writeValidRecord() {
+        recFile.writeAsStringSync('''
+---
+branch: $branchName
+blast_radius: platform
+review_rounds: 2
+ground_truth_verified: true
+verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/probe-$slug.md
+---
+''');
+        Directory('$repo/docs/reviews').createSync(recursive: true);
+        File('$repo/docs/reviews/probe-$slug.md')
+            .writeAsStringSync('verdict: accepted\n');
+      }
+
+      // First landing.
+      _run('git', ['checkout', '-q', '-B', branchName, 'main'], repo);
+      File('$repo/pubspec.yaml')
+          .writeAsStringSync('name: probe\n# $branchName v1\n');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'change on $branchName v1'], repo);
+      _run('git', ['checkout', '-q', 'main'], repo);
+      writeValidRecord();
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'record for $branchName v1'], repo);
+      _run('git', ['merge', '--no-ff', '-q', branchName,
+          '-m', "Merge branch '$branchName' — first landing"], repo);
+
+      // Second landing: fresh branch off the NEW main tip, genuinely
+      // different content so there is something to commit.
+      _run('git', ['checkout', '-q', '-B', branchName, 'main'], repo);
+      File('$repo/pubspec.yaml')
+          .writeAsStringSync('name: probe\n# $branchName v1\n# $branchName v2\n');
+      _run('git', ['add', '-A'], repo);
+      _run('git', ['commit', '-qm', 'change on $branchName v2'], repo);
+      _run('git', ['checkout', '-q', 'main'], repo);
+      if (touchRecordOnSecondLanding) {
+        writeValidRecord(); // re-written verbatim is still a no-op diff...
+        recFile.writeAsStringSync(
+            recFile.readAsStringSync().replaceFirst(
+                'review_rounds: 2', 'review_rounds: 3'), // ...so actually change a field.
+        );
+        _run('git', ['add', '-A'], repo);
+        _run('git', ['commit', '-qm', 'record for $branchName v2'], repo);
+      }
+      _run('git', ['merge', '--no-ff', '-q', branchName,
+          '-m', "Merge branch '$branchName' — second landing"], repo);
+
+      final r = _run('dart', ['scripts/check_plan_review_record_exists.dart'],
+          repo, extra: {
+            'GITHUB_REF': 'refs/heads/main',
+            'GITHUB_REPOSITORY_OWNER': 'upendraprasad19',
+          });
+      return (exitCode: r.exitCode, out: '${r.stdout}${r.stderr}');
+    }
+
+    test('a re-landing with an UNCHANGED record prints the advisory NOTE, '
+        'but does not block the merge', () {
+      final r = mergeTwice('reuse-stale', touchRecordOnSecondLanding: false);
+      expect(r.out, contains('NOTE (possible stale reuse)'),
+          reason: 'the second landing reused the first landing\'s record '
+              'byte-for-byte -- this must be surfaced.\n${r.out}');
+      expect(r.out, contains('reuse-stale'));
+      expect(r.exitCode, 0,
+          reason: 'this check is advisory-only for now (§4.11 soft-rollout) '
+              '-- it must never block a merge on its own.\n${r.out}');
+    });
+
+    test('a re-landing with an UPDATED record does NOT print the NOTE', () {
+      final r = mergeTwice('reuse-fresh', touchRecordOnSecondLanding: true);
+      expect(r.out, isNot(contains('NOTE (possible stale reuse)')),
+          reason: 'the record was genuinely modified for the second landing '
+              '-- flagging it would be a false positive that erodes trust in '
+              'the advisory.\n${r.out}');
+      expect(r.exitCode, 0);
+    });
+
+    test('a FIRST landing of a brand-new branch name never prints the NOTE',
+        () {
+      final code = mergeAndRunGate(
+          'brand-new-branch', "Merge branch 'brand-new-branch'");
+      expect(code, 0);
+      // Re-run standalone (mergeAndRunGate discards stdout) to inspect text.
+      final r = _run('dart', ['scripts/check_plan_review_record_exists.dart'],
+          repo, extra: {
+            'GITHUB_REF': 'refs/heads/main',
+            'GITHUB_REPOSITORY_OWNER': 'upendraprasad19',
+          });
+      expect(r.stdout, isNot(contains('possible stale reuse')));
+    });
+  });
 }

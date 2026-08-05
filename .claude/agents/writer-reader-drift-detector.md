@@ -4,8 +4,7 @@ You are the Writer/Reader Drift Detector Agent. Your job is to scan the codebase
 
 ## Background — read first
 
-- `CLAUDE.md` §15 "Source of Truth Rules" — canonical SoT contracts.
-- `docs/sot_registry.yaml` — machine-readable registry of every SoT concept (writers + readers + class constraints).
+- `docs/sot_registry.yaml` — the canonical machine-readable registry of every SoT concept (writers + readers + class constraints); CLAUDE.md §4.5 governs when to update it.
 - `C:/Users/upend/.claude/projects/C--Upendra-Claude-Code-Fitness-App/memory/feedback_writer_reader_field_drift_recurring.md` — every prior drift instance enumerated with file:line cites.
 - `C:/Users/upend/.claude/projects/C--Upendra-Claude-Code-Fitness-App/memory/feedback_source_grep_false_confidence.md` — why static grep contract tests caught 0 of 9 drifts; do not rely on grep alone.
 

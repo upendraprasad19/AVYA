@@ -41,7 +41,7 @@ Cap report at 800 words. Do NOT propose fixes — that's the consolidation phase
 | L9 | IST-throughout | Every date key + cloud `date` column + counter reset uses IST helpers. | Test #15.4 / B1, Test #12 / Task A-1. See `feedback_use_ist_throughout.md`. |
 | L10 | SoT registry completeness | Every "single reader" concept in `docs/sot_registry.yaml`. | Test #16.2: 41 entries. |
 | L11 | Restore-completeness sync | Every Hive surface paying users lose on reinstall has cloud table + sync write + restore method + contract test. | Test #11 / Theme A (3 surfaces); Test #15.3 / Bug 4a (template restore). |
-| L12 | Subscription server-verification | High-value features call `verifyFromServer()`. | Test #12 / Themes C-1..C-4. See CLAUDE.md §10. |
+| L12 | Subscription server-verification | High-value features call `verifyFromServer()`. | Test #12 / Themes C-1..C-4. See docs/architecture/subscription.md. |
 | L13 | Migration apply pair-update | Every `apply_migration` MCP call paired with `backups/applied_migrations.json` update. | See `feedback_migration_apply_record_pair.md`. |
 | L14 | onConflict natural-key live arbiter | Every `ON CONFLICT` shape resolves against live schema in rollback txn. | Test #16 / migration 064. See `feedback_partial_unique_arbiter_trap.md`. |
 | L15 | Cross-account session ownership (Hive) | Every user-scoped Hive read goes through `wrapUserScopedBox`; writers respect `HiveUserSession`. | Test #15.4 / B1 (two-layer fix). |
