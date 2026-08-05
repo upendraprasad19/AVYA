@@ -62,13 +62,28 @@ const Set<String> _allowList = <String>{
   // could not touch it at all). OI-84's own "~770" estimate had gone stale when
   // Unit A grew the file to 909.
   //
-  // ADDED 2026-08-03 — restoring_screen.dart. Founder-authorized in chat
-  // (restore-onboarding-signin-fix batch). Diagnose a3f6d9's fix touches 3
-  // separate paths to /home (two _goHome branches + the 30s CONTINUE-timeout
-  // escape hatch), each needing the same local-onboarded-flag stamp; comments
-  // already trimmed to the minimum non-obvious "why". Split owed, tracked as
-  // OI-88 — same reference layout as active_workout/.
-  'lib/features/auth/screens/restoring_screen.dart',
+  // REMOVED 2026-08-05 (repo-gate-pattern-sweep, diagnose e7c3b9) —
+  // lib/features/auth/screens/restoring_screen.dart. It was added 2026-08-03
+  // (founder-authorized in chat, restore-onboarding-signin-fix batch) because
+  // a3f6d9's fix pushed the file to 824. A further comment trim took it to
+  // 791, so the exemption is no longer load-bearing and the gate protects the
+  // file again on its own terms.
+  //
+  // This does NOT close OI-88, and the entry is deliberately not being
+  // presented as if it did. OI-88's stated fix shape is a SPLIT into a sibling
+  // folder (the key-migrator imports + _healAfterRestoreInBackground's
+  // reconciler fan-out, and/or _AnimatedDotsState, which has no dependency on
+  // _RestoringScreenState's fields), with the allow-list entry removed in the
+  // same commit. What actually happened here is a comment trim: no code moved,
+  // no file was created, and the structural debt is untouched. OI-88 stays
+  // OPEN, narrowed to that residual.
+  //
+  // Note the margin: 791 leaves NINE lines. That is the same condition the
+  // graduation_screen note above records as what created OI-84 in the first
+  // place — a file so close to the ceiling that the next fix cannot touch it.
+  // Removing the exemption is still strictly better than keeping it (the gate
+  // now actually watches this file), but the next change to it will likely
+  // have to do the split first rather than trim further.
 };
 
 void main() {

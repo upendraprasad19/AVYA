@@ -92,4 +92,16 @@ Converged. The production surface is one regex widening in a pre-commit gate,
 plus comment and documentation text; no application logic changed. The
 `restoring_screen.dart` trim brings the file to 791 lines, under Gate 43's 800
 ceiling, which makes the transitional allow-list entry unnecessary — removing
-it is done in the follow-up commit on this branch, closing **OI-88**.
+it is done in the follow-up commit on this branch.
+
+**Correction (follow-up commit, 2026-08-05).** The sentence above originally
+ended "closing **OI-88**". That was wrong, and it is the same defect class this
+batch spent three rounds on: a claim asserted without checking the authoritative
+source. OI-88's own text states its fix shape as a **split** into a sibling
+folder with the allow-list entry removed in the same commit. This branch did a
+**comment trim** — no code moved, no file created, the structural debt untouched.
+Removing the exemption closes the exemption half only; OI-88 stays OPEN, narrowed
+to the residual split, and the board entry says so. Worth recording that neither
+of the two independent rounds nor the B-pass caught this — all three verified the
+791 figure and the byte-identical-code claim, which were true, and none re-read
+OI-88 to check that the *inference drawn from* those numbers held.

@@ -36,7 +36,7 @@ findings:
     title: "restoring_screen.dart at the Gate 43 ceiling, zero margin, 28.75% comments"
     terminal_state: closed_in_commit
     commit: *wip
-    verification: "wc -l confirms 791 (post-refresh; 824 -> 791, a 33-line reduction). NOT evidenced by the gate: main allow-lists this file, so check_god_screen_max_lines.dart short-circuits before the size check and would PASS at any length -- removing that entry is the OI-88 follow-up."
+    verification: "wc -l confirms 791 (post-refresh; 824 -> 791, a 33-line reduction). NOW EVIDENCED BY THE GATE as of the follow-up commit on this branch: the allow-list entry was removed, so check_god_screen_max_lines.dart no longer short-circuits on this file -- it runs the real size check and reports 'OK -- no screen exceeds 800 lines' with restoring_screen.dart absent from the ALLOW output (6 entries left, down from 7). Before that removal the gate would have PASSED at any length, so the earlier PASS was vacuous for this file. SCOPE: this closes the EXEMPTION half only. OI-88's owed work is a SPLIT into a sibling folder; no code moved here and the structural debt is untouched, so OI-88 stays OPEN, narrowed to that residual. The plan-review record's original claim that this removal 'closes OI-88' was wrong and is corrected in the same commit."
     notes: "extracted/trimmed 4 narrative comment blocks to short pointers at CLAUDE.md/diagnose-docs; 2 of the 4 also corrected content that had drifted stale (15s-vs-30s CTA timing) relative to the code."
   - id: P3
     title: "SoT registry enclosing-method-name-vs-interior-range (the 3rd b3f9e7 bug) -- sweep for siblings"

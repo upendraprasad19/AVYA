@@ -106,3 +106,27 @@
     not the OI-84-literal hoist alone) and the arithmetic behind it — OI-84's own "~770 lines"
     estimate went stale when Unit A grew the file to 909. A board item's numbers age; re-measure
     before planning against them.
+
+- 2026-08-05 — /strategic-compact — trigger: **phase boundary** (Unit 2's review phase closed —
+  ×2 context-blind rounds + self-initiated B-pass all complete, diagnose-doc + closure YAML +
+  plan-review record + B-pass record written and validating) **+ heavy context pressure** after a
+  long multi-unit session (Unit 1 replay/merge/push, OI-89/90 filed, Unit 2 reviewed).
+  Boundary is real but NOT a ship: Unit 2's 17 files are still uncommitted, so the preserve list
+  had to carry live uncommitted state rather than just a merged SHA. · founder: ACCEPTED (ran /compact)
+  → Preserve list led with the three environment rules that cost the most time today, because
+    each was a *false signal* rather than a bug: a background task reporting "exit code 0" for a
+    commit the gate had refused; `ALLOW_RAW_GIT` exported around a test run leaking into
+    `git_safety_hook_integration_test.dart`'s subprocess and failing 3 tests that assert the hook
+    denies raw git; and `git checkout <file>` used to undo a scratch edit, which reverts to HEAD
+    and silently discarded an uncommitted fix (use a byte-copy).
+  → Also carried, as the batch's durable lesson: a completeness claim must cite **the command and
+    its input set**, not prose. Unit 2's citation-sweep count was wrong THREE times (2 → 3 → 8 →
+    20) because each correction added the site it was handed instead of re-deriving. And the
+    filter itself ("citations outside §0-§7") is structurally blind to the **wrong-but-live**
+    class — a citation resolving to a real but incorrect section — which is the class the batch
+    argued is worse than a dead pointer. Two were found only by reading, never by grepping.
+  → Third carry: bounds-checking is strictly weaker than correctness. The comment trim invalidated
+    three `restoring_screen.dart` `line_range:` entries in `docs/sot_registry.yaml`, and BOTH
+    registry gates passed, because they only assert `end <= lineCount` and the stale ranges stayed
+    in bounds. Same branch simultaneously repointed the writer-reader-drift-detector agent AT that
+    registry.

@@ -1540,11 +1540,23 @@ call.
   to do so on 2026-08-03 morning is what put `ca4ef2c3` on `origin` red.
 - **Blast radius estimate**: `feature` (a hook + docs); no runtime code, no migration, no schema.
 
-## OI-88 — `restoring_screen.dart` added to the Gate 43 allow-list; split owed (P3)
+## OI-88 — `restoring_screen.dart` split owed (allow-list entry now removed) (P3)
 
 - **Status**: OPEN
-- **Blocked on**: nobody yet — no session has picked up the split.
-- **Verified**: never
+- **Blocked on**: nobody yet — no session has picked up the split. The Gate 43 *exemption* half is
+  closed; the *split* half, which is the actual owed work, is not.
+- **Verified**: 2026-08-05 (`wc -l` = 791 on `repo-gate-pattern-sweep`; allow-list entry removed in
+  the same commit; `check_god_screen_max_lines.dart` passes with the file no longer exempt)
+- **UPDATE 2026-08-05** · `repo-gate-pattern-sweep`, diagnose `e7c3b9`. A comment trim took the
+  file 824 → 791, so the allow-list entry was removed — the gate protects this file again on its
+  own terms. **This did not do the owed work.** No code moved, no file was created; the trim was
+  comments only (proven byte-identical in code by strip-and-compare, twice). The fix shape below
+  is untouched and this OI stays OPEN, narrowed to it. Two things to carry forward: (a) that
+  batch's plan-review record claimed removing the entry would *close* OI-88 — it was wrong and is
+  corrected in the same commit as this update; (b) 791 leaves **nine lines** of margin, which is
+  precisely the condition the allow-list's own `graduation_screen` note records as having created
+  OI-84 (it sat six under, so a fix could not touch it at all). The next change to this file will
+  most likely have to do the split first rather than trim further.
 - **Identified**: 2026-08-03 · `restore-onboarding-signin-fix` batch. Diagnose `a3f6d9`'s fix
   (local-onboarded-flag stamp at all three paths to `/home` in `RestoringScreen`) added 24 lines
   net after comment-trimming, pushing the file from 800 to 824 lines — 24 over Gate 43's ceiling.
