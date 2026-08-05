@@ -64,7 +64,10 @@ resolveDestination(row) returns one of:
   - ResumeOnboarding(firstMissingStep) — onboarding_completed_at NULL, Hive partially populated
   - StartMissionBrief              — no user_profile row at all → new user
   ↓
-15-second timeout safety: CONTINUE button surfaces; restore continues in background
+Timeout safety (TWO stages, not one — restoring_screen.dart:72-73):
+  15s (`_softHintAfter`) → a soft "still working" HINT appears
+  30s (`_ctaAfter`)      → the CONTINUE escape BUTTON surfaces
+  Either way the restore keeps running in the background.
 ```
 
 **`hydrateFromCloud()` is a DIFFERENT, easily-confused method — `RestoringScreen`
@@ -107,7 +110,7 @@ read user-scoped Hive without going through `wrapUserScopedBox`.
 | Pitfall | How to avoid | Source |
 |---|---|---|
 | User A's data leaks into user B's session after live sign-out + sign-in | `wrapUserScopedBox` enforces Layer A; auth-state-changed providers enforce Layer B. APK Test #15.4 / B1 root cause: providers held stale Hive refs. Both layers must remain in place. | `auth_hive_owner_agreement` SoT + `test/contracts/auth_hive_owner_agreement_behavioral_test.dart` |
-| Restoring screen never advances on cold start | `restoreFromCloud()` is `since='2020-01-01'` (full history, NOT 30/90-day window — that hallucination is in `feedback_mistake_restore_window.md`). 15-second CONTINUE escape lets the user reach home; restore keeps running. | `feedback_mistake_restore_window.md` |
+| Restoring screen never advances on cold start | `restoreFromCloud()` is `since='2020-01-01'` (full history, NOT 30/90-day window — that hallucination is in `feedback_mistake_restore_window.md`). A soft hint shows at 15s and the CONTINUE escape button at 30s (`_softHintAfter` / `_ctaAfter`, restoring_screen.dart:72-73), letting the user reach home; restore keeps running. | `feedback_mistake_restore_window.md` |
 | Returning user waits >1 min on cold start | `_goHome` routes a RETURNING user (local profile present) to the **background-restore** path by default — home in ~3s, restore finishes in the background. Opt-OUT via `disable_bg_restore` kill-switch (was opt-in `bg_restore_enabled`; §4.6). Fresh installs (no local profile) still block on the full restore (nothing local to show). Ownership gate (`openForUser`) stays BLOCKING before nav (APK #15.4). Because restore now runs concurrently with logging, the loss-sensitive restore writers are **additive/local-wins** (see `lib/core/services/CLAUDE.md`). Diagnose c5a1f2. | `test/contracts/restore_local_wins_additive_test.dart` |
 | Sub-route `/onboarding/goal` bounces back to Welcome | `GoRouter._authRedirect` uses `location.startsWith('/onboarding')` (NOT `==`). Sub-routes must match the prefix. Fixed commit `17faa86`. | `lib/features/onboarding/CLAUDE.md` |
 | Phone OTP fails silently in prod | Twilio account created but not yet wired to Supabase Auth dashboard. See `project_pending_twilio_setup.md`. | `project_pending_twilio_setup.md` |

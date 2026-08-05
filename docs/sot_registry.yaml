@@ -3893,7 +3893,7 @@ concepts:
           the inline block at auth_provider._ensureLocalUser (was
           lines 477-770).
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 226-278
+        line_range: 200-252
         method: _goHome (both branches — bg-restore fast path at 242-244 +
           default blocking path at 273-275)
         notes: |
@@ -3912,7 +3912,7 @@ concepts:
           _ensureOwnershipBeforeHome), since _goHome is only reached once
           the destination is already classified "treat as onboarded".
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 524-556
+        line_range: 491-525
         method: _onContinueAnyway (30s CONTINUE timeout escape hatch)
         notes: |
           Diagnose a3f6d9, B-pass round 1 Finding 1 (1dcc14cdbf32-review.md,
@@ -3937,7 +3937,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 106-208
+        line_range: 91-193
         method: RestoringScreen._kickoffRestore (post-auth gate)
         semantic: flag-check
         fields_read: [user_id, onboarding_completed_at]

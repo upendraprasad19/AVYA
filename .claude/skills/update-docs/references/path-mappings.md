@@ -18,4 +18,4 @@
 | `supabase/functions/**` | `supabase/functions/CLAUDE.md` + `docs/architecture/ai.md` if AI Edge Function |
 | `supabase/migrations/**` | `supabase/migrations/CLAUDE.md` + `docs/architecture/database.md` if schema change |
 | Multi-feature (2+ above) | Consider `docs/architecture/<topic>.md` |
-| Discipline / process | Root `CLAUDE.md` §3 (rare) |
+| Discipline / process | Root `CLAUDE.md` §4 (rare) |

@@ -53,7 +53,7 @@ Before proposing ANY fix, grep memory + project retrospectives:
 ```
 Grep MEMORY.md (~/.claude/projects/.../memory/) for feedback_* files matching the symptom
 Grep memory/ for project_apk_test_*.md retrospectives — same class likely shipped before
-Grep CLAUDE.md §19 "COMMON BUGS TO AVOID" table for an exact-match entry
+Grep docs/playbook/common-pitfalls.md for an exact-match entry
 ```
 
 - If a prior incident matches: read its diagnose-doc (`docs/diagnoses/`), its regression test (`test/contracts/` or equivalent), and the fix commit. The bug may be a regression of THAT fix.
@@ -77,7 +77,7 @@ Per CLAUDE.md rules 21 + 22:
 1. **Diagnose-doc** at `docs/diagnoses/<date>-<slug>-<6hex>.md` (validated by `dart run scripts/validate_diagnose_doc.dart`).
 2. **Regression test** under `test/contracts/`, `test/<service>/`, or alongside the fix that FAILS on `main` without the fix and PASSES with it.
 3. **Memory-file update** if the bug is a NEW class, a NEW methodology refinement, or a NEW recurring mistake. Append to existing `feedback_mistake_*.md` if the class already has one.
-4. **CLAUDE.md update** to §19 "COMMON BUGS TO AVOID" only if the bug introduces a new invariant the codebase must enforce forever.
+4. **`docs/playbook/common-pitfalls.md` update** only if the bug introduces a new invariant the codebase must enforce forever.
 5. **This skill file** updated per §5 self-evolution rule below.
 
 ---
@@ -262,7 +262,7 @@ Plan approved at:  <timestamp / approval message>
 Diagnose-doc:      docs/diagnoses/<date>-<slug>-<6hex>.md
 Regression test:   <test path that fails-on-main / passes-with-fix>
 Memory deltas:     <new feedback_* files OR updates to existing ones>
-CLAUDE.md deltas:  <§19 entry added? new invariant codified?>
+CLAUDE.md deltas:  <docs/playbook/common-pitfalls.md entry added? new §4 invariant codified?>
 Skill deltas:      <new bug class appended to §2? new red flag in §3?>
 ```
 
@@ -499,8 +499,8 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 
 ## 6. Cross-references
 
-- `CLAUDE.md` §19 — COMMON BUGS TO AVOID table (canonical project-side bug list)
-- `CLAUDE.md` §22 — Diagnose-doc rule
+- `docs/playbook/common-pitfalls.md` — the canonical project-side bug list (migrated out of the old CLAUDE.md §19, which no longer exists)
+- `CLAUDE.md` §4.4 rule 22 — Diagnose-doc rule
 - `CLAUDE.md` rules 20 / 21 — No deferred test failures / Regression test required
 - `docs/discipline.md` — L3 checklist
 - `docs/sot_registry.yaml` — Single-source-of-truth registry

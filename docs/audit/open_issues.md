@@ -1540,11 +1540,23 @@ call.
   to do so on 2026-08-03 morning is what put `ca4ef2c3` on `origin` red.
 - **Blast radius estimate**: `feature` (a hook + docs); no runtime code, no migration, no schema.
 
-## OI-88 — `restoring_screen.dart` added to the Gate 43 allow-list; split owed (P3)
+## OI-88 — `restoring_screen.dart` split owed (allow-list entry now removed) (P3)
 
 - **Status**: OPEN
-- **Blocked on**: nobody yet — no session has picked up the split.
-- **Verified**: never
+- **Blocked on**: nobody yet — no session has picked up the split. The Gate 43 *exemption* half is
+  closed; the *split* half, which is the actual owed work, is not.
+- **Verified**: 2026-08-05 (`wc -l` = 791 on `repo-gate-pattern-sweep`; allow-list entry removed in
+  the same commit; `check_god_screen_max_lines.dart` passes with the file no longer exempt)
+- **UPDATE 2026-08-05** · `repo-gate-pattern-sweep`, diagnose `e7c3b9`. A comment trim took the
+  file 824 → 791, so the allow-list entry was removed — the gate protects this file again on its
+  own terms. **This did not do the owed work.** No code moved, no file was created; the trim was
+  comments only (proven byte-identical in code by strip-and-compare, twice). The fix shape below
+  is untouched and this OI stays OPEN, narrowed to it. Two things to carry forward: (a) that
+  batch's plan-review record claimed removing the entry would *close* OI-88 — it was wrong and is
+  corrected in the same commit as this update; (b) 791 leaves **nine lines** of margin, which is
+  precisely the condition the allow-list's own `graduation_screen` note records as having created
+  OI-84 (it sat six under, so a fix could not touch it at all). The next change to this file will
+  most likely have to do the split first rather than trim further.
 - **Identified**: 2026-08-03 · `restore-onboarding-signin-fix` batch. Diagnose `a3f6d9`'s fix
   (local-onboarded-flag stamp at all three paths to `/home` in `RestoringScreen`) added 24 lines
   net after comment-trimming, pushing the file from 800 to 824 lines — 24 over Gate 43's ceiling.
@@ -1660,3 +1672,48 @@ call.
   degrade rather than throw — plus a kill-switch, since this touches the cross-account guard.
 - **Blast radius estimate**: `platform` (`lib/core/services/hive_service.dart` +
   `guarded_box.dart` are core session/auth infrastructure); no migration, no schema.
+
+## OI-91 — 138 dead `CLAUDE.md §N` citations remain in live code/test/script comments (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — mechanical, but large enough that it wants its own batch rather than
+  riding along inside an unrelated fix.
+- **Verified**: 2026-08-05 (count re-derived by grep at filing time; see the exact command below)
+- **Identified**: 2026-08-05 · the B-pass on `repo-gate-pattern-sweep` (diagnose e7c3b9), which
+  caught that that batch's own completeness grep had an input set of 3 directories while its
+  artifacts stated the conclusion unscoped.
+- **Risk class**: documentation rot / broken agent navigation
+- **What's wrong**: root `CLAUDE.md`'s real `##` headings are exactly `0,1,2,2a,3,4,5,6,7`. Every
+  citation of any other section number is a dead pointer. e7c3b9 swept and fixed the
+  **prescriptive doc/skill zones** (`.claude/**`, `docs/naming_conventions.md`,
+  `docs/audit/AUDIT_PLAYBOOK.md` + `LENS_REGISTRY.md`, `docs/playbook/**`) — 20 sites. It did
+  **not** touch in-code comments, where 138 remain:
+
+  ```
+  grep -rnoE 'CLAUDE\.md.{0,3}§[0-9]+[a-z]?(\.[0-9]+)?' lib/ test/ scripts/ supabase/ integration_test/ \
+    | grep -vE '§(0|1|2|2a|3|4|5|6|7)\b' | wc -l      # -> 138
+  ```
+
+  Concentrated in `§15` (the old "Source of Truth Rules", now `docs/architecture/sync.md` +
+  `docs/sot_registry.yaml`), `§14`, `§11`, `§19`. Examples:
+  `lib/core/constants/app_constants.dart:68` (`§14`),
+  `lib/core/services/health_write_service.dart:43` (`§15`),
+  `lib/core/services/nutrition_read_service.dart:16` (`§15`).
+- **Why no gate catches it**: Gate 26 (`scripts/check_claude_md_citations.dart`) walks only root
+  `CLAUDE.md`, `AGENTS.md`, `lib/**/CLAUDE.md` and `supabase/**/CLAUDE.md` — i.e. markdown
+  contract files, never `.dart` source comments.
+- **Two sub-classes, and the second is the dangerous one:**
+  1. **Dead** — the cited section does not exist. Fails loudly the moment someone looks.
+  2. **Wrong-but-live** — the cited section exists but is the wrong one, so it reads as correct
+     and a grep-based sweep filtered on "outside §0-§7" is structurally blind to it. e7c3b9 found
+     two by reading rather than grepping (`naming_conventions.md:293` cited "§6 — Coding rules"
+     when §6 is MULTI-TIER COVERAGE and the rules are §4.4; `path-mappings.md:21` pointed
+     "Discipline / process" at §3 = SCREENS instead of §4). **The 138 above have NOT been checked
+     for this class** — that filter cannot see it, so the real number is ≥138.
+- **Fix shape (not yet attempted)**: build the old-section → new-home mapping once
+  (§15 → `docs/architecture/sync.md`/`docs/sot_registry.yaml`, §11 → `docs/architecture/ai.md`,
+  §19 → `docs/playbook/common-pitfalls.md`, §9 → `lib/shared/widgets/wardroom/CLAUDE.md`, …),
+  apply it, then read every remaining live `§N` citation for the wrong-but-live class rather than
+  trusting the filter. Consider extending Gate 26 to scan `.dart` comments so this cannot silently
+  regrow — that is the only version of this fix that stays fixed.
+- **Blast radius estimate**: `feature` (comments only, no logic); no migration, no schema.
