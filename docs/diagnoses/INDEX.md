@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### plan_review_record_gate (1 bugs)
+- 2026-08-05 a7f3c2 — scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands…
+
 ### phase_advance_write_path (1 bugs)
 - 2026-08-03 b4e9c7 — `lib/features/train/screens/graduation_screen.dart` reached 909 lines against Gate 43's 800-line ceiling and passed only because it had been added to the gate's transitional allow-list — the FIRST…
 
@@ -931,6 +934,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-05 | a7f3c2 | scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands… | plan_review_record_gate | test/scripts/plan_review_record_gate_e2e_test.dart |
 | 2026-08-03 | b4e9c7 | `lib/features/train/screens/graduation_screen.dart` reached 909 lines against Gate 43's 800-line ceiling and passed only because it had been added to the gate's transitional allow-list — the FIRST… | phase_advance_write_path | test/contracts/pro_phase_advance_behavioral_test.dart |
 | 2026-08-03 | d4e8a2 | NOT a live incident — a static-tracing risk flagged in b3f9e7's own "Known residual gap" section, investigated and closed here. Nothing under lib/features/onboarding/ called… | onboarding_completed_at | test/contracts/onboarding_hive_session_open_before_write_test.dart |
 | 2026-08-03 | e7c3b9 | The terms-accepted-fix batch (b3f9e7) hit 3 pre-existing gate-tripping content bugs only when its commit finally reached the full gate loop for the first time (earlier attempts failed before reaching… | repo_gate_content_hygiene | test/scripts/claude_md_citations_letter_suffix_test.dart |
