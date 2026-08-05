@@ -107,6 +107,33 @@
     estimate went stale when Unit A grew the file to 909. A board item's numbers age; re-measure
     before planning against them.
 
+- 2026-08-05 — /strategic-compact — trigger: **batch ship at a verified-clean boundary** (Units A
+  and B on `origin/main` `d825c0b5`, CI green, nothing unpushed, pending-list just re-verified) ·
+  founder: **ACCEPTED**.
+  → **The 2026-08-03 tuning note was applied and it paid off immediately.** That entry said step 2
+    must VERIFY the git/CI facts at gather time rather than transcribe them from earlier in the
+    session. Doing so this round turned up two things a transcribed list would have gotten wrong:
+    the six commits I last knew as "blocked, unpushed" had in fact all landed, and the blocker
+    (`docs/plan-reviews/onboarding-oauth-session-fix.md`) now exists — so the preserve list said
+    "shipped and green" because it was checked, not because it was assumed.
+  → Second application of the same rule, one layer down: while verifying the one remaining
+    blocking item I grepped the live Edge Function rather than the repo, and found version 10
+    still missing all three of Unit A's op-types. A repo-only check would have reported the
+    deploy as done. **Preserve lists should carry the EVIDENCE for a blocking item, not just its
+    name** — "log-client-error undeployed" is forgettable; "live v10's list ends at
+    `streak_freeze_lapse_reset`, and OI-85's decision depends on that signal" is actionable after
+    a compaction.
+  → Also caught with the same reflex: my own first grep for those op-types searched a name that
+    was never in the list (`phase_unlock_preempted_before_generate`) and would have had me report
+    "2 of 3". Diffing the actual commit gave the true answer. Sixth instance this week of
+    `feedback_green_check_input_set_width` — the check was narrower than the claim it tested.
+  → Step 6 logged on the approving turn, not deferred: the line records whether the founder
+    accepted, so it CANNOT be written before the answer arrives. That resolves the "log on the
+    first writeable turn" ambiguity from the previous four entries — the constraint was never
+    plan mode, it is that the outcome is an input to the record.
+  → Written from a worktree, not the shared main folder. An uncommitted file in shared `main` is
+    the exact cross-session hazard filed as OI-87 this week (another session's `git add -A` sweeps
+    it into their commit). Cheap to avoid; embarrassing to hit two days after filing it.
 - 2026-08-05 — /strategic-compact — trigger: **phase boundary** (Unit 2's review phase closed —
   ×2 context-blind rounds + self-initiated B-pass all complete, diagnose-doc + closure YAML +
   plan-review record + B-pass record written and validating) **+ heavy context pressure** after a

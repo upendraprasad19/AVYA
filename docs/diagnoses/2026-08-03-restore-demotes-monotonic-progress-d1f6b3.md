@@ -31,7 +31,7 @@ writers:
 readers:
   - { file: lib/shared/repositories/user_repository.dart, line: 79, method: reportProgressDemotionsDeclined (shared telemetry emitter) }
   - { file: lib/shared/services/pro_phase_advance.dart, line: 211, method: runProPhaseAdvance reports the decline it used to discard }
-  - { file: lib/features/train/screens/graduation_screen.dart, line: 746, method: _onPro reports the decline inside the lock }
+  - { file: lib/shared/services/pro_phase_advance.dart, line: 633, method: "runGraduationPhaseAdvance reports the decline inside the lock (source: 'graduation_screen'). Was graduation_screen.dart:746 until Unit B / OI-84 hoisted the locked advance out of the screen (909→552 lines), which silently invalidated this citation — repointed 2026-08-05" }
   - { file: lib/core/services/auth_session_bootstrapper.dart, line: 373, method: login-restore plan regen now reads the GUARDED phase from Hive, not the raw cloud row (B-pass F1) }
   - { file: lib/features/train/providers/train_provider.dart, line: 540, method: CurrentPlanNotifier reads current_phase (unchanged reader) }
   - { file: lib/features/train/providers/train_provider.dart, line: 591, method: second current_phase read feeding the plan views (unchanged reader) }
@@ -103,7 +103,7 @@ touched_layers_checked:
   - { tier: 3, name: postgres_schema, status: verified, evidence: "backups/live_schema_columns.json user_progress carries all 3 monotonic columns as int4; no schema change in this batch" }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "client-side merge only — no rows are rewritten by this fix" }
   - { tier: 5, name: migrations_applied, status: not_applicable, evidence: "no migration in this batch" }
-  - { tier: 6, name: edge_function_code_vs_deploy, status: verified, evidence: "log-client-error/index.ts HIGH_PRIORITY_OP_TYPES gains the 2 new restore events, keeping the client/server twin in sync (test/contracts/high_priority_op_types_parity_test.dart green). CODE ONLY — NOT DEPLOYED: an Edge Function deploy needs its own explicit founder authorization per CLAUDE.md 4.3, so the live function still classifies these 2 events as LOW priority until that go is given. The client-side bypass is live regardless; only the server-side rate-limit class lags." }
+  - { tier: 6, name: edge_function_code_vs_deploy, status: verified, evidence: "log-client-error/index.ts HIGH_PRIORITY_OP_TYPES gains 3 op-types in this batch — progress_restore_demotion_declined, progress_restore_field_malformed (restore-side) and phase_advance_declined_rows_stale (declined-advance) — keeping the client/server twin in sync (test/contracts/high_priority_op_types_parity_test.dart green). UPDATED 2026-08-05: DEPLOYED as v11 under its own explicit founder authorization per CLAUDE.md 4.3; live had been v10 since ~2026-06-18. Measured as a repo-vs-live delta rather than assumed, which showed the deploy carried 7 op-types, not 3 — the other 4 are Hermes C8's (e33c39e4, 2026-07-30) and had never reached live either. Boot-verified with an anon-key Bearer returning the module's own 401 'Invalid or expired token' (a 503 BOOT_ERROR would mean broken); the unauth smoke is gateway-masked for verify_jwt=true and proves nothing (skill 6.5, f5d8c3). CAVEAT: no shipped APK emits any of the 7 — the client emitters landed in this batch (5131244e, 2026-08-03) and the newest APK is 1.0.0+37 (99e145d2, 2026-07-27), so the HIGH lane is correct but silent until an APK ships." }
   - { tier: 7, name: cron_jobs, status: not_applicable, evidence: "no cron path touched" }
   - { tier: 8, name: rls_policies, status: not_applicable, evidence: "no policy change; the restore read is unchanged" }
   - { tier: 9, name: storage, status: not_applicable, evidence: "no Storage object touched" }
@@ -123,8 +123,10 @@ impact_analysis: |
   `account`. Consequences that follow from the tier, not from taste: `bpass: accepted` is
   REQUIRED (not advisory), and `docs/blast_radius.yaml:25` requires a `feature_flag` — which is
   why the kill-switch below exists. Hermes is NOT required (catastrophic-only). No migration.
-  The only Edge Function touched is `log-client-error`'s twin op-type list, and it is NOT
-  deployed — that needs its own explicit go.
+  The only Edge Function touched is `log-client-error`'s twin op-type list. It was NOT deployed
+  with this batch — that needed its own explicit go, which was given 2026-08-05; live is now
+  **v11**. See the tier-6 row for what that deploy actually covered (7 op-types, not 3) and why
+  it does not yet produce data.
 
   WHAT WAS DELIBERATELY NOT DONE, and why. The approved plan said the restore writers would
   take the shared phase-advance lock. Reading the primitive first showed that is WRONG:
