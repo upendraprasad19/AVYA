@@ -892,11 +892,33 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-56 — Revert repo to private
 
 - **Status**: OPEN
-- **Verified**: never
-- **Identified**: 2026-07-26
-- **Blocked on**: FOUNDER (after billing is fixed)
-- **What's missing**: Public since 2026-07-18. Note the security consequence while public: fork-PR
-  branch-name collisions are a live concern for the keystone gate (owner-guard added `d947743d`).
+- **Verified**: 2026-08-05 — visibility read live (`gh repo view` → **PUBLIC**); CI cost measured
+  from the Actions API (below). Supersedes the earlier "after billing is fixed" blocker, which
+  never said what about billing.
+- **Identified**: 2026-07-26 · public since 2026-07-18
+- **Blocked on**: FOUNDER — **dated decision 2026-08-05: stay public until September 2026**, then
+  flip. Nothing technical blocks it; this is a scheduling call with a measured reason. Public repos
+  get unlimited free Actions minutes, private ones are metered, and the measurement below puts the
+  current cadence at ~98% of the free private quota. Deliberately kept `OPEN` rather than given
+  some "parked" status — it is not done, and it should keep showing up in the open count.
+- **What's missing**: flip the repo back to private.
+- **The CI-cost measurement that decides this** (taken 2026-08-05 so September does not re-derive
+  it): all 6 jobs run on `ubuntu-latest` — the 1× multiplier, cheapest tier. Per-job time on run
+  `31006716605`: Analyze & Unit Tests 430 s · Build Check (APK) 192 s · Audit Gates 59 s ·
+  Plan-review record 35 s · Supabase Integration 23 s · Deno EF tests 12 s = **751 s of job time**.
+  GitHub bills each JOB rounded UP to the whole minute, so that is **16 billed minutes per run**,
+  not the 12.5 the raw seconds imply — four sub-minute jobs cost a full minute each. At **123 runs
+  per 30 days** that is **~1,968 min/month against GitHub Free's 2,000-minute private quota
+  (~98%)**. GitHub Pro (~$4/mo) lifts it to 3,000 and gives real headroom. Wall-clock is a trap
+  here: a run takes ~7 min end-to-end but bills 16, because jobs run in parallel and are billed
+  individually.
+- ⚠ **Two inputs to that number are UNVERIFIED**: the account plan could not be read
+  (`gh api user` returned `plan: null` — token scope), so GitHub Free is *assumed*; and the quota
+  figures come from model knowledge, not from the billing page. Confirm both at billing before
+  flipping, or the headroom calculation is built on a guess.
+- **Security consequence while public** — unchanged, and now runs ~4 weeks longer than planned:
+  fork-PR branch-name collisions are a live concern for the keystone gate (owner-guard added
+  `d947743d`).
 
 ## OI-57 — Decide the 7 open Dependabot PRs
 

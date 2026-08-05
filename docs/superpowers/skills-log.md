@@ -157,3 +157,28 @@
     registry gates passed, because they only assert `end <= lineCount` and the stale ranges stayed
     in bounds. Same branch simultaneously repointed the writer-reader-drift-detector agent AT that
     registry.
+- 2026-08-05 (2nd invocation of the day) — /strategic-compact — trigger: **batch ship at a
+  clean boundary** (log-client-error v11 deploy + board sweep merged as `d548e698`, CI green,
+  tree clean) after a session that ran four distinct phases (deploy → board sweep → ranked
+  triage → verification sweep) · founder: **ACCEPTED**.
+  → **The gather-time-verification rule paid off a third time, on a smaller scale.** Re-reading
+    state instead of transcribing it caught `MEMORY.md` at 20,706 B when I had said 20,261 B
+    earlier in the SAME session — it had grown between the two statements. Trivial in isolation,
+    but it confirms the rule holds even for facts measured minutes ago, not just facts inherited
+    from before a compaction.
+  → **Refinement to what a preserve list should lead with.** The single most valuable item this
+    round was not a state fact but a DEPENDENCY: no shipped APK emits the 7 telemetry op-types
+    the v11 deploy just prepared the server for, so OI-85's measurement cannot start and an empty
+    `client_errors` count reads as "rare" when it actually means "dead pipeline". A list of true
+    facts would have preserved "v11 is live" and lost the thing that makes it not yet useful.
+    Lead with what is blocked on what, then state.
+  → **Sessions that query live infrastructure generate far more droppable bulk than code
+    sessions.** The drop list was dominated by two full Edge Function source dumps and a
+    41-function `list_edge_functions` JSON — none of which carry information the conclusions
+    don't already hold. Worth expecting: an ops/verification session has a much better
+    drop-to-preserve ratio than an implementation session, so the compaction is cheaper and
+    should be reached for sooner.
+  → **Step-6 timing held.** The log line records accept/decline, so it cannot be written before
+    the founder answers. Resolved in the previous entry, applied here without re-litigating.
+  → Written from the worktree, riding with the unpushed OI-56 commit so both land in one push
+    rather than two CI cycles.
