@@ -147,5 +147,17 @@ deno.lock
 #     rm -f node_modules/pg node_modules/zod && git checkout -- node_modules/pg
 # CI is unaffected (fresh checkout per run), which is exactly why this only
 # ever bites locally and is easy to commit by accident.
+# NO TRAILING SLASH on `zod` — corrected 2026-08-05, primary-folder cruft
+# triage. The rule was written as `node_modules/zod/`, and a trailing slash in
+# gitignore matches a DIRECTORY ONLY. On this Windows/Git-Bash stack deno does
+# not materialise `zod` as a directory at all: it writes a 34-byte symlink STUB
+# — an ordinary text file containing `.deno/zod@3.25.76/node_modules/zod`. So
+# the rule could never match what deno actually produces, and `node_modules/zod`
+# has been surfacing as an untracked entry the whole time (`git check-ignore -v
+# node_modules/zod` returned no match before this fix, and does match after).
+# The repair line at the top of this block already says `rm -f node_modules/zod`
+# — `rm -f`, i.e. a file — so the file-shape was known; only the pattern was
+# wrong. Deleting the stub is NOT the fix: the next local deno run recreates it.
+# `.deno/` keeps its trailing slash because it genuinely is a directory.
 node_modules/.deno/
-node_modules/zod/
+node_modules/zod

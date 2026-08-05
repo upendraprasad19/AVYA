@@ -1717,3 +1717,85 @@ call.
   trusting the filter. Consider extending Gate 26 to scan `.dart` comments so this cannot silently
   regrow — that is the only version of this fix that stays fixed.
 - **Blast radius estimate**: `feature` (comments only, no logic); no migration, no schema.
+
+## OI-92 — `_git_lock.sh` reclaim: a failed restore destroys the lock it stole, letting two processes hold the mutex (P1)
+
+- **Status**: OPEN
+- **Blocked on**: a founder design decision — see "Recommended fix" below. The defect is fully
+  understood and empirically reproduced; what needs ratifying is whether automatic stale-lock
+  reclaim is kept at all.
+- **Verified**: 2026-08-05 (round-4 review of the unshipped `discipline-tooling-hardening` branch;
+  the `mv -T` failure mode reproduced by direct execution on this exact Git-Bash/MSYS2 toolchain,
+  not by reasoning)
+- **Identified**: 2026-08-05 · round-4 review of Unit 3a, `scripts/_git_lock.sh` (UNSHIPPED — the
+  branch is not merged, so this is not a live defect on `main`; it is the reason 3a+3c did not
+  ship).
+- **Risk class**: check-then-act / mutual-exclusion. **Fourth occurrence of the identical shape in
+  the same file** — round 1 found it in release, round 2 in claim, round 3 in the reclaim's
+  decide-then-act, and this is round 4 in the reclaim's restore-then-delete.
+
+### What's wrong
+
+`scripts/_git_lock.sh:288-289` (unshipped branch):
+
+```sh
+mv -T "$graveyard" "$lock_path" 2>/dev/null
+rm -rf "$graveyard" 2>/dev/null
+```
+
+The `rm -rf` is unconditional, but `mv -T` **fails** when the destination exists and is non-empty
+— which is precisely the semantic the *claim* side of this same file depends on. Verified by
+execution: with a populated `lock_path`, `mv -T graveyard lock_path` exits 1, `graveyard` survives,
+and the following `rm -rf` then deletes it.
+
+Sequence (no injected delay needed):
+
+1. Lock holds dead holder `D`, old enough to clear the age gate.
+2. Process **A** reads it, decides stale.
+3. Process **B** reads the same, reclaims, publishes its own lock. B legitimately holds it.
+4. **A** steals — and the file's own comment concedes `mv -T` is "a blind move keyed on the
+   DESTINATION's existence, not the SOURCE's content", so A steals **B's live lock**.
+5. The path is momentarily empty; **C** publishes there.
+6. A's verify correctly notices it stole the wrong thing (`stolen_pid=B` ≠ `holder_pid=D`) and
+   enters the restore branch.
+7. `mv -T "$graveyard" "$lock_path"` **fails** — C occupies the path.
+8. `rm -rf "$graveyard"` runs anyway → **B's lock is destroyed**.
+9. B still believes it holds the mutex; C believes it holds the mutex. **Both proceed** — the exact
+   condition the file exists to prevent.
+
+### Why the existing comment does not cover this
+
+The code *does* name the window ("a THIRD process claiming the momentarily-emptied path in the
+exact window between this steal and its restore") but dismisses it on the wrong grounds: it argues
+that process's own `git_lock_release` "would correctly detect it no longer owns `$lock_path` and
+refuse to touch it". That is true and irrelevant — nothing gets *destroyed* by C, but B and C hold
+the mutex **simultaneously**, which the note never addresses.
+
+The window is also wider than the file's own standard for "realistically reproducible". The age
+gate is justified by the claim that "there is no natural multi-second gap anywhere in this file's
+own logic … no subprocess-spawn-class delay". But the steal→restore window contains a `sed`
+subprocess plus two `echo`s, and this file's header measures a subprocess spawn at **61–89 ms** on
+this stack — the same class it says made the round-2 bug reproducible without injection.
+
+### Recommended fix — remove the reclaim, do not add a fourth layer
+
+`flock` is **not available** on this Git-Bash/MSYS2 stack (checked), so kernel-enforced locking is
+not an option. With only `mkdir` / `mv -T` / `kill -0`, an atomic "remove the stale lock AND
+install mine" does not exist: a directory target makes `mv -T` fail-if-present (right for claiming,
+useless for replacing), and a file target makes it replace unconditionally (right for replacing,
+useless for claiming).
+
+So delete the automatic reclaim outright — the age gate and the steal-verify-restore block, ~50
+lines — and always refuse, printing the manual `rm -rf "$lock_path"` command the file already
+emits. The claim path (`mv -T` publish of a fully-populated private candidate) is sound and
+independently verified under 5-way contention; it is only the *reclaim* that has now failed review
+four times.
+
+Cost: a holder killed without its EXIT trap firing (SIGKILL, power loss) leaves a lock needing one
+manual `rm -rf`, with the command already on screen. That is a cheap price for removing an entire
+bug family, and it matches the failure direction the file already commits to for the PID-reuse
+case — "wait / manual `rm -rf`, never silently proceed concurrently".
+
+- **Blast radius estimate**: `platform` (`scripts/_git_lock.sh` is promoted to platform by the
+  unshipped branch's own `docs/blast_radius.yaml` entry, alongside `safe_commit.sh` /
+  `safe_push.sh`); no migration, no schema. Not live on `main`.
