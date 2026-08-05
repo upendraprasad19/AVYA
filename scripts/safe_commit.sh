@@ -16,6 +16,11 @@
 #
 # CLAUDE.md §4.3: this is the ONLY sanctioned commit path. A PreToolUse hook
 # (scripts/git_safety_hook.dart) blocks a raw `git commit` outright.
+#
+# Concurrency: acquires the shared scripts/_git_lock.sh lock around the
+# git-mutating section, so two overlapping invocations (same worktree or
+# primary) refuse/wait instead of racing -- see that file's header for the
+# 2026-08-03 incident this closes.
 
 set -u
 
@@ -31,6 +36,9 @@ if [ -z "$REPO_ROOT" ]; then
   exit 1
 fi
 cd "$REPO_ROOT" || { echo "[safe_commit] FAILED: cd \"$REPO_ROOT\" failed." >&2; exit 1; }
+
+. "$REPO_ROOT/scripts/_git_lock.sh"
+git_lock_acquire "safe_commit" || exit 1
 
 LOG="$(mktemp 2>/dev/null || echo "/tmp/safe_commit_$$.log")"
 BEFORE_HEAD="$(git rev-parse HEAD 2>/dev/null || echo "")"
