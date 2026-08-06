@@ -863,14 +863,42 @@ Everything currently owed, from any source — not only audit findings. `MEMORY.
 durable *why* (scars, retrospectives) but lives in the harness dir outside git and is invisible to
 cloud sessions; **this file is the cross-session backlog.**
 
-## OI-53 — Flip the 13 workout-generator ship-dark flags
+## OI-53 — Flip the remaining 12 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05)
 
 - **Status**: OPEN
-- **Verified**: never
+- **Verified**: 2026-08-05 — flag inventory, dependency order and the data lag all re-derived from
+  source this session (`plan_engine_flags.dart`, `deload_evaluator.dart:170,173`,
+  `ship_dark_pending_review.yaml:76-101`), not carried from the entry's original text.
 - **Identified**: 2026-07-26 · workout-generator overhaul complete `7bb766fa`
-- **Blocked on**: FOUNDER
-- **What's missing**: Test account first — plateau presupposes `enable_readiness` ON. Each flip needs
-  its own full ×2 review per §4.12.4; logged in `docs/ship_dark_pending_review.yaml`.
+- **Blocked on**: FOUNDER — but read the shape below before treating this as one decision.
+- **What this actually is — 13 product decisions, not one toggle.** The ledger is explicit:
+  *"there is no batch discount, and flipping thirteen flags in one commit would be one review
+  pretending to be thirteen."* Each flip-on commit needs its own **full ×2 + `bpass: accepted`**
+  (§4.12.4 — the lighter `ship_dark_build` tier does NOT apply to a flip). Nothing is broken by
+  leaving them OFF: every shipped APK to date has run with all 13 dark, so OFF *is* the current
+  product. What is owed is a decision per flag, not a flip.
+- **The order is forced by code, not preference.** `enable_readiness` must flip FIRST:
+  - `enable_triggered_deload`'s evaluator **early-returns** on readiness
+    (`deload_evaluator.dart:56` — `if (!PlanEngineFlags.readinessEnabled) return;`; the
+    ledger's `&& readinessEnabled` phrasing describes the effect, not the code shape) —
+    so it does literally nothing until readiness is ON.
+  - `enable_plateau_escalation` self-gates (`plateauedGroups` checks `readinessEnabled`).
+  - `enable_volume_titration`'s **+1** direction needs positive readiness recovery evidence, so
+    with readiness OFF it can only ever TRIM. Flipping it alone gives users a one-way volume cut.
+- ⚠ **A data lag no review can shortcut.** Even with readiness flipped, `deload_evaluator.dart:173`
+  requires **≥3 readiness rows inside a 14-day IST window** (`:170`) before the dependent flags can
+  act; below that it returns `good: false` and keeps the deload (safe, but inert). So three of the
+  thirteen sit dead for **at least two weeks** after any flip, waiting on check-in data only real
+  users generate. "Flip all 13 at once" is therefore not merely risky — it is ineffective, and it
+  destroys attribution: 13 simultaneous changes to prescribed load/volume/selection with one
+  bug report and no way to isolate the cause. Attribution is the entire point of ship-dark.
+- ✅ **`enable_equipment_exclusions` — FLIPPED 2026-08-05 (diagnose `e2d6b8`), so this issue is
+  now TWELVE flags, not thirteen.** It was the exception: its *collection* UI shipped lit while
+  its *consumption* stayed dark, so the app saved an equipment preference it then ignored — a
+  live broken promise rather than a dormant feature. That promise is now kept. The counts and
+  quotes above ("13", "thirteen") describe the pre-flip state and are left as the ledger's own
+  wording; the live number is **12**. Related: OI-89 (its condition (a) closed with this flip),
+  and OI-95 (the flip's kill-switch is reachable only in debug builds).
 
 ## OI-54 — Confirm `/admin` access
 
@@ -923,13 +951,36 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-57 — Decide the 7 open Dependabot PRs
 
 - **Status**: OPEN
-- **Verified**: never
+- **Verified**: 2026-08-05 — every PR's `mergeStateStatus` + check rollup read live from the GitHub
+  API this session, and every PR body checked for a security-advisory section.
 - **Identified**: 2026-07-26
-- **Blocked on**: FOUNDER
-- **Live state**: #17/#16/#15/#5 CLEAN · #14 DIRTY (conflicted) · #10 three FAILURE checks · #9 UNKNOWN
-- **What's missing**: `pub` bumps merge freely under the content-verified exemption; the 2
-  `github-actions` bumps require a plan-review record **by design** (a bot must not rewrite the CI
-  that enforces every other gate). Documented in `.github/dependabot.yml`.
+- **Blocked on**: FOUNDER — **dated decision 2026-08-05: merge #16 only; the other six are
+  declined as churn** (see below). #16 was taken in this batch.
+- ⚠ **NONE of the 7 is a Dependabot *security* update.** No security labels, no "Vulnerabilities
+  fixed" section on any of them — they are ordinary "a newer version exists" PRs. This corrects the
+  framing this entry previously invited: OI-57 had been ranked as a *supply-chain* item, and it is
+  not one. The single security mention anywhere in the set is inside **#5**'s changelog, where
+  `actions/setup-java` upgraded its own bundled `form-data` — the action's supply chain, not ours.
+- **Live state (2026-08-05, measured)**: #17 CLEAN · #16 CLEAN · #15 CLEAN · #5 CLEAN ·
+  **#14 DIRTY** (conflicted) · **#9 DIRTY** (conflicted — this was the entry's one `UNKNOWN`, now
+  resolved) · **#10 UNSTABLE, 3 FAILURE checks**.
+- **Declined, with reasons (2026-08-05)** — a recorded decision, not a deferral; re-open any of
+  these if its premise changes:
+  - **#17** `onesignal_flutter` 5.5.4→5.6.6 — version churn, no fix we need.
+  - **#15** `build_runner` 2.13.1→2.15.1 — dev-only, and this repo generates no `.g.dart` today
+    (providers are written manually; root CLAUDE.md §0), so it is near-inert either way.
+  - **#14** `actions/checkout` 4→7 — **three major versions**, and conflicted. The keystone
+    plan-review CI job depends on `fetch-depth: 0` to reach `HEAD^1..HEAD^2`; a major bump here
+    can break the gate that enforces every other gate. Not worth it for zero gain.
+  - **#10** `flutter_native_splash` 2.4.7→2.4.8 — dev-time generator, and currently failing 3
+    checks.
+  - **#9** `patrol` + `patrol_finders` — device-test framework churn, conflicted.
+  - **#5** `actions/setup-java` 4→5 — the `form-data` fix is internal to the action; also requires
+    a plan-review record by design (below).
+- **The `github-actions` rule still stands** for #14/#5 whenever they are revisited: `pub` bumps
+  merge under the content-verified exemption, but the 2 `github-actions` bumps require a
+  plan-review record **by design** — a bot must not rewrite the CI that enforces every other gate.
+  Documented in `.github/dependabot.yml`.
 
 ## OI-58 — Keystone gate: single-parent + subject-spoof bypass
 
@@ -1028,11 +1079,22 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-65 — Qualification-Exam feature
 
 - **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
+- **Blocked on**: FOUNDER — **dated decision 2026-08-05: pick this up in January 2027.** Nothing
+  technical blocks it and it blocks nothing else; it is a pure enhancement, and the founder scoped
+  it out of the current horizon deliberately. Kept `OPEN` rather than given some "parked" status —
+  it is not done, and it should keep showing up in the open count. Same shape as OI-56's
+  September decision, and for the same stated reason.
+- **Verified**: 2026-08-05 — BLOCKER ONLY (the founder decision above was taken in-session). The
+  issue's own substance — the 9 locked decisions and the branch state — has NOT been re-checked
+  since filing.
 - **Identified**: 2026-07-26
 - **What's missing**: 9 decisions locked, committed `7328c99` on branch `qualification-exam`,
   **unpushed**. Pre-implementation.
+- ⚠ **Not an agent-side deferral under §4.2.** That rule bans an AGENT from re-labelling its own
+  unfinished work to avoid completing it. This is the founder making a product-scope call with a
+  date attached, which is the one case §4.2 explicitly reserves to them ("an explicit founder
+  product-scope decision"). Recorded here so a future session reads it as neither pickable work
+  nor a violation.
 
 ## OI-66 — Prove or remove the CI gradle cache
 
@@ -1654,10 +1716,22 @@ call.
   "(now flag-on)". The code says otherwise: `PlanEngineFlags.equipmentExclusionsEnabled`
   (`lib/shared/repositories/plan_engine/plan_engine_flags.dart:145-153`) reads
   `configBox['enable_equipment_exclusions']` and returns **false** when absent — ship-dark,
-  DEFAULT OFF. So protection today requires BOTH (a) that flag switched on AND (b) the user
-  actively subtracting "barbell"/"bench"/etc. in the Customize screen. A bodyweight user who
+  DEFAULT OFF. ~~So protection today requires BOTH (a) that flag switched on AND (b) the user
+  actively subtracting "barbell"/"bench"/etc. in the Customize screen.~~ **[(a) NO LONGER
+  APPLIES — see the 2026-08-05 update below; and the `:145-153` line range above is stale, the
+  getter is now at `plan_engine_flags.dart:169`.]** A bodyweight user who
   never opens Customize gets no protection at all. I could not observe production config from
   the repo, so the discrepancy is recorded rather than resolved — resolve it before sizing the
+
+  > ⚠ **UPDATED 2026-08-05 — condition (a) is now SATISFIED (diagnose `e2d6b8`).** The flag was
+  > flipped ON in the `deps-board-equipment` batch; the gate is now the
+  > `disable_equipment_exclusions` kill-switch, default ON, so the paragraph above is accurate
+  > only as a description of the world before that flip. **Condition (b) still holds and is now
+  > the whole of OI-89**: a user who never opens the Customize screen sets no exclusions, so a
+  > "bodyweight" user can still be served gym exercises via the SOFT equipment-TIER heuristic.
+  > The flip made the item-level EXCLUSION a hard constraint; it did NOT make the tier a hard
+  > constraint, and that distinction is precisely what this issue is about. Severity is unchanged
+  > for the never-opened-Customize user; it drops to zero for anyone who does set exclusions.
   fix.
 - **Product question (this is the real blocker)**: should each equipment tier enforce a **hard
   floor** — never surface a pick whose required equipment the tier cannot provide, falling back
@@ -1892,3 +1966,65 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Blast radius estimate**: the gate itself would be `feature` (a script plus CI wiring). The
   drift it detects is not — this instance sat on the telemetry lane, and OI-73's sits on cron
   auth.
+
+## OI-94 — `anonKey` is deprecated; production still passes it to `Supabase.initialize`
+
+- **Status**: OPEN
+- **Verified**: 2026-08-05 — surfaced by the analyzer immediately after the supabase_flutter
+  2.12.4→2.17.1 bump in this batch; the call site was read directly, not inferred.
+- **Identified**: 2026-08-05 · `deps-board-equipment` batch (the OI-57 #16 merge)
+- **Blocked on**: nothing technical to *start*, but it needs a founder/dashboard step — see below.
+- **What it is**: `supabase_flutter` now deprecates `anonKey` in favour of `publishableKey`
+  ("anonKey will be removed in a future major version"). The production call site is
+  `lib/core/services/supabase_service.dart:51`. Six test call sites carry the same deprecation
+  (`password_reset_redirect_flow_test.dart:334`, `ai_proxy_test.dart:40`, `pgvector_test.dart:51`,
+  `lt_journey_plan_export.dart:122` + `:127`, `supabase_test_helper.dart:66`).
+- **Severity is genuinely low, and saying so precisely matters**: it is `info`-level, the parameter
+  still works on the whole 2.x line, and removal lands in 3.x. Nothing is broken today.
+- **Why it was NOT folded into the bump that surfaced it**: the migration is not a rename. It
+  needs a *different key* issued from the Supabase dashboard (`sb_publishable_…`, not the legacy
+  anon JWT), which means `.env` on every dev machine, the CI secret, and the Vercel web build all
+  change together — an auth-configuration change with a founder/dashboard dependency. Bundling
+  that into a dependency bump would have put a config change to the auth boot path inside a commit
+  whose whole verification story is "the client library moved." Recorded with a reason rather than
+  done silently or dropped silently.
+- **Fix shape**: issue the publishable key in the dashboard → add it alongside the existing var
+  (do not swap in place) → switch `AppConstants` + `supabase_service.dart:51` → verify auth boot on
+  device AND on web → then retire the old var from `.env`/CI/Vercel. The test call sites can move
+  in the same pass.
+- **Blast radius estimate**: `account` — it is the auth client's boot credential. Would want the
+  ≥account review and an APK + live-web check, exactly like the bump that surfaced it.
+
+## OI-95 — a kill-switch is only reachable in DEBUG builds, so no flag can be reverted without an APK respin
+
+- **Status**: OPEN
+- **Verified**: 2026-08-06 — found by the round-2 reviewer of the `deps-board-equipment` batch and
+  re-confirmed by direct read, not accepted on the reviewer's word.
+- **Identified**: 2026-08-06 · `deps-board-equipment` (the e2d6b8 equipment-exclusions flip)
+- **Blocked on**: nothing technical. It needs a PRODUCT decision on *where* an operator switch
+  belongs (see below) before any code.
+- **What it is**: every `PlanEngineFlags` kill-switch lives in the local, unsynced `configBox`.
+  The only in-app writer of any of them is `DevPanelScreen`, and `app_router.dart:336` registers
+  `/dev` behind `if (kDebugMode)` — so the whole panel is compiled out of
+  `--flavor prod --release`. `grep -rn "RemoteConfig" lib/` finds nothing but
+  `sync_service.dart:254`'s comment confirming none exists.
+- **Why it matters**: §4.6's feature-flag protocol requires the old path stay "reachable when the
+  gate is closed". In a shipped APK it is not reachable — reverting ANY flag requires a code
+  change plus a full APK respin and store round-trip. The protocol's rollback promise is
+  therefore satisfied in the repo and not on the device, which is the gap that matters.
+- **Surfaced by, but NOT specific to, e2d6b8**: the equipment-exclusions flip wired a dev-panel
+  toggle (`_toggleEquipmentExclusions`) and its closure entry initially claimed that made the
+  kill-switch operable. Round 2 showed that is true only in debug. The same is true of
+  `enable_hold_weeks` and every one of the twelve OI-53 flags — this is architectural.
+- **Fix shape (needs the product call first)**: the honest options are (a) an `/admin`-gated
+  operator screen — `/admin` IS registered unconditionally (`app_router.dart:344+`) and is
+  founder-gated by `ADMIN_USER_IDS`, so a flag panel there would be release-reachable without
+  exposing plan-engine internals to users; or (b) a genuine server-side remote config, which is
+  a much larger piece and would also give staged rollout. (a) is small and closes the immediate
+  gap; (b) is the real capability. Do NOT expose kill-switches on a user-facing settings screen.
+  ⚠ (a) depends on OI-54 — whether `/admin` is actually reachable for the founder has never been
+  confirmed.
+- **Accepted risk in the meantime** (recorded as a judgement, not a fact): the flags gated this
+  way change plan CONTENT, not crash-safety or data integrity, so respin latency is tolerable.
+  That reasoning would NOT hold for a flag guarding auth, payment or sync.
+- **Blast radius estimate**: `feature` for (a); `platform` for (b).

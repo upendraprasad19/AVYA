@@ -156,7 +156,10 @@ class TrainingHistoryAnalyzer {
   }
 
   /// ⑥ slice C1 — resolves the effective equipment-EXCLUSION set for generateV4,
-  /// flag-gated (ship-dark behind `enable_equipment_exclusions`). Mirrors
+  /// flag-gated. **LIVE since 2026-08-05** (diagnose e2d6b8): the gate is now the
+  /// `disable_equipment_exclusions` kill-switch, default ON — it was ship-dark
+  /// behind `enable_equipment_exclusions` (default OFF) until then, which is why
+  /// the Customize UI's saved exclusions were silently ignored. Mirrors
   /// [resolveBodyFocus]/[physiqueFocusMuscles]: flag OFF → `const {}` WITHOUT
   /// reading Hive (byte-identical to B1's inert seam). Flag ON: an explicit [param]
   /// (tests / direct callers) takes precedence; else the user's `equipment_exclusions`

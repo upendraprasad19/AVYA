@@ -1296,8 +1296,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   /// Multi-select to SUBTRACT items the user lacks from their tier (mirrors
   /// [_buildInjuriesChips]; selected = excluded). Hidden when the tier has no
-  /// excludable items (bodyweight → the floor is never excludable). Ship-dark:
-  /// the exclusions only shape the plan once `enable_equipment_exclusions` flips.
+  /// excludable items (bodyweight → the floor is never excludable).
+  ///
+  /// LIVE since 2026-08-05 (`deps-board-equipment`). This comment previously read
+  /// "Ship-dark: the exclusions only shape the plan once
+  /// `enable_equipment_exclusions` flips" — and it was accurate, which is exactly
+  /// what made it a problem: this screen collected the preference, wrote it
+  /// (`:1686`) and synced it (sync_profile.dart:200) while the plan engine ignored
+  /// it. The flag is now default ON (kill-switch `disable_equipment_exclusions`),
+  /// so what the user selects here actually shapes their plan.
   Widget _buildEquipmentCustomizeChips() {
     final options = EquipmentVocab.tierExcludableItems(_equipment);
     if (options.isEmpty) return const SizedBox.shrink();
