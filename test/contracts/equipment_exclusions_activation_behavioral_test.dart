@@ -39,12 +39,14 @@ void main() {
     await tearDownHiveForTests(tempDir);
   });
 
+  // Flipped 2026-08-05 (deps-board-equipment): DEFAULT ON behind the
+  // `disable_equipment_exclusions` kill-switch — "on" is now the key's ABSENCE.
   Future<void> setFlag(bool on) async {
     final cfg = Hive.box('configBox');
     if (on) {
-      await cfg.put('enable_equipment_exclusions', true);
+      await cfg.delete('disable_equipment_exclusions');
     } else {
-      await cfg.delete('enable_equipment_exclusions');
+      await cfg.put('disable_equipment_exclusions', true);
     }
   }
 
@@ -111,6 +113,50 @@ void main() {
             'fails here (the rule-21 guarantee).');
     expect(plan.workouts.isNotEmpty, isTrue);
     await setFlag(false);
+    await setProfileExclusions(null);
+  });
+
+  // ── THE REAL USER JOURNEY (added round-1 review, 2026-08-05) ─────────────
+  //
+  // Round-1 review found the batch's central claim untested end-to-end. The
+  // sibling flip test in equipment_exclusion_filter_behavioral_test.dart deletes
+  // the config keys but passes `exclusions:` as an EXPLICIT PARAM — and per
+  // training_history_analyzer.dart:174-176 an explicit param SHORT-CIRCUITS
+  // before the profile read. So "default config × explicit param" was covered,
+  // and "profile read × forced flag" was covered (the test above), but
+  // "profile read × DEFAULT config" — the only combination a real device ever
+  // runs — was covered by nothing.
+  test('THE USER JOURNEY: profile exclusions honoured at the DEFAULT config '
+      '(no flag key set, no param)', () async {
+    final cfg = Hive.box('configBox');
+    // Round-2 review: register cleanup BEFORE the assertions, so a failure at any
+    // expect() below still restores shared Hive state for the sibling tests
+    // instead of leaking the kill-switch into them.
+    addTearDown(() async {
+      await cfg.delete('disable_equipment_exclusions');
+      await setProfileExclusions(null);
+    });
+    await cfg.delete('enable_equipment_exclusions'); // retired key
+    await cfg.delete('disable_equipment_exclusions'); // kill-switch absent
+    await setProfileExclusions(['cables']);
+
+    final plan = gen(); // no param — the profile central-read must drive it
+
+    expect(equipTokensOf(plan).contains('cables'), isFalse,
+        reason: 'a user who saved "no cables" in Edit Profile, on a device with '
+            'no flag key set, must not be prescribed cable work. This is the '
+            'exact journey diagnose e2d6b8 describes; before the flip it failed.');
+    expect(plan.workouts.isNotEmpty, isTrue,
+        reason: 'honouring the exclusion must not collapse generation');
+
+    // Negative control on the SAME journey: the kill-switch must restore the
+    // pre-flip behaviour through the profile path too, not just the param path.
+    await cfg.put('disable_equipment_exclusions', true);
+    final killed = gen();
+    expect(equipTokensOf(killed).contains('cables'), isTrue,
+        reason: 'kill-switch ON must make the profile exclusion inert again');
+
+    await cfg.delete('disable_equipment_exclusions');
     await setProfileExclusions(null);
   });
 

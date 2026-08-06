@@ -8322,7 +8322,10 @@ concepts:
           passed the ITEM LIST). `cardio machine` ADDED to basic_gym+full_gym tierItems. null
           override keeps template_service + tier-string tests (shared_contracts_test:825)
           byte-identical. Behavioral: test/contracts/wu2_gym_cardio_gate_behavioral_test.dart.
-          No baseline move (scorecard keys off equipment_tier). Ship-dark (enable_equipment_exclusions).
+          No baseline move (scorecard keys off equipment_tier). Gated on the shared
+          equipment-exclusions flag — FLIPPED ON 2026-08-05 (diagnose e2d6b8); kill-switch is now
+          `disable_equipment_exclusions` (default ON). Was ship-dark DEFAULT OFF until then, which
+          is why this WU-2 gym-cardio gate had been inert in production since 2026-07-17 (b7a4e2).
     readers:
       - file: lib/shared/repositories/plan_engine/plan_generator.dart
         method: the generated Phase (selection reflects the exclusions)

@@ -131,6 +131,29 @@ pending:
     merge_commit: 95b9bd6e
     flip_reviewed: false
     flip_commit: null
+    note: >
+      FLIPPED ON 2026-08-05 on branch `deps-board-equipment`. The kill-switch key
+      changed from `enable_equipment_exclusions` to `disable_equipment_exclusions`
+      (default ON), matching the four sibling default-ON flags in
+      plan_engine_flags.dart. Flipped ahead of the other twelve OI-53 flags because
+      this one was not dormant: edit_profile_screen.dart:1686 already WROTE
+      `equipment_exclusions` and sync_profile.dart:200 already synced it, so the app
+      was collecting an equipment preference it then ignored — a live broken promise
+      rather than an unshipped feature.
+      ⚠ TWO behaviours ride this one flag, and the flip-on review must cover BOTH:
+      (1) the exclusion filter itself (plan_generator.dart:140-142), which only
+      affects users who set an exclusion; and (2) ⑥ C2's WU-2 gym-cardio gate
+      (plan_generator.dart:298-308), whose `hasGymOverride` stops being null — per
+      diagnose b7a4e2 the predicate it deferred to was ALWAYS FALSE on the generated
+      path, so gym-cardio warmup/finisher pools (Treadmill/Bike) now activate for
+      EVERY gym-tier user, including those with no exclusions. (2) is the wider half
+      of the blast radius.
+      `flip_reviewed` stays FALSE until the flip commit's plan-review record shows
+      review_rounds >= 2 + `bpass: accepted` (§4.12.4). Discriminating regression
+      test: test/contracts/equipment_exclusion_filter_behavioral_test.dart
+      "DEFAULT (no config key at all): exclusions are HONOURED — the flip", proven
+      to FAIL on pre-flip code by mutation (Actual: <true> — cables prescribed to a
+      cables-excluding user) and PASS after, with a kill-switch negative control.
 
   - flag: enable_readiness
     branch: workout-6-readiness

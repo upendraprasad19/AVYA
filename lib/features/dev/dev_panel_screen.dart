@@ -259,6 +259,34 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('enable_hold_weeks = ${next ? 'ON' : 'OFF'}');
   }
 
+  /// The equipment-exclusions KILL-SWITCH (diagnose e2d6b8, flipped ON
+  /// 2026-08-05). Unlike `enable_hold_weeks` this flag is DEFAULT ON, so the
+  /// switch writes `disable_equipment_exclusions = true` to turn the feature
+  /// OFF and DELETES the key to return to the default.
+  ///
+  /// Added because round-1 review found the kill-switch had NO writer anywhere
+  /// in the app: §4.6 requires the old path stay "reachable when the gate is
+  /// closed", and a gate nothing can close is not reachable — reverting a
+  /// platform-tier plan change for every gym-tier user would have needed a code
+  /// change plus an APK respin.
+  ///
+  /// Turning it OFF reverts BOTH behaviours this one flag gates: the exclusion
+  /// filter AND ⑥ C2's WU-2 gym-cardio pools.
+  Future<void> _toggleEquipmentExclusions() async {
+    final nextEnabled = !PlanEngineFlags.equipmentExclusionsEnabled;
+    final cfg = HiveService.instance.configBox;
+    if (nextEnabled) {
+      await cfg.delete('disable_equipment_exclusions');
+    } else {
+      await cfg.put('disable_equipment_exclusions', true);
+    }
+    await DayRolloverObserver.instance.runRolloverNow(ref);
+    if (!mounted) return;
+    setState(() {});
+    _toast('equipment exclusions = ${nextEnabled ? 'ON' : 'OFF (killed)'} '
+        '— regenerate a plan to see the effect');
+  }
+
   void _toast(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
@@ -336,6 +364,10 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
             children: [
               _kv('enable_hold_weeks',
                   PlanEngineFlags.holdWeeksEnabled ? 'ON' : 'off'),
+              // DEFAULT ON since 2026-08-05 (e2d6b8) — the kill-switch key is
+              // `disable_equipment_exclusions`, so "off" here means killed.
+              _kv('equipment exclusions (+ WU-2 gym cardio)',
+                  PlanEngineFlags.equipmentExclusionsEnabled ? 'ON' : 'KILLED'),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -346,6 +378,12 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                         ? 'Turn hold weeks OFF'
                         : 'Turn hold weeks ON',
                     () => _toggleHoldWeeks(),
+                  ),
+                  _btn(
+                    PlanEngineFlags.equipmentExclusionsEnabled
+                        ? 'KILL equipment exclusions'
+                        : 'Restore equipment exclusions',
+                    () => _toggleEquipmentExclusions(),
                   ),
                   // Use after every time-travel jump — the clock buttons above
                   // do NOT invalidate providers on their own.

@@ -37,12 +37,14 @@ void main() {
     await tearDownHiveForTests(tempDir);
   });
 
+  // Flipped 2026-08-05 (deps-board-equipment): DEFAULT ON behind the
+  // `disable_equipment_exclusions` kill-switch — "on" is now the key's ABSENCE.
   Future<void> setFlag(bool on) async {
     final cfg = Hive.box('configBox');
     if (on) {
-      await cfg.put('enable_equipment_exclusions', true);
+      await cfg.delete('disable_equipment_exclusions');
     } else {
-      await cfg.delete('enable_equipment_exclusions');
+      await cfg.put('disable_equipment_exclusions', true);
     }
   }
 

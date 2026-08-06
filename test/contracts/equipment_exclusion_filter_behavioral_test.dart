@@ -73,12 +73,16 @@ void main() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
+  // Flipped 2026-08-05 (deps-board-equipment): the flag is now DEFAULT ON behind
+  // the `disable_equipment_exclusions` kill-switch, so "on" is the ABSENCE of the
+  // key and "off" is the explicit kill. Only this helper inverts — every caller's
+  // setFlag(true)/setFlag(false) still means exactly what it says.
   Future<void> setFlag(bool on) async {
     final cfg = Hive.box(HiveService.configBoxName);
     if (on) {
-      await cfg.put('enable_equipment_exclusions', true);
+      await cfg.delete('disable_equipment_exclusions');
     } else {
-      await cfg.delete('enable_equipment_exclusions');
+      await cfg.put('disable_equipment_exclusions', true);
     }
   }
 
@@ -172,6 +176,49 @@ void main() {
             'exercise (the pure-exclusion drop, all pick paths).');
     expect(exerciseCount(plan), greaterThan(0));
     await setFlag(false);
+  });
+
+  // ── THE FLIP TEST (2026-08-05, deps-board-equipment) ──────────────────────
+  //
+  // Every other test in this file drives the flag EXPLICITLY via setFlag(), so
+  // every one of them passes both before and after the flip — none of them can
+  // detect which way the DEFAULT points. That is the whole gap this test closes:
+  // it asserts behaviour with NO config key present at all, which is the state a
+  // real user's device is in. It FAILS on the pre-flip code (default OFF ⇒ the
+  // exclusion is ignored ⇒ cables are prescribed) and PASSES after.
+  //
+  // This is the live broken promise being closed: edit_profile_screen.dart:1686
+  // already writes `equipment_exclusions` and sync_profile.dart:200 already syncs
+  // it, so before the flip a user could save "I have no cables" and still be
+  // prescribed cable work.
+  test('DEFAULT (no config key at all): exclusions are HONOURED — the flip',
+      () async {
+    final cfg = Hive.box(HiveService.configBoxName);
+    // Pristine: neither the retired `enable_` key nor the new kill-switch.
+    await cfg.delete('enable_equipment_exclusions');
+    await cfg.delete('disable_equipment_exclusions');
+
+    final plan = gen(exclusions: const ['cables']);
+    expect(equipTokensOf(plan).contains('cables'), isFalse,
+        reason: 'with NO flag key set — the state of every real install — a user '
+            'who excluded cables must not be prescribed cable work. Before the '
+            '2026-08-05 flip this failed: the default was OFF, so the profile '
+            'field was collected, synced, and then silently ignored.');
+    expect(exerciseCount(plan), greaterThan(0),
+        reason: 'the plan must still be non-trivial; honouring an exclusion must '
+            'not collapse generation.');
+
+    // NEGATIVE CONTROL: the kill-switch still reverts to the pre-flip path, so
+    // §4.6\'s "old path preserved and reachable" holds. Without this half, the
+    // test above could pass for a build that had simply deleted the flag.
+    await cfg.put('disable_equipment_exclusions', true);
+    final killed = gen(exclusions: const ['cables']);
+    expect(equipTokensOf(killed).contains('cables'), isTrue,
+        reason: 'kill-switch ON must restore the verbatim pre-flip behaviour '
+            '(exclusions ignored). If this ever fails, the kill-switch is dead '
+            'and the flip is no longer revertible.');
+
+    await cfg.delete('disable_equipment_exclusions');
   });
 
   test('exclude EVERYTHING (flag ON): valid bodyweight plan, no excluded equipment',

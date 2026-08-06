@@ -134,21 +134,45 @@ class PlanEngineFlags {
     }
   }
 
-  /// ⑥ slice B1 equipment item-level EXCLUSION filter. **Default OFF (ship dark,
-  /// §4.6)** — it SHRINKS the selectable pool (a user subtracts equipment they
-  /// don't have), which changes exercise selection, so it ships inert and is
-  /// flipped ON after APK verification (and once slice C's Customize UI writes
-  /// the `equipment_exclusions` profile field it reads). When OFF, `generateV4`
-  /// threads an EMPTY exclusions set → every `.isNotEmpty`-guarded drop in
-  /// queryV4 / the att5 pool / the L2 custom-append is inert → byte-identical to
-  /// today. Set `configBox['enable_equipment_exclusions'] = true` to enable.
+  /// ⑥ slice B1 equipment item-level EXCLUSION filter.
+  ///
+  /// **FLIPPED ON 2026-08-05** (`deps-board-equipment`). Was ship-dark DEFAULT
+  /// OFF behind `enable_equipment_exclusions`; the kill-switch is now
+  /// `disable_equipment_exclusions` and the default is ON, matching the four
+  /// sibling default-ON flags in this file (`disable_injury_universal_filter`,
+  /// `disable_warmup_injury_filter`, `disable_detraining_decay`,
+  /// `disable_cardio_goal_default`).
+  ///
+  /// **Why it was flipped:** the *collection* half shipped lit while the
+  /// *consumption* half stayed dark. `edit_profile_screen.dart:1686` already
+  /// writes `equipment_exclusions` and `sync_profile.dart:200` already syncs it,
+  /// so a user could tell the app they own no barbell, watch it save, and still
+  /// be prescribed barbell lifts. That is a live broken promise, not a dormant
+  /// feature — which is what separated this flag from the other twelve in OI-53.
+  ///
+  /// ⚠ **This flag gates TWO behaviours; a reviewer must weigh both.**
+  /// 1. `plan_generator.dart:140-142` — the exclusion set is sourced from the
+  ///    profile instead of `{}`, so every `.isNotEmpty`-guarded drop (queryV4
+  ///    att1-4 / att5 pool / L2 custom-append / L6 swap) becomes live. Affects
+  ///    only users who actually set an exclusion.
+  /// 2. `plan_generator.dart:298-308` — ⑥ C2's `hasGymOverride` stops being
+  ///    `null`. Per diagnose b7a4e2 the fallback predicate it defers to was
+  ///    **always false on the generated path**, so this ACTIVATES the gym-cardio
+  ///    warmup/finisher pools (Treadmill/Bike) for **every gym-tier user,
+  ///    including those with no exclusions set**. This is the wider half of the
+  ///    blast radius and the reason the flip is not "byte-identical for users
+  ///    who ignore the feature."
+  ///
+  /// Set `configBox['disable_equipment_exclusions'] = true` to revert BOTH
+  /// behaviours to the verbatim pre-flip path (§4.6 requires the old path stay
+  /// reachable).
   static bool get equipmentExclusionsEnabled {
     try {
       return HiveService.instance.configBox
-              .get('enable_equipment_exclusions') ==
+              .get('disable_equipment_exclusions') !=
           true;
     } catch (_) {
-      return false; // no Hive (pure unit test) → safe default: OFF (no exclusions)
+      return true; // no Hive (pure unit test) → safe default: exclusions ON
     }
   }
 
@@ -200,8 +224,8 @@ class PlanEngineFlags {
   }
 
   /// ⑧ Batch 8 (W2.5 adherence gate): the "repeat the last phase's content"
-  /// advance. When ON, a phase advance that passes `repeatContent:true`
-  /// (UNIT 3's low-adherence choice, not yet wired) PINS the just-finished
+  /// advance. When ON, a phase advance that passes `repeatContent:true` PINS
+  /// the just-finished
   /// phase's exercises into the new phase (via generateV4's pinnedExercisesByDay)
   /// instead of a fresh selection, gated on the prior phase's
   /// {planGoal, equipment, daysPerWeek, effectiveExp} being UNCHANGED. Ship-dark
@@ -209,6 +233,19 @@ class PlanEngineFlags {
   /// config write). OFF → no extraction, no gate, no config write, `repeatContent`
   /// inert → byte-identical to today. Set `configBox['enable_adherence_gate'] =
   /// true` to enable.
+  ///
+  /// ⚠ Corrected 2026-08-05: this comment used to say the `repeatContent:true`
+  /// caller was "not yet wired". It IS wired — `pro_phase_advance.dart:167-169`
+  /// computes it as `adherenceGateEnabled && currentPhaseCompletionRate() <
+  /// AppConstants.phaseUnlockCompletionRate` and passes it through
+  /// `autoGenerateNextPhaseIfNeeded`. The `&&` short-circuits, so with the flag
+  /// OFF the completion-rate scan never runs and the path stays byte-identical
+  /// — which is why the stale note survived: flag-OFF behaviour is the same
+  /// either way, so nothing failed to make it visible. Same phantom-citation
+  /// class as the `check_writer_reader_drift.dart` gate `lib/CLAUDE.md` cited
+  /// for months without it ever existing: a doc claiming LESS coverage than
+  /// reality is quieter than one claiming more, but it still mis-scopes the
+  /// next person's plan.
   static bool get adherenceGateEnabled {
     try {
       return HiveService.instance.configBox.get('enable_adherence_gate') == true;

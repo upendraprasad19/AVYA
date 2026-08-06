@@ -130,8 +130,69 @@ void main() {
     final names = warmupCooldownNames(gen(injuries: const ['wrist']));
     // A wrist injury must not drop leg/knee moves.
     final base = warmupCooldownNames(gen(injuries: const []));
-    expect(names.intersection(_kneeMoves), base.intersection(_kneeMoves),
-        reason: 'a wrist injury must not affect knee-loading moves');
+
+    // ⚠ 2026-08-05 (e2d6b8): compare only the knee moves that are NOT themselves
+    // wrist-loading. `Jump Rope` is tagged {'knee','ankle','wrist'}
+    // (warmup_cooldown.dart:43) and lives ONLY in the _gymCardio pool
+    // (warmup_cooldown.dart:110), so dropping it for a wrist injury is CORRECT —
+    // it is not the wrist filter leaking into knee moves.
+    //
+    // This assertion was VACUOUS for Jump Rope until the enable_equipment_
+    // exclusions flip: ⑥ C2's gym-cardio gate was unreachable on the generated
+    // path (hasGymEquipment always false, diagnose b7a4e2), so Jump Rope was
+    // never emitted on EITHER side and the two sets matched trivially. Activating
+    // the gate made it real and immediately exposed that `_kneeMoves` misfiles a
+    // move that is knee- AND wrist-loading.
+    //
+    // ⚠ HARDCODED, deliberately NOT derived from WarmupCooldownSelector
+    // .moveInjuries. The first version of this fix DID derive it, and round-1
+    // review proved that tautological by mutation: stripping 'wrist' from Jump
+    // Rope's tags at warmup_cooldown.dart:43 left all 7 tests in this file
+    // passing, because both sides of the comparison were reading the same map
+    // the filter itself reads. That also violated this file's own header rule
+    // (":6 — Asserts against SPECIFIC known moves (not the production map) to
+    // stay non-circular"). Independent ground truth is the whole point.
+    const wristTagged = {'Jump Rope'};
+    final wristIrrelevantKneeMoves = _kneeMoves.difference(wristTagged);
+
+    // The non-circular pin the exclusion above depends on: if Jump Rope's tags
+    // ever change, THIS fails loudly instead of the exclusion silently widening.
+    // Precedent: warmup_library_injury_mirror_test.dart pins the same map by
+    // value rather than deriving from it.
+    expect(WarmupCooldownSelector.moveInjuries['Jump Rope'],
+        {'knee', 'ankle', 'wrist'},
+        reason: 'Jump Rope must stay knee+ankle+wrist tagged. The wristTagged '
+            'exclusion above is hardcoded on this fact; if the tags change, fix '
+            'both together rather than letting the exclusion drift.');
+
+    expect(wristIrrelevantKneeMoves, isNotEmpty,
+        reason: 'non-vacuity: if every knee move became wrist-tagged this test '
+            'would pass while asserting nothing');
+    expect(names.intersection(wristIrrelevantKneeMoves),
+        base.intersection(wristIrrelevantKneeMoves),
+        reason: 'a wrist injury must not affect knee-loading moves that are not '
+            'themselves wrist-loading');
+
+    // The other half of the same contract, now that the gym pool is reachable:
+    // a move that IS wrist-loading MUST be dropped for a wrist injury. Without
+    // this, the exclusion above could be widened until the test asserted nothing.
+    // Non-vacuity guard for the converse half. Round-2 review found the previous
+    // `if (!base.contains(m)) continue;` silently skipped the entire assertion if
+    // the move ever stopped reaching the baseline — latently vacuous, the same
+    // failure mode that hid this bug for three weeks. Assert reachability first.
+    final emittedWristTagged = base.intersection(wristTagged);
+    expect(emittedWristTagged, isNotEmpty,
+        reason: 'Jump Rope must appear in the UNINJURED baseline or the drop '
+            'assertion below asserts nothing. If this fails, the gym-cardio pool '
+            'stopped being reachable — precisely the condition that made this '
+            'test vacuous before the 2026-08-05 flip (diagnose e2d6b8).');
+
+    for (final m in emittedWristTagged) {
+      expect(names, isNot(contains(m)),
+          reason: '$m is wrist-loading (${WarmupCooldownSelector.moveInjuries[m]}) '
+              'and was emitted in the uninjured baseline, so a wrist-injured user '
+              'must NOT receive it');
+    }
   });
 
   test('multi-injury never empties any day warmup or cooldown (floor)', () {
