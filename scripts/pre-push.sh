@@ -25,6 +25,15 @@ set -e
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# Same git-hook env leak the pre-commit hook guards against — see the long
+# comment on the `flutter()` wrapper in scripts/pre-commit.sh. GIT_DIR overrides
+# `git -C`, so flutter reading its own version out of $FLUTTER_ROOT gets THIS
+# repo instead and concludes the SDK is unavailable. Scoped to flutter only:
+# blast_radius_from_diff.dart below needs the real git env.
+flutter() {
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE flutter "$@"
+}
+
 # Pre-push receives ref updates on stdin; consume so we don't break the protocol.
 cat > /dev/null
 

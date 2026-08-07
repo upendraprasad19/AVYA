@@ -6,6 +6,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### notification_preferences (1 bugs)
+- 2026-08-07 a7e3d1 — Two defects on the same surface, both filed as OI-76. (1) COUNT. The Profile tab's Notifications row subtitle reads "N/M enabled". It counted all 10 registry keys, including `protein_alerts` and…
+
+### community_review_queue (1 bugs)
+- 2026-08-07 d5b8c2 — `promote-community-item` (daily cron, job `promote_community_item_daily`) opened both of its promotion paths with a call to the Postgres RPC `community_votes_summary`. That function does not exist —…
+
 ### equipment_exclusion_filter (2 bugs)
 - 2026-08-06 e2d6b8 — A user opens Edit Profile, selects the equipment they do NOT have (e.g. cables), and saves. The selection persists and syncs to cloud. Their generated plan then prescribes exercises requiring exactly…
 - 2026-07-17 b7a4e2 — On every GENERATED workout plan, gym users (basic_gym / full_gym) NEVER received the gym-cardio warmup moves (_gymCardio: Jump Rope / Cycling (Stationary) / Running (Treadmill)) or the gym finisher…
@@ -938,6 +944,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-07 | a7e3d1 | Two defects on the same surface, both filed as OI-76. (1) COUNT. The Profile tab's Notifications row subtitle reads "N/M enabled". It counted all 10 registry keys, including `protein_alerts` and… | notification_preferences | test/contracts/notification_pro_key_scoping_test.dart |
+| 2026-08-07 | d5b8c2 | `promote-community-item` (daily cron, job `promote_community_item_daily`) opened both of its promotion paths with a call to the Postgres RPC `community_votes_summary`. That function does not exist —… | community_review_queue | test/contracts/promote_community_vote_tally_test.dart |
 | 2026-08-06 | e2d6b8 | A user opens Edit Profile, selects the equipment they do NOT have (e.g. cables), and saves. The selection persists and syncs to cloud. Their generated plan then prescribes exercises requiring exactly… | equipment_exclusion_filter | test/contracts/equipment_exclusion_filter_behavioral_test.dart |
 | 2026-08-05 | a7f3c2 | scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands… | plan_review_record_gate | test/scripts/plan_review_record_gate_e2e_test.dart |
 | 2026-08-03 | c9f4e1 | Two independent, real (not hypothetical) gaps in the git-safety tooling that CLAUDE.md §4.3 already relies on. (1) A 2026-08-03 near-miss during the terms-accepted-fix backfill follow-up: a foreground… | git_safety_tooling | test/contracts/git_lock_concurrency_test.dart (3a — real concurrent processes, not mocked timing; 5 tests after round-2's fix round, see below), test/scripts/plan_review_record_gate_e2e_test.dart (3b — 3 new tests appended to the existing E2E suite for this gate), test/scripts/safe_merge_test.dart (3c — real bare-remote + clone E2E, including the seeded-stale-origin scenario and, after round-2, the multi-word -m passthrough), test/scripts/safe_push_test.dart (NEW in round-2's fix round — safe_push.sh had zero prior coverage; this pins only the EXTRA_ARGS fix that batch actually changed there, not the pre-existing SSH-keepalive/retry logic). |

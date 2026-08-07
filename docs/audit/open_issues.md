@@ -634,22 +634,58 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 ## OI-82 — `promote-community-item` calls an RPC that does not exist on this project (P2)
 
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-08-01 (Unit 9) — `community_votes_summary` is absent from `pg_proc` in EVERY
-  schema on `dedsavbjuwgarrhphgnl`, confirmed twice (once by me during the sweep, once
-  independently by the round-1 reviewer).
+- **Status**: CLOSED IN SOURCE · 2026-08-07 · branch `claude/work-session-3rqcp5` (Unit 1).
+  Diagnose `d5b8c2`; test `test/contracts/promote_community_vote_tally_test.dart` (5 assertions,
+  negative-controlled by reinstating the defect). **The redeploy is NOT done — see below.**
+- **Blocked on**: FOUNDER, for the redeploy only. The code fix is landed; the DEPLOYED bundle still
+  contains the dead call until `promote-community-item` is redeployed, which per §4.3 is a separate
+  explicit authorization (plan approval ≠ deploy approval). The session that made the fix also had
+  no `supabase/.supabase/` access token, so the host-shell deploy path was not available from it.
+  Stated rather than omitted because conflating "committed" with "live" is precisely what OI-47 was
+  caught doing.
+- **Verified**: 2026-08-07 — premise RE-CONFIRMED LIVE today, not inherited: `pg_proc` across every
+  schema on `dedsavbjuwgarrhphgnl` returns **zero rows** for `community_votes_summary`.
 - **Identified**: 2026-08-01, while waiving RPC reads for the OI-79 gate.
-- **What's wrong**: `supabase/functions/promote-community-item/index.ts:128` and `:197` both call
-  `.rpc("community_votes_summary")`. The function does not exist, so every call errors and the
-  code proceeds down its fallback path — meaning the primary vote-summary path has never executed
-  in production. The OI-79 gate waives these reads as "cannot truncate", which is true and
-  irrelevant: they cannot return rows at all.
-- **Why not fixed here**: determining the intent (create the missing RPC vs. delete the dead call
-  and promote the fallback to primary) is a product/data decision about how community promotion is
-  meant to rank items, not a paging fix.
-- **Fix**: decide intent; if the fallback is correct, delete the dead RPC calls and their waivers
-  so the gate stops reporting them as waived reads.
+- **What was wrong**: `promote-community-item/index.ts:128` and `:197` both called
+  `.rpc("community_votes_summary")`. The function does not exist, so `.rpc()` returned
+  `{data: null, error}` (PostgREST reports a missing function as an error object rather than
+  throwing) and `candidates ?? fallbackCount(...)` fell through on every tick — the primary
+  vote-summary path had never executed in production.
+- **What this entry MISSED, and it is the more interesting half**: the error was also
+  **unreportable**. The guard was `if (countErr && !list)`, but `fallbackCount` returns `[]` on
+  failure and `![]` is `false` in JS, so the branch could not execute even when `countErr` was set.
+  A dead guard wrapped a dead call and the pair source-greps as working error handling — the
+  literal shape of the source-grep-false-confidence class. (That class is named after a
+  `feedback_*.md` that lives only in the harness-local memory directory and is NOT in this repo —
+  `memory/MEMORY.md:8` documents that trap. Stating the class in words here so the reference is
+  followable from a clone, per the same lesson.)
+- **Intent decided (2026-08-07, founder): DELETE the call, promote the tally.** Evidence: no
+  migration in the repo has ever defined the function — the sole textual match in
+  `supabase/migrations` is a PROSE COMMENT at `101_admin_dashboard_metrics_functions.sql:16` citing
+  it as an example of an *existing* public function, which it is not (that comment is NOT corrected
+  here — see the tier note below). So there was no unapplied migration to restore; it was speculative code whose
+  helper was never written. `fallbackCount` already computed exactly what the RPC's name promises —
+  same `{item_id, approves}` shape, same `APPROVAL_THRESHOLD` applied identically — so creating the
+  RPC would have meant inventing unspecified ranking behaviour to replace a path that already works.
+- **Fix landed**: both `.rpc()` calls, both `oi79-ok` waiver comments and both dead `countErr`
+  guards deleted; `fallbackCount` renamed `countApproveVotes` and called directly; its doc comment
+  rewritten (it had described itself as a fallback "if the RPC helper doesn't exist yet"). The
+  waivers had to go WITH the calls: `check_unbounded_cron_reads.dart` matches waivers by line
+  proximity, so an orphaned one can drift onto a neighbouring read and silently bless it. Gate now
+  exits 0 with 3 waived reads repo-wide, down from 5, and none in this file.
+- **Live state at close (why this closure does not overclaim)**: the entire community-promotion
+  surface is dormant — 0 approve votes ever cast, 0 items approved, 0 rows in `food_database` or
+  `exercise_library` with `source='community'`. Removing a path that never returned a row cannot
+  change an outcome. This was a diagnosability fix, not a user-visible one.
+- **Tier note — why migration 101's false-precedent comment was left alone**: that file already
+  contains the literal phrase "SECURITY DEFINER" (line 33, plus the `security definer` clauses on
+  the three functions it defines), and `blast_radius_content_rules_lib.dart` matches WHOLE-FILE
+  content rather than the diff hunk. Editing even a comment there escalates the whole batch
+  platform → **catastrophic**, pulling in a hermes pass. Measured, not assumed: staged →
+  `catastrophic`, unstaged → `platform`. Tracked as ledger entry `MIG-101-COMMENT` in
+  `docs/audit/oi_unit1_backlog.closure.yaml` to ride with the OI-78 unit, which must author a
+  migration at that tier anyway. Recorded here because "why didn't they fix the obvious one-line
+  comment" is the first question a reader will have.
 
 ## OI-79 — Un-ranged PostgREST reads silently truncate at db-max-rows (1000) in cron candidate scans (P1)
 
@@ -845,9 +881,9 @@ with a gate holds; everything on intention decays. Same disease §4.12 records f
 | OI-44 | **STILL OPEN** — `checkAndUnlock` at `badge_service.dart:18` | `getCurrentRank()` 176 → **`rank_service.dart:217`**. NOT refreshed: `isPro` `sub.service.dart:233` → **`subscription_service.dart:320`**; `gate()` 306 → **:420** |
 | OI-45 | **STILL OPEN** — `increment()` body is still `final current = read(); await write(current + 1)` **[SUPERSEDED 2026-07-29 by the usage-counter-race batch correction in OI-45's own entry above — this row re-confirmed the CODE SHAPE only; the RUNTIME behavior it implies does not reproduce, downgraded CRITICAL → LOW]** | 74-79 → **`usage_counter_service.dart:100-106`**. NOT refreshed: `UserRepository.updateProgress` 75-84 → **:133**; `HealthSyncService.syncToHive` 190-192 → **:148** |
 | OI-46 | **STILL OPEN** — migration 026 explicitly scopes to `food_text_analysis`; no daily-cap trigger on `ai_coach_interactions` | — |
-| OI-47 | **STILL OPEN** — `_shared/sanitize_for_prompt.ts` **absent**; raw `User name: ${name}` live | 243 → **`morning-alert/index.ts:278`** |
+| OI-47 | ~~**STILL OPEN** — `_shared/sanitize_for_prompt.ts` **absent**; raw `User name: ${name}` live~~ **SUPERSEDED — OI-47 CLOSED 2026-07-28** (merge `9d5e9d31`, deployed to all 16 LLM-reaching functions). `sanitize_for_prompt.ts` exists. Row kept as the dated 2026-07-26 snapshot it is; annotated 2026-08-07 because a grep for "OI-47" hits this row before the closed entry, and this board's own index cites OI-47 by name as the item that "read as authoritative for a day while being wrong". | 243 → **`morning-alert/index.ts:278`** |
 | OI-48 | **MATERIALLY STALE — the stated harm no longer describes the code.** `e78e2c7e` (2026-07-08, OPT-E) batched the per-user reads via chunked `.in()`. The outer `from("users").select(...)` remains, so the O(all users) *shape* survives, but "~5 Postgres reads × N users" does not. **Needs re-scoping, not carrying forward.** | — |
-| OI-51 | **PARTLY CLOSED.** `razorpay_service.dart:_onUserChanged()` nulls `_onSuccess`/`_onFailure`/`_pendingPlan` via `SingletonLifecycleRegistry`, added by the 2026-05-20 tech-debt audit (A7) — *after* this OI was filed, so its "No reset path" text is now false. **Still genuinely open:** Crashlytics `setUserIdentifier('')` and `OneSignal.logout()` — neither appears anywhere in `lib/`. | auth_provider 543/760 → **:587/:607**; razorpay 30-32 → **:40-42** |
+| OI-51 | ~~**PARTLY CLOSED.** … **Still genuinely open:** Crashlytics `setUserIdentifier('')` and `OneSignal.logout()`~~ **SUPERSEDED — OI-51 CLOSED 2026-07-28** (merge `9d5e9d31`, `ff716e29`; test `signout_unbinds_sdk_identity_test.dart`). Row kept as the dated 2026-07-26 snapshot it is; annotated 2026-08-07 for the same grep-precedence reason as OI-47 above. ⚠ Its closed entry records a residual worth re-checking: the fix is CLIENT-side and was not in APK `1.0.0+37`; whether it has reached users depends on which build shipped after `+38`. | auth_provider 543/760 → **:587/:607**; razorpay 30-32 → **:40-42** |
 | OI-25 | Carried forward — **NOT audited this pass.** | — |
 | OI-50 | Carried forward — **NOT audited this pass.** Spot-check found `sets.first` moved `train_provider.dart:72` → **:85**, and the cited `mealType[0]` does **not exist** in `todays_meals_card.dart` at all (it is in `nutrition_screen.dart`). Citations unreliable. | — |
 
@@ -1247,26 +1283,76 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-75 — notification_preferences has no SoT registry entry
 
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
+- **Status**: CLOSED · 2026-08-07 · branch `claude/work-session-3rqcp5` (Unit 1).
+  Entry appended to `docs/sot_registry.yaml` (concept `notification_preferences`, domain `profile`),
+  `behavioral_test_path: test/contracts/notification_prefs_rescope_behavioral_test.dart`.
+- **Blocked on**: nothing — closed.
+- **Verified**: 2026-08-07 — Gate 42 (`check_sot_behavioral_test_paths.dart`) PASS at 107 concepts;
+  `check_reader_manifest_complete.dart` and `check_snapshot_contract.dart` both PASS;
+  `sot_registry_completeness_test.dart` ([Gate 7 mirror]) PASS. That last one earned its keep: the
+  first draft of this entry cited `line_range: 205-240` for `write` in a 232-line file, and a
+  `read` range of 120-145 when `read()` is at :155. Both were caught by the gate, not by review —
+  worth recording because this entry's whole point is that its citations be trustworthy.
 - **Identified**: 2026-07-27 · B-pass
-- **What's missing**: §4.5 requires a `docs/sot_registry.yaml` entry for a new writer/reader
-  contract. The arc created one (repository → compileDailySnapshot → 6 Edge Function readers) and
+- **What was missing**: §4.5 requires a `docs/sot_registry.yaml` entry for a new writer/reader
+  contract. The arc created one (repository → compileDailySnapshot → Edge Function readers) and
   did not register it. `docs/snapshot_contract.yaml` WAS updated, so the drift gate covers the
-  snapshot seam; the SoT registry entry is the missing half.
+  snapshot seam; the SoT registry entry was the missing half.
+- **⚠ THIS ENTRY'S READER COUNT WAS WRONG — it said 6, the real number is 10.** Re-derived by grep
+  at close time rather than copied (this entry's own citations, and `snapshot_contract.yaml`'s
+  `notification_preferences` readers block, are recorded as unvalidated by OI-80). The server
+  readers are **not uniform**: SIX consume `_shared/notification_prefs.ts`
+  (`morning-alert:56`, `plateau-alert:44`, `pr-detection:24`, `proactive-coach-promotion:27`,
+  `protein-gap-alert:46`, `re-engagement:55` — import sites), and **FOUR read
+  `snapshot_json.notification_preferences` INLINE and never import the helper**
+  (`weekly-recap-ready:54`, `streak-guardian:177`, `workout-window-closing:233`,
+  `expiry-reminder:118`). "6" was the helper group only. Recorded because it is a live maintenance
+  hazard, not a bookkeeping nit: **a change to the helper's semantics reaches only 6 of 10
+  consumers**, and the ABSENT ⇒ SEND default means a divergence fails toward sending notifications
+  rather than withholding them.
+- **Note on §4.4 r21**: this closure also corrected root `CLAUDE.md` §4.4 r21, which still described
+  Gate 42 as emitting a WARN with a `behavioral_test_required: true` backlog. The gate has been
+  STRICT by default for some time and that marker is now itself a hard blocker — the stale wording
+  is what led this OI's own plan to propose a bare registry entry that would have failed pre-commit.
 
 ## OI-76 — Notification count includes PRO-locked rows a free user cannot disable
 
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
+- **Status**: CLOSED · 2026-08-07 · branch `claude/work-session-3rqcp5` (Unit 1).
+  Diagnose `a7e3d1`; tests `test/contracts/notification_pro_key_scoping_test.dart` +
+  `test/contracts/paywall_feature_label_test.dart`, both negative-controlled by execution.
+- **Blocked on**: nothing — closed.
+- **Verified**: 2026-08-07 — fixed and pinned. `flutter test test/contracts/ test/router/` → 2832 pass
+  on Flutter 3.41.4 (the CI-pinned version) with `TZ=Asia/Kolkata`.
 - **Identified**: 2026-07-27 · B-pass
-- **What's wrong**: `profile_content.dart` counts all 10 registry keys, including Protein Alerts and
-  Plateau Check. A free user cannot turn those off, and their server functions PRO-gate anyway, so
-  the subtitle permanently reads at least 2/10 "enabled" for notifications that will never fire.
-- **Related**: the paywall callback passes `AppConstants.featureProgressPhotos` for notification
-  rows — wrong copy, and §4.4 r19 keys server-side verification off that id.
+- **What was wrong**: `profile_content.dart` counted all 10 registry keys, including Protein Alerts
+  and Plateau Check. A free user cannot turn those off, and their server functions PRO-gate anyway,
+  so the subtitle permanently read at least 2/10 "enabled" for notifications that would never fire.
+- **⚠ THE "Related" LINE BELOW WAS WRONG ON ITS SECOND CLAIM — kept verbatim, corrected here.**
+  It read: *"the paywall callback passes `AppConstants.featureProgressPhotos` for notification
+  rows — wrong copy, and §4.4 r19 keys server-side verification off that id."*
+  1. **The first half understated it.** `PaywallSheet` renders `feature` VERBATIM into its
+     letterhead (`paywall_sheet.dart:367`, `'${widget.feature} is a PRO feature'`), so a free user
+     tapping a locked notification row was shown the literal string
+     **"progress_photos is a PRO feature"** — not merely the wrong copy, the raw identifier. It was
+     the only one of ~25 `showPaywallSheet` call sites passing a snake_case constant; every other
+     passes a display string.
+  2. **The second half is FALSE.** §4.4 r19 does NOT key off this id. `showPaywallSheet`
+     (`paywall_sheet.dart:23`) is display + telemetry only and never reaches `gate()` or
+     `verifyFromServer()`; r19 keys off `gateAndVerify`'s positional first argument, a different
+     call. Both appear together at `profile_content.dart:345-349`, which is the convention this fix
+     restores: **id → the gate, display string → the paywall.** Acting on the claim as written
+     would have produced a fix aimed at a server-side contract that does not exist — and the
+     obvious "swap in a new `AppConstants.featureNotifications`" would have changed nothing, since
+     `_featureSubtitle` switches on display strings and any constant still falls to the default arm.
+- **Also fixed, found while fixing the above**: all three NOTIFICATIONS rows in `settings_screen.dart`
+  pushed `/profile/notification-settings` with no `extra`, so the route's `?? false` default showed a
+  **paying PRO user a lock** on the two PRO rows. The screen's own `initState` comment names that
+  exact harm as one it fixed, but only the prefs half was ever fixed. `isPro` was already in scope at
+  `settings_screen.dart:40`.
+- **Load-bearing constraint the fix had to respect**: `allKeys` and `emissionMap()` are NOT narrowed.
+  The server's rule is ABSENT ⇒ SEND, so scoping the emitted snapshot by tier — the intuitive
+  implementation — would turn the two PRO notifications **ON** for free users. Pinned by a
+  negative-controlled test rather than a comment.
 
 ## OI-77 — AI-coach chat photo references never round-trip through cloud sync/restore
 
@@ -2028,3 +2114,128 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   way change plan CONTENT, not crash-safety or data integrity, so respin latency is tolerable.
   That reasoning would NOT hold for a flag guarding auth, payment or sync.
 - **Blast radius estimate**: `feature` for (a); `platform` for (b).
+
+## OI-96 — community promotion has TWO mechanisms and the trigger may starve the cron's copy step (P2)
+
+- **Status**: OPEN
+- **Blocked on**: a PRODUCT decision — which mechanism owns promotion. The mechanism is understood
+  and read from live state; what to DO about it is not a mechanical call.
+- **Verified**: 2026-08-07 — both definitions read directly (the trigger from live `pg_proc`, the
+  cron from source), and the live counters queried. See the evidence block below.
+- **Identified**: 2026-08-07, while closing OI-82 (diagnose `d5b8c2`). Filed rather than fixed
+  inside a vote-tally cleanup, per the round-2 plan-review note that the cron/trigger relationship
+  "is not established anywhere".
+- **Risk class**: two writers, one concept — the SoT class root `CLAUDE.md` §4.1 names as the
+  default suspect.
+- **What's wrong (read, NOT observed — see the live-state caveat)**: `community_review_queue`'s own
+  registry entry says items auto-promote "via the SECURITY DEFINER trigger
+  `trg_auto_approve_community` **and** the `promote-community-item` cron (both BYPASSRLS)". They do
+  different things and interact badly:
+  - **The trigger** (`public.auto_approve_community_item()`, read live from `pg_proc`) fires on an
+    approve vote, counts `community_reviews`, and at `approve_count >= 10` sets
+    `user_custom_foods.approved = true` / `user_custom_exercises.approved_for_library = true` on the
+    SOURCE row. It does NOT copy anything into the public library and does NOT notify.
+  - **The cron** (`promote-community-item`) tallies the same votes with the same threshold of 10,
+    then for each item over threshold fetches the source row and **`if (source.approved === true)
+    continue; // already promoted`** — before the step that copies into `food_database` /
+    `exercise_library` and calls `notifySubmitter`.
+  Read literally, the trigger always wins: it flips the flag synchronously on the 10th vote, so by
+  the time the daily cron runs, every qualifying row is already `approved = true` and is skipped.
+  The copy-into-library and submitter-notification steps would then never execute, and no community
+  item would ever reach the public library — while both mechanisms report success.
+- **⚠ UNPROVEN, and that is stated deliberately**: with **0 approve votes ever cast** the
+  interaction has never been exercised, so this is a reading of two definitions, not an observed
+  failure. Do not treat it as confirmed until it is reproduced (cast 10 approve votes against one
+  item on a branch, then run the cron and check whether a `food_database` row appears).
+- **Live state 2026-08-07** (`dedsavbjuwgarrhphgnl`): `community_reviews WHERE vote='approve'` = 0;
+  `user_custom_foods WHERE approved` = 0; `user_custom_exercises WHERE approved_for_library` = 0;
+  `food_database WHERE source='community'` = 0; `exercise_library WHERE source='community'` = 0.
+  The whole surface is dormant, which is why this is P2 and not P0 — it bites the first time the
+  feature is genuinely used.
+- **Second, separable finding — a traceability gap**: `auto_approve_community_item()` is defined
+  **cloud-only**. No migration in `supabase/migrations/` creates it; the only repo references are
+  `053`/`090`/`091` ALTERing or REVOKEing something that must already exist, and `092`. Its body is
+  recoverable solely by querying `pg_proc`, so a reviewer reading the repo cannot see the threshold,
+  the columns it writes, or that it is SECURITY DEFINER. Whatever is decided about the mechanism,
+  the definition should be captured in a migration so the repo stops under-describing live schema.
+- **Product question to answer first**: should the trigger own promotion (and then the cron's
+  copy/notify steps need to stop keying off `approved`), or should the cron own it (and then the
+  trigger should not pre-empt the flag)? One mechanism should own the transition; today two claim it.
+- **Blast radius estimate**: `platform` — a fix touches an Edge Function and probably a migration
+  defining/altering a SECURITY DEFINER function. Note the `security definer` content rule
+  (`blast_radius_content_rules_lib.dart`) escalates any `supabase/migrations/**.sql` whose TEXT
+  matches `/security\s+definer/i`, comments included — writing that phrase in the migration, even in
+  a comment, self-escalates the change to `catastrophic`. Plan for that or phrase around it
+  deliberately; do not discover it at push time.
+
+## OI-97 — five PaywallSheet labels fall through to generic copy (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — mechanical, but it is copy work, so it wants the Wardroom brand soul
+  loaded (§0.3) rather than a mechanical string drop.
+- **Verified**: 2026-08-07 — `_featureSubtitle`'s switch read directly against every
+  `showPaywallSheet` call site in `lib/`.
+- **Identified**: 2026-08-07, while fixing OI-76's paywall half (diagnose `a7e3d1`). OI-76's own
+  call site was the worst instance (it passed a snake_case id and rendered
+  "progress_photos is a PRO feature"); these five are the residue on call sites that fix did not
+  touch, and are recorded so the class is not mistaken for closed.
+- **What's wrong**: `paywall_sheet.dart` `_featureSubtitle` switches on display strings and returns
+  a feature-specific benefit line, else the default *"Upgrade to PRO and unlock your full
+  potential."*. Five labels reach it with no matching `case` and therefore show generic copy on a
+  screen whose entire job is to convert: `'PRO'`, `'PRO Upgrade'`,
+  `'AI Body Composition Assessment'`, `'Readiness Trends'`, `'AI Weekly Report'`.
+  Note `'AI Weekly Report'` is a near-miss — the switch has `case 'Weekly AI Report'`, a word-order
+  difference, which is exactly the kind of drift a `default:` arm hides.
+- **Why it is P3 and not lower**: no user sees a wrong claim, only a weak one. But the default arm
+  silently absorbs typos, so this is also the mechanism by which a future renamed feature loses its
+  copy without anything failing.
+- **Fix shape**: add the five cases; consider whether the labels should be constants shared with the
+  call sites so a rename cannot silently fall through again (the deeper fix, and the only one that
+  stays fixed).
+- **Blast radius estimate**: `feature` — one widget, copy only.
+
+## OI-98 — notification preferences are push-only: a reinstall overwrites the server's copy with all-enabled (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. The mechanism is understood and read from code; what is NOT
+  established is the exact ordering on a real reinstall (see the caveat below), and that should be
+  confirmed before designing the fix.
+- **Verified**: 2026-08-07 — by grep across `lib/core/services/` and `lib/features/auth/`, while
+  writing OI-75's SoT registry entry. Gate 11 (`check_sync_fanout.dart`) is what forced the
+  question: it demanded a `restore_methods:` list and there was nothing truthful to put in it.
+- **Identified**: 2026-08-07 · Unit 1 (branch `claude/work-session-3rqcp5`).
+- **Risk class**: restore-completeness — the class `docs/architecture/sync.md` exists to prevent.
+- **What's wrong**: `notification_preferences` travels UPWARD only.
+  - Written into the daily snapshot at `sync_service.dart:842`
+    (`'notification_preferences': NotificationPrefsRepository.emissionMap()`), pushed by
+    `pushSnapshotNow` (`:870`).
+  - **Nothing ever reads it back.** The only read of `snapshot_json` is `:1763-1776`, and it
+    selects `fitness_summary` specifically. `grep -rn notification_preferences lib/core/services/
+    lib/features/auth/` returns exactly three hits: the emission above, a key name in
+    `user_config_migrator.dart:217`, and a comment in `auth_provider.dart:621`. No restore path
+    writes the key back to `userBox`.
+- **Why this is worse than "prefs don't restore"**: it is not a silent loss, it is an active
+  overwrite. On a reinstall `userBox` is empty, so `read()` returns `{}`, so `emissionMap()` emits
+  **every key with `{'enabled': true}`** (its documented default — an untouched key emits enabled).
+  That map is then pushed and **replaces the server's stored preferences**. A user who had turned
+  three notifications off gets all ten back on, and the record of their choice is destroyed rather
+  than merely unread. The ABSENT ⇒ SEND rule makes the failure direction "send more", never "send
+  less", so nobody complains about silence — they just start receiving notifications they had
+  switched off.
+- **⚠ Caveat, stated so this is not over-claimed**: the mechanism above is read from code. The exact
+  ORDERING on a real reinstall — whether any restore repopulates `userBox` before the first
+  `pushSnapshotNow`, and whether the first push happens before or after the user reaches the
+  Notifications screen — was NOT traced. Confirm that before designing the fix; if some restore
+  path does repopulate the box first, the impact is smaller than described (though the missing
+  read-back is still a gap).
+- **Fix shape (not attempted)**: give the concept a real restore leg — read
+  `snapshot_json->notification_preferences` in the restore path and write it back through
+  `NotificationPrefsRepository.write` before the first push. Alternatively, make the emission
+  distinguish "user has never set this" from "user set it to enabled", so a fresh install cannot
+  masquerade as an explicit all-enabled choice. The second is the more durable fix and is a schema
+  question, not just a client one.
+- **Related**: OI-75 (its registry entry records `restore_methods: []` with this as the reason);
+  OI-80 (the `notification_preferences` reader citations in `snapshot_contract.yaml` are recorded
+  as unvalidated).
+- **Blast radius estimate**: `account` — touches the sync restore path; no migration, no schema
+  change for the first fix shape.
