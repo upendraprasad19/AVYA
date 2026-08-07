@@ -119,21 +119,7 @@ async function promoteFoods(
   admin: SupabaseClient,
 ): Promise<number> {
   // Count approve votes per food item and pick those with ≥ threshold.
-  // oi79-ok: `community_votes_summary` does not exist on this project (verified
-  // live across all schemas), so this call errors on every tick and the paged
-  // `fallbackCount` below is the only path that ever returns rows. Waived
-  // rather than paged because paging a call that always fails would be
-  // ceremony around dead code; the live path IS bounded. The missing RPC is
-  // recorded separately — this waiver is not a claim that it is fine.
-  const { data: candidates, error: countErr } = await admin.rpc(
-    "community_votes_summary",
-    { p_item_type: "food" },
-  );
-  const list = (candidates as Array<{ item_id: string; approves: number }> | null) ??
-    (await fallbackCount(admin, "food"));
-  if (countErr && !list) {
-    console.warn("[promote:foods] count failed", countErr);
-  }
+  const list = await countApproveVotes(admin, "food");
 
   let promoted = 0;
   for (const row of list) {
@@ -188,22 +174,7 @@ async function promoteFoods(
 async function promoteExercises(
   admin: SupabaseClient,
 ): Promise<number> {
-  // oi79-ok: `community_votes_summary` does not exist on this project (verified
-  // live across all schemas), so this call errors on every tick and the paged
-  // `fallbackCount` below is the only path that ever returns rows. Waived
-  // rather than paged because paging a call that always fails would be
-  // ceremony around dead code; the live path IS bounded. The missing RPC is
-  // recorded separately — this waiver is not a claim that it is fine.
-  const { data: candidates, error: countErr } = await admin.rpc(
-    "community_votes_summary",
-    { p_item_type: "exercise" },
-  );
-  const list =
-    (candidates as Array<{ item_id: string; approves: number }> | null) ??
-      (await fallbackCount(admin, "exercise"));
-  if (countErr && !list) {
-    console.warn("[promote:exercises] count failed", countErr);
-  }
+  const list = await countApproveVotes(admin, "exercise");
 
   let promoted = 0;
   for (const row of list) {
@@ -250,21 +221,31 @@ async function promoteExercises(
 }
 
 /**
- * Fallback count query if the RPC helper doesn't exist yet.
+ * THE approve-vote tally. Counts approve votes per item and returns
+ * `{item_id, approves}` for the caller to threshold.
  *
- * ⚠️ This is NOT a fallback in practice — it is the ONLY live path.
- * `community_votes_summary` does not exist in any schema on this project
- * (verified live 2026-08-01 via pg_proc across all schemas), so the `.rpc()`
- * call in promoteFoods/promoteExercises errors on every tick and always lands
- * here. Treat this function as the primary implementation when reasoning about
- * promotion behaviour.
+ * It used to be named `fallbackCount` and sat behind a
+ * `.rpc("community_votes_summary")` call. That RPC has never existed in any
+ * schema on this project (verified live 2026-08-01 via pg_proc, confirmed twice
+ * independently), so `.rpc()` returned `{data: null, error}` on every tick —
+ * PostgREST reports a missing function as an error object rather than throwing —
+ * and the `??` fell through to here every single time. The primary path had
+ * therefore never executed in production, and no migration anywhere defines the
+ * function, so there was nothing to "restore": the call was speculative code
+ * whose helper was never written. Removed in OI-82 rather than implemented,
+ * because this tally already computes exactly what the RPC's name promises.
+ *
+ * The reason it went unnoticed for so long is worth keeping: the error was
+ * guarded by `if (countErr && !list)`, and `list` was always an array — `![]` is
+ * `false` in JS — so the warning could not fire even when `countErr` was set. A
+ * dead guard around a dead call reads as error handling and is worse than none.
  *
  * OI-79: paged. This reads one row per VOTE, not per item, so an un-ranged read
  * clipped at 1000 votes and every count derived after it was too low — items at
  * or above the approval threshold silently never got promoted, with no error.
  * That made it a wrong-result path, not just an incomplete one.
  */
-async function fallbackCount(
+async function countApproveVotes(
   admin: SupabaseClient,
   itemType: "food" | "exercise",
 ): Promise<Array<{ item_id: string; approves: number }>> {

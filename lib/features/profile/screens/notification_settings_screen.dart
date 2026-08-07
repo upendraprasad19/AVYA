@@ -14,7 +14,11 @@ class NotificationSettingsScreen extends StatefulWidget {
 
   /// Opens the paywall when a free user taps a locked PRO row. Optional so the
   /// screen stays usable from a test or a preview harness.
-  final VoidCallback? onProLockedTap;
+  ///
+  /// Receives the tapped row's display title so the paywall names the feature
+  /// the user actually reached for (OI-76). A single no-arg callback could only
+  /// ever show one feature's copy for both locked rows.
+  final ValueChanged<String>? onProLockedTap;
   final ValueChanged<Map<String, dynamic>> onSave;
 
   const NotificationSettingsScreen({
@@ -224,7 +228,8 @@ class _NotificationSettingsScreenState
                   title: 'Protein Alerts',
                   enabled: _getEnabled('protein_alerts'),
                   onToggle: (v) => _toggle('protein_alerts', v),
-                  isProFeature: true,
+                  isProFeature: NotificationPrefsRepository.proOnlyKeys
+                      .contains('protein_alerts'),
                   userIsPro: widget.isPro,
                   onLockedTap: widget.onProLockedTap,
                 ),
@@ -233,7 +238,8 @@ class _NotificationSettingsScreenState
                   title: 'Plateau Check',
                   enabled: _getEnabled('plateau_alert'),
                   onToggle: (v) => _toggle('plateau_alert', v),
-                  isProFeature: true,
+                  isProFeature: NotificationPrefsRepository.proOnlyKeys
+                      .contains('plateau_alert'),
                   userIsPro: widget.isPro,
                   onLockedTap: widget.onProLockedTap,
                 ),
@@ -289,8 +295,9 @@ class _NotificationRow extends StatelessWidget {
   /// [isProFeature] this decides LOCKED vs interactive.
   final bool userIsPro;
 
-  /// Invoked when a free user taps a locked PRO row (opens the paywall).
-  final VoidCallback? onLockedTap;
+  /// Invoked with this row's [title] when a free user taps a locked PRO row
+  /// (opens the paywall).
+  final ValueChanged<String>? onLockedTap;
   final bool showBorder;
   final String? timeValue;
   final List<String>? timeOptions;
@@ -386,7 +393,7 @@ class _NotificationRow extends StatelessWidget {
           // this whole batch exists to remove.
           if (isProFeature && !userIsPro)
             GestureDetector(
-              onTap: onLockedTap,
+              onTap: onLockedTap == null ? null : () => onLockedTap!(title),
               behavior: HitTestBehavior.opaque,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),

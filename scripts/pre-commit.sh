@@ -22,6 +22,25 @@ set -e
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# Git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE into every hook, and they
+# override even `git -C <path>` — the documented env-leak class
+# (feedback_mistake_git_hook_env_leak; see the header of
+# scripts/plan_review_record_lib.dart for the same trap in test code).
+#
+# It bites here because `flutter` derives its own version by running
+# `git -C "$FLUTTER_ROOT" describe`. With GIT_DIR leaked, that reads THIS repo
+# instead of the SDK, so flutter reports `0.0.0-unknown` / `channel
+# [user-branch]`, decides the SDK is unavailable, and fails dependency
+# resolution with "depends on integration_test from sdk which doesn't exist" —
+# a message that points at pubspec.yaml and not at the actual cause.
+#
+# Scoped to flutter deliberately: the git-dependent gates below (staged-diff
+# blast radius, worktree guard, closure/index regen) still need the real git
+# env, so this must NOT be a blanket `unset` at the top of the script.
+flutter() {
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE flutter "$@"
+}
+
 echo "[pre-commit] flutter analyze..."
 flutter analyze --no-fatal-infos
 

@@ -8506,3 +8506,170 @@ concepts:
         fields_read: [paths]
         notes: meta-gate — every watched top-level dir must be matched by some glob, so new code cannot silently inherit default_tier.
     contract_test_path: test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart
+
+  - concept: notification_preferences
+    domain: profile
+    behavioral_test_path: test/contracts/notification_prefs_rescope_behavioral_test.dart
+    description: |
+      Per-user notification toggles. THE writer/reader pair is
+      `NotificationPrefsRepository` (Unit C bug (c) moved these off the shared,
+      ownerless `configBox` onto the per-user `userBox`; the repository does its
+      own session check and never falls back, because `MigratedKey`'s configBox
+      fallback would re-create the leak).
+
+      The client->server seam is the daily snapshot: `emissionMap()` is folded
+      into `snapshot_json.notification_preferences` by
+      `SyncService.compileDailySnapshot` and read back by TEN Edge Functions.
+
+      TWO INVARIANTS, both load-bearing and both easy to break by
+      "simplification":
+
+      1. ABSENT => SEND (decision N2). The server tests `=== false`, so a key
+         missing from the emitted map means the notification IS sent.
+         `emissionMap()` therefore emits EVERY key in `allKeys`, always,
+         defaulting an untouched key to `{'enabled': true}` — it is never scoped
+         by tier, tenure, or anything else. Narrowing it to "the keys this user
+         can control" turns PRO-locked notifications ON for free users. Pinned by
+         `notification_pro_key_scoping_test.dart` (OI-76, a7e3d1).
+      2. `allKeys` must stay set-equal to the server's `ProactiveType` vocabulary
+         (`notification_prefs_parity_test.dart` — also hard-asserts length 10). A
+         key here but not server-side is a toggle that does nothing; a key
+         server-side but not here is unreachable and defaults to SEND.
+
+      `proOnlyKeys` / `controllableKeys` (a7e3d1) are DISPLAY-ONLY derivations
+      over `allKeys` for the profile subtitle's numerator+denominator and the
+      settings rows' `isProFeature` flag. They deliberately do not touch storage
+      or emission — see invariant 1.
+
+      READER SPLIT WORTH KNOWING (measured 2026-08-07 by grep, not inherited):
+      the server readers are NOT uniform. Six go through
+      `_shared/notification_prefs.ts` (`fetchNotificationPrefs` +
+      `isNotificationEnabled`); four read
+      `snapshot_json.notification_preferences` INLINE and never import the
+      helper. A change to the helper's semantics therefore reaches only 6 of 10
+      consumers. OI-75 filed the entry as "6 Edge Function readers" — that count
+      was the helper group only.
+    writers:
+      - file: lib/features/profile/services/notification_prefs_repository.dart
+        line_range: 205-231
+        method: write
+        semantic: latest
+        notes: |
+          THE writer. Session check FIRST (no session => no-op returning false,
+          never a configBox write). Normalises before storing, then pushes the
+          snapshot so the server sees the change today rather than at next
+          launch. Returns false rather than throwing when it did not persist.
+      - file: lib/features/profile/services/notification_prefs_repository.dart
+        line_range: 187-204
+        method: emissionMap
+        semantic: pass-through
+        notes: |
+          The snapshot projection. Emits ALL of allKeys unconditionally —
+          see invariant 1. Resolves the `workout_reminder` (singular) legacy
+          alias at read time so a user's stored OFF is not orphaned into SEND.
+          Never throws: an escape here would kill the user's ENTIRE daily
+          snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
+      - file: lib/core/services/sync_service.dart
+        line_range: 821-845
+        method: compileDailySnapshot
+        semantic: pass-through
+        notes: folds emissionMap() into snapshot_json.notification_preferences at :842.
+      - file: lib/features/profile/services/notification_prefs_repository.dart
+        line_range: 78-100
+        method: proOnlyKeys (const) + controllableKeys
+        semantic: display-only
+        notes: |
+          a7e3d1 / OI-76. Display-only derivations; NOT subtracted from allKeys
+          and NOT applied inside emissionMap. Also the single source for the
+          settings rows' isProFeature flag, replacing duplicated `true` literals.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/profile/services/notification_prefs_repository.dart
+        line_range: 155-186
+        method: read
+        semantic: latest
+        fields_read: [enabled]
+        notes: |
+          THE reader. Normalises every shape; only a literal `false` disables, so
+          a corrupted or half-written value cannot silently darken a
+          notification. Swallows storage errors and returns {} (=> all-enabled).
+      - file: lib/features/profile/screens/notification_settings_screen.dart
+        line_range: 42-61
+        method: initState
+        semantic: display-only
+        fields_read: [enabled]
+        notes: self-heals via NotificationPrefsRepository.read() when pushed without `extra`.
+      - file: lib/features/profile/screens/profile/screen.dart
+        line_range: 191-212
+        method: _loadNotificationPreferences
+        semantic: display-only
+        fields_read: [enabled]
+      - file: lib/features/profile/screens/profile/profile_content.dart
+        line_range: 62-80
+        method: build — "N/M enabled" subtitle
+        semantic: aggregated
+        fields_read: [enabled]
+        notes: |
+          a7e3d1 / OI-76: counts controllableKeys(isPro:), not allKeys. A free
+          user cannot toggle the 2 PRO keys, so counting them pinned the
+          subtitle at >= 2/10 forever.
+      - file: supabase/functions/_shared/notification_prefs.ts
+        line_range: 76-132
+        method: fetchNotificationPrefs (read at :106) + isNotificationEnabled (:133)
+        semantic: flag-check
+        fields_read: [enabled]
+        notes: |
+          THE server-side helper, and the canonical implementation of
+          ABSENT => SEND. Consumed by SIX functions: morning-alert (:56),
+          plateau-alert (:44), pr-detection (:24), proactive-coach-promotion
+          (:27), protein-gap-alert (:46), re-engagement (:55) — line numbers are
+          each function's import site.
+      - file: supabase/functions/weekly-recap-ready/index.ts
+        line_range: 54-60
+        method: inline snapshot read
+        semantic: flag-check
+        fields_read: [weekly_recap.enabled]
+        notes: INLINE reader — does NOT use _shared/notification_prefs.ts.
+      - file: supabase/functions/streak-guardian/index.ts
+        line_range: 177-182
+        method: inline snapshot read
+        semantic: flag-check
+        fields_read: [streak_alerts.enabled]
+        notes: INLINE reader — does NOT use _shared/notification_prefs.ts.
+      - file: supabase/functions/workout-window-closing/index.ts
+        line_range: 233-238
+        method: inline snapshot read
+        semantic: flag-check
+        fields_read: [workout_reminders.enabled]
+        notes: INLINE reader — does NOT use _shared/notification_prefs.ts.
+      - file: supabase/functions/expiry-reminder/index.ts
+        line_range: 118-123
+        method: inline snapshot read
+        semantic: flag-check
+        fields_read: [subscription_reminders.enabled]
+        notes: INLINE reader — does NOT use _shared/notification_prefs.ts.
+    hive:
+      box: userBox
+      key: notification_preferences
+      shape: "Map<String, Map<String, dynamic>> — {key: {enabled: bool, ...}}"
+    cloud:
+      table: user_daily_snapshots
+      columns: [snapshot_json]
+    # Gate 11 (check_sync_fanout.dart) scopes these two fields to methods
+    # declared in sync_service.dart — the fan-out surface — NOT the repository's
+    # own write/read. `compileDailySnapshot` is the assembly point (:821) but
+    # returns Map, so it is not a fan-out method either.
+    sync_methods: [pushSnapshotNow]
+    # EMPTY, and that is a finding rather than an omission: sync_service.dart
+    # mentions notification_preferences exactly once, at :842 (emission). No
+    # restore path reads it back, so on a reinstall userBox is empty, read()
+    # returns {}, and the server's ABSENT => SEND rule re-enables every
+    # notification the user had switched off. Filed as OI-98 rather than fixed
+    # inside a registry entry.
+    restore_methods: []
+    forbidden_legacy_patterns:
+      - "configBox.get('notification_preferences') — the shared, ownerless box (Unit C bug (c))"
+      - "MigratedKey for this key — both its paths fall back to configBox"
+      - "scoping emissionMap() by tier — inverts ABSENT => SEND (invariant 1)"
+      - "removing a key from allKeys — breaks the ProactiveType parity contract"
+    contract_test_path: test/contracts/notification_prefs_parity_test.dart

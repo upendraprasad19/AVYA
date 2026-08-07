@@ -63,6 +63,34 @@ class NotificationPrefsRepository {
     're_engagement',
   ];
 
+  /// The subset of [allKeys] whose notifications only ever fire for a PRO user.
+  ///
+  /// DISPLAY-ONLY. This is deliberately NOT subtracted from [allKeys] or from
+  /// [emissionMap] — the server's rule is ABSENT ⇒ SEND (see the header), so
+  /// dropping a key from the emitted snapshot would turn these two PRO-locked
+  /// notifications ON for free users, the exact inverse of the intent. The
+  /// server PRO-gates them independently; the client's only job is to stop
+  /// counting toggles a free user cannot reach (OI-76).
+  ///
+  /// It is also the source of the `isProFeature` flag on the settings rows, so
+  /// the "which keys are PRO?" answer lives in one place instead of being
+  /// duplicated as literals at each call site.
+  static const Set<String> proOnlyKeys = <String>{
+    'protein_alerts',
+    'plateau_alert',
+  };
+
+  /// The keys a user of the given tier can actually control — the denominator
+  /// behind the profile row's "N/M enabled" subtitle.
+  ///
+  /// A free user is shown 8, not 10: Protein Alerts and Plateau Check are
+  /// locked, their server functions PRO-gate anyway, and counting them left the
+  /// subtitle permanently reading at least 2/10 "enabled" for notifications
+  /// that could never fire.
+  static List<String> controllableKeys({required bool isPro}) => isPro
+      ? allKeys
+      : allKeys.where((k) => !proOnlyKeys.contains(k)).toList(growable: false);
+
   /// Legacy key aliases, read-time only.
   ///
   /// The client historically wrote `workout_reminder` (singular) while every

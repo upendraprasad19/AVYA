@@ -97,6 +97,10 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
         return 'Wake up to AI-personalised motivation and daily plan reminders.';
       case 'Photo Analysis':
         return 'Send photos to your AI coach for instant meal analysis, form checks, and more.';
+      case 'Protein Alerts':
+        return 'Get a nudge when your protein is falling short, while the day can still be saved.';
+      case 'Plateau Check':
+        return 'Get told the moment your progress stalls, with the change that breaks it.';
       default:
         return 'Upgrade to PRO and unlock your full potential.';
     }

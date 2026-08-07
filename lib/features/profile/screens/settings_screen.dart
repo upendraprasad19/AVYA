@@ -8,6 +8,23 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+
+/// `extra` payload for the `/profile/notification-settings` route.
+///
+/// The route reads `isPro` and `onProLockedTap` out of `extra` and falls back to
+/// `false` / `null` when it is absent, so pushing bare (as all three NOTIFICATIONS
+/// rows used to) locked the two PRO rows for a paying user and left the lock icon
+/// inert for a free one. `notifPrefs` and `onSave` are deliberately omitted: the
+/// screen re-reads the prefs itself when handed an empty map and persists through
+/// `NotificationPrefsRepository.write`, so duplicating them here would create a
+/// second source of truth for values it already owns.
+Map<String, dynamic> _notifSettingsExtra(BuildContext context, bool isPro) =>
+    <String, dynamic>{
+      'isPro': isPro,
+      'onProLockedTap': (String feature) =>
+          showPaywallSheet(context, feature: feature),
+    };
 
 /// Settings screen — matches the handoff
 /// (`design_handoff_wardroom/src/screens/utility.jsx` SettingsScreen).
@@ -100,17 +117,34 @@ class SettingsScreen extends ConsumerWidget {
                   context,
                   'NOTIFICATIONS',
                   [
+                    // All three rows open the same screen. They pass `isPro`
+                    // because the route defaults it to FALSE when `extra` is
+                    // absent — which showed a paying PRO user a lock on the two
+                    // PRO notification rows. The screen already self-heals the
+                    // prefs map and persists its own writes, so `isPro` was the
+                    // last field this entry point still got wrong (found while
+                    // fixing OI-76; the harm is named in the screen's own
+                    // initState comment but only the prefs half was fixed).
                     _Row(
                       label: 'Training reminders',
-                      onTap: () => context.push('/profile/notification-settings'),
+                      onTap: () => context.push(
+                        '/profile/notification-settings',
+                        extra: _notifSettingsExtra(context, isPro),
+                      ),
                     ),
                     _Row(
                       label: 'Coach insights',
-                      onTap: () => context.push('/profile/notification-settings'),
+                      onTap: () => context.push(
+                        '/profile/notification-settings',
+                        extra: _notifSettingsExtra(context, isPro),
+                      ),
                     ),
                     _Row(
                       label: 'Streak warnings',
-                      onTap: () => context.push('/profile/notification-settings'),
+                      onTap: () => context.push(
+                        '/profile/notification-settings',
+                        extra: _notifSettingsExtra(context, isPro),
+                      ),
                     ),
                   ],
                 ),

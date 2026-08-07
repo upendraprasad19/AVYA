@@ -62,11 +62,19 @@ extension _ProfileContent on _ProfileScreenState {
     // Driven by the registry, not a hardcoded list. The old literal listed 5
     // keys — and one of them (`workout_reminder`, singular) had already drifted
     // from what the server reads, so the count was wrong as well as stale.
+    //
+    // Scoped to the keys THIS user can actually toggle (OI-76): a free user
+    // cannot disable Protein Alerts or Plateau Check, and those never fire for
+    // them anyway, so counting them made the subtitle read at least 2/10
+    // "enabled" forever. The registry itself is untouched — see the
+    // display-only note on `proOnlyKeys`.
+    final controllableNotifKeys =
+        NotificationPrefsRepository.controllableKeys(isPro: isPro);
     int enabledNotifCount = 0;
-    for (final key in NotificationPrefsRepository.allKeys) {
+    for (final key in controllableNotifKeys) {
       if (_getNotifEnabled(key)) enabledNotifCount++;
     }
-    final totalNotifCount = NotificationPrefsRepository.allKeys.length;
+    final totalNotifCount = controllableNotifKeys.length;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -485,9 +493,19 @@ extension _ProfileContent on _ProfileScreenState {
                       // is the only paywall UI). Passed as a callback because
                       // subscription.gateAndVerify() is an action dispatcher and cannot
                       // render a chip (round-3 F9).
-                      'onProLockedTap': () => showPaywallSheet(
+                      //
+                      // The tapped row passes its OWN title (OI-76). This used to
+                      // pass `AppConstants.featureProgressPhotos` — the only one of
+                      // ~25 showPaywallSheet call sites passing a snake_case id
+                      // rather than a display string. PaywallSheet renders the value
+                      // verbatim ("<feature> is a PRO feature") and switches on
+                      // display strings for its subtitle, so a free user tapping a
+                      // locked notification row was shown the literal text
+                      // "progress_photos is a PRO feature" plus copy for an
+                      // unrelated feature.
+                      'onProLockedTap': (String feature) => showPaywallSheet(
                             context,
-                            feature: AppConstants.featureProgressPhotos,
+                            feature: feature,
                           ),
                       'onSave': (Map<String, dynamic> prefs) {
                         setState(() => _notifPrefs = prefs);

@@ -542,7 +542,8 @@ class AppRouter {
                       return NotificationSettingsScreen(
                         notifPrefs: extra['notifPrefs'] as Map<String, dynamic>? ?? {},
                         isPro: extra['isPro'] as bool? ?? false,
-                        onProLockedTap: extra['onProLockedTap'] as VoidCallback?,
+                        onProLockedTap:
+                            extra['onProLockedTap'] as ValueChanged<String>?,
                         onSave: extra['onSave'] as ValueChanged<Map<String, dynamic>>? ??
                             (_) {},
                       );

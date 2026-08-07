@@ -1,0 +1,330 @@
+# docs/audit/oi_unit1_backlog.closure.yaml
+#
+# Closure ledger for the Unit 1 backlog batch (branch claude/work-session-3rqcp5,
+# 2026-08-07). Required by CLAUDE.md §4.2: any batch of >= 4 findings/units
+# produces a ledger where EVERY entry carries a terminal_state and no entry
+# carries a `deferred:` key, so closed == N is structural rather than asserted.
+#
+# NOTE for whoever audits this: Gate 40 (validate_audit_closure.dart) SKIPS when
+# no closure file exists — omitting this ledger would have been a silent
+# invariant violation, not a red gate. It is written because the rule requires
+# it, not because a script demanded it.
+#
+# SCOPE. The user asked about 9 backlog items. Two independent context-blind
+# plan reviews (§4.12) found material defects in six of seven actionable ones,
+# and the user then scoped this session to Unit 1. The remaining items are NOT
+# deferred — §4.2 bans that, including its euphemisms. They are recorded below
+# with the terminal state they actually have: `blocked_on_user` where a human
+# action is the only thing that can advance them, and `upstream_blocked` where a
+# named prerequisite must land first. Each names its blocker and its
+# reopen_when explicitly, so no entry can read as "we ran out of time".
+
+batch: oi-unit1-backlog
+branch: claude/work-session-3rqcp5
+date: 2026-08-07
+blast_radius: feature
+closed_count: 15
+total_count: 15
+
+# Same convention as oi-mechanism.closure.yaml: the ledger is authored in the
+# same commit as the fixes, so no SHA exists yet at authoring time.
+_commit: &wip "claude/work-session-3rqcp5 (uncommitted at authoring)"
+
+findings:
+
+  # ── Landed in this batch ──────────────────────────────────────────────────
+
+  - id: OI-76
+    title: Notification count includes PRO-locked rows a free user cannot disable
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: >-
+      flutter test test/contracts/ test/router/ -> 2832 pass on Flutter 3.41.4
+      (CI-pinned) with TZ=Asia/Kolkata; flutter analyze -> 0 errors, 0 warnings.
+      All three defects negative-controlled by execution: revert -> fail ->
+      restore -> pass.
+    diagnose: docs/diagnoses/2026-08-07-notification-count-and-paywall-identity-a7e3d1.md
+    tests:
+      - test/contracts/notification_pro_key_scoping_test.dart
+      - test/contracts/paywall_feature_label_test.dart
+    notes: |
+      Three defects on one surface, all fixed: (1) the subtitle counted 10 keys
+      including 2 a free user cannot toggle; (2) the paywall rendered the raw
+      identifier "progress_photos is a PRO feature" because the call site passed
+      a feature id where every sibling passes a display string; (3) found while
+      fixing those, all three Settings entry points pushed the route bare so a
+      PAYING PRO user was shown a lock on features they own.
+      The board's claim that "§4.4 r19 keys server-side verification off that
+      id" was FALSE and is corrected in the entry — showPaywallSheet never
+      reaches gate()/verifyFromServer().
+      Load-bearing constraint respected: allKeys and emissionMap() are NOT
+      narrowed, because the server's ABSENT => SEND rule means a tier-scoped
+      emission would turn the two PRO notifications ON for free users. Pinned by
+      its own negative-controlled test rather than a comment.
+
+  - id: OI-75
+    title: notification_preferences has no SoT registry entry
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: >-
+      Gate 42 (check_sot_behavioral_test_paths.dart) PASS at 107 concepts;
+      check_reader_manifest_complete.dart PASS; check_snapshot_contract.dart
+      PASS.
+    notes: |
+      Concept added to docs/sot_registry.yaml with a real behavioral_test_path
+      (Gate 42 is strict — a bare entry would have been blocked at pre-commit).
+      Readers were RE-DERIVED by grep, not copied: the board said 6 Edge
+      Function readers, the real number is 10 (6 via _shared/notification_prefs.ts,
+      4 reading snapshot_json inline). That split is a live maintenance hazard,
+      not a bookkeeping nit — a change to the helper reaches only 6 of 10
+      consumers, and ABSENT => SEND means divergence fails toward SENDING.
+      Root CLAUDE.md §4.4 r21's stale "emits a WARN" description of Gate 42
+      corrected in the same commit; that wording is what led the plan to propose
+      the bare entry in the first place.
+
+  - id: OI-82
+    title: promote-community-item calls an RPC that does not exist on this project
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: >-
+      Premise re-verified LIVE 2026-08-07 against dedsavbjuwgarrhphgnl (pg_proc,
+      all schemas -> 0 rows for community_votes_summary) rather than inherited
+      from the 2026-08-01 claim. check_unbounded_cron_reads.dart exits 0 with 3
+      waived reads repo-wide (was 5), none in this file. Test negative-controlled
+      by reinstating the defect: 2 of 5 assertions fail, then pass on restore.
+    diagnose: docs/diagnoses/2026-08-07-promote-community-dead-rpc-d5b8c2.md
+    tests:
+      - test/contracts/promote_community_vote_tally_test.dart
+    notes: |
+      SOURCE fix only. The redeploy is tracked separately as OI-82-deploy rather
+      than folded in here, because "committed" and "live" are different claims
+      and conflating them is the documented OI-47 scar.
+      Both .rpc calls, both oi79-ok waivers and both dead `countErr && !list`
+      guards removed; fallbackCount renamed countApproveVotes. The waivers had
+      to be deleted WITH their calls — the gate matches waivers by line
+      proximity, so an orphan can drift onto a neighbouring read.
+
+  - id: MIG-101-COMMENT
+    title: migration 101 cites a function that has never existed as precedent for its schema choice
+    terminal_state: upstream_blocked
+    blocker: >-
+      Touching supabase/migrations/101_admin_dashboard_metrics_functions.sql AT
+      ALL escalates this batch from platform to CATASTROPHIC tier, which pulls in
+      a hermes pass on top of the plan-review record and B-pass. The file already
+      contains the literal phrase "SECURITY DEFINER" (line 33, plus the
+      `security definer` clauses on the three functions it defines), and
+      blast_radius_content_rules_lib.dart matches WHOLE-FILE content, not the
+      diff hunk — so a comment-only edit escalates exactly as a DDL change would.
+      Measured, not assumed: staged -> `catastrophic`; unstaged -> `platform`.
+      A one-line comment correction does not warrant a catastrophic-tier review
+      ceremony.
+    reopen_when: >-
+      The OI-78 unit runs. That unit must author a migration and therefore
+      reckons with this same content rule regardless, so the correction rides
+      along at no additional review cost. If OI-78 is dropped, any other
+      migration-touching unit will do.
+    reason: |
+      101_admin_dashboard_metrics_functions.sql:16 justifies its `public`-schema
+      choice by listing community_votes_summary among "existing" public
+      functions the repo already calls via .rpc(). It has never existed in any
+      schema (live pg_proc, 2026-08-07 -> 0 rows). The migration's CONCLUSION is
+      unaffected — it rests on config.toml's [api] schemas and on other, real
+      examples — but one cited witness is fictional and will otherwise be
+      re-read as evidence by the next person who opens the file. Found while
+      closing OI-82; the finding itself is recorded in diagnose d5b8c2 so it
+      cannot be lost if this ledger entry is missed.
+
+  - id: BOARD-STALE-ROWS
+    title: stale OI-47 / OI-51 rows in the 2026-07-26 audit table inside open_issues.md
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: >-
+      Both OIs confirmed CLOSED 2026-07-28 at closed_issues.md (merge 9d5e9d31);
+      sanitize_for_prompt.ts confirmed present in the tree, contradicting the
+      row's "absent" claim.
+    notes: |
+      open_issues.md:848 asserted OI-47 "STILL OPEN — sanitize_for_prompt.ts
+      absent"; :850 asserted OI-51 "PARTLY CLOSED ... still genuinely open".
+      A grep for either ID hits these rows BEFORE the real closed entries.
+      Annotated as superseded rather than deleted, because the table is an
+      explicitly dated snapshot and rewriting it would destroy the record it
+      exists to keep. This board's own index names OI-47 as the item that "read
+      as authoritative for a day while being wrong" — exactly the failure this
+      annotation prevents recurring.
+
+  # ── Found during this batch, filed with evidence ──────────────────────────
+
+  - id: OI-96
+    title: community promotion has two mechanisms; the trigger may starve the cron's copy step
+    terminal_state: blocked_on_user
+    reason: |
+      Needs a PRODUCT decision before any code moves: should the SECURITY
+      DEFINER trigger own promotion, or the cron? Both use threshold 10, and the
+      cron skips rows the trigger has already flagged `approved = true` — the
+      step that copies into food_database / exercise_library and notifies the
+      submitter sits AFTER that skip. Read literally the trigger always wins and
+      the copy never runs.
+      Explicitly recorded as UNPROVEN: with 0 approve votes ever cast the
+      interaction has never executed, so this is a reading of two definitions,
+      not an observed failure. Filed with the reproduction steps needed to
+      confirm it, plus a separable traceability gap — the trigger is defined
+      cloud-only and appears in no migration, so its body is recoverable only by
+      querying pg_proc.
+
+  - id: OI-97
+    title: five PaywallSheet labels fall through to generic copy
+    terminal_state: blocked_on_user
+    reason: |
+      Mechanical but it is user-facing conversion copy, so §0.3 requires the
+      Wardroom brand soul loaded and the wording chosen deliberately rather than
+      dropped in as filler. Out of scope for a batch already carrying the OI-76
+      paywall fix; recorded so the class is not mistaken for closed by that
+      closure. Includes a near-miss worth noting: the switch has
+      `case 'Weekly AI Report'` while a call site passes 'AI Weekly Report' — a
+      word-order drift the `default:` arm silently absorbs.
+
+  - id: OI-98
+    title: notification preferences are push-only; a reinstall overwrites the server copy with all-enabled
+    terminal_state: blocked_on_user
+    reason: |
+      Found while writing OI-75's registry entry — Gate 11 demanded a
+      `restore_methods:` list and there was nothing truthful to put in it.
+      notification_preferences is written into the snapshot (sync_service.dart:842)
+      and never read back; the only snapshot_json read (:1763-1776) selects
+      fitness_summary. So on reinstall userBox is empty, emissionMap() emits every
+      key enabled (its documented default), and that OVERWRITES the server's stored
+      preferences — an active destruction of the user's choices, not a silent
+      non-restore, and the ABSENT => SEND rule means it always fails toward
+      sending MORE.
+      Held for a decision rather than fixed here for two reasons. (1) The exact
+      ordering on a real reinstall — whether any restore repopulates userBox before
+      the first pushSnapshotNow — was NOT traced, and the fix design depends on it.
+      (2) The durable fix is arguably to distinguish "never set" from "set to
+      enabled" in the emitted shape, which is a server-contract question, not a
+      client one — and this is an `account`-tier sync-path change, a different
+      review posture from this feature-tier unit.
+
+  # ── Not actionable by an agent ────────────────────────────────────────────
+
+  - id: OI-47
+    title: L30 prompt injection vectors
+    terminal_state: verified_clean
+    evidence: >-
+      Already CLOSED 2026-07-28 (merge 9d5e9d31, deployed to all 16
+      LLM-reaching Edge Functions); _shared/sanitize_for_prompt.ts present.
+    notes: >-
+      Included in this ledger only because the user's list named it; no work was
+      owed. Its stale board row is handled under BOARD-STALE-ROWS above.
+
+  - id: OI-51
+    title: L38 cross-account SDK state
+    terminal_state: verified_clean
+    evidence: >-
+      Already CLOSED 2026-07-28 (merge 9d5e9d31, commit ff716e29, test
+      signout_unbinds_sdk_identity_test.dart).
+    notes: >-
+      No work owed. One residual surfaced for the founder rather than silently
+      dropped: the fix is CLIENT-side and was not in APK 1.0.0+37, so whether it
+      has reached users depends on which build shipped after the +38 bump.
+
+  - id: OI-54
+    title: Confirm /admin access
+    terminal_state: blocked_on_user
+    reason: |
+      Not agent-actionable by construction. admin-dashboard-data/index.ts:33
+      reads ADMIN_USER_IDS from the Edge Function environment and fails secure
+      when unset or non-matching (:163-166); no filesystem or MCP path exposes a
+      secret's VALUE. The check is: sign in to /admin; if 403, confirm the
+      founder's auth.users.id is in that secret's comma-separated list. Note it
+      gates a dependent item recorded on the board as "(a) depends on OI-54".
+
+  - id: OI-82-deploy
+    title: redeploy promote-community-item so the live bundle matches the fixed source
+    terminal_state: blocked_on_user
+    reason: |
+      §4.3 — deploying an Edge Function to prod is a separate explicit
+      authorization even when the batch plan was approved. The session that
+      landed the source fix also had no supabase/.supabase/ access token, so the
+      host-shell deploy path was unavailable from it regardless. Tracked as its
+      own entry rather than a footnote to OI-82 so "the code is fixed" cannot be
+      read as "production is fixed".
+      Low urgency, stated with its reason: the deleted call never returned a row,
+      and the surface is dormant (0 votes, 0 promotions ever), so the live bundle
+      is not doing harm — it is issuing one failing request per day.
+
+  # ── Correctly scoped to their own units (NOT deferrals — see header) ──────
+
+  - id: OI-78
+    title: 3 public-schema RPCs retain the PUBLIC-default-ACL EXECUTE gap
+    terminal_state: upstream_blocked
+    blocker: >-
+      test/edge_functions/pgvector_test.dart's error-swallow must be tightened
+      BEFORE the revoke lands. It signs in with signInWithPassword (role
+      `authenticated`) and calls match_memories at :83/:151/:191; revoking
+      `authenticated` makes Postgres return "permission denied for function
+      match_memories", and that test's catch matches on
+      e.toString().contains('function'), which that message satisfies, so it
+      calls markTestSkipped. CI stays GREEN while three live-DB tests silently
+      evaporate — trading a P3 attack surface for a silent coverage hole.
+    reopen_when: >-
+      pgvector_test.dart's catch distinguishes a permission error from a
+      missing-function error (or the test is moved to a service-role path, or
+      deliberately deleted), AND the founder gives the separate explicit go for
+      a live migration apply that §4.3 requires.
+    reason: |
+      Two further prerequisites recorded so the next session does not
+      rediscover them:
+      (1) use migration 117's role list (REVOKE FROM PUBLIC, anon, authenticated),
+      NOT 091's PUBLIC-only form, which migrations/CLAUDE.md documents as
+      insufficient because Supabase grants EXECUTE to anon/authenticated DIRECTLY
+      via pg_default_acl — and note 046:50 holds an explicit prior GRANT to
+      `authenticated` on morning_alert_pick_quarter that a PUBLIC-only revoke
+      cannot touch;
+      (2) the phrase "security definer" anywhere in the migration's FILENAME OR
+      BODY, comments included, escalates it to catastrophic tier via
+      blast_radius_content_rules_lib.dart — plan for that or phrase around it
+      deliberately, do not discover it at push time.
+
+  - id: OI-88
+    title: restoring_screen.dart split owed
+    terminal_state: upstream_blocked
+    blocker: >-
+      Account-tier refactor of the post-auth boot path. §4.12.3 requires its own
+      ×2 independent plan review plus a docs/plan-reviews/<branch>.md record with
+      verdict: converged, and a B-pass before merge — a different and heavier
+      review posture than this feature-tier unit, which cannot be satisfied from
+      inside it.
+    reopen_when: >-
+      A session opens with OI-88 as its own unit and runs the ×2 review before
+      touching restoring_screen.dart.
+    reason: |
+      Verified this session so the next one starts from truth: the file is 791
+      lines against Gate 43's 800 ceiling, and _AnimatedDots/_AnimatedDotsState
+      at :737-791 genuinely has zero coupling to _RestoringScreenState (read,
+      not inferred). One correction the next session needs: OI-88's own "Fix
+      shape" bullet still says "Remove the allow-list entry in the same commit"
+      — that entry was already removed 2026-08-05 and
+      check_god_screen_max_lines.dart:41-47 no longer lists the file. There is
+      nothing to remove.
+
+  - id: OI-91
+    title: 138 dead CLAUDE.md section citations in code comments
+    terminal_state: upstream_blocked
+    blocker: >-
+      The old-section -> new-home MAPPING must exist before any sweep, and the
+      one sketched in the OI covers only 4 of the 10 section numbers actually
+      present (measured 2026-08-07: §15×78, §11×19, §19×11, §16×8, §14×8, §12×6,
+      §10×4, §13a×2, §9×1, §17×1). Sweeping on the incomplete mapping would close
+      the OI while leaving ~29 citations unmapped.
+    reopen_when: >-
+      The full 10-section mapping is written down and reviewed, and a decision is
+      taken on whether the "wrong-but-live" sub-class (a citation resolving to a
+      real but wrong section, structurally invisible to the OI's own grep) is in
+      scope for the same pass.
+    reason: |
+      The OI's own text records that it "wants its own batch rather than riding
+      along inside an unrelated fix", and that the real count is >= 138 because
+      its grep cannot see the wrong-but-live class — so honest closure needs a
+      read-pass, not a sed run. Measured this session as `platform` tier, not
+      `feature`: it touches supabase/migrations/*.sql,
+      supabase/functions/_shared/** and scripts/.
