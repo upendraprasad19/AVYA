@@ -161,3 +161,7 @@ deno.lock
 # `.deno/` keeps its trailing slash because it genuinely is a directory.
 node_modules/.deno/
 node_modules/zod
+
+# Flutter tool scratch state written by the SDK when it runs in this container.
+# Not project content; it appeared only because the SDK was installed fresh here.
+.config/

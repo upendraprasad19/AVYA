@@ -87,9 +87,16 @@ class NotificationPrefsRepository {
   /// locked, their server functions PRO-gate anyway, and counting them left the
   /// subtitle permanently reading at least 2/10 "enabled" for notifications
   /// that could never fire.
+  /// Both branches return an UNMODIFIABLE list on purpose. Returning `allKeys`
+  /// directly (a `const` literal, fully unmodifiable) on one branch and
+  /// `.toList(growable: false)` (fixed-length but element-settable) on the
+  /// other would hand callers the same type with two different mutability
+  /// contracts — a latent trap for whoever first tries to sort or patch the
+  /// result. B-pass finding 7.
   static List<String> controllableKeys({required bool isPro}) => isPro
-      ? allKeys
-      : allKeys.where((k) => !proOnlyKeys.contains(k)).toList(growable: false);
+      ? List<String>.unmodifiable(allKeys)
+      : List<String>.unmodifiable(
+          allKeys.where((k) => !proOnlyKeys.contains(k)));
 
   /// Legacy key aliases, read-time only.
   ///

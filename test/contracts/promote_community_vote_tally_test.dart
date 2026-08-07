@@ -50,14 +50,41 @@ const _fn = 'supabase/functions/promote-community-item/index.ts';
 /// the dead `countErr` guard as the historical reason it exists, so asserting
 /// over the raw file would fail on its own explanation — and "delete the
 /// explanation to make the test pass" is the wrong direction.
+/// The line-comment pass is string-literal aware. A naive `indexOf('//')`
+/// also matches inside `"https://…"`, which this very file's target contains
+/// three times (two import specifiers and the OneSignal fetch URL) — it would
+/// silently truncate those lines mid-statement. Harmless against today's
+/// assertions, but it makes the stripper lie about what the code says, so any
+/// future assertion added near a URL line would misbehave for a reason nobody
+/// would look for. B-pass finding 3.
 String _codeOnly(String source) => source
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
     .split('\n')
-    .map((l) {
-      final i = l.indexOf('//');
-      return i == -1 ? l : l.substring(0, i);
-    })
+    .map(_stripLineComment)
     .join('\n');
+
+String _stripLineComment(String line) {
+  String? quote;
+  for (var i = 0; i < line.length; i++) {
+    final c = line[i];
+    if (quote != null) {
+      if (c == r'\') {
+        i++; // skip the escaped char
+      } else if (c == quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (c == '"' || c == "'" || c == '`') {
+      quote = c;
+      continue;
+    }
+    if (c == '/' && i + 1 < line.length && line[i + 1] == '/') {
+      return line.substring(0, i);
+    }
+  }
+  return line;
+}
 
 void main() {
   late String src;

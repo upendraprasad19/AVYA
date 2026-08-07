@@ -23,7 +23,7 @@ concept: community_review_queue
 sot_registry_entry: community_review_queue
 writers:
   - { file: supabase/functions/promote-community-item/index.ts, method_or_widget: "promoteFoods — copies an approved user_custom_foods row into food_database", line: 118 }
-  - { file: supabase/functions/promote-community-item/index.ts, method_or_widget: "promoteExercises — copies an approved user_custom_exercises row into exercise_library", line: 173 }
+  - { file: supabase/functions/promote-community-item/index.ts, method_or_widget: "promoteExercises — copies an approved user_custom_exercises row into exercise_library", line: 174 }
 readers:
   - { file: supabase/functions/promote-community-item/index.ts, method_or_widget: "countApproveVotes (was fallbackCount) — THE approve-vote tally, paged via fetchAllPages", line: 248 }
   - { file: supabase/functions/promote-community-item/index.ts, method_or_widget: "promoteFoods call site — now calls the tally directly", line: 122 }
@@ -147,8 +147,8 @@ recurrence: |
   Not a recurrence of a prior diagnose-doc, stated explicitly so a future audit
   can verify rather than assume.
 
-  It IS a second instance of the class `feedback_source_grep_false_confidence.md`
-  describes, in its most literal form: a `console.warn` that reads as error
+  It IS a second instance of the source-grep-false-confidence class, in its most
+  literal form: a `console.warn` that reads as error
   handling, wired to a condition (`countErr && !list`) that is unsatisfiable
   because `![]` is false. Source-grepping this file for "does it handle RPC
   errors?" returns yes. Executing it returns never. The OI-79 paging audit

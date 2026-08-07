@@ -655,7 +655,10 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   **unreportable**. The guard was `if (countErr && !list)`, but `fallbackCount` returns `[]` on
   failure and `![]` is `false` in JS, so the branch could not execute even when `countErr` was set.
   A dead guard wrapped a dead call and the pair source-greps as working error handling — the
-  literal shape of `feedback_source_grep_false_confidence.md`.
+  literal shape of the source-grep-false-confidence class. (That class is named after a
+  `feedback_*.md` that lives only in the harness-local memory directory and is NOT in this repo —
+  `memory/MEMORY.md:8` documents that trap. Stating the class in words here so the reference is
+  followable from a clone, per the same lesson.)
 - **Intent decided (2026-08-07, founder): DELETE the call, promote the tally.** Evidence: no
   migration in the repo has ever defined the function — the sole textual match in
   `supabase/migrations` is a PROSE COMMENT at `101_admin_dashboard_metrics_functions.sql:16` citing
@@ -1328,7 +1331,7 @@ cloud sessions; **this file is the cross-session backlog.**
   It read: *"the paywall callback passes `AppConstants.featureProgressPhotos` for notification
   rows — wrong copy, and §4.4 r19 keys server-side verification off that id."*
   1. **The first half understated it.** `PaywallSheet` renders `feature` VERBATIM into its
-     letterhead (`paywall_sheet.dart:363`, `'${widget.feature} is a PRO feature'`), so a free user
+     letterhead (`paywall_sheet.dart:367`, `'${widget.feature} is a PRO feature'`), so a free user
      tapping a locked notification row was shown the literal string
      **"progress_photos is a PRO feature"** — not merely the wrong copy, the raw identifier. It was
      the only one of ~25 `showPaywallSheet` call sites passing a snake_case constant; every other
