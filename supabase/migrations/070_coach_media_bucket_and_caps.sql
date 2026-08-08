@@ -14,13 +14,13 @@
 --   3. On consent → app copies blob from chat-media into
 --      `coach-media/<uid>/...` (long-term retention).
 --   4. `delete-account` Edge Function purges both buckets on hard
---      delete (CLAUDE.md §16 already lists coach-media in the purge
+--      delete (docs/architecture/payment.md already lists coach-media in the purge
 --      list — it was a pending bucket reference until now).
 --
 -- ── OI-24 ─────────────────────────────────────────────────────────────
 -- Add bucket-level file_size_limit + allowed_mime_types to the four
 -- existing private/public buckets that lack them. Defense-in-depth
--- alongside the client-side caps documented in CLAUDE.md §10:
+-- alongside the client-side caps documented in docs/architecture/subscription.md:
 --   - avatars:           1 MB, image/jpeg + image/png + image/webp
 --   - banners:           2 MB, image/jpeg + image/png + image/webp
 --   - progress-photos:   8 MB, image/jpeg + image/png + image/webp
@@ -45,8 +45,9 @@ SET file_size_limit = EXCLUDED.file_size_limit,
     public = EXCLUDED.public;
 
 -- Owner-only policies — mirrors progress_photos shape (path layout
--- `<user_id>/<filename>` per CLAUDE.md §19 "Image upload RLS violation"
--- row).
+-- `<user_id>/<filename>`; pinned by `test/contracts/chat_media_signed_url_test.dart`
+-- + `test/contracts/ai_media_proxy_user_scope_test.dart` (retired root §19
+-- entry #21, Class A per the 2026-05-18 declutter audit).
 
 DO $$
 BEGIN

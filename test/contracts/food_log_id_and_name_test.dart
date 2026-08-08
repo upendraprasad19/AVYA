@@ -55,7 +55,7 @@ void main() {
               'Test #12.6 — id must equal log_key so legacy readers '
               '(meal["id"]) work without a separate field rename.');
       expect(row['log_key'], logKey,
-          reason: 'Canonical Hive contract field per CLAUDE.md §15.');
+          reason: 'Canonical Hive contract field per docs/architecture/sync.md.');
     });
 
     test('per-item entries carry name, calories, protein (canonical names)',

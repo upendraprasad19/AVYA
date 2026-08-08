@@ -24,7 +24,7 @@
 //
 // The methods are sync because the underlying Hive write is sync;
 // `unawaited(SyncService.instance.syncFreezes())` keeps the cloud
-// fan-out fire-and-forget (matches the existing CLAUDE.md §15
+// fan-out fire-and-forget (matches the existing docs/architecture/sync.md
 // fire-and-forget pattern).
 
 import 'dart:async';

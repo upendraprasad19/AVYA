@@ -4,7 +4,7 @@
 // Single edit surface: EditWorkoutLogSheet (edit_workout_log_sheet.dart).
 // 4 entry points must route through it; save must invalidate all workout providers.
 //
-// See CLAUDE.md §15 "Source of Truth Rules".
+// See docs/architecture/sync.md "Source of Truth Rules".
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';

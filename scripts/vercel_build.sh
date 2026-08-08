@@ -13,7 +13,7 @@
 # "No host specified in URI" (CLAUDE.md §0).
 set -euo pipefail
 
-FLUTTER_VERSION="3.41.4"   # must match dev/CI (CLAUDE.md §0)
+FLUTTER_VERSION="3.41.4"   # must match dev/CI (.github/workflows/test.yml)
 
 # Fail fast if a required build-time env var is missing or empty.
 missing=""

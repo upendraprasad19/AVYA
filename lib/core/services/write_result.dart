@@ -4,7 +4,7 @@
 /// `WriteResult` is the canonical return shape for every atomic write
 /// method. Callers should treat `success == true` as authoritative —
 /// the Hive write succeeded and providers were invalidated. Cloud
-/// sync is fire-and-forget per CLAUDE.md §15; failure to sync does
+/// sync is fire-and-forget per docs/architecture/sync.md; failure to sync does
 /// NOT flip `success` to false.
 library;
 

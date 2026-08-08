@@ -13,7 +13,7 @@ import 'hive_service.dart';
 /// closes-OI: OI-02 (architecture-gap — no symmetric ReadServices)
 ///
 /// Hive field-name contract (READ side — must agree with the writer
-/// contract documented in CLAUDE.md §15 "Hive field-name contract"):
+/// contract documented in docs/architecture/sync.md "Hive field-name contract"):
 ///
 /// `nlog_*` rows (canonical, from `NutritionWriteService.logMeal`):
 ///   - `date`               : String (IST `YYYY-MM-DD`)

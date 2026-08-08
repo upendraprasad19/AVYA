@@ -2,7 +2,7 @@ part of '../sync_service.dart';
 
 /// APK Test #11 — Theme A push + restore for the 4 Hive-only surfaces
 /// that previously vanished on reinstall: streak freezes, notifications
-/// inbox, saved diet plan, rank promotions. See CLAUDE.md §15
+/// inbox, saved diet plan, rank promotions. See docs/architecture/sync.md
 /// "Restore-completeness sync" for the canonical contract.
 extension SyncServiceRestoreCompleteness on SyncService {
   // ── Restore-completeness push (Theme A push side) ─────────
@@ -246,7 +246,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// Inserts (or upserts by [entry]'s id) a single notification inbox entry
   /// to the `notifications_inbox` cloud table (migration 048).
   /// Called fire-and-forget from [NotificationInboxService.record] per
-  /// CLAUDE.md §15.
+  /// docs/architecture/sync.md.
   ///
   /// [entry] is the `AppNotification.toJson()` map — keys: id, category,
   /// title, body, created_at, priority, read. The cloud column is
@@ -291,7 +291,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// Pushes the user's saved diet plan to the `saved_diet_plans` cloud
   /// table (migration 048). One row per user — upserts on conflict.
   /// Called fire-and-forget from [DietPlanScreen._savePlan] per
-  /// CLAUDE.md §15.
+  /// docs/architecture/sync.md.
   Future<void> syncSavedDietPlan(Map<String, dynamic> planJson) async {
     try {
       final userId = _supabase.currentUser?.id;
@@ -567,7 +567,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// the UI still calls [SupabaseService.getOrCreateReferralCode] which
   /// upserts a fresh row.
   ///
-  /// FK quirk (CLAUDE.md §7): `referral_codes.user_id` is the ONLY
+  /// FK quirk (docs/architecture/database.md): `referral_codes.user_id` is the ONLY
   /// user-scoped FK pointing at `auth.users(id)` rather than
   /// `public.users(id)` — because codes are generated before the
   /// onboarding sync path inserts the user into `public.users`. The
@@ -623,7 +623,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// Profile → Invite Friends sheet can render an audit list without
   /// hitting the network. 50-row cap is plenty (rare-enough event).
   ///
-  /// FK note (CLAUDE.md §7): both `referrer_id` and `referee_id` FK to
+  /// FK note (docs/architecture/database.md): both `referrer_id` and `referee_id` FK to
   /// `public.users(id)` (corrected 2026-05-12 P3-A). Both columns are
   /// indexed (idx_referral_redemptions_referrer + the implicit unique
   /// index on referee_id), so the `OR` filter is cheap. PostgREST

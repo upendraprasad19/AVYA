@@ -6,7 +6,9 @@
 //
 // Pins the Atwater fallback: total_calories = sum of per-item (4P+4C+9F)
 // when top-level total is missing. Never read result['total_calories'] directly.
-// See CLAUDE.md §19 "Scan meal saves 0 kcal".
+// Retired root §19 entry #35 ("Scan meal saves 0 kcal"), classified Class A
+// by the 2026-05-18 declutter audit and deleted from the contract file
+// because THIS test is its record.
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';

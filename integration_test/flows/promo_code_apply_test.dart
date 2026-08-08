@@ -29,7 +29,7 @@ void main() {
     }, skip: 'Phase 7 scaffold — needs Razorpay + Supabase test mode.');
 
     test('T3 — Razorpay order amount matches the discounted total', () {
-      // CLAUDE.md §16 #2 — promo-aware amount validation. Server
+      // docs/architecture/payment.md #2 — promo-aware amount validation. Server
       // recomputes expected amount from discount_pct.
     }, skip: 'Phase 7 scaffold — needs Razorpay + Supabase test mode.');
 
@@ -37,7 +37,7 @@ void main() {
         () {
       // increment_promo_used_count gated by !alreadyProcessed (T-3).
       // Audit row in promo_code_uses (UNIQUE (code, user_id) per
-      // CLAUDE.md §16 #7).
+      // docs/architecture/payment.md #7).
     }, skip: 'Phase 7 scaffold — needs Razorpay + Supabase test mode.');
 
     test('T5 — replayed webhook does NOT double-burn used_count', () {

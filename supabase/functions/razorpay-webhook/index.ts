@@ -442,7 +442,7 @@ serve(async (req: Request) => {
     // Extract user_id and promo from notes (set during checkout creation).
     // NOTE: notes.plan is intentionally NOT used for entitlement — plan is
     // derived server-side from the on-wire amount via derivePlanFromAmount
-    // per CLAUDE.md §16 rule 1. A client that spoofs notes.plan cannot
+    // per docs/architecture/payment.md rule 1. A client that spoofs notes.plan cannot
     // claim a different plan than what the amount actually paid for.
     const notes = paymentEntity.notes ?? {};
     const userId = notes.user_id;
@@ -473,7 +473,7 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── Derive plan from amount (primary — CLAUDE.md §16 rule 1) ───────────
+    // ── Derive plan from amount (primary — docs/architecture/payment.md rule 1) ───────────
     // Plan is determined from the actual payment amount, NOT from
     // client-supplied notes.plan. This prevents a ₹349 monthly payment
     // from claiming yearly entitlement by spoofing notes.plan = 'yearly'.

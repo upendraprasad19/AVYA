@@ -10,7 +10,7 @@ if any field is missing or has placeholder text (`?`, `TBD`, `<...>`, empty),
 main thread re-dispatches with the failure reason rather than accepting the
 agent's fix proposal.
 
-Per CLAUDE.md §6.22, this preamble is the discipline contract for any
+Per CLAUDE.md §4.4 rule 22, this preamble is the discipline contract for any
 investigation-class subagent dispatch.
 
 ---

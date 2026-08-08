@@ -14,4 +14,4 @@ Categories cover staples, street food, restaurant dishes, dairy, pulses, protein
 
 Community growth: User adds custom food → Hive + Supabase. Admin approves → promoted to global DB. Other users get it via periodic sync + app updates.
 
-**Re-seeding:** if the bundled JSON is updated, regenerate migration via `node .claude/gen_migration_041.js` (V2 generator) or `node scripts/seed_food_database.js` (legacy 93-item generator), then apply. Idempotent (deterministic v5 UUID per CLAUDE.md §7 namespace).
+**Re-seeding:** if the bundled JSON is updated, regenerate migration via `node .claude/gen_migration_041.js` (V2 generator) or `node scripts/seed_food_database.js` (legacy 93-item generator), then apply. Idempotent (deterministic v5 UUID per docs/architecture/database.md namespace).

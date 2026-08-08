@@ -1,7 +1,7 @@
 // Regression test for audit 2026-05-16 / E.11 (RankChip + RankInsignia legacy
 // widget deletion).
 //
-// Bug: CLAUDE.md §9 documented `RankChip` + `RankInsignia` as "slated for
+// Bug: lib/shared/widgets/wardroom/CLAUDE.md documented `RankChip` + `RankInsignia` as "slated for
 // removal", but 5+ live callsites remained for 3 weeks after the canonical
 // `WardRankPill` / `WardRankInsignia` shipped (APK Test #6). Founder
 // approved Phase D NEEDS_DECISION 1 Option A — migrate callsites + delete

@@ -18,7 +18,8 @@
 //   3. Server-side: redeploy `log-client-error` Edge Function.
 //   4. Client-side: bump APK + ship.
 //
-// CLAUDE.md §19 reference: APK Test #16.1 / Theme D + audit
+// Provenance (root's old §19 pitfalls list, retired by the 2026-05-18
+// declutter): APK Test #16.1 / Theme D + audit
 // 2026-05-16 / F10.4 / E.14.E.
 
 import 'dart:io';

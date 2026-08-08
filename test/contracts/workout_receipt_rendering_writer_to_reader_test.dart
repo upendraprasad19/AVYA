@@ -5,7 +5,7 @@
 // Reader: WorkoutReceiptData.fromExerciseLogs (receipt_card.dart)
 //
 // Pins the writer→reader field agreement so a field rename in WorkoutWriteService
-// breaks this test immediately (before APK build). See CLAUDE.md §15.
+// breaks this test immediately (before APK build). See docs/architecture/sync.md.
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';

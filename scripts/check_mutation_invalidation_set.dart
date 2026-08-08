@@ -2,7 +2,7 @@
 //
 // Gate (E.13 — Audit 2026-05-16 framework deliverable):
 // Mutation methods must invalidate the canonical provider set per
-// CLAUDE.md §15 "Provider invalidation after mutation".
+// docs/architecture/sync.md "Provider invalidation after mutation".
 //
 // Heuristic source-grep — for each scanned file, look for methods whose
 // body contains BOTH a Hive write (`workoutBox.put`, `nutritionBox.put`,
@@ -27,7 +27,7 @@
 //                aiInsightProvider}
 //
 // Exit 0 = pass (no missing-invalidation hotspots).
-// Exit 1 = fail (large gap detected — likely a CLAUDE.md §15 violation).
+// Exit 1 = fail (large gap detected — likely a docs/architecture/sync.md violation).
 //
 // Usage: dart run scripts/check_mutation_invalidation_set.dart
 
@@ -147,7 +147,7 @@ void main(List<String> args) async {
     }
     if (totalMisses > 0) {
       stderr.writeln('\n  Fix: ensure every mutation invalidates the '
-          'CLAUDE.md §15 canonical provider set for its domain.');
+          'docs/architecture/sync.md canonical provider set for its domain.');
       exit(1);
     }
     stdout.writeln('\n[check_mutation_invalidation_set] PASS (with warnings).');

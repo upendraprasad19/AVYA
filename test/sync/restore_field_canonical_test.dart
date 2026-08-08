@@ -1,6 +1,6 @@
 // Regression tests for Theme D1 + D2 (Test #11):
 //   D1 — WorkoutRepository.logExercise / updateExerciseLog delegate to
-//        WorkoutWriteService (single source-of-truth per CLAUDE.md §15).
+//        WorkoutWriteService (single source-of-truth per docs/architecture/sync.md).
 //   D2 — sync_service._restoreExerciseLogs writes canonical Hive field
 //        names (`set_number` / `sets`) instead of legacy
 //        (`sets_completed` / `sets_detail`).

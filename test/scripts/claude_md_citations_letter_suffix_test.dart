@@ -142,4 +142,110 @@ Bad ref: §9.
         reason: 'a genuinely dangling §N must still FAIL — the widened '
             'regex must not have loosened digit-only validation.\n${bad.out}');
   });
+
+  // ------------------------------------------------------------------
+  // Code zone (OI-91) — anchored citations in source comments.
+  // ------------------------------------------------------------------
+  //
+  // WHY THESE ASSERT ON OUTPUT, NOT JUST EXIT CODE. `_codeZoneEnforced` is
+  // `true` in this commit, but the finding LINE is emitted identically
+  // whether the flag is `true` (blocking) or `false` (report-only, the mode
+  // used during development to baseline the 138 pre-existing dead citations
+  // without failing every commit mid-sweep). Asserting on the line pins the
+  // detection logic itself rather than the current mode, so these tests
+  // don't need rewriting if the flag is ever toggled again. The two
+  // negative-control tests below ALSO assert `r.code == 0` — safe now that
+  // enforcement already shipped in this commit, and it closes the gap a
+  // pure `isNot(contains(...))` check has: that assertion is satisfied
+  // just as well by the gate crashing before it ever ran.
+  //
+  // WHY THE ESCAPE SEQUENCE RATHER THAN THE LITERAL CHARACTER. The code zone
+  // scans `test/`, so an anchored citation written literally in THIS file
+  // makes the gate flag its own test — measured, not hypothetical: the first
+  // draft of these fixtures took the repo count from 138 to 140. Dart resolves
+  // the escape at runtime, so the fixture written to disk still contains the
+  // real character the gate matches on, while this source file does not.
+  group('code zone — anchored citations in source comments', () {
+    /// Root with `## 3.`, `## 4.` and `### 4.4` real; nothing else.
+    void writeStandardRoot() => writeRoot('''
+# Root
+
+## 3. SCREENS
+body
+
+## 4. PROCESS INVARIANTS
+body
+
+### 4.4 The coding rules
+body
+''');
+
+    void writeCode(String relPath, String body) {
+      final f = File('${fixture.path}/$relPath');
+      f.parent.createSync(recursive: true);
+      f.writeAsStringSync(body);
+    }
+
+    test('flags a dead anchored citation in a .dart comment', () {
+      writeStandardRoot();
+      writeCode('lib/thing.dart', '// per CLAUDE.md \u00A715, writers fan out\n');
+      final r = runGate();
+      expect(r.out, contains('lib/thing.dart:1'),
+          reason: 'a dead anchored citation in source must be reported — this '
+              'is the whole point of the code zone.\n${r.out}');
+      expect(r.out, contains('§15'), reason: r.out);
+    });
+
+    test(
+        'THE FALSE-POSITIVE CONTROL: a section token citing ANOTHER document '
+        'is not flagged', () {
+      // Measured at filing time: code carries 526 bare section tokens, only
+      // 227 of which refer to the root contract file. If the code zone ever
+      // regresses to the markdown zone's bare pattern, this fixture — which
+      // stands in for the other 299 — starts failing the build.
+      writeStandardRoot();
+      writeCode('lib/other.dart', '''
+// see the apk-test-6 spec §15 for the ordering
+// and Plan §12, and DEVICE_TESTING.md §19
+''');
+      final r = runGate();
+      expect(r.code, 0,
+          reason: 'the gate must actually run and pass, not merely fail to '
+              'mention this path — a crash before the scan starts would '
+              'satisfy the contains() check below just as well.\n${r.out}');
+      expect(r.out, isNot(contains('lib/other.dart')),
+          reason: 'section tokens belonging to OTHER documents must not be '
+              'attributed to the root contract file. A bare pattern here '
+              'would fail on ~299 real citations.\n${r.out}');
+    });
+
+    test('does not flag a LIVE anchored citation', () {
+      writeStandardRoot();
+      writeCode('lib/live.dart', '// gated per CLAUDE.md \u00A74.4 rule 9\n');
+      final r = runGate();
+      expect(r.code, 0,
+          reason: 'the gate must actually run and pass, not merely fail to '
+              'mention this path — a crash before the scan starts would '
+              'satisfy the contains() check below just as well.\n${r.out}');
+      expect(r.out, isNot(contains('lib/live.dart')),
+          reason: 'a citation resolving to a real heading must stay silent.'
+              '\n${r.out}');
+    });
+
+    test(
+        'flags a dead SUBSECTION of a live section — the case OI-91\'s survey '
+        'grep is blind to', () {
+      // `## 3.` exists but has no subsections, so `§3.1` is dead. OI-91's
+      // filter excluded anything starting `§3`, so it never saw this class.
+      // The gate validates against REAL headings and catches it for free.
+      // Live instance at filing time: lib/core/utils/ist_date.dart:4.
+      writeStandardRoot();
+      writeCode('lib/sub.dart', '// dates per CLAUDE.md \u00A73.1\n');
+      final r = runGate();
+      expect(r.out, contains('lib/sub.dart:1'),
+          reason: 'a citation to a nonexistent subsection of a REAL section '
+              'must be caught. This is strictly more than the survey grep '
+              'that produced OI-91\'s count could see.\n${r.out}');
+    });
+  });
 }

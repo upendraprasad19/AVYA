@@ -5,7 +5,7 @@
 // RestoringScreen → restoreFromCloud → home shows yesterday's
 // workout + streak + saved meals + diet plan + freezes + ranks.
 //
-// Per CLAUDE.md §15 "Restore-completeness sync" (Theme A from Test
+// Per docs/architecture/sync.md "Restore-completeness sync" (Theme A from Test
 // #11) and audit-2026-05-11 H-13 fix: the restore must cover every
 // Hive-only surface a paying user expects on a new device.
 //

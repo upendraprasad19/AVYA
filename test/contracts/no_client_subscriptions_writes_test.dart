@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// path (razorpay-webhook / verify-payment / create-razorpay-order).
 ///
 /// Subscriptions writes MUST flow through service-role-gated Edge
-/// Functions. CLAUDE.md §16 (payment security rules).
+/// Functions. docs/architecture/payment.md (payment security rules).
 void main() {
   group('Audit C-1 · no client-side subscriptions writes', () {
     test('no .from(subscriptions).insert/update/upsert/delete in lib/', () {

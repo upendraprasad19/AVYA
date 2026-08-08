@@ -2,7 +2,7 @@
 //
 // Drift-fix batch 2026-05-24 / F1 workout (P1).
 //
-// Per CLAUDE.md §15 Hive field-name contract: `reps_completed` on
+// Per docs/architecture/sync.md Hive field-name contract: `reps_completed` on
 // `exlog_*` is SUM across sets (writer contract). The AI coach PR
 // snapshot was reading it as if it were per-set reps, producing
 // nonsense like "PR: 100kg x 28 reps" for a 4-set workout.

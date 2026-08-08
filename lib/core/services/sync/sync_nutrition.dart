@@ -119,7 +119,7 @@ List<dynamic> nutritionSlotUnion(List<dynamic> localItems, List<dynamic> cloudIt
 /// `syncNutritionData()` is the SoT fan-out entry point pinned by
 /// `test/contracts/sync_fanout_contract_test.dart` — its body MUST
 /// continue to call `_syncNutritionLogs`, `_syncWaterLogs`, and
-/// `_syncSavedMeals` (CLAUDE.md §15).
+/// `_syncSavedMeals` (docs/architecture/sync.md).
 ///
 /// Static helper `_nlogKeyForRestore` stays on the SyncService class
 /// alongside the other deterministic-id helpers — extension methods

@@ -18,7 +18,7 @@
 //   5. Backfill skips when the only single-select value is `'balanced'`
 //      (already the default).
 //
-// Per CLAUDE.md §15 "Source of Truth Rules" — the muster is the SoT for
+// Per docs/architecture/sync.md "Source of Truth Rules" — the muster is the SoT for
 // these facts; profile reads from a mirrored copy.
 
 import 'dart:io';

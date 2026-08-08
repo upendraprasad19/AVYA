@@ -21,7 +21,7 @@ void main() {
             src.contains('compactionTarget'),
         isTrue,
         reason: '_compactContext must enforce a target under the '
-            '10KB server limit (9500 bytes per CLAUDE.md §11). Without '
+            '10KB server limit (9500 bytes per docs/architecture/ai.md). Without '
             'the ceiling, historical-query enriched contexts blow past '
             'the limit and the server rejects with 400.',
       );

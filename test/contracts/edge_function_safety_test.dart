@@ -61,7 +61,9 @@ void main() {
   // Note: the original "no ?identifier in map literals" check was retired
   // 2026-04-28. Dart 3.4+ added `use_null_aware_elements` lint making
   // `?identifier` a VALID nullable-element shorthand for
-  // `if (x != null) 'key': x`. CLAUDE.md §19 documents this. The codebase
+  // `if (x != null) 'key': x`. Root's old §19 pitfalls list documented
+  // this; that list was retired by the 2026-05-18 declutter, so the note
+  // is preserved here. The codebase
   // actively uses the syntax (`?dobIso`, `?wakeIso`, `?defaultDur`, etc.).
   // Removing the check keeps the test file as a placeholder for future
   // Edge Function safety contracts.

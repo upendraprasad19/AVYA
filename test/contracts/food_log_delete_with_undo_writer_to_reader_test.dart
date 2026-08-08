@@ -6,7 +6,9 @@
 //
 // Pins: deleteFoodLog must ONLY be called from _confirmAndDeleteFoodLog,
 // which stashes the row before deleting and offers UNDO via restoreFoodLog.
-// See CLAUDE.md §19 "Food log delete with no undo".
+// Retired root §19 entry #48 ("Food log delete with no undo"), classified
+// Class A by the 2026-05-18 declutter audit and deleted from the contract
+// file because THIS test is its record.
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';

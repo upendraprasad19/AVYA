@@ -15,7 +15,7 @@ void main() {
       final src =
           _src('lib/shared/repositories/plan_engine/volume_filter.dart');
       expect(src.contains('targetCount'), isTrue);
-      // The table per CLAUDE.md §12: beginner / intermediate / advanced
+      // The table per lib/shared/repositories/plan_engine/CLAUDE.md: beginner / intermediate / advanced
       // × 3/4/5/6 days. Source must reference the experience tiers.
       expect(
         src.contains('beginner') &&
@@ -24,14 +24,14 @@ void main() {
         isTrue,
         reason: 'VolumeFilter.targetCount must branch on '
             'experience level (beginner / intermediate / advanced) per '
-            'CLAUDE.md §12.',
+            'lib/shared/repositories/plan_engine/CLAUDE.md.',
       );
     });
 
     test('exercise_selector cascade has the 5-attempt pattern', () {
       final src = _src(
           'lib/shared/repositories/plan_engine/exercise_selector.dart');
-      // Per CLAUDE.md §12 the cascade has 5 attempts ending in
+      // Per lib/shared/repositories/plan_engine/CLAUDE.md the cascade has 5 attempts ending in
       // universalPool. The canonical entry point is `_cascadeFill`
       // and the comment "5-attempt cascade" / "5 attempts" pins the
       // shape.
@@ -42,7 +42,7 @@ void main() {
             src.contains('5 attempt') ||
             src.contains('5 attempts'),
         isTrue,
-        reason: 'cascade must be documented as 5-attempt per CLAUDE.md §12.',
+        reason: 'cascade must be documented as 5-attempt per lib/shared/repositories/plan_engine/CLAUDE.md.',
       );
       expect(src.contains('universalPool'), isTrue,
           reason: 'universalPool fallback must exist (terminal attempt).');

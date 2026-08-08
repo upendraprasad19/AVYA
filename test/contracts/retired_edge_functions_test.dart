@@ -1,4 +1,5 @@
-// CLAUDE.md §19 entry #56 regression test (CLAUDE.md decluttering Milestone 4).
+// Regression test for retired root §19 entry #56 (Class B, 2026-05-18
+// declutter Milestone 4) — this test is the entry's surviving record.
 //
 // Pins the rule: `ai-proxy-pro` Edge Function was retired 2026-04-18
 // (merged into `ai-proxy` with server-side isPro gate; returns 410 Gone in

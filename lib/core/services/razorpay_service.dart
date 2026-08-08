@@ -330,7 +330,7 @@ class RazorpayService {
 
   /// APK Test #12.5 / Class 2b — pulls a user-readable error message
   /// out of an Edge Function response body. Edge Functions follow the
-  /// CLAUDE.md §11 "Edge Function Error Sanitization" contract:
+  /// docs/architecture/ai.md "Edge Function Error Sanitization" contract:
   /// validation errors return `{error: "..."}` while internal errors
   /// return generic `{error: "Internal server error", request_id}`.
   /// Both shapes are handled — internal errors fall through to the
@@ -373,7 +373,7 @@ class RazorpayService {
     //   - Hive `isPro=true` + `localActivationAt` timestamp (grace period)
     //   - SubscriptionService.gate() server-verifies high-value features
     //     so a compromised local state still can't unlock paid content
-    //     (see CLAUDE.md §10 — verifyFromServer cache TTL 5 min).
+    //     (see docs/architecture/subscription.md — verifyFromServer cache TTL 5 min).
     //
     // Before this fix, if Phase 1 polling + Phase 2 verify both failed or
     // threw, the Phase 3 local fallback was ALSO skipped (it lived at the

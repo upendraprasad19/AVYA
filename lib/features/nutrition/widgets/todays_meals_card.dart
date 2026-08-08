@@ -213,7 +213,7 @@ class _PopulatedSlotCard extends StatelessWidget {
       final item = items[i];
       // APK Test #12.6 / Obs 7 — derive display name from canonical sources.
       // Pre-fix: read `food_name` (a field that doesn't exist on top-level
-      // nlog rows) → always fell back to "Unknown". Per CLAUDE.md §15
+      // nlog rows) → always fell back to "Unknown". Per docs/architecture/sync.md
       // nutrition contract, top-level has `meal_type` + `items[]`; per-item
       // has `name`. Build label from joined items[] names, fallback to
       // meal_type, fallback to "Logged meal".
@@ -314,7 +314,7 @@ class _PopulatedSlotCard extends StatelessWidget {
   }
 
   /// APK Test #12.6 / Obs 7 — derive a meal display name from the
-  /// canonical nutrition contract (CLAUDE.md §15). Top-level nlog rows
+  /// canonical nutrition contract (docs/architecture/sync.md). Top-level nlog rows
   /// have NO `food_name` / `name` field — only `meal_type` and
   /// `items[]` (where each item has its own `name`).
   ///

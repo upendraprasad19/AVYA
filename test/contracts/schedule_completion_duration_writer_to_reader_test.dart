@@ -67,7 +67,7 @@ void main() {
         'happens BEFORE the upsert call', () {
       // The fix must look up the matching wlog from workoutBox by
       // `wlog_<dateStr>`. The schedule entry's `date` field is already
-      // IST (CLAUDE.md §15) so reusing it for the wlog key preserves the
+      // IST (docs/architecture/sync.md) so reusing it for the wlog key preserves the
       // IST convention.
       final lookupOffset = slice.indexOf("workoutBox.get('wlog_");
       expect(lookupOffset, isNot(-1),

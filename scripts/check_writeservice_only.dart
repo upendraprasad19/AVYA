@@ -4,7 +4,7 @@
 // All writes to workoutBox / nutritionBox / healthBox must go through the
 // canonical WriteService for that domain.
 //
-// Allowed-writers list (per E.13 spec + CLAUDE.md §15 SoT registry):
+// Allowed-writers list (per E.13 spec + docs/architecture/sync.md SoT registry):
 //   - WorkoutWriteService  (sole writer for workoutBox)
 //   - NutritionWriteService (sole writer for nutritionBox)
 //   - HealthWriteService   (sole writer for healthBox — built in E.7)

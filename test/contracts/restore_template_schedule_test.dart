@@ -19,7 +19,7 @@
 //   resolved via JOIN.
 //
 // This is a Class A restore-completeness gap (same shape as Test #11
-// Theme A freezes/inbox/diet plan). Per CLAUDE.md §15: "Any Hive
+// Theme A freezes/inbox/diet plan). Per docs/architecture/sync.md: "Any Hive
 // surface paying users lose on reinstall needs cloud column/table +
 // sync write + restore method + contract test."
 //

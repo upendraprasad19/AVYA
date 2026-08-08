@@ -90,7 +90,7 @@ void main() {
       final src = serviceFile.readAsStringSync();
       expect(src.contains('unawaited(SyncService.instance.'), isTrue,
           reason: 'Every method must fire a sync method fire-and-forget '
-              'per CLAUDE.md §15.');
+              'per docs/architecture/sync.md.');
       // Each method should also fire a pushSnapshot so the AI coach sees
       // the new health datapoint.
       final pushCount =

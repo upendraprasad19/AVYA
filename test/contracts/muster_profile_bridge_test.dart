@@ -15,7 +15,7 @@
 //     guess).
 //   - why_now / definition_of_winning are NOT mapped to profile.
 //
-// Per CLAUDE.md §15 "Source of Truth Rules" — the muster is the SoT
+// Per docs/architecture/sync.md "Source of Truth Rules" — the muster is the SoT
 // for these facts; profile reads from a mirrored copy.
 
 import 'dart:io';

@@ -7,7 +7,7 @@
 //          EditWorkoutLogSheet.save (rescans is_pr)
 //
 // Pins every canonical field name so a rename in WorkoutWriteService
-// immediately breaks this test. See CLAUDE.md §15 "Hive field-name contract".
+// immediately breaks this test. See docs/architecture/sync.md "Hive field-name contract".
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';

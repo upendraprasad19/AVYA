@@ -583,7 +583,7 @@ class NutritionWriteService {
   /// search "Save as preset" flows where the meal hasn't yet been
   /// logged. Single Hive write (`saved_meal_<ts>`) + fan-out via the
   /// canonical sync helpers — matches the WriteService SoT contract
-  /// per CLAUDE.md §15.
+  /// per docs/architecture/sync.md.
   Future<WriteResult> saveMealPreset({
     required String name,
     required int totalCalories,

@@ -1,4 +1,5 @@
-// CLAUDE.md §19 entry #55 regression test (CLAUDE.md decluttering Milestone 4).
+// Regression test for retired root §19 entry #55 (Class B, 2026-05-18
+// declutter Milestone 4) — this test is the entry's surviving record.
 //
 // Pins the rule: All AI traffic moved to Gemini on 2026-04-18. `_shared/openrouter.ts`
 // is deleted; `_shared/gemini.ts` is the only helper. No Edge Function source
@@ -7,7 +8,9 @@
 //
 // Pre-fix evidence: commit `7646200` (2026-04-18) — full migration off
 // Cerebras + OpenRouter to single Gemini provider. See also
-// `lib/CLAUDE.md` §11 model matrix and §19 entry "Cerebras/OpenRouter calls anywhere".
+// `docs/architecture/ai.md` model matrix. (The original comment attributed
+// that §11 to `lib/CLAUDE.md`; it was root's — no nested contract file
+// defines numbered sections.)
 //
 // Source-grep contract — strips comments first per
 // feedback_source_grep_strip_comments_first.md. Migration notes in

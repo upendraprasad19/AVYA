@@ -1877,10 +1877,26 @@ call.
 
 ## OI-91 — 138 dead `CLAUDE.md §N` citations remain in live code/test/script comments (P3)
 
-- **Status**: OPEN
-- **Blocked on**: nothing — mechanical, but large enough that it wants its own batch rather than
-  riding along inside an unrelated fix.
-- **Verified**: 2026-08-05 (count re-derived by grep at filing time; see the exact command below)
+- **Status**: CLOSED · 2026-08-07 · branch `oi91-claude-md-citations`, diagnose `b2f7a4`,
+  ledger `docs/audit/oi91_claude_md_citations.closure.yaml` (5/5 terminal). All 138 swept
+  (survey command now returns 0), **plus 11 wrong-but-live** that this entry recorded as
+  unmeasured. Gate 26 extended to a code zone over `.dart`/`.ts`/`.js`/`.sql`/`.sh` and flipped
+  to hard-fail, so the class cannot regrow.
+  **Three corrections to what this entry said**, recorded rather than quietly fixed:
+  1. **The mapping did not need building.** `docs/superpowers/plans/2026-05-18-claude-md-declutter-plan.md`
+     Tasks 2.5–2.13 already record the destination for **all 10** dead section numbers; the
+     "fix shape" below proposed reconstructing it and covered 4.
+  2. **The §19 destination was wrong.** Pointing §19 at `docs/playbook/common-pitfalls.md` would
+     have minted 10 fresh broken pointers — only 1 of the 5 quoted entry titles is in that file.
+     `2026-05-18-claude-md-declutter-audit.md` shows the Class A/B entries were *deleted because a
+     test became their record*, and in 5 cases that test is the very file carrying the citation.
+  3. **Blast radius measured `catastrophic`, not `feature`.** Not the migrations — two comment
+     lines in `supabase/functions/razorpay-webhook/index.ts`, which `docs/blast_radius.yaml:41`
+     maps to catastrophic, and `blast_radius_from_diff.dart` has no comment-only carve-out. The
+     three edited migration files carry no `security definer` text so they stay `platform`.
+- **Blocked on**: nothing — closed.
+- **Verified**: 2026-08-07 (count re-derived by the entry's own command → 0; gate
+  negative-controlled by execution in both directions). Originally 2026-08-05 at filing time.
 - **Identified**: 2026-08-05 · the B-pass on `repo-gate-pattern-sweep` (diagnose e7c3b9), which
   caught that that batch's own completeness grep had an input set of 3 directories while its
   artifacts stated the conclusion unscoped.
@@ -1912,13 +1928,26 @@ call.
      when §6 is MULTI-TIER COVERAGE and the rules are §4.4; `path-mappings.md:21` pointed
      "Discipline / process" at §3 = SCREENS instead of §4). **The 138 above have NOT been checked
      for this class** — that filter cannot see it, so the real number is ≥138.
-- **Fix shape (not yet attempted)**: build the old-section → new-home mapping once
-  (§15 → `docs/architecture/sync.md`/`docs/sot_registry.yaml`, §11 → `docs/architecture/ai.md`,
-  §19 → `docs/playbook/common-pitfalls.md`, §9 → `lib/shared/widgets/wardroom/CLAUDE.md`, …),
-  apply it, then read every remaining live `§N` citation for the wrong-but-live class rather than
-  trusting the filter. Consider extending Gate 26 to scan `.dart` comments so this cannot silently
-  regrow — that is the only version of this fix that stays fixed.
-- **Blast radius estimate**: `feature` (comments only, no logic); no migration, no schema.
+- **Fix shape (AS SHIPPED — the original proposal is kept below it for the record)**: the
+  authoritative old-section → new-home mapping was **already written** in
+  `docs/superpowers/plans/2026-05-18-claude-md-declutter-plan.md` (Tasks 2.5–2.13), covering all
+  10 numbers. Applied it; handled §19 per the per-entry classes in the sibling
+  `2026-05-18-claude-md-declutter-audit.md`; read every remaining live citation for the
+  wrong-but-live class (found 11); extended Gate 26 to a code zone and flipped it to hard-fail.
+
+  *Original proposal, which under-scoped the mapping and mis-routed §19:* "build the
+  old-section → new-home mapping once (§15 → `docs/architecture/sync.md`/`docs/sot_registry.yaml`,
+  §11 → `docs/architecture/ai.md`, §19 → `docs/playbook/common-pitfalls.md`, §9 →
+  `lib/shared/widgets/wardroom/CLAUDE.md`, …), apply it, then read every remaining live `§N`
+  citation for the wrong-but-live class rather than trusting the filter. Consider extending
+  Gate 26 to scan `.dart` comments so this cannot silently regrow — that is the only version of
+  this fix that stays fixed." The last sentence was right and is what shipped.
+- **Blast radius estimate**: was `feature`; **measured `catastrophic`** — see the Status block.
+- **Root cause worth carrying forward**: the declutter **renumbered** rather than only relocated.
+  Old §4 = DATA ARCHITECTURE, §5 = DIRECTORY STRUCTURE, §6 = **the coding rules 1-23**,
+  §7 = **DATABASE SCHEMA**; those four numbers now hold entirely different content. So any
+  pre-2026-05-18 citation of §4–§7 is suspect on sight, and no grep filtered on "outside the live
+  range" can see it. That is why sub-class 2 needed reading, not grepping.
 
 ## OI-92 — `_git_lock.sh` reclaim: a failed restore destroys the lock it stole, letting two processes hold the mutex (P1)
 
@@ -2239,3 +2268,34 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   as unvalidated).
 - **Blast radius estimate**: `account` — touches the sync restore path; no migration, no schema
   change for the first fix shape.
+
+## OI-99 — Gate 26 has no `docs/` zone, and the destination files OI-91 rewrote into are themselves not immune to dead/wrong `CLAUDE.md §N` citations (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Needs its own false-positive analysis before a fix, same
+  reason OI-91's code zone didn't reuse the markdown zone's bare-section pattern — prose docs
+  likely cite external specs/RFCs differently than code comments do, and that has to be measured,
+  not assumed.
+- **Verified**: 2026-08-08 — B-pass on branch `oi91-claude-md-citations`, dispatched as part of
+  landing OI-91. Found by reading `docs/architecture/ai.md` directly, not by extending the gate.
+- **Identified**: 2026-08-08 · B-pass review of branch `oi91-claude-md-citations` (diagnose
+  `b2f7a4`).
+- **Risk class**: docs-rot / broken agent navigation — same class as OI-91, different zone.
+- **What's wrong**: `scripts/check_claude_md_citations.dart`'s two zones (markdown contract files;
+  code comments under `lib/ test/ scripts/ supabase/ integration_test/`) both stop short of
+  `docs/**`. That is a real gap specifically because OI-91 made it one: 96 of the 138 citations
+  that batch rewrote now point INTO `docs/architecture/*.md`, and those destination files carry
+  their own `CLAUDE.md §N` citations, un-scanned by either zone. A live instance was found by
+  reading, not grepping: `docs/architecture/ai.md:40` cited "CLAUDE.md §6 rule 1" — old §6 was the
+  coding rules, current §6 is unrelated (MULTI-TIER COVERAGE PROTOCOL) — the exact "wrong-but-live"
+  shape OI-91 spent its effort finding and fixing elsewhere. That specific instance (plus two
+  softer ones in `docs/reference/food-database.md` and `docs/reference/directory-structure.md`)
+  were fixed on the spot in the same commit as this filing; the STRUCTURAL gap — nothing stops the
+  next one from appearing — is what stays open.
+- **Fix shape (not attempted)**: extend Gate 26 with a third zone over `docs/architecture/**`,
+  `docs/reference/**`, `docs/naming_conventions.md`, `docs/playbook/**`, mirroring the code zone's
+  anchored-pattern approach (`CLAUDE\.md.{0,3}§N`, not bare `§N`) — but first measure how many bare
+  section tokens exist in that zone and what fraction are false positives, the same survey OI-91
+  did for code before committing to the anchored shape. Land report-only per §4.11, baseline, then
+  flip to hard-fail.
+- **Blast radius estimate**: `feature` (docs-only; no migration, no schema, no application code).

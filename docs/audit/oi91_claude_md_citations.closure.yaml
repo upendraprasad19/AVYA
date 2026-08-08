@@ -1,0 +1,104 @@
+# docs/audit/oi91_claude_md_citations.closure.yaml
+#
+# Closure ledger for the OI-91 batch (branch oi91-claude-md-citations,
+# 2026-08-07). Required by CLAUDE.md §4.2: any batch of >= 4 findings/units
+# produces a ledger where EVERY entry carries a terminal_state and no entry
+# carries a `deferred:` key, so closed == N is structural rather than asserted.
+#
+# SCOPE NOTE. OI-91 as filed was one number: 138 dead citations. It closes here
+# as five units, because the investigation found the board's own framing was
+# incomplete in two ways it recorded as unmeasured — the §19 entries mostly do
+# not exist at the destination the board proposed, and the 2026-05-18 declutter
+# RENUMBERED sections rather than only relocating them, which makes a whole
+# second class of citation wrong while still resolving.
+
+batch: oi91-claude-md-citations
+branch: oi91-claude-md-citations
+date: 2026-08-07
+blast_radius: catastrophic
+closed_count: 5
+total_count: 5
+
+# Ledger authored in the same commit as the fixes, so no SHA exists yet.
+_commit: &wip "oi91-claude-md-citations (uncommitted at authoring)"
+
+findings:
+
+  - id: OI-91-gate
+    title: Gate 26 never read source comments, so 138 dead citations accumulated behind a PASS
+    terminal_state: closed_in_commit
+    commit: *wip
+    detail: >
+      scripts/check_claude_md_citations.dart gains a code zone over
+      .dart/.ts/.js/.sql/.sh in lib/ test/ scripts/ supabase/ integration_test/.
+      Anchored rather than bare-section matching: measured 526 bare section
+      tokens in code of which only 227 are root citations, so a bare pattern
+      would have failed ~299 times on day one. Landed report-only, flipped to
+      blocking in the same batch once the sweep was green (§4.11 order).
+    verification: >
+      Negative-controlled by execution both ways — appending one dead citation
+      to lib/core/utils/ist_date.dart made the gate FAIL naming that exact
+      file:line, removing it restored PASS. Gate test suite 7/7 including a
+      false-positive control standing in for the 299 non-root tokens.
+
+  - id: OI-91-sweep
+    title: 138 dead citations across 100 files
+    terminal_state: closed_in_commit
+    commit: *wip
+    detail: >
+      Mapping recovered from the declutter plan's own Tasks 2.5-2.13 rather
+      than reconstructed, covering all 10 dead section numbers where the board
+      had proposed 4. 125 were mechanical pointer swaps; 13 needed judgment.
+    verification: >
+      OI-91's own survey command returns 0, down from 138. Gate 26 PASSES in
+      enforced mode across 16 markdown contract files and 1595 source files.
+
+  - id: OI-91-s19
+    title: The board's proposed §19 destination does not contain what the citations claim
+    terminal_state: closed_in_commit
+    commit: *wip
+    detail: >
+      OI-91 proposed mapping §19 to docs/playbook/common-pitfalls.md. Only 1 of
+      the 5 quoted entry titles is in that file. The 2026-05-18 declutter audit
+      classifies every §19 entry: Class A/B entries were DELETED because a test
+      became their record, and in 5 cases that test is the very file carrying
+      the dead citation. Each of the 11 now names the retired entry, its class,
+      and its surviving record. Blind-mapping would have minted 10 fresh
+      pointers to a document that does not contain them.
+    verification: >
+      Per-entry classes read from the declutter audit (entries 21, 35, 48, 55,
+      56, 128, 147, 161), and each cited destination confirmed to exist and to
+      carry the claimed content before the citation was repointed.
+
+  - id: OI-91-wrong-but-live
+    title: 11 citations resolved to a real section that was the wrong one
+    terminal_state: closed_in_commit
+    commit: *wip
+    detail: >
+      The sub-class OI-91 flagged as the dangerous one and recorded as
+      unmeasured. Cause is renumbering, not relocation — old §6 was the coding
+      rules 1-23 (now §4.4) and old §7 was DATABASE SCHEMA (now the pointer
+      table), so pre-declutter citations of those numbers still resolve. Fixed
+      7 x old-§7 to docs/architecture/database.md, 3 x old-§6 to §4.4, and one
+      §0 citation claiming a Flutter version pin that §0 does not contain.
+    verification: >
+      All 77 in-range citations read individually. Destinations confirmed to
+      carry the claimed content (database.md:51 v5-UUID namespace, :43 FK
+      direction quirk; §4.4 rules 11/12 and 21). Two were read and deliberately
+      left unchanged because they are correct as written — recorded in the
+      diagnose-doc so a later audit sees they were judged, not missed.
+
+  - id: OI-91-self-inflicted
+    title: The gate's own test tripped the gate it tests
+    terminal_state: closed_in_commit
+    commit: *wip
+    detail: >
+      The first draft of the code-zone test fixtures wrote anchored citations
+      literally, which took the repo count from 138 to 140 — the gate scans
+      test/ too. Fixed with escape sequences in the fixture strings rather than
+      an allow-list entry, so no allow-list debt of the kind OI-84/OI-88 record
+      is created. Found by reconciling a count discrepancy rather than by a
+      failing gate, since the code zone was still report-only at that point.
+    verification: >
+      grep for anchored literals in the test source returns clean; gate count
+      returned to the 138 baseline; tests still 7/7.

@@ -10,7 +10,7 @@
  * `HIGH_PRIORITY_OP_TYPES` allowlist. The serve handler is NOT exercised
  * here — it requires `SUPABASE_URL` + service-role env vars and a live
  * `client_errors` table. End-to-end integration testing is deferred to
- * a manual `curl` after deploy (see deploy notes in CLAUDE.md §11).
+ * a manual `curl` after deploy (see deploy notes in docs/architecture/ai.md).
  *
  * Contract: client + server allowlists must stay in lock-step. The Dart
  * suite `test/safety/error_telemetry_rate_limit_test.dart` pins the

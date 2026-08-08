@@ -15,7 +15,7 @@
  * the client already depends on. A future refactor can collapse both onto
  * this helper once the new tool has soaked.
  *
- * Atwater fallback (per CLAUDE.md §15 "Scan meal saves 0 kcal"):
+ * Atwater fallback (per docs/architecture/sync.md "Scan meal saves 0 kcal"):
  *   When Gemini returns an item with calories=0 but non-zero macros, we
  *   compute kcal = 4P + 4C + 9F before returning. Same fallback runs at the
  *   meal level so total_calories is always populated from items[].
@@ -126,7 +126,7 @@ export async function parseFoodText(description: string): Promise<ParsedMeal> {
   // Defensive — Gemini sometimes omits items entirely on terse descriptions.
   parsed.items = Array.isArray(parsed.items) ? parsed.items : [];
 
-  // Per-item Atwater fallback (matches CLAUDE.md §15 "Scan meal saves 0 kcal").
+  // Per-item Atwater fallback (matches docs/architecture/sync.md "Scan meal saves 0 kcal").
   for (const item of parsed.items) {
     const p = Number(item.protein_g ?? 0);
     const c = Number(item.carbs_g ?? 0);

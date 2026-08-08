@@ -36,7 +36,7 @@ void main() {
     // Files that legitimately read user-scoped data but should NOT watch.
     // Add any new exemption with a comment justifying it.
     final exemptions = <String>{
-      // Pre-auth crossing surface — intentionally shared per CLAUDE.md §15.
+      // Pre-auth crossing surface — intentionally shared per docs/architecture/sync.md.
       'lib/features/auth/providers/referral_code_stash_provider.dart',
       // Auth provider itself + invalidation provider — can't self-watch.
       'lib/features/auth/providers/auth_provider.dart',

@@ -32,7 +32,7 @@ void main() {
             "import 'package:icanbefitter/core/services/workout_write_service.dart'"),
         reason:
             'Handler must import WorkoutWriteService — it is the sole writer '
-            'for workout_log + exercise_log Hive rows per CLAUDE.md §15.',
+            'for workout_log + exercise_log Hive rows per docs/architecture/sync.md.',
       );
       expect(
         src,

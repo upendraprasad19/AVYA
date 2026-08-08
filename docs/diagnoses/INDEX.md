@@ -6,6 +6,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### claude_md_section_citation — the pointer from a source comment to a numbered
+section of root `CLAUDE.md`. The schema below is writer/reader-shaped because
+this drift IS writer/reader drift; the writer just happens to be a document
+rather than a Hive box. (1 bugs)
+- 2026-08-07 b2f7a4 — 138 `CLAUDE.md §N` citations in `.dart` / `.ts` / `.sql` / `.js` comments pointed at root-CLAUDE.md sections that do not exist. Root's real headings are exactly `0, 1, 2, 2a, 3, 4, 5, 6, 7`; the…
+
 ### notification_preferences (1 bugs)
 - 2026-08-07 a7e3d1 — Two defects on the same surface, both filed as OI-76. (1) COUNT. The Profile tab's Notifications row subtitle reads "N/M enabled". It counted all 10 registry keys, including `protein_alerts` and…
 
@@ -944,6 +950,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-07 | b2f7a4 | 138 `CLAUDE.md §N` citations in `.dart` / `.ts` / `.sql` / `.js` comments pointed at root-CLAUDE.md sections that do not exist. Root's real headings are exactly `0, 1, 2, 2a, 3, 4, 5, 6, 7`; the… | claude_md_section_citation — the pointer from a source comment to a numbered
+section of root `CLAUDE.md`. The schema below is writer/reader-shaped because
+this drift IS writer/reader drift; the writer just happens to be a document
+rather than a Hive box. | test/scripts/claude_md_citations_letter_suffix_test.dart |
 | 2026-08-07 | a7e3d1 | Two defects on the same surface, both filed as OI-76. (1) COUNT. The Profile tab's Notifications row subtitle reads "N/M enabled". It counted all 10 registry keys, including `protein_alerts` and… | notification_preferences | test/contracts/notification_pro_key_scoping_test.dart |
 | 2026-08-07 | d5b8c2 | `promote-community-item` (daily cron, job `promote_community_item_daily`) opened both of its promotion paths with a call to the Postgres RPC `community_votes_summary`. That function does not exist —… | community_review_queue | test/contracts/promote_community_vote_tally_test.dart |
 | 2026-08-06 | e2d6b8 | A user opens Edit Profile, selects the equipment they do NOT have (e.g. cables), and saves. The selection persists and syncs to cloud. Their generated plan then prescribes exercises requiring exactly… | equipment_exclusion_filter | test/contracts/equipment_exclusion_filter_behavioral_test.dart |
