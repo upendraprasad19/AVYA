@@ -41,7 +41,7 @@ class InductionService {
   }
 
   /// Records the I COMMIT tap. Writes Hive immediately, fires sync to Supabase
-  /// fire-and-forget per CLAUDE.md §15.
+  /// fire-and-forget per docs/architecture/sync.md.
   Future<void> recordCommitment() async {
     final now = DateTime.now().toIso8601String();
     await HiveService.instance.coachBox.put('committed_at', now);
@@ -64,7 +64,7 @@ class InductionService {
 
   /// Records a single muster answer to [HiveService.coachBox] AND bridges
   /// the value to [userBox['profile']] for keys that map to profile
-  /// fields. Per CLAUDE.md §15 "Source of Truth Rules" — the muster is
+  /// fields. Per docs/architecture/sync.md "Source of Truth Rules" — the muster is
   /// the SoT for these facts; profile reads from a mirrored copy so Edit
   /// Profile and plan generator see the values.
   ///
@@ -124,7 +124,7 @@ class InductionService {
   }
 
   /// Marks the muster complete. Writes Hive + fires sync + pushSnapshot
-  /// fire-and-forget per CLAUDE.md §15.
+  /// fire-and-forget per docs/architecture/sync.md.
   Future<void> completeMuster() async {
     final now = DateTime.now().toIso8601String();
     await HiveService.instance.coachBox.put('induction_completed_at', now);

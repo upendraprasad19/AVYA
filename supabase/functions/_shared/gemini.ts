@@ -9,7 +9,7 @@
  *          daily-snapshot, rolling-context, morning-alert,
  *          future-prediction, weekly-report.
  *
- * Model matrix (stay in sync with CLAUDE.md §11):
+ * Model matrix (stay in sync with docs/architecture/ai.md):
  *   gemini-2.5-flash       — primary chat + structured JSON (ai-proxy,
  *                            morning-alert, rolling-context,
  *                            future-prediction, daily-snapshot text,

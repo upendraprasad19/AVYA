@@ -4,7 +4,7 @@
 //
 // `train_provider.dart` was reading legacy `sets_completed` from exlog
 // rows. The canonical Hive writer (WorkoutWriteService.logExercise)
-// emits `set_number` (per CLAUDE.md §15 Hive field-name contract).
+// emits `set_number` (per docs/architecture/sync.md Hive field-name contract).
 // Reader sites must prefer canonical, fall through to legacy.
 //
 // This test pins that every `sets_completed` read in train_provider.dart

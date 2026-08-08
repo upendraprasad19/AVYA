@@ -5,7 +5,7 @@
 // writes Hive + cloud → home macros update.
 //
 // 20 AI coach tools live across 4 families (workout/progress/
-// nutrition/plan per CLAUDE.md §11). The READ tools execute
+// nutrition/plan per docs/architecture/ai.md). The READ tools execute
 // server-side; WRITE tools emit ToolIntent that the client confirms
 // via card/sheet then dispatches to the canonical WriteServices.
 // The Test #11 L1 founder-reported "didn\'t log" bug was actually a

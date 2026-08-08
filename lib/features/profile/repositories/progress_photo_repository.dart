@@ -31,7 +31,7 @@ class PhotoQuotaException implements Exception {
 /// to keep local, and we only list metadata when the user opens the
 /// gallery. Listings are always freshly fetched.
 ///
-/// PRO-gated at the call sites per CLAUDE.md §10 (`progress_photos` is in
+/// PRO-gated at the call sites per docs/architecture/subscription.md (`progress_photos` is in
 /// the high-value feature allowlist with server-side verify).
 class ProgressPhotoRepository {
   ProgressPhotoRepository._();

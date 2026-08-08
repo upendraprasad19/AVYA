@@ -55,7 +55,7 @@ async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
   ] = await Promise.all([
     // 1. Workouts completed + total volume (per-exercise summary table).
     //    Schema deviation from spec: `workout_logs.total_volume_kg` does NOT exist in prod.
-    //    Per CLAUDE.md §11, exercise-level data lives in `workout_log_exercises`. We derive
+    //    Per docs/architecture/ai.md, exercise-level data lives in `workout_log_exercises`. We derive
     //    distinct workout days from completed_at and compute volume from weight*reps*set_number.
     sb
       .from("workout_log_exercises")
@@ -114,7 +114,7 @@ async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
     const w = r.weight_kg ?? 0;
     const reps = r.reps ?? 0;
     // APK Test #12.6 / Obs 8 — drop the (* sets) term that triple-counted
-    // volume. Per CLAUDE.md §11 cloud contract, `reps` already holds
+    // volume. Per docs/architecture/ai.md cloud contract, `reps` already holds
     // CUMULATIVE reps across all sets (e.g. 3×10 = `reps: 30`); multiplying
     // again by `set_number` 3-4×'d every weighted exercise. Founder
     // reported 79,713 kg total volume for ~$23k of actual work. Fix:

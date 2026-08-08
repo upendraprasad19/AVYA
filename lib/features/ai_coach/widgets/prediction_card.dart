@@ -113,7 +113,7 @@ class PredictionCard extends StatelessWidget {
               ),
             ),
             // Empty-state CTA for onboarded users — first prediction is
-            // free per CLAUDE.md §14; surface a single UPDATE button so
+            // free per docs/architecture/business-rules.md; surface a single UPDATE button so
             // they can actually trigger generation instead of staring at
             // a static "queued" message.
             if (onboardingCompleted) ...[

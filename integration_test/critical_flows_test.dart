@@ -6,7 +6,7 @@
 //   3. log workout → render via WorkoutReceiptData.fromExerciseLogs
 //
 // These exercise the WriteService → Hive → Reader chain that has caused
-// the most APK regressions (Tests #6 → #12). Per CLAUDE.md §6 every
+// the most APK regressions (Tests #6 → #12). Per CLAUDE.md §4.4 rule 21, every
 // new flow added here must FAIL on the writer-only side without the
 // matching reader update — see `feedback_source_of_truth_audit.md`.
 //

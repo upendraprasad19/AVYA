@@ -3,7 +3,7 @@
  *
  * Used to be the polling endpoint for Remotion/Lambda video render jobs
  * (shareable workout highlight reels). The video-share feature is
- * DEFERRED per CLAUDE.md §10 "Shareable Cards" table — hidden until
+ * DEFERRED per docs/architecture/subscription.md "Shareable Cards" table — hidden until
  * post-launch. The old implementation had zero auth (used
  * SERVICE_ROLE_KEY without auth.getUser or user_id filter), which meant
  * anyone knowing a jobId could poll anyone else's render status (IDOR).

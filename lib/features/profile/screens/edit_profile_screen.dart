@@ -73,7 +73,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late bool _isMetric; // true = KG/CM, false = LBS/IN
 
   // Track original plan-affecting values for rescheduling detection.
-  // V4 pipeline plan-driving inputs (per CLAUDE.md §12 + plan_engine/):
+  // V4 pipeline plan-driving inputs (per lib/shared/repositories/plan_engine/CLAUDE.md + plan_engine/):
   //   daysPerWeek + goal + equipment + fitness_experience drive the split
   //   resolver + volume filter + exercise selector. injuries drive the
   //   exercise-selector exclusion masks. physique_focus drives +1 set on

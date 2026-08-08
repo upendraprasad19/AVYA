@@ -120,7 +120,7 @@ void main() {
     // call moved from inline-in-DeleteNutritionLogNotifier into
     // NutritionWriteService.deleteLog (which is what the notifier now
     // delegates to). Sync IS fired; only the owning file changed.
-    // CLAUDE.md §15 sync fan-out contract: syncNutritionData() must be
+    // docs/architecture/sync.md sync fan-out contract: syncNutritionData() must be
     // called on every nutrition delete path.
     test(
       'fires syncNutritionData + pushSnapshot inside NutritionWriteService.deleteLog '
@@ -140,7 +140,7 @@ void main() {
         final body = tail.substring(0, bodyEnd);
         expect(body, contains('syncNutritionData'),
             reason: 'deleteLog must fan out to syncNutritionData per '
-                'CLAUDE.md §15 sync fan-out contract');
+                'docs/architecture/sync.md sync fan-out contract');
         expect(body, contains('pushSnapshot'),
             reason: 'deleteLog must also push AI snapshot per sync pattern');
       },

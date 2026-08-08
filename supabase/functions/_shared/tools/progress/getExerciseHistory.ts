@@ -41,7 +41,7 @@ async function handler(
   const { sb, userId } = ctx;
   const since = new Date(Date.now() - args.weeks * 7 * 86400_000).toISOString();
 
-  // Per CLAUDE.md §11, workout_log_exercises is the per-exercise summary table.
+  // Per docs/architecture/ai.md, workout_log_exercises is the per-exercise summary table.
   // Schema (verified via execute_sql): exercise_id (text, NOT NULL) carries the
   // stable exercise name; set_number = total completed sets; weight_kg = best
   // across sets; reps = cumulative reps; is_pr boolean; completed_at timestamptz.

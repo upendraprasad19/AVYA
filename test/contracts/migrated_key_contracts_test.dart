@@ -6,7 +6,7 @@
 //   (a) Listed in `UserConfigMigrator.userScopedKeys`, OR
 //   (b) Listed in `UserConfigMigrator._intentionallyShared`.
 //
-// CLAUDE.md §15 "User-scoped Hive keys (MigratedKey discipline)" pins
+// docs/architecture/sync.md "User-scoped Hive keys (MigratedKey discipline)" pins
 // this rule. Drift = a key that's user-specific but never migrated from
 // configBox → userBox on devices upgrading past the migration flag.
 

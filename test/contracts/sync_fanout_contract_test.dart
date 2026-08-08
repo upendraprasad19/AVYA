@@ -58,7 +58,7 @@ void main() {
       for (final helper in expectedHelpers) {
         expect(body.contains(helper), isTrue,
             reason: 'syncWorkoutDataNow() must fan out to $helper '
-                    '(see CLAUDE.md §15 sync fan-out contract).');
+                    '(see docs/architecture/sync.md sync fan-out contract).');
       }
     });
 
@@ -75,7 +75,7 @@ void main() {
       for (final helper in expectedHelpers) {
         expect(body.contains(helper), isTrue,
             reason: 'syncNutritionDataNow() must fan out to $helper '
-                    '(see CLAUDE.md §15 sync fan-out contract).');
+                    '(see docs/architecture/sync.md sync fan-out contract).');
       }
     });
 

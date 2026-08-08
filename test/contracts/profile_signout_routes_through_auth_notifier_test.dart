@@ -4,7 +4,9 @@
 // `UserRepository.clearAllData()`. Pre-fix the screen-local
 // implementation skipped `HiveUserSession.deleteAllFilesForCurrentUser`,
 // leaving per-user namespaced box files on disk — re-opening the
-// cross-account leak class CLAUDE.md §19 documents as closed.
+// cross-account leak class `lib/features/auth/CLAUDE.md` documents as
+// closed (`auth_hive_owner_agreement`). Was root §19 until the
+// 2026-05-18 declutter retired that list.
 //
 // Source-grep style — the production code touches GoRouter +
 // Riverpod + Hive lifecycle, so unit testing the flow is not

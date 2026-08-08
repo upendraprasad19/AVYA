@@ -1026,7 +1026,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   // `HiveUserSession.openForUser` has actually opened the box,
                   // where the write can succeed. UTC ISO8601 because the cloud
                   // column is `timestamptz` (IST applies to date-keys only,
-                  // not timestamps — see CLAUDE.md §15 IST contract).
+                  // not timestamps — see docs/architecture/sync.md IST contract).
                   authNotifier.signUpWithEmail(
                     email,
                     password,

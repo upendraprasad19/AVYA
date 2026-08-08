@@ -99,7 +99,7 @@ void main() {
         isTrue,
         reason:
             'Error text must use AppColors.bad — no raw color literals allowed '
-            'per CLAUDE.md §6 rule 11/12 (token-first).',
+            'per CLAUDE.md §4.4 rules 11/12 (token-first).',
       );
     });
 

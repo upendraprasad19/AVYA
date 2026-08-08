@@ -53,7 +53,7 @@ void main() {
           reason:
               'saveTemplate must EITHER directly call syncWorkoutData OR '
               'route through WorkoutWriteService.upsertTemplate (which '
-              'fires syncWorkoutData internally). CLAUDE.md §15 Sync '
+              'fires syncWorkoutData internally). docs/architecture/sync.md Sync '
               'fan-out contract.');
 
       final firesPushSnapshot = body

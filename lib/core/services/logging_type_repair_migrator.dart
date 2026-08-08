@@ -43,7 +43,7 @@
 // Gated by `migrationBox['logging_type_repair_v1_done']`. Runs once
 // per device lifetime (the flag survives `clearAllData()`).
 //
-// Read CLAUDE.md §15 "Hive field-name contract" for the broader
+// Read docs/architecture/sync.md "Hive field-name contract" for the broader
 // drift discipline this migration enforces.
 
 import 'dart:async';

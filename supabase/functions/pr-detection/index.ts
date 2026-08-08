@@ -31,7 +31,7 @@ const corsHeaders = {
 
 interface PRRow {
   user_id: string;
-  exercise_id: string; // = exercise name per CLAUDE.md §11
+  exercise_id: string; // = exercise name per docs/architecture/ai.md
   weight_kg: number | null;
   reps: number | null;
   completed_at: string; // F43: real workout time, not row sync time

@@ -93,7 +93,7 @@ void main() {
       expect(find.text('UPDATE'), findsOneWidget,
           reason:
               'Empty-state CTA must be visible for onboarded users so they '
-              'can trigger first-time generation (free per CLAUDE.md §14).');
+              'can trigger first-time generation (free per docs/architecture/business-rules.md).');
 
       await tester.tap(find.text('UPDATE'));
       await tester.pump();

@@ -8,7 +8,7 @@ extension SyncServiceCoach on SyncService {
   /// Only non-null Hive fields are included — preserves partial induction
   /// state without overwriting cloud columns with null when the user hasn't
   /// yet completed the muster. Uses migration 042 columns.
-  /// Fire-and-forget per CLAUDE.md §15.
+  /// Fire-and-forget per docs/architecture/sync.md.
   Future<void> syncCoachMemoryNow(String userId) async {
     try {
       final coach = _hive.coachBox;

@@ -66,7 +66,7 @@ SELECT cron.schedule(
 );
 
 -- ── C. No-op verify: no orphan refs to coach-media bucket in schema ─────
--- (Storage buckets are managed in storage.buckets; CLAUDE.md §16 lists
+-- (Storage buckets are managed in storage.buckets; docs/architecture/payment.md lists
 --  `coach-media/<uid>/` in delete-account purge step, but the bucket does
 --  not exist. Resolution is in the Edge Function — drop the purge step or
 --  create the bucket. Tracked as OI-18 follow-up.)

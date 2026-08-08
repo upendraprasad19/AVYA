@@ -742,7 +742,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // Reuse the request_id minted in the outer catch when available; the
     // outer scope's `requestId` only exists in the catch block, so mint a
     // local one here for the non-fatal warn log to satisfy the project's
-    // standard catch-block format (CLAUDE.md §11).
+    // standard catch-block format (docs/architecture/ai.md).
     const chatRequestId = crypto.randomUUID().split("-")[0];
     if (isChatChannel) {
       try {

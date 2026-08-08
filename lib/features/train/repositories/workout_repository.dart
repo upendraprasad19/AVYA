@@ -1237,7 +1237,7 @@ class WorkoutRepository {
   // These methods previously wrote exlog_* entries directly to Hive using
   // the LEGACY field schema (sets_completed / sets_detail). They now delegate
   // to WorkoutWriteService.logExercise (the single source of truth per
-  // CLAUDE.md §15) which writes the CANONICAL schema (set_number / sets).
+  // docs/architecture/sync.md) which writes the CANONICAL schema (set_number / sets).
   //
   // Marked @Deprecated so callers are flagged for migration to
   // WorkoutWriteService directly. Will be removed in Test #12.
@@ -1306,7 +1306,7 @@ class WorkoutRepository {
   ///
   /// Mirrors the write performed by `CreateCustomExerciseSheet._save()` so
   /// AI-coach-created customs are byte-identical to UI-created customs:
-  ///   - Deterministic v5 UUID per CLAUDE.md §7
+  ///   - Deterministic v5 UUID per docs/architecture/database.md
   ///     (namespace `5a1f0b0c-9dad-11d1-80b4-00c04fd430c8`,
   ///     name = `<user_id>|exercise|<lower(name)>`).
   ///   - Same map shape (id / name / category / logging_type / default_sets
@@ -1347,7 +1347,7 @@ class WorkoutRepository {
       );
     }
 
-    // Deterministic v5 UUID per CLAUDE.md §7. Same algorithm as
+    // Deterministic v5 UUID per docs/architecture/database.md. Same algorithm as
     // CreateCustomExerciseSheet._save() — keeps cross-device upserts
     // idempotent so AI- and UI-created customs collapse correctly.
     const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
@@ -1418,7 +1418,7 @@ class WorkoutRepository {
   ///     group_id, group_day_index}` — `group_id`/`group_day_index` are
   ///     extra metadata so the multi-day grouping survives across tools
   ///     (e.g. Phase D.7's `scheduleTemplate` can fan out by group).
-  ///   - Deterministic v5 UUID per CLAUDE.md §7
+  ///   - Deterministic v5 UUID per docs/architecture/database.md
   ///     (namespace `5a1f0b0c-9dad-11d1-80b4-00c04fd430c8`,
   ///     name = `<user_id>|template|<lower(name)>` for the group ID).
   ///
@@ -1470,7 +1470,7 @@ class WorkoutRepository {
     }
 
     // Deterministic v5 UUID — same algorithm as createCustomExercise
-    // (CLAUDE.md §7). Keeps cross-device upserts idempotent and lets the
+    // (docs/architecture/database.md). Keeps cross-device upserts idempotent and lets the
     // `tmpl_*` group survive a re-create on another device.
     const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
     final userId = SupabaseService.instance.currentUser?.id ?? 'anon';

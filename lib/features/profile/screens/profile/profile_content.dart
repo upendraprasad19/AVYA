@@ -36,7 +36,7 @@ extension _ProfileContent on _ProfileScreenState {
 
     // Nutrition targets
     //
-    // Source of truth (CLAUDE.md §15): `macroTargetsProvider` is the ONE
+    // Source of truth (docs/architecture/sync.md): `macroTargetsProvider` is the ONE
     // reader for BMR / TDEE / calories / P / C / F across Home, Nutrition,
     // and Profile. It prefers the stored targets in the Hive profile map
     // (written at onboarding and on every Edit Profile save) and falls

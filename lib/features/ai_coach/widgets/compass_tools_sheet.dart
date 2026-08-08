@@ -2,7 +2,7 @@
 //
 // Naval-themed shortcut palette opened from the compass-rose button on
 // the LEFT of the AI coach composer. Commands grouped into 4 families
-// matching the AI tool inventory in CLAUDE.md §11:
+// matching the AI tool inventory in docs/architecture/ai.md:
 //   DRILL   · WORKOUT      → 5 cmds (8 workout tools subset)
 //   GALLEY  · NUTRITION    → 3 cmds (4 nutrition tools subset)
 //   ORDERS  · PLAN         → 4 cmds (5 plan tools subset)

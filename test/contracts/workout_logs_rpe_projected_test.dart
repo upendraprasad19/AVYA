@@ -1,4 +1,5 @@
-// CLAUDE.md §19 entry #147 regression test (CLAUDE.md decluttering Milestone 4).
+// Regression test for retired root §19 entry #147 (Class B, 2026-05-18
+// declutter Milestone 4) — this test is the entry's surviving record.
 //
 // Pins the rule: Cloud `workout_logs.rpe` column is projected by
 // `_syncWorkoutLogs` in the sync service (Audit 2026-05-12 P2-F).

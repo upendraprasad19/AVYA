@@ -5,7 +5,7 @@
 // Reader: WorkoutRepository.getExerciseLogsForDate (O(1) index lookup)
 //
 // Prevents the O(n) workoutBox.keys manual-scan anti-pattern.
-// See CLAUDE.md §15.
+// See docs/architecture/sync.md.
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';

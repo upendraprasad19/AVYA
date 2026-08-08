@@ -4,7 +4,7 @@
 /// and care — Home and Profile. Zero height when sync is idle, so it
 /// doesn't disturb the layout when nothing's pending.
 ///
-/// Copy rules (CLAUDE.md §11): no "restart the app" — map to
+/// Copy rules (docs/architecture/ai.md): no "restart the app" — map to
 /// actionable user copy only.
 ///
 /// Reference: docs/superpowers/specs/2026-04-17-sync-reliability.md Pillar C.

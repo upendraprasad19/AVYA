@@ -244,7 +244,7 @@ class AiCoachRepository {
   /// the log), NOT the SUM across sets. Falls through to
   /// `reps_completed` for legacy rows without a `sets[]` array.
   ///
-  /// Why: per CLAUDE.md §15 Hive field-name contract, `reps_completed`
+  /// Why: per docs/architecture/sync.md Hive field-name contract, `reps_completed`
   /// is SUM across sets (writer-side semantic). The AI coach PR
   /// snapshot used to surface this as "PR: 100kg x 28 reps" for a
   /// 4-set pyramid — nonsense lifting semantics.
