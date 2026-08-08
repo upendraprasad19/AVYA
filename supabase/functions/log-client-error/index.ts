@@ -87,6 +87,49 @@ const MAX_CLIENT_VERSION_CHARS = 32;
 // events was the previous worst pre-storm; 2000 leaves a ~40× margin.
 const DAILY_RATE_LIMIT = 2000;
 
+// ── Pre-auth (signed-out) lane — diagnose b6e4f2 ─────────────────────
+//
+// Everything that fails BEFORE a session exists — forgot-password send,
+// sign-in, sign-up, the OAuth launch — was structurally unloggable, on FOUR
+// independent counts: the client's `callFunction` throws 'No active session'
+// before it ever reaches the network (`supabase_service.dart:238-252`); this
+// handler 401'd any request whose token resolved to no user; the
+// `client_errors.user_id` column was NOT NULL; and the RLS INSERT policy is
+// `auth.uid() = user_id`. So the exact signal the header comment above calls
+// one "we must never lose" — an auth failure — was the one class we lost every
+// instance of. `auth_forgot_password_send_failed` has zero rows, ever.
+//
+// The lane is deliberately narrow. The caller must still present a valid
+// project key (the gateway's `verify_jwt` still applies — this is not an open
+// endpoint); the op_type must be on this allow-list; and every anonymous row
+// shares ONE global daily budget, because there is no caller identity to key a
+// per-user budget on. Rows land with `user_id = NULL` (migration 119): the FK
+// to `auth.users` permits NULL, and the authenticated INSERT policy still
+// rejects NULL, so this path stays reachable only through this service-role
+// handler.
+// Every entry MUST have a real client emitter — an allow-listed op_type that
+// nothing sends is not harmless, it is a false claim of coverage. Round-1
+// review caught three of these listed with ZERO emitters while
+// `auth_send_phone_otp_failed`, which IS emitted signed-out, was missing and
+// therefore still 401'd. Emitters were added rather than the entries trimmed,
+// because the whole point of the lane is that these four flows become
+// diagnosable. Verify with:
+//   grep -rn "auth_sign_in_failed\|auth_sign_up_failed\|auth_oauth_launch_failed\|
+//             auth_send_phone_otp_failed\|auth_forgot_password_send_failed\|
+//             auth_password_recovery_verify_failed" lib/
+const PRE_AUTH_OP_TYPES = new Set([
+  "auth_forgot_password_send_failed", // forgot_password_sheet.dart
+  "auth_password_recovery_verify_failed", // forgot_password_sheet.dart
+  "auth_sign_in_failed", // auth_provider.signInWithEmail
+  "auth_sign_up_failed", // auth_provider.signUpWithEmail
+  "auth_oauth_launch_failed", // auth_provider.signInWithGoogle
+  "auth_send_phone_otp_failed", // auth_provider.signInWithPhone
+]);
+
+// Small on purpose: this lane exists to catch a RARE failure. A flood is
+// itself the signal to go and look, not something to absorb silently.
+const ANON_DAILY_RATE_LIMIT = 200;
+
 // APK Test #16.1 / Theme D — priority lanes.
 //
 // HIGH-priority op_types ALWAYS insert, even past the rate limit.
@@ -192,14 +235,19 @@ function isHighPriority(opType: string | null): boolean {
  */
 async function nextWindowAt(
   supabase: SupabaseClient,
-  userId: string,
+  // NULL = the shared pre-auth lane (b6e4f2). `.eq("user_id", null)` would
+  // compile to `user_id=eq.null` and match NOTHING; SQL NULL needs `IS NULL`.
+  userId: string | null,
   since: string,
 ): Promise<string | null> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("client_errors")
     .select("created_at")
-    .eq("user_id", userId)
-    .gte("created_at", since)
+    .gte("created_at", since);
+  query = userId === null
+    ? query.is("user_id", null)
+    : query.eq("user_id", userId);
+  const { data, error } = await query
     .order("created_at", { ascending: true })
     .limit(1);
   if (error || !data || data.length === 0) return null;
@@ -231,9 +279,12 @@ export const handler = async (req: Request): Promise<Response> => {
     const { data: { user }, error: authError } = await supabaseAuth.auth
       .getUser(token);
 
-    if (authError || !user) {
-      return clientError("Invalid or expired token", 401);
-    }
+    // A token that resolves to no user is either the project's anon key — the
+    // pre-auth lane (b6e4f2) — or an expired session. Which one it is depends
+    // on the op_type, which we only know after parsing the body, so the 401
+    // moves DOWN to the PRE_AUTH_OP_TYPES gate rather than firing here.
+    // `authError` is deliberately not fatal on its own for the same reason.
+    const userId: string | null = user?.id ?? null;
 
     const body = await req.json();
     // APK Test #12.2 / Task #3 — truncate (don't reject) oversized
@@ -277,22 +328,43 @@ export const handler = async (req: Request): Promise<Response> => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // ── Pre-auth lane gate (b6e4f2) ──────────────────────────────
+    // No user behind the token. ONLY an allow-listed pre-auth op_type may
+    // proceed; anything else is the expired-session case and stays a 401
+    // exactly as it was before this lane existed.
+    const isAnonLane = userId === null;
+    if (isAnonLane && (opType == null || !PRE_AUTH_OP_TYPES.has(opType))) {
+      return clientError("Invalid or expired token", 401);
+    }
+
     // Per-user 24h rate limit. HIGH-priority op_types skip the count
     // query AND the budget gate — they always insert.
-    const highPriority = isHighPriority(opType);
+    //
+    // The anon lane is NEVER high-priority, whatever the op_type: the
+    // priority bypass exists to guarantee we keep a trusted user's P0
+    // signals, and granting it to an unauthenticated caller would hand them
+    // an unbounded write. Today no PRE_AUTH_OP_TYPES entry matches a
+    // HIGH_PRIORITY_OP_TYPES prefix — this makes that safe by construction
+    // rather than by coincidence, so adding one later can't quietly open it.
+    const highPriority = !isAnonLane && isHighPriority(opType);
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     if (!highPriority) {
-      const { count, error: countError } = await supabase
+      let countQuery = supabase
         .from("client_errors")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
         .gte("created_at", since);
+      countQuery = isAnonLane
+        ? countQuery.is("user_id", null)
+        : countQuery.eq("user_id", userId!);
+
+      const { count, error: countError } = await countQuery;
 
       if (countError) {
         return serverError("log-client-error:count", countError);
       }
-      if ((count ?? 0) >= DAILY_RATE_LIMIT) {
+      const budget = isAnonLane ? ANON_DAILY_RATE_LIMIT : DAILY_RATE_LIMIT;
+      if ((count ?? 0) >= budget) {
         // APK Test #16.1 / Theme D — distinguishable rate-limit signal.
         //
         // Pre-Test-#16.1 we returned `{ok: true, rate_limited: true}`
@@ -306,12 +378,12 @@ export const handler = async (req: Request): Promise<Response> => {
         // We KEEP returning 200 (not 429) so the client's fire-and-
         // forget `.invoke` doesn't throw and crash unrelated flows;
         // the body shape is the contract.
-        const nextWindow = await nextWindowAt(supabase, user.id, since);
+        const nextWindow = await nextWindowAt(supabase, userId, since);
         return ok({
           ok: true,
           rate_limited: true,
           next_window_at: nextWindow,
-          priority_lane: "low",
+          priority_lane: isAnonLane ? "pre_auth" : "low",
         });
       }
     }
@@ -319,7 +391,9 @@ export const handler = async (req: Request): Promise<Response> => {
     const { error: insertError } = await supabase
       .from("client_errors")
       .insert({
-        user_id: user.id,
+        // NULL for the pre-auth lane (b6e4f2). The FK to auth.users permits
+        // NULL; `user_id IS NULL` is what distinguishes these rows.
+        user_id: userId,
         error_code: errorCode,
         error_message: errorMessage,
         op_type: opType,
@@ -336,7 +410,7 @@ export const handler = async (req: Request): Promise<Response> => {
     // ops can sanity-check classification without table scans.
     return ok({
       ok: true,
-      priority_lane: highPriority ? "high" : "low",
+      priority_lane: isAnonLane ? "pre_auth" : (highPriority ? "high" : "low"),
     });
   } catch (err) {
     return serverError("log-client-error", err);

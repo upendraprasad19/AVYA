@@ -795,5 +795,14 @@
     "applier": "claude-via-mcp",
     "diagnose": "b3f9e7",
     "slug": "backfill_terms_accepted_historical_rows"
+  },
+  {
+    "migration": "119",
+    "applied_at": "2026-08-06T23:30:00+05:30",
+    "hash": "sha256:1b0764fc1cf75b73a3cfbf1b2ea2a1085cb83f45feafcb1dc831d8750f2e2c4a",
+    "applier": "founder-manual-sql-editor",
+    "diagnose": "b6e4f2",
+    "slug": "client_errors_nullable_user_id_for_preauth",
+    "note": "Applied by the founder by hand in the Supabase SQL editor after the auto-mode classifier refused apply_migration twice. Live state VERIFIED (pg_attribute.attnotnull=false; FK client_errors_user_id_fkey unchanged; RLS INSERT with_check still auth.uid()=user_id). Because it did NOT go through the migration system, supabase_migrations.schema_migrations has NO row for it \u2014 a list_migrations vs this manifest comparison will show 119 absent on the server side. That gap is expected, not drift to re-apply."
   }
 ]

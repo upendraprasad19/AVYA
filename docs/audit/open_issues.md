@@ -2053,6 +2053,24 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   drift it detects is not — this instance sat on the telemetry lane, and OI-73's sits on cron
   auth.
 
+- **FOURTH INSTANCE, 2026-08-08 — same function again, inside a single batch.** During
+  `post38-auth-fixes` slice-0 scoping: deployed `log-client-error` **v12** carries a FIVE-entry
+  `PRE_AUTH_OP_TYPES`; the repo source carries **six**. Round-1 review of that same batch added
+  `auth_send_phone_otp_failed` — the one pre-auth op_type that was already emitted signed-out and
+  therefore still 401'd — and the redeploy never happened. Measured by decoding
+  `.claude/_payload_log-client-error.json` as UTF-8 and diffing against the worktree source
+  (18334 chars deployed vs 19253; the allow-list block is the sole difference). Latent, not
+  live-broken: `_kEnablePhoneEnlist = false` (`lib/features/auth/screens/sign_in_screen.dart:27`)
+  makes `signInWithPhone` unreachable, so nothing emits that op_type today.
+  What this instance adds to the case: the drift opened and went unnoticed **within one batch,
+  between a review round and the commit** — not over seven weeks. So the "release-checklist line
+  item" cheap version above would NOT have caught it; the window was hours, not weeks. Recorded
+  in `docs/diagnoses/2026-08-06-preauth-failures-unloggable-b6e4f2.md` tier 6.
+  ⚠ Note on how it was found: the first diff read the payload with Python's `open()`, which
+  defaults to cp1252 on Windows, producing mojibake that looked like an `emit_payload.js`
+  encoding bug. It is not — that script reads `'utf-8'` at both sites (`:123`, `:188`). Decode
+  explicitly before concluding anything about deployed bytes.
+
 ## OI-94 — `anonKey` is deprecated; production still passes it to `Supabase.initialize`
 
 - **Status**: OPEN
@@ -2239,3 +2257,93 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   as unvalidated).
 - **Blast radius estimate**: `account` — touches the sync restore path; no migration, no schema
   change for the first fix shape.
+
+## OI-99 — the stale-`userId` sink guard covers the nutrition fan-out only; ~26 sibling sinks share the shape
+
+- **Status**: OPEN
+- **Blocked on**: nothing — this is bounded work, not a decision
+- **Verified**: 2026-08-07 (grep below run against `post38-auth-fixes`)
+- **Filed by**: round-1 review of `post38-auth-fixes`, which caught that the e5c2d1 diagnose-doc
+  claimed this OI had already been filed when it had not. Filing it for real is the fix for that
+  claim — a scope statement closed against a tracker entry that does not exist is a deferral to
+  nowhere (`feedback_spawn_task_chip_not_durable`).
+- **What e5c2d1 actually fixed**: `SyncService.ownerChangedSince(ownerId)` is now checked at the
+  WRITE SINK in `sync_nutrition.dart` — all four of that file's sinks (`nutrition_logs`,
+  `nutrition_log_items`, `water_logs`, `user_saved_meals`). The RESTORE half is global, because
+  its guard lives in the shared between-step check (`restoreAbortedFor`).
+- **What remains**: every other sync fan-out method resolves the owner id once — at its own entry
+  or in a caller that passes it down — and then carries it across awaits to a cloud write.
+  `grep -rn "'user_id': userId" lib/core/services/sync/` finds the sibling sinks across
+  `sync_workout`, `sync_health`, `sync_profile`, `sync_coach` and `sync_community`.
+- **Why it matters**: the observed incident was caught by RLS (22 × 42501), which is the LAST
+  line of defence, not the intended one. The same race with the opposite interleaving — captured
+  id equal to the NEW user while the ROWS came from the previous user's Hive box — satisfies
+  `auth.uid() = user_id` and is written, and Postgres cannot distinguish that from a legitimate
+  write. So the unguarded sinks are a silent cross-account-write risk, not just a noise source.
+- **Fix shape**: mechanical sweep — `if (ownerChangedSince(userId)) return;` immediately before
+  each cloud write, plus a case in
+  `test/contracts/session_owner_inflight_guard_behavioral_test.dart` per domain. Consider a
+  `check_*.dart` gate that flags a `'user_id': userId` sink with no preceding guard within N
+  lines, so the sweep cannot silently regress (§4.11 gates-before-refactor).
+- **Blast radius estimate**: `platform`.
+
+## OI-100 — ForgotPasswordSheet's two-step code flow has no test
+
+- **Status**: OPEN
+- **Blocked on**: nothing — bounded work
+- **Verified**: 2026-08-07 (`grep -rln "ForgotPasswordSheet" test/` → no matches)
+- **Filed by**: round-1 review of `post38-auth-fixes`. The c9e2b7 diagnose-doc originally
+  DESCRIBED two sheet test cases that had never been written; correcting the doc without
+  tracking the gap would just move the untruth. Filed so the gap is owed, not implied away.
+- **What is covered today**: `test/contracts/password_recovery_code_flow_behavioral_test.dart`
+  covers the RESET SCREEN's session gate (2 cases, first mutation-proven).
+- **What is NOT covered**: the headline Unit-2 change — `ForgotPasswordSheet`'s step machine
+  (email → code), its client-side code validation (`length != 6 || int.tryParse == null`
+  rejects before any network call), and its `verifyOTP(type: OtpType.recovery)` call plus the
+  `AppRouter.isPasswordRecovery = true` + `router.go('/reset')` sequence on success.
+- **Fix shape**: a widget test using the same MockClient + inline `Supabase.initialize` harness
+  as `password_reset_redirect_flow_test.dart` (note its `:272-279` comment — init must happen
+  INSIDE the testWidgets body, not setUpAll, or a GoTrue timer lands outside the zone `pump()`
+  advances). Assert: send success advances the step and shows the target address; a bad code is
+  rejected with NO request issued; a good code sets the recovery flag and navigates to `/reset`.
+- **Why it matters**: this is the flow a locked-out user depends on, and it is the part of the
+  batch with the largest behaviour change (link → typed code). The screen it hands off to is
+  tested; the handoff itself is not.
+- **Blast radius estimate**: `platform`.
+
+## OI-101 — ~90 diagnose-docs cite a `sot_registry_entry:` concept that does not exist
+
+- **Status**: OPEN
+- **Blocked on**: nothing — bounded, mechanical work. Gate 44 already prevents new instances.
+- **Verified**: 2026-08-08 (`dart run scripts/check_sot_registry_citations.dart` reports the
+  count live on every run; it is not a hand-written snapshot)
+- **Identified**: 2026-08-08 · while building Gate 44 during `post38-auth-fixes` slice 0
+- **Risk class**: documentation integrity — a citation that resolves to nothing
+- **What's wrong**: `scripts/validate_diagnose_doc.dart` — the validator every diagnose-doc must
+  pass — contains **zero** references to the SoT registry. It checks the `sot_registry_entry:`
+  field is present and non-empty; it has never checked the value RESOLVES. Across 370 tracked
+  docs that has accumulated **~90 unresolved identifier-shaped citations across 82 distinct
+  names** since 2026-05-03, plus **29** citations written as free prose that no tool can
+  adjudicate at all.
+- **Why a dangling citation is worse than an absent one**: §4.1's writer/reader discipline sends
+  you to the registry to find the contract. Finding nothing reads as "this concept was never
+  registered" rather than "this doc named something that does not exist" — so the reader
+  concludes the CODE lacks a contract when the real defect is in the doc.
+- **What is already done**: Gate 44 (`scripts/check_sot_registry_citations.dart`, pure logic in
+  `scripts/sot_citation_lib.dart`, test `test/contracts/sot_registry_citations_test.dart`) hard-
+  fails any doc dated >= `2026-08-01` whose citation does not resolve, and reports the older
+  backlog as a live WARN count. Scoped by date because a repo-wide hard fail would have been
+  unsatisfiable on day one, which is how gates end up bypassed
+  (`feedback_mistake_claimed_gate_unsatisfiable.md`).
+- **Fix shape**: walk the 82 distinct dangling names. Each resolves to one of three: a registry
+  concept that was RENAMED (repoint the citation), a concept that genuinely should exist, or a
+  doc where no concept applies (use `not_applicable`).
+  ⚠ Adding a concept is NOT cheap any more: **Gate 42 flipped STRICT on 2026-08-07**, so a new
+  entry needs a real `behavioral_test_path:` or `presence_only: true` with a documented reason.
+  The `behavioral_test_required: true` backlog marker was REMOVED and is now itself a hard
+  blocker. An earlier draft of this entry said otherwise — written from a CLAUDE.md read that
+  was one day stale. Budget a behavioral test per added concept, not a placeholder.
+  Then move `citationCutoff` back and delete the backlog branch —
+  the gate graduates to `--strict` by default. Normalising the 29 prose citations to a bare
+  identifier or a sentinel closes the gate's remaining blind spot.
+- **Blast radius estimate**: `feature` (docs + a constant), though it touches many files.
