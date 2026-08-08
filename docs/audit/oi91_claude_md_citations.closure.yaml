@@ -42,7 +42,7 @@ findings:
       false-positive control standing in for the 299 non-root tokens.
 
   - id: OI-91-sweep
-    title: 138 dead citations across 100 files
+    title: 138 dead citations across 101 files
     terminal_state: closed_in_commit
     commit: *wip
     detail: >

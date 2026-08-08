@@ -154,7 +154,7 @@ fix: |
      Landed report-only, then flipped to blocking in the same batch once the
      sweep was green.
 
-  2. **The sweep — 138 citations, 100 files.** Mapping recovered from the
+  2. **The sweep — 138 citations, 101 files.** Mapping recovered from the
      declutter plan's own Tasks 2.5-2.13 rather than reconstructed: §15 →
      `docs/architecture/sync.md` (78), §11 → `docs/architecture/ai.md` (19),
      §16 → `payment.md` (8), §14 → `business-rules.md` (8), §12 →
@@ -201,7 +201,7 @@ verification: |
     why the gate's baseline read 138 while the board's grep read 137 after the
     first fix. That discrepancy was chased down rather than rounded off.
 touched_layers_checked:
-  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "100 files rewritten, comments only. flutter analyze (3.41.4, CI-pinned): 0 errors / 0 warnings / 242 pre-existing deprecation infos, unchanged. flutter test test/contracts/ test/scripts/ test/onboarding/ test/critical_flows/ -> 2988 passed, 1 skipped. That suite matters more than usual here: several edited files are source-grep tests that read their own or neighbouring source, so a comment edit could have moved an assertion." }
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "101 files rewritten, comments only. flutter analyze (3.41.4, CI-pinned): 0 errors / 0 warnings / 242 pre-existing deprecation infos, unchanged. flutter test test/contracts/ test/scripts/ test/onboarding/ test/critical_flows/ -> 2988 passed, 1 skipped. That suite matters more than usual here: several edited files are source-grep tests that read their own or neighbouring source, so a comment edit could have moved an assertion." }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "No runtime code path changed. The diff is comments plus one gate script and its test; no Hive box, key or adapter is touched." }
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "Three migration files edited (057, 069, 070) - comment text only, zero SQL statements changed. Verified by diffing the statement text: byte-identical outside comment lines." }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "No query, insert, update or backfill authored. No data read or written." }
@@ -274,13 +274,16 @@ on that file. It isn't one: the code zone's own anchor pattern
 that "§19" sits 20+ characters from the nearest "CLAUDE.md" token — it was
 never a live, gate-anchored citation, just prose naming the retired entry
 next to the line's real (and separately fixed) `§11` citation. Re-verified
-directly against a clean pre-fix extraction (`git archive HEAD | tar -x`,
-then the board's own survey regex restricted to `§19`): exactly 11 matches,
-11 distinct files, and the grand total across all sections is exactly 138 —
-both reproduced fresh, not read from a prior run. The 125-mechanical /
-13-judged split in the closure ledger is unaffected: the 13 already accounts
-for all 11 §19 files, this file's own dual §11+§19 handling as one judged
-fix, and the `ist_date.dart` §3.1 wrong-but-live fix.
+directly against a clean pre-fix extraction (`git archive 0f2268a | tar -x` —
+the merge-base this batch's commit landed on top of; NOT `HEAD`, which after
+this commit lands is the fixed tree and would return 0, not 11 — then the
+board's own survey regex restricted to `§19`): exactly 11 matches, 11
+distinct files, and the grand total across all sections is exactly 138 —
+both reproduced fresh, not read from a prior run, and independently
+reproduced a second time by round 2 of review with the same result. The
+125-mechanical / 13-judged split in the closure ledger is unaffected: the 13
+already accounts for all 11 §19 files, this file's own dual §11+§19 handling
+as one judged fix, and the `ist_date.dart` §3.1 wrong-but-live fix.
 
 ## What this does not close
 
@@ -303,17 +306,30 @@ is deliberately not bundled into an already-catastrophic-tier diff. Filed as
 OI-99.
 
 **The anchored regex has two narrow, currently-inert gaps**, found by two
-independent reviewers constructing counter-examples: the `.{0,3}` window
-between `CLAUDE.md` and `§` doesn't match natural phrasing with a wider gap
-(`"CLAUDE.md, section §19"`, `"CLAUDE.md (§7)"`); and the capture group only
-supports one dot, so a fabricated `§4.1.99` truncates to the real `§4.1` and
-silently validates. Neither currently produces a wrong result in the swept
-zones (checked directly: the one live 2-dot citation in scope, `§4.12.1` in
-`lib/shared/services/pro_phase_advance.dart:384`, happens to be semantically
-correct even truncated). Left as a known limitation rather than widened here
-— widening the anchor window reduces precision in the other direction (see
-the 299-non-root-token problem above), and multi-dot support needs its own
-negative-test pass.
+independent reviewers constructing counter-examples, one of which round 2 of
+review corrected: the `.{0,3}` window between `CLAUDE.md` and `§` doesn't
+match natural phrasing with a wider gap (`"CLAUDE.md, section §19"` — verified
+zero matches; a same-shaped `"CLAUDE.md (§7)"` was originally offered here as
+a second example but round 2 re-ran the pattern and found it DOES match,
+capturing `7` — the gap is only 2 characters, inside the `.{0,3}` window, so
+it was a bad example, not a second gap; removed rather than replaced). The
+capture group only supports one dot, so a fabricated `§4.1.99` truncates to
+the real `§4.1` and silently validates — round 2 also corrected the scope of
+this: it is not one live 2-dot citation but **six**, across five files
+(`pro_phase_advance.dart:384` → `§4.12.1`; `bug_index_frontmatter_test.dart:6`,
+`bug_index_lib.dart:12`, `check_diagnose_index_fresh.dart:8` → `§4.1.5`;
+`check_plan_review_record_exists.dart:20,825` → `§4.12.4`). All six happen to
+be semantically correct even truncated to their parent section, so the
+conclusion (currently inert) survives, but the six are the true count. The
+one-dot limit is also symmetric on the writer side: root CLAUDE.md's only
+2-dot heading, `### 4.1.5 Bug-history lookup`, isn't recognised by the gate's
+own heading parser either (`knownSections` has no `4.1.5` entry) — so a
+`§4.1.5` citation validates purely by truncating to the real `§4.1`, not
+because the gate actually resolved the subsection. Left as a known limitation
+rather than widened here — widening the anchor window reduces precision in
+the other direction (see the 299-non-root-token problem above), and
+multi-dot support needs its own negative-test pass on both the citation and
+heading sides.
 
 **Duplicate citations on one line double-report, and interact with the
 30-item output cap.** Two identical dead citations on the same source line

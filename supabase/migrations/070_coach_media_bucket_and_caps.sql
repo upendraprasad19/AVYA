@@ -20,7 +20,8 @@
 -- ── OI-24 ─────────────────────────────────────────────────────────────
 -- Add bucket-level file_size_limit + allowed_mime_types to the four
 -- existing private/public buckets that lack them. Defense-in-depth
--- alongside the client-side caps documented in docs/architecture/subscription.md:
+-- alongside the client-side caps documented in docs/audit/closed_issues.md
+-- (## OI-24 — Storage bucket-level size + MIME caps):
 --   - avatars:           1 MB, image/jpeg + image/png + image/webp
 --   - banners:           2 MB, image/jpeg + image/png + image/webp
 --   - progress-photos:   8 MB, image/jpeg + image/png + image/webp
