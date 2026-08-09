@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/auth/screens/splash_screen.dart';
 import 'package:icanbefitter/features/auth/screens/sign_in_screen.dart';
 import 'package:icanbefitter/features/auth/screens/reset_password_screen.dart';
@@ -705,6 +706,71 @@ class AppRouter {
     final isOnboarded =
         MigratedKey.readWithDefault<bool>('onboarding_completed', false);
 
+    return postSessionRedirect(
+      // The kill-switch is read HERE, at the impure boundary, so
+      // postSessionRedirect stays a pure function its truth-table test can
+      // drive without Hive.
+      signOutInProgress:
+          _signOutGuardEnabled && AuthNotifier.signOutInProgress,
+      isOnboarded: isOnboarded,
+      isOnAuthRoute: isOnAuthRoute,
+      isOnOnboarding: isOnOnboarding,
+    );
+  }
+
+  /// §4.6 kill-switch for the sign-out redirect guard (diagnose b7e4c1).
+  ///
+  /// Auth is one of the categories §4.6 names explicitly, and the sibling fix
+  /// in this same commit (`SyncService.restoreOpTimeout`) ships
+  /// `disable_restore_op_timeout` — this closes that inconsistency (B-pass
+  /// finding 3). Setting `configBox['disable_signout_redirect_guard'] = true`
+  /// restores the verbatim pre-fix routing, where a mid-teardown redirect reads
+  /// the wiped `onboarding_completed` at face value.
+  ///
+  /// Defaults to ENABLED when Hive is unavailable: without the guard the app
+  /// mis-routes a signing-out user into onboarding, so "on" is the safe
+  /// direction.
+  static bool get _signOutGuardEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_signout_redirect_guard') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// The authenticated-and-session-open tail of [_authRedirect], as a pure
+  /// function so the sign-out ordering can be unit-tested without a router,
+  /// a BuildContext or a live Supabase session. Same pattern as
+  /// [shouldGateOnSessionOpen]. Returns the redirect target, or null to stay.
+  ///
+  /// **Branch order is the fix, not an accident.** `isOnboarded == false` is
+  /// AMBIGUOUS: it means "never onboarded" OR "the box that held the flag is
+  /// gone". `signOut()` produces the second case for real — it wipes Hive
+  /// BEFORE ending the Supabase session (deliberately; see
+  /// [AuthNotifier.signOut] for why the order can't be flipped back), so
+  /// mid-teardown this reads false while the user is still authenticated, and
+  /// the `!isOnboarded` branch would route someone who just tapped SIGN OUT
+  /// into `/onboarding`. That is the founder's 2026-08-05 report. It is
+  /// intermittent only because this router has no `refreshListenable` on auth
+  /// state, so whether a redirect evaluates inside the window is
+  /// timing-dependent. Testing `signOutInProgress` FIRST disambiguates the
+  /// read before anything trusts it.
+  ///
+  /// Diagnose b7e4c1. Pinned by signout_router_guard_behavioral_test.dart.
+  @visibleForTesting
+  static String? postSessionRedirect({
+    required bool signOutInProgress,
+    required bool isOnboarded,
+    required bool isOnAuthRoute,
+    required bool isOnOnboarding,
+  }) {
+    if (signOutInProgress) {
+      return isOnAuthRoute ? null : '/sign-in';
+    }
+
+    // Signed in but not onboarded -> go to onboarding.
     if (!isOnboarded) {
       return isOnOnboarding ? null : '/onboarding';
     }

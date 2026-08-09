@@ -8673,3 +8673,218 @@ concepts:
       - "scoping emissionMap() by tier — inverts ABSENT => SEND (invariant 1)"
       - "removing a key from allKeys — breaks the ProactiveType parity contract"
     contract_test_path: test/contracts/notification_prefs_parity_test.dart
+
+  - concept: past_phase_display_recovery
+    domain: workout
+    behavioral_test_path: test/contracts/past_phase_display_recovery_behavioral_test.dart
+    description: |
+      TWO readers of the schedule_* past-phase bucketing legitimately need
+      DIFFERENT strictness, and conflating them was diagnose c9e4b7.
+
+      `pastPhaseBlocks()` is STRICT (cutoff = plan_start) and is the ONLY input
+      the PhaseProgressReconciler may consume: it advances current_phase
+      MONOTONICALLY and its own comment calls an over-advance "unrecoverable",
+      so a wider set there could promote a user on evidence the strict filter
+      deliberately rejected, with no way back.
+
+      `pastPhaseBlocksForDisplay(currentPhase)` is the DISPLAY-ONLY recovery
+      wrapper: strict set when non-empty, otherwise (and only when
+      currentPhase > 1) the un-cutoff set minus the last block, empty below 2
+      blocks. Display is recoverable; a monotonic promotion is not.
+
+      Both paths share `_scheduleRowsBefore(DateTime? cutoff)` so a row is
+      parsed IDENTICALLY either way — they differ only in the cutoff passed.
+      That shared walk is the drift guard.
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1216-1235
+        method: _scheduleRowsBefore
+        semantic: shared-row-walk
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1209-1210
+        method: pastPhaseBlocks
+        semantic: strict-set
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1261-1268
+        method: pastPhaseBlocksForDisplay
+        semantic: display-recovery
+    readers:
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 137
+        method: past-phase strip
+        semantic: render
+        notes: The ONLY permitted caller of the display wrapper.
+      - file: lib/core/services/phase_progress_reconciler.dart
+        line_range: 131
+        method: reconciler
+        semantic: monotonic-advance
+        notes: >-
+          MUST read the STRICT pastPhaseBlocks() only. Pinned by an isFalse
+          source-grep assertion in week_selector_past_phases_test.dart. If that
+          test fails, give the reconciler its own strict call — do NOT relax it.
+    hive:
+      box: workoutBox
+      key: schedule_<yyyy-MM-dd>
+      shape: "Map with a `date` string, parsed back by _scheduleRowsBefore"
+    cloud:
+      table: scheduled_workouts
+      columns: [date, status, user_id]
+    sync_methods: []
+    restore_methods: []
+    forbidden_legacy_patterns:
+      - "phase_progress_reconciler.dart calling pastPhaseBlocksForDisplay — monotonic over-advance is unrecoverable"
+      - "re-bucketing schedule_* inside week_selector.dart instead of delegating to the shared SoT"
+      - "adding a `bool strict` parameter instead of two named methods — it puts the reconciler one boolean away from the dangerous path, invisibly at the call site"
+    contract_test_path: test/contracts/week_selector_past_phases_test.dart
+
+  - concept: signout_teardown_window_and_restore_op_ceiling
+    domain: auth_profile
+    behavioral_test_path: test/contracts/signout_router_guard_behavioral_test.dart
+    description: |
+      Diagnose b7e4c1. Two transition-window contracts on the session path.
+
+      (1) `onboarding_completed == false` is AMBIGUOUS during sign-out: it means
+      "never onboarded" OR "the box holding it was just wiped". signOut() tears
+      down Hive BEFORE ending the Supabase session, so mid-teardown the app is
+      authenticated AND reads false, and the router's !isOnboarded branch sent
+      the user to /onboarding. `AuthNotifier.signOutInProgress` disambiguates it
+      and MUST be tested first in AppRouter.postSessionRedirect.
+
+      The teardown ORDER cannot be flipped back: clearAllData() goes through
+      wrapUserScopedBox, which throws when unauthenticated with a non-null
+      owner, so ending the session first makes all 7 clears throw and every
+      sign-out permanently report ClearResult.hasFailures — the exact signal two
+      live recovery paths use to detect a REAL partial clear.
+
+      The flag is a static, NOT a Riverpod provider: _authRedirect is a plain
+      static evaluated synchronously during navigation with no ref in scope
+      (same constraint as HiveUserSession.currentOwnerFullId).
+
+      (2) Restore had NO timeout anywhere in its chain, so one wedged Supabase
+      call blocked the whole ~30-op fan-out forever. 45s is a WEDGE-BREAKER, not
+      a latency budget — a slow op on a bad connection must still finish. A Dart
+      .timeout() frees the AWAITER and does NOT cancel the request.
+    writers:
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 427
+        method: signOutInProgress
+        semantic: teardown-window-flag
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 462-485
+        method: signOut
+        semantic: set-in-try-clear-in-finally
+        notes: >-
+          finally, not a trailing assignment — a stranded ON flag would pin the
+          whole app at /sign-in until process restart.
+      - file: lib/core/services/sync_service.dart
+        line_range: 1996
+        method: restoreOpTimeout
+        semantic: per-op-ceiling
+      - file: lib/core/services/sync_service.dart
+        line_range: 2015-2020
+        method: applyRestoreCeiling
+        semantic: apply-ceiling
+      - file: lib/core/services/sync_service.dart
+        line_range: 2027-2029
+        method: restoreFailureReason
+        semantic: telemetry-reason-split
+    readers:
+      - file: lib/core/router/app_router.dart
+        line_range: 743-745
+        method: postSessionRedirect
+        semantic: branch-order-is-the-fix
+        notes: signOutInProgress MUST be tested BEFORE the onboarding read.
+      - file: lib/core/router/app_router.dart
+        line_range: 709-714
+        method: _authRedirect
+        semantic: delegates-to-pure-fn
+      - file: lib/core/services/sync_service.dart
+        line_range: 2037
+        method: _safeRestoreOp
+        semantic: bounded-await
+    hive:
+      box: userBox
+      key: onboarding_completed
+      shape: "bool via MigratedKey.readWithDefault; kill-switch disable_restore_op_timeout lives in the SHARED configBox (device-level, deliberately not user-scoped)"
+    cloud:
+      table: users
+      columns: [id]
+    sync_methods: []
+    restore_methods: [_safeRestoreOp]
+    forbidden_legacy_patterns:
+      - "reordering signOut() to call auth.signOut() before clearAllData() — makes all 7 user-scoped clears throw and permanently blinds the partial-clear alarm"
+      - "converting signOutInProgress to a Riverpod provider — _authRedirect has no ref and cannot read it"
+      - "setting signOutInProgress outside a try/finally"
+      - "reading onboarding_completed as fact during a teardown window without consulting the flag"
+    contract_test_path: test/contracts/restore_op_timeout_behavioral_test.dart
+
+  - concept: notification_cron_eligibility_and_pro_gate
+    domain: cross_domain
+    presence_only: true  # both surfaces are Deno Edge Functions — no Flutter unit-test seam exists to drive them
+    description: |
+      Diagnose e3b9d7. Two outbound-notification eligibility contracts.
+
+      (1) STREAK-GUARDIAN: the number that GATES the send and the number the
+      COPY quotes must come from the SAME row. Eligibility gated on
+      user_progress.current_streak_weeks while the body quoted
+      current_streak_days from the daily SNAPSHOT — two caches, different
+      writers, different schedules — so a push contradicted itself
+      ("Don't break your 28-day streak" beside a 0-day streak). Select what you
+      quote. `recent_pr_exercise` is banned from this function entirely: it has
+      no recency bound (its source scans all history), and pr-detection already
+      owns "you just hit a PR" with a correct 20-minute lookback. Removing it
+      from the TITLE alone is insufficient — it must also leave the Gemini
+      userState, or the model narrates the stale PR into the body.
+
+      (2) WEEKLY-RECAP-READY: the Sunday Brief is PRO-only and had NO
+      subscription check at all. The canonical predicate is
+      `status='active' AND end_date > now()` via the SHARED
+      _shared/subscription.ts fetchProUserIds — never `status` alone (a lapsed
+      row keeps it) and never the denormalized users.subscription_status.
+      Fetched ONCE outside the page loop; filtered BEFORE the concurrency loop;
+      pagination bookkeeping stays on the RAW page because .range() walked the
+      raw page. Fails SAFE: an empty set sends to nobody, never to everybody.
+    writers:
+      - file: supabase/functions/streak-guardian/index.ts
+        line_range: 94-96
+        method: eligibility select + gte
+        semantic: one-row-gates-and-supplies
+      - file: supabase/functions/weekly-recap-ready/index.ts
+        line_range: 133
+        method: fetchProUserIds call
+        semantic: fetched-once-outside-loop
+      - file: supabase/functions/weekly-recap-ready/index.ts
+        line_range: 179-180
+        method: proUsers filter + skipped tally
+        semantic: filter-before-send
+      - file: supabase/functions/_shared/subscription.ts
+        line_range: 59
+        method: fetchProUserIds
+        semantic: canonical-pro-predicate
+    readers:
+      - file: supabase/functions/streak-guardian/index.ts
+        line_range: 214
+        method: streakDays
+        semantic: reads-the-selected-row
+      - file: supabase/functions/weekly-recap-ready/index.ts
+        line_range: 263
+        method: concurrency loop
+        semantic: iterates-proUsers
+        notes: The last place the PRO filter can be lost.
+    hive:
+      box: null
+      key: null
+      shape: "Not applicable — both are service-role Deno crons with no Hive access."
+    cloud:
+      table: user_progress
+      columns: [user_id, current_streak_weeks, current_streak_days]
+    sync_methods: []
+    restore_methods: []
+    forbidden_legacy_patterns:
+      - "streak-guardian reading current_streak_days from the snapshot instead of the selected user_progress row"
+      - "a `?? streakWeeks * 7` fallback for streakDays — unreachable under the gate, but silently restores the two-cache contradiction if the gate is loosened"
+      - "recentPR / recent_pr_exercise anywhere in streak-guardian, including the Gemini userState"
+      - "weekly-recap-ready reading users.subscription_status — a stale denormalized mirror"
+      - "re-implementing the PRO predicate locally instead of importing _shared/subscription.ts"
+      - "advancing the pagination offset by the FILTERED count — .range() walked the raw page, so this skips users"
+    contract_test_path: test/contracts/weekly_recap_pro_filter_test.dart

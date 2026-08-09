@@ -145,14 +145,35 @@ void main() {
       src = _strip(f.readAsStringSync());
     });
 
-    test('signOut() invokes unbindSessionIdentity()', () {
-      final idx = src.indexOf('Future<void> signOut()');
-      expect(idx, greaterThan(0), reason: 'signOut must exist');
-      // Slice to the end of the method — the next top-level member declaration.
-      final end = src.indexOf('\n  Future<', idx + 10);
-      final body = src.substring(idx, end > idx ? end : src.length);
+    test('the sign-out path reaches unbindSessionIdentity()', () {
+      // UPDATED 2026-08-09 (diagnose b7e4c1, B-pass finding 1): signOut() is
+      // now a join-or-start dispatcher and the teardown lives in _teardown(),
+      // so the old "slice to the next `\n  Future<`" span stops at
+      // _performSignOut and can no longer see the call. It failed on a MOVE,
+      // not a regression.
+      //
+      // The invariant is unchanged and is what this still pins: sign-out must
+      // REACH the unbind. Asserting the chain link-by-link keeps that true —
+      // a call sitting in a method nobody invokes is exactly the dead code
+      // this test exists to prevent.
+      final signOutIdx = src.indexOf('Future<void> signOut()');
+      expect(signOutIdx, greaterThan(0), reason: 'signOut must exist');
+      final performIdx = src.indexOf('Future<void> _performSignOut()');
+      expect(performIdx, greaterThan(0),
+          reason: 'signOut delegates to _performSignOut');
+      final teardownIdx = src.indexOf('Future<void> _teardown()');
+      expect(teardownIdx, greaterThan(0),
+          reason: '_performSignOut delegates to _teardown');
 
-      expect(body, contains('unbindSessionIdentity()'),
+      expect(src.substring(signOutIdx, performIdx), contains('_performSignOut()'),
+          reason: 'signOut() must actually invoke _performSignOut');
+      expect(src.substring(performIdx, teardownIdx), contains('_teardown()'),
+          reason: '_performSignOut must actually invoke _teardown');
+
+      final end = src.indexOf('\n  Future<', teardownIdx + 10);
+      final teardown =
+          src.substring(teardownIdx, end > teardownIdx ? end : src.length);
+      expect(teardown, contains('unbindSessionIdentity()'),
           reason: 'the SDK calls existing somewhere is worthless if sign-out '
               'never reaches them — this is the assertion that stops them '
               'living in dead code');
