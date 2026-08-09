@@ -26,9 +26,18 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+// HAND-ENUMERATED, and that is this list's one weakness: a new gate e2e helper
+// is uncovered until someone remembers to add it here. Registering
+// worktree_config_integrity_e2e_test.dart (2026-08-09) was an explicit step in
+// its own plan for exactly that reason — the list is a green check only as wide
+// as its input set.
 const _helpers = <String>[
   'test/scripts/plan_review_record_gate_e2e_test.dart',
   'test/scripts/gate_input_family_e2e_test.dart',
+  'test/scripts/worktree_config_integrity_e2e_test.dart',
+  // retire_worktree runs a command that DELETES worktrees, so a GIT_DIR leak
+  // there would be destructive rather than merely meaningless.
+  'test/scripts/retire_worktree_e2e_test.dart',
 ];
 
 String _strip(String src) => src

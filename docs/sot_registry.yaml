@@ -8781,21 +8781,21 @@ concepts:
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2015-2020
+        line_range: 2021-2024
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2027-2029
+        line_range: 2033-2035
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 743-745
+        line_range: 763-768
         method: postSessionRedirect
         semantic: branch-order-is-the-fix
         notes: signOutInProgress MUST be tested BEFORE the onboarding read.
       - file: lib/core/router/app_router.dart
-        line_range: 709-714
+        line_range: 610-719
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart

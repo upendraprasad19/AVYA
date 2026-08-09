@@ -74,6 +74,16 @@ const List<String> _codeRoots = [
 /// someone writes a dead citation into it.
 const List<String> _codeExtensions = ['.dart', '.ts', '.js', '.sql', '.sh'];
 
+/// Report paths with FORWARD slashes on every platform.
+///
+/// `File.path` yields OS-native separators, so this gate printed
+/// `lib	hing.dart:1` on Windows and `lib/thing.dart:1` in CI. Two regression
+/// tests asserting the forward-slash form therefore passed in CI and failed
+/// locally — the local-vs-CI divergence class (feedback_local_ci_env_divergence).
+/// A report string is a contract with its readers (tests, humans, greps); it
+/// should not vary by the machine that produced it.
+String _rel(String p) => p.replaceAll(r'\', '/');
+
 void main(List<String> args) async {
   final warnOnly = args.contains('--warn-only');
   // Build heading set for root CLAUDE.md only — nested files cite root §.
@@ -128,7 +138,7 @@ void main(List<String> args) async {
         // Check the text immediately before this `§` for an external-statute token.
         final preceding = lines[i].substring(0, m.start);
         if (externalStatuteRegex.hasMatch(preceding)) continue;
-        broken.add('${file.path}:${i + 1} → §$sec (not in CLAUDE.md known sections: ${knownSections.toList()..sort()})');
+        broken.add('${_rel(file.path)}:${i + 1} → §$sec (not in CLAUDE.md known sections: ${knownSections.toList()..sort()})');
       }
     }
   }
@@ -169,7 +179,7 @@ void main(List<String> args) async {
       for (final m in anchoredCiteRegex.allMatches(lines[i])) {
         final sec = m.group(1)!;
         if (knownSections.contains(sec)) continue;
-        brokenInCode.add('${file.path}:${i + 1} → §$sec');
+        brokenInCode.add('${_rel(file.path)}:${i + 1} → §$sec');
       }
     }
   }

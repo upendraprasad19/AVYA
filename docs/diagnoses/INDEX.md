@@ -6,6 +6,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### worktree_retirement_allow_list (1 bugs)
+- 2026-08-10 d7b3e9 — `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three…
+
+### worktree_config_integrity (1 bugs)
+- 2026-08-09 a4f7c2 — `git rev-parse --show-toplevel` returned `.../.claude/worktrees/post38-auth-fixes` from EVERY worktree in the repo and from the shared main folder. A session working in…
+
 ### notification_cron_eligibility_and_pro_gate (1 bugs)
 - 2026-08-09 e3b9d7 — TWO notification-cron defects reported by the founder from their own phone and account, 2026-08-05 / 2026-08-07. (1) STREAK-GUARDIAN SENT A SELF-CONTRADICTING PUSH. A single notification read "Don't…
 
@@ -959,6 +965,8 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-10 | d7b3e9 | `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three… | worktree_retirement_allow_list | test/scripts/retire_worktree_lib_test.dart |
+| 2026-08-09 | a4f7c2 | `git rev-parse --show-toplevel` returned `.../.claude/worktrees/post38-auth-fixes` from EVERY worktree in the repo and from the shared main folder. A session working in… | worktree_config_integrity | test/scripts/worktree_config_integrity_e2e_test.dart |
 | 2026-08-09 | e3b9d7 | TWO notification-cron defects reported by the founder from their own phone and account, 2026-08-05 / 2026-08-07. (1) STREAK-GUARDIAN SENT A SELF-CONTRADICTING PUSH. A single notification read "Don't… | notification_cron_eligibility_and_pro_gate | test/contracts/streak_guardian_eligibility_test.dart |
 | 2026-08-09 | c9e4b7 | Founder, live web 2026-08-05, account upendraprasad19@gmail.com: the Train screen's week selector showed NO past-phase history despite the account being on Phase 2 with a completed Phase 1 on record.… | past_phase_display_recovery | test/contracts/past_phase_display_recovery_behavioral_test.dart |
 | 2026-08-09 | b7e4c1 | TWO defects on the auth/session path, both reported by the founder from live web on 2026-08-05, both fixed here because they share the same root class — an unbounded or ambiguous state read during a… | signout_teardown_window_and_restore_op_ceiling | test/contracts/signout_router_guard_behavioral_test.dart |
