@@ -402,7 +402,9 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
    `sh scripts/new-worktree.sh <slug>` (branches off the latest `main`, copies `.env`), then
    `cd .claude/worktrees/<slug>` and do ALL edits/commits there.
 2. **The shared main folder is INTEGRATION-ONLY:** reads, merging a branch into main, `git push`,
-   and `/build-apk`. Never `git add`/commit feature work there. **Prefer
+   `/build-apk`, and worktree **retirement** (point 6 — `retire_worktree.dart` refuses to run from
+   a linked worktree, so the primary is the only place it CAN run). Never `git add`/commit feature
+   work there. **Prefer
    `sh scripts/safe_merge.sh <branch>` over a raw `git merge --no-ff <branch>`** for the merge step
    (Unit 3c, discipline-tooling-hardening, 2026-08-03) — it refuses to merge onto a local `main`
    that is behind `origin/main`, and shares the same concurrency lock as `safe_commit.sh` /
@@ -421,34 +423,55 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 
 6. **RETIREMENT — the other half of the lifecycle (added 2026-08-09).** This rule mandated
    *creation* and defined no end of life: `new-worktree.sh` created, nothing retired. The count
-   reached **106 directories / 17 GB**. That is not neglect, it is an unclosed loop in the rule
-   itself, so it regrows on its own unless the rule closes it.
-   - **Retire a worktree once its branch is merged AND pushed:**
-     `dart run scripts/retire-worktree.dart --execute [<slug>]` — run from the PRIMARY worktree
+   reached **106 directories / 17 GB**, reclaimed to **1.4 GB** (`du -sh .claude/worktrees`,
+   observed 2026-08-09 — point-in-time measurements, not re-derivable after the fact; re-measure
+   rather than citing these). That is not neglect, it is an unclosed loop in the rule itself, so
+   it regrows on its own unless the rule closes it.
+   - **Retire a worktree once its branch is merged, clean (tracked AND ignored) and carries
+     nothing unpushed:** `dart run scripts/retire_worktree.dart --execute [<slug>]` — run from the PRIMARY worktree
      (it refuses from a linked one; removing the tree you stand in is undefined). **Dry-run is the
      DEFAULT**; `--execute` is opt-in.
-   - **The predicate is THREE-legged and every leg is load-bearing:** merged into `main` **AND**
-     `git status --porcelain` empty **AND** no unpushed commits. Anything failing any leg is
-     reported and LEFT ALONE — never `--force`. **"Merged" alone is NOT sufficient and this is
-     measured, not theoretical:** on 2026-08-09 five worktrees held 21 uncommitted files between
-     them while classifying as merged by branch tip. A merge-only sweep destroys all of it. Merge
-     status describes a branch; it says nothing about the working tree on top of it.
+   - **WHEN — the trigger, without which this is just prose.** The §5 per-batch checklist carries
+     a retirement row, so it is walked at every batch end alongside the diagnose-doc and index
+     regens. This is deliberate: §4.13 points 1–5 are backed by a pre-commit gate, and point 6 is
+     NOT (see below), so without a checklist row it would decay exactly the way
+     `docs/audit/open_issues.md` did — 70 days unread because "nothing referenced it, everything
+     with a gate holds, everything on intention decays". A §7 pointer row is not a trigger.
+   - **The predicate is FOUR-legged and every leg is load-bearing:** (1) merged into `main`,
+     (2) no tracked changes, (3) no NON-REGENERABLE ignored files, (4) no unpushed commits — or no
+     upstream configured at all, in which case leg 1 already guarantees the commits are reachable
+     from `main`. Anything failing any leg is reported and LEFT ALONE — never `--force`.
+     **"Merged" alone is NOT sufficient and this is measured, not theoretical:** on 2026-08-09 five
+     worktrees held 21 uncommitted files between them while classifying as merged by branch tip. A
+     merge-only sweep destroys all of it. Merge status describes a branch; it says nothing about
+     the working tree on top of it. **Leg 3 is separate from leg 2 because
+     `git status --porcelain` — the obvious spelling of "clean" — EXCLUDES ignored files entirely**
+     (see below), so naming it as the clean check would name the blind spot as the guard.
    - **Orphaned directories** (present on disk, absent from `git worktree list`) are a SEPARATE,
      stricter category: `git worktree remove` cannot see them, and an orphan is by definition one
      git has lost track of — so "git says it is safe" carries no information. Only a genuinely
      empty directory is auto-removed; anything holding even one file is reported for human review.
-   - **Deliberately NOT a blocking gate.** A commit is never blocked because unrelated old
-     worktrees exist — that would be a ship-stop for a hygiene problem, the same error class as the
-     2026-07-25/26 required-status-checks incident. Enforcement is the operator running the
-     command, not the hook.
+   - **Deliberately NOT a blocking gate — an explicit, named exception to §4's "Pre-commit hook
+     gates them. Violations are P0." default.** A commit must never be blocked because unrelated
+     old worktrees exist; that would be a ship-stop for a hygiene problem, the same error class as
+     the 2026-07-25/26 required-status-checks incident. The §5 checklist row above is what carries
+     it instead. (§4.11's gate-before-refactor rule does not apply here: retirement is neither a
+     refactor nor gate-shaped.)
    - The harness may ALSO auto-clean unchanged worktrees on its own, so the count dropping without
      anyone acting is expected rather than alarming. It appears to apply the same
      leave-dirty-trees-alone rule; this was observed, not documented by the vendor, so do not rely
      on it as the cleanup mechanism.
-   - Tooling: `scripts/retire-worktree.dart` + pure `scripts/retire_worktree_lib.dart`; tests
+   - **Leg 2 must see IGNORED files too.** `git status --porcelain` EXCLUDES them and
+     `git worktree remove` does NOT refuse on them — verified 2026-08-09: a merged worktree holding
+     an ignored `secrets/.env` classified "merged + clean + pushed", removed with exit 0, file
+     gone. The tool reads `--ignored=matching` and keeps the worktree unless every ignored path is
+     regenerable (`.env`, `build/`, `.dart_tool/`, …). Regenerables are excluded deliberately:
+     point 1 copies `.env` into EVERY worktree, so counting them would make nothing retirable.
+   - Tooling: `scripts/retire_worktree.dart` + pure `scripts/retire_worktree_lib.dart`; tests
      `test/scripts/retire_worktree_lib_test.dart` (predicate) and
-     `test/scripts/retire_worktree_e2e_test.dart` (real linked worktrees, mutation-proven — the
-     dirty-leg neutered turns both suites red).
+     `test/scripts/retire_worktree_e2e_test.dart` (real linked worktrees). **Mutation-proven on
+     BOTH protective legs** — neutering the dirty check reddens 7 tests (5 unit + 2 e2e), the ignored check 4
+     (2 + 2), and reverting the exact-path match to prefix matching 4. A gate whose test never fails is the Gate-44 lesson.
 
 7. **`core.worktree` must never be set (added 2026-08-09, diagnose `a4f7c2`).** Point 1's guarantee
    — "a worktree has its OWN index, so mixing is structurally impossible" — holds only while
@@ -488,6 +511,9 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 [ ] feedback_*.md added/updated if user corrected a claim OR recurring class
 [ ] project_*.md retrospective written (every shipped batch)
 [ ] MEMORY.md index updated
+[ ] Worktree retired if merged + clean (incl. ignored) + nothing unpushed (§4.13 point 6):
+      dart run scripts/retire_worktree.dart          # dry-run first, ALWAYS
+    This row IS the trigger — point 6 is deliberately ungated, so nothing else fires it.
 [ ] Skill self-evolution: does any .claude/skills/<topic>/SKILL.md need a new bug-class entry, red flag, or trigger phrase?
 ```
 
@@ -579,5 +605,5 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | End-of-batch maintenance skill | `/update-docs` (`.claude/skills/update-docs/SKILL.md`) |
 | Discipline harness hooks (prompt-time §4 reminders + euphemism gate + MEMORY.md size nudge + worktree warning) | `scripts/discipline_hook.dart` (UserPromptSubmit / PreToolUse:Skill / SessionStart → `.claude/settings.json`; the SessionStart matcher fires on ALL sources — startup/resume/compact: compact re-injects the hot-set, the shared-main worktree triggers the §4.13 warning, and an over-cap MEMORY.md index nudges `/consolidate-memory` — user-level skill `~/.claude/skills/consolidate-memory/`) + `scripts/check_no_deferral_euphemism.dart` (pre-commit gate, §4.2). Audit retrospectives: `memory/project_discipline_harness_hooks_2026_06_27.md`, `memory/project_memory_consolidation_2026_07_04.md`. |
 | Worktree-per-session enforcement (one worktree per session; shared main folder = integration-only; prevents cross-session git-index file-mixing) | **§4.13.** Pre-commit gate `scripts/check_commit_from_worktree.dart` (+ pure `scripts/worktree_guard_lib.dart`, test `test/contracts/check_commit_from_worktree_test.dart`) blocks non-merge commits in the primary worktree; helper `scripts/new-worktree.sh <slug>`; `scripts/discipline_hook.dart` SessionStart warning. Diagnose `f0c2d5`; `memory/feedback_worktree_per_session.md`. |
-| Worktree **lifecycle** — retirement (the half §4.13 originally lacked; the count reached 106 dirs / 17 GB before this existed, reclaimed to 1.4 GB) | **§4.13 point 6.** `dart run scripts/retire-worktree.dart` (dry-run DEFAULT, `--execute` opt-in) + pure `scripts/retire_worktree_lib.dart`. Three-leg predicate: merged AND clean AND pushed — "merged" alone would have destroyed 21 uncommitted files across 5 worktrees on 2026-08-09. Orphans (on disk, not in `git worktree list`) are a stricter separate category: only genuinely empty dirs auto-remove. Operator-invoked, NOT a blocking gate. Tests `test/scripts/retire_worktree_lib_test.dart` + `retire_worktree_e2e_test.dart` (mutation-proven). |
+| Worktree **lifecycle** — retirement (the half §4.13 originally lacked; the count reached 106 dirs / 17 GB before this existed, reclaimed to 1.4 GB) | **§4.13 point 6.** `dart run scripts/retire_worktree.dart` (dry-run DEFAULT, `--execute` opt-in) + pure `scripts/retire_worktree_lib.dart`. Four-leg predicate: merged AND no tracked changes AND no non-regenerable ignored files AND nothing unpushed — "merged" alone would have destroyed 21 uncommitted files across 5 worktrees on 2026-08-09. Orphans (on disk, not in `git worktree list`) are a stricter separate category: only genuinely empty dirs (0 entries, counting directories) auto-remove. Operator-invoked, NOT a blocking gate. Tests `test/scripts/retire_worktree_lib_test.dart` + `retire_worktree_e2e_test.dart` (mutation-proven). |
 | Worktree **config integrity** — `core.worktree` must never be set (it silently redirects EVERY worktree at one branch's files, defeating §4.13 from underneath while its gate passes cleanly) | **§4.13 point 7.** Pre-commit gate `scripts/check_worktree_config_integrity.dart` + pure `scripts/worktree_config_integrity_lib.dart`; tests `test/scripts/worktree_config_integrity_lib_test.dart` + `worktree_config_integrity_e2e_test.dart`. Checks ALL git scopes (a global `~/.gitconfig` entry corrupts identically); **fails OPEN** when git cannot answer, so an environment quirk cannot wedge every commit. Diagnose `a4f7c2`. |

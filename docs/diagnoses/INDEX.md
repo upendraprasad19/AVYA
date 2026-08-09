@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### worktree_retirement_allow_list (1 bugs)
+- 2026-08-10 d7b3e9 — `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three…
+
 ### worktree_config_integrity (1 bugs)
 - 2026-08-09 a4f7c2 — `git rev-parse --show-toplevel` returned `.../.claude/worktrees/post38-auth-fixes` from EVERY worktree in the repo and from the shared main folder. A session working in…
 
@@ -953,6 +956,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-10 | d7b3e9 | `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three… | worktree_retirement_allow_list | test/scripts/retire_worktree_lib_test.dart |
 | 2026-08-09 | a4f7c2 | `git rev-parse --show-toplevel` returned `.../.claude/worktrees/post38-auth-fixes` from EVERY worktree in the repo and from the shared main folder. A session working in… | worktree_config_integrity | test/scripts/worktree_config_integrity_e2e_test.dart |
 | 2026-08-07 | b2f7a4 | 138 `CLAUDE.md §N` citations in `.dart` / `.ts` / `.sql` / `.js` comments pointed at root-CLAUDE.md sections that do not exist. Root's real headings are exactly `0, 1, 2, 2a, 3, 4, 5, 6, 7`; the… | claude_md_section_citation — the pointer from a source comment to a numbered
 section of root `CLAUDE.md`. The schema below is writer/reader-shaped because

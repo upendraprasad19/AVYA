@@ -1,12 +1,12 @@
-// scripts/retire-worktree.dart
+// scripts/retire_worktree.dart
 //
 // The missing counterpart to scripts/new-worktree.sh: retires worktrees whose
 // work is finished. §4.13 mandated creation and defined no end of life, so the
 // count reached 106 directories / 17 GB (2026-08-09).
 //
-//   dart run scripts/retire-worktree.dart                 # dry-run (DEFAULT)
-//   dart run scripts/retire-worktree.dart --execute        # actually remove
-//   dart run scripts/retire-worktree.dart --execute <slug> # one worktree
+//   dart run scripts/retire_worktree.dart                 # dry-run (DEFAULT)
+//   dart run scripts/retire_worktree.dart --execute        # actually remove
+//   dart run scripts/retire_worktree.dart --execute <slug> # one worktree
 //
 // DRY-RUN IS THE DEFAULT and --execute is opt-in, because removal is
 // irreversible for exactly the work legs 2-3 exist to catch.
@@ -33,7 +33,7 @@ import 'dart:io';
 import 'retire_worktree_lib.dart';
 
 /// Worktrees never retired automatically regardless of their git state.
-/// Deliberately a hardcoded floor UNDER the three-leg predicate, not a
+/// Deliberately a hardcoded floor UNDER the four-leg predicate, not a
 /// replacement for it — belt and braces on the one operation that can destroy
 /// uncommitted work.
 const _protected = <String>{
@@ -41,52 +41,55 @@ const _protected = <String>{
   'train-signout-notif-bugs',
 };
 
+/// Parent env minus git's own vars.
+///
+/// git exports GIT_DIR / GIT_WORK_TREE into every hook, and they override BOTH
+/// `workingDirectory:` and `-C <path>`. This command DELETES, so a leaked
+/// GIT_WORK_TREE pointing elsewhere is not a cosmetic problem — round 1 showed
+/// it defeats the primary-worktree detection below.
+Map<String, String> _cleanEnv() {
+  final e = Map<String, String>.from(Platform.environment);
+  e.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
+  return e;
+}
+
 ProcessResult? _git(List<String> args, {String? cwd}) {
   try {
     // List<String> args, never a shell string — this repo's path contains a
     // space ("Claude Code").
-    return Process.runSync('git', args, workingDirectory: cwd);
+    return Process.runSync('git', args,
+        workingDirectory: cwd,
+        environment: _cleanEnv(),
+        includeParentEnvironment: false);
   } on ProcessException {
     return null; // git missing / cwd gone
   }
 }
 
+/// Raw `git worktree list --porcelain` output ('' when git could not answer).
+String _porcelain() {
+  final r = _git(['worktree', 'list', '--porcelain']);
+  return (r == null || r.exitCode != 0) ? '' : r.stdout as String;
+}
+
 String _norm(String p) =>
     p.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '').toLowerCase();
 
-/// (path, branch) for every registered worktree.
-List<(String, String)> _worktrees() {
-  final r = _git(['worktree', 'list', '--porcelain']);
-  if (r == null || r.exitCode != 0) return const [];
-  final out = <(String, String)>[];
-  String? path;
-  for (final line in (r.stdout as String).split('\n')) {
-    final l = line.trimRight();
-    if (l.startsWith('worktree ')) {
-      path = l.substring(9).trim();
-    } else if (l.startsWith('branch ') && path != null) {
-      out.add((path, l.substring(7).trim().replaceFirst('refs/heads/', '')));
-      path = null;
-    } else if (l.startsWith('detached') && path != null) {
-      // Detached worktrees carry no branch, so leg 1 can never be satisfied.
-      // Emitted with an empty branch so they are COUNTED and reported rather
-      // than silently skipped by the parser — an unlisted worktree reads as
-      // "handled" when it was never examined.
-      out.add((path, ''));
-      path = null;
-    }
-  }
-  return out;
-}
-
-int _countFiles(Directory d) {
+/// Count of ENTRIES (not just files) under [d].
+///
+/// Deliberately counts directories too. An earlier version counted only Files,
+/// so a tree of empty subdirectories — and a directory holding only a symlink /
+/// NTFS junction to a real tree — both measured 0 and were classified "empty
+/// husk", which is not what `classifyOrphan` documents. Returns -1 when
+/// unreadable; the caller maps that to "not empty" so it can never be deleted.
+int _countEntries(Directory d) {
   var n = 0;
   try {
-    for (final e in d.listSync(recursive: true, followLinks: false)) {
-      if (e is File) n++;
+    for (final _ in d.listSync(recursive: true, followLinks: false)) {
+      n++;
     }
   } on FileSystemException {
-    return -1; // unreadable -> caller treats as "not empty"
+    return -1;
   }
   return n;
 }
@@ -145,44 +148,95 @@ void main(List<String> args) {
   stdout.writeln('[retire] mode: ${execute ? "EXECUTE" : "DRY-RUN"}');
   stdout.writeln('');
 
-  var retired = 0, kept = 0, failed = 0;
+  var retired = 0, kept = 0, failed = 0, matched = 0;
 
-  for (final (path, branch) in _worktrees()) {
+  for (final w in parseWorktreePorcelain(_porcelain())) {
+    final path = w.path;
+    final branch = w.branch;
     final name = _norm(path).split('/').last;
     if (only != null && name != _norm(only)) continue;
+    matched++;
 
     final isPrimary = _norm(path) == _norm(root);
+
+    // Naming the PRIMARY as a slug must not look like success. Its output line
+    // is suppressed below (it is never a retirement candidate), so without this
+    // `--execute "Fitness App"` printed nothing and exited 0 — indistinguishable
+    // from "retired it".
+    if (isPrimary && only != null) {
+      stderr.writeln('[retire] FAIL: "$only" is the PRIMARY worktree — it is '
+          'the integration folder and is never retired.');
+      exit(1);
+    }
 
     // Gather facts. A worktree whose directory is gone, or whose status call
     // fails, is UNREADABLE — never conflated with clean.
     var readable = Directory(path).existsSync();
-    var dirty = 0, unpushed = 0;
+    var dirty = 0, unpushed = 0, ignored = 0;
+    var upstream = true;
     if (readable) {
-      final st = _git(['status', '--porcelain'], cwd: path);
+      // PER-WORKTREE core.worktree check. The global guard above reads only the
+      // primary's config scopes; a `core.worktree` in
+      // .git/worktrees/<name>/config.worktree is invisible to it and silently
+      // redirects THIS worktree's status at another directory — the a4f7c2
+      // inversion one scope over. Assert this worktree resolves to itself
+      // before trusting anything it reports.
+      final top = _git(['rev-parse', '--show-toplevel'], cwd: path);
+      if (top == null ||
+          top.exitCode != 0 ||
+          _norm((top.stdout as String).trim()) != _norm(path)) {
+        readable = false;
+      }
+    }
+    if (readable) {
+      // --ignored=matching: `git status --porcelain` EXCLUDES ignored files and
+      // `git worktree remove` does not refuse on them, so without this an
+      // ignored file is destroyed silently (verified 2026-08-09).
+      final st = _git(['status', '--porcelain', '--ignored=matching'], cwd: path);
       if (st == null || st.exitCode != 0) {
         readable = false;
       } else {
-        dirty = (st.stdout as String)
-            .split('\n')
-            .where((l) => l.trim().isNotEmpty)
-            .length;
-        final up = _git(['log', '@{u}..', '--oneline'], cwd: path);
-        if (up != null && up.exitCode == 0) {
-          unpushed = (up.stdout as String)
-              .split('\n')
-              .where((l) => l.trim().isNotEmpty)
-              .length;
+        for (final l in (st.stdout as String).split('\n')) {
+          final line = l.trimRight();
+          if (line.trim().isEmpty) continue;
+          final isIgnored = line.startsWith('!!');
+          final p = line.length > 3 ? line.substring(3).trim() : '';
+          if (isIgnored) {
+            if (!isRegenerableIgnored(p)) ignored++;
+          } else {
+            dirty++;
+          }
+        }
+        // NO UPSTREAM is not "nothing unpushed" (round-1 F2). `git log @{u}..`
+        // exits 128 when no tracking branch exists. Distinguish the two rather
+        // than reading 128 as 0: the branch is still retirable (leg 1 already
+        // proved it merged, so its commits are reachable from main), but the
+        // reason string must not claim a leg it never evaluated.
+        final hasUp = _git(['rev-parse', '--abbrev-ref', '@{u}'], cwd: path);
+        upstream = hasUp != null && hasUp.exitCode == 0;
+        if (upstream) {
+          final up = _git(['log', '@{u}..', '--oneline'], cwd: path);
+          if (up == null || up.exitCode != 0) {
+            readable = false;
+          } else {
+            unpushed = (up.stdout as String)
+                .split('\n')
+                .where((l) => l.trim().isNotEmpty)
+                .length;
+          }
         }
       }
     }
 
     final d = classifyWorktree(
       isPrimary: isPrimary,
-      isProtected: _protected.contains(name),
+      isProtected: _protected.contains(name) || w.locked,
       factsReadable: readable,
       merged: branch.isNotEmpty && merged.contains(branch),
       dirtyFiles: dirty,
       unpushed: unpushed,
+      ignoredFiles: ignored,
+      upstreamConfigured: upstream,
     );
 
     if (!d.shouldRetire) {
@@ -211,14 +265,19 @@ void main(List<String> args) {
 
   // Orphans: directories git does not know about. Reported ALWAYS, removed only
   // when genuinely empty (see classifyOrphan).
+  // SCOPED BY SLUG. Round-1 F4: `only` filtered the registered loop but not
+  // this one, so `--execute <slug-that-matches-nothing>` still deleted an
+  // orphan the operator never named. A scoped invocation must touch exactly
+  // what it names.
   final wtDir = Directory('$root/.claude/worktrees');
   var orphanKept = 0, orphanRemoved = 0;
-  if (wtDir.existsSync()) {
-    final registered = _worktrees().map((e) => _norm(e.$1)).toSet();
+  if (wtDir.existsSync() && only == null) {
+    final registered =
+        parseWorktreePorcelain(_porcelain()).map((e) => _norm(e.path)).toSet();
     for (final e in wtDir.listSync().whereType<Directory>()) {
       if (registered.contains(_norm(e.path))) continue;
-      final n = _countFiles(e);
-      final d = classifyOrphan(fileCount: n < 0 ? 1 : n);
+      final n = _countEntries(e);
+      final d = classifyOrphan(entryCount: n < 0 ? 1 : n);
       final nm = _norm(e.path).split('/').last;
       if (!d.shouldRetire) {
         stdout.writeln('  ORPHAN  $nm  [${d.reason}]');
@@ -239,9 +298,21 @@ void main(List<String> args) {
     }
   }
 
+  // A named slug that matched nothing is an ERROR, not a silent success.
+  // Silently doing nothing while reporting exit 0 is how an operator believes a
+  // worktree was retired when it never existed under that name.
+  if (only != null && matched == 0) {
+    stderr.writeln('[retire] FAIL: no registered worktree named "$only". '
+        'Nothing was examined or removed.');
+    exit(1);
+  }
+
   stdout.writeln('');
   stdout.writeln('[retire] retire=$retired keep=$kept failed=$failed '
       'orphan_removed=$orphanRemoved orphan_kept=$orphanKept');
+  if (only != null) {
+    stdout.writeln('[retire] scoped to "$only" — orphan sweep skipped.');
+  }
   if (!execute) {
     stdout.writeln('[retire] dry-run only — re-run with --execute to remove.');
   }
