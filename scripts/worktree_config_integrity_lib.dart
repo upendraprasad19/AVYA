@@ -111,16 +111,33 @@ List<WorktreeConfigEntry> parseShowOrigin(String stdout) {
 /// EXIT-CODE CONTRACT (verified live, 2026-08-09) — easy to get backwards:
 ///   0 → key present   → entries parsed → VIOLATION
 ///   1 → key ABSENT    → clean → PASS        (this is the healthy case!)
-///   other → git failed (not a repo, git missing, permissions) → INDETERMINATE
+///   other → git could not answer → INDETERMINATE
+///
+/// `128` is NOT "not a repo" — B-pass corrected this. Verified: OUTSIDE any
+/// repository `git config --show-origin --get-all core.worktree` still exits
+/// **1**, identical to the healthy in-repo case. So exit 1 alone cannot
+/// distinguish "clean repo" from "never looked at a repo", and this function
+/// requires the caller to supply [inRepo] as independent evidence. A real 128
+/// comes from e.g. a malformed config file (`fatal: bad config line N`).
 ///
 /// Do NOT reuse check_commit_from_worktree.dart:29-32's `_git()` helper here:
 /// it returns '' on ANY non-zero exit, which conflates "clean" (1) with "git
-/// is broken" (128). That conflation would make this gate silently pass in
-/// exactly the environments where it is least able to see the truth.
+/// is broken". That conflation would make this gate silently pass in exactly
+/// the environments where it is least able to see the truth.
 WorktreeConfigResult evaluateWorktreeConfig({
   required int exitCode,
   required String stdout,
+  bool inRepo = true,
 }) {
+  if (!inRepo) {
+    // Never report health for a directory we never established is a repo.
+    return const WorktreeConfigResult(
+      violation: false,
+      indeterminate: true,
+      reason: 'not inside a git repository — no health claim can be made '
+          '(git config exits 1 here exactly as it does when clean).',
+    );
+  }
   if (exitCode == 1) {
     return const WorktreeConfigResult(
       violation: false,

@@ -106,7 +106,18 @@ void main() {
     _run('git', ['commit', '-q', '-m', 'seed'], repo);
 
     // A REAL linked worktree — the configuration the gate exists to protect.
-    _run('git', ['worktree', 'add', '-q', linkedWt, '-b', 'feature'], repo);
+    final wt = _run('git', ['worktree', 'add', '-q', linkedWt, '-b', 'feature'], repo);
+
+    // ASSERT the setup actually worked. Without this, a failed `worktree add`
+    // leaves the tests named "...with a normal linked worktree" and "a normal
+    // `git worktree add` does NOT set core.worktree" passing while testing
+    // nothing at all — they would be unfalsifiable. (B-pass P2-5.)
+    if (wt.exitCode != 0 || !Directory(linkedWt).existsSync()) {
+      throw StateError('SETUP FAILED: git worktree add exited ${wt.exitCode} '
+          '(${(wt.stderr as String).trim()}); linked worktree exists='
+          '${Directory(linkedWt).existsSync()}. Refusing to run assertions '
+          'that would vacuously pass.');
+    }
   });
 
   tearDownAll(() {
@@ -167,12 +178,18 @@ void main() {
             'OTHER worktree — this is the mixing hazard §4.13 exists to stop');
   });
 
-  test('--warn-only never fails, even while corrupt', () {
+  test('--warn-only exits 0 while corrupt BUT still reports the violation', () {
     final r = _run(
         'dart',
         ['run', 'scripts/check_worktree_config_integrity.dart', '--warn-only'],
         repo);
     expect(r.exitCode, 0);
+    // Asserting only exitCode == 0 would be satisfied by a gate that silently
+    // no-ops on the flag — the flag must soften the exit, not the detection.
+    // (B-pass P2-6.)
+    expect(r.stderr as String, contains('FAIL'),
+        reason: '--warn-only must still DETECT and report; it only downgrades '
+            'the exit code');
   });
 
   test('PASS again after the documented repair (unset restores health)', () {

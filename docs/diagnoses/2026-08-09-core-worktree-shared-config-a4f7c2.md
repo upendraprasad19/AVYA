@@ -42,8 +42,9 @@ writers:
   - { file: scripts/setup-hooks.sh, method_or_widget: "the only in-repo script that writes git config at all (core.sshCommand) — ruled out", line: 63 }
 readers:
   - { file: scripts/check_commit_from_worktree.dart, method_or_widget: "primary-vs-linked classification via --git-dir vs --git-common-dir — passed cleanly THROUGHOUT the incident; this is the blind spot", line: 59 }
-  - { file: scripts/check_worktree_config_integrity.dart, method_or_widget: "NEW gate — asserts no core.worktree in any scope", line: 44 }
-  - { file: scripts/worktree_config_integrity_lib.dart, method_or_widget: "evaluateWorktreeConfig — pure verdict fn over git's exit code + --show-origin output", line: 118 }
+  - { file: scripts/check_worktree_config_integrity.dart, method_or_widget: "NEW gate — the git config invocation it judges on", line: 69 }
+  - { file: scripts/check_worktree_config_integrity.dart, method_or_widget: "_tryRun — catches ProcessException so a missing git binary cannot crash the hook", line: 48 }
+  - { file: scripts/worktree_config_integrity_lib.dart, method_or_widget: "evaluateWorktreeConfig — pure verdict fn over git's exit code + --show-origin output + the independent inRepo probe", line: 127 }
 hive_key_prefix: null
 hive_key_formula: null
 sync_methods: []
@@ -62,8 +63,8 @@ cross_account_guard: |
   with no user data path. The analogous property (isolation between concurrent
   sessions) is exactly what was broken, and is what the new gate restores.
 forbidden_patterns_checked:
-  - { pattern: "core\\.worktree", absent: true }
-  - { pattern: "git config(?!.*--worktree).*core\\.worktree", absent: true }
+  - { pattern: "core\\.worktree present in `git config --show-origin --get-all` output (NOT a source-text grep — the literal string necessarily appears in the gate and its tests)", absent: true }
+  - { pattern: "in-repo script writing core.worktree (grepped scripts/ for `git config`: only setup-hooks.sh:63 core.sshCommand)", absent: true }
 proposed_fix: |
   Two parts.
 
@@ -77,9 +78,26 @@ proposed_fix: |
 
   (2) PREVENT recurrence with scripts/check_worktree_config_integrity.dart, a
   pre-commit gate asserting no `core.worktree` in ANY git scope. Checking only
-  the shared config file would leave a false-negative class (a global
-  ~/.gitconfig or an exported GIT_WORK_TREE produces identical corruption), and
-  a false negative here recreates the exact bug the gate exists to catch.
+  the shared config file would leave a false-negative class — a global
+  ~/.gitconfig entry produces identical corruption — and a false negative here
+  recreates the exact bug the gate exists to catch.
+
+  SCOPE LIMIT, stated rather than papered over (B-pass P2-3): an exported
+  `GIT_WORK_TREE` env var causes the SAME misresolution and this gate does NOT
+  detect it — verified, `git config --get-all core.worktree` still exits 1
+  under it. The gate deliberately does not check that env var, because git
+  exports GIT_WORK_TREE into EVERY hook, so flagging its presence would fail
+  every pre-commit run in the repo — a self-inflicted ship-stop worse than the
+  gap. The env-var vector is transient (one process tree) where the config
+  vector is persistent (every process, until repaired), so the persistent one
+  is the one worth gating.
+
+  FAILS OPEN, deliberately. When git cannot answer (binary missing, malformed
+  config, a `safe.directory` refusal in a container) the gate WARNS and exits 0
+  rather than blocking. It runs on every commit in every worktree; hard-failing
+  on an environment quirk would wedge all work — the ship-stop class this repo
+  already hit with required status checks (2026-07-25/26). Matches the sibling
+  convention at check_commit_from_worktree.dart:62-67.
 
   Root cause is NOT closed and the doc does not pretend otherwise: no in-repo
   script sets this key (grepped — only setup-hooks.sh writes git config at all).

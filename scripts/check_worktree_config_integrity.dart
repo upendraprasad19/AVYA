@@ -38,27 +38,68 @@
 import 'dart:io';
 import 'worktree_config_integrity_lib.dart';
 
+/// Run git, returning null if the binary could not be spawned at all.
+///
+/// Process.runSync THROWS ProcessException when the executable is missing (it
+/// does NOT return a non-zero exit code) — verified 2026-08-09. Left uncaught,
+/// this gate died with an unhandled exception and exit 255, which also defeated
+/// `--warn-only`. Caught here so every failure mode routes through the normal
+/// verdict path.
+ProcessResult? _tryRun(List<String> args) {
+  try {
+    return Process.runSync('git', args);
+  } on ProcessException {
+    return null;
+  }
+}
+
 void main(List<String> args) {
   final warnOnly = args.contains('--warn-only');
   final tag = warnOnly ? '[worktree-config WARN]' : '[worktree-config]';
 
   // List<String> args to Process.runSync — NEVER a shell string. This repo's
   // path contains a space ("Claude Code"), and shell-quoting it is a footgun.
-  final r = Process.runSync(
-    'git',
-    ['config', '--show-origin', '--get-all', 'core.worktree'],
-  );
+  //
+  // Positive repo assertion FIRST: `git config` exits 1 both when the key is
+  // absent AND when we are not in a repository at all, so without this the
+  // gate would print "healthy" from any random directory.
+  final repoProbe = _tryRun(['rev-parse', '--git-common-dir']);
+  final inRepo = repoProbe != null && repoProbe.exitCode == 0;
 
-  final result = evaluateWorktreeConfig(
-    exitCode: r.exitCode,
-    stdout: r.stdout as String,
-  );
+  final r = _tryRun(['config', '--show-origin', '--get-all', 'core.worktree']);
+
+  final result = r == null
+      ? const WorktreeConfigResult(
+          violation: false,
+          indeterminate: true,
+          reason: 'could not execute git (binary missing or not on PATH).',
+        )
+      : evaluateWorktreeConfig(
+          exitCode: r.exitCode,
+          stdout: r.stdout as String,
+          inRepo: inRepo,
+        );
 
   if (result.indeterminate) {
-    // Never silently pass on a git we could not interrogate.
-    stderr.writeln('$tag FAIL: ${result.reason}');
-    stderr.writeln('  stderr: ${(r.stderr as String).trim()}');
-    exit(warnOnly ? 0 : 1);
+    // FAIL OPEN, loudly.
+    //
+    // This gate runs on EVERY commit in EVERY worktree. Hard-failing when git
+    // merely could not answer would wedge all work on an environment quirk
+    // (a `safe.directory`/dubious-ownership refusal in a container, a broken
+    // PATH, a malformed config elsewhere in the file). That is the ship-stop
+    // class this repo has been bitten by before — required status checks
+    // blocking every direct push, 2026-07-25/26.
+    //
+    // Matches the sibling gate's explicit convention
+    // (check_commit_from_worktree.dart:62-67: "fail OPEN — never wedge a
+    // commit on a git problem"). A missed detection is recoverable; a repo
+    // nobody can commit to is not.
+    stderr.writeln('$tag WARNING (passing): ${result.reason}');
+    if (r != null) {
+      final e = (r.stderr as String).trim();
+      if (e.isNotEmpty) stderr.writeln('  git stderr: $e');
+    }
+    exit(0);
   }
 
   if (!result.violation) {

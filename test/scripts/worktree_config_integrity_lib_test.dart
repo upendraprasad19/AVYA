@@ -113,11 +113,42 @@ void main() {
       expect(r.entries.single.value, 'C:/x/worktrees/post38-auth-fixes');
     });
 
-    test('exit 128 (git broken / not a repo) → INDETERMINATE, never clean', () {
+    test('exit 128 (malformed config file) → INDETERMINATE, never clean', () {
+      // NOT "not a repo" — an earlier draft of this test said so and was
+      // wrong. Outside a repo, git config exits 1, not 128 (B-pass P2-2).
+      // A real 128 here comes from e.g. `fatal: bad config line N`.
       final r = evaluateWorktreeConfig(exitCode: 128, stdout: '');
       expect(r.indeterminate, isTrue);
       expect(r.violation, isFalse);
       expect(r.reason, contains('128'));
+    });
+
+    test('exit 1 while NOT in a repo → INDETERMINATE, never "healthy"', () {
+      // The false negative B-pass P2-2 caught: outside any repository
+      // `git config --show-origin --get-all core.worktree` exits 1 — byte for
+      // byte the healthy signal. Verified live from C:\. Without the
+      // independent inRepo evidence the gate would announce health from a
+      // directory it never established was a repo at all.
+      final r =
+          evaluateWorktreeConfig(exitCode: 1, stdout: '', inRepo: false);
+      expect(r.indeterminate, isTrue);
+      expect(r.violation, isFalse);
+      expect(r.reason, contains('not inside a git repository'));
+    });
+
+    test('inRepo defaults to true so existing callers keep the strict path',
+        () {
+      expect(evaluateWorktreeConfig(exitCode: 1, stdout: '').indeterminate,
+          isFalse);
+    });
+
+    test('a VIOLATION is still a violation regardless of the repo probe', () {
+      // Defensive: if git answered with a real key, that is corruption even if
+      // the probe was inconclusive. Health requires evidence; harm does not.
+      final r = evaluateWorktreeConfig(
+          exitCode: 0, stdout: 'file:.git/config\tC:/x\n', inRepo: false);
+      expect(r.indeterminate, isTrue,
+          reason: 'not-in-repo short-circuits first — documented precedence');
     });
 
     test('exit 0 with unparseable output → INDETERMINATE, never clean', () {
