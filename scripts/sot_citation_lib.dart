@@ -121,13 +121,39 @@ CitationVerdict classifyCitation(String cited, Set<String> concepts) {
   return concepts.contains(cited) ? CitationVerdict.resolved : CitationVerdict.dangling;
 }
 
-/// True when a diagnose-doc filename's leading `YYYY-MM-DD-` date is on or
-/// after [cutoff]. Lexicographic compare is correct for zero-padded ISO dates.
-/// A filename with no parseable date is treated as PRE-cutoff (grandfathered)
-/// rather than post — the gate must not fail on a naming convention it cannot
-/// read.
-bool isPostCutoff(String fileName, {String cutoff = citationCutoff}) {
-  final m = RegExp(r'^(\d{4}-\d{2}-\d{2})-').firstMatch(fileName);
-  if (m == null) return false;
-  return m.group(1)!.compareTo(cutoff) >= 0;
+/// True when a diagnose-doc is on or after [cutoff] — i.e. subject to the hard
+/// resolve-check rather than grandfathered into the backlog.
+///
+/// Reads BOTH the filename's leading `YYYY-MM-DD-` and the doc's own `date:`
+/// frontmatter, and takes the LATER of the two. Lexicographic compare is
+/// correct for zero-padded ISO dates.
+///
+/// Why both: B-pass 2026-08-08 (Finding 6) pointed out that a filename-only
+/// check lets a new doc exempt itself permanently just by being NAMED with a
+/// pre-cutoff date. Requiring both fields to be backdated raises the cost and,
+/// more usefully, makes the evasion VISIBLE in review — a doc whose frontmatter
+/// date disagrees with its filename is an obvious smell.
+///
+/// Stated plainly so nobody over-trusts it: this cutoff is a GRANDFATHERING
+/// mechanism, not a security boundary. An author who controls both fields can
+/// still opt out. The defence against that is review, not this function.
+///
+/// A doc with neither parseable date is treated as PRE-cutoff — the gate must
+/// not hard-fail on a naming convention it cannot read.
+bool isPostCutoff(
+  String fileName, {
+  String cutoff = citationCutoff,
+  String? docContent,
+}) {
+  final dates = <String>[];
+  final fromName = RegExp(r'^(\d{4}-\d{2}-\d{2})-').firstMatch(fileName);
+  if (fromName != null) dates.add(fromName.group(1)!);
+  if (docContent != null) {
+    final fromFm =
+        RegExp(r'^date:\s*(\d{4}-\d{2}-\d{2})', multiLine: true).firstMatch(docContent);
+    if (fromFm != null) dates.add(fromFm.group(1)!);
+  }
+  if (dates.isEmpty) return false;
+  dates.sort();
+  return dates.last.compareTo(cutoff) >= 0;
 }

@@ -69,8 +69,15 @@ void main(List<String> args) {
 
   final registry = File('docs/sot_registry.yaml');
   if (!registry.existsSync()) {
-    stdout.writeln('[Gate 44] SKIP: docs/sot_registry.yaml not present.');
-    exit(0);
+    // FAIL CLOSED. An earlier version exited 0 here ("SKIP"), which meant a
+    // rename or accidental deletion of the registry silently DISABLED the gate
+    // while a registry that merely parsed to zero concepts failed hard — two
+    // states that both mean "citations cannot be verified", handled opposite
+    // ways. B-pass 2026-08-08, Finding 5.
+    stderr.writeln('[Gate 44] FAIL: docs/sot_registry.yaml not present.');
+    stderr.writeln('  Citations cannot be verified without it. If the registry');
+    stderr.writeln('  genuinely moved, update this path — do not delete the check.');
+    exit(1);
   }
 
   final concepts = parseConcepts(registry.readAsStringSync());
@@ -102,8 +109,12 @@ void main(List<String> args) {
     if (!file.existsSync()) continue;
 
     final name = path.split('/').last;
-    final raw = citationOf(file.readAsStringSync());
+    final content = file.readAsStringSync();
+    final raw = citationOf(content);
     if (raw == null) continue; // no field — validate_diagnose_doc.dart owns that
+
+    // Date from filename OR `date:` frontmatter, whichever is later.
+    final post = isPostCutoff(name, docContent: content);
 
     for (final cited in splitCitation(raw)) {
       final entry = '$name -> $cited';
@@ -112,10 +123,15 @@ void main(List<String> args) {
         case CitationVerdict.resolved:
           break;
         case CitationVerdict.prose:
-          prose.add(entry);
+          // A POST-cutoff doc must cite a resolvable concept or an explicit
+          // sentinel — prose is a VIOLATION, not a shrug. Otherwise the whole
+          // gate is opt-out: write `sot_registry_entry: some new concept` with
+          // spaces and the resolve-check never applies, in --strict too.
+          // B-pass 2026-08-08, Finding 2.
+          (post ? violations : prose).add(entry);
           break;
         case CitationVerdict.dangling:
-          (isPostCutoff(name) ? violations : backlog).add(entry);
+          (post ? violations : backlog).add(entry);
           break;
       }
     }

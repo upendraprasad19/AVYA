@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**36 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**38 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -41,6 +41,8 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-96 | community promotion has TWO mechanisms and the trigger may starve the… | a PRODUCT decision — which mechanism owns promotion. The mechanism is understood | 2026-08-07 — both definitions read directly (the trigger from live `pg_proc`, the | [:2136](open_issues.md#L2136) |
 | OI-97 | five PaywallSheet labels fall through to generic copy (P3) | nothing — mechanical, but it is copy work, so it wants the Wardroom brand soul | 2026-08-07 — `_featureSubtitle`'s switch read directly against every | [:2189](open_issues.md#L2189) |
 | OI-98 | notification preferences are push-only: a reinstall overwrites the… | nothing technical. The mechanism is understood and read from code; what is NOT | 2026-08-07 — by grep across `lib/core/services/` and `lib/features/auth/`, while | [:2215](open_issues.md#L2215) |
-| OI-99 | the stale-`userId` sink guard covers the nutrition fan-out only; ~26… | nothing — this is bounded work, not a decision | 2026-08-07 (grep below run against `post38-auth-fixes`) | [:2261](open_issues.md#L2261) |
 | OI-100 | ForgotPasswordSheet's two-step code flow has no test | nothing — bounded work | 2026-08-07 (`grep -rln "ForgotPasswordSheet" test/` → no matches) | [:2290](open_issues.md#L2290) |
 | OI-101 | ~90 diagnose-docs cite a `sot_registry_entry:` concept that does not exist | nothing — bounded, mechanical work. Gate 44 already prevents new instances. | 2026-08-08 (`dart run scripts/check_sot_registry_citations.dart` reports the | [:2314](open_issues.md#L2314) |
+| OI-102 | the stale-`userId` sink guard covers the nutrition fan-out only; ~26… | nothing — this is bounded work, not a decision | 2026-08-07 (grep below run against `post38-auth-fixes`) | [:2261](open_issues.md#L2261) |
+| OI-103 | OI numbering collides across concurrent sessions and nothing detects it | nothing — a small gate, but it needs a decision on where it runs (see below) | 2026-08-09 (two live collisions in one day: OI-96/97/98, then OI-99) | [:2351](open_issues.md#L2351) |
+| OI-104 | the anon telemetry lane's daily budget is a non-atomic count-then-insert | nothing | 2026-08-09 (B-pass on `d4a8de00`, reviewer read the deployed function source) | [:2376](open_issues.md#L2376) |

@@ -2258,7 +2258,7 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Blast radius estimate**: `account` — touches the sync restore path; no migration, no schema
   change for the first fix shape.
 
-## OI-99 — the stale-`userId` sink guard covers the nutrition fan-out only; ~26 sibling sinks share the shape
+## OI-102 — the stale-`userId` sink guard covers the nutrition fan-out only; ~26 sibling sinks share the shape
 
 - **Status**: OPEN
 - **Blocked on**: nothing — this is bounded work, not a decision
@@ -2347,3 +2347,47 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   the gate graduates to `--strict` by default. Normalising the 29 prose citations to a bare
   identifier or a sentinel closes the gate's remaining blind spot.
 - **Blast radius estimate**: `feature` (docs + a constant), though it touches many files.
+
+## OI-103 — OI numbering collides across concurrent sessions and nothing detects it
+
+- **Status**: OPEN
+- **Blocked on**: nothing — a small gate, but it needs a decision on where it runs (see below)
+- **Verified**: 2026-08-09 (two live collisions in one day: OI-96/97/98, then OI-99)
+- **Identified**: 2026-08-09 · B-pass Finding 4 on `d4a8de00`
+- **Risk class**: cross-session process drift — silent, and both sides validate clean
+- **What's wrong**: §4.13 worktrees isolate the git INDEX; they do NOT isolate the shared
+  `## OI-NN` numbering NAMESPACE in `docs/audit/open_issues.md`. Two sessions filing issues
+  concurrently both pick "the next free number" against *their own* base and both are correct in
+  isolation. Nothing — not the OI index generator, not Gate 40, not the merge — compares the two.
+- **Measured**: 2026-08-08 mine claimed OI-96/97/98, already taken on `origin/main`; renumbered to
+  99/100/101. Within hours `origin/main` advanced again (`c90fc4c0`) with its own OI-99, so mine
+  moved to 100/101/102. **Two collisions, one day, same branch.** The manual renumber is a patch,
+  not a fix — it goes stale the moment another session lands.
+- **Why it matters beyond tidiness**: an OI number is a citation target. Diagnose-docs, closure
+  YAMLs and commit messages all cite `OI-NN`. A collision silently repoints someone else's
+  citation at your issue.
+- **Fix shape**: `scripts/check_oi_numbering_unique.dart` — parse `## OI-(\d+)` from HEAD and from
+  `origin/main`, fail when the same number carries a different title. **Open decision:** a
+  pre-commit gate would read a possibly-stale local `origin/main` ref (fails safe, but weakly);
+  CI is authoritative but only catches it after the push. Probably both, with CI as the real gate.
+  A cheaper complement: allocate from a high, per-session-reserved block instead of "next free".
+- **Blast radius estimate**: `feature` (a script plus wiring).
+
+## OI-104 — the anon telemetry lane's daily budget is a non-atomic count-then-insert
+
+- **Status**: OPEN
+- **Blocked on**: nothing
+- **Verified**: 2026-08-09 (B-pass on `d4a8de00`, reviewer read the deployed function source)
+- **Identified**: 2026-08-09 · raised by the B-pass reviewer as an un-filed caveat rather than a
+  finding, because it is not a regression from that commit
+- **Risk class**: soft rate limit presented as a hard one
+- **What's wrong**: `log-client-error`'s anon lane counts existing rows and then inserts, with no
+  DB-side reservation or trigger — unlike this codebase's own ai-proxy reservation pattern. Under
+  concurrency the effective ceiling exceeds `ANON_DAILY_RATE_LIMIT = 200`. It is now reachable
+  with only the public anon key, which is what makes it worth writing down.
+- **Why it is not urgent**: the lane is allow-list-only (six op_types, all `_failed`), is forced
+  non-high-priority so it cannot bypass the priority budget, and writes `user_id NULL` rows that
+  the authenticated RLS policy still refuses. The exposure is noise volume, not authz.
+- **Fix shape**: either a Postgres-side reservation (the ai-proxy pattern) or accept the soft cap
+  explicitly and say so in the function header, so nobody later reads 200 as a guarantee.
+- **Blast radius estimate**: `platform` (Edge Function + possibly a migration).

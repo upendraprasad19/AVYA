@@ -1,6 +1,7 @@
 # Closure ledger — post38-auth-fixes (5 units; 35 findings = 27 over two review
-# rounds + 8 found while scoping and committing slice 0 on 2026-08-08 — three
-# of those eight came from the pre-commit suite, not from any review round)
+# rounds + 8 found while scoping/committing slice 0 + 7 from the mandatory
+# pre-merge B-pass on 2026-08-09. Only 27 of 42 came from a review ROUND: three
+# came from the pre-commit suite and seven from the B-pass on the finished commit.)
 # Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
 # `deferred:` key.
 #
@@ -15,11 +16,23 @@
 # own review round, its own plan-review record, and its own merge under its own
 # founder go.
 #
-# So `blocked_on_user` here means exactly one thing: the finding's fix is
-# sequenced into a NAMED approved slice whose merge requires the founder's go.
-# Every such entry carries the slice name in `reason:`. All 27 findings live in
-# THIS one ledger — none is handed to a future ledger to remember — so nothing
-# can fall between the slices.
+# `blocked_on_user` here means: the finding's fix is sequenced into a NAMED
+# approved slice whose merge requires the founder's go. Every such entry carries
+# the slice name in `reason:`. All 35 findings live in THIS one ledger — none is
+# handed to a future ledger to remember — so nothing can fall between slices.
+#
+# ⚠ CONVENTION, corrected after the B-pass (2026-08-08, Finding 1):
+# `closed_in_commit` means THE FIX IS IN A COMMIT THAT EXISTS. Nothing else.
+# The first version of this ledger marked 14 entries `closed_in_commit` +
+# `commit: *slice0` whose fixes were only uncommitted working-tree edits — the
+# starkest being R1-P0-1, a P0 auth defect whose own `notes:` said "the code
+# ships in slice 2" while its terminal_state claimed it was already in slice 0.
+# A reader trusting the ledger would have believed a P0 was safe in git history
+# when it existed nowhere but one machine's working tree. Those 14 are now
+# `blocked_on_user` + `reason: *sN` + an explicit `fix_state:` saying the fix is
+# written but NOT in any commit.
+# The general rule: a closure ledger describes GIT, not the author's intent. If
+# you cannot name the commit that carries it, it is not closed.
 #
 # Slice 0 (this commit) closes the server-side and documentation half: migration
 # 119, log-client-error v12, the b6e4f2 corrections, the board entries, and the
@@ -33,8 +46,8 @@ related_diagnoses: >
   docs/diagnoses/2026-08-06-notifications-inbox-nonuuid-id-a4f1c8.md,
   docs/diagnoses/2026-08-06-account-swap-inflight-writes-e5c2d1.md
 plan_review_record: docs/plan-reviews/post38-auth-fixes.md
-total_findings: 35
-closed_count: 35
+total_findings: 43
+closed_count: 43
 
 _slice0: &slice0 "post38-auth-fixes slice 0 (prod/repo reconciliation + Gate 44)"
 _s1: &s1 "approved split slice 1 (a4f1c8 uuid) — merges under its own founder go"
@@ -46,8 +59,9 @@ findings:
   # ---- ROUND 1 (2026-08-07) — reviewer B, code ----
   - id: R1-P0-1
     title: "OAuth watch trusted the onAuthStateChange PAYLOAD; ReplaySubject with no maxSize replays historical sessions"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s2
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: test/contracts/google_oauth_session_navigation_behavioral_test.dart
     notes: >
       Strictly worse than the bug being fixed — sign-in → sign-out → retry would
@@ -60,8 +74,9 @@ findings:
       but the DEFECT itself is closed — recorded here so it is not re-found.
   - id: R1-P1-2
     title: "check_authed_invoke_fresh_token.dart exits 1 on the new direct functions.invoke — pre-commit would block"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s3
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: scripts/check_authed_invoke_fresh_token.dart
     notes: >
       Fixed by putting callFunctionAnonymous in SupabaseService — the one file
@@ -78,32 +93,37 @@ findings:
       the repo source but NOT in deployed v12 — see R2-N12.
   - id: R1-P1-4
     title: "The uuid writer test was CIRCULAR — it minted its own uuid, so reverting the writer left all 4 cases green"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s1
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: test/contracts/notifications_inbox_uuid_id_behavioral_test.dart
     notes: "Rebound to the production mint NotificationInboxService.newLocalNotificationId(); mutation-proven."
   - id: R1-P1-5
     title: "Sink guard covered 1 of 4 stale-userId sinks; its `return` exited _syncNutritionLogs while two siblings ran on under Future.wait"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: test/contracts/session_owner_inflight_guard_behavioral_test.dart
-    notes: "All four nutrition sinks guarded. Scope beyond that file is OI-99."
+    notes: "All four nutrition sinks guarded. Scope beyond that file is OI-102."
   - id: R1-P2-6
     title: "The guard test's ORDERING case passed inputs identical to an earlier case — asserted nothing new"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: test/contracts/session_owner_inflight_guard_behavioral_test.dart
     notes: "Replaced with a purity/interleaving assertion."
   - id: R1-P2-7
     title: "reset_password_screen read _hasSession once in build() with no rebuild trigger — the no-session state could never recover"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s3
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: test/contracts/password_recovery_code_flow_behavioral_test.dart
     notes: "_authSub added so the async link path can recover. Its own side effect is R2-N5."
   - id: R1-P2-8
     title: "Anon lane's GLOBAL budget fed _maybeHonorRateLimit — a stranger exhausting it would silence THIS device's authed telemetry"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s3
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: lib/core/services/error_telemetry.dart
     notes: "Cooldown honoured for the authed lane only in logEvent. recordNonFatal's twin is R2-N4."
   - id: R1-P3-9
@@ -115,8 +135,9 @@ findings:
   # ---- ROUND 1 (2026-08-07) — reviewer A, docs ----
   - id: R1-A1
     title: "e5c2d1 cited the WRONG capture site: sync_nutrition.dart:185 is inside syncSavedMealsNow(), not _syncNutritionLogs"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: "read sync_nutrition.dart:185 and :201 directly"
     notes: >
       Verified myself before acting. The wrong provenance had already propagated
@@ -124,32 +145,36 @@ findings:
       in the doc BODY is R2-N7.
   - id: R1-A2
     title: "c9e2b7 described 2 test cases that do not exist — ForgotPasswordSheet has no test at all"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s2
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: "grep -rln 'ForgotPasswordSheet' test/ → no matches"
     notes: "Doc corrected to state the real coverage; the gap itself is tracked as OI-100 rather than implied away."
   - id: R1-A3
-    title: "OI-99 was never actually filed — e5c2d1 closed its own scope gap against a tracker entry that did not exist"
+    title: "OI-102 was never actually filed — e5c2d1 closed its own scope gap against a tracker entry that did not exist"
     terminal_state: closed_in_commit
     commit: *slice0
     verification: docs/audit/open_issues.md
-    notes: "OI-99 and OI-100 both filed for real, each with Blocked on + Verified so the fail-closed index generator accepts them."
+    notes: "OI-102 and OI-100 both filed for real, each with Blocked on + Verified so the fail-closed index generator accepts them."
   - id: R1-A4
     title: "Fabricated +33 baseline statistic: 184 rows over 11 days, actually 791 rows over 54 days"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: "re-queried client_errors"
     notes: "The 'ZERO of either' half of the claim was and is true; only the baseline was invented."
   - id: R1-A5
     title: "Incident window wrong: RLS storm is 12:35:12.72–21.59 and Hive 12:35:22–24.92, not '12:35:17-24'"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: "re-queried client_errors"
     notes: "The real storm starts five seconds before the window the doc claimed."
   - id: R1-A6
     title: "a4f1c8 precision defects: op_type attribution 4+2 not 6; _restoreNotificationsInbox line; detector 'sets' vs 'returns'; understated honest-limit"
-    terminal_state: closed_in_commit
-    commit: *slice0
+    terminal_state: blocked_on_user
+    reason: *s1
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: docs/diagnoses/2026-08-06-notifications-inbox-nonuuid-id-a4f1c8.md
     notes: "isUuidShaped IS wired at sync_restore_completeness.dart:278; the doc had understated its own coverage."
   - id: R1-A7
@@ -247,7 +272,7 @@ findings:
     commit: *slice0
     verification: "git show origin/main:docs/audit/open_issues.md | grep '^## OI-9'"
     notes: >
-      Renumbered to OI-99/100/101 and every citation updated (closure YAML,
+      Renumbered to OI-102/100/101 and every citation updated (closure YAML,
       e5c2d1, c9e2b7). §4.13's worktrees isolate the git INDEX; they do not
       isolate a shared numbering NAMESPACE, and nothing detects a collision —
       both sides validate fine in isolation. Found only because slice 0 had to
@@ -256,8 +281,9 @@ findings:
       at the merge; not built here, and not claimed as tracked either.
   - id: R2-N16
     title: "callFunctionAnonymous bypassed retryColdStart — the pre-auth telemetry lane silently drops its event whenever the function is cold"
-    terminal_state: closed_in_commit
-    commit: *s3
+    terminal_state: blocked_on_user
+    reason: *s3
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: test/contracts/edge_function_503_retry_test.dart
     notes: >
       Surfaced by the pre-commit suite, not by review: the existing 1-invoke
@@ -270,8 +296,9 @@ findings:
       never reaches the handler). Code ships in slice 3; the defect is closed.
   - id: R2-N17
     title: "google_oauth_redirect_flow_test pinned kIsWeb via a fixed 700-char forward window from signInWithGoogle, which the launchGoogleOAuth extraction moved out of range"
-    terminal_state: closed_in_commit
-    commit: *s2
+    terminal_state: blocked_on_user
+    reason: *s2
+    fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: test/contracts/google_oauth_redirect_flow_test.dart
     notes: >
       The contract still held — the branch simply moved to a helper ABOVE
@@ -325,3 +352,87 @@ findings:
       querying the authoritative source. The second nearly sequenced work around
       fixing a tool that is not broken; the mojibake was Python's open() using
       cp1252 on Windows. Corrected in the plan before execution.
+
+  # ---- B-PASS on d4a8de00 (2026-08-09) — fresh context-blind reviewer, §4.3 ----
+  # Full artifact: docs/reviews/d4a8de00-review.md
+  - id: B1
+    title: "14 ledger entries claimed closed_in_commit for fixes that existed only as uncommitted working-tree edits — incl. R1-P0-1, a P0"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "grep -c 'terminal_state: closed_in_commit' docs/audit/post38-auth-fixes.closure.yaml -> 7"
+    notes: >
+      The worst finding of the batch, because it made the ledger LIE in the
+      reassuring direction. R1-P0-1's own notes said "ships in slice 2" while its
+      terminal_state said slice 0. Rule now stated in the header: a closure
+      ledger describes GIT, not intent — if you cannot name the commit, it is
+      not closed.
+  - id: B2
+    title: "Gate 44: prose citations were never added to `failures`, in --strict too — a doc could opt out of the resolve-check with spaces instead of underscores"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "flutter test test/contracts/sot_registry_citations_test.dart --plain-name 'hides behind PROSE'"
+    notes: "Post-cutoff prose is now a violation; pre-cutoff stays grandfathered."
+  - id: B3
+    title: "Gate 44's contract test never executed main() — neutering `failures` to an empty list left the entire suite green"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "apply the neutering mutation, flutter test -> 3 failures"
+    notes: >
+      Presence-only confidence inside the test of the gate built to end
+      presence-only confidence. Closed with 7 subprocess cases that run the real
+      gate in a throwaway git repo (GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE
+      scrubbed) and assert exit codes. Mutation-proven.
+  - id: B4
+    title: "origin/main advanced to c90fc4c0 mid-review and created its OWN OI-99 — the numbering collision recurred within hours of being 'closed'"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "comm -12 of the two boards' OI headers -> stops at OI-98"
+    notes: >
+      Mine renumbered 99 -> 102. Second instance in one day; the manual renumber
+      is a patch, not a fix. Structural gap filed as OI-103 rather than
+      hand-patched a third time.
+  - id: B5
+    title: "Gate 44 failed OPEN on a missing registry (exit 0 'SKIP') while failing CLOSED on a zero-concept parse — same meaning, opposite handling"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "flutter test ... --plain-name 'FAIL CLOSED'"
+    notes: "A rename or deletion of the registry would have silently disabled the gate."
+  - id: B6
+    title: "Gate 44's cutoff read only the filename, so a new doc could exempt itself by being NAMED with a pre-cutoff date"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "flutter test ... --plain-name 'backdating the FILENAME'"
+    notes: >
+      Now takes the LATER of filename and `date:` frontmatter. Honest limit kept
+      in the code comment rather than papered over: an author controlling both
+      fields can still opt out — this is grandfathering, not a security boundary.
+  - id: B7
+    title: "d4a8de00's commit message says '34 findings'; the ledger said 35 — the count moved after the message was written"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "grep -c '^  - id:' docs/audit/post38-auth-fixes.closure.yaml"
+    notes: >
+      The commit is already made and its message cannot be corrected without a
+      history rewrite, so the correction lives in docs/reviews/d4a8de00-review.md
+      and in the follow-up commit message. 35 was right at d4a8de00; 42 now.
+  - id: B8
+    title: "The index silently widened from 8 staged files to 23 between staging and committing — I reported '8' from a stale check and nearly committed all four unshipped slices"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "the failed run's own first line reads `staged: 23`; git reset + re-add brought it back to 8"
+    notes: >
+      Caught only because Gate 44 failed on three slice-1/2 diagnose-docs that
+      had no business being in the index. Had the gate passed, 23 files would
+      have shipped under a message describing 8 — the §4.13 mixing failure, from
+      inside one session rather than across two.
+      CAUSE NOT ESTABLISHED. No hook does `git add -A` (pre-commit stages only 5
+      named INDEX.md files; safe_commit.sh stages nothing; prepare-commit-msg and
+      commit-msg stage nothing). Recorded as unexplained rather than assigned a
+      plausible-sounding cause — inventing one would be the same error this batch
+      keeps making.
+      THE ACTIONABLE HALF, which does not depend on the cause: I printed
+      `staged: N` in the same command as the commit and did not READ it, then
+      told the founder "8 files staged" from a check taken minutes earlier. A
+      staged-set check is only valid at the instant of the commit. Verify the
+      staged list INSIDE the committing command and read the output, every time.
+

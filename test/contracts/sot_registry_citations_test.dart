@@ -157,6 +157,163 @@ concepts:
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // SUBPROCESS tests — these execute the GATE ITSELF (`main()`), not just the
+  // pure lib.
+  //
+  // Added after B-pass 2026-08-08 Finding 3: every test above imports only
+  // sot_citation_lib.dart, so the cutoff branching, --strict handling and
+  // exit(0)/exit(1) wiring were entirely uncovered. Replacing the gate's
+  // `failures` list with a literal `<String>[]` — a total neutering — left the
+  // whole suite green. That is presence-only confidence of exactly the shape
+  // this gate exists to stop, in the gate's own test.
+  //
+  // Each case builds a THROWAWAY git repo so the gate's `git ls-files` sees a
+  // controlled corpus.
+  //
+  // ⚠ The ENTIRE GIT_* namespace is scrubbed AND `includeParentEnvironment` is
+  // false — see runGateOn. Inside the pre-commit hook this test inherits git's
+  // exported vars, which override BOTH `workingDirectory:` AND `-C`, so the
+  // fixture would silently operate on the REAL repo
+  // (feedback_mistake_git_hook_env_leak). Naming three variables was not
+  // enough, and scrubbing without the flag did nothing at all.
+  // Regression-check both paths with:
+  //   GIT_DIR=$(git rev-parse --git-dir) GIT_WORK_TREE=$(pwd) GIT_PREFIX= \
+  //     flutter test test/contracts/sot_registry_citations_test.dart
+  group('gate subprocess (main() wiring)', () {
+    late String scriptPath;
+
+    setUpAll(() {
+      scriptPath = '${Directory.current.path}/scripts/check_sot_registry_citations.dart';
+      expect(File(scriptPath).existsSync(), isTrue, reason: 'gate script must exist');
+    });
+
+    /// Builds a temp git repo, writes [registry] + one doc, returns the gate's
+    /// ProcessResult.
+    ProcessResult runGateOn({
+      required String registryYaml,
+      required String docName,
+      required String docBody,
+      bool writeRegistry = true,
+      List<String> args = const [],
+    }) {
+      final tmp = Directory.systemTemp.createTempSync('gate44_');
+      // Scrub the ENTIRE GIT_* namespace, not a hand-picked few.
+      //
+      // A first version removed only GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE —
+      // the three named in feedback_mistake_git_hook_env_leak — and passed
+      // standalone but failed all 7 cases inside the pre-commit hook with
+      // "fatal: this operation must be run in a work tree". git exports more
+      // than those three (GIT_PREFIX, GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY,
+      // GIT_ALTERNATE_OBJECT_DIRECTORIES, GIT_CONFIG*, …) and any one of them
+      // can re-point a child git at the REAL repo. Enumerating names is the bug;
+      // scrubbing the namespace is the fix.
+      final env = Map<String, String>.from(Platform.environment)
+        ..removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
+
+      Directory('${tmp.path}/docs/diagnoses').createSync(recursive: true);
+      if (writeRegistry) {
+        File('${tmp.path}/docs/sot_registry.yaml').writeAsStringSync(registryYaml);
+      }
+      File('${tmp.path}/docs/diagnoses/$docName').writeAsStringSync(docBody);
+
+      for (final cmd in [
+        ['init'],
+        ['config', 'user.email', 't@t.t'],
+        ['config', 'user.name', 't'],
+        ['add', '-A'],
+      ]) {
+        final r = Process.runSync('git', cmd,
+            workingDirectory: tmp.path,
+            environment: env,
+            includeParentEnvironment: false);
+        expect(r.exitCode, 0, reason: 'git ${cmd.first} failed: ${r.stderr}');
+      }
+
+      // runInShell: on Windows the launcher is `dart.bat`, which Process cannot
+      // exec directly — without this every case dies with a bare
+      // "The system cannot find the file specified" that looks like a gate bug.
+      return Process.runSync(
+        'dart',
+        ['run', scriptPath, ...args],
+        workingDirectory: tmp.path,
+        environment: env,
+        includeParentEnvironment: false,
+        runInShell: true,
+      );
+    }
+
+    const goodRegistry = 'concepts:\n\n  - concept: real_concept\n    domain: x\n';
+
+    test('exit 1 when a POST-cutoff doc cites an absent concept', () {
+      final r = runGateOn(
+        registryYaml: goodRegistry,
+        docName: '2026-08-09-thing-abc123.md',
+        docBody: 'sot_registry_entry: no_such_concept\n',
+      );
+      expect(r.exitCode, 1, reason: 'stdout=${r.stdout} stderr=${r.stderr}');
+      expect('${r.stderr}', contains('no_such_concept'));
+    });
+
+    test('exit 0 when a POST-cutoff doc cites a real concept', () {
+      final r = runGateOn(
+        registryYaml: goodRegistry,
+        docName: '2026-08-09-thing-abc123.md',
+        docBody: 'sot_registry_entry: real_concept\n',
+      );
+      expect(r.exitCode, 0, reason: 'stdout=${r.stdout} stderr=${r.stderr}');
+    });
+
+    test('exit 1 when a POST-cutoff doc hides behind PROSE (Finding 2)', () {
+      // The evasion: spaces instead of underscores means "not identifier-shaped",
+      // which used to be filed as an unadjudicated WARN even under --strict.
+      final r = runGateOn(
+        registryYaml: goodRegistry,
+        docName: '2026-08-09-thing-abc123.md',
+        docBody: 'sot_registry_entry: some brand new concept\n',
+      );
+      expect(r.exitCode, 1, reason: 'prose must not be an opt-out; stdout=${r.stdout}');
+    });
+
+    test('a PRE-cutoff doc with the same dangling citation is grandfathered', () {
+      // The discriminator for the cutoff branch: identical body, older name.
+      final r = runGateOn(
+        registryYaml: goodRegistry,
+        docName: '2026-05-04-thing-abc123.md',
+        docBody: 'sot_registry_entry: no_such_concept\n',
+      );
+      expect(r.exitCode, 0, reason: 'stdout=${r.stdout} stderr=${r.stderr}');
+    });
+
+    test('backdating the FILENAME does not exempt a doc whose frontmatter is recent (Finding 6)', () {
+      final r = runGateOn(
+        registryYaml: goodRegistry,
+        docName: '2026-05-04-thing-abc123.md',
+        docBody: 'date: 2026-08-09\nsot_registry_entry: no_such_concept\n',
+      );
+      expect(r.exitCode, 1, reason: 'later of filename/frontmatter wins; stdout=${r.stdout}');
+    });
+
+    test('exit 1 (FAIL CLOSED) when the registry file is missing (Finding 5)', () {
+      final r = runGateOn(
+        registryYaml: goodRegistry,
+        docName: '2026-08-09-thing-abc123.md',
+        docBody: 'sot_registry_entry: real_concept\n',
+        writeRegistry: false,
+      );
+      expect(r.exitCode, 1, reason: 'a missing registry must not silently disable the gate');
+    });
+
+    test('an explicit sentinel is accepted post-cutoff', () {
+      final r = runGateOn(
+        registryYaml: goodRegistry,
+        docName: '2026-08-09-thing-abc123.md',
+        docBody: 'sot_registry_entry: not_applicable\n',
+      );
+      expect(r.exitCode, 0, reason: 'stdout=${r.stdout} stderr=${r.stderr}');
+    });
+  });
+
   group('end-to-end pipeline', () {
     test('a doc citing an absent concept is classified dangling', () {
       const doc = '''
