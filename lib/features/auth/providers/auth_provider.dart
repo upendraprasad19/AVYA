@@ -410,11 +410,75 @@ class AuthNotifier extends Notifier<AuthState2> {
     }
   }
 
+  /// True while [signOut] is tearing the session down.
+  ///
+  /// `_authRedirect` reads this. Between `clearAllData()` and
+  /// `auth.signOut()` the app is simultaneously AUTHENTICATED and
+  /// `onboarding_completed == false` (the box it reads was just wiped), and
+  /// `app_router.dart`'s `!isOnboarded` branch reads that as "this user has
+  /// never onboarded" → `/onboarding`. That is the founder's 2026-08-05
+  /// sign-out report, and it is intermittent only because GoRouter has no
+  /// `refreshListenable` on auth state, so whether a redirect evaluates inside
+  /// the window is timing-dependent.
+  ///
+  /// A `static` (not Riverpod) deliberately: `_authRedirect` is a plain
+  /// function on the router, evaluated synchronously during navigation, with
+  /// no `ref`. Same reason `HiveUserSession.currentOwnerFullId` is static.
+  static bool signOutInProgress = false;
+
   /// Sign the user out of Supabase.
   ///
-  /// Sign out BEFORE clearing Hive so the router never sees
-  /// authenticated + !onboarded which would redirect to /onboarding.
-  Future<void> signOut() async {
+  /// **Ordering: Hive teardown FIRST, `auth.signOut()` LAST — deliberately.**
+  /// This comment used to claim the reverse ("sign out BEFORE clearing Hive so
+  /// the router never sees authenticated + !onboarded"), which the code has not
+  /// done since 2026-04-28 (`217a8cbd0`, the cross-account file-leak fix). The
+  /// comment was describing an intent the ordering had already abandoned, and
+  /// the window it warned about is real — see [signOutInProgress], which is how
+  /// it is actually closed now.
+  ///
+  /// The order cannot simply be flipped back. `clearAllData()` clears the 7
+  /// user-scoped boxes through `wrapUserScopedBox`, which THROWS when the
+  /// caller is unauthenticated with a non-null owner. End the Supabase session
+  /// first and all 7 clears throw — each caught independently
+  /// (`user_repository.dart:606`), so the teardown still completes via the
+  /// shared boxes plus [HiveUserSession.deleteAllFilesForCurrentUser] — but
+  /// every sign-out would then report 7 failures, fire 7 `recordNonFatal`
+  /// events, and return `ClearResult.hasFailures`. Two live recovery paths key
+  /// off exactly that signal (`_ensureLocalUser` below, `main.dart:74`'s
+  /// interrupted-logout completion), so flipping the order would drown a real
+  /// partial-clear alarm in permanent noise.
+  /// Ceiling on the WHOLE teardown.
+  ///
+  /// B-pass finding 1: a `finally` only runs when control leaves the `try`, and
+  /// a never-resolving `await` never does. None of the four steps below carries
+  /// its own timeout, and `_supabase.client.auth.signOut()` is a network call —
+  /// exactly the wedge class [SyncService.restoreOpTimeout] exists for. A wedge
+  /// there would strand [signOutInProgress] ON forever, and because it is a
+  /// process-global static that pins EVERY session on the device at /sign-in
+  /// until restart, not just this one. Bounding the whole sequence guarantees
+  /// the `finally` is reached.
+  ///
+  /// Shorter than the restore ceiling (45s) on purpose: teardown is local work
+  /// plus one auth call, and the user is staring at a button they just tapped.
+  static const Duration signOutTimeout = Duration(seconds: 20);
+
+  /// The in-flight teardown, so a second caller JOINS instead of racing.
+  ///
+  /// B-pass finding 1, second half: neither sign-out entry point debounces, and
+  /// with two overlapping calls the first to finish would clear the flag while
+  /// the other is still mid-teardown — reopening the exact authenticated +
+  /// wiped-box window this guard closes.
+  static Future<void>? _inFlightSignOut;
+
+  Future<void> signOut() {
+    final existing = _inFlightSignOut;
+    if (existing != null) return existing; // join, never race
+    final run = _performSignOut();
+    _inFlightSignOut = run;
+    return run.whenComplete(() => _inFlightSignOut = null);
+  }
+
+  Future<void> _performSignOut() async {
     // APK Test #12.8 — capture sign-out before any Hive clear so the
     // event makes it to cloud even if a subsequent step throws.
     final signedOutId = _supabase.currentUser?.id;
@@ -422,6 +486,31 @@ class AuthNotifier extends Notifier<AuthState2> {
       unawaited(ErrorTelemetry.logEvent('auth_signed_out',
           message: 'userId=${signedOutId.substring(0, 8)}'));
     }
+    // try/finally, not a plain assignment pair: every step below already
+    // swallows its own throw, but an error escaping between them (or the
+    // caller cancelling) must not strand the flag ON — that would pin the
+    // whole app at /sign-in until restart.
+    signOutInProgress = true;
+    try {
+      await _teardown().timeout(signOutTimeout);
+    } catch (e) {
+      // Includes TimeoutException. Teardown is already best-effort per step;
+      // what matters here is that control LEAVES the try so the finally runs.
+      debugPrint('[auth/signOut] teardown did not complete cleanly: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, StackTrace.current,
+          reason: 'auth_signout_teardown_incomplete'));
+    } finally {
+      // Cleared only after the session is genuinely gone, so the next
+      // `_authRedirect` falls through to the ordinary `!isAuthenticated`
+      // branch rather than the wiped-box one.
+      signOutInProgress = false;
+    }
+
+    state = const AuthState2(status: AuthStatus.idle);
+  }
+
+  /// The teardown sequence itself. Order is load-bearing — see [signOut].
+  Future<void> _teardown() async {
     try {
       await UserRepository.instance.clearAllData();
     } catch (e) {
@@ -439,8 +528,6 @@ class AuthNotifier extends Notifier<AuthState2> {
     }
 
     await unbindSessionIdentity();
-
-    state = const AuthState2(status: AuthStatus.idle);
   }
 
   /// OI-51 — releases every per-user identity this device holds outside Hive.

@@ -24,11 +24,19 @@ import 'hold_chip_group.dart';
 ///   - tappable → opens [_PastWeekSheet] showing the 7-day breakdown
 ///     from `schedule_*` Hive entries for that historical week.
 ///
-/// Past-phase detection: walks `workoutBox.toMap()` for keys starting
-/// with `schedule_`, groups entries by date range (4 calendar weeks
-/// each), filters to date ranges strictly BEFORE the current plan's
-/// `plan_start_date`. The current phase (and locked previews of
-/// future phases II/III) keep the pre-fix behaviour.
+/// Past-phase detection: DELEGATED, not done here. This widget calls
+/// `WorkoutScheduleReadService.pastPhaseBlocksForDisplay(currentPhase)`; the
+/// `workoutBox` walk, the `schedule_` prefix filter, the plan-start cutoff and
+/// the 28-day bucketing all live in that shared SoT, which
+/// `PhaseProgressReconciler` also feeds from (via the STRICT `pastPhaseBlocks()`
+/// — see diagnose c9e4b7 for why the two callers need different strictness).
+/// Re-walking the box here is what makes the two drift apart; pinned by
+/// week_selector_reads_current_phase_test.dart.
+///
+/// ⚠ Corrected 2026-08-09: this comment used to describe the walk as happening
+/// in this file. It has not since the 2026-06-02 refactor.
+/// The current phase (and locked previews of future phases II/III) keep the
+/// pre-fix behaviour.
 ///
 /// The widget accepts the same public signature as before
 /// (`totalWeeks`, `selectedWeek`, `onSelect`) so all existing call-sites
@@ -126,8 +134,17 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
     // reconciler uses — no parallel reader to drift). currentPhase drives the
     // numbering AND the gate (no past groups on Phase 1 — you can't have
     // completed a phase yet).
-    final pastPhases =
-        _toPastPhases(service.pastPhaseBlocks(), widget.currentPhase);
+    // ...via the DISPLAY wrapper: the strict `pastPhaseBlocks()` keys "past"
+    // solely on `plan_start_date`, so an account whose `current_phase` advanced
+    // without `plan_start` moving with it rendered "PHASE II" as current with
+    // ZERO past groups behind it — no PHASE I anywhere (diagnose c9e4b7). The
+    // wrapper recovers those blocks for display without widening what
+    // `PhaseProgressReconciler` treats as past (it advances a counter that can
+    // never be walked back).
+    final pastPhases = _toPastPhases(
+      service.pastPhaseBlocksForDisplay(widget.currentPhase),
+      widget.currentPhase,
+    );
 
     // Free-tier hold weeks (ship-dark `enable_hold_weeks`). Always
     // HoldStatusData.empty while the flag is OFF, so everything below this line

@@ -6,6 +6,15 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### notification_cron_eligibility_and_pro_gate (1 bugs)
+- 2026-08-09 e3b9d7 — TWO notification-cron defects reported by the founder from their own phone and account, 2026-08-05 / 2026-08-07. (1) STREAK-GUARDIAN SENT A SELF-CONTRADICTING PUSH. A single notification read "Don't…
+
+### past_phase_display_recovery (1 bugs)
+- 2026-08-09 c9e4b7 — Founder, live web 2026-08-05, account upendraprasad19@gmail.com: the Train screen's week selector showed NO past-phase history despite the account being on Phase 2 with a completed Phase 1 on record.…
+
+### signout_teardown_window_and_restore_op_ceiling (1 bugs)
+- 2026-08-09 b7e4c1 — TWO defects on the auth/session path, both reported by the founder from live web on 2026-08-05, both fixed here because they share the same root class — an unbounded or ambiguous state read during a…
+
 ### claude_md_section_citation — the pointer from a source comment to a numbered
 section of root `CLAUDE.md`. The schema below is writer/reader-shaped because
 this drift IS writer/reader drift; the writer just happens to be a document
@@ -950,6 +959,9 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-09 | e3b9d7 | TWO notification-cron defects reported by the founder from their own phone and account, 2026-08-05 / 2026-08-07. (1) STREAK-GUARDIAN SENT A SELF-CONTRADICTING PUSH. A single notification read "Don't… | notification_cron_eligibility_and_pro_gate | test/contracts/streak_guardian_eligibility_test.dart |
+| 2026-08-09 | c9e4b7 | Founder, live web 2026-08-05, account upendraprasad19@gmail.com: the Train screen's week selector showed NO past-phase history despite the account being on Phase 2 with a completed Phase 1 on record.… | past_phase_display_recovery | test/contracts/past_phase_display_recovery_behavioral_test.dart |
+| 2026-08-09 | b7e4c1 | TWO defects on the auth/session path, both reported by the founder from live web on 2026-08-05, both fixed here because they share the same root class — an unbounded or ambiguous state read during a… | signout_teardown_window_and_restore_op_ceiling | test/contracts/signout_router_guard_behavioral_test.dart |
 | 2026-08-07 | b2f7a4 | 138 `CLAUDE.md §N` citations in `.dart` / `.ts` / `.sql` / `.js` comments pointed at root-CLAUDE.md sections that do not exist. Root's real headings are exactly `0, 1, 2, 2a, 3, 4, 5, 6, 7`; the… | claude_md_section_citation — the pointer from a source comment to a numbered
 section of root `CLAUDE.md`. The schema below is writer/reader-shaped because
 this drift IS writer/reader drift; the writer just happens to be a document
