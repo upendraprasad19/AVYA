@@ -1,0 +1,190 @@
+# Closure ledger — train-signout-notif-bugs
+#
+# Seven issues the founder found live-testing the web app as
+# upendraprasad19@gmail.com on 2026-08-05 / 2026-08-07.
+#
+# §4.2 structural invariant: every entry carries a terminal_state; the schema
+# has no `deferred:` key. Gate 40 recomputes the tally and fails if any item is
+# non-terminal.
+#
+# Four of the approved plan's premises did NOT survive verification and were
+# corrected before a line was written (see the plan-review record). Those
+# corrections are recorded per-entry below rather than summarised, because the
+# WRONG fix is the more useful thing for a future reader to find.
+
+batch: train-signout-notif-bugs
+date: 2026-08-09
+blast_radius: account
+diagnose_docs:
+  - docs/diagnoses/2026-08-09-past-phase-display-and-expired-copy-c9e4b7.md
+  - docs/diagnoses/2026-08-09-signout-redirect-race-and-restore-wedge-b7e4c1.md
+  - docs/diagnoses/2026-08-09-notification-cron-contradiction-and-pro-leak-e3b9d7.md
+total_count: 7
+closed_count: 7
+
+findings:
+  - id: 1
+    title: Week selector showed no past-phase history on a Phase-2 account
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: 9c254963
+    diagnose: c9e4b7
+    verification: >-
+      pastPhaseBlocks() filters schedule_* rows to STRICTLY BEFORE plan_start.
+      That is correct for the PhaseProgressReconciler, which advances
+      current_phase monotonically and calls an over-advance "unrecoverable" in
+      its own comment — but it renders nothing when plan_start has not advanced.
+      Split rather than loosened: the row walk moved into the shared
+      _scheduleRowsBefore(cutoff) so both paths parse a row identically, and a
+      DISPLAY-ONLY pastPhaseBlocksForDisplay recovers the wider set. The
+      reconciler is pinned to the strict method by an isFalse source-grep
+      assertion. Behavioural proof: past_phase_display_recovery_behavioral_test
+      (6, real Hive round-trip, seeded with the founder's live numbers);
+      mutation-proven — group B fails when the recovery is removed.
+      ⚠ PLAN PREMISE WAS WRONG: the plan named generateAndScheduleFromDate as
+      the culprit. It is Edit-Profile-only (edit_profile_screen.dart:1881); the
+      phase-advance path generateAndSchedule already writes plan_start, and the
+      isFirstGeneration gate is deliberate per sot_registry.yaml.
+
+  - id: 2
+    title: Plan-expired card hardcoded to Phase 1 regardless of actual phase
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: 9c254963
+    diagnose: c9e4b7
+    verification: >-
+      Copy now interpolates currentPhase / nextPhase read from UserRepository
+      (plan_expired_card.dart:123,125), so a user finishing Phase 3 is
+      congratulated on Phase 3 and offered Phase 4. A double space in the CTA
+      was removed in the same pass. The flag-OFF fallback string
+      'Run Week 4 again' was deliberately LEFT — it is reached only when
+      enable_hold_weeks is OFF, where it is accurate. Covered by the c9e4b7
+      diagnose-doc's reader map; no separate behavioural test, as this is a
+      pure copy interpolation with no state contract.
+
+  - id: 3
+    title: Sign-out intermittently landed on the ONBOARDING flow
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 9c254963
+    diagnose: b7e4c1
+    verification: >-
+      signOut() wipes Hive BEFORE ending the Supabase session, so mid-teardown
+      the app is authenticated AND onboarding_completed reads false — the router
+      took its !isOnboarded branch. AuthNotifier.signOutInProgress
+      (auth_provider.dart:427, set/cleared in a try/finally at :462/:485)
+      disambiguates it, and AppRouter.postSessionRedirect tests it FIRST
+      (app_router.dart:743). Behavioural proof:
+      signout_router_guard_behavioral_test (11) — mutation-proven, removing the
+      branch turns 4 red and the headline case returns '/onboarding', the
+      founder's exact symptom. A 5-test flag-OFF group proves every pre-existing
+      branch is byte-identical.
+      ⚠ PLAN PREMISE WAS WRONG: the plan proposed flipping the teardown ORDER.
+      That would make all 7 user-scoped clears throw (wrapUserScopedBox rejects
+      an unauthenticated caller with a non-null owner), so every sign-out would
+      permanently report ClearResult.hasFailures — the exact signal two live
+      recovery paths use to detect a REAL partial clear. Order kept; ambiguity
+      closed instead.
+
+  - id: 4
+    title: Restore hung forever on a wedged op; RestoringScreen never exited
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 9c254963
+    diagnose: b7e4c1
+    verification: >-
+      There was NO timeout anywhere in the restore chain — grep -c '.timeout('
+      returned 0 for sync_service.dart, supabase_service.dart AND
+      auth_session_bootstrapper.dart. SyncService.restoreOpTimeout = 45s
+      (:1996) applied via applyRestoreCeiling (:2015), with a TimeoutException
+      reported under its own reason sync_service_restore_op_timeout (:2027) so
+      the wedge class is countable in client_errors instead of traceless.
+      Kill-switch disable_restore_op_timeout restores the verbatim unbounded
+      await (§4.6). Behavioural proof: restore_op_timeout_behavioral_test (9,
+      fakeAsync) asserts BOTH sides of the boundary, that the kill-switch holds
+      across 10 simulated minutes, and that a timeout frees the awaiter WITHOUT
+      cancelling the request; mutation-proven, 4 red without the ceiling.
+      ⚠ PLAN PREMISE WAS WRONG: the plan proposed making the RestoringScreen
+      "Continue" button cancel the restore. cancelInflightRestore() is already
+      correctly wired (restoring_screen.dart:116,:182); making Continue abort
+      would kill working restores seconds from completion.
+
+  - id: 5
+    title: Hold-weeks display (enable_hold_weeks flag flip)
+    severity: P2
+    terminal_state: upstream_blocked
+    blocked_on: OI-60
+    blocker: >-
+      OI-60 carries 7 FOB items that are prerequisites for the hold-weeks
+      display path, none of them started. Flipping enable_hold_weeks in this
+      batch would activate surfaces whose inputs do not exist yet — the flag
+      gates real rendering, not a no-op. This is another work item with its own
+      board entry, not a scheduling choice made here.
+    reopen_when: >-
+      All 7 of OI-60's FOB items have landed. At that point the flip-on commit
+      requires the FULL x2 plan review plus bpass per CLAUDE.md 4.12.4 —
+      the ship-dark build-tier relaxation explicitly does NOT apply to the
+      commit that changes a flag's default, because that is the moment real
+      user risk starts. Re-verify the plan-expired card's flag-OFF fallback copy
+      (finding 2) at the same time, since it becomes unreachable.
+    verification: >-
+      NOT closed, and deliberately not attempted. Flipping enable_hold_weeks is
+      gated by OI-60's 7 unstarted FOB items; flipping it in this batch would
+      activate a display path whose prerequisites do not exist yet. This entry
+      is terminal as upstream_blocked rather than postponed — the blocker is another
+      party's unstarted work item with its own board entry, not a scheduling
+      choice made here. The flag remains OFF and untouched by this batch — the
+      plan-expired card's flag-OFF fallback copy (finding 2) is correct in that
+      state. Re-verify against OI-60 before any future flip; per §4.12.4 the
+      flip-on commit requires a FULL ×2 review regardless of how lightly the
+      build step was reviewed.
+      ⚠ A mid-session question of mine implied this flag could be flipped here.
+      That was walked back on verification; recorded so the walk-back is not
+      re-litigated.
+
+  - id: 6
+    title: streak-guardian sent a self-contradicting push
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 9c254963
+    diagnose: e3b9d7
+    verification: >-
+      Two independent root causes, both closed. (a) Eligibility gated on
+      current_streak_weeks while the copy quoted current_streak_days from the
+      daily SNAPSHOT — two caches, different writers. Both now come from the
+      selected user_progress row (select + .gte at index.ts:94,96; read at
+      :214), so they cannot disagree, and >= 1 means a live-0 user is never
+      told to protect a streak. The unreachable `?? streakWeeks * 7` fallback
+      was removed — it would silently restore the contradiction if the gate were
+      loosened. (b) The unbounded recent_pr_exercise title branch removed
+      entirely (its source scans all history with no cutoff; pr-detection
+      already owns real-time PRs with a 20-min lookback) AND removed from the
+      Gemini userState — dropping it from the title alone was insufficient
+      because the model writes the body independently. Proof:
+      streak_guardian_eligibility_test (9, comment-stripped source-grep +
+      brace/paren balance); mutation-proven, 3 red.
+      ⚠ SOURCE ONLY — the live deploy is a separate authorization (§4.3).
+
+  - id: 7
+    title: PRO-only Sunday Brief was sent to every active user
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 9c254963
+    diagnose: e3b9d7
+    verification: >-
+      weekly-recap-ready had NO subscription check of any kind; last_active_at
+      was its only filter. Confirmed live on the founder's own account — PRO
+      ended 2026-07-05, still receiving the Brief 2026-08-07. Now uses the
+      SHARED _shared/subscription.ts fetchProUserIds (status='active' AND
+      end_date > now(), NOT the stale denormalized users.subscription_status),
+      fetched ONCE outside the page loop (:133), filtered per-page before any
+      send work (:179), with the concurrency loop iterating proUsers (:263).
+      Pagination bookkeeping deliberately stays on the RAW page — .range()
+      walked the raw page, so advancing the offset by the filtered count would
+      SKIP users. Filtered-out users are counted as skipped (:180) so a
+      send-nobody run is visible rather than silently clean. Fails SAFE: an
+      empty set sends to nobody, never everybody. Proof:
+      weekly_recap_pro_filter_test (13, ordering assertions not just presence);
+      mutation-proven, the ordering test goes red when the loop reverts to the
+      raw page.
+      ⚠ SOURCE ONLY — the live deploy is a separate authorization (§4.3).
