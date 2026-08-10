@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### test_isolation_intra_file (1 bugs)
+- 2026-08-10 f3c7a2 — Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,…
+
 ### onboarding_completed_at (8 bugs)
 - 2026-08-10 c2e9f4 — Founder (upendraprasad19@gmail.com, auth.users.id d7a67a37-0b05-4f0a- b13c-388bff3cb59b) signed in with GOOGLE to an account created by email in May, force-closed the app during a slow restore,…
 - 2026-08-03 d4e8a2 — NOT a live incident — a static-tracing risk flagged in b3f9e7's own "Known residual gap" section, investigated and closed here. Nothing under lib/features/onboarding/ called…
@@ -966,6 +969,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-10 | f3c7a2 | Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,… | test_isolation_intra_file | test/scripts/worktree_config_integrity_e2e_test.dart |
 | 2026-08-10 | c2e9f4 | Founder (upendraprasad19@gmail.com, auth.users.id d7a67a37-0b05-4f0a- b13c-388bff3cb59b) signed in with GOOGLE to an account created by email in May, force-closed the app during a slow restore,… | onboarding_completed_at | test/contracts/local_onboarding_evidence_behavioral_test.dart |
 | 2026-08-10 | d7b3e9 | `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three… | worktree_retirement_allow_list | test/scripts/retire_worktree_lib_test.dart |
 | 2026-08-09 | a4f7c2 | `git rev-parse --show-toplevel` returned `.../.claude/worktrees/post38-auth-fixes` from EVERY worktree in the repo and from the shared main folder. A session working in… | worktree_config_integrity | test/scripts/worktree_config_integrity_e2e_test.dart |
