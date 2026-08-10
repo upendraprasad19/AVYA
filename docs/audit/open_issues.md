@@ -1735,10 +1735,33 @@ call.
 ## OI-88 — `restoring_screen.dart` split owed (allow-list entry now removed) (P3)
 
 - **Status**: OPEN
-- **Blocked on**: nobody yet — no session has picked up the split. The Gate 43 *exemption* half is
-  closed; the *split* half, which is the actual owed work, is not.
-- **Verified**: 2026-08-05 (`wc -l` = 791 on `repo-gate-pattern-sweep`; allow-list entry removed in
-  the same commit; `check_god_screen_max_lines.dart` passes with the file no longer exempt)
+- **Blocked on**: nothing external — but the split is now known to be **bigger than "move two
+  widgets"**, and the file has **ZERO margin**. See the 2026-08-10 update.
+- **Verified**: 2026-08-10 (`wc -l` = **800** on `main` @ `1e981c82`;
+  `check_god_screen_max_lines.dart` passes — at exactly the ceiling, so the NEXT change to this
+  file fails the gate outright)
+- **UPDATE 2026-08-10** · `google-signin-misroute`, merge `1e981c82`, diagnose `c2e9f4`. The
+  **extraction half shipped**: `_healAfterRestoreInBackground` → `restoring/heal_after_restore.dart`
+  and `_AnimatedDots` → `restoring/animated_dots.dart`, both as `part` files of the same library
+  (private names unchanged, no call site moved). That is exactly the two candidates the fix shape
+  below names. It did **not** close this OI, because the fix's own new code consumed the headroom
+  it bought: 791 → 728 → 800.
+  - ⚠ **The remaining work is the STATE-CLASS split, and it was attempted and REVERTED in that
+    same batch.** Moving `_RestoringScreenState` into `restoring/state.dart` leaves the head file
+    at 63 lines and immediately breaks: **5 `line_range` citations in `docs/sot_registry.yaml`**,
+    `check_reader_manifest_complete.dart`, and `restoring_screen_timeout_test.dart` — because a
+    dozen registry entries and several source-grep tests point at line numbers INSIDE this file.
+    Re-anchoring all of them is the actual owed work, and it is its own batch. Landing a
+    half-migrated registry to save one refactor trades contained hygiene debt for live correctness
+    risk.
+  - One thing that batch DID make safe: `test/helpers/read_screen_source.dart` gained
+    `readLibrarySource()` / `readRestoringScreenSource()`, which resolve parts by parsing the head
+    file's own `part` directives instead of a hardcoded folder map. **17** test files source-read
+    this screen (the figure carried in earlier sessions was "4"); they now follow a split
+    automatically rather than silently reading a subset.
+- **Prior verification**: 2026-08-05 (`wc -l` = 791 on `repo-gate-pattern-sweep`; allow-list entry
+  removed in the same commit; `check_god_screen_max_lines.dart` passes with the file no longer
+  exempt)
 - **UPDATE 2026-08-05** · `repo-gate-pattern-sweep`, diagnose `e7c3b9`. A comment trim took the
   file 824 → 791, so the allow-list entry was removed — the gate protects this file again on its
   own terms. **This did not do the owed work.** No code moved, no file was created; the trim was
@@ -1763,12 +1786,23 @@ call.
 - **Why this is tracked rather than closed**: same rationale as OI-84 — the allow-list's own header
   says it "MUST shrink to empty when the audit ladder closes". An eighth entry with no owed-work
   record would quietly reverse that direction. This OI is that record.
-- **Fix shape (not yet attempted)**: split into a sibling folder, reference layout
-  `lib/features/train/screens/active_workout/` — candidates for extraction: the three key-migrator
-  imports + `_healAfterRestoreInBackground`'s reconciler/migrator fan-out (currently inline), and/or
-  the `_AnimatedDotsState` loading-indicator widget at the bottom of the file, which has no
-  dependency on `_RestoringScreenState`'s fields and could move to its own widget file outright.
-  **Remove the allow-list entry in the same commit.**
+- **Fix shape (revised 2026-08-10 — the easy half is DONE)**: the two named extraction candidates
+  (`_healAfterRestoreInBackground`, `_AnimatedDots`) shipped in `1e981c82` as `part` files under
+  `lib/features/auth/screens/restoring/`. The allow-list entry was already removed on 2026-08-05.
+  **What remains is the state-class split, and its cost is the citation re-anchoring, not the
+  move:**
+  1. Move `_RestoringScreenState` into `restoring/state.dart` as `part of '../restoring_screen.dart'`
+     (mechanical; the head file keeps its `*_screen.dart` name so it stays inside Gate 43's
+     filename regex — deliberately unlike `active_workout/screen.dart`, which the regex does not
+     match at all).
+  2. Re-anchor **every** `docs/sot_registry.yaml` entry whose `file:` is `restoring_screen.dart` —
+     there are ~5 with `line_range`s plus a dozen `forbidden_patterns` exemption rows.
+  3. Fix `check_reader_manifest_complete.dart` and `restoring_screen_timeout_test.dart`, both of
+     which key off content that moves.
+  4. Verify with `sot_registry_completeness_test.dart` (the Gate-7 mirror that catches
+     `line_range` overruns) and `reader_manifest_exhaustiveness_test.dart`.
+  Sequence matters: do this BEFORE any other change to the file, because there is no margin left
+  to absorb one.
 - **Blast radius estimate**: `account` (`restoring_screen.dart` is on the auth post-auth-boot path);
   no migration, no schema.
 
