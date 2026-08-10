@@ -49,11 +49,45 @@ String _pastIso() =>
 String _futureIso() =>
     DateTime.now().add(const Duration(days: 30)).toIso8601String();
 
+/// Waits for `_downgradeLocally`'s async MigratedKey writes to land.
+///
 /// `_downgradeLocally` awaits its MigratedKey writes before firing
-/// `onStateChanged`, so the hook lands a few microtasks after the call
-/// returns. Same settle used by subscription_expiry_banner_behavioral_test.
-Future<void> _settle() =>
-    Future<void>.delayed(const Duration(milliseconds: 20));
+/// `onStateChanged`, so the hook lands a few microtasks after the call returns.
+///
+/// A FIXED sleep is not a synchronization primitive. At 20 ms this file was
+/// green on an idle machine and RED under load — observed 2026-08-10, when a
+/// pre-push full suite failed on exactly one assertion here ("the decision path
+/// must still wipe expiresAt") while background jobs ran, then passed 3/3 once
+/// the machine went idle. Same commit, both times. That is the async-timing arm
+/// of `feedback_local_ci_env_divergence`, and it blocks a push at random.
+///
+/// This waits for QUIESCENCE, not for a caller-supplied predicate, and that
+/// choice is load-bearing. The first attempt at this fix took a per-call-site
+/// `until:` predicate — and each site's predicate was derived from the FIRST
+/// assertion that followed it, so at the site below (`isPro` → `expiresAt` →
+/// `proLapsedAt`) the poll exited the moment `isPro` flipped, before the other
+/// two writes landed. That turned a flaky test into a deterministically failing
+/// one: strictly worse. Quiescence needs no per-site knowledge and therefore
+/// cannot encode a partial view of what a given test asserts next.
+///
+/// `_downgradeLocally` writes several keys in sequence; the run is done when the
+/// observed tuple stops changing. Sampling stops as soon as it is stable, so an
+/// idle machine pays ~30 ms rather than a blanket sleep.
+Future<void> _settle() async {
+  const keys = ['isPro', 'expiresAt', 'pro_lapsed_at', 'plan'];
+  String snapshot() =>
+      keys.map((k) => '$k=${MigratedKey.read<dynamic>(k)}').join('|');
+
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  var previous = snapshot();
+  var stableRounds = 0;
+  while (stableRounds < 3 && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final current = snapshot();
+    stableRounds = current == previous ? stableRounds + 1 : 0;
+    previous = current;
+  }
+}
 
 void main() {
   late Directory tempDir;
