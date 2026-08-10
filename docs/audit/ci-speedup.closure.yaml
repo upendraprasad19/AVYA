@@ -1,0 +1,71 @@
+# Closure ledger — CI cycle-time reduction. Gate 40 (validate_audit_closure.dart).
+# One terminal_state per item; no `deferred:` key. 7 items, over the §4.2 >=4
+# threshold. Branch: ci-speedup.
+#
+# No diagnose-doc: CI config + tooling, not a shipped bug. Commit subjects are
+# `chore(ci):` / `fix(tooling):`-free by design — none match rule 22's
+# `^(fix|bug|regression)` pattern.
+
+batch: ci-speedup
+total_findings: 7
+closed_count: 7
+
+# The plan's §7 called for THREE commits (A0 / new-worktree / CI). Two shipped,
+# because .github/workflows/test.yml carries BOTH the A0 skip-list entry and the
+# job restructure — they are not separable by file, and splitting them would need
+# fragile partial staging of one hunk-adjacent file. The worktree fix IS separable
+# and stayed its own commit, which is where the reviewability argument actually
+# bit. Recorded here rather than leaving the anchors pointing at a commit that
+# does not exist.
+_c1: &c1 "ci-speedup C-ci (A0 corrections + the CI change)"
+_c2: &c2 "ci-speedup C-worktree (new-worktree base ref)"
+_c3: &c3 "ci-speedup C-ci (A0 corrections + the CI change)"
+
+findings:
+  - id: CI-1
+    title: "The single `analyze-and-unit-test` job WAS the entire workflow wall clock (7m49s of 7m49s), with `flutter analyze` running 47s SERIALLY before the 6m38s test step in the same job"
+    terminal_state: closed_in_commit
+    commit: *c3
+    verification: "Measured from `gh api .../runs/31350916315/jobs`: job 02:51:14->02:59:03; analyze step 02:51:36->02:52:23 (47s); test step 02:52:23->02:59:01 (6m38s). Split into an `analyze` job + a 3-shard `unit-test` job using flutter's NATIVE --total-shards/--shard-index (verified present via `flutter test --help`), with --total-shards derived from `strategy.job-total` so the count is written once."
+    notes: "v1 of the plan proposed a hand-rolled `find | sort | awk 'NR % N'` partition plus a new completeness gate. Native sharding deletes all of it — and with it the new gate's rule-24 ledger entry, its bare-invocation hazard in both gate loops, and its locale-dependent sort."
+
+  - id: CI-2
+    title: "The plan's highest-risk change — parallelising the `audit-gates` loop — had a MEASURED wall-clock benefit of exactly zero"
+    terminal_state: verified_clean
+    commit: *c3
+    verification: "The gate loop step is 32s (02:51:44->02:52:16) on a job that ends 02:52:17, i.e. 6m46s before the workflow does. Bounded-parallel at 4 saves <=24s of a 32s step with 6m46s of slack. Repo is PUBLIC so runner minutes are free too."
+    notes: "DROPPED, and this is not a deferral (§4.2): no defect is being carried forward — the change was measured to be worthless. The measurement is recorded in the plan so it is not re-proposed. Both context-blind reviewers reached this independently; the main thread re-derived it from the API before accepting."
+
+  - id: CI-3
+    title: "`supabase-tests` ran ZERO tests and reported green, feeding the CLAUDE.md §0 claim that CI is the full-suite source-of-truth"
+    terminal_state: closed_in_commit
+    commit: *c3
+    verification: "Both test steps were gated `if: env.SUPABASE_URL != ''` while SUPABASE_URL existed only inside each step's OWN `env:` block — a step's `if:` is evaluated before its own env applies, so the condition was always false. Confirmed against the live run: both steps `skipped`, job `success`; `gh secret list` empty. Fixed by hoisting the secrets to a JOB-level `env:` (where the `secrets` context IS available), so the condition now means what it looked like it meant, plus an always-run step emitting a ::warning:: when the secret is absent."
+    notes: "A job-level `if:` cannot read `secrets` at all, so 'renders as skipped' would need a probe job plus this workflow's first `needs:` edge — rejected as not worth a cosmetic distinction. ADDING THE SECRETS IS FOUNDER-ONLY and is called out in the batch summary, not silently assumed."
+
+  - id: CI-4
+    title: "`scripts/new-worktree.sh` based new worktrees off a STALE main whenever work was merged-but-unpushed — the §4.13 workflow's normal state"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: "It preferred `origin/main` unconditionally on any successful fetch, commented 'the freshest main'. It bit this batch: the ci-speedup worktree was created at be74bf63, WITHOUT the just-merged gate-registry (f909cf35), guaranteeing a conflict since this unit also edits pre-commit.sh. Replaced with an explicit 4-branch predicate (identical / local-behind / local-ahead / diverged) plus a no-remote guard, because `--is-ancestor` returns 0 for equal refs and errors under `set -e` on a missing ref. Test `test/scripts/new_worktree_base_test.dart`, 5 real scratch repos, all green. MUTATION: revert to the unconditional preference -> 2 red (LOCAL AHEAD + DIVERGED)."
+    notes: "Diverged WARNS and continues on local main rather than exiting: new-worktree.sh is the entry point for ALL new work under §4.13 point 1, so a hard exit is a ship-stop for a hygiene problem — the error class §4.13 point 6 explicitly names."
+
+  - id: CI-5
+    title: "`check_apk_release_signed.dart` was absent from CI's gate skip-list while present in pre-commit's AND in Gate 33's allowlist, so CI bare-ran it every push"
+    terminal_state: closed_in_commit
+    commit: *c1
+    verification: "Added to the `case` block in test.yml. It is already in check_gate_scripts_wired.dart's _allowList ('Needs an APK + apksigner + JDK; runs from /build-apk Gate 48'), so this changes no Gate 33 verdict — confirmed PASS after. It only removes a misleading log line."
+
+  - id: CI-6
+    title: "`check_skipped_discipline_budget.dart` still ran --warn-only 7 weeks after its own stated removal condition was met"
+    terminal_state: closed_in_commit
+    commit: *c1
+    verification: "Both waivers in docs/skipped-discipline.md:5-6 are marked `**resolved** 2026-06-19`, and the gate exits 0 without the flag — ran it live: `[Gate-SDB] PASS: no open waivers older than 14 days.` Flag removed and the invocation wrapped with a `[pre-commit] FAIL:` message like its neighbours (a bare `set -e` failure gave no diagnostic)."
+    notes: "The plan's FIRST version proposed the opposite — adding the gate to CI's skip-list or running it --warn-only there — which would have deleted the only hard-failing surface. Caught in review."
+
+  - id: CI-7
+    title: "Stale gate counts in pre-commit.sh, and TWO live line-number citations into test.yml that this batch's own edits would silently break"
+    terminal_state: closed_in_commit
+    commit: *c1
+    verification: "Counts: 86 gate files; pre-commit's case block has 15 ARM lines (a name appearing in a COMMENT inside the block is not a skip — that error gave 16/70 on the first pass) -> 71 run in the loop, with 2 of the 15 invoked explicitly elsewhere so real coverage is 73. Citations: docs/blast_radius.yaml cited test.yml:61 and docs/audit/open_issues.md:603 cited test.yml:171 — the latter an OPEN board entry. Both re-pointed to stable ANCHORS instead of line numbers; nothing in the repo would have caught either (check_claude_md_citations.dart covers CLAUDE.md §N only). Also corrected test.yml's own comment claiming the APK job is the critical path (measured 3m22s vs 7m49s)."
+    notes: "The open_issues.md citation is the more damaging of the two — it is live working state, not a rationale comment. The first plan draft missed it entirely."
