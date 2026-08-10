@@ -18,6 +18,7 @@
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 String _strip(String s) => s
     .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
@@ -32,8 +33,7 @@ void main() {
   final boot = _strip(File('lib/core/services/auth_session_bootstrapper.dart')
       .readAsStringSync());
   final restoringScreen = _strip(
-      File('lib/features/auth/screens/restoring_screen.dart')
-          .readAsStringSync());
+      readRestoringScreenSource());
 
   group('terms_acceptance writer→reader contract', () {
     test('sign_in_screen captures consent + passes it into signUpWithEmail',

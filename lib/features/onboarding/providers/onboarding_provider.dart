@@ -265,12 +265,104 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     }
   }
 
+  /// Pure decision: does this cloud `onboarding_completed_at` value mean
+  /// "already onboarded, refuse the overwrite"?
+  ///
+  /// Extracted for the same reason `classifyDestination` and
+  /// `shouldStampFallbackTermsConsent` are — the surrounding method makes live
+  /// Supabase calls a unit test cannot exercise, so the DECISION is separated
+  /// from the I/O and mutation-proven on its own.
+  ///
+  /// Only a present, non-empty stamp refuses. A null (never onboarded) or an
+  /// empty string (a column written blank by some historical path) both allow
+  /// onboarding to proceed — the fail-OPEN direction.
+  @visibleForTesting
+  static bool shouldRefuseOnboardingOverwrite(Object? cloudStamp) {
+    if (cloudStamp == null) return false;
+    return cloudStamp.toString().trim().isNotEmpty;
+  }
+
+  /// True when the cloud already holds a completed onboarding for the signed-in
+  /// user — i.e. re-running the funnel would OVERWRITE a real profile.
+  ///
+  /// closes-diagnose: c2e9f4. Deliberately **fails OPEN** (returns false, so
+  /// onboarding proceeds) on any error or when signed out: a genuine new user
+  /// on a flaky connection must never be locked out of onboarding by a guard
+  /// meant to protect returning users. That asymmetry is the point — a false
+  /// negative costs a returning user one more misroute (which the routing
+  /// fixes in this same batch already address); a false POSITIVE would brick
+  /// signup entirely, which is far worse.
+  ///
+  /// Reads `onboarding_completed_at` — the same column
+  /// `AuthSessionBootstrapper.classifyDestination` treats as the definition of
+  /// "onboarded", so the guard and the router cannot disagree about what the
+  /// word means.
+  Future<bool> _alreadyOnboardedInCloud() async {
+    try {
+      if (HiveService.instance.configBox
+              .get('disable_onboarding_overwrite_guard') ==
+          true) {
+        return false;
+      }
+    } catch (_) {
+      // configBox unavailable — keep the guard ON (safe direction).
+    }
+    try {
+      final userId = SupabaseService.instance.currentUser?.id;
+      if (userId == null) return false;
+      final row = await SupabaseService.instance.client
+          .from('user_profile')
+          .select('onboarding_completed_at')
+          .eq('user_id', userId)
+          .maybeSingle();
+      final already =
+          shouldRefuseOnboardingOverwrite(row?['onboarding_completed_at']);
+      if (already) {
+        unawaited(ErrorTelemetry.logEvent('onboarding_overwrite_refused',
+            message: 'userId=${userId.substring(0, 8)}'));
+      }
+      return already;
+    } catch (e, st) {
+      // Fail OPEN — see the doc comment above.
+      debugPrint('[OnboardingNotifier] overwrite guard check failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'onboarding_overwrite_guard_check_failed'));
+      return false;
+    }
+  }
+
   /// Saves profile, generates plan, schedules workouts to calendar dates.
   ///
   /// Returns the generated [Phase] for the animation screen to display,
   /// or null on failure.
   Future<Phase?> completeOnboarding() async {
     state = state.copyWith(isCompleting: true, error: null);
+
+    // closes-diagnose: c2e9f4 — LAST LINE OF DEFENCE.
+    //
+    // Three separate routing bugs have now put a fully-onboarded user in
+    // front of onboarding (1bfeed 2026-05-16, a3f6d9 2026-08-03, c2e9f4
+    // 2026-08-10). Each was fixed at the routing layer, and a fourth route
+    // into this method is always possible. What made all three survivable
+    // was luck: the founder never tapped through. If they had, this method
+    // would have overwritten a real profile — goal, weight, experience,
+    // equipment, injuries — with whatever the re-run collected, then synced
+    // that over the cloud row.
+    //
+    // So the guard belongs HERE, at the commit, not only at the routes: if
+    // the cloud says this account already finished onboarding, refuse the
+    // overwrite regardless of how the user arrived. Placed before ANY write
+    // (the Hive stamp below, and the sync fan-out it triggers) so both are
+    // prevented, not just the cloud half.
+    //
+    // Kill-switch `configBox['disable_onboarding_overwrite_guard']` (§4.6).
+    if (await _alreadyOnboardedInCloud()) {
+      state = state.copyWith(
+        isCompleting: false,
+        error: 'already_onboarded',
+      );
+      return null;
+    }
 
     try {
       final a = state.answers;

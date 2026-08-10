@@ -187,6 +187,7 @@ Plan          (/onboarding/plan)       → "REPORT FOR DUTY" — commits via
 
 | Pitfall | How to avoid | Source |
 |---|---|---|
+| A returning user re-runs onboarding and overwrites a real profile | `completeOnboarding()` now refuses at its ENTRY (before the Hive stamp, so the sync fan-out it triggers is prevented too) when cloud `user_profile.onboarding_completed_at` is already set — `error: 'already_onboarded'`, returns null. Decision is the pure, mutation-proven `OnboardingNotifier.shouldRefuseOnboardingOverwrite`. **FAILS OPEN** on any error or when signed out: a false negative costs a returning user one wrong screen, a false positive would block every genuine new signup — never invert this. Added because THREE routing bugs (1bfeed, a3f6d9, c2e9f4) have put a fully-onboarded user in front of onboarding and only luck (the founder not tapping through) prevented the loss. Kill-switch `disable_onboarding_overwrite_guard`. | `docs/diagnoses/2026-08-10-resolve-destination-failed-read-means-new-user-c2e9f4.md` |
 | Stepped onboarding bounces back to Welcome on every tap | `GoRouter._authRedirect`'s `isOnOnboarding` check MUST use `location.startsWith('/onboarding')`, not `location == '/onboarding'`. Sub-routes (`/goal`, `/stats`, `/plan`) would otherwise be redirected back to Welcome on every navigation. Fixed in commit `17faa86`. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
 
 ## Tests pinning the rules here

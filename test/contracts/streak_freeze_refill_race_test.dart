@@ -21,6 +21,7 @@
 
 import 'dart:io';
 import 'package:test/test.dart';
+import '../helpers/read_screen_source.dart';
 
 String _stripComments(String src) => src
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
@@ -103,8 +104,7 @@ void main() {
   });
 
   group('B0b — restoring_screen invokes refillIfNewWeek post-openForUser', () {
-    final src = File('lib/features/auth/screens/restoring_screen.dart')
-        .readAsStringSync();
+    final src = readRestoringScreenSource();
     final stripped = _stripComments(src);
 
     test('imports StreakProgressService', () {
@@ -150,8 +150,7 @@ void main() {
   });
 
   group('B3 — restoring_screen clears stale streak_freeze_just_used', () {
-    final src = File('lib/features/auth/screens/restoring_screen.dart')
-        .readAsStringSync();
+    final src = readRestoringScreenSource();
     final stripped = _stripComments(src);
 
     test('cold-start path writes streak_freeze_just_used: false', () {

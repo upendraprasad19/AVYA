@@ -6,6 +6,7 @@
 
 import 'dart:io';
 import 'package:test/test.dart';
+import '../helpers/read_screen_source.dart';
 
 String _stripComments(String src) => src
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
@@ -127,7 +128,7 @@ void main() {
 
   group('RestoringScreen migrator timing telemetry', () {
     final src =
-        File('lib/features/auth/screens/restoring_screen.dart').readAsStringSync();
+        readRestoringScreenSource();
     final stripped = _stripComments(src);
 
     test('emits restoring_screen_migrator_done for ExlogKeyMigrator', () {

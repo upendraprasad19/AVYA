@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/plan_integrity_reconciler.dart';
+import '../helpers/read_screen_source.dart';
 
 /// Behavioral + wiring regression for the restore plan_json-skip bug
 /// (diagnose 2026-06-06-restore-plan-json-skip).
@@ -144,8 +145,7 @@ void main() {
     final restoreSrc = _strip(
         File('lib/core/services/sync/sync_workout.dart').readAsStringSync());
     final bootSrc = _strip(
-        File('lib/features/auth/screens/restoring_screen.dart')
-            .readAsStringSync());
+        readRestoringScreenSource());
 
     test('reconcile() is symptom-gated + kill-switchable + plan_start-guarded',
         () {

@@ -41,6 +41,7 @@
 // Run: flutter test test/contracts/restoring_screen_local_onboarded_flag_stamp_test.dart
 
 import 'dart:io';
+import '../helpers/read_screen_source.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -136,9 +137,7 @@ void main() {
     test(
         '_goHome (both branches) and _onContinueAnyway all stamp the flag '
         'before reaching /home', () {
-      final src = File(
-        'lib/features/auth/screens/restoring_screen.dart',
-      ).readAsStringSync();
+      final src = readRestoringScreenSource();
 
       // Matches both `if (!UserRepository...` (the two _goHome sites) and
       // `if (ownershipOpen && !UserRepository...` (_onContinueAnyway) —

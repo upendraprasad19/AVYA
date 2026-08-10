@@ -6,6 +6,7 @@
 // paths. Source-grep, comment-stripped.
 
 import 'dart:io';
+import '../helpers/read_screen_source.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -34,7 +35,7 @@ void main() {
   test('a7c3f8 — restoring_screen runs the backfill after openForUser (both paths)',
       () {
     final src = _strip(
-        File('lib/features/auth/screens/restoring_screen.dart').readAsStringSync());
+        readRestoringScreenSource());
     expect(src.contains('openForUser'), isTrue,
         reason: 'restoring_screen opens the user session before the backfill');
     final count =

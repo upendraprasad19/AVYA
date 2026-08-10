@@ -20,6 +20,7 @@
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 String _stripComments(String src) => src
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
@@ -49,7 +50,7 @@ void main() {
   final splashInitState =
       _methodBody(splashSrc, 'void initState() {', maxChars: 3000);
   final restoringSrc =
-      File('lib/features/auth/screens/restoring_screen.dart').readAsStringSync();
+      readRestoringScreenSource();
   final restoringStripped = _stripComments(restoringSrc);
 
   group('Splash must not touch userBox before HiveUserSession opens', () {

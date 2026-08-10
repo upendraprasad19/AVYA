@@ -12,8 +12,8 @@
 // Source-grep with comment-stripping per
 // `feedback_source_grep_strip_comments_first.md`.
 
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 String _stripComments(String src) => src
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
@@ -24,8 +24,7 @@ void main() {
 
   setUpAll(() {
     src = _stripComments(
-        File('lib/features/auth/screens/restoring_screen.dart')
-            .readAsStringSync());
+        readRestoringScreenSource());
   });
 
   test('CONTINUE-button threshold raised from 15s to 30s', () {
