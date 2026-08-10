@@ -43,6 +43,9 @@ const _helpers = <String>[
   // would pass against the real 5 collisions rather than the fixture's.
   'test/scripts/gate_index_e2e_test.dart',
   'test/scripts/gate_index_fresh_e2e_test.dart',
+  // new_worktree_base runs a script that CREATES worktrees, so a GIT_DIR leak
+  // there acts on the real repo destructively, not merely meaninglessly.
+  'test/scripts/new_worktree_base_test.dart',
 ];
 
 String _strip(String src) => src

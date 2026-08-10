@@ -39,11 +39,42 @@ if git show-ref --verify --quiet "refs/heads/$SLUG"; then
   exit 1
 fi
 
-# Base off the freshest main (origin/main if reachable, else local main).
+# Base off the freshest main — whichever of `main` / `origin/main` is AHEAD.
+#
+# This used to prefer origin/main unconditionally whenever `git fetch` succeeded,
+# calling it "the freshest main". That is only true when nothing is merged-but-
+# unpushed — and §4.13's workflow is precisely *merge locally in the primary,
+# then push*, so the stale window is STRUCTURAL, not a fluke.
+#
+# It bit for real on 2026-08-10: a worktree created after `gate-registry` merged
+# to local main (f909cf35) but while the push was still in flight was based on
+# be74bf63, WITHOUT the merged work, guaranteeing a conflict for a unit that
+# touched the same files.
+#
+# Ordering matters: `git merge-base --is-ancestor A B` returns 0 when A == B, so
+# identical refs satisfy BOTH tests. The equality case is handled FIRST and
+# explicitly, so reordering the branches below cannot silently change behaviour.
 BASE="main"
-if git fetch origin main --quiet 2>/dev/null; then
-  BASE="origin/main"
+if git fetch origin main --quiet 2>/dev/null &&
+   git rev-parse --verify --quiet origin/main >/dev/null; then
+  LOCAL_SHA="$(git rev-parse main)"
+  REMOTE_SHA="$(git rev-parse origin/main)"
+  if [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
+    BASE="main"                       # identical — either works
+  elif git merge-base --is-ancestor main origin/main; then
+    BASE="origin/main"                # local behind — remote is fresher
+  elif git merge-base --is-ancestor origin/main main; then
+    BASE="main"                       # merged-but-unpushed — LOCAL is fresher
+  else
+    # Genuinely diverged. WARN, do not exit: new-worktree.sh is the entry point
+    # for ALL new work under §4.13 point 1, so hard-failing here is a ship-stop
+    # for a hygiene problem — the error class §4.13 point 6 explicitly names.
+    echo "⚠️  main and origin/main have DIVERGED (local $LOCAL_SHA / remote $REMOTE_SHA)." >&2
+    echo "    Basing on local main. Reconcile them before merging this branch." >&2
+    BASE="main"
+  fi
 fi
+echo "→ basing '$SLUG' on $BASE ($(git rev-parse --short "$BASE"))"
 
 git worktree add "$WT" -b "$SLUG" "$BASE"
 
