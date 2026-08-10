@@ -1,5 +1,5 @@
 # Closure ledger — CI cycle-time reduction. Gate 40 (validate_audit_closure.dart).
-# One terminal_state per item; no `deferred:` key. 7 items, over the §4.2 >=4
+# One terminal_state per item; no `deferred:` key. 10 items, over the §4.2 >=4
 # threshold. Branch: ci-speedup.
 #
 # No diagnose-doc: CI config + tooling, not a shipped bug. Commit subjects are
@@ -7,8 +7,8 @@
 # `^(fix|bug|regression)` pattern.
 
 batch: ci-speedup
-total_findings: 9
-closed_count: 9
+total_findings: 10
+closed_count: 10
 
 # The plan's §7 called for THREE commits (A0 / new-worktree / CI). Two shipped,
 # because .github/workflows/test.yml carries BOTH the A0 skip-list entry and the
@@ -26,7 +26,7 @@ findings:
     title: "The single `analyze-and-unit-test` job WAS the entire workflow wall clock (7m49s of 7m49s), with `flutter analyze` running 47s SERIALLY before the 6m38s test step in the same job"
     terminal_state: closed_in_commit
     commit: *c3
-    verification: "Measured from `gh api .../runs/31350916315/jobs`: job 02:51:14->02:59:03; analyze step 02:51:36->02:52:23 (47s); test step 02:52:23->02:59:01 (6m38s). Split into an `analyze` job + a 3-shard `unit-test` job using flutter's NATIVE --total-shards/--shard-index (verified present via `flutter test --help`), with --total-shards derived from `strategy.job-total` so the count is written once."
+    verification: "Measured from `gh api .../runs/31350916315/jobs`: job 02:51:14->02:59:03; analyze step 02:51:36->02:52:23 (47s); test step 02:52:23->02:59:01 (6m38s). Split into an `analyze` job (KEPT) + a 3-shard `unit-test` matrix (REVERTED the same day -- see CI-9). Only the analyze split survives; it takes 47s off the critical path with no ordering surface."
     notes: "v1 of the plan proposed a hand-rolled `find | sort | awk 'NR % N'` partition plus a new completeness gate. Native sharding deletes all of it — and with it the new gate's rule-24 ledger entry, its bare-invocation hazard in both gate loops, and its locale-dependent sort."
 
   - id: CI-2
@@ -94,7 +94,11 @@ findings:
           sharding handed shard 2 the assertion without its predecessor. Expected
           stderr to contain 'FAIL', got ''.
       Reverted; the `analyze` split (47s off the critical path, no ordering
-      surface) is KEPT. CI green again is the closing evidence.
+      surface) is KEPT. NOTE: an earlier draft of this entry claimed "CI green
+      again is the closing evidence" while NO green run existed and the
+      revert was still unpushed -- the repo's most-recurrent class
+      (feedback_mistake_unverified_done_claims) written into the very
+      artifact meant to be the durable record. Corrected by review.
     notes: |
       Round 2 named this exact hazard (P1-2): the plan had verified CROSS-FILE
       isolation — no flutter_test_config.dart, per-test Hive temp dirs, no socket
@@ -107,4 +111,28 @@ findings:
       Path filters (skip the heavy jobs on docs-only pushes) remain the untried
       option with the better expected value; they need their own analysis of which
       gates must still run on a docs change, which is why they are not bundled here.
+
+  - id: CI-10
+    title: "The batch NEVER RAN THE 4.1.5 BUG-HISTORY LOOKUP - this repo had already measured and REJECTED test sharding 15 days earlier, and the whole cycle re-derived it"
+    terminal_state: closed_in_commit
+    commit: "order-dep-test (record + ledger correction + order-dependency fix)"
+    verification: |
+      docs/audit/ci-governance.closure.yaml (commit d947743d, 2026-07-26), entry G10, carries
+      verbatim: the same `_shardSuite` within-suite mechanism; a MEASURED 365s for shard 0 of 4
+      against 689s for the full suite, i.e. ~2.1x total compute; and the verdict "4-way sharding
+      was the PLANNED remedy and was refuted before implementation, so it is a REJECTED OPTION
+      rather than outstanding work."
+      Rule 4.1.5 makes that lookup a PRECONDITION of proposing a root cause. It was not done. The
+      sharding proposal then survived a plan, x2 context-blind review, a B-pass, implementation,
+      a merge, a red CI, and a revert - every one of which could have ended it at zero cost.
+    notes: |
+      The revert commit named the transferable lesson as "writing the abort condition BEFORE the
+      measurement". That is true but secondary; the abort condition only mattered because the
+      change should never have been built. Neither review round asked "has this repo tried this
+      before?" - that question is on no lens, and its absence cost the entire cycle.
+      Also closed here: the order-dependent test that sharding exposed. Three tests in
+      worktree_config_integrity_e2e_test.dart inherited `core.worktree` from a predecessor; each
+      now establishes it. Verified: standalone `--plain-name` went 1-failed -> passing for all
+      three, whole file still 6/6. One of them ("unset restores health") had been passing
+      VACUOUSLY under sharding - asserting a repair against a repo that was never corrupted.
 

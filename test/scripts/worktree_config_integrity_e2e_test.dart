@@ -170,7 +170,12 @@ void main() {
 
   test('the corruption is observable as wrong toplevel resolution '
       '(proves the gate targets a real hazard, not a cosmetic key)', () {
-    // core.worktree is still set from the previous test.
+    // Establish the corruption HERE rather than inheriting it. Depending on a
+    // previous test's side effect made this file fail standalone
+    // (`--plain-name` selects one test -> the writer never runs) and made the
+    // repair test below pass VACUOUSLY when a shard split the file.
+    _run('git', ['config', 'core.worktree', linkedWt], repo);
+
     final top = _run('git', ['rev-parse', '--show-toplevel'], repo);
     final resolved = (top.stdout as String).trim().replaceAll('\\', '/');
     expect(resolved.toLowerCase(), contains('linked'),
@@ -179,6 +184,8 @@ void main() {
   });
 
   test('--warn-only exits 0 while corrupt BUT still reports the violation', () {
+    _run('git', ['config', 'core.worktree', linkedWt], repo);
+
     final r = _run(
         'dart',
         ['run', 'scripts/check_worktree_config_integrity.dart', '--warn-only'],
@@ -193,6 +200,9 @@ void main() {
   });
 
   test('PASS again after the documented repair (unset restores health)', () {
+    // Set it FIRST: asserting "unset restores health" against a repo that was
+    // never corrupted proves nothing and passes vacuously.
+    _run('git', ['config', 'core.worktree', linkedWt], repo);
     _run('git', ['config', '--unset-all', 'core.worktree'], repo);
 
     final r = runGate(repo);
