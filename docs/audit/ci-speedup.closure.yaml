@@ -7,8 +7,8 @@
 # `^(fix|bug|regression)` pattern.
 
 batch: ci-speedup
-total_findings: 8
-closed_count: 8
+total_findings: 9
+closed_count: 9
 
 # The plan's §7 called for THREE commits (A0 / new-worktree / CI). Two shipped,
 # because .github/workflows/test.yml carries BOTH the A0 skip-list entry and the
@@ -76,4 +76,35 @@ findings:
     commit: *c2
     verification: "With origin/main present and local main absent, `LOCAL_SHA=\"$(git rev-parse main)\"` exits 128 and `set -e` aborts the script — raw git error, no worktree. Independently reproduced: a set -e script running that assignment in a repo with no `main` exits 128 and never reaches the next line. The PRE-fix code had no local-ref dependency and handled the case fine. Fixed with a symmetric existence guard; test 'NO LOCAL main (but origin/main exists) falls back to origin/main', 6/6 green. MUTATION: remove the local-main guard -> 1 red."
     notes: "Both plan-review rounds caught the remote-missing asymmetry and neither considered its mirror; all 5 original tests assumed a local main exists. THIRD consecutive review this session where one round's fix introduced the next round's finding — same shape as the gate-registry batch's isRegenerableIgnored chain. The pattern: adding a guard for the case just hit, without asking what its mirror is."
+
+  - id: CI-9
+    title: "The sharding half of CI-1 was REVERTED the same day it landed — both of the plan's own pre-committed abort conditions fired on the first real run"
+    terminal_state: closed_in_commit
+    commit: "unshard (revert of the shard matrix; the analyze split is KEPT)"
+    verification: |
+      Run 31364967041 on 5b307179, the first CI run after the merge.
+      (1) MEASURED 18.3% — 7m49s -> 6m23s — under the 25% floor the plan fixed IN
+          ADVANCE precisely so the result could falsify it. `--total-shards` slices
+          WITHIN each suite (test_core/runner.dart:496-502), so every shard still
+          compiled and loaded all ~693 files; only test bodies divided. The fixed
+          cost does not shard, so the ceiling was always low.
+      (2) IT BROKE A TEST. Shard 2 failed worktree_config_integrity_e2e_test.dart
+          "--warn-only ... still reports the violation": that test asserts on
+          corruption a PREVIOUS test in the same file injects, and within-suite
+          sharding handed shard 2 the assertion without its predecessor. Expected
+          stderr to contain 'FAIL', got ''.
+      Reverted; the `analyze` split (47s off the critical path, no ordering
+      surface) is KEPT. CI green again is the closing evidence.
+    notes: |
+      Round 2 named this exact hazard (P1-2): the plan had verified CROSS-FILE
+      isolation — no flutter_test_config.dart, per-test Hive temp dirs, no socket
+      binding — which is not the exposure. Within-suite sharding creates INTRA-file
+      carryover. It was recorded as "may not work rather than silent corruption"
+      and shipped past. It fired on the first run.
+      The pre-committed rule is what made this a 10-minute decision instead of an
+      argument: <25% -> sharding is the wrong lever, use path filters. Writing the
+      abort condition BEFORE the measurement is the transferable part.
+      Path filters (skip the heavy jobs on docs-only pushes) remain the untried
+      option with the better expected value; they need their own analysis of which
+      gates must still run on a docs change, which is why they are not bundled here.
 
