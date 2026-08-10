@@ -233,24 +233,19 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     }
   }
 
-  /// Opens the user-scoped Hive session if it is not already open, so a
-  /// local-evidence read cannot be silently served an empty box.
+  /// Opens the user-scoped Hive session so a local-evidence read cannot be
+  /// silently served an empty box.
   ///
-  /// closes-diagnose: c2e9f4. `wrapUserScopedBox` returns `GuardedBox.empty`
-  /// for authenticated-but-owner-null (guarded_box.dart:333), meaning every
-  /// read yields null and any evidence check concludes "no evidence" — the
-  /// failure is SILENT, because the loud `StateError` at :335 fires only when
-  /// UNAUTHENTICATED, which is never the case here.
-  ///
+  /// closes-diagnose: c2e9f4. Under authenticated-but-owner-null
+  /// `wrapUserScopedBox` serves `GuardedBox.empty` (guarded_box.dart:333) —
+  /// every read yields null and the evidence check concludes "no evidence",
+  /// SILENTLY (the loud `StateError` at :335 fires only when UNAUTHENTICATED).
   /// The pre-fix code relied on `restoreFromCloudForUser` having opened the
-  /// session, but that call (sync_service.dart:454) is **fire-and-forget**, so
-  /// whether ownership was open when the evidence was read came down to a
-  /// race. That is the most likely reason the a3f6d9 self-heal appeared to
-  /// work in testing and still let this bug through in the field.
-  ///
-  /// `openForUser` is idempotent and `_sessionLock`-guarded, and `_goHome`
-  /// already opens the same session moments later, so this only moves the
-  /// existing call earlier — it introduces no new ownership transition.
+  /// session, but that call (sync_service.dart:454) is fire-and-forget, so it
+  /// was a RACE — likely why a3f6d9's self-heal passed tests and still let this
+  /// through in the field. `openForUser` is idempotent + `_sessionLock`-guarded
+  /// and `_goHome` opens it moments later anyway, so this only moves the
+  /// existing call earlier; no new ownership transition.
   Future<void> _ensureHiveSessionOpenForEvidence() async {
     try {
       await HiveUserSession.ensureOpenedForCurrentSession();
@@ -264,14 +259,11 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     }
   }
 
-  /// Local-evidence check used by the [StartMissionBrief] and
-  /// [DestinationUnknown] branches (closes-diagnose c2e9f4).
-  ///
-  /// Opens the Hive session first, then delegates to the pure predicate in
-  /// `local_onboarding_evidence.dart`. Kill-switch
-  /// `configBox['disable_local_onboarded_evidence']` (§4.6) restores the
-  /// pre-fix behaviour, where both branches routed to onboarding without
-  /// consulting local state at all.
+  /// Local-evidence check for the [StartMissionBrief] / [DestinationUnknown]
+  /// branches (closes-diagnose c2e9f4). Opens the Hive session first, then
+  /// delegates to the pure predicate in `local_onboarding_evidence.dart`.
+  /// Kill-switch `disable_local_onboarded_evidence` (§4.6) restores the pre-fix
+  /// behaviour, where neither branch consulted local state at all.
   Future<bool> _hasLocalOnboardedEvidence() async {
     try {
       if (HiveService.instance.configBox.get('disable_local_onboarded_evidence') ==
@@ -614,6 +606,46 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         // (corrupt box) is observable instead of silently looping (B-pass F2.1).
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
             reason: 'restoring_continue_openforuser_failed'));
+      }
+    }
+    // closes-diagnose: c2e9f4 — B-pass Finding 1 (P0). CONTINUE used to go to
+    // /home unconditionally; with classification unresolved the stamp below was
+    // skipped, so `_authRedirect` bounced /home → bare /onboarding, re-opening
+    // this batch's own misroute through the escape hatch — for precisely its
+    // target cohort (returning user, fresh reinstall, read failing the whole
+    // 30s). `completeOnboarding`'s guard cannot save them either: it re-runs the
+    // SAME SELECT under the SAME broken token and FAILS OPEN by design. A
+    // wall-clock timer is not evidence that /home is safe — re-ask instead.
+    if (!_committedToGoHome && userId != null) {
+      if (await _hasLocalOnboardedEvidence()) {
+        _committedToGoHome = true;
+      } else {
+        final retry =
+            await AuthSessionBootstrapper.instance.resolveDestination(userId);
+        switch (retry) {
+          case GoHome():
+            _committedToGoHome = true;
+          case ResumeOnboarding(:final firstMissingStep):
+            if (mounted) context.go('/onboarding/$firstMissingStep');
+            return;
+          case StartMissionBrief():
+            // A genuine new user — unchanged destination for them.
+            if (mounted) context.go('/onboarding/mission-brief');
+            return;
+          case DestinationUnknown(:final reason):
+            // STILL unknown → stay. /home bounces to onboarding, and onboarding
+            // is what destroys a real profile. CTA stays live so a tap retries.
+            unawaited(ErrorTelemetry.logEvent(
+                'restoring_continue_still_unknown',
+                message: 'userId=${userId.substring(0, 8)} reason=$reason'));
+            if (mounted) {
+              setState(() {
+                _statusLabel = 'Still connecting — tap again to retry.';
+                _showTimeoutCta = true;
+              });
+            }
+            return;
+        }
       }
     }
     // a3f6d9 — third path to /home; needs the same stamp. Gated on

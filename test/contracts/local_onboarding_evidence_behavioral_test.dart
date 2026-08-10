@@ -387,6 +387,42 @@ void main() {
               'answer that can destroy a real profile');
     });
 
+    // ── B-pass Finding 1 (P0), closed in-batch ───────────────────────────
+    // The sibling test above only greps the `case DestinationUnknown` BODY for
+    // a literal `context.go('/onboarding`. It stayed green while the misroute
+    // was reachable INDIRECTLY: _onContinueAnyway navigated to /home with the
+    // local flag unstamped, and _authRedirect bounced that to bare /onboarding.
+    // A guard whose test can only see one of the two routes is the
+    // guard-without-its-mirror class again — third instance in this batch.
+    test('CONTINUE re-resolves instead of assuming /home when classification '
+        'never completed', () {
+      final continueBody = src.substring(
+          src.indexOf('Future<void> _onContinueAnyway()'));
+      final guard = continueBody.indexOf('if (!_committedToGoHome');
+      final navigate =
+          continueBody.indexOf('context.go(RestoringScreen.resolveRestoreDestination');
+      expect(guard, greaterThan(-1),
+          reason: 'CONTINUE must detect the un-classified case rather than '
+              'treating the wall-clock timer as proof that /home is safe');
+      expect(guard, lessThan(navigate),
+          reason: 'the re-resolve must GATE the navigation, not follow it');
+      expect(continueBody.contains('resolveDestination(userId)'), isTrue,
+          reason: 'it must actually re-ask, not guess');
+    });
+
+    test('a still-unknown CONTINUE does not navigate anywhere', () {
+      final continueBody = src.substring(
+          src.indexOf('Future<void> _onContinueAnyway()'));
+      final unknownCase = continueBody.indexOf('case DestinationUnknown(');
+      expect(unknownCase, greaterThan(-1));
+      final nextCase = continueBody.indexOf('        }', unknownCase);
+      final body = continueBody.substring(unknownCase, nextCase);
+      expect(body.contains('context.go('), isFalse,
+          reason: 'with state STILL unknown after a retry, /home bounces to '
+              'onboarding and onboarding is what destroys a real profile — '
+              'staying put is the only non-destructive option');
+    });
+
     test('the evidence read opens the Hive session first', () {
       expect(src.contains('ensureOpenedForCurrentSession'), isTrue,
           reason: 'under owner-null wrapUserScopedBox serves GuardedBox.empty '

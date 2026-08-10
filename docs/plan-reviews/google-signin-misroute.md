@@ -5,20 +5,18 @@ blast_radius: account
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/ddb5c62af53f-review.md
 ---
 
 # Plan-review record — Google sign-in → Mission Brief misroute (account)
 
 Keystone record for the §4.12 merge gate (`check_plan_review_record_exists.dart`). Account-tier
 (`lib/features/auth/**` :188, `lib/core/services/**` :267 in `docs/blast_radius.yaml`) — confirm
-with `scripts/blast_radius_from_diff.dart` at merge time rather than trusting this line. `bpass: pending` — the gate only compels `accepted` at ≥platform, and §4.3 requires the
-self-initiated `/code-review` **before the `--no-ff` merge**, which has not been reached: nothing
-in this batch is committed. Flip to `accepted` with a real `bpass_review:` path once it runs. It
-is recorded as pending rather than pre-filled, because a record citing a review file that does
-not exist is the phantom-citation failure this repo has corrected three times already
-(`check_writer_reader_drift.dart`, `restore_completeness_test.dart`,
-`check_open_issues_reconciled.dart`).
+with `scripts/blast_radius_from_diff.dart` at merge time rather than trusting this line. B-pass run and accepted: `docs/reviews/ddb5c62af53f-review.md`. It found **3 findings including a
+P0**, all fixed in-batch — see "Round 3" below. (It was held at `bpass: pending` until the review
+actually existed, rather than pre-filled; a record citing a review file that does not exist is the
+phantom-citation failure this repo has corrected three times already.)
 
 ## Scope
 
@@ -94,6 +92,27 @@ rather than what its absence looks like. Fixed by adding a behavioral test that 
 `classifyDestination`, `shouldStampFallbackTermsConsent`) so the decision is directly
 mutation-provable, with the catch's direction pinned structurally and its scope limit stated in
 the test file.
+
+## Round 3 — independent context-blind B-pass (the one that mattered)
+
+Fresh Sonnet reviewer with no conversation context, per `.claude/skills/code-review/SKILL.md`.
+**3 findings, 0 false alarms, all fixed in-batch.** Every claim was re-verified at its cited
+file:line before acceptance (`feedback_audit_verifier_cannot_trust_own_subagent`).
+
+The P0 is the significant one, and it is worth being blunt about: **I had noticed this exact path
+myself while self-reviewing and talked myself out of it**, reasoning "the CONTINUE escape landing
+on `/onboarding` is pre-existing behaviour, not a new bug". That was wrong on the part that
+matters — this batch's entire premise is that an *unanswered read* must never lead to onboarding,
+and the escape hatch reached onboarding from precisely the unanswered-read state, for precisely
+the worst-case cohort (returning user, fresh reinstall, read failing the full 30s). The
+`completeOnboarding` guard could not backstop it either: same SELECT, same broken token,
+documented to fail open.
+
+That is the value the round-1/round-2 self-reviews could not provide, and it retroactively
+justifies §4.12.1's insistence on a *context-blind* reader: I was reasoning from the same model
+that wrote the code, so "pre-existing" felt like a sufficient answer. It also makes this the
+**third** guard-without-its-mirror instance in one batch — the first two found by mutation, this
+one only by an independent reader. Neither technique subsumes the other.
 
 ## Ground truth verified
 

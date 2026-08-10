@@ -542,6 +542,17 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       if (phase == null) {
         final err = ref.read(onboardingProvider).error ??
             'Failed to generate plan. Please try again.';
+        // closes-diagnose: c2e9f4 — B-pass Finding 2. `already_onboarded` is an
+        // internal sentinel from completeOnboarding's overwrite guard, and this
+        // banner renders `_error` VERBATIM (_errorBanner → Text(message)). It
+        // must never reach a user as raw text. It also isn't an error from the
+        // user's side: the guard fired because this account is already set up,
+        // so the right response is to take them home, not to show a red box.
+        if (err == 'already_onboarded') {
+          final inducted = InductionService.instance.inductionCompleted;
+          context.go(inducted ? '/home' : '/coach/induction');
+          return;
+        }
         setState(() {
           _submitting = false;
           _error = err;

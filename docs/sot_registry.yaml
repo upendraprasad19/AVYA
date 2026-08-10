@@ -3963,7 +3963,7 @@ concepts:
           Hive routes to resume-onboarding. NOT NULL routes to /home
           (15s timeout safety).
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 150-230
+        line_range: 150-208
         method: AuthSessionBootstrapper.resolveDestination
         semantic: flag-check
         fields_read: [user_id, onboarding_completed_at, date_of_birth, primary_goal, current_weight_kg, fitness_experience]
