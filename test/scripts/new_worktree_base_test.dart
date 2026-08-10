@@ -170,6 +170,31 @@ void main() {
     expect(w.baseSha, localSha);
   });
 
+  test('NO LOCAL main (but origin/main exists) falls back to origin/main', () {
+    // B-pass finding, and a regression the FIRST version of this fix
+    // introduced: it guarded only origin/main's existence, so a missing LOCAL
+    // main made `git rev-parse main` exit 128 and `set -e` abort the whole
+    // script — raw git error, no worktree. Verified independently: a `set -e`
+    // script doing LOCAL_SHA="$(git rev-parse main)" in a repo without `main`
+    // exits 128 and never reaches the next line. The PRE-fix code had no
+    // local-ref dependency and handled this case fine, so the guard has to be
+    // symmetric.
+    final r = _repo();
+    addTearDown(() => r.root.parent.deleteSync(recursive: true));
+
+    final remoteSha =
+        (_run('git', ['rev-parse', 'origin/main'], r.root.path).stdout as String).trim();
+    _git(r.root.path, ['checkout', '-b', 'elsewhere']);
+    _git(r.root.path, ['branch', '-D', 'main']);
+    expect(_run('git', ['rev-parse', '--verify', 'main'], r.root.path).exitCode,
+        isNot(0),
+        reason: 'fixture must actually have no local main');
+
+    final w = _newWorktree(r.root.path, 'slice');
+    expect(w.exitCode, 0, reason: 'must not crash with a raw git error: ${w.out}');
+    expect(w.baseSha, remoteSha);
+  });
+
   test('NO REMOTE falls back to local main without erroring', () {
     // --is-ancestor errors under `set -e` if origin/main does not exist, so the
     // existence guard must come first.

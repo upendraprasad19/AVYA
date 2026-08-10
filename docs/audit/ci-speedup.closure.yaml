@@ -7,8 +7,8 @@
 # `^(fix|bug|regression)` pattern.
 
 batch: ci-speedup
-total_findings: 7
-closed_count: 7
+total_findings: 8
+closed_count: 8
 
 # The plan's §7 called for THREE commits (A0 / new-worktree / CI). Two shipped,
 # because .github/workflows/test.yml carries BOTH the A0 skip-list entry and the
@@ -69,3 +69,11 @@ findings:
     commit: *c1
     verification: "Counts: 86 gate files; pre-commit's case block has 15 ARM lines (a name appearing in a COMMENT inside the block is not a skip — that error gave 16/70 on the first pass) -> 71 run in the loop, with 2 of the 15 invoked explicitly elsewhere so real coverage is 73. Citations: docs/blast_radius.yaml cited test.yml:61 and docs/audit/open_issues.md:603 cited test.yml:171 — the latter an OPEN board entry. Both re-pointed to stable ANCHORS instead of line numbers; nothing in the repo would have caught either (check_claude_md_citations.dart covers CLAUDE.md §N only). Also corrected test.yml's own comment claiming the APK job is the critical path (measured 3m22s vs 7m49s)."
     notes: "The open_issues.md citation is the more damaging of the two — it is live working state, not a rationale comment. The first plan draft missed it entirely."
+
+  - id: CI-8
+    title: "B-pass: the new-worktree base fix guarded origin/main's existence but NOT local main's — a regression the fix itself introduced"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: "With origin/main present and local main absent, `LOCAL_SHA=\"$(git rev-parse main)\"` exits 128 and `set -e` aborts the script — raw git error, no worktree. Independently reproduced: a set -e script running that assignment in a repo with no `main` exits 128 and never reaches the next line. The PRE-fix code had no local-ref dependency and handled the case fine. Fixed with a symmetric existence guard; test 'NO LOCAL main (but origin/main exists) falls back to origin/main', 6/6 green. MUTATION: remove the local-main guard -> 1 red."
+    notes: "Both plan-review rounds caught the remote-missing asymmetry and neither considered its mirror; all 5 original tests assumed a local main exists. THIRD consecutive review this session where one round's fix introduced the next round's finding — same shape as the gate-registry batch's isRegenerableIgnored chain. The pattern: adding a guard for the case just hit, without asking what its mirror is."
+

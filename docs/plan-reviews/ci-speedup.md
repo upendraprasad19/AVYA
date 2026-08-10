@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/ci-speedup-bpass.md
 ---
 

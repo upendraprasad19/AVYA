@@ -54,8 +54,23 @@ fi
 # Ordering matters: `git merge-base --is-ancestor A B` returns 0 when A == B, so
 # identical refs satisfy BOTH tests. The equality case is handled FIRST and
 # explicitly, so reordering the branches below cannot silently change behaviour.
+#
+# BOTH existence guards are required and the asymmetry was a real regression:
+# the first version guarded only origin/main, so with a LOCAL main missing but
+# origin/main present, `git rev-parse main` exits 128 and `set -e` aborts the
+# whole script with a raw git error and no worktree created. The pre-diff code
+# had no local-ref dependency at all and handled that case fine. Verified: a
+# `set -e` script doing LOCAL_SHA="$(git rev-parse main)" in a repo without
+# `main` exits 128 and never reaches the next line. (B-pass finding.)
 BASE="main"
-if git fetch origin main --quiet 2>/dev/null &&
+if ! git rev-parse --verify --quiet main >/dev/null; then
+  # No local main. Fall back to origin/main if we can reach it, else let
+  # `git worktree add` produce its own clear error rather than crashing here.
+  if git fetch origin main --quiet 2>/dev/null &&
+     git rev-parse --verify --quiet origin/main >/dev/null; then
+    BASE="origin/main"
+  fi
+elif git fetch origin main --quiet 2>/dev/null &&
    git rev-parse --verify --quiet origin/main >/dev/null; then
   LOCAL_SHA="$(git rev-parse main)"
   REMOTE_SHA="$(git rev-parse origin/main)"
