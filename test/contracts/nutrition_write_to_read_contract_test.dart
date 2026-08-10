@@ -2,7 +2,7 @@
 //
 // Locks the Hive `nlog_*` field-name contract between the canonical
 // writer and every downstream reader. Field renames must update writer +
-// every consumer + this test in the same PR (per CLAUDE.md §15).
+// every consumer + this test in the same PR (per docs/architecture/sync.md).
 //
 // Consumers covered:
 //   - DailyNutritionNotifier (drives TodaysMealsCard + nutrition screen)

@@ -1,3 +1,5 @@
+// Gate: 44
+//
 // Gate 44 — Nested CLAUDE.md content quality
 // =============================================
 // Fails if any `lib/**/CLAUDE.md` or `supabase/**/CLAUDE.md` is still in

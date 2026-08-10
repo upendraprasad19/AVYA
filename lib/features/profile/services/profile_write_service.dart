@@ -18,7 +18,7 @@ import '../../../core/utils/ist_date.dart';
 /// goal change, IST stamping of `updated_at`, sync fan-out).
 ///
 /// Same architectural shape as [WorkoutWriteService] /
-/// [NutritionWriteService] / [HealthWriteService] per CLAUDE.md §15
+/// [NutritionWriteService] / [HealthWriteService] per docs/architecture/sync.md
 /// "Source of Truth Rules". Profile is a single-keyed Hive entry
 /// (`userBox['profile']`), so the mutex is global rather than
 /// per-(date, exerciseName).
@@ -116,7 +116,7 @@ class ProfileWriteService {
   // ─────────────────────────────────────────────────────────────
 
   /// Fire SyncService.syncProfileNow if we have a logged-in user.
-  /// Fire-and-forget per CLAUDE.md §15 — Hive write already succeeded
+  /// Fire-and-forget per docs/architecture/sync.md — Hive write already succeeded
   /// so a cloud push failure must not flip the local mutation's
   /// success bit.
   void _fireSync() {

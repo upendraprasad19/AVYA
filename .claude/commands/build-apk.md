@@ -237,7 +237,7 @@ dart run scripts/check_exlog_key_canonical.dart
 
 Source-grep fails the build if any file outside the canonical `WorkoutWriteService.exlogKey` (+ documented restore mirror + ExlogKeyMigrator allowlist) constructs an `exlog_*` Hive key directly. Codifies APK Test #16.1 / Theme A — three rogue writer formulas were silently producing non-canonical keys (`String.hashCode` non-determinism + per-call `ms` keys) → visible duplicates + receipt no-op. See `.claude/skills/debugging/SKILL.md` §2.12 "Rogue Hive key formula bypasses canonical writer".
 
-### Gate 23 — `nlog_*` canonical writer enforcement
+### Gate 53 — `nlog_*` canonical writer enforcement
 
 ```bash
 dart run scripts/check_nlog_key_canonical.dart

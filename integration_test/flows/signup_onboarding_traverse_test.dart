@@ -3,7 +3,7 @@
 // Critical untested flow: cold launch → Welcome → email sign-up →
 // terms accept → Mission Brief → Identity → Goal → Stats → Details
 // → Plan REPORT FOR DUTY → home. The 6-screen stepped onboarding
-// flow (CLAUDE.md §13a) has no end-to-end coverage; each screen has
+// flow (lib/features/onboarding/CLAUDE.md) has no end-to-end coverage; each screen has
 // widget tests but the inter-screen state-passing (via GoRouter
 // state.extra) is exercised only by manual smoke testing.
 //
@@ -21,7 +21,7 @@ void main() {
   group('Sign-up + onboarding 6-screen traverse', () {
     test('T1 — Welcome → BEGIN ENLISTMENT routes to /restoring then /onboarding/mission-brief',
         () {
-      // Per CLAUDE.md §13a: new users (no user_profile row) route
+      // Per lib/features/onboarding/CLAUDE.md: new users (no user_profile row) route
       // through RestoringScreen → MissionBriefScreen, not directly
       // to /onboarding.
     }, skip: 'Phase 7 scaffold — needs Supabase Auth test mode.');

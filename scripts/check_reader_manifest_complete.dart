@@ -1,6 +1,8 @@
 // scripts/check_reader_manifest_complete.dart
 //
-// Audit gate (build-apk Gate 18) — enforces the reader-side manifest in
+// Gate: 50
+//
+// Gate 50 — enforces the reader-side manifest in
 // `docs/sot_registry.yaml`.
 //
 // PHASE 1 (forbidden-patterns):
@@ -159,7 +161,7 @@ void main(List<String> args) async {
     // overwhelmingly false-positives on Map field reads (e.g.,
     // `row['weight_kg']` for prefix `weight_`). Field-name contracts
     // are enforced by a separate test class (Hive field-name contracts
-    // per CLAUDE.md §15).
+    // per docs/architecture/sync.md).
     final getCtxRe = RegExp(
         r'\.(get|containsKey|delete|put)\s*\(\s*' + literal);
     final startsWithRe =

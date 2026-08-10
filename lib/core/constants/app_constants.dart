@@ -65,7 +65,7 @@ class AppConstants {
   static const String featurePredictionMonthly = 'prediction_monthly'; // Monthly card (free=once)
   static const String featureAdaptiveWorkouts = 'adaptive_workouts'; // Phase 2
   // audit-2026-05-16 E.8 — `featureDietPlanPdf` constant deleted.
-  // CLAUDE.md §14 confirms diet-plan PDF export is FREE. 0 `gate()` callsites.
+  // docs/architecture/business-rules.md confirms diet-plan PDF export is FREE. 0 `gate()` callsites.
   static const String featurePhotoAnalysis = 'photo_analysis';     // Photo in chat (PRO)
 
   // ── Free Tier Limits ──────────────────────────────────────

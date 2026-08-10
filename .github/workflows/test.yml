@@ -29,14 +29,22 @@ env:
 
 jobs:
   # ── Tier 1: Static Analysis + Unit Tests ───────────────────────
-  # Runs analyze + the FULL unit suite (~10 min as the suite has grown to 3000+ tests). Blocks all PRs on failure.
-  # timeout-minutes: 20 gives headroom — the job was cancelled at the old 10-min limit when a slightly
-  # slower runner pushed the ~10-min suite over the edge (2026-07-01; C1 merge run 28517992078 hit 10m15s
-  # twice while "All tests passed!" printed just before the timeout kill). See feedback_local_ci_env_divergence.md.
-  analyze-and-unit-test:
-    name: Analyze & Unit Tests
+  # Was ONE job running analyze + the full suite. Measured on run 31350916315 it
+  # was 7m49s and the ENTIRE workflow wall clock — every other job finished with
+  # minutes to spare. Split 2026-08-10 into `analyze` + a sharded `unit-test`.
+  # History worth keeping: this job was cancelled at a 10-min limit when a slower
+  # runner pushed the ~10-min suite over the edge (2026-07-01; C1 merge run
+  # 28517992078 hit 10m15s twice while "All tests passed!" printed just before
+  # the kill). See feedback_local_ci_env_divergence.md — the per-shard budget
+  # below is set with that incident in mind.
+  #
+  # `flutter analyze` was a 47s step running SERIALLY before the 6m38s test step
+  # in one job (measured, run 31350916315). Its own job runs in parallel and
+  # takes it off the critical path for free.
+  analyze:
+    name: Analyze
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -53,12 +61,57 @@ jobs:
       - name: Flutter analyze (zero warnings allowed)
         run: flutter analyze --no-fatal-infos
 
-      - name: Run unit tests (pure Dart — no device needed)
+  unit-test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    # Per-shard budget. The old 20 min covered a ~10-min single job; a shard is a
+    # fraction of that, so 20 min would let a HUNG shard burn 20 minutes before
+    # failing. 12 min keeps the headroom that test.yml's own 2026-07-01 note
+    # (run 28517992078, cancelled at a 10-min limit) says is needed, without the
+    # 8x slack.
+    timeout-minutes: 12
+    strategy:
+      # One red shard must not cancel the others — otherwise a single failure
+      # hides every other shard's result and the next run re-discovers them.
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run unit tests (shard ${{ matrix.shard }})
         # Golden-image tests are platform-specific (Windows-generated PNGs vs
         # CI's Linux render differ in font hinting/anti-aliasing); excluded
         # here, run locally via the pre-push full suite. See dart_test.yaml +
         # feedback_local_ci_env_divergence.md.
-        run: flutter test test/ --exclude-tags golden --reporter expanded
+        #
+        # --total-shards comes from strategy.job-total so the shard count is
+        # written ONCE (the matrix list) instead of hand-synced in two places.
+        #
+        # HOW THIS SHARDS, because it is not what the name suggests:
+        # test_core's _shardSuite (runner.dart:496-502) computes
+        # shardSize = suite.group.testCount / totalShards and filters WITHIN each
+        # suite. Every shard still discovers, compiles and loads all ~693 files
+        # and runs every setUpAll; only the test BODIES divide. So wall clock does
+        # NOT divide by N — the speedup is Amdahl-bounded by the compile/load
+        # fraction. Tag exclusion happens BEFORE partitioning (runner.dart:297
+        # passes the tag-filtered suite into _shardSuite), so no shard is
+        # lightened by the 5 excluded golden files.
+        run: |
+          flutter test test/ --exclude-tags golden \
+            --total-shards ${{ strategy.job-total }} \
+            --shard-index ${{ matrix.shard }} \
+            --reporter expanded
 
   # ── Deno Edge-Function tests (added Unit C 2026-07-08, diagnose a7e2c4) ──
   # Until now NO CI job ran the Deno tests under supabase/functions/**, so a red
@@ -159,6 +212,7 @@ jobs:
             NAME="$(basename "$GATE")"
             case "$NAME" in
               check_apk_size_within_bounds.dart|\
+              check_apk_release_signed.dart|\
               check_hooks_installed.dart|\
               check_plan_review_record_exists.dart|\
               check_telemetry_pii_classification.dart|\
@@ -251,7 +305,8 @@ jobs:
   # Deleting it does NOT reduce coverage, and — contrary to the batch's original
   # rationale — it does NOT reduce wall-clock either: it finished ~2.5 min before
   # the run ended (04:55:58 vs 04:58:29 on run 30188423209), so it was never on
-  # the critical path. The APK job is. What it actually saves is ~5 min of
+  # the critical path. Measured 2026-08-10 (run 31350916315) the APK job is NOT
+  # either — 3m22s vs the 7m49s test job. What it actually saves is ~5 min of
   # duplicate runner-minutes per run, and one source of "which job ran this
   # test?" confusion.
   #
@@ -260,13 +315,42 @@ jobs:
 
   # ── Tier 3: Supabase Integration Tests (requires secrets) ──────
   # Only runs if SUPABASE_URL secret is configured.
+  # ⚠ THIS JOB RAN ZERO TESTS AND REPORTED GREEN until 2026-08-10.
+  # Both test steps were gated `if: env.SUPABASE_URL != ''` while SUPABASE_URL
+  # was defined ONLY inside each step's own `env:` block. A step's `if:` is
+  # evaluated before its own `env:` applies, so the condition read an unset var
+  # and was always false. Measured on run 31350916315: both steps `skipped`,
+  # job `success`, and `gh secret list` is empty. Its green tick was feeding the
+  # CLAUDE.md §0 claim that "CI is the full-suite source-of-truth".
+  #
+  # Fix: the secrets are hoisted to a JOB-level `env:` below (the `secrets`
+  # context IS available there), so `if: env.SUPABASE_URL != ''` now means what
+  # it always looked like it meant. When the secrets exist the tests run; when
+  # they do not, the job stays green but emits a ::warning:: rather than a
+  # silent pass — a job-level `if:` cannot read `secrets` at all, so "renders as
+  # skipped" would need a probe job plus the workflow's first `needs:` edge,
+  # which is not worth a cosmetic distinction.
+  #
+  # ⚠ ADDING THE SECRETS IS A FOUNDER-ONLY ACTION. Until then this job verifies
+  # NOTHING and says so on every run.
   supabase-tests:
     name: Supabase Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
     steps:
+      - name: Announce whether this job verifies anything
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::warning title=Supabase integration tests did not run::No SUPABASE_URL secret is configured, so this job verifies NOTHING. It is green because there is nothing to fail, not because integration tests passed."
+          else
+            echo "SUPABASE_URL is configured — integration tests will run."
+          fi
+
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
@@ -280,9 +364,6 @@ jobs:
 
       - name: Run Supabase tests
         if: env.SUPABASE_URL != ''
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           flutter test test/supabase/ \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
@@ -291,9 +372,6 @@ jobs:
 
       - name: Run Edge Function tests
         if: env.SUPABASE_URL != ''
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           flutter test test/edge_functions/ \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \

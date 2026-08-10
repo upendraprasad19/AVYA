@@ -1,6 +1,6 @@
 // T-12 / audit-2026-05-11 — WriteService-bypass detector.
 //
-// CLAUDE.md §15 "Hive field-name contract" + "Sync fan-out contract"
+// docs/architecture/sync.md "Hive field-name contract" + "Sync fan-out contract"
 // names two services as the sole writers for workout / nutrition Hive
 // rows:
 //   - WorkoutWriteService — writes exlog_* and wlog_* (logExercise,
@@ -174,7 +174,7 @@ void main() {
           isEmpty,
           reason:
               'Direct workoutBox.put for exlog_*/wlog_* outside '
-              'WorkoutWriteService is forbidden per CLAUDE.md §15. '
+              'WorkoutWriteService is forbidden per docs/architecture/sync.md. '
               'Route through WorkoutWriteService.logExercise / .markCompleted.',
         );
       },
@@ -201,7 +201,7 @@ void main() {
           isEmpty,
           reason:
               'Direct nutritionBox.put for nlog_*/saved_meal_* outside '
-              'NutritionWriteService is forbidden per CLAUDE.md §15. '
+              'NutritionWriteService is forbidden per docs/architecture/sync.md. '
               'Route through NutritionWriteService.logMeal / .saveMealPreset.',
         );
       },

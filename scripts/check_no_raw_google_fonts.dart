@@ -1,5 +1,7 @@
 // scripts/check_no_raw_google_fonts.dart
 //
+// Gate: 37
+//
 // Gate 37 (Tech-debt audit 2026-05-20, finding C2 prep): assert that
 // `GoogleFonts.getFont('DM Sans', ...)` is invoked only via
 // `lib/core/theme/typography.dart` (the AppTypography SoT).

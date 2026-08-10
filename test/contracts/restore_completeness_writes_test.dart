@@ -7,7 +7,7 @@ import '_sync_service_source.dart';
 ///
 /// Asserts that the three Hive-only surfaces that previously vanished on
 /// reinstall now fan out to cloud via SyncService immediately after
-/// every local mutation (CLAUDE.md §15 fire-and-forget pattern).
+/// every local mutation (docs/architecture/sync.md fire-and-forget pattern).
 ///
 /// Migration 048 (applied as '047_restore_completeness' in prod) added:
 ///   • user_progress.streak_freezes_* columns (Theme A1)
@@ -50,7 +50,7 @@ void main() {
             repoSrc.contains('SyncService.instance.syncFreezes'),
         isTrue,
         reason: 'workout_repository must push freeze state to cloud after '
-            'consuming a freeze (CLAUDE.md §15). Now routed through '
+            'consuming a freeze (docs/architecture/sync.md). Now routed through '
             'StreakProgressService.commitConsume which fires syncFreezes.',
       );
     });
@@ -79,7 +79,7 @@ void main() {
         isTrue,
         reason:
             'StreakProgressService.commitRefill must fire syncFreezes '
-            '(CLAUDE.md §15 restore-completeness contract).',
+            '(docs/architecture/sync.md restore-completeness contract).',
       );
       expect(
         svcSrc.contains('int? refillIfNewWeek()') ||
@@ -111,7 +111,7 @@ void main() {
           isTrue,
           reason:
               'NotificationInboxService.record must push every inbox entry '
-              'to cloud (CLAUDE.md §15). Without this the full inbox is '
+              'to cloud (docs/architecture/sync.md). Without this the full inbox is '
               'lost on reinstall.');
     });
 
@@ -122,7 +122,7 @@ void main() {
       expect(src.contains('SyncService.instance.syncSavedDietPlan'), isTrue,
           reason:
               'DietPlanScreen._savePlan must push the saved plan to cloud '
-              '(CLAUDE.md §15). Without this the plan is lost on reinstall.');
+              '(docs/architecture/sync.md). Without this the plan is lost on reinstall.');
     });
 
     test('all sync callsites use unawaited() (never block UI)', () {
@@ -146,7 +146,7 @@ void main() {
             isTrue,
             reason:
                 '${entry.key} must wrap ${entry.value}() in unawaited() '
-                'per CLAUDE.md §15 fire-and-forget. Awaiting would block '
+                'per docs/architecture/sync.md fire-and-forget. Awaiting would block '
                 'the UI / provider build.');
       }
     });

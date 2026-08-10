@@ -1973,13 +1973,87 @@ class SyncService {
   /// via [_reportSyncFailure] with `opType = 'restore_<label>'`. The wrapper
   /// always completes normally so that `eagerError: false` propagation still
   /// works correctly (any remaining tasks in the wait list continue).
+  //
+  // ⚠ The blank-ish separator above is load-bearing: a contiguous run of `///`
+  // lines is ONE doc comment attached to the NEXT declaration. Without it the
+  // _safeRestoreOp doc above would silently re-attach to restoreOpTimeout and
+  // _safeRestoreOp would have none (B-pass finding 5).
+
+  /// Per-op ceiling for a single restore step.
+  ///
+  /// Until 2026-08-07 there was NO timeout anywhere in the restore chain —
+  /// verified by `grep -c '\.timeout('` returning 0 for sync_service.dart,
+  /// supabase_service.dart AND auth_session_bootstrapper.dart. One wedged
+  /// Supabase call therefore blocked the entire ~30-op fan-out forever and
+  /// RestoringScreen sat on "Pulling your dispatch" indefinitely (founder,
+  /// 2026-08-05). The screen's 15s/30s timers are pure UI and were never wired
+  /// to restore progress, so they could not end it either.
+  ///
+  /// Deliberately generous: this is a ceiling that unsticks a WEDGED call, not
+  /// a latency budget — a genuinely slow op on a bad Indian mobile connection
+  /// must still be allowed to finish. Note a Dart `.timeout()` does NOT cancel
+  /// the underlying request; it frees the AWAITER so the chain can move on,
+  /// which is exactly what was needed here.
+  ///
+  /// Kill-switch: `configBox['disable_restore_op_timeout'] = true` restores the
+  /// verbatim unbounded await (§4.6 — the old path stays reachable).
+  ///
+  /// Diagnose b7e4c1.
+  static const Duration restoreOpTimeout = Duration(seconds: 45);
+
+  static bool get _restoreOpTimeoutEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_restore_op_timeout') !=
+          true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → safe default: bounded
+    }
+  }
+
+  /// Applies the [restoreOpTimeout] ceiling to a single restore step.
+  ///
+  /// Extracted so the ceiling is unit-testable under `fakeAsync` without a
+  /// live Supabase fan-out or a Hive box — `_safeRestoreOp` itself cannot be
+  /// driven from a unit test (it reports through ErrorTelemetry and
+  /// `_reportSyncFailure`). Pinned by
+  /// restore_op_timeout_behavioral_test.dart. Diagnose b7e4c1.
+  @visibleForTesting
+  static Future<void> applyRestoreCeiling(
+    Future<void> task, {
+    required bool enabled,
+  }) =>
+      enabled ? task.timeout(restoreOpTimeout) : task;
+
+  /// The telemetry `reason` a failed restore step is reported under.
+  ///
+  /// A wedge and a 4xx are NOT the same event: the wedge class is what hung
+  /// RestoringScreen forever while leaving no trace at all, so it gets its own
+  /// reason and stays countable in `client_errors`. Diagnose b7e4c1.
+  @visibleForTesting
+  static String restoreFailureReason(Object error) => error is TimeoutException
+      ? 'sync_service_restore_op_timeout'
+      : 'sync_service_safe_restore_op';
+
+  /// Wraps a restore/sync future so one table failure cannot abort the others
+  /// in a [Future.wait] call.
+  ///
+  /// On failure the error is logged locally and reported to `client_errors`
+  /// via [_reportSyncFailure] with `opType = 'restore_<label>'`. The wrapper
+  /// always completes normally so that `eagerError: false` propagation still
+  /// works correctly (any remaining tasks in the wait list continue) — that
+  /// invariant is what lets the ~30-op fan-out survive a single failing op, so
+  /// do not make this method rethrow.
+  ///
+  /// The catch reports twice by design (audit-2026-05-11 H-42 — telemetry
+  /// pair): once via [ErrorTelemetry.recordNonFatal] and again inside
+  /// [_reportSyncFailure].
   Future<void> _safeRestoreOp(String label, Future<void> task) async {
     // Bug 2026-05-19 (A1 telemetry) — wrap with Stopwatch so client_errors
     // can answer "which restore op is the long pole." LOW-priority op_type
     // emitted on success; failure path keeps the pre-existing error report.
     final sw = Stopwatch()..start();
     try {
-      await task;
+      await applyRestoreCeiling(task, enabled: _restoreOpTimeoutEnabled);
       sw.stop();
       unawaited(ErrorTelemetry.logEvent(
         'restore_op_done',
@@ -1987,10 +2061,16 @@ class SyncService {
       ));
     } catch (e, st) {
       sw.stop();
-      debugPrint('[sync/restore] $label failed: $e (${sw.elapsedMilliseconds}ms)');
-      // audit-2026-05-11 H-42 — telemetry pair.
+      // A timeout is reported under its own reason. It is NOT the same event as
+      // a 4xx/5xx/parse failure — it means the op WEDGED, which is the class
+      // that used to hang the restore screen forever and left no trace at all.
+      // Keeping it distinguishable is what makes "which op wedges, and how
+      // often" answerable from client_errors instead of guessable.
+      final timedOut = e is TimeoutException;
+      debugPrint('[sync/restore] $label '
+          '${timedOut ? "TIMED OUT" : "failed"}: $e (${sw.elapsedMilliseconds}ms)');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_safe_restore_op'));
+          reason: restoreFailureReason(e)));
       try {
         await _reportSyncFailure(opType: 'restore_$label', error: e);
       } catch (_) {}

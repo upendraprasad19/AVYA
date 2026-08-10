@@ -137,7 +137,7 @@ extension _MediaPicker on _AiCoachScreenState {
   /// Pick an image from camera or gallery, compress it, upload, and send.
   Future<void> _pickImage(ImageSource source) async {
     // audit-2026-05-16 F8.1 / E.8 — `featurePhotoAnalysis` is documented as
-    // a PRO feature in CLAUDE.md §14, but pre-fix had ZERO client-side gate
+    // a PRO feature in docs/architecture/business-rules.md, but pre-fix had ZERO client-side gate
     // callsites — free users could silently upload photos to chat (server-
     // side ai-media-proxy enforced a separate PRO check, but the client UX
     // never surfaced the paywall). Gate at the entry point.

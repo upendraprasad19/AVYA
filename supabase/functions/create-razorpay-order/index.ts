@@ -17,7 +17,7 @@
  *
  * Security:
  *   - verify_jwt: false — the Supabase gateway's JWT check is buggy
- *     (same issue CLAUDE.md §11 documents for ai-proxy / ai-proxy-pro):
+ *     (same issue docs/architecture/ai.md documents for ai-proxy / ai-proxy-pro):
  *     valid client JWTs are rejected with 401 before the function runs.
  *     We flip the gateway flag off and do the JWT validation ourselves
  *     via `supabase.auth.getUser(token)` below — that is the real gate.

@@ -10,7 +10,7 @@ part of '../sync_service.dart';
 /// (workout-plan blob).
 ///
 /// `syncWorkoutData()` is the SoT fan-out entry point pinned by
-/// `test/contracts/sync_fanout_contract_test.dart` (CLAUDE.md §15) — it
+/// `test/contracts/sync_fanout_contract_test.dart` (docs/architecture/sync.md) — it
 /// MUST keep calling all 6 helpers: _syncWorkoutLogs, _syncExerciseLogs,
 /// _syncScheduleCompletions, _syncWorkoutTemplates, _syncScheduledWorkouts,
 /// _syncStreaks.
@@ -799,7 +799,7 @@ extension SyncServiceWorkout on SyncService {
           // D2 (Test #11): write canonical Hive field name `sets` (per-set
           // Map list) instead of legacy `sets_detail`. Consumers (receipt
           // rendering, AI snapshot, PR rescan) all key off `sets` per
-          // CLAUDE.md §15 "Hive field-name contract".
+          // docs/architecture/sync.md "Hive field-name contract".
           logMap['sets'] = setsDetail;
 
           // Recompute exact per-set volume from the detail list (the

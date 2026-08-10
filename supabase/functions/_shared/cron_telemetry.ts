@@ -4,7 +4,8 @@
  * Closes audit 2026-05-17 / OI-15. Background: `cron.job_run_details.status='succeeded'`
  * only confirms the pg_cron-side `net.http_post()` dispatch succeeded; it does NOT
  * reflect the Edge Function's actual HTTP response. During the Vault drift incident
- * (2026-05-11..16, CLAUDE.md §19 entry "pr-detection cron loops 401 every 15 min"),
+ * (2026-05-11..16 — retired root §19 entry #161, relocated to
+ * `supabase/functions/CLAUDE.md`'s cron-auth pattern by the 2026-05-18 declutter),
  * pg_cron reported 1066 "succeeded" runs across a week while every single call returned
  * 401 server-side and zero work happened.
  *

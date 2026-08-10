@@ -90,7 +90,7 @@ void main() {
       expect(healthWriteSrc.contains('syncWeightNow'), isTrue,
           reason:
               'logWeight must fire syncWeightNow() fire-and-forget after the '
-              'Hive write per CLAUDE.md §15 (Hive-first, cloud async)');
+              'Hive write per docs/architecture/sync.md (Hive-first, cloud async)');
     });
 
     // ── READER: home_provider weightHistoryProvider ───────────────

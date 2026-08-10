@@ -75,7 +75,7 @@ void main() {
 
       // Core fields that MUST round-trip. (We don't try to extract
       // these via regex from the writer source — too noisy. Hard-code
-      // the canonical list per CLAUDE.md §15 "Hive field-name contract"
+      // the canonical list per docs/architecture/sync.md "Hive field-name contract"
       // for exlog_*.)
       const coreFields = [
         'exercise_name',
@@ -99,7 +99,7 @@ void main() {
           restoreSlice!.contains("'$f'"),
           isTrue,
           reason: '_restoreExerciseLogs must project canonical field '
-              "'$f' (CLAUDE.md §15 Hive field-name contract for "
+              "'$f' (docs/architecture/sync.md Hive field-name contract for "
               'exlog_*). Pre-fix any of these going missing would '
               'silently degrade a downstream reader.',
         );

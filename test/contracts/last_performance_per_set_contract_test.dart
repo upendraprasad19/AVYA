@@ -14,7 +14,7 @@
 // reps_completed=85 pre-filled into every set of the next session.
 //
 // This contract pins the SEMANTICS (per-set vs aggregate), filling the
-// gap CLAUDE.md §15 left when it pinned only field PRESENCE.
+// gap docs/architecture/sync.md left when it pinned only field PRESENCE.
 
 import 'dart:io';
 

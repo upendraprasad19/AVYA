@@ -127,15 +127,43 @@ related_bugs: >
   OI-93 (deployed Edge Function lagging the repo, undetected) — this batch closes
   its fourth instance for log-client-error by shipping v13. b6e4f2 is the
   diagnose-doc for the pre-auth lane whose redeploy exposed both defects.
+  ⚠ CORRECTED 2026-08-10 on merging origin/main: the smoke-map half of THIS doc is
+  itself the FOURTH instance of a specific, already-documented omission — see
+  recurrence.
 recurrence: >
-  New for these two specific defects, but the CLASS is well documented and this
-  is at least its third appearance: a check whose green (or red) verdict is
-  decided by an input set nobody examined — feedback_green_check_input_set_width.md
-  ("name the input set a check consumed before citing it"). Here the smoke check's
-  tolerated-code set omitted the only status the function can actually return to
-  that probe, and the archive's sha came from a worktree nobody confirmed was the
-  payload's source. In both cases the check ran, produced output, and was wrong
-  about the thing it existed to assert.
+  ⚠ CORRECTED 2026-08-10. The first version of this field called the smoke-map
+  defect "new for these two specific defects" and reached for a general class
+  (feedback_green_check_input_set_width.md). That was wrong by omission, and the
+  evidence was in the very file I edited: `.claude/deploy_via_api.js` on main
+  already carried comments recording THREE prior instances of this exact
+  omission — notif-prefs (2026-07-27), OI-47 (2026-07-28), and weekly-recap-ready
+  (2026-08-10, added hours before this fix while deploying the e3b9d7 PRO-gate
+  fix). `log-client-error` is the FOURTH. I only saw it when merging origin/main.
+  .
+  The prior instance's own comment states the diagnosis and predicts this one
+  verbatim: "Three instances of one omission is a pattern, not bad luck: the map
+  is hand-maintained and nothing derives it from the presence of an
+  `isAuthorizedCronCall` gate in the function's source. Deriving it is a separate
+  change with its own review; noting it here so the next person hitting a fourth
+  instance has the diagnosis rather than the symptom." This doc IS that fourth
+  person, and the fix shipped here is the symptom fix the comment warned about —
+  one more hand-patched entry.
+  .
+  So the honest statement of the class is narrower and sharper than a general
+  input-set-width appeal: SMOKE_TOLERATED_CODES is a hand-maintained mirror of a
+  property (does this function require auth?) that is already expressed in the
+  function's own source, and nothing keeps the two in sync. Four manual patches
+  in fifteen days is the map saying it should be derived, not maintained.
+  §4.1.5 requires citing prior instances when a recurrence is found; the citation
+  belongs here rather than in a new OI, because OI-93 already covers the sibling
+  drift class and this is its smoke-map twin. The derive-the-map change is
+  explicitly NOT attempted in this commit — it is a behaviour change to the
+  deploy path's verdict logic, which per §4.11 lands as its own gated unit rather
+  than riding a fix for the thing it would replace.
+  .
+  The archive-provenance half remains genuinely new, and for it the original
+  input-set-width citation stands: the sha came from a worktree nobody confirmed
+  was the payload's source.
 ---
 
 # a7c3f9 — deploy tool: smoke step false-FAILs forever, archive filename claims a false provenance

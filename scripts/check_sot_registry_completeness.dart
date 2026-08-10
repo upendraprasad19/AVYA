@@ -1,5 +1,7 @@
 // scripts/check_sot_registry_completeness.dart
 //
+// Gate: 7
+//
 // Gate 7: SoT registry completeness.
 //
 // Asserts:

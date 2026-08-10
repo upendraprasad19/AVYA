@@ -42,7 +42,7 @@ void main() {
         reason:
             "syncCoachMemoryNow must read Hive key 'coaching_notes' (back-compat). "
             "Hive readers throughout the app use 'coaching_notes' literally; this "
-            "key is preserved per CLAUDE.md §15 Hive field-name contract.");
+            "key is preserved per docs/architecture/sync.md Hive field-name contract.");
 
     // The cloud write MUST be `coach_notes`.
     expect(slice.contains("payload['coach_notes']"), isTrue,

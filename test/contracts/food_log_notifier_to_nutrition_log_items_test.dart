@@ -111,7 +111,7 @@ void main() {
         body,
         contains('istNow()'),
         reason:
-            'logMeal date must be the current IST instant per CLAUDE.md §15 '
+            'logMeal date must be the current IST instant per docs/architecture/sync.md '
             'IST-throughout rule — Device-local DateTime.now() drifts on '
             'users outside UTC+5:30',
       );

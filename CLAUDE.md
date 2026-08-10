@@ -280,7 +280,7 @@ After observations captured + before brainstorming:
 - **Live prod apply needs its own explicit go.** Applying a migration (`apply_migration`) or deploying an Edge Function to the prod project requires explicit per-action authorization EVEN WHEN the batch plan was approved — plan approval ≠ deploy approval. A classifier block on a live apply is CORRECT; get the explicit ok, never work around it.
 - Refs: `feedback_apk_build_explicit_approval.md`, `feedback_main_is_source_of_truth.md`, `feedback_use_build_apk_skill.md`, `feedback_mistake_review_not_self_triggered.md`.
 
-### 4.4 The coding rules (23 — NON-NEGOTIABLE)
+### 4.4 The coding rules (24 — NON-NEGOTIABLE)
 
 1. **Hive-first for ALL reads/writes.** Never block UI on Supabase response. Supabase writes are background/async.
 2. **Riverpod only** for state management. No `setState` for shared state.
@@ -305,6 +305,7 @@ After observations captured + before brainstorming:
 21. **Regression test required for every fix.** Test that FAILS without the fix and PASSES with it. Cite test path in commit message. Source-grep tests under `test/contracts/` count for PRESENCE only — every SoT registry entry MUST ALSO have a `behavioral_test_path:` (Hive-write → Hive-read assertion, or fakeAsync race harness, or end-to-end flow) that fails when the runtime path is broken even if the source text remains intact. Gate 42 (`scripts/check_sot_behavioral_test_paths.dart`) is **STRICT by default** and BLOCKS the commit: a new entry needs a real `behavioral_test_path:`, or `presence_only: true` documenting why a behavioral test is not feasible (6 entries carry it today — Deno-EF/static concepts). **There is no `behavioral_test_required: true` backlog** — that escape hatch was removed when the gate flipped strict, and the marker is now itself a hard blocker. `--warn-only` exists for in-branch debugging and must never reach main. Corrected 2026-08-07: this rule previously described the pre-strict WARN behaviour, and a session planning OI-75 read it as licence to add a bare registry entry. (The `feedback_source_grep_false_confidence.md` this rule has always cited is NOT in the repo — it lives only in the harness-local memory directory, a trap `memory/MEMORY.md:8` documents for the whole `feedback_*` family. Only two `feedback_*.md` are actually committed. Left cited rather than deleted because the name is load-bearing vocabulary across the board, but flagged here so nobody burns a search on it.)
 22. **Bug fixes require a diagnose-doc.** Every commit on `main` matching `^(fix|bug|regression)(\([^)]*\))?:` MUST reference `docs/diagnoses/<date>-<slug>-<id>.md` via `closes-diagnose: <bug-id>` in the commit body. Doc must pass `dart run scripts/validate_diagnose_doc.dart <path>`. Subagents dispatched for investigation MUST receive `docs/agent_brief_preamble.md` as prefix. Pre-commit hook + `/build-apk` Gate 10 enforce this.
 23. **No stopping mid-batch.** Multi-task instructions ("fix everything", "address each and everything") run through to completion. Valid stops only on: whole batch done / BLOCKED on user-only action / new interrupting instruction. Banned: "context tight", "responsible handoff", "fresh session pickup". Documentation per rule 22 + memory file update for any NEW pattern + CLAUDE.md update for any NEW invariant — always.
+24. **Every NEW `check_*.dart` gate ships mutation-proven.** The same commit adds a test that FAILS when the gate's protection is deliberately neutered — not merely a happy-path test — plus a `mutation_proven: true` entry in `docs/audit/gate_test_ledger.yaml` carrying `test_path:` (a LIST — the closest precedent, `retire_worktree`, is proven across two files) and `evidence:` naming what was neutered and how many tests reddened. `scripts/check_gate_test_ledger.dart` requires every `check_*.dart` to hold **exactly one** ledger state, and a `mutation_proven` claim to name a test that EXISTS, REFERENCES the gate, and CONTAINS a red-path assertion drawn from a **closed literal list** of accepted forms (bare `isNotEmpty` is deliberately rejected — it appears in hundreds of unrelated assertions and would make the check pass for almost any file). **What this proves and what it does not:** a script cannot prove a mutation was RUN. It CAN prove the test exists, names the gate, and asserts a failing path — which makes the Gate-44 class ("its own test never invoked `main()`") mechanically impossible. The residue is self-attested and read by the §4.12 ×2 review — the same trust model as rule 21's `presence_only:` and §4.12.4's `tier: ship_dark_build`. Say so plainly; do not mistake it for a solved problem. **The 84 gates predating 2026-08-10 are enumerated BY NAME** in that script as `grandfathered:`. Membership is by name, not by date — a date-equality check closes nothing, since any future gate could write `grandfathered: 2026-08-10` and pass, and both gates born in that batch carry that very date. An enumerated exemption is terminal, NOT a deferral (§4.2); "backfill later" would be. **A new gate takes NO number.** The filename is the identity — it is what `pre-commit.sh`, `test.yml` and Gate 33 all key on. A number is an optional alias that only a `/build-apk` section needs; if one does, it takes the next free number, which `build_gate_index.dart` prints on every run. Registry: `docs/audit/GATE_INDEX.md` (generated — see the §7 pointer row).
 
 ### 4.5 Discipline gates per fix
 
@@ -402,7 +403,9 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
    `sh scripts/new-worktree.sh <slug>` (branches off the latest `main`, copies `.env`), then
    `cd .claude/worktrees/<slug>` and do ALL edits/commits there.
 2. **The shared main folder is INTEGRATION-ONLY:** reads, merging a branch into main, `git push`,
-   and `/build-apk`. Never `git add`/commit feature work there. **Prefer
+   `/build-apk`, and worktree **retirement** (point 6 — `retire_worktree.dart` refuses to run from
+   a linked worktree, so the primary is the only place it CAN run). Never `git add`/commit feature
+   work there. **Prefer
    `sh scripts/safe_merge.sh <branch>` over a raw `git merge --no-ff <branch>`** for the merge step
    (Unit 3c, discipline-tooling-hardening, 2026-08-03) — it refuses to merge onto a local `main`
    that is behind `origin/main`, and shares the same concurrency lock as `safe_commit.sh` /
@@ -418,6 +421,67 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
    shared main worktree.
 5. Even a solo session should use a worktree — it is always safe, and "is another session active?" is
    not reliably knowable. Ref: `memory/feedback_worktree_per_session.md`, diagnose `f0c2d5`.
+
+6. **RETIREMENT — the other half of the lifecycle (added 2026-08-09).** This rule mandated
+   *creation* and defined no end of life: `new-worktree.sh` created, nothing retired. The count
+   reached **106 directories / 17 GB**, reclaimed to **1.4 GB** (`du -sh .claude/worktrees`,
+   observed 2026-08-09 — point-in-time measurements, not re-derivable after the fact; re-measure
+   rather than citing these). That is not neglect, it is an unclosed loop in the rule itself, so
+   it regrows on its own unless the rule closes it.
+   - **Retire a worktree once its branch is merged, clean (tracked AND ignored) and carries
+     nothing unpushed:** `dart run scripts/retire_worktree.dart --execute [<slug>]` — run from the PRIMARY worktree
+     (it refuses from a linked one; removing the tree you stand in is undefined). **Dry-run is the
+     DEFAULT**; `--execute` is opt-in.
+   - **WHEN — the trigger, without which this is just prose.** The §5 per-batch checklist carries
+     a retirement row, so it is walked at every batch end alongside the diagnose-doc and index
+     regens. This is deliberate: §4.13 points 1–5 are backed by a pre-commit gate, and point 6 is
+     NOT (see below), so without a checklist row it would decay exactly the way
+     `docs/audit/open_issues.md` did — 70 days unread because "nothing referenced it, everything
+     with a gate holds, everything on intention decays". A §7 pointer row is not a trigger.
+   - **The predicate is FOUR-legged and every leg is load-bearing:** (1) merged into `main`,
+     (2) no tracked changes, (3) no NON-REGENERABLE ignored files, (4) no unpushed commits — or no
+     upstream configured at all, in which case leg 1 already guarantees the commits are reachable
+     from `main`. Anything failing any leg is reported and LEFT ALONE — never `--force`.
+     **"Merged" alone is NOT sufficient and this is measured, not theoretical:** on 2026-08-09 five
+     worktrees held 21 uncommitted files between them while classifying as merged by branch tip. A
+     merge-only sweep destroys all of it. Merge status describes a branch; it says nothing about
+     the working tree on top of it. **Leg 3 is separate from leg 2 because
+     `git status --porcelain` — the obvious spelling of "clean" — EXCLUDES ignored files entirely**
+     (see below), so naming it as the clean check would name the blind spot as the guard.
+   - **Orphaned directories** (present on disk, absent from `git worktree list`) are a SEPARATE,
+     stricter category: `git worktree remove` cannot see them, and an orphan is by definition one
+     git has lost track of — so "git says it is safe" carries no information. Only a genuinely
+     empty directory is auto-removed; anything holding even one file is reported for human review.
+   - **Deliberately NOT a blocking gate — an explicit, named exception to §4's "Pre-commit hook
+     gates them. Violations are P0." default.** A commit must never be blocked because unrelated
+     old worktrees exist; that would be a ship-stop for a hygiene problem, the same error class as
+     the 2026-07-25/26 required-status-checks incident. The §5 checklist row above is what carries
+     it instead. (§4.11's gate-before-refactor rule does not apply here: retirement is neither a
+     refactor nor gate-shaped.)
+   - The harness may ALSO auto-clean unchanged worktrees on its own, so the count dropping without
+     anyone acting is expected rather than alarming. It appears to apply the same
+     leave-dirty-trees-alone rule; this was observed, not documented by the vendor, so do not rely
+     on it as the cleanup mechanism.
+   - **Leg 2 must see IGNORED files too.** `git status --porcelain` EXCLUDES them and
+     `git worktree remove` does NOT refuse on them — verified 2026-08-09: a merged worktree holding
+     an ignored `secrets/.env` classified "merged + clean + pushed", removed with exit 0, file
+     gone. The tool reads `--ignored=matching` and keeps the worktree unless every ignored path is
+     regenerable (`.env`, `build/`, `.dart_tool/`, …). Regenerables are excluded deliberately:
+     point 1 copies `.env` into EVERY worktree, so counting them would make nothing retirable.
+   - Tooling: `scripts/retire_worktree.dart` + pure `scripts/retire_worktree_lib.dart`; tests
+     `test/scripts/retire_worktree_lib_test.dart` (predicate) and
+     `test/scripts/retire_worktree_e2e_test.dart` (real linked worktrees). **Mutation-proven on
+     BOTH protective legs** — neutering the dirty check reddens 7 tests (5 unit + 2 e2e), the ignored check 4
+     (2 + 2), and reverting the exact-path match to prefix matching 4. A gate whose test never fails is the Gate-44 lesson.
+
+7. **`core.worktree` must never be set (added 2026-08-09, diagnose `a4f7c2`).** Point 1's guarantee
+   — "a worktree has its OWN index, so mixing is structurally impossible" — holds only while
+   nothing overrides per-worktree resolution. On 2026-08-09 the SHARED `.git/config` carried
+   `core.worktree = .../worktrees/post38-auth-fixes`, so every git command in all 102 worktrees
+   resolved against that one branch's files. `check_commit_from_worktree.dart` passed cleanly
+   throughout: it compares `--git-dir` to `--git-common-dir`, and those stay correct. Gated now by
+   `scripts/check_worktree_config_integrity.dart` on every commit (fails OPEN when git cannot
+   answer, so an environment quirk cannot wedge all work).
 
 ### 4.9 Common process pitfalls
 
@@ -448,6 +512,9 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 [ ] feedback_*.md added/updated if user corrected a claim OR recurring class
 [ ] project_*.md retrospective written (every shipped batch)
 [ ] MEMORY.md index updated
+[ ] Worktree retired if merged + clean (incl. ignored) + nothing unpushed (§4.13 point 6):
+      dart run scripts/retire_worktree.dart          # dry-run first, ALWAYS
+    This row IS the trigger — point 6 is deliberately ungated, so nothing else fires it.
 [ ] Skill self-evolution: does any .claude/skills/<topic>/SKILL.md need a new bug-class entry, red flag, or trigger phrase?
 ```
 
@@ -539,3 +606,6 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | End-of-batch maintenance skill | `/update-docs` (`.claude/skills/update-docs/SKILL.md`) |
 | Discipline harness hooks (prompt-time §4 reminders + euphemism gate + MEMORY.md size nudge + worktree warning) | `scripts/discipline_hook.dart` (UserPromptSubmit / PreToolUse:Skill / SessionStart → `.claude/settings.json`; the SessionStart matcher fires on ALL sources — startup/resume/compact: compact re-injects the hot-set, the shared-main worktree triggers the §4.13 warning, and an over-cap MEMORY.md index nudges `/consolidate-memory` — user-level skill `~/.claude/skills/consolidate-memory/`) + `scripts/check_no_deferral_euphemism.dart` (pre-commit gate, §4.2). Audit retrospectives: `memory/project_discipline_harness_hooks_2026_06_27.md`, `memory/project_memory_consolidation_2026_07_04.md`. |
 | Worktree-per-session enforcement (one worktree per session; shared main folder = integration-only; prevents cross-session git-index file-mixing) | **§4.13.** Pre-commit gate `scripts/check_commit_from_worktree.dart` (+ pure `scripts/worktree_guard_lib.dart`, test `test/contracts/check_commit_from_worktree_test.dart`) blocks non-merge commits in the primary worktree; helper `scripts/new-worktree.sh <slug>`; `scripts/discipline_hook.dart` SessionStart warning. Diagnose `f0c2d5`; `memory/feedback_worktree_per_session.md`. |
+| Worktree **lifecycle** — retirement (the half §4.13 originally lacked; the count reached 106 dirs / 17 GB before this existed, reclaimed to 1.4 GB) | **§4.13 point 6.** `dart run scripts/retire_worktree.dart` (dry-run DEFAULT, `--execute` opt-in) + pure `scripts/retire_worktree_lib.dart`. Four-leg predicate: merged AND no tracked changes AND no non-regenerable ignored files AND nothing unpushed — "merged" alone would have destroyed 21 uncommitted files across 5 worktrees on 2026-08-09. Orphans (on disk, not in `git worktree list`) are a stricter separate category: only genuinely empty dirs (0 entries, counting directories) auto-remove. Operator-invoked, NOT a blocking gate. Tests `test/scripts/retire_worktree_lib_test.dart` + `retire_worktree_e2e_test.dart` (mutation-proven). |
+| **Gate registry** — which script owns gate number N, and can that gate's test actually FAIL? (Before this, neither question was mechanically answerable: "Gate 44" named TWO unrelated scripts, five surveys in one session returned five different collision counts, and only 6 test files in the whole repo asserted a red path.) | `docs/audit/GATE_INDEX.md` — **generated**, do not hand-edit; regenerated by `scripts/pre-commit.sh` when a baked input changes. Generator `scripts/build_gate_index.dart` + pure `scripts/gate_index_lib.dart`; freshness gate `scripts/check_gate_index_fresh.dart`. **The registry keys on the FILENAME**; a number is an optional alias (49 of 87 have one). Canonical declaration is `// Gate: N` alone on its line in the first 10 lines — the ONLY form the generator reads. Four claim sources: script headers, `_extraGateScripts` (for numbered non-`check_*` gates like `validate_audit_closure.dart` = Gate 40), `build-apk.md` sections, and the closure ledgers (BOTH `*_closures.yaml` and `*.closure.yaml`, BOTH mint orders) — a ledger mint is EVIDENCE, superseded once the script declares its own number, because ledgers are historical records that are never rewritten. Rule 24 ledger: `docs/audit/gate_test_ledger.yaml` + `scripts/check_gate_test_ledger.dart`. Tests: `test/scripts/gate_index_{lib,e2e,fresh_e2e}_test.dart`, `gate_test_ledger_lib_test.dart`. |
+| Worktree **config integrity** — `core.worktree` must never be set (it silently redirects EVERY worktree at one branch's files, defeating §4.13 from underneath while its gate passes cleanly) | **§4.13 point 7.** Pre-commit gate `scripts/check_worktree_config_integrity.dart` + pure `scripts/worktree_config_integrity_lib.dart`; tests `test/scripts/worktree_config_integrity_lib_test.dart` + `worktree_config_integrity_e2e_test.dart`. Checks ALL git scopes (a global `~/.gitconfig` entry corrupts identically); **fails OPEN** when git cannot answer, so an environment quirk cannot wedge every commit. Diagnose `a4f7c2`. |

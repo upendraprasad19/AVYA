@@ -50,7 +50,7 @@
 #
 # Slice 0 (this commit) closes the server-side and documentation half: migration
 # 119, log-client-error v12, the b6e4f2 corrections, the board entries, and the
-# new Gate 44 that forces slices 1–3 to register their SoT concepts.
+# new SoT-citation gate that forces slices 1–3 to register their SoT concepts.
 
 batch: post38-auth-fixes
 diagnose: docs/diagnoses/2026-08-06-preauth-failures-unloggable-b6e4f2.md
@@ -63,7 +63,7 @@ plan_review_record: docs/plan-reviews/post38-auth-fixes.md
 total_findings: 45
 closed_count: 45
 
-_slice0: &slice0 "post38-auth-fixes slice 0 (prod/repo reconciliation + Gate 44)"
+_slice0: &slice0 "post38-auth-fixes slice 0 (prod/repo reconciliation + the SoT-citation gate)"
 _s1: &s1 "approved split slice 1 (a4f1c8 uuid) — merges under its own founder go"
 _s2: &s2 "approved split slice 2 (OAuth watch) — merges under its own founder go"
 _s3: &s3 "approved split slice 3 (telemetry lane, client half) — merges under its own founder go"
@@ -274,7 +274,7 @@ findings:
     commit: *slice0
     verification: test/contracts/sot_registry_citations_test.dart
     notes: >
-      Gate 44 (scripts/check_sot_registry_citations.dart) added, negative-control
+      The SoT-citation gate (scripts/check_sot_registry_citations.dart) added, negative-control
       proven: with d3a7c9 / a4f1c8 / c9e2b7 staged it exits 1 naming all three;
       unstaged it exits 0. Ships in slice 0 so slices 1–3 are FORCED to register
       their concepts (§4.11 gates-before-refactor). Scoped by doc date because a
@@ -381,13 +381,13 @@ findings:
       ledger describes GIT, not intent — if you cannot name the commit, it is
       not closed.
   - id: B2
-    title: "Gate 44: prose citations were never added to `failures`, in --strict too — a doc could opt out of the resolve-check with spaces instead of underscores"
+    title: "The SoT-citation gate: prose citations were never added to `failures`, in --strict too — a doc could opt out of the resolve-check with spaces instead of underscores"
     terminal_state: closed_in_commit
     commit: *slice0
     verification: "flutter test test/contracts/sot_registry_citations_test.dart --plain-name 'hides behind PROSE'"
     notes: "Post-cutoff prose is now a violation; pre-cutoff stays grandfathered."
   - id: B3
-    title: "Gate 44's contract test never executed main() — neutering `failures` to an empty list left the entire suite green"
+    title: "The SoT-citation gate's contract test never executed main() — neutering `failures` to an empty list left the entire suite green"
     terminal_state: closed_in_commit
     commit: *slice0
     verification: "apply the neutering mutation, flutter test -> 3 failures"
@@ -406,13 +406,13 @@ findings:
       is a patch, not a fix. Structural gap filed as OI-103 rather than
       hand-patched a third time.
   - id: B5
-    title: "Gate 44 failed OPEN on a missing registry (exit 0 'SKIP') while failing CLOSED on a zero-concept parse — same meaning, opposite handling"
+    title: "The SoT-citation gate failed OPEN on a missing registry (exit 0 'SKIP') while failing CLOSED on a zero-concept parse — same meaning, opposite handling"
     terminal_state: closed_in_commit
     commit: *slice0
     verification: "flutter test ... --plain-name 'FAIL CLOSED'"
     notes: "A rename or deletion of the registry would have silently disabled the gate."
   - id: B6
-    title: "Gate 44's cutoff read only the filename, so a new doc could exempt itself by being NAMED with a pre-cutoff date"
+    title: "The SoT-citation gate's cutoff read only the filename, so a new doc could exempt itself by being NAMED with a pre-cutoff date"
     terminal_state: closed_in_commit
     commit: *slice0
     verification: "flutter test ... --plain-name 'backdating the FILENAME'"
@@ -435,7 +435,7 @@ findings:
     commit: *slice0
     verification: "the failed run's own first line reads `staged: 23`; git reset + re-add brought it back to 8"
     notes: >
-      Caught only because Gate 44 failed on three slice-1/2 diagnose-docs that
+      Caught only because The SoT-citation gate failed on three slice-1/2 diagnose-docs that
       had no business being in the index. Had the gate passed, 23 files would
       have shipped under a message describing 8 — the §4.13 mixing failure, from
       inside one session rather than across two.

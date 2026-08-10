@@ -104,7 +104,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_nutrition_logs_user_date_meal
 -- H-28 — UNIQUE(workout_log_id, exercise_id, set_number) on
 --        workout_log_exercises
 --
--- Per CLAUDE.md §11 "Exercise Log Cloud Contract" each
+-- Per docs/architecture/ai.md "Exercise Log Cloud Contract" each
 -- (workout_log_id, exercise_id, set_number) tuple is UNIQUE by
 -- intent. Pre-fix only the PK constraint existed; concurrent sync
 -- pushes from two devices could produce duplicates.
@@ -143,4 +143,4 @@ COMMENT ON INDEX public.idx_ai_coach_user_channel_created IS
 COMMENT ON INDEX public.uniq_nutrition_logs_user_date_meal IS
   'audit-2026-05-11 H-27 — UNIQUE(user_id, date, meal_type) per WriteService SoT.';
 COMMENT ON INDEX public.uniq_workout_log_exercises_wlog_ex_set IS
-  'audit-2026-05-11 H-28 — UNIQUE(workout_log_id, exercise_id, set_number) per CLAUDE.md §11.';
+  'audit-2026-05-11 H-28 — UNIQUE(workout_log_id, exercise_id, set_number) per docs/architecture/ai.md.';

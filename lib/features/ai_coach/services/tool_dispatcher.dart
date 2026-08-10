@@ -79,7 +79,7 @@ class ToolDispatcher {
   ///  1. Check expiry (1h TTL)
   ///  2. Re-read current Hive state for concurrent-edit guard
   ///  3. Route by intent.type to the right repository call
-  ///  4. Fire the 6-provider invalidation batch (CLAUDE.md §15)
+  ///  4. Fire the 6-provider invalidation batch (docs/architecture/sync.md)
   ///  5. Fire fire-and-forget sync (syncWorkoutData + pushSnapshot)
   ///  6. Return result
   ///
@@ -1442,7 +1442,7 @@ class ToolDispatcher {
   }
 
   void _invalidateWorkoutProviders(Ref ref) {
-    // CLAUDE.md §15 mandatory batch.
+    // docs/architecture/sync.md mandatory batch.
     // Each invalidation is independently try/caught — a missing provider
     // shouldn't prevent the rest from refreshing. Unrolled (vs. iterating
     // a list) because providers are a sealed family and don't share a

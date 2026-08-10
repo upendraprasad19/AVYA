@@ -59,7 +59,7 @@ async function handler(
   const { sb, userId } = ctx;
   const name = args.exerciseId.trim();
 
-  // Per CLAUDE.md §11: exercise_id is the stable identity (= exercise_name).
+  // Per docs/architecture/ai.md: exercise_id is the stable identity (= exercise_name).
   // is_pr=true flags the set as a PR. set_number = total completed sets.
   // Schema verified 2026-04-27: exercise_id, weight_kg, reps, set_number,
   // logging_type, duration_seconds, distance_km, is_pr, completed_at all present.

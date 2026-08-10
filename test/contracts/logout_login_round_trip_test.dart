@@ -260,7 +260,10 @@ void main() {
       test('$path does not call istDateStr(x.toLocal())', () {
         final content = File(path).readAsStringSync();
         // The double-shift pattern: istDateStr(something.toLocal())
-        // This is forbidden per CLAUDE.md §19 "istDateStr(istNow())" rule.
+        // Forbidden by the IST helper contract in `lib/core/utils/ist_date.dart`,
+        // swept by `test/contracts/ist_sweep_no_utc_substring_test.dart`.
+        // (Retired root §19 entry #128, Class A per the 2026-05-18
+        // declutter audit — those tests are its record now.)
         final hasDoubleShift = RegExp(r'istDateStr\([^)]+\.toLocal\(\)\)')
             .hasMatch(content);
         expect(

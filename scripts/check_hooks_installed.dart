@@ -1,5 +1,7 @@
 // scripts/check_hooks_installed.dart
 //
+// Gate: 32
+//
 // Gate 32 (Tech-debt audit 2026-05-20, finding I8): assert that the
 // repo's pre-commit hook is installed (i.e. `.git/hooks/pre-commit` exists
 // and references `scripts/pre-commit.sh`).

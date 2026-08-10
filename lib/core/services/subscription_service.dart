@@ -85,10 +85,11 @@ class SubscriptionService {
   /// audit-2026-05-16 E.8 — `featureActiveWorkoutMode`, `featureVoiceNotes`,
   /// `featureDietPlanPdf` removed entirely. Active workout is free since
   /// Test #2 Q6, voice is free since Test #9 F13, diet-plan PDF is free per
-  /// CLAUDE.md §14. The constants themselves are also deleted from
+  /// docs/architecture/business-rules.md. The constants themselves are also deleted from
   /// AppConstants in this batch.
-  /// `featurePhotoAnalysis` added — was a documented PRO feature per §14
-  /// with no gate callsite anywhere (audit F8.1 sub-bug); now in the list.
+  /// `featurePhotoAnalysis` added — was a documented PRO feature per
+  /// docs/architecture/business-rules.md with no gate callsite anywhere
+  /// (audit F8.1 sub-bug); now in the list.
   static const List<String> allProFeatures = [
     AppConstants.featurePhases2To12,
     AppConstants.featureAiCoachUnlimited,

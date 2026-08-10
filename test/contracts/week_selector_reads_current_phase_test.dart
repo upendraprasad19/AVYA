@@ -33,8 +33,38 @@ void main() {
       expect(screen.contains('currentPhase: plan.phase'), isTrue);
     });
 
-    test('past phases come from the shared pastPhaseBlocks() SoT', () {
-      expect(sel.contains('pastPhaseBlocks()'), isTrue);
+    test('past phases come from the shared bucketing SoT, not a local re-walk',
+        () {
+      // UPDATED 2026-08-09 (diagnose c9e4b7): the selector now goes through the
+      // DISPLAY wrapper. `pastPhaseBlocksForDisplay` still delegates to the
+      // strict `pastPhaseBlocks()` for its primary path — the recovery is a
+      // fallback, not a replacement — so the point this test pins is unchanged:
+      // the selector must NOT re-bucket schedule_* itself, because that is how
+      // it drifts from PhaseProgressReconciler.
+      //
+      // Matching the prefix rather than the exact old string keeps this green
+      // for either name while still failing if the selector goes back to
+      // walking the box directly.
+      expect(sel.contains('pastPhaseBlocks'), isTrue);
+      expect(
+        sel.contains('pastPhaseBlocksForDisplay('),
+        isTrue,
+        reason: 'the selector reads the display wrapper (c9e4b7); the strict '
+            'pastPhaseBlocks() is reserved for the reconciler, whose '
+            'monotonic advance is unrecoverable if over-fed.',
+      );
+      // Assert on the actual anti-pattern — WALKING the box — not on the
+      // `schedule_` string. The widget legitimately parses a date out of a
+      // schedule key it was handed (`_labelFor`, week_selector.dart:647), and
+      // a targeted `.get('wlog_…')` is fine too. What must not come back is
+      // `workoutBox.toMap()` iteration, which is how the widget would drift
+      // from the shared bucketing SoT.
+      expect(
+        sel.contains('workoutBox.toMap()'),
+        isFalse,
+        reason: 'the widget must not re-walk workoutBox — that is the SoT\'s '
+            'job (_scheduleRowsBefore).',
+      );
     });
   });
 }

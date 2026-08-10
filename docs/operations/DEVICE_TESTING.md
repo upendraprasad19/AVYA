@@ -161,6 +161,6 @@ quarterly audit cadence per CLAUDE.md §4.10).
 - The 4 flows are currently `skip: 'T1 scaffold — ...'`. Founder
   flips `skip` to a runtime gate (or removes it entirely) once the
   first real run is green on the Pixel.
-- Gate `scripts/check_device_tests_exist.dart` (Gate 44) enforces
+- Gate `scripts/check_device_tests_exist.dart` (Gate 54) enforces
   that all 4 named files exist with their named feature mention.
   Deleting one without replacement is a pre-commit fail.

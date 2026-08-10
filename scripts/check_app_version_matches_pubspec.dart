@@ -1,8 +1,12 @@
 // scripts/check_app_version_matches_pubspec.dart
 //
+// Gate: 51
+//
 // Build-gate script: asserts `AppConstants.appVersion` in
 // lib/core/constants/app_constants.dart matches the `version:` line in
-// pubspec.yaml. Run as part of `/build-apk` Gate 18.
+// pubspec.yaml. Runs on EVERY commit (pre-commit + CI), not build-time only
+// — it was removed from Gate 33's allowlist 2026-06-07 because the constant
+// kept lagging pubspec. It never had a `/build-apk` section of its own.
 //
 // Background — audit 2026-05-16 F10.1:
 //   `AppConstants.appVersion` was hardcoded `'1.0.0+23'` and never bumped while

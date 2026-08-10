@@ -114,7 +114,8 @@ paths:
   # suite runs before code leaves the machine (:64, a string equality against
   # "feature"), so an edit disabling it would clear zero review gate AND skip
   # the suite on the very push that lands it. CI is not a substitute —
-  # .github/workflows/test.yml:61 excludes golden-image tests, which run ONLY in
+  # .github/workflows/test.yml (the `unit-test` job, `--exclude-tags golden`)
+  # excludes golden-image tests, which run ONLY in
   # that local suite.
   #
   # commit-msg.sh is the sole LOCAL enforcement of coding rule 22 (every

@@ -24,7 +24,7 @@ void main() {
   group('Custom exercise submission flow', () {
     test('T1 — submit custom exercise writes `custom_exercise_*` per-key entry',
         () {
-      // Per CLAUDE.md §15 SoT contract. Verify Hive key shape +
+      // Per docs/architecture/sync.md SoT contract. Verify Hive key shape +
       // cloud user_custom_exercises row.
     }, skip: 'Phase 7 scaffold — needs Supabase test mode.');
 

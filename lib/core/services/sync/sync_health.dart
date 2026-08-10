@@ -124,7 +124,7 @@ extension SyncServiceHealth on SyncService {
   }
 
   /// Pushes recent sleep entries to Supabase `sleep_logs`. Fire-and-forget per
-  /// CLAUDE.md §15. Handles two Hive storage patterns:
+  /// docs/architecture/sync.md. Handles two Hive storage patterns:
   ///   • Per-day keys  `sleep_log_YYYY-MM-DD`  (standard log path)
   ///   • List key      `sleep_logs`             (conversational AI tool path)
   Future<void> syncSleepNow() async {
@@ -181,7 +181,7 @@ extension SyncServiceHealth on SyncService {
   }
 
   /// Pushes recent body measurements to Supabase `body_measurements`.
-  /// Fire-and-forget per CLAUDE.md §15. Delegates to existing `_syncMeasurements`
+  /// Fire-and-forget per docs/architecture/sync.md. Delegates to existing `_syncMeasurements`
   /// which reads `measurement_YYYY-MM-DD` keys — the same pattern written by
   /// conversational_log_handler._logMeasurement.
   Future<void> syncMeasurementsNow() async {

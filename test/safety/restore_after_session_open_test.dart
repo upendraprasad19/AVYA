@@ -119,7 +119,7 @@ void main() {
           src,
           contains("await coach.put('coaching_notes', notes)"),
           reason: 'Hive write key must stay `coaching_notes` — only the cloud '
-              'select column changed (CLAUDE.md §15 Hive field-name contract).',
+              'select column changed (docs/architecture/sync.md Hive field-name contract).',
         );
       },
     );

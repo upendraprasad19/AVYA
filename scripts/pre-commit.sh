@@ -49,7 +49,11 @@ flutter analyze --no-fatal-infos
 # to pre-push so commits aren't blocked on the slow run. CI runs full
 # suite on every push regardless.
 #
-# Fast path: contract tests + analyzer + all 38 gates (~3 min).
+# Fast path: contract tests + analyzer + the gate loop (~3 min). 86 gate files
+# exist; the loop runs 71 (15 are case-skipped below). 2 of those 15
+# (check_no_deferral_euphemism, check_skipped_discipline_budget) are invoked
+# EXPLICITLY above, so real pre-commit coverage is 73 of 86 — quoting only "71"
+# understates it the same way the old "38" overstated it.
 # Heavy: flutter test (full suite, ~7 min) → runs on pre-push instead.
 #
 # Set PRE_COMMIT_FULL=1 to force the full suite locally (e.g. before a
@@ -110,6 +114,30 @@ if git diff --cached --name-only | grep -qE '^docs/incidents/[0-9]{4}-.*\.md$'; 
   git add docs/incidents/INDEX.md
 fi
 
+# Regen the gate index when any BAKED input changes.
+#
+# The trigger below is exhaustive over the baked inputs, and the qualifier
+# matters: an earlier draft claimed "exactly covers" while omitting three
+# sources. Note it is `scripts/*.dart`, NOT `scripts/check_*.dart` —
+# validate_audit_closure.dart (Gate 40) and gate_index_lib.dart (which holds
+# _extraGateScripts and the historical-aliases table) both feed BAKED columns
+# and neither matches check_*. And BOTH closure-ledger filename conventions are
+# listed: *_closures.yaml matches 6 files, *.closure.yaml matches 18 more.
+#
+# The 5 pre-existing collisions (Gates 7, 18, 19, 23, 44) were resolved in the
+# commit that follows the one introducing this block, so --warn-only is gone and
+# a duplicate number now BLOCKS. It existed for exactly one commit: without it,
+# the introducing commit would have been blocked by its own hook and the
+# collision baseline it produces could never have been written.
+if git diff --cached --name-only | grep -qE '^(scripts/.+\.dart|\.claude/commands/build-apk\.md|docs/audit/([^/]+_closures\.yaml|[^/]+\.closure\.yaml|closed_issues\.md|gate_test_ledger\.yaml))$'; then
+  echo "[pre-commit] Gate-index input touched — regenerating GATE_INDEX.md..."
+  if ! dart run scripts/build_gate_index.dart; then
+    echo "[pre-commit] FAIL: build_gate_index.dart errored."
+    exit 1
+  fi
+  git add docs/audit/GATE_INDEX.md
+fi
+
 # Regen handbook index if any handbook file was modified.
 if git diff --cached --name-only | grep -qE '^docs/handbook/.+\.md$'; then
   echo "[pre-commit] Handbook touched — regenerating INDEX.md..."
@@ -141,13 +169,17 @@ fi
 # Allow-list (build-only or advisory) lives in scripts/check_gate_scripts_wired.dart.
 # Each script accepts a --warn-only flag during its 24h smoke window;
 # remove the flag once the gate is proven stable.
-# P1.G (2026-06-18): waiver-budget gate runs --warn-only during baseline window.
-# 2 pre-existing open waivers from 2026-05-11 are >14d old; §4.11 gates-before-
-# refactor requires warn-only until those are resolved or superseded by behavioral
-# tests. Remove --warn-only once the waivers in docs/skipped-discipline.md are
-# marked "resolved" with a commit SHA.
-echo "[pre-commit] Gate-SDB (warn-only baseline): check_skipped_discipline_budget..."
-dart run scripts/check_skipped_discipline_budget.dart --warn-only
+# P1.G (2026-06-18): the waiver-budget gate ran --warn-only during its §4.11
+# baseline window, pending the 2 open waivers from 2026-05-11. BOTH are now
+# marked "**resolved** 2026-06-19" in docs/skipped-discipline.md:5-6, so the
+# script's own stated removal condition was met — and it exits 0 without the flag
+# (verified by running it). The flag is gone; this is now a hard gate.
+# Note it is ALSO in the case-skip list below, so it does not double-run.
+echo "[pre-commit] Gate-SDB: check_skipped_discipline_budget..."
+if ! dart run scripts/check_skipped_discipline_budget.dart; then
+  echo "[pre-commit] FAIL: open skipped-discipline waivers older than 14 days (§4.11). Fix root cause; do NOT use --no-verify."
+  exit 1
+fi
 
 # Gate-DEU (discipline audit 2026-06-27): flag deferral-EUPHEMISM phrases in the
 # staged Markdown additions (CLAUDE.md §4.2 bans the semantic, not just "defer").
@@ -161,7 +193,8 @@ if ! dart run scripts/check_no_deferral_euphemism.dart; then
 fi
 
 echo "[pre-commit] Running tech-debt audit gates (bounded-parallel)..."
-# Lean-workflow batch (2026-06-01): the ~28 check_*.dart gates ran sequentially.
+# Lean-workflow batch (2026-06-01): the check_*.dart gates ran sequentially.
+# 86 gate files exist; this loop runs 71 (15 case-skipped below).
 # Run them with BOUNDED concurrency (PRE_COMMIT_GATE_JOBS, default 4) to shave
 # wall-time without spawning 28 Dart VMs at once (same OOM ceiling discipline as
 # Gradle -Xmx on this 16 GB box). MUST preserve the literal `scripts/check_*.dart`

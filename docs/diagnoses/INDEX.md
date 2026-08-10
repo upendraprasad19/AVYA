@@ -9,30 +9,39 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### deploy_smoke_tolerated_codes (1 bugs)
 - 2026-08-10 a7c3f9 — Deploying log-client-error v13 returned HTTP 201 with a healthy ACTIVE function, and then printed "Smoke FAIL — HTTP 401 (not in tolerated set [400])" followed by rollback instructions. The deploy was…
 
+### worktree_retirement_allow_list (1 bugs)
+- 2026-08-10 d7b3e9 — `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three…
+
+### worktree_config_integrity (1 bugs)
+- 2026-08-09 a4f7c2 — `git rev-parse --show-toplevel` returned `.../.claude/worktrees/post38-auth-fixes` from EVERY worktree in the repo and from the shared main folder. A session working in…
+
+### notification_cron_eligibility_and_pro_gate (1 bugs)
+- 2026-08-09 e3b9d7 — TWO notification-cron defects reported by the founder from their own phone and account, 2026-08-05 / 2026-08-07. (1) STREAK-GUARDIAN SENT A SELF-CONTRADICTING PUSH. A single notification read "Don't…
+
+### past_phase_display_recovery (1 bugs)
+- 2026-08-09 c9e4b7 — Founder, live web 2026-08-05, account upendraprasad19@gmail.com: the Train screen's week selector showed NO past-phase history despite the account being on Phase 2 with a completed Phase 1 on record.…
+
+### signout_teardown_window_and_restore_op_ceiling (1 bugs)
+- 2026-08-09 b7e4c1 — TWO defects on the auth/session path, both reported by the founder from live web on 2026-08-05, both fixed here because they share the same root class — an unbounded or ambiguous state read during a…
+
+### claude_md_section_citation — the pointer from a source comment to a numbered
+section of root `CLAUDE.md`. The schema below is writer/reader-shaped because
+this drift IS writer/reader drift; the writer just happens to be a document
+rather than a Hive box. (1 bugs)
+- 2026-08-07 b2f7a4 — 138 `CLAUDE.md §N` citations in `.dart` / `.ts` / `.sql` / `.js` comments pointed at root-CLAUDE.md sections that do not exist. Root's real headings are exactly `0, 1, 2, 2a, 3, 4, 5, 6, 7`; the…
+
 ### notification_preferences (1 bugs)
 - 2026-08-07 a7e3d1 — Two defects on the same surface, both filed as OI-76. (1) COUNT. The Profile tab's Notifications row subtitle reads "N/M enabled". It counted all 10 registry keys, including `protein_alerts` and…
 
 ### community_review_queue (1 bugs)
 - 2026-08-07 d5b8c2 — `promote-community-item` (daily cron, job `promote_community_item_daily`) opened both of its promotion paths with a call to the Postgres RPC `community_votes_summary`. That function does not exist —…
 
-### session_owner_inflight_guard (1 bugs)
-- 2026-08-06 e5c2d1 — In one 1.0.0+38 session the founder signed out of user d7a67a37 (12:31:01 UTC) and signed into 9e6bde97 via Google (12:31:37). client_errors then shows, over roughly twelve seconds, 22 × "new row…
-
 ### equipment_exclusion_filter (2 bugs)
 - 2026-08-06 e2d6b8 — A user opens Edit Profile, selects the equipment they do NOT have (e.g. cables), and saves. The selection persists and syncs to cloud. Their generated plan then prescribes exercises requiring exactly…
 - 2026-07-17 b7a4e2 — On every GENERATED workout plan, gym users (basic_gym / full_gym) NEVER received the gym-cardio warmup moves (_gymCardio: Jump Rope / Cycling (Stationary) / Running (Treadmill)) or the gym finisher…
 
-### oauth_signin_completion (1 bugs)
-- 2026-08-06 d3a7c9 — Founder taps CONTINUE WITH GOOGLE on APK 1.0.0+38, completes Google consent, and the app sits on the sign-in screen with BOTH buttons spinning forever. Force-quitting and reopening lands on Home,…
-
-### notifications_inbox_id_contract (1 bugs)
-- 2026-08-06 a4f1c8 — client_errors shows 6 × PostgrestException 22P02 "invalid input syntax for type uuid: local-welcome-1786019702890010" against sync_notifications_inbox_entry in one 1.0.0+38 session. Nobody reported it…
-
 ### preauth_error_telemetry (1 bugs)
 - 2026-08-06 b6e4f2 — Founder hits "Could not send reset link. Try again." on the web app. The code that produced that message also calls ErrorTelemetry.logEvent('auth_forgot_password_send_failed'), so there should have…
-
-### password_recovery_session (1 bugs)
-- 2026-08-06 c9e2b7 — Founder requests a password reset FROM THE ANDROID APP, receives the email, opens the link (which loads the web app), lands on the branded SET NEW PASSWORD screen, types a new password, and gets "Auth…
 
 ### plan_review_record_gate (1 bugs)
 - 2026-08-05 a7f3c2 — scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands…
@@ -963,14 +972,19 @@ Re-run: `dart run scripts/build_bug_index.dart`
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-08-10 | a7c3f9 | Deploying log-client-error v13 returned HTTP 201 with a healthy ACTIVE function, and then printed "Smoke FAIL — HTTP 401 (not in tolerated set [400])" followed by rollback instructions. The deploy was… | deploy_smoke_tolerated_codes | "not_applicable — see regression_test_planned for why, and what was done instead" |
+| 2026-08-10 | d7b3e9 | `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three… | worktree_retirement_allow_list | test/scripts/retire_worktree_lib_test.dart |
+| 2026-08-09 | a4f7c2 | `git rev-parse --show-toplevel` returned `.../.claude/worktrees/post38-auth-fixes` from EVERY worktree in the repo and from the shared main folder. A session working in… | worktree_config_integrity | test/scripts/worktree_config_integrity_e2e_test.dart |
+| 2026-08-09 | e3b9d7 | TWO notification-cron defects reported by the founder from their own phone and account, 2026-08-05 / 2026-08-07. (1) STREAK-GUARDIAN SENT A SELF-CONTRADICTING PUSH. A single notification read "Don't… | notification_cron_eligibility_and_pro_gate | test/contracts/streak_guardian_eligibility_test.dart |
+| 2026-08-09 | c9e4b7 | Founder, live web 2026-08-05, account upendraprasad19@gmail.com: the Train screen's week selector showed NO past-phase history despite the account being on Phase 2 with a completed Phase 1 on record.… | past_phase_display_recovery | test/contracts/past_phase_display_recovery_behavioral_test.dart |
+| 2026-08-09 | b7e4c1 | TWO defects on the auth/session path, both reported by the founder from live web on 2026-08-05, both fixed here because they share the same root class — an unbounded or ambiguous state read during a… | signout_teardown_window_and_restore_op_ceiling | test/contracts/signout_router_guard_behavioral_test.dart |
+| 2026-08-07 | b2f7a4 | 138 `CLAUDE.md §N` citations in `.dart` / `.ts` / `.sql` / `.js` comments pointed at root-CLAUDE.md sections that do not exist. Root's real headings are exactly `0, 1, 2, 2a, 3, 4, 5, 6, 7`; the… | claude_md_section_citation — the pointer from a source comment to a numbered
+section of root `CLAUDE.md`. The schema below is writer/reader-shaped because
+this drift IS writer/reader drift; the writer just happens to be a document
+rather than a Hive box. | test/scripts/claude_md_citations_letter_suffix_test.dart |
 | 2026-08-07 | a7e3d1 | Two defects on the same surface, both filed as OI-76. (1) COUNT. The Profile tab's Notifications row subtitle reads "N/M enabled". It counted all 10 registry keys, including `protein_alerts` and… | notification_preferences | test/contracts/notification_pro_key_scoping_test.dart |
 | 2026-08-07 | d5b8c2 | `promote-community-item` (daily cron, job `promote_community_item_daily`) opened both of its promotion paths with a call to the Postgres RPC `community_votes_summary`. That function does not exist —… | community_review_queue | test/contracts/promote_community_vote_tally_test.dart |
-| 2026-08-06 | e5c2d1 | In one 1.0.0+38 session the founder signed out of user d7a67a37 (12:31:01 UTC) and signed into 9e6bde97 via Google (12:31:37). client_errors then shows, over roughly twelve seconds, 22 × "new row… | session_owner_inflight_guard | test/contracts/session_owner_inflight_guard_behavioral_test.dart |
 | 2026-08-06 | e2d6b8 | A user opens Edit Profile, selects the equipment they do NOT have (e.g. cables), and saves. The selection persists and syncs to cloud. Their generated plan then prescribes exercises requiring exactly… | equipment_exclusion_filter | test/contracts/equipment_exclusion_filter_behavioral_test.dart |
-| 2026-08-06 | d3a7c9 | Founder taps CONTINUE WITH GOOGLE on APK 1.0.0+38, completes Google consent, and the app sits on the sign-in screen with BOTH buttons spinning forever. Force-quitting and reopening lands on Home,… | oauth_signin_completion | test/contracts/google_oauth_session_navigation_behavioral_test.dart |
-| 2026-08-06 | a4f1c8 | client_errors shows 6 × PostgrestException 22P02 "invalid input syntax for type uuid: local-welcome-1786019702890010" against sync_notifications_inbox_entry in one 1.0.0+38 session. Nobody reported it… | notifications_inbox_id_contract | test/contracts/notifications_inbox_uuid_id_behavioral_test.dart |
 | 2026-08-06 | b6e4f2 | Founder hits "Could not send reset link. Try again." on the web app. The code that produced that message also calls ErrorTelemetry.logEvent('auth_forgot_password_send_failed'), so there should have… | preauth_error_telemetry | test/contracts/error_telemetry_payload_contract_test.dart |
-| 2026-08-06 | c9e2b7 | Founder requests a password reset FROM THE ANDROID APP, receives the email, opens the link (which loads the web app), lands on the branded SET NEW PASSWORD screen, types a new password, and gets "Auth… | password_recovery_session | test/contracts/password_recovery_code_flow_behavioral_test.dart |
 | 2026-08-05 | a7f3c2 | scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands… | plan_review_record_gate | test/scripts/plan_review_record_gate_e2e_test.dart |
 | 2026-08-03 | c9f4e1 | Two independent, real (not hypothetical) gaps in the git-safety tooling that CLAUDE.md §4.3 already relies on. (1) A 2026-08-03 near-miss during the terms-accepted-fix backfill follow-up: a foreground… | git_safety_tooling | test/contracts/git_lock_concurrency_test.dart (3a — real concurrent processes, not mocked timing; 5 tests after round-2's fix round, see below), test/scripts/plan_review_record_gate_e2e_test.dart (3b — 3 new tests appended to the existing E2E suite for this gate), test/scripts/safe_merge_test.dart (3c — real bare-remote + clone E2E, including the seeded-stale-origin scenario and, after round-2, the multi-word -m passthrough), test/scripts/safe_push_test.dart (NEW in round-2's fix round — safe_push.sh had zero prior coverage; this pins only the EXTRA_ARGS fix that batch actually changed there, not the pre-existing SSH-keepalive/retry logic). |
 | 2026-08-03 | b4e9c7 | `lib/features/train/screens/graduation_screen.dart` reached 909 lines against Gate 43's 800-line ceiling and passed only because it had been added to the gate's transitional allow-list — the FIRST… | phase_advance_write_path | test/contracts/pro_phase_advance_behavioral_test.dart |

@@ -5,7 +5,7 @@
 // "Total volume lifted: 79,713 kg" + "Workouts: 2 of 28 planned" — both
 // inflated. Two bugs:
 //   1. Volume formula was `w * reps * sets` but `reps` is CUMULATIVE
-//      across sets per CLAUDE.md §11 — multiplying by sets again
+//      across sets per docs/architecture/ai.md — multiplying by sets again
 //      triple-counted (founder's actual ~$23k inflated to ~$80k).
 //   2. Planned-workouts filter excluded only `paused` and `skipped`, not
 //      `rest` — rest days counted as "planned workouts."
@@ -34,7 +34,7 @@ void main() {
       expect(source, isNot(contains('totalVolume += w * reps * sets')),
           reason:
               'Volume must not multiply by set_number — `reps` is already '
-              'CUMULATIVE per CLAUDE.md §11 cloud contract. Was triple-counting.');
+              'CUMULATIVE per docs/architecture/ai.md cloud contract. Was triple-counting.');
       expect(source, contains('totalVolume += w * reps'),
           reason: 'Volume formula must use weight × cumulative_reps.');
     });

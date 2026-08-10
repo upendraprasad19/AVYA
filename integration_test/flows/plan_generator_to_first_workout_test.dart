@@ -29,7 +29,7 @@ void main() {
 
     test('T2 — workout days have exercise count matching VolumeFilter.targetCount(intermediate, 4) = 7',
         () {
-      // Per CLAUDE.md §12 table: intermediate × 4-day = 7 exercises/day.
+      // Per lib/shared/repositories/plan_engine/CLAUDE.md table: intermediate × 4-day = 7 exercises/day.
     }, skip: 'Phase 7 scaffold — needs onboarding fixture user.');
 
     test('T3 — cascade attempts stay within attempt1 / 2 for build_muscle / full_gym',

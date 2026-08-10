@@ -11,7 +11,7 @@ const ROOT = path.resolve(__dirname, '..');
 const JSON_PATH = path.join(ROOT, 'assets', 'data', 'food_database.json');
 const OUTPUT_SQL = path.join(ROOT, 'supabase', 'migrations', '030_seed_food_database.sql');
 
-// UUID v5 namespace (shared with custom exercises + templates per CLAUDE.md §7)
+// UUID v5 namespace (shared with custom exercises + templates per docs/architecture/database.md)
 const NAMESPACE = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
 
 function uuidv5(name, namespace) {

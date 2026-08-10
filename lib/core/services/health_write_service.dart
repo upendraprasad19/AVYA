@@ -40,7 +40,7 @@ import 'write_result.dart';
 ///   5. Single `healthBox.put`.
 ///   6. Fires the matching `SyncService.syncXxxNow()` selectively + a
 ///      `pushSnapshot()` so the AI coach sees the change (fire-and-forget
-///      per CLAUDE.md §15).
+///      per docs/architecture/sync.md).
 ///   7. On exception: `ErrorTelemetry.recordNonFatal` + `_reportSyncFailure`
 ///      with `op_type` `upsert_<kind>_log`.
 ///   8. Returns a [WriteResult] keyed by the Hive entry.

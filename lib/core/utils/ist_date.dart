@@ -1,7 +1,7 @@
 /// IST (Asia/Kolkata, UTC+5:30) date/time helpers.
 ///
 /// All "today" / "this week" / "calendar" logic in the app derives
-/// from IST per CLAUDE.md §3.1 + apk-test-6 spec §3.1. Use these
+/// from IST per CLAUDE.md §4.5 + apk-test-6 spec §3.1. Use these
 /// helpers — never hand-roll `toUtc().add(Duration(hours: 5, ...))`.
 library;
 

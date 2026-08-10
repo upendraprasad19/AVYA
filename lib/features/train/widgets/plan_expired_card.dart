@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'keep_training_phase1_action.dart';
 
@@ -114,6 +115,14 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
 
   @override
   Widget build(BuildContext context) {
+    // The card names the phase you BANKED and the one you'd deploy to. Both were
+    // hardcoded "1"/"2", so a phase-2+ user whose plan expired was told they had
+    // secured Phase 1 and offered a Phase 2 they already own. Same repository
+    // read `phase2_preview_card.dart:64-65` uses; current_phase cannot change
+    // while this card is mounted (an advance removes the card).
+    final currentPhase =
+        (UserRepository.instance.getProgress()?['current_phase'] as int?) ?? 1;
+    final nextPhase = currentPhase + 1;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       padding: const EdgeInsets.all(18),
@@ -127,18 +136,18 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
         children: [
           // Header — endowed-progress lead (Phase 1 already banked)
           Text(
-            'Phase 1 — secured, Recruit.',
+            'Phase $currentPhase — secured, Recruit.',
             style: AppTypography.body.copyWith(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 6),
           Text(
-            'Phase 2: new drills, supersets, progressive overload — your orders are ready.',
+            'Phase $nextPhase: new drills, supersets, progressive overload — your orders are ready.',
             style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim, height: 1.4),
           ),
           const SizedBox(height: 18),
 
           // Primary — Upgrade to PRO
-          _primaryCta(),
+          _primaryCta(nextPhase),
           const SizedBox(height: 12),
 
           // Ship-dark: with `enable_hold_weeks` ON, holding is a REAL second
@@ -265,7 +274,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
     );
   }
 
-  Widget _primaryCta() {
+  Widget _primaryCta(int nextPhase) {
     return GestureDetector(
       onTap: _handleUpgrade,
       child: Container(
@@ -284,7 +293,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
         ),
         child: Center(
           child: Text(
-            'Deploy to Phase 2 — go PRO  →',
+            'Deploy to Phase $nextPhase — go PRO →',
             style: AppTypography.body.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
           ),
         ),

@@ -80,8 +80,20 @@ serve(async (req: Request) => {
       () =>
         supabase
           .from("user_progress")
-          .select("user_id, current_streak_weeks")
-          .gte("current_streak_weeks", 2),
+          // `current_streak_days` is selected AND gated on, not just selected:
+          // eligibility used to read ONLY `current_streak_weeks` while the message
+          // body quoted `current_streak_days` from the daily snapshot — two caches
+          // refreshed by different writers on different schedules. When they
+          // disagreed the push contradicted itself in a single notification.
+          // Founder's account 2026-08-05: current_streak_weeks=4 (frozen; last
+          // workout 2026-05-22) but current_streak_days=0 → "Don't break your
+          // 28-day streak" landed beside "streak at 0 days". Both numbers now come
+          // from THIS row, so they cannot disagree, and `>= 1` means a user whose
+          // live streak is already 0 is never told they have one to protect.
+          // Diagnose e3b9d7.
+          .select("user_id, current_streak_weeks, current_streak_days")
+          .gte("current_streak_weeks", 2)
+          .gte("current_streak_days", 1),
       { orderBy: "id", label: "streak-guardian streak-users" },
     );
 
@@ -192,8 +204,14 @@ serve(async (req: Request) => {
 
       // 5. Build a contextual message based on streak + snapshot data.
       const snap = snapshot?.snapshot_json ?? {};
-      const streakDays = (snap?.current_streak_days as number) ?? streakWeeks * 7;
-      const recentPR = snap?.recent_pr_exercise as string | null;
+      // From the user_progress row this user was SELECTED on — not from the
+      // snapshot — so the number gating the send is the number the copy quotes.
+      // No `?? streakWeeks * 7` fallback: `.gte("current_streak_days", 1)` above
+      // means SQL already excluded NULL (a NULL fails `>=`), so a fallback here
+      // would be unreachable today AND would silently restore the exact
+      // two-source contradiction this fix removes if that gate were ever
+      // loosened. The guarantee lives in the query; don't shadow it.
+      const streakDays = user.current_streak_days as number;
       const weight = snap?.current_weight_kg as number | null;
       const targetWeight = snap?.target_weight_kg as number | null;
 
@@ -219,9 +237,17 @@ serve(async (req: Request) => {
       } else if (streakDays % 10 === 0 && streakDays > 10) {
         title = `${streakDays}-day milestone!`;
         fallbackMessage = `${streakDays} days of showing up. That's elite. Don't let today be the one you miss.`;
-      } else if (recentPR) {
-        title = "You hit a PR recently!";
-        fallbackMessage = `New best on ${recentPR} this week. Momentum is real — keep your ${streakWeeks}-week streak alive!`;
+        // A `recent_pr_exercise` branch used to sit between this arm and the next,
+        // titling the push "You hit a PR recently!". It carried NO recency check:
+        // the field comes from ai_snapshot_builder._getPRTimelineSummary, which
+        // scans every exlog row ever with no date cutoff, so "recently" could mean
+        // months ago — the founder's snapshot was quoting a 75-day-old PR beside a
+        // 0-day streak. Removed rather than date-bounded: `pr-detection` is a
+        // separate cron with a correct 20-minute lookback that already owns "you
+        // just hit a PR" in real time, so a second surface celebrating the same
+        // event later is redundant even when correctly bounded. Users who would
+        // have hit it now fall through to the goal-weight / variant framings.
+        // Diagnose e3b9d7.
       } else if (weight && targetWeight && Math.abs(weight - targetWeight) < 2) {
         title = "Almost at your goal weight!";
         fallbackMessage = `You're within 2kg of your target. Don't miss today — every session counts now.`;
@@ -238,10 +264,15 @@ serve(async (req: Request) => {
       // Generate Captain-voiced copy via Gemini; fall back to English on error.
       let message = fallbackMessage;
       try {
+        // `recent_pr_exercise` was ALSO handed to Gemini here. Dropping it from
+        // the title alone would not have been enough: the model writes the body
+        // independently and would happily narrate the same unbounded, possibly
+        // months-old PR into the copy — which is how the contradiction reached
+        // the founder's phone in the first place ("You hit a PR recently!" beside
+        // "streak at 0 days"). The model can only say what it is given.
         const userState = {
           streak_days: streakDays,
           streak_weeks: streakWeeks,
-          recent_pr_exercise: recentPR,
           current_weight_kg: weight,
           target_weight_kg: targetWeight,
           workout_logged_today: false,

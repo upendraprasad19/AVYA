@@ -1206,11 +1206,16 @@ class WorkoutScheduleReadService {
   /// (≤~200 keys typical). Used by the week selector (display) and
   /// `PhaseProgressReconciler` (current_phase invariant) — single bucketing
   /// SoT, no drift. Fix 2026-06-02 (two-Phase-1 bug).
-  List<PastPhaseBlock> pastPhaseBlocks() {
-    final planStart = getPlanStartDate();
-    final box = _hive.workoutBox;
+  List<PastPhaseBlock> pastPhaseBlocks() =>
+      bucketPastRows(_scheduleRowsBefore(getPlanStartDate()));
+
+  /// Every `schedule_*` row, clipped to those strictly before [cutoff] when it
+  /// is non-null. ONE walk, shared by [pastPhaseBlocks] and
+  /// [pastPhaseBlocksForDisplay], so the two can never drift in how they parse
+  /// a row (#1 bug class).
+  List<(DateTime, Map<String, dynamic>)> _scheduleRowsBefore(DateTime? cutoff) {
     final rows = <(DateTime, Map<String, dynamic>)>[];
-    for (final entry in box.toMap().entries) {
+    for (final entry in _hive.workoutBox.toMap().entries) {
       final key = entry.key.toString();
       if (!key.startsWith(_schedulePrefix)) continue;
       final value = entry.value;
@@ -1221,10 +1226,46 @@ class WorkoutScheduleReadService {
       final date = DateTime.tryParse(dateStr);
       if (date == null) continue;
       // Only rows strictly before the active plan window count as "past".
-      if (planStart != null && !date.isBefore(planStart)) continue;
+      if (cutoff != null && !date.isBefore(cutoff)) continue;
       rows.add((date, map));
     }
-    return bucketPastRows(rows);
+    return rows;
+  }
+
+  /// DISPLAY-ONLY recovery wrapper around [pastPhaseBlocks].
+  ///
+  /// [pastPhaseBlocks] decides "past" SOLELY from `plan_start_date`. When an
+  /// account's `current_phase` advanced but `plan_start_date` did NOT move with
+  /// it, that filter keeps nothing — the earliest schedule row IS `plan_start`
+  /// — so the Train strip renders "PHASE II" as the current group while showing
+  /// zero completed phases behind it. Founder account, verified 2026-08-07:
+  /// `current_phase=2`, `plan_start=2026-04-27`, earliest row also 2026-04-27,
+  /// 77 rows through 2026-07-23 (18 completed) → zero blocks → no PHASE I group
+  /// rendered anywhere (diagnose c9e4b7). The window is self-reinforcing:
+  /// `_syncWorkoutPlan` mirrors local → cloud `plan_json`, `PlanWindowReanchor`
+  /// mirrors it back on restore, so it never heals on its own.
+  ///
+  /// Recovery: when the strict filter comes back empty AND the counter says at
+  /// least one phase is behind us, re-bucket EVERY schedule row and drop the
+  /// newest block (the window being trained now). `bucketPastRows` already
+  /// handles both stamped-`phase` identity grouping and the 28-day calendar
+  /// fallback, so this also works for cloud-restored rows — cloud
+  /// `scheduled_workouts` has no `phase` column, so those rows carry no stamp.
+  ///
+  /// ⚠ DISPLAY ONLY — [pastPhaseBlocks] itself is deliberately left alone.
+  /// `PhaseProgressReconciler` feeds on it to ADVANCE `current_phase`
+  /// monotonically and irreversibly ("a monotonic over-advance is
+  /// unrecoverable", `phase_progress_reconciler.dart:55-58`), so widening its
+  /// notion of "past" there could over-advance a counter that can never be
+  /// walked back. The reconciler must never call this method.
+  List<PastPhaseBlock> pastPhaseBlocksForDisplay(int currentPhase) {
+    final strict = pastPhaseBlocks();
+    if (strict.isNotEmpty || currentPhase <= 1) return strict;
+    final all = bucketPastRows(_scheduleRowsBefore(null));
+    // <2 blocks means every row belongs to the window we are training in now —
+    // nothing is genuinely behind us, so show nothing rather than invent a group.
+    if (all.length < 2) return const [];
+    return all.sublist(0, all.length - 1);
   }
 
   /// Pure bucketing behind [pastPhaseBlocks] (visible for testing — no Hive).

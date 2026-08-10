@@ -33,12 +33,42 @@ void main() {
   });
 
   test('week selector delegates past-phase bucketing to the shared SoT', () {
+    // UPDATED 2026-08-07 (diagnose c9e4b7): the selector now goes through the
+    // DISPLAY wrapper, which still delegates to the same bucketing SoT for the
+    // strict path. It must not re-bucket schedule_* itself either way.
     expect(
-      src.contains('pastPhaseBlocks()'),
+      src.contains('pastPhaseBlocksForDisplay('),
       isTrue,
       reason: 'WeekSelector must read the shared '
-          'WorkoutScheduleReadService.pastPhaseBlocks() SoT, not re-bucket '
-          'schedule_* itself (avoids drift with PhaseProgressReconciler).',
+          'WorkoutScheduleReadService.pastPhaseBlocksForDisplay() SoT, not '
+          're-bucket schedule_* itself (avoids drift with '
+          'PhaseProgressReconciler).',
+    );
+    expect(
+      svc.contains('pastPhaseBlocks()'),
+      isTrue,
+      reason: 'the display wrapper must still delegate to the strict '
+          'pastPhaseBlocks() for its primary path — the recovery is a '
+          'fallback, not a replacement.',
+    );
+  });
+
+  test('PhaseProgressReconciler must NOT use the display wrapper', () {
+    // The load-bearing separation behind c9e4b7. pastPhaseBlocksForDisplay
+    // recovers blocks the strict filter misses, which is right for RENDERING
+    // and wrong for the reconciler: it advances current_phase MONOTONICALLY,
+    // and its own comment calls a monotonic over-advance "unrecoverable"
+    // (phase_progress_reconciler.dart). Feeding it the wider set could promote
+    // a user on evidence the strict filter deliberately rejected, with no way
+    // back. If this ever fails, the fix is to give the reconciler its own
+    // strict call — NOT to relax this assertion.
+    final rec = _strip(
+        File('lib/core/services/phase_progress_reconciler.dart')
+            .readAsStringSync());
+    expect(
+      rec.contains('pastPhaseBlocksForDisplay'),
+      isFalse,
+      reason: 'the reconciler must feed on the STRICT pastPhaseBlocks() only.',
     );
   });
 
@@ -47,12 +77,22 @@ void main() {
     expect(svc.contains("startsWith(_schedulePrefix)") ||
         svc.contains("startsWith('schedule_')"), isTrue,
         reason: 'pastPhaseBlocks() filters workoutBox by the schedule_ prefix.');
+    // UPDATED 2026-08-07 (c9e4b7): the walk + cutoff filter moved into the
+    // shared `_scheduleRowsBefore(DateTime? cutoff)` so the strict path and the
+    // display-recovery path parse a row identically (they differ ONLY in the
+    // cutoff they pass). The filter itself is unchanged — strictly-before.
     expect(
-      RegExp(r'planStart\s*!=\s*null\s*&&\s*!\s*date\.isBefore\(planStart\)')
+      RegExp(r'cutoff\s*!=\s*null\s*&&\s*!\s*date\.isBefore\(cutoff\)')
           .hasMatch(svc),
       isTrue,
-      reason: 'pastPhaseBlocks() must skip entries in/after the current plan '
-          'window (those belong to the active phase, not history).',
+      reason: 'the shared row walk must skip entries in/after the cutoff '
+          '(those belong to the active phase, not history).',
+    );
+    expect(
+      svc.contains('_scheduleRowsBefore(getPlanStartDate())'),
+      isTrue,
+      reason: 'the STRICT pastPhaseBlocks() must pass plan_start as its cutoff '
+          '— that is what makes it strict.',
     );
     expect(svc.contains('~/ 28'), isTrue,
         reason: 'past entries bucket by phase-length (28 days).');

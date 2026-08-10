@@ -17,6 +17,7 @@ import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_ded
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds } from "../_shared/paged_fetch.ts";
+import { fetchProUserIds } from "../_shared/subscription.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -118,9 +119,24 @@ serve(async (req: Request) => {
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     const cutoff = fourteenDaysAgo.toISOString();
 
+    // The Sunday Brief is a PRO deliverable, but this function had NO
+    // subscription check of any kind — `last_active_at >= cutoff` was its ONLY
+    // eligibility filter, so every active free/lapsed user got the PRO push.
+    // Confirmed live 2026-08-07 on the founder's own account (PRO ended
+    // 2026-07-05, still receiving it). Same shared helper morning-alert /
+    // plateau-alert / protein-gap-alert already use — `status='active' AND
+    // end_date > now()`, NOT the stale denormalized `users.subscription_status`.
+    // Fetched ONCE, outside the page loop (it is a full-table set, not per-page).
+    // Fail-safe: fetchProUserIds returns an EMPTY set on error and never throws,
+    // so a lookup failure sends to nobody rather than to everybody — the safe
+    // direction for a paid-tier push. Diagnose e3b9d7.
+    const proUserIds = await fetchProUserIds(supabase);
+    console.log(`weekly-recap-ready: ${proUserIds.size} PRO users eligible`);
+
     let totalUsers = 0;
     let sent = 0;
     let skipped = 0;
+    let skippedNotPro = 0; // entitlement misses, NOT preference opt-outs
     let errors = 0;
     let offset = 0;
     let hasMore = true;
@@ -157,7 +173,22 @@ serve(async (req: Request) => {
 
       batchNum++;
       totalUsers += users.length;
-      const userIds = users.map((u: ActiveUser) => u.id);
+      // Pagination bookkeeping above stays keyed on the RAW page (that is what
+      // `.range()` walked); everything below works on the PRO subset only, so
+      // the batch snapshot/progress fetches don't pull rows for users we will
+      // never message.
+      const proUsers = users.filter((u: ActiveUser) => proUserIds.has(u.id));
+      // Counted separately from `skipped`. `skipped` feeds the response field
+      // `skipped_by_preference`, which is specifically about a user having
+      // switched the recap OFF. Folding entitlement misses into it would make
+      // that number read as "N users disabled this" when most of N were simply
+      // never PRO — and the free population dwarfs the opted-out one.
+      skippedNotPro += users.length - proUsers.length;
+      if (proUsers.length === 0) {
+        offset += PAGE_SIZE;
+        continue;
+      }
+      const userIds = proUsers.map((u: ActiveUser) => u.id);
 
       console.log(
         `weekly-recap-ready: batch ${batchNum}, ${users.length} users (offset ${offset})`,
@@ -235,8 +266,8 @@ serve(async (req: Request) => {
       }
 
       // ── Process with bounded concurrency ─────────────────
-      for (let i = 0; i < users.length; i += CONCURRENCY) {
-        const chunk = users.slice(i, i + CONCURRENCY);
+      for (let i = 0; i < proUsers.length; i += CONCURRENCY) {
+        const chunk = proUsers.slice(i, i + CONCURRENCY);
         const results = await Promise.allSettled(
           chunk.map((user: ActiveUser) =>
             processUser(user, snapshotMap, progressMap, supabase)
@@ -260,7 +291,7 @@ serve(async (req: Request) => {
     const elapsed = Date.now() - startTime;
     console.log(
       `weekly-recap-ready: completed in ${elapsed}ms, ` +
-        `${totalUsers} users, ${sent} sent, ${skipped} skipped, ${errors} errors`,
+        `${totalUsers} users, ${sent} sent, ${skipped} skipped-by-pref, ${skippedNotPro} not-pro, ${errors} errors`,
     );
 
     await logCronEnd(logId, "success", { httpStatus: 200 });
@@ -270,6 +301,7 @@ serve(async (req: Request) => {
         active_users: totalUsers,
         notifications_sent: sent,
         skipped_by_preference: skipped,
+        skipped_not_pro: skippedNotPro,
         errors,
         batches: batchNum,
         elapsed_ms: elapsed,

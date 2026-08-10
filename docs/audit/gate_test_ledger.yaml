@@ -1,0 +1,295 @@
+# Gate test ledger — rule 24 (CLAUDE.md §4.4).
+#
+# Every scripts/check_*.dart carries EXACTLY ONE state:
+#   mutation_proven: true  + test_path: (list) + evidence:   — a NEW gate
+#   grandfathered: 2026-08-10                                — CLOSED list
+#   test_exempt: <reason>                                    — no fixture is constructible
+#
+# Enforced by scripts/check_gate_test_ledger.dart — which carries NO gate
+# number, per the forward-minting rule this batch ships (a new gate takes no
+# number; the filename is the identity). The grandfather
+# list is closed BY NAME in that script, not by this date string — writing the
+# date here does not join the list.
+#
+# Why this exists: "Gate 44's own test never invoked main()". On 2026-08-10, 84
+# gates existed and only 6 test files in the whole repo asserted a red path.
+
+check_adr_index_fresh.dart:
+  grandfathered: 2026-08-10
+
+check_ai_tool_dispatcher_coverage.dart:
+  grandfathered: 2026-08-10
+
+check_alerts.dart:
+  grandfathered: 2026-08-10
+
+check_apk_release_signed.dart:
+  grandfathered: 2026-08-10
+
+check_apk_size_within_bounds.dart:
+  grandfathered: 2026-08-10
+
+check_app_version_matches_pubspec.dart:
+  grandfathered: 2026-08-10
+
+check_applied_migrations_ledger.dart:
+  grandfathered: 2026-08-10
+
+check_authed_invoke_fresh_token.dart:
+  grandfathered: 2026-08-10
+
+check_blast_radius_coverage.dart:
+  grandfathered: 2026-08-10
+
+check_bugfix_commits_have_diagnose.dart:
+  grandfathered: 2026-08-10
+
+check_ci_flutter_version.dart:
+  grandfathered: 2026-08-10
+
+check_claude_md_citations.dart:
+  grandfathered: 2026-08-10
+
+check_client_errors_alert.dart:
+  grandfathered: 2026-08-10
+
+check_closes_oi_cited.dart:
+  grandfathered: 2026-08-10
+
+check_code_review_pass_exists.dart:
+  grandfathered: 2026-08-10
+
+check_commit_from_worktree.dart:
+  grandfathered: 2026-08-10
+
+check_container_color_decoration.dart:
+  grandfathered: 2026-08-10
+
+check_copy_centralization.dart:
+  grandfathered: 2026-08-10
+
+check_cqrs_query_naming.dart:
+  grandfathered: 2026-08-10
+
+check_crashlytics_alert_routing.dart:
+  grandfathered: 2026-08-10
+
+check_cron_registry.dart:
+  grandfathered: 2026-08-10
+
+check_device_tests_exist.dart:
+  grandfathered: 2026-08-10
+
+check_diagnose_index_fresh.dart:
+  grandfathered: 2026-08-10
+
+check_doc_internal_consistency.dart:
+  grandfathered: 2026-08-10
+
+check_edge_function_auth_pattern.dart:
+  grandfathered: 2026-08-10
+
+check_edge_function_payloads.dart:
+  grandfathered: 2026-08-10
+
+check_edge_function_rollback_script.dart:
+  grandfathered: 2026-08-10
+
+check_exlog_key_canonical.dart:
+  grandfathered: 2026-08-10
+
+check_gate_index_fresh.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/gate_index_fresh_e2e_test.dart
+  evidence: "Making the gate exit 0 unconditionally reddens 2 e2e tests (stale index, missing index)."
+
+check_gate_scripts_wired.dart:
+  grandfathered: 2026-08-10
+
+check_gate_test_ledger.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/gate_test_ledger_lib_test.dart
+  evidence: "3 mutations, 1 red each: neutering the state-count check, the red-path-assertion check, or the grandfather-membership check. Each reddens exactly the one test written for it."
+
+check_generic_error_telemetry.dart:
+  grandfathered: 2026-08-10
+
+check_goal_token_exhaustiveness.dart:
+  grandfathered: 2026-08-10
+
+check_god_screen_max_lines.dart:
+  grandfathered: 2026-08-10
+
+check_hardcoded_pricing_and_limits.dart:
+  grandfathered: 2026-08-10
+
+check_hive_map_field_drift.dart:
+  grandfathered: 2026-08-10
+
+check_hooks_installed.dart:
+  grandfathered: 2026-08-10
+
+check_id_injection_on_get.dart:
+  grandfathered: 2026-08-10
+
+check_import_map_present.dart:
+  grandfathered: 2026-08-10
+
+check_incident_index_fresh.dart:
+  grandfathered: 2026-08-10
+
+check_jose_version.dart:
+  grandfathered: 2026-08-10
+
+check_local_date_key_drift.dart:
+  grandfathered: 2026-08-10
+
+check_migration_ledger_paired.dart:
+  grandfathered: 2026-08-10
+
+check_migrations_applied.dart:
+  grandfathered: 2026-08-10
+
+check_migrations_live.dart:
+  grandfathered: 2026-08-10
+
+check_mutation_invalidation_set.dart:
+  grandfathered: 2026-08-10
+
+check_naming_audit.dart:
+  grandfathered: 2026-08-10
+
+check_naming_conventions.dart:
+  grandfathered: 2026-08-10
+
+check_nested_claude_md_content.dart:
+  grandfathered: 2026-08-10
+
+check_nlog_key_canonical.dart:
+  grandfathered: 2026-08-10
+
+check_no_deferral_euphemism.dart:
+  grandfathered: 2026-08-10
+
+check_no_http_package.dart:
+  grandfathered: 2026-08-10
+
+check_no_raw_google_fonts.dart:
+  grandfathered: 2026-08-10
+
+check_no_raw_ispro_read.dart:
+  grandfathered: 2026-08-10
+
+check_onconflict_live_arbiter.dart:
+  grandfathered: 2026-08-10
+
+check_plan_review_record_exists.dart:
+  grandfathered: 2026-08-10
+
+check_profile_write_service_only.dart:
+  grandfathered: 2026-08-10
+
+check_raw_hex_in_features.dart:
+  grandfathered: 2026-08-10
+
+check_razorpay_key_flavor.dart:
+  grandfathered: 2026-08-10
+
+check_reader_manifest_complete.dart:
+  grandfathered: 2026-08-10
+
+check_regression_catalog.dart:
+  grandfathered: 2026-08-10
+
+check_restore_round_trip_coverage.dart:
+  grandfathered: 2026-08-10
+
+check_saved_meal_key_canonical.dart:
+  grandfathered: 2026-08-10
+
+check_schema_column_refs.dart:
+  grandfathered: 2026-08-10
+
+check_schema_payload_parity.dart:
+  grandfathered: 2026-08-10
+
+check_secrets_gitignored.dart:
+  grandfathered: 2026-08-10
+
+check_singleton_provider_migration.dart:
+  grandfathered: 2026-08-10
+
+check_skipped_discipline_budget.dart:
+  grandfathered: 2026-08-10
+
+check_snapshot_contract.dart:
+  grandfathered: 2026-08-10
+
+check_sot_behavioral_test_paths.dart:
+  grandfathered: 2026-08-10
+
+check_sot_registry_citations.dart:
+  mutation_proven: true
+  test_path:
+    - test/contracts/sot_registry_citations_test.dart
+  evidence: >
+    Reverting parseConcepts from the list shape (`- concept: <name>`) to the
+    mapping shape (`  <name>:`) reddens 8 of 28 tests (20 pass / 8 fail),
+    measured 2026-08-10 by actually running the mutation, not asserted. The 8
+    are the subprocess cases that invoke the real gate's main() in a throwaway
+    git repo — so the mutation is caught at the wiring level, not only in pure
+    logic. NOTE: commit d4a8de00's message claimed "3 cases red"; that number
+    predates the 8 subprocess cases and is superseded by this measurement.
+    The mapping shape is the exact mistake that produced a bogus "299 broken
+    docs" reading while this gate was being designed: it parses to an EMPTY
+    concept set, which makes every citation look dangling.
+
+check_sot_registry_completeness.dart:
+  grandfathered: 2026-08-10
+
+check_sot_registry_parity.dart:
+  grandfathered: 2026-08-10
+
+check_std_encoding_import_rot.dart:
+  grandfathered: 2026-08-10
+
+check_sync_fanout.dart:
+  grandfathered: 2026-08-10
+
+check_tab_screen_uses_hive_scaffold.dart:
+  grandfathered: 2026-08-10
+
+check_telemetry_pii_classification.dart:
+  grandfathered: 2026-08-10
+
+check_test_runtime_budget.dart:
+  grandfathered: 2026-08-10
+
+check_two_user_cross_account.dart:
+  grandfathered: 2026-08-10
+
+check_unawaited_has_error_sink.dart:
+  grandfathered: 2026-08-10
+
+check_unbounded_cron_reads.dart:
+  grandfathered: 2026-08-10
+
+check_week_selector_phase_labels.dart:
+  grandfathered: 2026-08-10
+
+check_widget_no_direct_supabase.dart:
+  grandfathered: 2026-08-10
+
+check_workout_schedule_split.dart:
+  grandfathered: 2026-08-10
+
+check_worktree_config_integrity.dart:
+  grandfathered: 2026-08-10
+
+check_writeservice_contracts.dart:
+  grandfathered: 2026-08-10
+
+check_writeservice_only.dart:
+  grandfathered: 2026-08-10

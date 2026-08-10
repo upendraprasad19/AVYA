@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // AUTH_INVALIDATION_EXEMPT: intentionally shared pre-auth surface per
-// CLAUDE.md §15. The referral code is stashed BEFORE the user signs up
+// docs/architecture/sync.md. The referral code is stashed BEFORE the user signs up
 // (so there's no auth identity yet) and must survive across the
 // signed-out → signed-in transition. Watching authUserIdTokenProvider
 // would clear the stash exactly when we need to preserve it.

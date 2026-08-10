@@ -154,7 +154,7 @@ supabase/
 
 ---
 
-## Quick orientation (current — from CLAUDE.md §5)
+## Quick orientation (relocated from CLAUDE.md §5 by the 2026-05-18 declutter)
 
 > See `docs/naming_conventions.md` for naming rules + reserved domain glossary. **Read this before introducing new feature names.**
 

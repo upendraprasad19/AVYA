@@ -15,7 +15,7 @@ import 'hive_service.dart';
 /// closes-OI: OI-08 (PR per-set MAX semantic duplicated across 2 files)
 ///
 /// Hive field-name contract (READ side — must agree with the writer
-/// contract documented in CLAUDE.md §15 "Hive field-name contract"):
+/// contract documented in docs/architecture/sync.md "Hive field-name contract"):
 ///
 /// `exlog_*` rows (canonical, from `WorkoutWriteService.logExercise`):
 ///   - `exercise_name`     : String

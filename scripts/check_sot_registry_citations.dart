@@ -1,6 +1,8 @@
 // scripts/check_sot_registry_citations.dart
 //
-// Gate 44 (post38-auth-fixes, 2026-08-08): assert that every diagnose-doc's
+// SoT-citation gate (post38-auth-fixes, 2026-08-08). Takes NO gate number:
+// rule 24 makes the FILENAME the identity, and 44 is held canonically by
+// scripts/check_nested_claude_md_content.dart. Assert that every diagnose-doc's
 // `sot_registry_entry:` names a concept that ACTUALLY EXISTS in
 // docs/sot_registry.yaml.
 //
@@ -74,7 +76,7 @@ void main(List<String> args) {
     // while a registry that merely parsed to zero concepts failed hard — two
     // states that both mean "citations cannot be verified", handled opposite
     // ways. B-pass 2026-08-08, Finding 5.
-    stderr.writeln('[Gate 44] FAIL: docs/sot_registry.yaml not present.');
+    stderr.writeln('[sot-citations] FAIL: docs/sot_registry.yaml not present.');
     stderr.writeln('  Citations cannot be verified without it. If the registry');
     stderr.writeln('  genuinely moved, update this path — do not delete the check.');
     exit(1);
@@ -82,7 +84,7 @@ void main(List<String> args) {
 
   final concepts = parseConcepts(registry.readAsStringSync());
   if (concepts.isEmpty) {
-    stderr.writeln('[Gate 44] FAIL: parsed 0 concepts from docs/sot_registry.yaml.');
+    stderr.writeln('[sot-citations] FAIL: parsed 0 concepts from docs/sot_registry.yaml.');
     stderr.writeln('  Refusing to run — with an empty concept set every citation');
     stderr.writeln('  would read as dangling. The registry format likely changed.');
     exit(1);
@@ -90,7 +92,7 @@ void main(List<String> args) {
 
   final ls = Process.runSync('git', ['ls-files', '--', 'docs/diagnoses']);
   if (ls.exitCode != 0) {
-    stderr.writeln('[Gate 44] FAIL: `git ls-files` errored: ${ls.stderr}');
+    stderr.writeln('[sot-citations] FAIL: `git ls-files` errored: ${ls.stderr}');
     exit(1);
   }
 
@@ -144,7 +146,7 @@ void main(List<String> args) {
   }
 
   if (backlog.isNotEmpty) {
-    stdout.writeln('[Gate 44] WARN: ${backlog.length} pre-$citationCutoff '
+    stdout.writeln('[sot-citations] WARN: ${backlog.length} pre-$citationCutoff '
         'citation(s) do not resolve (backlog).');
     if (strict) {
       for (final b in backlog) {
@@ -156,14 +158,14 @@ void main(List<String> args) {
   if (prose.isNotEmpty) {
     // Stated, not swallowed: this is the gate's known blind spot. A doc that
     // writes its citation as prose is not adjudicated here at all.
-    stdout.writeln('[Gate 44] WARN: ${prose.length} citation(s) are prose, not a '
+    stdout.writeln('[sot-citations] WARN: ${prose.length} citation(s) are prose, not a '
         'concept identifier — not adjudicated.');
   }
 
   final failures = strict ? [...violations, ...backlog] : violations;
 
   if (failures.isNotEmpty) {
-    stderr.writeln('[Gate 44] FAIL: ${failures.length} diagnose-doc citation(s) '
+    stderr.writeln('[sot-citations] FAIL: ${failures.length} diagnose-doc citation(s) '
         'name a concept absent from docs/sot_registry.yaml:');
     for (final v in failures) {
       stderr.writeln('  $v');
@@ -176,7 +178,7 @@ void main(List<String> args) {
     exit(1);
   }
 
-  stdout.writeln('[Gate 44] PASS: ${docs.length} diagnose-doc(s) checked, '
+  stdout.writeln('[sot-citations] PASS: ${docs.length} diagnose-doc(s) checked, '
       '${concepts.length} registry concept(s); '
       '0 unresolved citation(s) dated >= $citationCutoff'
       '${backlog.isEmpty ? '' : ', ${backlog.length} in backlog'}.');

@@ -2,13 +2,13 @@
 // code deletions) + E.9 (inline isPro audit).
 //
 // Bugs:
-// - F8.1: `featurePhotoAnalysis` was documented as PRO in CLAUDE.md §14
+// - F8.1: `featurePhotoAnalysis` was documented as PRO in docs/architecture/business-rules.md
 //   but had ZERO `gate()` callsites. Free users could silently upload
 //   photos to AI coach chat; ai-media-proxy server-side check produced
 //   a hard error rather than a paywall.
 // - E.8 dead code: 3 feature constants (featureActiveWorkoutMode,
 //   featureVoiceNotes, featureDietPlanPdf) had 0 callsites + were
-//   documented as FREE in CLAUDE.md §14. Plus MySubmissionsScreen +
+//   documented as FREE in docs/architecture/business-rules.md. Plus MySubmissionsScreen +
 //   softDeleteAccount had 0 callers for 3 weeks.
 // - E.9: 9 `if (isPro)` widget locations were audited per-callsite.
 //   ALL VERIFIED OK — 4 are constructor-prop reads with reactive callers,
@@ -67,7 +67,7 @@ void main() {
       expect(dietPlanPdfDef, isFalse,
           reason:
               'featureDietPlanPdf was deleted in audit-2026-05-16 E.8 '
-              '(documented FREE per CLAUDE.md §14, 0 callsites ever).');
+              '(documented FREE per docs/architecture/business-rules.md, 0 callsites ever).');
     });
 
     test('MySubmissionsScreen file no longer exists', () {

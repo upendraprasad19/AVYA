@@ -1,5 +1,7 @@
 // scripts/check_singleton_provider_migration.dart
 //
+// Gate: 46
+//
 // Gate 46 (Tech-debt audit 2026-05-20, B5 D9-D10 deliverable): assert the
 // 7 singleton services targeted by A7 have:
 //

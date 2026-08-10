@@ -1,5 +1,7 @@
 // scripts/check_crashlytics_alert_routing.dart
 //
+// Gate: 30
+//
 // Gate 30 (Tech-debt audit 2026-05-20, finding I9): assert that Firebase
 // Crashlytics alert routing is documented at
 // `android/app/firebase-alerts.json` (declarative record of velocity / ANR

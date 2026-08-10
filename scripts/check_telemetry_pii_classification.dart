@@ -1,5 +1,7 @@
 // scripts/check_telemetry_pii_classification.dart
 //
+// Gate: 22
+//
 // Gate 22: every `ErrorTelemetry.recordNonFatal` / `logEvent` callsite
 // in lib/ should be classified for PII risk. Advisory-only by default.
 //

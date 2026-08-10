@@ -1,5 +1,7 @@
 // scripts/check_god_screen_max_lines.dart
 //
+// Gate: 43
+//
 // Gate 43 — God-screen line ceiling.
 //
 // Tech-debt audit 2026-05-20 (Code C3/C4) identified multiple

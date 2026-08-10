@@ -1,5 +1,7 @@
 // scripts/check_no_http_package.dart
 //
+// Gate: 45
+//
 // Tech-debt audit 2026-05-20 / finding D8 — source-grep gate.
 //
 // Pins the rule that `package:http` is NOT imported anywhere under `lib/`.

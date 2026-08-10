@@ -22,7 +22,7 @@ void main() {
 
   group('Delete account E2E (DPDP §17)', () {
     test('T1 — Profile → /profile/delete-account opens blast-radius screen', () {
-      // Per CLAUDE.md §16 (delete-account audit-2026-05-11 H1):
+      // Per docs/architecture/payment.md (delete-account audit-2026-05-11 H1):
       // 2-step confirm UI. Step 1 = blast-radius page.
     }, skip: 'Phase 7 scaffold — irreversible; needs test-user provisioning.');
 

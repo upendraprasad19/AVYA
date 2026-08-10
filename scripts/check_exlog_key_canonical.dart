@@ -1,5 +1,7 @@
 // scripts/check_exlog_key_canonical.dart
 //
+// Gate: 17
+//
 // APK Test #16.1 / Agent A — source-grep gate. Pins the rule that
 // `exlog_*` Hive keys are constructed in exactly ONE place:
 // `lib/core/services/workout_write_service.dart` via the static
