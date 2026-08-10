@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### test_isolation_intra_file (1 bugs)
+- 2026-08-10 f3c7a2 — Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,…
+
 ### worktree_retirement_allow_list (1 bugs)
 - 2026-08-10 d7b3e9 — `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three…
 
@@ -965,6 +968,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-10 | f3c7a2 | Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,… | test_isolation_intra_file | test/scripts/worktree_config_integrity_e2e_test.dart |
 | 2026-08-10 | d7b3e9 | `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three… | worktree_retirement_allow_list | test/scripts/retire_worktree_lib_test.dart |
 | 2026-08-09 | a4f7c2 | `git rev-parse --show-toplevel` returned `.../.claude/worktrees/post38-auth-fixes` from EVERY worktree in the repo and from the shared main folder. A session working in… | worktree_config_integrity | test/scripts/worktree_config_integrity_e2e_test.dart |
 | 2026-08-09 | e3b9d7 | TWO notification-cron defects reported by the founder from their own phone and account, 2026-08-05 / 2026-08-07. (1) STREAK-GUARDIAN SENT A SELF-CONTRADICTING PUSH. A single notification read "Don't… | notification_cron_eligibility_and_pro_gate | test/contracts/streak_guardian_eligibility_test.dart |
