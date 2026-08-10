@@ -1,5 +1,7 @@
 // scripts/check_migrations_applied.dart
 //
+// Gate: 14
+//
 // Gate 14: Local migrations match the prod state snapshot.
 //
 // Reads supabase/migrations/*.sql filenames, compares against

@@ -1,5 +1,7 @@
 // scripts/check_profile_write_service_only.dart
 //
+// Gate: 35
+//
 // Gate 35 (Tech-debt audit 2026-05-20, finding A4 prep): assert that no
 // production code outside `ProfileWriteService` writes to userBox under
 // the `profile` key (or its sub-keys).

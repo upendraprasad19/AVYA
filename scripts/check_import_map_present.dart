@@ -1,5 +1,7 @@
 // scripts/check_import_map_present.dart
 //
+// Gate: 27
+//
 // Gate 27 (Tech-debt audit 2026-05-20, findings D2, D3): assert
 // `supabase/functions/import_map.json` exists + pins every shared
 // dependency to a fixed version (no floating `@N` shapes).

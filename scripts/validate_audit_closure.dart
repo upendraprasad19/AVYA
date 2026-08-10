@@ -1,5 +1,7 @@
 // scripts/validate_audit_closure.dart
 //
+// Gate: 40
+//
 // Gate 40 (Tech-debt audit 2026-05-20, B4 deliverable): validate audit
 // closure YAML files in `docs/audit/*_audit_closures.yaml`.
 //

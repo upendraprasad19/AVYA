@@ -1,5 +1,7 @@
 // scripts/check_edge_function_payloads.dart
 //
+// Gate: 12
+//
 // Gate 12: Flutter caller body keys ⊆ Edge Function validator shape.
 //
 // For every concept's edge_function_payloads[] entry in docs/sot_registry.yaml,

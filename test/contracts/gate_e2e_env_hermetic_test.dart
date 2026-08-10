@@ -38,6 +38,11 @@ const _helpers = <String>[
   // retire_worktree runs a command that DELETES worktrees, so a GIT_DIR leak
   // there would be destructive rather than merely meaningless.
   'test/scripts/retire_worktree_e2e_test.dart',
+  // gate_index builds fixture repos under scripts/ + docs/audit/; a GIT_DIR
+  // leak would point the run at the real tree and the collision assertions
+  // would pass against the real 5 collisions rather than the fixture's.
+  'test/scripts/gate_index_e2e_test.dart',
+  'test/scripts/gate_index_fresh_e2e_test.dart',
 ];
 
 String _strip(String src) => src

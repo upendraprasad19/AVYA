@@ -1,5 +1,7 @@
 // scripts/check_restore_round_trip_coverage.dart
 //
+// Gate: 21
+//
 // Gate 21: every `syncX()` method in `lib/core/services/sync/` must
 // have a paired `_restoreX()` (or `restoreX()`) method. Catches the
 // OI-09 / Test #12.8 class — "6 of 16 _restoreXxx methods keyed wrong

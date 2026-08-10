@@ -1,5 +1,7 @@
 // scripts/check_gate_scripts_wired.dart
 //
+// Gate: 33
+//
 // Gate 33 (Tech-debt audit 2026-05-20, finding I2): assert that every
 // `scripts/check_*.dart` file is invoked from BOTH:
 //   - scripts/pre-commit.sh (local enforcement)

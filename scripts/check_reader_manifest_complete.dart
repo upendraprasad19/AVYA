@@ -1,6 +1,8 @@
 // scripts/check_reader_manifest_complete.dart
 //
-// Audit gate (build-apk Gate 18) — enforces the reader-side manifest in
+// Gate: 50
+//
+// Gate 50 — enforces the reader-side manifest in
 // `docs/sot_registry.yaml`.
 //
 // PHASE 1 (forbidden-patterns):

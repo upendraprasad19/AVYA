@@ -1,5 +1,7 @@
 // scripts/check_apk_release_signed.dart
 //
+// Gate: 48
+//
 // Gate 48: the built APK is signed with the RELEASE certificate, not the
 // Android debug key.
 //

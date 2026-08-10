@@ -1,5 +1,7 @@
 // scripts/check_bugfix_commits_have_diagnose.dart
 //
+// Gate: 10
+//
 // Gate 10: Bug-fix commits since last APK build reference a valid diagnose-doc.
 //
 // Logic:

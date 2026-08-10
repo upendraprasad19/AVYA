@@ -1,5 +1,7 @@
 // scripts/check_sync_fanout.dart
 //
+// Gate: 11
+//
 // Gate 11: Every sync_method and restore_method declared in the registry
 //          exists as a Future<...> declaration in sync_service.dart.
 //

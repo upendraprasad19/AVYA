@@ -1,5 +1,7 @@
 // scripts/check_razorpay_key_flavor.dart
 //
+// Gate: 24
+//
 // Gate 24 (Tech-debt audit 2026-05-20, finding I14): assert that Razorpay
 // key prefixes match the build flavor. `rzp_live_*` MUST appear only in
 // prod-flavor build configuration; `rzp_test_*` in dev-flavor.

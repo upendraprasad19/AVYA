@@ -1,5 +1,7 @@
 // scripts/check_edge_function_rollback_script.dart
 //
+// Gate: 38
+//
 // Gate 38 (Tech-debt audit 2026-05-20, finding I3): assert that the
 // Edge Function deploy script supports rollback + post-deploy smoke
 // verification, AND that the payload-archive directory exists.

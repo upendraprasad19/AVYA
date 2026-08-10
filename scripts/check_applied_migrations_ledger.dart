@@ -1,5 +1,7 @@
 // scripts/check_applied_migrations_ledger.dart
 //
+// Gate: 39
+//
 // Gate 39 (Tech-debt audit 2026-05-20, finding I12): assert that
 // `backups/applied_migrations.json` is in the structured-record shape
 // `[{migration, applied_at, hash, applier}, ...]` — NOT the legacy

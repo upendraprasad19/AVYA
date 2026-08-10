@@ -1,5 +1,7 @@
 // scripts/check_jose_version.dart
 //
+// Gate: 28
+//
 // Gate 28 (Tech-debt audit 2026-05-20, finding D12): assert `jose` is at
 // or above the configured minimum version across every Edge Function.
 // Crypto lib; minor releases ship CVE fixes; lag is a security smell.

@@ -1,5 +1,7 @@
 // scripts/check_apk_size_within_bounds.dart
 //
+// Gate: 13
+//
 // Gate 13: APK size within ±10% of last shipped size.
 //
 // Reads backups/apk_sizes.json. Compares the freshly built APK at

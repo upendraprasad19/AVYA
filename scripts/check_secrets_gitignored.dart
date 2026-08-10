@@ -1,5 +1,7 @@
 // scripts/check_secrets_gitignored.dart
 //
+// Gate: 23
+//
 // Gate 23 (Tech-debt audit 2026-05-20, finding I1): assert that Android
 // signing artifacts and other sensitive secret patterns are never tracked
 // by git AND are matched by an active .gitignore rule.

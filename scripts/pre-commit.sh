@@ -110,6 +110,30 @@ if git diff --cached --name-only | grep -qE '^docs/incidents/[0-9]{4}-.*\.md$'; 
   git add docs/incidents/INDEX.md
 fi
 
+# Regen the gate index when any BAKED input changes.
+#
+# The trigger below is exhaustive over the baked inputs, and the qualifier
+# matters: an earlier draft claimed "exactly covers" while omitting three
+# sources. Note it is `scripts/*.dart`, NOT `scripts/check_*.dart` —
+# validate_audit_closure.dart (Gate 40) and gate_index_lib.dart (which holds
+# _extraGateScripts and the historical-aliases table) both feed BAKED columns
+# and neither matches check_*. And BOTH closure-ledger filename conventions are
+# listed: *_closures.yaml matches 6 files, *.closure.yaml matches 18 more.
+#
+# The 5 pre-existing collisions (Gates 7, 18, 19, 23, 44) were resolved in the
+# commit that follows the one introducing this block, so --warn-only is gone and
+# a duplicate number now BLOCKS. It existed for exactly one commit: without it,
+# the introducing commit would have been blocked by its own hook and the
+# collision baseline it produces could never have been written.
+if git diff --cached --name-only | grep -qE '^(scripts/.+\.dart|\.claude/commands/build-apk\.md|docs/audit/([^/]+_closures\.yaml|[^/]+\.closure\.yaml|closed_issues\.md|gate_test_ledger\.yaml))$'; then
+  echo "[pre-commit] Gate-index input touched — regenerating GATE_INDEX.md..."
+  if ! dart run scripts/build_gate_index.dart; then
+    echo "[pre-commit] FAIL: build_gate_index.dart errored."
+    exit 1
+  fi
+  git add docs/audit/GATE_INDEX.md
+fi
+
 # Regen handbook index if any handbook file was modified.
 if git diff --cached --name-only | grep -qE '^docs/handbook/.+\.md$'; then
   echo "[pre-commit] Handbook touched — regenerating INDEX.md..."

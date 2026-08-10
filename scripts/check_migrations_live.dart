@@ -1,5 +1,7 @@
 // scripts/check_migrations_live.dart
 //
+// Gate: 14b
+//
 // Gate 14b: Local migrations match LIVE Supabase migration state.
 //
 // Closes OI-34 (audit-2026-05-17 Hermes F9). The companion

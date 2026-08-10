@@ -1,5 +1,7 @@
 // scripts/check_naming_audit.dart
 //
+// Gate: 8
+//
 // Gate 8: Forbidden legacy patterns absent.
 //
 // For every concept's forbidden_legacy_patterns[] in docs/sot_registry.yaml,

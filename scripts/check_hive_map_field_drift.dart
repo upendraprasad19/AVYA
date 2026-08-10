@@ -1,5 +1,7 @@
 // scripts/check_hive_map_field_drift.dart
 //
+// Gate: 19
+//
 // Gate 19 — Hive Map field-key drift detector (Theme G, closes-diagnose
 // 2026-05-22 ec4d27 sibling + the durable mitigation for the 10th
 // writer/reader drift caught this batch).
