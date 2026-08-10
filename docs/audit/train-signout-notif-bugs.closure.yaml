@@ -14,7 +14,12 @@
 
 batch: train-signout-notif-bugs
 date: 2026-08-09
-blast_radius: account
+# platform, not account — measured with blast_radius_from_diff.dart over the
+# real staged set, not estimated. This line said `account` until 2026-08-10; it
+# was written before the measurement and never corrected. The tier matters: at
+# >=platform `bpass: accepted` is REQUIRED rather than advisory, which is why
+# the plan-review record carries it.
+blast_radius: platform
 diagnose_docs:
   - docs/diagnoses/2026-08-09-past-phase-display-and-expired-copy-c9e4b7.md
   - docs/diagnoses/2026-08-09-signout-redirect-race-and-restore-wedge-b7e4c1.md

@@ -650,6 +650,21 @@ const SMOKE_TOLERATED_CODES = {
   // Verified by reading each function's source, not by inferring from the slug.
   'streak-guardian': [401],
   'rolling-context': [401],
+  // THIRD instance of the exact omission described in the two comments above
+  // (notif-prefs 2026-07-27, OI-47 2026-07-28), found the same way on
+  // 2026-08-10 while deploying the e3b9d7 PRO-gate fix. Gates on
+  // `isAuthorizedCronCall` (weekly-recap-ready/index.ts:104, and its own
+  // comment records that the cron caller "relied on `verify_jwt: false`
+  // alone"), so an unauth smoke gets a healthy 401 that would otherwise be
+  // reported as a smoke FAILURE — pushing toward re-deploying a function that
+  // is already fine. Verified by reading the source, not inferred from the slug.
+  //
+  // Three instances of one omission is a pattern, not bad luck: the map is
+  // hand-maintained and nothing derives it from the presence of an
+  // `isAuthorizedCronCall` gate in the function's source. Deriving it is a
+  // separate change with its own review; noting it here so the next person
+  // hitting a fourth instance has the diagnosis rather than the symptom.
+  'weekly-recap-ready': [401],
   'beat-my-coach': [400, 401],
   'future-prediction': [400, 401],
   'assess-body-composition': [400, 401],
