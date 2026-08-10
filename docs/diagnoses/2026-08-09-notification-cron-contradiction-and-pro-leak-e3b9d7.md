@@ -124,7 +124,7 @@ touched_layers_checked:
   - { tier: 3, name: postgres_schema, status: verified, evidence: "current_streak_days confirmed present on user_progress in backups/live_schema_columns.json, which is what check_schema_column_refs.dart validates the new .select()/.gte() refs against for supabase/functions/ (WI-1 server-seam extension)." }
   - { tier: 4, name: postgres_data, status: verified, evidence: "The founder's own row is the reproducing case and is recorded in the symptom: current_streak_weeks=4 with current_streak_days=0, last workout 2026-05-22. The PRO leak was confirmed on the same account, PRO ended 2026-07-05, still receiving the Sunday Brief 2026-08-07." }
   - { tier: 5, name: migrations_applied, status: not_applicable, evidence: "No migration — both columns already exist." }
-  - { tier: 6, name: edge_function_deploy, status: fixed_in_this_batch, evidence: "SOURCE is fixed and committed here. The live DEPLOY of both functions is NOT part of this commit — it requires its own explicit founder authorization per CLAUDE.md §4.3 (plan approval is not deploy approval). Until deployed, the live functions retain the old behaviour; this is stated rather than implied so nobody reads a green commit as a shipped fix." }
+  - { tier: 6, name: edge_function_deploy, status: fixed_in_this_batch, evidence: "DEPLOYED 2026-08-10 after explicit founder authorization (separate from plan approval, per §4.3). streak-guardian -> v22 ACTIVE, weekly-recap-ready -> v20 ACTIVE, both verify_jwt=false (unchanged; both self-gate via isAuthorizedCronCall). Verified NOT by the smoke code alone but by reading the LIVE deployed source back via MCP get_edge_function and matching it comment-stripped: streak-guardian has .gte(current_streak_days,1) + the 3-column select + `user.current_streak_days`, and zero occurrences of recentPR / 'You hit a PR recently' / recent_pr_exercise / 'streakWeeks * 7'; weekly-recap-ready has fetchProUserIds + proUserIds.has + `i < proUsers.length` + the skippedNotPro split. Comment-stripping was load-bearing: the fixes' own comments quote the removed strings, so an un-stripped check reports them present." }
   - { tier: 7, name: cron_jobs, status: verified, evidence: "Neither cron's schedule, job name, nor auth gate changed. streak-guardian stays the 20:00 IST daily job; weekly-recap-ready's dispatch is untouched. Both keep _shared/cron_telemetry.ts, so the adoption gate stays green." }
   - { tier: 8, name: rls_policies, status: not_applicable, evidence: "Both run service-role; no policy consulted or changed." }
   - { tier: 9, name: storage, status: not_applicable, evidence: "No storage object involved." }
@@ -158,9 +158,13 @@ impact_analysis: |
   direction, PRO users would silently stop receiving the Brief. The `skipped`
   tally is what makes that observable rather than invisible.
 
-  ⚠ NOT LIVE YET. Both functions still run their OLD code in production until
-  the deploy is explicitly authorized. The fix is real in git and unproven in
-  prod until then.
+  ⚠ LIVE as of 2026-08-10 — streak-guardian v22, weekly-recap-ready v20, both
+  source-verified against the deployed bundle (see tier 6). What is NOT yet
+  observed is a real cron TICK under the new code: `weekly_recap_ready_sunday`
+  fires Sundays 20:00 IST and `streak-guardian-daily` daily 20:00 IST, so the
+  first true exercise of the PRO gate is the next Sunday run. Deployed and
+  source-verified is not the same as "watched it behave", and the distinction is
+  recorded rather than glossed.
 
   NOT FIXED HERE: the underlying divergence between the two streak caches. This
   fix stops the crons from straddling them; it does not reconcile the writers.
