@@ -22,13 +22,13 @@ Total gates: **87** (49 numbered, 38 by filename only).
 | 51 | `check_app_version_matches_pubspec.dart` | Build-gate script: asserts `AppConstants.appVersion` in | grandfathered |
 | 39 | `check_applied_migrations_ledger.dart` | assert that `backups/applied_migrations.json` is in the structured-record shape | grandfathered |
 | — | `check_authed_invoke_fresh_token.dart` | every authed Edge Function call from the client sends a FRESH token | grandfathered |
-| — | `check_blast_radius_coverage.dart` | . | grandfathered |
+| — | `check_blast_radius_coverage.dart` | Asserts that every top-level directory under `lib/features/`, | grandfathered |
 | 10 | `check_bugfix_commits_have_diagnose.dart` | Bug-fix commits since last APK build reference a valid diagnose-doc. | grandfathered |
 | — | `check_ci_flutter_version.dart` | CI / dev / Vercel Flutter-version parity. | grandfathered |
 | 26 | `check_claude_md_citations.dart` | assert that every `§N` and `§N.M` citation across CLAUDE.md + nested CLAUDE.md files | grandfathered |
 | 29 | `check_client_errors_alert.dart` | assert an alert config exists at `supabase/alerts/client_errors.yaml` declaring a threshold rule | grandfathered |
 | — | `check_closes_oi_cited.dart` | Commit-msg gate: a commit that flips an OI from OPEN to CLOSED in | grandfathered |
-| — | `check_code_review_pass_exists.dart` | . | grandfathered |
+| — | `check_code_review_pass_exists.dart` | For staged commits whose max blast-radius is `catastrophic`, require a | grandfathered |
 | — | `check_commit_from_worktree.dart` | Worktree-per-session enforcement (codified 2026-07-07 after 2 cross-session | grandfathered |
 | — | `check_container_color_decoration.dart` | a Flutter `Container` must not pass BOTH `color:` and `decoration:`. | grandfathered |
 | — | `check_copy_centralization.dart` | WARN-ONLY diagnostic. User-facing copy should live in WardroomCopy (lib/core/copy/wardroom_copy.dart) | grandfathered |

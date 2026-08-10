@@ -5,7 +5,9 @@
 #   grandfathered: 2026-08-10                                — CLOSED list
 #   test_exempt: <reason>                                    — no fixture is constructible
 #
-# Enforced by scripts/check_gate_test_ledger.dart (Gate 55). The grandfather
+# Enforced by scripts/check_gate_test_ledger.dart — which carries NO gate
+# number, per the forward-minting rule this batch ships (a new gate takes no
+# number; the filename is the identity). The grandfather
 # list is closed BY NAME in that script, not by this date string — writing the
 # date here does not join the list.
 #

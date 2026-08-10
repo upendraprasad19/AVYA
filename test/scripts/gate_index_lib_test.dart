@@ -95,6 +95,22 @@ void main() {
           'Hive Map field-key drift detector');
     });
 
+    test('a line consumed to bare punctuation does NOT become the purpose', () {
+      // B-pass P2-1. `_purposeStrip` eats "Gate (Track 2 of the … batch)"
+      // leaving only ".", which a bare isEmpty check accepted — and the blank
+      // comment line right after then ended the loop, so the real description
+      // never surfaced. Two of 87 real rows rendered as a lone "." before this.
+      // Verbatim shape from check_blast_radius_coverage.dart:1-5.
+      const src = '// scripts/check_blast_radius_coverage.dart\n'
+          '//\n'
+          '// Gate (Track 2 of the six-industry-gap closure batch).\n'
+          '//\n'
+          '// Asserts that every top-level directory under lib/features/ is covered.\n';
+      final p = extractPurpose(src, 'check_blast_radius_coverage.dart');
+      expect(p, isNot('.'));
+      expect(p, contains('Asserts that every top-level directory'));
+    });
+
     test('falls back rather than throwing on a header-less file', () {
       expect(extractPurpose('void main() {}\n', 'check_foo.dart'),
           '(no header description)');

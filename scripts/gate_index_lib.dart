@@ -135,6 +135,8 @@ String? parseCanonicalGateNumber(String source) {
 final RegExp _purposeStrip =
     RegExp(r'^Gate\s*:?\s*(\d+[a-z]?)?\s*(\([^)]*\))?\s*[:—\-–]?\s*');
 
+final RegExp _hasWord = RegExp(r'[A-Za-z0-9]');
+
 /// First substantive comment line in the header window — the one-line purpose.
 /// Skips the conventional `// scripts/<name>.dart` self-reference, blank
 /// comment lines, and the canonical declaration itself.
@@ -167,7 +169,13 @@ String extractPurpose(String source, String script) {
 
     final piece =
         parts.isEmpty ? body.replaceFirst(_purposeStrip, '').trim() : body;
-    if (piece.isEmpty) continue;
+    // Reject a piece with no word character, not merely an EMPTY one. A header
+    // like `// Gate (Track 2 of the … batch).` is consumed entirely by
+    // _purposeStrip except for the trailing `.`, and a bare isEmpty check
+    // accepted that "." as the purpose — then the next blank comment line ended
+    // the loop, so the real description one paragraph down never surfaced.
+    // Two of 87 rows rendered as a lone "." before this (B-pass P2-1).
+    if (!_hasWord.hasMatch(piece)) continue;
     parts.add(piece);
 
     final soFar = parts.join(' ');

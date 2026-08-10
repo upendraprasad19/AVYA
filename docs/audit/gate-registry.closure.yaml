@@ -1,18 +1,25 @@
 # Closure ledger — gate registry + red/green test rule. Gate 40
 # (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
-# 8 items, over the §4.2 >=4 threshold. Branch: gate-registry.
+# 10 items, over the §4.2 >=4 threshold. Branch: gate-registry.
 #
 # No diagnose-doc: this is new tooling + a process rule, not a bug fix. The
-# commits are `feat(gates):` / `refactor(gates):` / `docs(gates):`, none of which
-# match rule 22's `^(fix|bug|regression)` pattern.
+# commits are `feat(gates):` / `refactor(gates):` / `docs(gates):` / `chore(gates):`,
+# none of which match rule 22's `^(fix|bug|regression)` pattern. GR-9/GR-10 are
+# review findings on UNMERGED code, caught by this batch's own B-pass before the
+# merge — their durable record is docs/reviews/gate-registry-bpass.md plus these
+# entries, which is the right artifact for a review finding. A `fix(` subject was
+# tried first and correctly BLOCKED by the commit-msg gate; the fix was to label
+# the commit honestly, not to manufacture a diagnose-doc for a defect that never
+# reached main.
 
 batch: gate-registry
-total_findings: 8
-closed_count: 8
+total_findings: 10
+closed_count: 10
 
 _a: &a "ed164459 (commit A — detection gate)"
 _b: &b "gate-registry commit B (refactor)"
 _c: &c "gate-registry commit C (rule 24)"
+_d: &d "gate-registry commit D (B-pass closure)"
 
 findings:
   - id: GR-1
@@ -70,3 +77,18 @@ findings:
     commit: *a
     verification: "`flutter analyze --no-fatal-infos scripts/gate_index_lib.dart` -> 0 warnings/errors. Caught only when the commit failed."
     notes: "Cause worth recording: the author ran `flutter analyze ... | tail -8` and saw only infos. The warnings were ABOVE the tail. Checking severity requires grepping for it, not reading the end of the output — the same input-set-width error this whole batch is about, committed against the batch's own verification step. Subsequent checks use `grep -cE '^\\s*(error|warning)'`."
+
+  - id: GR-9
+    title: "B-pass P2-1 — extractPurpose accepted BARE PUNCTUATION as a gate's purpose, so 2 of 87 index rows rendered as a lone '.'"
+    terminal_state: closed_in_commit
+    commit: *d
+    verification: "`_purposeStrip` consumes a header like `// Gate (Track 2 of the ... batch).` entirely except the trailing `.`, and the loop rejected only an EMPTY piece — so '.' was accepted, and the blank comment line immediately after ended the loop, so the real description one paragraph down never surfaced. Confirmed live: `grep -nE '\| \. \|' docs/audit/GATE_INDEX.md` returned check_blast_radius_coverage.dart and check_code_review_pass_exists.dart, both of which have real summaries two lines lower. Fix: reject a piece with no word character. After: 0 rows. Regression test built from the verbatim check_blast_radius_coverage.dart header; MUTATION: revert the guard to `piece.isEmpty` -> 1 test red."
+    notes: "Found by the self-initiated B-pass (docs/reviews/gate-registry-bpass.md), independently re-verified against source before acceptance per feedback_audit_verifier_cannot_trust_own_subagent. Fixed in-batch, not carried (§4.2)."
+
+  - id: GR-10
+    title: "B-pass P2-2 — the ledger's own header cited '(Gate 55)' for a gate that deliberately carries NO number, contradicting the forward-minting rule the same batch introduces"
+    terminal_state: closed_in_commit
+    commit: *d
+    verification: "`grep -c 'Gate 55' docs/audit/gate_test_ledger.yaml` -> 0 after the fix. 55 was merely nextFreeNumber() at authoring time, never an assignment."
+    notes: "More than cosmetic: the string sits in the exact `scripts/xxx.dart (Gate N)` shape `_mintForward` matches (gate_index_lib.dart:232-233). It is inert only because build_gate_index.dart's isLedger predicate does not glob this filename — a landmine if that glob is ever widened. This is the SECOND self-consistency slip of the same kind in one batch: the gate itself first shipped as `// Gate: 55` before that was caught and removed in commit C."
+
