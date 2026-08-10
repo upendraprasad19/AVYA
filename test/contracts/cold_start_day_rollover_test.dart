@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 /// T3.2 — APK Test #13 (2026-05-12)
 ///
@@ -49,7 +50,7 @@ void main() {
 
     rolloverSrc = rolloverFile.readAsStringSync();
     appSrc = appFile.readAsStringSync();
-    restoringSrc = restoringFile.readAsStringSync();
+    restoringSrc = readRestoringScreenSource();
   });
 
   // ── Test 1: raw overwrite `_ref = ref` must NOT exist in runRolloverNow ──

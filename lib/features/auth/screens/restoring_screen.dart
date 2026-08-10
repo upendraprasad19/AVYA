@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/services/saved_meal_key_migrator.dart';
 import 'package:icanbefitter/core/services/phase_progress_reconciler.dart';
 import 'package:icanbefitter/core/services/plan_integrity_reconciler.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/local_onboarding_evidence.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
@@ -23,6 +24,13 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
+
+// Single-library `part` split (2026-08-10) — same shape as
+// `lib/features/train/screens/active_workout/`, except the head file keeps its
+// `*_screen.dart` name so it stays inside Gate 43's filename regex. Parts share
+// this file's imports and its private namespace, so nothing was renamed.
+part 'restoring/animated_dots.dart';
+part 'restoring/heal_after_restore.dart';
 
 /// Gate screen shown immediately after sign-in success. Runs
 /// [AuthSessionBootstrapper.resolveDestination] + [SyncService.restoreFromCloudForUser]
@@ -109,12 +117,50 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
 
     switch (destination) {
       case StartMissionBrief():
+        // closes-diagnose: c2e9f4 — this branch is reached both when the user
+        // genuinely has no profile row AND when the cloud read returned zero
+        // rows because RLS filtered a stale-token request (HTTP 200, null,
+        // indistinguishable from "no such user"). Consult local evidence
+        // before condemning anyone to onboarding: a returning user whose Hive
+        // profile is populated goes home instead.
+        //
+        // A genuinely new user has neither the flag nor a profile map, so
+        // this changes nothing for them — pinned by the behavioral test.
+        if (await _hasLocalOnboardedEvidence()) {
+          debugPrint('[RestoringScreen] StartMissionBrief overridden by local '
+              'evidence — cloud read returned no row but Hive says onboarded.');
+          unawaited(ErrorTelemetry.logEvent(
+              'restoring_missionbrief_overridden_by_local_evidence',
+              message: 'userId=${user.id.substring(0, 8)}'));
+          _committedToGoHome = true;
+          await _goHome(user.id, restoreFuture);
+          return;
+        }
         // Brand-new user with no profile row — cancel restore, go to Mission Brief.
         // Obs#1: account-creation copy, not restore copy (nothing to restore).
         if (mounted) setState(() => _statusLabel = 'Setting up your account…');
         // A7 / B5 D9-D10 — canonical provider path.
         ref.read(syncServiceProvider).cancelInflightRestore();
         if (mounted) context.go('/onboarding/mission-brief');
+        return;
+
+      case DestinationUnknown(:final reason):
+        // closes-diagnose: c2e9f4 — the read did not answer. Local evidence
+        // first; failing that, DO NOT route into onboarding. Staying put keeps
+        // the restore running and leaves the 15s hint / 30s CONTINUE escape
+        // in place, whereas guessing "new user" is the one wrong answer that
+        // destroys data if the user completes the flow.
+        debugPrint('[RestoringScreen] destination unknown ($reason)');
+        unawaited(ErrorTelemetry.logEvent('restoring_destination_unknown',
+            message: 'userId=${user.id.substring(0, 8)} reason=$reason'));
+        if (await _hasLocalOnboardedEvidence()) {
+          _committedToGoHome = true;
+          await _goHome(user.id, restoreFuture);
+          return;
+        }
+        if (mounted) {
+          setState(() => _statusLabel = 'Still connecting…');
+        }
         return;
 
       case ResumeOnboarding(:final firstMissingStep):
@@ -124,24 +170,18 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         // onboarding_completed_at was never stamped on the cloud. Without
         // this, RestoringScreen would route them back through onboarding
         // every cold start. Self-heal-stamp instead.
+        // closes-diagnose: c2e9f4 — routed through the shared helper so all
+        // THREE not-onboarded branches consult the same evidence, and so the
+        // Hive session is guaranteed open before the read (it previously was
+        // not — see _hasLocalOnboardedEvidence's doc comment).
+        await _ensureHiveSessionOpenForEvidence();
         final hiveProfile = HiveService.instance.userBox.get('profile');
-        final hiveProfileMap = hiveProfile is Map ? hiveProfile : null;
-        // OI-46 (2026-07-29, B-pass) — renamed from hasCorePlanFields (3
-        // fields) to hasAllRequiredFields, matching the 9 columns migration
-        // 112 gates server-side. Also now gates the stamp ATTEMPT below: a
-        // flagOnboarded=true legacy user missing one of the other 6 fields
-        // would otherwise retry-and-be-rejected (P0001) forever with no way
-        // to succeed. Navigation is unaffected — that cohort still goes home.
-        final hasAllRequiredFields = hiveProfileMap != null &&
-            hiveProfileMap['primary_goal'] != null &&
-            hiveProfileMap['fitness_experience'] != null &&
-            hiveProfileMap['current_weight_kg'] != null &&
-            hiveProfileMap['date_of_birth'] != null &&
-            hiveProfileMap['gender'] != null &&
-            hiveProfileMap['height_cm'] != null &&
-            hiveProfileMap['target_weight_kg'] != null &&
-            hiveProfileMap['days_per_week'] != null &&
-            hiveProfileMap['equipment_access'] != null;
+        // OI-46 (2026-07-29, B-pass) — the 9 columns migration 112 gates
+        // server-side. Gates the stamp ATTEMPT below: a flagOnboarded=true
+        // legacy user missing one of the other 6 fields would otherwise
+        // retry-and-be-rejected (P0001) forever with no way to succeed.
+        // Navigation is unaffected — that cohort still goes home.
+        final hasAllRequiredFields = hasAllRequiredProfileFields(hiveProfile);
         // audit-2026-05-16 reader-side / F3-2.1 — onboarding_completed
         // moved to userBox via MigratedKey (Test #11.1, UserConfigMigrator
         // v2). Reading from configBox directly returns the legacy/empty
@@ -152,7 +192,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         final flagOnboarded =
             MigratedKey.readWithDefault<bool>('onboarding_completed', false);
 
-        if (flagOnboarded || hasAllRequiredFields) {
+        if (hasLocalOnboardedEvidence(
+            hiveProfile: hiveProfile, flagOnboarded: flagOnboarded)) {
           debugPrint(
             '[RestoringScreen] self-heal: cloud onboarding_completed_at is '
             'NULL but Hive profile is populated — stamping now.',
@@ -189,6 +230,69 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         _committedToGoHome = true;
         await _goHome(user.id, restoreFuture);
         return;
+    }
+  }
+
+  /// Opens the user-scoped Hive session if it is not already open, so a
+  /// local-evidence read cannot be silently served an empty box.
+  ///
+  /// closes-diagnose: c2e9f4. `wrapUserScopedBox` returns `GuardedBox.empty`
+  /// for authenticated-but-owner-null (guarded_box.dart:333), meaning every
+  /// read yields null and any evidence check concludes "no evidence" — the
+  /// failure is SILENT, because the loud `StateError` at :335 fires only when
+  /// UNAUTHENTICATED, which is never the case here.
+  ///
+  /// The pre-fix code relied on `restoreFromCloudForUser` having opened the
+  /// session, but that call (sync_service.dart:454) is **fire-and-forget**, so
+  /// whether ownership was open when the evidence was read came down to a
+  /// race. That is the most likely reason the a3f6d9 self-heal appeared to
+  /// work in testing and still let this bug through in the field.
+  ///
+  /// `openForUser` is idempotent and `_sessionLock`-guarded, and `_goHome`
+  /// already opens the same session moments later, so this only moves the
+  /// existing call earlier — it introduces no new ownership transition.
+  Future<void> _ensureHiveSessionOpenForEvidence() async {
+    try {
+      await HiveUserSession.ensureOpenedForCurrentSession();
+    } catch (e, st) {
+      // Non-fatal: the evidence read below just returns empty, which is the
+      // pre-fix behaviour. Recorded so a genuinely unopenable session is
+      // observable rather than silently degrading every boot.
+      debugPrint('[RestoringScreen] evidence session open failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'restoring_evidence_session_open_failed'));
+    }
+  }
+
+  /// Local-evidence check used by the [StartMissionBrief] and
+  /// [DestinationUnknown] branches (closes-diagnose c2e9f4).
+  ///
+  /// Opens the Hive session first, then delegates to the pure predicate in
+  /// `local_onboarding_evidence.dart`. Kill-switch
+  /// `configBox['disable_local_onboarded_evidence']` (§4.6) restores the
+  /// pre-fix behaviour, where both branches routed to onboarding without
+  /// consulting local state at all.
+  Future<bool> _hasLocalOnboardedEvidence() async {
+    try {
+      if (HiveService.instance.configBox.get('disable_local_onboarded_evidence') ==
+          true) {
+        return false;
+      }
+    } catch (_) {
+      // configBox unavailable — keep the FIX on (safe direction).
+    }
+    await _ensureHiveSessionOpenForEvidence();
+    try {
+      return hasLocalOnboardedEvidence(
+        hiveProfile: HiveService.instance.userBox.get('profile'),
+        flagOnboarded:
+            MigratedKey.readWithDefault<bool>('onboarding_completed', false),
+      );
+    } catch (e, st) {
+      debugPrint('[RestoringScreen] local evidence read failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'restoring_local_evidence_read_failed'));
+      return false;
     }
   }
 
@@ -660,132 +764,5 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         ),
       ),
     );
-  }
-}
-
-/// Obs 4 (2026-06-05): post-restore heals for the background-restore path —
-/// runs AFTER the in-flight cloud restore finishes (no concurrent Hive writer),
-/// entirely ref-free (singletons) so it survives RestoringScreen disposal.
-/// Mirrors the post-restore sequence in `_ensureOwnershipBeforeHome`: key
-/// migrators → phase reconciler → weekly refill → bump the home refresh tick.
-/// Every step is independently guarded.
-Future<void> _healAfterRestoreInBackground() async {
-  // Hermes L34: each step records a non-fatal on failure (mirrors the foreground
-  // twin _ensureOwnershipBeforeHome) — a heal that throws in the background must
-  // not be a SILENT loss of observability (also surfaces the L27 migrator-race).
-  try {
-    await ExlogKeyMigrator.runIfNeeded();
-  } catch (e, st) {
-    unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_exlog'));
-  }
-  try {
-    await NlogKeyMigrator.runIfNeeded();
-  } catch (e, st) {
-    unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_nlog'));
-  }
-  try {
-    await SavedMealKeyMigrator.runIfNeeded();
-  } catch (e, st) {
-    unawaited(
-        ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_saved_meal'));
-  }
-  try {
-    // ignore: deprecated_member_use — singleton read in a ref-free bg context
-    await PhaseProgressReconciler.reconcile(
-        WorkoutScheduleReadService.instance);
-  } catch (e, st) {
-    unawaited(ErrorTelemetry.recordNonFatal(e, st,
-        reason: 'bg_heal_phase_reconcile'));
-  }
-  try {
-    // ignore: deprecated_member_use — singleton read in a ref-free bg context
-    await PlanIntegrityReconciler.reconcile(
-        WorkoutScheduleReadService.instance);
-  } catch (e, st) {
-    unawaited(ErrorTelemetry.recordNonFatal(e, st,
-        reason: 'bg_heal_plan_integrity'));
-  }
-  try {
-    StreakProgressService.instance.refillIfNewWeek();
-  } catch (e, st) {
-    unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_refill'));
-  }
-  try {
-    // coach_memory backfill (Obs#3): bg-restore twin of the foreground call in
-    // _ensureOwnershipBeforeHome — also AFTER openForUser, ref-free singleton.
-    await AiCoachRepository.instance.backfillCoachMemoryIfNeeded();
-  } catch (e, st) {
-    unawaited(
-        ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_coach_memory'));
-  }
-  try {
-    // Defense-in-depth (c5a1f2): rebuild every exercise_log_index_<date> as the
-    // UNION of the actual exlog_ keys present — self-heals any index drift from
-    // a lost index write (e4a8b1 class) or a rogue writer. Runs AFTER the key
-    // migrators above so re-keyed rows are indexed too.
-    await WorkoutWriteService.instance.reconcileExlogIndexes();
-  } catch (e, st) {
-    unawaited(
-        ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_exlog_index'));
-  }
-  // Notify the (now-mounted) home screen to refresh from the updated Hive.
-  SyncService.instance.bumpRestoreCompleted();
-}
-
-// ── Animated pulsing dots ────────────────────────────────────────
-
-class _AnimatedDots extends StatefulWidget {
-  const _AnimatedDots({super.key});
-
-  @override
-  State<_AnimatedDots> createState() => _AnimatedDotsState();
-}
-
-class _AnimatedDotsState extends State<_AnimatedDots>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final t = _controller.value;
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(3, (i) {
-            final phase = (t + i / 3) % 1.0;
-            final opacity = (0.5 + 0.5 * (1 - (2 * phase - 1).abs()))
-                .clamp(0.0, 1.0);
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.accent.withValues(alpha: opacity),
-                ),
-              ),
-            );
-          }),
-        );
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 }

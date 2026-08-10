@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 /// Source-of-truth contract: writer/reader pairs for `onboarding_completed_at`
 /// from docs/sot_registry.yaml.
@@ -32,7 +33,7 @@ void main() {
     final rsf = File('lib/features/auth/screens/restoring_screen.dart');
     expect(rsf.existsSync(), isTrue,
         reason: 'restoring_screen.dart must exist (reader _checkOnboardingStatus)');
-    restoringSrc = rsf.readAsStringSync();
+    restoringSrc = readRestoringScreenSource();
 
     final router = File('lib/core/router/app_router.dart');
     expect(router.existsSync(), isTrue,

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 /// OB-7 — Onboarding resume from arbitrary step.
 ///
@@ -47,7 +48,7 @@ void main() {
         reason:
             'auth_session_bootstrapper.dart must exist (introduced by audit '
             '2026-05-20 / A1).');
-    restoringSrc = restoringFile.readAsStringSync();
+    restoringSrc = readRestoringScreenSource();
     bootstrapperSrc = bootstrapperFile.readAsStringSync();
   });
 
@@ -158,8 +159,18 @@ void main() {
       // ever succeed. Pin the renamed variable + all 9 field checks + the
       // stamp-attempt now being conditional (not unconditional) inside the
       // self-heal branch.
-      expect(restoringSrc.contains('hasAllRequiredFields'), isTrue,
-          reason: 'the widened 9-field check must exist under this name.');
+      // c2e9f4: the 9-field check moved OUT of this widget and into the pure
+      // module lib/core/services/local_onboarding_evidence.dart, so all three
+      // "not onboarded" branches share one predicate instead of only
+      // ResumeOnboarding having one. The invariant is unchanged — assert it
+      // where the code now lives. (The behavioural counterpart, which is the
+      // stronger guarantee, is local_onboarding_evidence_behavioral_test.dart.)
+      final evidenceSrc =
+          File('lib/core/services/local_onboarding_evidence.dart')
+              .readAsStringSync();
+      expect(restoringSrc.contains('hasAllRequiredProfileFields'), isTrue,
+          reason: 'the widened 9-field check must still be invoked from the '
+              'restoring screen, under its extracted name.');
       for (final field in [
         'date_of_birth',
         'gender',
@@ -172,18 +183,19 @@ void main() {
         'equipment_access',
       ]) {
         expect(
-          restoringSrc.contains("hiveProfileMap['$field'] != null"),
+          evidenceSrc.contains("'$field'"),
           isTrue,
-          reason: 'hasAllRequiredFields must check $field, matching '
+          reason: 'requiredOnboardingProfileFields must list $field, matching '
               'migration 112 exactly.',
         );
       }
       // The stamp attempt must be wrapped in its OWN conditional on
       // hasAllRequiredFields — not fired unconditionally for every
       // flagOnboarded/hasAllRequiredFields entrant to the self-heal branch.
-      final selfHealBlockStart = restoringSrc.indexOf('if (flagOnboarded || hasAllRequiredFields)');
+      final selfHealBlockStart = restoringSrc.indexOf('if (hasLocalOnboardedEvidence(');
       expect(selfHealBlockStart, greaterThan(-1),
-          reason: 'the self-heal entry condition must reference both signals.');
+          reason: 'the self-heal entry condition must go through the shared '
+              'evidence predicate (flag OR all-9-fields).');
       final stampCallIdx = restoringSrc.indexOf('_stampOnboardingCompletedAt(user.id)', selfHealBlockStart);
       final innerGuardIdx = restoringSrc.indexOf('if (hasAllRequiredFields)', selfHealBlockStart);
       expect(innerGuardIdx, greaterThan(-1),

@@ -18,6 +18,7 @@
 // Run: flutter test test/contracts/auth_session_bootstrapper_test.dart
 
 import 'dart:io';
+import '../helpers/read_screen_source.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
@@ -236,12 +237,22 @@ void main() {
     test('resolveDestination does not query non-existent user_profile.full_name',
         () {
       final src = stripped();
-      final start = src.indexOf('resolveDestination(String userId)');
-      expect(start, isNot(-1),
+      expect(src.indexOf('resolveDestination(String userId)'), isNot(-1),
           reason: 'resolveDestination must still exist');
-      final after = src.substring(start);
-      final endIdx = after.indexOf('classifyDestination');
-      final body = endIdx == -1 ? after : after.substring(0, endIdx);
+      // c2e9f4: the SELECT moved out of resolveDestination's own body into the
+      // shared _selectProfileRow helper (so the first attempt and the
+      // post-refresh retry cannot drift in their column list). Slice the
+      // SELECT itself rather than a method body — that is what this test is
+      // actually about, and it stays correct wherever the call lives.
+      final selectStart = src.indexOf("from('user_profile')");
+      expect(selectStart, isNot(-1),
+          reason: 'the user_profile SELECT must still exist somewhere in this '
+              'file — if it moved to another file, point this test there.');
+      final afterSelect = src.substring(selectStart);
+      final selectEnd = afterSelect.indexOf('maybeSingle()');
+      final body = selectEnd == -1
+          ? afterSelect
+          : afterSelect.substring(0, selectEnd);
       expect(
         body.contains('full_name'),
         isFalse,
@@ -287,8 +298,7 @@ void main() {
         'restoring_screen.dart no longer imports supabase_flutter '
         'or calls Supabase.instance.client directly', () {
       final src = _stripComments(
-        File('lib/features/auth/screens/restoring_screen.dart')
-            .readAsStringSync(),
+        readRestoringScreenSource(),
       );
       expect(
         src.contains("package:supabase_flutter/supabase_flutter.dart"),
@@ -308,8 +318,7 @@ void main() {
         'restoring_screen.dart calls AuthSessionBootstrapper.instance.'
         'resolveDestination', () {
       final src = _stripComments(
-        File('lib/features/auth/screens/restoring_screen.dart')
-            .readAsStringSync(),
+        readRestoringScreenSource(),
       );
       expect(
         // Tolerant of dart format wrapping the call across lines (e.g.

@@ -46,6 +46,39 @@ class StartMissionBrief extends PostSignInDestination {
   const StartMissionBrief();
 }
 
+/// **The cloud read did not answer.** Distinct from [StartMissionBrief],
+/// which asserts a positive fact ("this user has no profile row").
+///
+/// closes-diagnose: c2e9f4 — third instance of the restore→onboarding
+/// misroute class (1bfeed 2026-05-16, a3f6d9 2026-08-03).
+///
+/// Before this existed, [AuthSessionBootstrapper.resolveDestination]
+/// collapsed THREE outcomes into two: row-present, row-absent, and
+/// *could-not-determine* — with the third folded into [StartMissionBrief]
+/// under a comment calling it "the conservative fallback". It is
+/// conservative for a brand-new user and the single most destructive
+/// answer available for an existing one, because it routes a fully
+/// onboarded account into onboarding, where completing the flow
+/// overwrites a real profile.
+///
+/// The ambiguity is not hypothetical, and it has two separate entrances
+/// that look identical at the call site:
+///   1. the SELECT throws (expired JWT → 401, transport error), or
+///   2. the SELECT returns HTTP 200 with ZERO ROWS because RLS
+///      (`user_profile_select_own`, own-row-only) filtered a request whose
+///      token was stale or not yet attached — `.maybeSingle()` yields
+///      `null`, byte-identical to "no such user".
+///
+/// Callers MUST NOT treat this as "new user". `RestoringScreen` consults
+/// local Hive evidence instead and, failing that, keeps the user on the
+/// restoring screen rather than sending them into onboarding.
+class DestinationUnknown extends PostSignInDestination {
+  /// Why the read could not be resolved — telemetry/debug only, never
+  /// shown to the user.
+  final String reason;
+  const DestinationUnknown(this.reason);
+}
+
 /// Single-owner post-sign-in hydration funnel.
 ///
 /// Tech-debt audit 2026-05-20 finding A1 (god-provider extract) +
@@ -100,26 +133,43 @@ class AuthSessionBootstrapper {
   /// onboarding order — `identity` < `goal` < `stats` < `details` <
   /// `plan` (same order the screens are wired into the router).
   ///
-  /// On Supabase error: returns [StartMissionBrief] as the conservative
-  /// fallback — same behavior the legacy `_resolveOnboardingResumeRoute`
-  /// catch-block had at `restoring_screen.dart:239`.
+  /// On a read that FAILS: returns [DestinationUnknown], **not**
+  /// [StartMissionBrief] (closes-diagnose c2e9f4). See that class for why
+  /// "couldn't read" must never collapse into "brand-new user".
+  ///
+  /// Before the SELECT, the access token is refreshed via
+  /// [SupabaseService.ensureFreshToken] — the same precaution
+  /// `SupabaseService.callFunction` has always taken, and for the same
+  /// reason (CLAUDE.md §4.4 rule 9: a stale JWT 401s). This read had no such
+  /// step, despite being the single decision that routes every returning
+  /// user. On a throw it retries ONCE behind a hard `refreshSession()`.
+  ///
+  /// Kill-switch `configBox['disable_resolve_destination_unknown']` restores
+  /// the verbatim pre-fix behaviour (no refresh, no retry, catch →
+  /// StartMissionBrief) per §4.6.
   Future<PostSignInDestination> resolveDestination(String userId) async {
     return _withLock(userId, () async {
+      final legacyMode = _legacyResolveFallbackEnabled;
+
+      if (!legacyMode) {
+        // Proactive refresh — a token that expires mid-flight comes back as
+        // either a 401 (throw) or an RLS-filtered empty result (no throw at
+        // all), and the second shape is indistinguishable from "no row".
+        try {
+          await _supabase.ensureFreshToken();
+        } catch (e, st) {
+          // Non-fatal: the SELECT below may still succeed on the existing
+          // token. Recorded so a refresh that fails EVERY boot is visible.
+          debugPrint(
+              '[AuthSessionBootstrapper.resolveDestination] token refresh: $e');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'resolve_destination_token_refresh_failed',
+              extra: {'user_id': userId}));
+        }
+      }
+
       try {
-        // NOTE: identity-step completion is detected via `date_of_birth`
-        // (a real `user_profile` column written by the onboarding identity
-        // screen → sync_profile.dart). Do NOT select `full_name` here — that
-        // column lives on the `users` table, NOT `user_profile`; selecting it
-        // raises PostgREST 42703 and the catch below silently degrades EVERY
-        // user to StartMissionBrief. See diagnose 2026-05-30-resolve-
-        // destination-full-name-drift.
-        final row = await _supabase.client
-            .from('user_profile')
-            .select('user_id, onboarding_completed_at, date_of_birth, '
-                'primary_goal, current_weight_kg, fitness_experience')
-            .eq('user_id', userId)
-            .maybeSingle();
-        return classifyDestination(row);
+        return classifyDestination(await _selectProfileRow(userId));
       } catch (e, st) {
         debugPrint('[AuthSessionBootstrapper.resolveDestination] $e');
         unawaited(ErrorTelemetry.recordNonFatal(
@@ -128,11 +178,65 @@ class AuthSessionBootstrapper {
           reason: 'auth_session_bootstrapper_resolve_destination',
           extra: {'user_id': userId},
         ));
-        // Conservative fallback (matches legacy behaviour at
-        // restoring_screen.dart:239 catch-block).
-        return const StartMissionBrief();
+
+        if (legacyMode) {
+          // Verbatim pre-fix behaviour behind the kill-switch.
+          return const StartMissionBrief();
+        }
+
+        // One retry behind a HARD refresh. `ensureFreshToken` above only
+        // refreshes inside its expiry buffer; a token rejected for any other
+        // reason (rotated, revoked, clock skew) needs the forced path.
+        try {
+          await _supabase.client.auth.refreshSession();
+          final retried = classifyDestination(await _selectProfileRow(userId));
+          unawaited(ErrorTelemetry.logEvent(
+              'resolve_destination_retry_succeeded',
+              message: 'userId=${_shortId(userId)}'));
+          return retried;
+        } catch (e2, st2) {
+          debugPrint(
+              '[AuthSessionBootstrapper.resolveDestination] retry failed: $e2');
+          unawaited(ErrorTelemetry.recordNonFatal(e2, st2,
+              reason: 'resolve_destination_unknown',
+              extra: {'user_id': userId}));
+          // The whole point of c2e9f4: an unanswered read is its OWN state.
+          return DestinationUnknown('read_failed: $e2');
+        }
       }
     });
+  }
+
+  /// The single `user_profile` SELECT, shared by the first attempt and the
+  /// post-refresh retry so the two can never drift in their column list.
+  ///
+  /// NOTE: identity-step completion is detected via `date_of_birth` (a real
+  /// `user_profile` column written by the onboarding identity screen →
+  /// sync_profile.dart). Do NOT select `full_name` here — that column lives
+  /// on the `users` table, NOT `user_profile`; selecting it raises PostgREST
+  /// 42703 and degrades EVERY user. See diagnose
+  /// 2026-05-30-resolve-destination-full-name-drift.
+  Future<Map<String, dynamic>?> _selectProfileRow(String userId) {
+    return _supabase.client
+        .from('user_profile')
+        .select('user_id, onboarding_completed_at, date_of_birth, '
+            'primary_goal, current_weight_kg, fitness_experience')
+        .eq('user_id', userId)
+        .maybeSingle();
+  }
+
+  static String _shortId(String userId) =>
+      userId.length >= 8 ? userId.substring(0, 8) : userId;
+
+  /// §4.6 kill-switch. Defaults to the FIX being on (returns false) whenever
+  /// Hive is unavailable: without it a failed read mis-routes an onboarded
+  /// user into onboarding, so "fix on" is the safe direction.
+  bool get _legacyResolveFallbackEnabled {
+    try {
+      return _hive.configBox.get('disable_resolve_destination_unknown') == true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Pure decision function. Visible-for-testing — given a

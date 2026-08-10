@@ -7,7 +7,7 @@
 // widget test impractical; the resolveDestination logic is tested separately in
 // auth_session_bootstrapper_test).
 
-import 'dart:io';
+import '../helpers/read_screen_source.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,7 +25,7 @@ String _strip(String src) {
 
 void main() {
   final src = _strip(
-      File('lib/features/auth/screens/restoring_screen.dart').readAsStringSync());
+      readRestoringScreenSource());
 
   test('d5e1b9 — the restore-label title is gated on _useRestoreLabel', () {
     expect(src.contains('_useRestoreLabel'), isTrue,

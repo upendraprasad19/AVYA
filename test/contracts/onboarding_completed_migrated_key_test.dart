@@ -17,7 +17,7 @@
 // Source-grep contract test — pins the read pattern so a refactor can't
 // silently revert to direct configBox access.
 
-import 'dart:io';
+import '../helpers/read_screen_source.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,8 +25,7 @@ void main() {
   late String src;
 
   setUpAll(() {
-    src = File('lib/features/auth/screens/restoring_screen.dart')
-        .readAsStringSync();
+    src = readRestoringScreenSource();
   });
 
   group('RestoringScreen onboarding read path', () {
