@@ -132,7 +132,9 @@ concepts:
     });
 
     test('non-identifier fragments are prose, not silently accepted as resolved', () {
-      for (final p in const ['no', 'No', 'writer/reader', 'x']) {
+      // 'no'/'No' are negation openers -> sentinel (a declaration), covered
+      // separately. These are non-negation, non-identifier fragments.
+      for (final p in const ['writer/reader', 'x', 'some thing']) {
         expect(classifyCitation(p, concepts), CitationVerdict.prose, reason: p);
       }
     });
@@ -262,6 +264,26 @@ concepts:
         docBody: 'sot_registry_entry: real_concept\n',
       );
       expect(r.exitCode, 0, reason: 'stdout=${r.stdout} stderr=${r.stderr}');
+    });
+
+    test('a POST-cutoff doc DECLARING non-applicability in prose is accepted', () {
+      // The real convention, and the false positive that blocked two docs
+      // already merged to main (a4f7c2, d7b3e9). A value opening with a
+      // negation is the author being MORE explicit, not evading.
+      for (final decl in const [
+        'Not a Hive/cloud writer-reader storage concept — dev-workflow tooling',
+        'Not applicable — no writer contract changed',
+        'n/a — pure UI layout',
+        'None — process only',
+      ]) {
+        final r = runGateOn(
+          registryYaml: goodRegistry,
+          docName: '2026-08-09-thing-abc123.md',
+          docBody: 'sot_registry_entry: $decl\n',
+        );
+        expect(r.exitCode, 0,
+            reason: 'declaration must be accepted: "$decl"\nstdout=${r.stdout}');
+      }
     });
 
     test('exit 1 when a POST-cutoff doc hides behind PROSE (Finding 2)', () {

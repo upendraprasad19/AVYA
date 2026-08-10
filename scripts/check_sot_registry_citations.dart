@@ -113,6 +113,12 @@ void main(List<String> args) {
     final raw = citationOf(content);
     if (raw == null) continue; // no field — validate_diagnose_doc.dart owns that
 
+    // A whole-value sentinel ("Not applicable — …", "N/A", "none") settles the
+    // doc before tokenising. Tokenising first reduced `Not applicable` to `Not`,
+    // which matched no sentinel and was reported as a hard violation — a false
+    // positive that blocked two docs already merged to main.
+    if (isSentinelValue(raw)) continue;
+
     // Date from filename OR `date:` frontmatter, whichever is later.
     final post = isPostCutoff(name, docContent: content);
 

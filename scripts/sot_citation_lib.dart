@@ -18,16 +18,74 @@
 /// EARLIER is a tightening and requires clearing whatever it newly captures.
 const String citationCutoff = '2026-08-01';
 
-/// Values that explicitly assert "no registry concept applies".
+/// Values that explicitly assert "no registry concept applies", in NORMALISED
+/// form — compare with [normalizeSentinel], never against a raw string.
 const Set<String> citationSentinels = {
-  'n/a',
+  'n_a',
   'na',
   'null',
   'none',
   'not_applicable',
   'tbd',
-  '-',
+  'nil',
 };
+
+/// Case-folds and collapses every run of non-alphanumerics to a single `_`.
+///
+/// `Not applicable`, `NOT APPLICABLE`, `not-applicable`, `n/a`, `N/A` all
+/// normalise onto the set above.
+///
+/// Why this exists: the first version compared raw lowercased TOKENS against a
+/// literal set. `sot_registry_entry: Not applicable — …` tokenised to `Not`,
+/// missed the set, was not identifier-shaped, and — once post-cutoff prose
+/// became a hard violation — was reported as a FAILURE. That false positive
+/// blocked two diagnose-docs that had already merged to main
+/// (a4f7c2, d7b3e9), i.e. a gate shipped hours earlier was failing other
+/// people's valid work. A gate that rejects correct input is worse than no gate.
+String normalizeSentinel(String s) => s
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+    .replaceAll(RegExp(r'^_+'), '')
+    .replaceAll(RegExp(r'_+$'), '');
+
+/// Words that OPEN an explicit "no concept applies" declaration.
+///
+/// The repo's real convention is not a bare token — authors write a sentence
+/// saying why nothing applies, e.g.
+///   `sot_registry_entry: > Not a Hive/cloud writer-reader storage concept — …`
+///   `sot_registry_entry: n/a — no writer contract changed`
+/// Both are the author being MORE explicit, not less. A first version treated
+/// all post-cutoff prose as a violation and so rejected two docs already merged
+/// to main (a4f7c2, d7b3e9).
+///
+/// The line that actually matters: a value OPENING with a negation is a
+/// declaration; prose that opens with anything else (`some new concept here`)
+/// is unadjudicable and stays a violation post-cutoff — that is the evasion
+/// shape the B-pass flagged.
+const Set<String> _negationOpeners = {
+  'not', 'no', 'none', 'na', 'n', 'nil', 'null', 'tbd', 'nothing', 'neither',
+};
+
+/// True when the citation VALUE AS A WHOLE declares that no concept applies.
+///
+/// Checked BEFORE tokenising — that is the entire point. Tokenising first
+/// reduced `Not applicable` to `Not`, matched no sentinel, and failed the doc.
+bool isSentinelValue(String raw) {
+  var s = raw.split('#').first;
+  s = s.replaceAll(RegExp(r'\([^)]*\)'), ' '); // provenance parentheticals
+  for (final marker in ['—', '--', ';', ':']) {
+    final i = s.indexOf(marker);
+    if (i >= 0) s = s.substring(0, i);
+  }
+  final norm = normalizeSentinel(s);
+  if (norm.isEmpty || citationSentinels.contains(norm)) return true;
+  // The negation rule applies to PROSE ONLY. A bare snake_case identifier is a
+  // concept name and must be adjudicated as one — otherwise any concept
+  // starting `no_` (e.g. `no_such_concept`) would be waved through as a
+  // declaration, which is a hole, not a fix.
+  if (isIdentifierShaped(s.trim())) return false;
+  return _negationOpeners.contains(norm.split('_').first);
+}
 
 /// How a single citation token is adjudicated.
 enum CitationVerdict {
@@ -116,7 +174,14 @@ Iterable<String> splitCitation(String raw) sync* {
 
 /// Adjudicates one already-split citation token against the registry.
 CitationVerdict classifyCitation(String cited, Set<String> concepts) {
-  if (citationSentinels.contains(cited.toLowerCase())) return CitationVerdict.sentinel;
+  final norm = normalizeSentinel(cited);
+  if (citationSentinels.contains(norm)) return CitationVerdict.sentinel;
+  // Negation opener => a prose declaration. NOT applied to identifier-shaped
+  // values, or `no_such_concept` would classify as "no concept applies".
+  if (!isIdentifierShaped(cited) &&
+      _negationOpeners.contains(norm.split('_').first)) {
+    return CitationVerdict.sentinel;
+  }
   if (!isIdentifierShaped(cited)) return CitationVerdict.prose;
   return concepts.contains(cited) ? CitationVerdict.resolved : CitationVerdict.dangling;
 }

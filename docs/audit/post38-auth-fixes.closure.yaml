@@ -1,7 +1,21 @@
-# Closure ledger — post38-auth-fixes (5 units; 35 findings = 27 over two review
-# rounds + 8 found while scoping/committing slice 0 + 7 from the mandatory
-# pre-merge B-pass on 2026-08-09. Only 27 of 42 came from a review ROUND: three
-# came from the pre-commit suite and seven from the B-pass on the finished commit.)
+# Closure ledger — post38-auth-fixes (5 units; 45 findings).
+#
+# ⚠ COUNTS CORRECTED 2026-08-10. This header previously opened "35 findings =
+# 27 + 8 + 7" — three numbers that sum to 42, against a header that said 35 and
+# a `total_findings:` that said 43. Nobody was lying; the prose was hand-edited
+# as findings accrued while the LIST was the thing actually growing. Recounted
+# mechanically by id prefix, which is the only number that cannot drift:
+#     16  R1-*   round 1 (2026-08-07)
+#     19  R2-N*  round 2 (2026-08-08) — largely defects introduced BY round 1's fixes
+#      8  B*     mandatory pre-merge B-pass on d4a8de00 (2026-08-09)
+#      2  DEP-*  found by RUNNING the authorised v13 deploy and reading its output (2026-08-10)
+#     ---
+#     45  = total_findings = closed_count
+# So only 35 of 45 came from a review ROUND at all: eight came from the B-pass on
+# an already-finished commit, and two from executing a deploy that had already
+# reported success. Reviews are not the only instrument, and were not the most
+# efficient one here.
+#
 # Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
 # `deferred:` key.
 #
@@ -18,7 +32,7 @@
 #
 # `blocked_on_user` here means: the finding's fix is sequenced into a NAMED
 # approved slice whose merge requires the founder's go. Every such entry carries
-# the slice name in `reason:`. All 35 findings live in THIS one ledger — none is
+# the slice name in `reason:`. All 45 findings live in THIS one ledger — none is
 # handed to a future ledger to remember — so nothing can fall between slices.
 #
 # ⚠ CONVENTION, corrected after the B-pass (2026-08-08, Finding 1):
@@ -46,8 +60,8 @@ related_diagnoses: >
   docs/diagnoses/2026-08-06-notifications-inbox-nonuuid-id-a4f1c8.md,
   docs/diagnoses/2026-08-06-account-swap-inflight-writes-e5c2d1.md
 plan_review_record: docs/plan-reviews/post38-auth-fixes.md
-total_findings: 43
-closed_count: 43
+total_findings: 45
+closed_count: 45
 
 _slice0: &slice0 "post38-auth-fixes slice 0 (prod/repo reconciliation + Gate 44)"
 _s1: &s1 "approved split slice 1 (a4f1c8 uuid) — merges under its own founder go"
@@ -435,4 +449,52 @@ findings:
       told the founder "8 files staged" from a check taken minutes earlier. A
       staged-set check is only valid at the instant of the commit. Verify the
       staged list INSIDE the committing command and read the output, every time.
+
+  # ---- DEPLOY (2026-08-10) — found by RUNNING the authorised v13 redeploy ----
+  # Neither of these came from a review round. Both were found by reading the
+  # output of a deploy that had already succeeded — the same lesson as
+  # feedback_git_landing_verification.md: "the tool reported success" and "the
+  # thing is correct" are different claims.
+  - id: DEP-P2-44
+    title: "log-client-error's smoke tolerated-code set omitted 401, so its smoke step false-FAILed on every deploy"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    fix_state: "fixed — .claude/deploy_via_api.js SMOKE_TOLERATED_CODES['log-client-error'] 400 -> [400, 401]"
+    verification: docs/diagnoses/2026-08-10-deploy-smoke-false-fail-and-archive-mislabel-a7c3f9.md
+    notes: >
+      The function is verify_jwt=true, so the gateway answers the headerless
+      {smoke:true} probe with 401 before the module runs — it can never return
+      the 400 the entry was written for. Thirteen sibling auth-required
+      functions in the same table already list 401 with exactly that rationale;
+      this entry was the lone outlier. Not a one-off: it had already fired on
+      the v11 and v12 deploys of this function and been hand-waved each time.
+      A verification step that reports FAIL on every healthy run, complete with
+      rollback instructions, teaches the operator to stop reading it.
+      Proven by executing the REAL edited table with the red path: fixed
+      predicate(401) -> true; pre-fix [400] predicate(401) -> FALSE.
+  - id: DEP-P2-45
+    title: "payload archive stamped cwd's HEAD sha, so a cross-worktree deploy named the archive after a commit that does not contain it"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    fix_state: "fixed — new provenanceSha() verifies the payload against `git show <sha>:...` and returns 'nosha' when it cannot substantiate the claim"
+    verification: docs/diagnoses/2026-08-10-deploy-smoke-false-fail-and-archive-mislabel-a7c3f9.md
+    notes: >
+      archivePayload stamped currentHeadSha() (cwd = REPO_ROOT) while
+      emit_payload.js --functions-dir routinely sources the payload from a
+      DIFFERENT worktree — which §4.13 actively encourages, since the primary
+      worktree is integration-only. Today's v13 deploy wrote v4_4df6ef2.json:
+      a main-branch sha whose tree holds a FIVE-entry allow-list, against a
+      payload holding six. A wrong sha is worse than none — it routes an
+      incident-time rollback to source that never produced the payload.
+      Proven by running the real function: branch sha -> "034e712",
+      main sha -> "nosha" (reproducing today's mislabel), null -> "nosha".
+      The archive from today's deploy was renamed by hand to v4_034e712.json,
+      which is the value the fixed function independently computes.
+      RESIDUE, filed not swallowed: this script cannot be unit-tested at all
+      (top-level IIFE, no require.main guard; CI provisions deno but never
+      node), so both fixes had to be proven by extracting and eval-ing source
+      text. That gap is OI-105. It is NOT bundled here because changing the
+      execution model of the script that had just run a live production deploy,
+      in the same commit as the defects it would test, is the wrong order —
+      the guard lands first and standalone (§4.11).
 

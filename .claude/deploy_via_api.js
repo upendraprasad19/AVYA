@@ -574,7 +574,15 @@ function archivePayload(fnName, files, headSha) {
     // derived from how many archives currently exist + 1.
     const existing = fs.readdirSync(dir).filter((n) => n.endsWith('.json'));
     const nextN = existing.length + 1;
-    const shortSha = (headSha || 'unknown').slice(0, 7);
+    // The sha must be PROVENANCE, not just "whatever HEAD happened to be".
+    // headSha comes from REPO_ROOT, but --functions-dir can point at a
+    // DIFFERENT worktree, so the two routinely disagree. Observed 2026-08-10:
+    // deploying post38-auth-fixes' log-client-error while cwd was the primary
+    // worktree named the archive v4_4df6ef2 — a main-branch sha whose tree
+    // contains a FIVE-entry allow-list, while the archived payload has six.
+    // Anyone doing rollback archaeology would check out that sha and find
+    // source that never produced this payload. Verify before claiming.
+    const shortSha = provenanceSha(fnName, files, headSha);
     const archivePath = path.join(dir, `v${nextN}_${shortSha}.json`);
     fs.writeFileSync(archivePath, JSON.stringify(files, null, 2), 'utf-8');
     console.log(`[deploy] Archived payload to ${path.relative(REPO_ROOT, archivePath)}`);
@@ -605,6 +613,43 @@ function currentHeadSha() {
   }
 }
 
+/**
+ * Return the 7-char sha to put in the archive filename, but ONLY if that
+ * commit's tree actually contains the payload we are about to write.
+ *
+ * Returns 'nosha' when the claim cannot be substantiated — an archive named
+ * `nosha` is honest and still fully usable (the CONTENT is the rollback
+ * artifact; the sha is a convenience pointer). A wrong sha is worse than no
+ * sha, because it sends you to source that never produced this payload.
+ *
+ * Fails OPEN to 'nosha' on any git error: an unreadable git object must not
+ * turn a healthy deploy into a crash.
+ */
+function provenanceSha(fnName, files, headSha) {
+  if (!headSha) return 'nosha';
+  try {
+    const entry = (files || []).find((f) => (f && (f.name || f.path)) === 'index.ts');
+    if (!entry || typeof entry.content !== 'string') return 'nosha';
+    const tracked = execSync(
+      `git show ${headSha}:supabase/functions/${fnName}/index.ts`,
+      { cwd: REPO_ROOT, encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024 },
+    );
+    // Normalise line endings only — this repo is developed on Windows and
+    // checked out on Linux in CI, so CRLF/LF is noise, not divergence.
+    const norm = (s) => s.replace(/\r\n/g, '\n');
+    if (norm(tracked) === norm(entry.content)) return headSha.slice(0, 7);
+    console.warn(
+      `[deploy] Archive sha withheld: ${headSha.slice(0, 7)} does not contain this payload`,
+    );
+    console.warn(
+      '[deploy]   (--functions-dir pointed at a different worktree than cwd). Naming it "nosha".',
+    );
+    return 'nosha';
+  } catch (e) {
+    return 'nosha';
+  }
+}
+
 // --- I3: post-deploy smoke step ------------------------------------------
 // Allow-list per function: codes that mean "deployed and running" even if
 // they reject the synthetic {smoke:true} payload (e.g. missing JWT → 401
@@ -624,7 +669,14 @@ const SMOKE_TOLERATED_CODES = {
   'ai-proxy': [400, 401],          // missing user_id → 400 is healthy
   'ai-proxy-pro': [400, 401],
   'ai-media-proxy': [400, 401],
-  'log-client-error': [400],
+  // verify_jwt=true, so the headerless {smoke:true} probe never reaches the
+  // module — the gateway answers 401 first. Omitting 401 here made this
+  // function's smoke step FAIL on every single deploy (observed v13,
+  // 2026-08-10: "Smoke FAIL — HTTP 401 (not in tolerated set [400])" on a
+  // deploy that was in fact healthy). A check that cries wolf every time
+  // trains you to ignore it, which is worse than not having it. 400 stays
+  // for the case where a caller DOES present a key and trips validation.
+  'log-client-error': [400, 401],
   'morning-alert': [401],          // cron-only auth
   'evaluate-rank-promotions': [401],
   'compute-coach-signals': [401],

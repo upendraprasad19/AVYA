@@ -2391,3 +2391,30 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Fix shape**: either a Postgres-side reservation (the ai-proxy pattern) or accept the soft cap
   explicitly and say so in the function header, so nobody later reads 200 as a guarantee.
 - **Blast radius estimate**: `platform` (Edge Function + possibly a migration).
+
+## OI-105 — `.claude/deploy_via_api.js` cannot be unit-tested, so its logic is only ever proven by hand
+
+- **Status**: OPEN
+- **Blocked on**: nothing
+- **Verified**: 2026-08-10 (read the file; confirmed the top-level IIFE and CI's node absence)
+- **Identified**: 2026-08-10 · while fixing `a7c3f9` (two defects in this same script)
+- **Risk class**: untestable tooling on the production-deploy path
+- **What's wrong**: the script ends in a bare top-level `async` IIFE with no `require.main === module`
+  guard and no `module.exports`, so importing it *attempts a deploy*. Its pure logic —
+  `SMOKE_TOLERATED_CODES`, `provenanceSha`, `isHighPriority`-style helpers — therefore cannot be
+  exercised by any automated test. Compounding it, `.github/workflows/test.yml` provisions **deno
+  only** (lines 108/125), never node, so even a hand-written JS test would not be gated by CI.
+- **Evidence it matters**: `a7c3f9` fixed two defects here that had shipped through at least the v11
+  and v12 deploys of `log-client-error` unnoticed. Both were proven by *extracting source text and
+  eval-ing it* — a technique that works but tests a copy of the parse, not the module. The
+  `log-client-error` Edge Function this tool deploys already solves exactly this, with
+  `if (import.meta.main) serve(handler)` plus explicit test exports; the deploy tool never adopted
+  the same pattern.
+- **Fix shape**: wrap the IIFE in `if (require.main === module)`, add `module.exports` for the pure
+  helpers, add a node test, and add a `node --test` step to CI (or port the helpers to Dart so the
+  existing `flutter test` gate covers them). Deliberately NOT bundled into `a7c3f9`: changing the
+  execution model of the script that had just performed a live production deploy, in the same commit
+  that fixes the defects that change would test, is the wrong order — the guard lands first and
+  standalone, per §4.11.
+- **Blast radius estimate**: `feature` (`.claude/` + `.github/workflows/`), but the *consequence* of
+  a defect in this file reaches production deploys.
