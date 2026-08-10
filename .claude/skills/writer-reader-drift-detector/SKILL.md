@@ -180,7 +180,7 @@ Once writer × reader mismatch is identified:
 
 ## 5. Verification gates
 
-- `scripts/check_writeservice_only.dart` (Gate 7) — direct Hive writes outside WriteServices
+- `scripts/check_writeservice_only.dart` (Gate 49) — direct Hive writes outside WriteServices
 - `scripts/check_reader_manifest_complete.dart` (existing) — every SoT concept lists writers AND readers
 - `scripts/check_no_raw_ispro_read.dart` (Gate 34) — example of a concept-specific writer-bypass gate
 - `scripts/check_sot_behavioral_test_paths.dart` (Gate 42, lands B5 D2) — every SoT entry has `behavioral_test_path:` or `behavioral_test_required: true`

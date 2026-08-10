@@ -1,8 +1,8 @@
 // scripts/check_device_tests_exist.dart
 //
-// Gate: 44
+// Gate: 54
 //
-// Gate 44 (tech-debt audit 2026-05-20 / T1): assert that the 4 named
+// Gate 54 (tech-debt audit 2026-05-20 / T1): assert that the 4 named
 // Patrol device-CI flow files exist in `integration_test/device/` and
 // each contains its named feature keyword.
 //

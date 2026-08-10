@@ -1,6 +1,6 @@
 // scripts/check_writeservice_only.dart
 //
-// Gate: 7
+// Gate: 49
 //
 // Gate (E.13 — Audit 2026-05-16 framework deliverable):
 // All writes to workoutBox / nutritionBox / healthBox must go through the

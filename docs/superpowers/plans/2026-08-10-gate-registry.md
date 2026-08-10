@@ -211,6 +211,25 @@ thin IO script.
 5. `scripts/pre-commit.sh` + `.github/workflows/test.yml` + Gate 33's `_allowList` — wiring facts;
 6. references to each gate name anywhere under `test/`.
 
+**A ledger mint is EVIDENCE, not law — added during execution, seen by neither review round.**
+Source 4 makes closure ledgers a claim source, but §2.3 also forbids rewriting them. Those two rules
+are in direct conflict the moment anything is renumbered, and the real corpus proves it rather than
+merely implying it: `2026_05_20_audit_closures.yaml:237,315` mints Gate 7 for
+`check_writeservice_only.dart`, which commit B renumbers to 49, so the generator hard-failed on a
+collision that **cannot be corrected at its source**. Without a rule the registry is unbuildable
+after any renumber.
+
+Rule: a ledger mint creates a claim only for a script that declares **nothing** itself. Once a
+script carries `// Gate: N`, its own declaration is authoritative and an older mint is **superseded**
+and listed under `## Historical aliases → Superseded ledger mints`.
+
+This is not a loophole, and two tests hold it to that: the collision check still runs across every
+canonical declaration (two scripts declaring 49 still hard-fail even when one also has a superseded
+mint), and a mint for an **undeclared** script still creates a real claim — which is exactly what
+made Gate 45 and Gate 7 discoverable. Mutation: supersede *all* mints → 1 test red. (A first mutation
+attempt targeted the `declared.number != mint.number` refinement and reddened nothing; that line
+drops a *redundant agreeing* mint and is not protective. Reported rather than quietly recounted.)
+
 **Sources 5 and 6 feed `--verbose` stdout ONLY; they are NOT baked into `GATE_INDEX.md`.** Reviewer
 P1-4: baking volatile columns forces the regen trigger to cover `scripts/**` + `test/**` +
 `test.yml` — nearly every commit — or the index goes stale while `check_gate_index_fresh` (which runs

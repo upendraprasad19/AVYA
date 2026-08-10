@@ -176,6 +176,48 @@ void main() {
     expect('${r.stdout}${r.stderr}', contains('DIFFERENT numbers'));
   });
 
+  test('a ledger mint is SUPERSEDED by the script own canonical declaration',
+      () {
+    // Discovered during execution, after both review rounds: source 4 makes
+    // closure ledgers a claim source, but ledgers are historical records that
+    // are never rewritten. Without supersession the registry becomes
+    // UNBUILDABLE after any renumber — the real corpus proves it, since
+    // 2026_05_20_audit_closures.yaml:237,315 still mints Gate 7 for
+    // check_writeservice_only.dart, which now declares 49.
+    //
+    // Not a loophole: the collision check still runs across every canonical
+    // declaration (next test), and a mint for an UNDECLARED script still
+    // creates a real claim (test below) — which is what made Gate 45 and
+    // Gate 7 discoverable at all.
+    final dir = _fixture({'check_alpha.dart': _gate('49', 'Renumbered.')});
+    addTearDown(() => dir.deleteSync(recursive: true));
+    File('${dir.path}/docs/audit/old_audit_closures.yaml').writeAsStringSync(
+      'verification: scripts/check_alpha.dart (Gate 7, hard-fail)\n',
+    );
+
+    final r = _runBuilder(dir.path);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+
+    final index = File('${dir.path}/docs/audit/GATE_INDEX.md').readAsStringSync();
+    expect(index, contains('Superseded ledger mints'),
+        reason: 'superseded mints must be REPORTED, never silently swallowed');
+    expect(index, contains('ledger says Gate 7'));
+  });
+
+  test('supersession does NOT hide a collision between two declarations', () {
+    final dir = _fixture({
+      'check_alpha.dart': _gate('49', 'Alpha.'),
+      'check_beta.dart': _gate('49', 'Beta.'),
+    });
+    addTearDown(() => dir.deleteSync(recursive: true));
+    File('${dir.path}/docs/audit/old_audit_closures.yaml').writeAsStringSync(
+      'verification: scripts/check_alpha.dart (Gate 7, hard-fail)\n',
+    );
+
+    final r = _runBuilder(dir.path);
+    expect(r.exitCode, 1, reason: 'two declarations on 49 must still collide');
+  });
+
   test('a closure ledger mint collides with a header declaration', () {
     // Source 4. The ONLY claim Gate 45 and Gate 7 have in the real repo lives
     // in a ledger — a scan blind to these produced two P0s in review.

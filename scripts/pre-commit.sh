@@ -120,13 +120,14 @@ fi
 # and neither matches check_*. And BOTH closure-ledger filename conventions are
 # listed: *_closures.yaml matches 6 files, *.closure.yaml matches 18 more.
 #
-# --warn-only is passed ONLY while the 5 pre-existing collisions (Gates 7, 18,
-# 19, 23, 44) are still live. The commit that resolves them removes the flag.
-# Without it, the commit that introduces this block would be blocked by its own
-# hook and the collision baseline could never be produced.
+# The 5 pre-existing collisions (Gates 7, 18, 19, 23, 44) were resolved in the
+# commit that follows the one introducing this block, so --warn-only is gone and
+# a duplicate number now BLOCKS. It existed for exactly one commit: without it,
+# the introducing commit would have been blocked by its own hook and the
+# collision baseline it produces could never have been written.
 if git diff --cached --name-only | grep -qE '^(scripts/.+\.dart|\.claude/commands/build-apk\.md|docs/audit/([^/]+_closures\.yaml|[^/]+\.closure\.yaml|closed_issues\.md|gate_test_ledger\.yaml))$'; then
   echo "[pre-commit] Gate-index input touched — regenerating GATE_INDEX.md..."
-  if ! dart run scripts/build_gate_index.dart --warn-only; then
+  if ! dart run scripts/build_gate_index.dart; then
     echo "[pre-commit] FAIL: build_gate_index.dart errored."
     exit 1
   fi

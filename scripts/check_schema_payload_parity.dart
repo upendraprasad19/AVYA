@@ -1,8 +1,8 @@
 // scripts/check_schema_payload_parity.dart
 //
-// Gate: 19
+// Gate: 52
 //
-// Gate 19: every NOT NULL column on user-tagged Supabase tables must
+// Gate 52: every NOT NULL column on user-tagged Supabase tables must
 // appear in every insert/upsert payload from Edge Functions or client
 // sync code.
 //
@@ -88,7 +88,7 @@ void main() {
   // ── 1. Discover NOT NULL columns from migrations ──────────────────────────
   final migrationsDir = Directory(_migrationsDir);
   if (!migrationsDir.existsSync()) {
-    stderr.writeln('[Gate 19] WARN — $_migrationsDir not found. Exit 0.');
+    stderr.writeln('[Gate 52] WARN — $_migrationsDir not found. Exit 0.');
     exit(0);
   }
 
@@ -132,12 +132,12 @@ void main() {
 
   if (notNullCols.isEmpty) {
     stdout.writeln(
-        '[Gate 19] WARN — no NOT NULL columns discovered for audited tables. Exit 0.');
+        '[Gate 52] WARN — no NOT NULL columns discovered for audited tables. Exit 0.');
     exit(0);
   }
 
   stdout.writeln(
-      '[Gate 19] auditing ${notNullCols.length} NOT NULL columns across ${_auditedTables.length} tables');
+      '[Gate 52] auditing ${notNullCols.length} NOT NULL columns across ${_auditedTables.length} tables');
 
   // ── 2. For each callsite root, find insert/upsert payloads ────────────────
   final failures = <String>[];
@@ -221,10 +221,10 @@ void main() {
 
   if (failures.isEmpty) {
     stdout.writeln(
-        '[Gate 19] PASS — every NOT NULL column appears in every insert/upsert payload (or is allowlisted).');
+        '[Gate 52] PASS — every NOT NULL column appears in every insert/upsert payload (or is allowlisted).');
     exit(0);
   } else {
-    stderr.writeln('[Gate 19] ${failures.length} schema-vs-payload drift(s):');
+    stderr.writeln('[Gate 52] ${failures.length} schema-vs-payload drift(s):');
     for (final f in failures) {
       stderr.writeln('  $f');
     }

@@ -114,6 +114,25 @@ void main(List<String> args) {
   // `*.closure.yaml` matches 18 more. validate_audit_closure.dart:79-83 already
   // reads both — a glob covering only the first excludes three quarters of the
   // ledgers, including this batch's own closure file.
+  //
+  // A ledger mint is EVIDENCE, not law: it creates a claim only for a script
+  // that declares nothing itself. Once a script carries `// Gate: N`, its own
+  // declaration is authoritative and any older ledger mint is SUPERSEDED.
+  //
+  // Without this rule the registry would be unbuildable after any renumber:
+  // closure ledgers are historical records and are never rewritten (rewriting
+  // one would falsify what was true when it was written), so a superseded mint
+  // would collide with the new number forever. Superseding is not a loophole —
+  // the collision check still runs across every canonical declaration, so two
+  // scripts declaring the same number still hard-fail, and a mint for an
+  // UNdeclared script still creates a real claim. That is what made Gate 45 and
+  // Gate 7 discoverable in the first place. Superseded mints are reported, not
+  // swallowed.
+  final declaredScripts = claims
+      .where((c) => c.source == ClaimSource.header)
+      .map((c) => c.script)
+      .toSet();
+  final superseded = <GateClaim>[];
   final auditDir = Directory('docs/audit');
   if (auditDir.existsSync()) {
     for (final f in auditDir.listSync().whereType<File>()) {
@@ -122,7 +141,18 @@ void main(List<String> args) {
           name.endsWith('.closure.yaml') ||
           name == 'closed_issues.md';
       if (!isLedger) continue;
-      claims.addAll(parseLedgerMints(f.readAsStringSync(), 'docs/audit/$name'));
+      for (final mint in parseLedgerMints(f.readAsStringSync(), 'docs/audit/$name')) {
+        final declared = claims.firstWhere(
+          (c) => c.source == ClaimSource.header && c.script == mint.script,
+          orElse: () => mint,
+        );
+        if (declaredScripts.contains(mint.script) &&
+            declared.number != mint.number) {
+          superseded.add(mint);
+          continue;
+        }
+        claims.add(mint);
+      }
     }
   }
 
@@ -229,6 +259,28 @@ void main(List<String> args) {
     ..sort((a, b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0));
   for (final k in aliasKeys) {
     buf.writeln('- **Gate $k** — ${_historicalAliases[k]}');
+  }
+
+  if (superseded.isNotEmpty) {
+    final byScript = <String, Set<String>>{};
+    for (final s in superseded) {
+      byScript.putIfAbsent(s.script, () => <String>{}).add(s.number);
+    }
+    buf
+      ..writeln()
+      ..writeln('### Superseded ledger mints')
+      ..writeln()
+      ..writeln('A closure ledger minted these numbers before the script '
+          'declared its own. The ledger is a historical')
+      ..writeln('record and is never rewritten, so the script\'s own '
+          '`// Gate: N` wins and the old mint is listed here.')
+      ..writeln();
+    final scripts = byScript.keys.toList()..sort();
+    for (final s in scripts) {
+      final old = (byScript[s]!.toList()..sort()).join(', ');
+      buf.writeln('- `$s` — ledger says Gate $old; '
+          'now Gate ${numberByScript[s] ?? '—'}.');
+    }
   }
 
   File(_indexPath).writeAsStringSync(buf.toString());
