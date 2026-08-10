@@ -1,5 +1,7 @@
 // scripts/check_sot_behavioral_test_paths.dart
 //
+// Gate: 42
+//
 // Gate 42 (Tech-debt audit 2026-05-20, B5 D2 deliverable): assert every
 // SoT registry concept entry carries either:
 //   - `behavioral_test_path:` (cite a real behavioral contract test)

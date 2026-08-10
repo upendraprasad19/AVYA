@@ -1,5 +1,7 @@
 // scripts/check_reader_manifest_complete.dart
 //
+// Gate: 18
+//
 // Audit gate (build-apk Gate 18) — enforces the reader-side manifest in
 // `docs/sot_registry.yaml`.
 //

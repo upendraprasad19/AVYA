@@ -1,5 +1,7 @@
 // scripts/check_claude_md_citations.dart
 //
+// Gate: 26
+//
 // Gate 26 (Tech-debt audit 2026-05-20, finding Doc6): assert that every
 // `§N` and `§N.M` citation across CLAUDE.md + nested CLAUDE.md files
 // resolves to a heading that exists.

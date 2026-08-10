@@ -1,5 +1,7 @@
 // scripts/check_client_errors_alert.dart
 //
+// Gate: 29
+//
 // Gate 29 (Tech-debt audit 2026-05-20, finding I4): assert an alert config
 // exists at `supabase/alerts/client_errors.yaml` declaring a threshold rule
 // on the `client_errors` table.

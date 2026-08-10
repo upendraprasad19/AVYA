@@ -1,5 +1,7 @@
 // scripts/check_writeservice_contracts.dart
 //
+// Gate: 9
+//
 // Gate 9: Every WriteService concept with a hive block has a contract test.
 //
 // For every concept in docs/sot_registry.yaml that has a hive.key_prefix,

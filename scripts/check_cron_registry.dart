@@ -1,5 +1,7 @@
 // scripts/check_cron_registry.dart
 //
+// Gate: 31
+//
 // Gate 31 (Tech-debt audit 2026-05-20, finding I5): assert that every
 // `cron.schedule(...)` call in `supabase/migrations/*.sql` is also recorded
 // in `docs/operations/CRON_REGISTRY.md`.

@@ -1,5 +1,7 @@
 // scripts/check_nlog_key_canonical.dart
 //
+// Gate: 23
+//
 // Drift-fix batch 2026-05-24 / F2 nutrition — source-grep gate. Pins
 // the rule that `nlog_*` Hive keys are constructed in exactly ONE
 // place: `lib/core/services/nutrition_write_service.dart` via the

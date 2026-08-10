@@ -1,5 +1,7 @@
 // scripts/check_test_runtime_budget.dart
 //
+// Gate: 41
+//
 // Gate 41 (Tech-debt audit 2026-05-20, finding T9): assert no individual
 // test exceeds the configured runtime budget.
 //

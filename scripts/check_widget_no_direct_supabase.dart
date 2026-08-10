@@ -1,5 +1,7 @@
 // scripts/check_widget_no_direct_supabase.dart
 //
+// Gate: 36
+//
 // Gate 36 (Tech-debt audit 2026-05-20, findings A5/A9 prep): enforce
 // CLAUDE.md rule #4 (Repository pattern) — widgets / screens must NEVER
 // call `Supabase.instance.client` directly.

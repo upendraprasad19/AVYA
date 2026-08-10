@@ -1,5 +1,7 @@
 // scripts/check_doc_internal_consistency.dart
 //
+// Gate: 18
+//
 // Gate 18: known-drift pairs across CLAUDE.md + AGENTS.md must agree.
 //
 // Closes OI-35 (audit-2026-05-17 Hermes F10). CLAUDE.md §2 claimed

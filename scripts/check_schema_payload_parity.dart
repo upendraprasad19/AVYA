@@ -1,5 +1,7 @@
 // scripts/check_schema_payload_parity.dart
 //
+// Gate: 19
+//
 // Gate 19: every NOT NULL column on user-tagged Supabase tables must
 // appear in every insert/upsert payload from Edge Functions or client
 // sync code.

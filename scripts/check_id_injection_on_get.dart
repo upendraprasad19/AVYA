@@ -1,5 +1,7 @@
 // scripts/check_id_injection_on_get.dart
 //
+// Gate: 16
+//
 // Gate 16 — repository methods that return List<Map<...>> from a Hive
 // `box.get(key)` must inject the key as `id` on the returned map.
 //

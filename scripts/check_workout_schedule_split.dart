@@ -1,5 +1,7 @@
 // scripts/check_workout_schedule_split.dart
 //
+// Gate: 47
+//
 // Gate 47 (Tech-debt audit 2026-05-20, B5 D13-D17 / A2 deliverable):
 // assert the 4-way split of `WorkoutScheduleService` is in place.
 //

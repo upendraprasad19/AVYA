@@ -1,5 +1,7 @@
 // scripts/check_no_raw_ispro_read.dart
 //
+// Gate: 34
+//
 // Gate 34 (Tech-debt audit 2026-05-20, finding C6 prep): assert that no
 // production code reads `configBox.get('isPro')` / `config.get('isPro')`
 // outside the canonical SubscriptionService.

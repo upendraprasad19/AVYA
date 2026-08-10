@@ -1,5 +1,7 @@
 // scripts/check_diagnose_index_fresh.dart
 //
+// Gate: 25
+//
 // Gate 25 (Tech-debt audit 2026-05-20, finding Doc2): assert that
 // `docs/diagnoses/INDEX.md` enumerates every diagnose-doc on disk.
 //

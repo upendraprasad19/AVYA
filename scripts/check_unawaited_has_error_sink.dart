@@ -1,5 +1,7 @@
 // scripts/check_unawaited_has_error_sink.dart
 //
+// Gate: 20
+//
 // Gate 20: every `unawaited(...)` call in lib/ must be near (within
 // the enclosing method body) at least one error sink — either:
 //   - the awaited Future has `.catchError(...)` chained, OR

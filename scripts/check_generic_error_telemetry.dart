@@ -1,5 +1,7 @@
 // scripts/check_generic_error_telemetry.dart
 //
+// Gate: 15
+//
 // Gate 15 — every user-facing generic error message in lib/ must be
 // preceded (within ~10 lines, same catch block) by an ErrorTelemetry
 // or _reportSyncFailure call, so silent failures leave a breadcrumb in

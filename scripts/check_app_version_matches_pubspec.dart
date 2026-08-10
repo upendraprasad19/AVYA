@@ -1,5 +1,7 @@
 // scripts/check_app_version_matches_pubspec.dart
 //
+// Gate: 18
+//
 // Build-gate script: asserts `AppConstants.appVersion` in
 // lib/core/constants/app_constants.dart matches the `version:` line in
 // pubspec.yaml. Run as part of `/build-apk` Gate 18.
