@@ -600,7 +600,9 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
   is the file OI-79 rewrote most heavily (+67 lines, the reader moved 77 → 106). A stale pointer
   sends the next audit to a function parameter and invites the conclusion that the reader is gone.
 - **Compounding**: `check_snapshot_contract.dart` is in the skip allowlist of BOTH
-  `scripts/pre-commit.sh:169` and `.github/workflows/test.yml:171`; it runs only via
+  `scripts/pre-commit.sh` and `.github/workflows/test.yml` (both `check_*.dart`
+  gate-loop case-skip blocks — cited by anchor, not line: the 2026-08-10 CI
+  sharding batch moved both); it runs only via
   `test/contracts/snapshot_contract_consolidated_test.dart`.
 - **Interim mitigation (already shipped in `337bf6eb`)**: the YAML carries an inline ⚠ warning at
   that entry, and its `line: 106` was verified BY HAND. Nothing currently depends on the gate
