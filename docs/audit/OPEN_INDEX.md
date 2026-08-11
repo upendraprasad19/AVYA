@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**33 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**38 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -41,3 +41,8 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-97 | five PaywallSheet labels fall through to generic copy (P3) | nothing — mechanical, but it is copy work, so it wants the Wardroom brand soul | 2026-08-07 — `_featureSubtitle`'s switch read directly against every | [:2236](open_issues.md#L2236) |
 | OI-98 | notification preferences are push-only: a reinstall overwrites the… | nothing technical. The mechanism is understood and read from code; what is NOT | 2026-08-07 — by grep across `lib/core/services/` and `lib/features/auth/`, while | [:2262](open_issues.md#L2262) |
 | OI-99 | Gate 26 has no `docs/` zone, and the destination files OI-91 rewrote into… | nothing technical. Needs its own false-positive analysis before a fix, same | 2026-08-08 — B-pass on branch `oi91-claude-md-citations`, dispatched as part of | [:2308](open_issues.md#L2308) |
+| OI-100 | `prior_art_checked:` needs to reference a VERIFIED artifact, not be free… | nothing technical. The design below is settled; it needs implementation plus the | 2026-08-11 — round-2 context-blind review of branch `safe-push-verifier`, plus | [:2339](open_issues.md#L2339) |
+| OI-101 | Gate 41 (`check_test_runtime_budget.dart`) is shipped, dormant, and points… | a founder scope decision — re-arm or retire. Two named options is precisely why | 2026-08-11 — prior-art sweep + round-2 review of `safe-push-verifier`; skip entries | [:2379](open_issues.md#L2379) |
+| OI-102 | local `test/contracts/` takes 18.6 min on every commit, and the lever is… | a clean measurement. Every candidate so far has died to a measurement artifact. | 2026-08-11 — full JSON-reporter run, `{"success":true,"type":"done","time":1114598}`. | [:2412](open_issues.md#L2412) |
+| OI-103 | `safe_push.sh` reports OK from a detached HEAD when given an explicit… | nothing; needs its own small analysis, deliberately not bundled into | 2026-08-11 — round-2 review of `safe-push-verifier` corrected the earlier claim. | [:2449](open_issues.md#L2449) |
+| OI-104 | `check_hooks_installed.dart` detects hook PRESENCE, not staleness;… | nothing technical. | 2026-08-11 — `.git/hooks/pre-commit` and `pre-push` both dated `Jul 29 10:28` | [:2470](open_issues.md#L2470) |

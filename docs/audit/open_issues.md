@@ -2335,3 +2335,157 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   did for code before committing to the anchored shape. Land report-only per §4.11, baseline, then
   flip to hard-fail.
 - **Blast radius estimate**: `feature` (docs-only; no migration, no schema, no application code).
+
+## OI-100 — `prior_art_checked:` needs to reference a VERIFIED artifact, not be free text — §4.1.5 has now been skipped twice, the second time inside the batch built to prevent it (P1)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. The design below is settled; it needs implementation plus the
+  fixture updates it forces.
+- **Verified**: 2026-08-11 — round-2 context-blind review of branch `safe-push-verifier`, plus
+  direct counts by the main thread (110 records, 42 with `date:`).
+- **Identified**: 2026-08-11 · ×2 plan review of `safe-push-verifier`.
+- **Risk class**: process-discipline decay — the recurrence class `ci-speedup.closure.yaml` CI-10
+  already documents.
+- **What's wrong**: CI-10 recorded a full plan → ×2 review → B-pass → implement → merge → red CI →
+  revert cycle spent re-deriving an option this repo had measured and rejected 15 days earlier,
+  because the §4.1.5 bug-history lookup was never run. The remedy proposed at the time was a
+  `prior_art_checked:` field on the plan-review record. **It happened again during the very batch
+  that proposed that field**: the dispatched §4.1.5 subagent was stopped and never reported, the
+  plan proceeded anyway, and then asserted in writing that the lookup "paid for itself". It had not
+  run. That is the point: the CI-10 failure was a **false assertion**, and a free-text field
+  receives the same false assertion. As designed it would be, in the reviewer's words, "a habit
+  with a checkbox" — strictly weaker than every other field on that gate, since `bpass:` and
+  `hermes:` already carry anti-fabrication backing.
+- **Fix shape (design settled, not attempted)**: require `prior_art_checked:` to NAME a committed
+  artifact that EXISTS at the merge rev — reusing the `refs` mechanism verbatim at
+  `scripts/check_plan_review_record_exists.dart:842-866`, which already does exactly this for
+  `bpass_review`/`hermes_report` (file must exist at `atRev` AND contain a line-anchored marker).
+  A diagnose-doc, a closure-YAML entry, or a committed grep transcript all qualify.
+  **Do NOT make the requirement date-conditional** — that was tried in review and is worse than the
+  hole: only **42 of 110** existing records carry a `date:` field at all, so the rule needs an
+  implicit "no date ⇒ exempt" clause, and any future record then opts out by omitting one line.
+  Self-attested dates are also trivially back-dated. Gate the requirement on the merge commit's
+  reachability from a marker commit if a cutover is needed at all.
+- **Also required by this fix**: the e2e fixtures at
+  `test/scripts/plan_review_record_gate_e2e_test.dart:136-145` and `:222-231` build records with
+  today's exact field set and will redden; `test/scripts/gate_input_family_e2e_test.dart:601-622`
+  asserts on WHICH failure fires first and can break even while the exit code stays 1;
+  `test/contracts/review_gate_staged_content_not_working_tree_test.dart:278,298,315` writes review
+  artifacts for the same gate. Rule 21 needs a test that FAILS without the new field — updating
+  fixtures is the opposite direction.
+- **Blast radius estimate**: `platform` (`scripts/check_plan_review_record_exists.dart` is the
+  keystone merge gate).
+
+## OI-101 — Gate 41 (`check_test_runtime_budget.dart`) is shipped, dormant, and points at a destination it was never wired to (P2)
+
+- **Status**: OPEN
+- **Blocked on**: a founder scope decision — re-arm or retire. Two named options is precisely why
+  this could not ship inside `safe-push-verifier`.
+- **Verified**: 2026-08-11 — prior-art sweep + round-2 review of `safe-push-verifier`; skip entries
+  read directly at `scripts/pre-commit.sh:222` and `.github/workflows/test.yml:224`.
+- **Identified**: 2026-08-11 · the sweep that found this batch was rebuilding it.
+- **Risk class**: dormant-gate / false-assurance — a closure ledger says a finding is closed by an
+  artifact that never runs.
+- **What's wrong**: `scripts/check_test_runtime_budget.dart` landed 2026-05-21 (commit `4d912d3`)
+  closing audit finding T9, and has **zero invocation sites**: every one of its ~10 references is a
+  skip list, an allowlist, a ledger, or a generated index. `docs/audit/2026_05_20_audit_closures.yaml:485-496`
+  says it was "intended for /build-apk skill + CI artifact runs" — grep of `.claude/commands/build-apk.md`
+  for it returns **nothing**. This is why a later batch proposed building it again from scratch:
+  a shipped-but-dormant gate is invisible to anyone searching for whether the capability exists.
+- **Fix shape (not attempted; ~10 files, 4 platform-tier — this is why it is its own unit)**:
+  - **If RETIRED**: delete the script; remove skip entries at `pre-commit.sh:222` and `test.yml:224`
+    (both platform); remove the Gate 33 allowlist entry at `check_gate_scripts_wired.dart:72-73`
+    (platform); remove the grandfathered name at `check_gate_test_ledger.dart:110`; **remove
+    `docs/audit/gate_test_ledger.yaml:251` or the build HARD-FAILS** — `gate_test_ledger_lib.dart:274`
+    errors on "has a ledger entry but no scripts/$gate on disk" (verified); regenerate
+    `docs/audit/GATE_INDEX.md`; fix the generator line `audit_test_pyramid.dart:338` that still
+    emits the dead name. **Blocker**: retiring deletes the artifact that closed audit finding T9,
+    silently reopening it — which §4.2 forbids. T9 must be re-closed by something else first.
+  - **If RE-ARMED**: standalone mode runs `flutter test --reporter json` over the whole suite, the
+    exact reason it was allow-listed. `--analyze` mode needs a JSON artifact **CI does not produce**
+    (`test.yml:112,369,377` all use `--reporter expanded`), so this also edits `test.yml` (platform).
+    Its default budget is 30s/test against a suite whose measured p95 is 38.4s and max 149.0s per
+    file — arming at default plausibly reddens `main` immediately. §4.11 also mandates a 24h
+    `--warn-only` baseline, which a single-push batch cannot satisfy.
+- **Blast radius estimate**: `platform`.
+
+## OI-102 — local `test/contracts/` takes 18.6 min on every commit, and the lever is not yet known (P2)
+
+- **Status**: OPEN
+- **Blocked on**: a clean measurement. Every candidate so far has died to a measurement artifact.
+- **Verified**: 2026-08-11 — full JSON-reporter run, `{"success":true,"type":"done","time":1114598}`.
+- **Identified**: 2026-08-11.
+- **Risk class**: developer-cycle-time; secondarily `--no-verify` pressure (the original I10 motive).
+- **What's wrong**: `pre-commit.sh:66` runs `flutter test test/contracts/` — **477 files, 18.6 min,
+  on every commit**. The I10 fast/full split (2026-05-21) sized this at ~3 min when `test/contracts/`
+  held **179** files; it now holds 477, i.e. ~69% of the whole 694-file suite. The "fast path" has
+  eroded into most of the suite.
+- **What has ALREADY been ruled out — do not re-derive**:
+  - *Optimising the slow files*: distribution is flat. Top 10 files = **8.4%**, top 25 = 15.5%,
+    top 200 = 59.7%. Reaching ~5 min needs a 73% cut; no subset optimisation gets there.
+  - *`flutter test` → `dart test` migration*: measured **~18%** against a ≥50% bar set in advance
+    (warm marginal cost 0.83s vs 0.33s/file; fixed 9.2s vs 3.7s). 447 of 477 files import
+    `flutter_test` while only 8 use `testWidgets`, so the migration is broadly *possible* — it just
+    does not carry the problem. **Zero prior art in the repo**; the one untouched idea here.
+  - *`--concurrency` (16 cores, default is cores/2 = 8)*: **UNPROVEN, and the obvious measurement is
+    a trap.** j8-cold 191s → j16-warm 91s looks like 2.1×, but the control refutes it: j8-**warm**
+    90s, j16-**warm** 170s. Runs alternate ~90s/~170s with no relationship to the flag.
+  - *A "37% fixed per-file startup" figure*: **wrong** — inferred from a 6.8s minimum span, but
+    spans are measured under 8-way contention and include queueing (sum-of-spans 8777s ≫ wall 1114.6s).
+  - *Diff-conditional test selection*: rejected in `docs/adr/0013-blast-radius-tiered-gating.md:52-67`
+    alt #3. 93 contract tests read `docs/` and 265 reference `lib/`, so the dependency graph is broad.
+- **Fix shape (measurement first, no predetermined outcome)**: on a QUIET machine (no subagents —
+  contamination is why the above is unproven), use **counterbalanced blocks** (`j8×3, j16×3, j16×3,
+  j8×3`) or randomised order, n≥5 per arm, reporting the paired distribution. **Alternating
+  j8/j16 is the single worst design here** — it is perfectly aliased with the observed period-2
+  oscillation. Identify the oscillator BEFORE assigning a 1.9× swing to either arm. Also unexplained
+  and probably the real lead: **CI runs 690 files in 417s while local runs 478 in 1114.6s** — ~3.9×
+  slower per file locally at ~4× the parallelism.
+- **Interaction**: OI-86 (concurrent `flutter test` runs corrupt each other's Hive state) is the
+  named hazard for any concurrency increase; 112 contract files use Hive. It is intermittent, so
+  "twice consecutively green" does NOT clear it.
+- **Blast radius estimate**: `platform` (`scripts/pre-commit.sh` is `docs/blast_radius.yaml:101`).
+
+## OI-103 — `safe_push.sh` reports OK from a detached HEAD when given an explicit branch argument (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing; needs its own small analysis, deliberately not bundled into
+  `safe-push-verifier` because no fix had been designed and the stated mechanism was wrong.
+- **Verified**: 2026-08-11 — round-2 review of `safe-push-verifier` corrected the earlier claim.
+- **Identified**: 2026-08-11.
+- **Risk class**: landing-verification (`feedback_git_landing_verification.md`).
+- **What's wrong**: `safe_push.sh:64` resolves `LOCAL_SHA` from a branch **name**, so from a
+  detached HEAD with an explicit branch argument it pushes that branch's (possibly stale) sha,
+  ls-remotes the same name, matches, and reports OK — while the commits you are actually sitting on
+  are not the ones that landed. **Correction to the earlier framing**: the NO-argument case is
+  already safe — `BRANCH` becomes the literal `HEAD`, `git push origin HEAD` fails on an unqualified
+  destination, `GIT_EXIT != 0`, and the script exits 1 loudly. Only the explicit-branch-arg form
+  has the misleading shape, and that form is arguably *correct* ("push the branch you named, verify
+  the branch you named").
+- **Fix shape (not attempted)**: probably a WARNING when `HEAD` is detached and an explicit branch
+  arg is given, not an abort — aborting would break the documented 2-positional-arg form
+  (`safe_push.sh:12-17`) that exists precisely so callers don't fall back to raw, unverified git.
+- **Blast radius estimate**: `platform` (`docs/blast_radius.yaml:158`).
+
+## OI-104 — `check_hooks_installed.dart` detects hook PRESENCE, not staleness; installed hooks were 12 days behind their sources (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical.
+- **Verified**: 2026-08-11 — `.git/hooks/pre-commit` and `pre-push` both dated `Jul 29 10:28`
+  against `scripts/pre-commit.sh` `Aug 10 11:30`; the installed copies were missing the `flutter()`
+  env-unset wrapper and the entire gate-index regen block. Fixed for this machine by re-running
+  `sh scripts/setup-hooks.sh`; the structural gap stays open.
+- **Identified**: 2026-08-11 · ×2 plan review of `safe-push-verifier`.
+- **Risk class**: silent-inert-gate — the highest-consequence shape, because everything downstream
+  looks green.
+- **What's wrong**: `scripts/setup-hooks.sh:45` installs by `cp`, not symlink, so `.git/hooks/*`
+  drifts from `scripts/*.sh` the moment either changes. `scripts/check_hooks_installed.dart:40`
+  checks only `if (!content.contains('scripts/pre-commit.sh') && !content.contains('flutter analyze'))`
+  — **any** file containing the string `flutter analyze` passes. So an edit to a hook script is inert
+  until someone remembers to re-run the installer, and the gate that exists to catch that says green.
+  This is a `feedback_green_check_input_set_width` instance sitting under the whole local gate suite.
+- **Fix shape (not attempted)**: compare content, not presence — hash `scripts/<hook>.sh` against
+  `.git/hooks/<hook>` and fail on mismatch with the exact re-run command; or install a symlink where
+  the platform permits and hash-check only where it does not. Prefer the hash check: it is
+  platform-independent and states the real invariant ("the hook that runs IS the hook in git").
+- **Blast radius estimate**: `platform`.

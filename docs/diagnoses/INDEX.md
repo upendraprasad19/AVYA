@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### landing_verification_probe_conflation (1 bugs)
+- 2026-08-11 d4f9b2 — scripts/safe_push.sh — the ONLY sanctioned push path and the file whose entire purpose is to be trusted about whether a push landed — exits 0 having verified nothing whenever `git ls-remote` cannot…
+
 ### test_isolation_intra_file (1 bugs)
 - 2026-08-10 f3c7a2 — Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,…
 
@@ -969,6 +972,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-11 | d4f9b2 | scripts/safe_push.sh — the ONLY sanctioned push path and the file whose entire purpose is to be trusted about whether a push landed — exits 0 having verified nothing whenever `git ls-remote` cannot… | landing_verification_probe_conflation | test/scripts/safe_push_test.dart |
 | 2026-08-10 | f3c7a2 | Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,… | test_isolation_intra_file | test/scripts/worktree_config_integrity_e2e_test.dart |
 | 2026-08-10 | c2e9f4 | Founder (upendraprasad19@gmail.com, auth.users.id d7a67a37-0b05-4f0a- b13c-388bff3cb59b) signed in with GOOGLE to an account created by email in May, force-closed the app during a slow restore,… | onboarding_completed_at | test/contracts/local_onboarding_evidence_behavioral_test.dart |
 | 2026-08-10 | d7b3e9 | `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three… | worktree_retirement_allow_list | test/scripts/retire_worktree_lib_test.dart |
