@@ -35,7 +35,20 @@ npm install               # root — package.json carries lint helpers + emit_pa
 sh scripts/setup-hooks.sh
 ```
 
-This installs `scripts/pre-commit.sh` as the active hook. The hook blocks any commit while `flutter analyze --no-fatal-infos` or `flutter test` is failing, regenerates `docs/diagnoses/INDEX.md` on diagnose-doc changes, and walks the regression catalog on merge commits. See CLAUDE.md §0 for the bypass policy.
+This installs four hooks (`pre-commit`, `pre-push`, `commit-msg`, `prepare-commit-msg`) as
+**verbatim copies** of the matching `scripts/*.sh` — so editing a script changes nothing until
+you re-run this command. It installs into `git rev-parse --git-common-dir`/hooks, which every
+worktree shares.
+
+- **`pre-commit`** blocks the commit on any failing discipline gate, regenerates
+  `docs/diagnoses/INDEX.md` and the other indexes when their sources change, and walks the
+  regression catalog on merge commits. It does **not** run `flutter analyze` or `flutter test`
+  (cost split 2026-08-11 — see CLAUDE.md §0).
+- **`pre-push`** runs `flutter analyze` on every push, then the full `flutter test` when the
+  pushed range is ≥`account` blast-radius.
+
+See CLAUDE.md §0 for the bypass policy and the `PRE_COMMIT_LEGACY` / `PRE_COMMIT_FULL` /
+`PRE_PUSH_FULL` escape hatches.
 
 ## 4. Fill `.env`
 
@@ -73,7 +86,7 @@ flutter analyze
 flutter test
 ```
 
-Both should pass cleanly. A non-empty failure list means either a regression on `main` (rare — pre-commit hook should have blocked it) or a missed local step above.
+Both should pass cleanly. A non-empty failure list means either a regression on `main` (rare — the pre-push hook and CI should have blocked it; note the pre-commit hook does NOT run these, so a red commit is possible locally by design) or a missed local step above.
 
 ## 8. Run dev flavor
 

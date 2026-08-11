@@ -2411,8 +2411,12 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 
 ## OI-102 — local `test/contracts/` takes 18.6 min on every commit, and the lever is not yet known (P2)
 
-- **Status**: OPEN
-- **Blocked on**: a clean measurement. Every candidate so far has died to a measurement artifact.
+- **Status**: CLOSED · 2026-08-11 · ADR-0018 removed the trigger: `pre-commit.sh` no longer runs
+  `flutter test test/contracts/` at all, so the 18.6 min is no longer paid per commit. **The
+  measurement question this was blocked on is NOT answered** — it is carried forward as OI-105
+  rather than closed with it. Closing on "the symptom is gone" while the open question dies
+  quietly would be the deferral §4.2 bans; the successor entry is what makes this terminal.
+- **Blocked on**: nothing — closed. (Was: a clean measurement. That now blocks OI-105.)
 - **Verified**: 2026-08-11 — full JSON-reporter run, `{"success":true,"type":"done","time":1114598}`.
 - **Identified**: 2026-08-11.
 - **Risk class**: developer-cycle-time; secondarily `--no-verify` pressure (the original I10 motive).
@@ -2489,3 +2493,33 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   the platform permits and hash-check only where it does not. Prefer the hash check: it is
   platform-independent and states the real invariant ("the hook that runs IS the hook in git").
 - **Blast radius estimate**: `platform`.
+
+## OI-105 — local `flutter test` runs ~3.9x slower per file than CI, cause unknown (P3)
+
+- **Status**: OPEN
+- **Blocked on**: a contamination-free measurement on a quiet machine. Every candidate so far has
+  died to a measurement artifact.
+- **Verified**: never — this is OI-102's unanswered half, carried forward unmeasured on 2026-08-11.
+- **Identified**: 2026-08-11 (as OI-102; re-scoped when ADR-0018 removed OI-102's symptom).
+- **Risk class**: developer-cycle-time. No correctness risk.
+- **What's wrong**: CI runs 690 files in 417s while local ran 478 in 1114.6s — roughly 3.9x slower
+  per file locally, at ~4x the parallelism. Nobody knows why. This was the open question underneath
+  OI-102; ADR-0018 removed the *pain* (the suite no longer runs per-commit) without explaining the
+  *gap*, so it survives on its own. It still costs real time at every pre-push and every CI run.
+- **What has ALREADY been ruled out — do not re-derive** (inherited verbatim from OI-102, which was
+  closed 2026-08-11; read that entry for the full evidence):
+  - *Optimising the slow files*: distribution is flat. Top 10 files = 8.4%, top 200 = 59.7%.
+  - *`flutter test` -> `dart test`*: measured ~18% against a >=50% bar set in advance.
+  - *`--concurrency`*: UNPROVEN and the obvious measurement is a trap — the apparent 2.1x died to
+    the reverse-order control. Alternating j8/j16 is perfectly aliased with an observed period-2
+    oscillation; identify the oscillator BEFORE assigning a swing to either arm.
+  - *A "37% fixed per-file startup" figure*: wrong — inferred from spans measured under 8-way
+    contention, which include queueing.
+  - *Diff-conditional test selection*: rejected in `docs/adr/0013-blast-radius-tiered-gating.md:52-67`.
+- **Fix shape (measurement first, no predetermined outcome)**: counterbalanced blocks
+  (`j8x3, j16x3, j16x3, j8x3`) or randomised order, n>=5 per arm, on a machine with no subagents
+  running, reporting the paired distribution.
+- **Interaction**: OI-86 (concurrent `flutter test` runs corrupt each other's Hive state) is the
+  named hazard for any concurrency increase; 112 contract files use Hive. It is intermittent, so
+  "twice consecutively green" does NOT clear it.
+- **Blast radius estimate**: `platform` (any fix touches `scripts/pre-push.sh` or `test.yml`).
