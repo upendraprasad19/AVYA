@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**38 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**39 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -46,3 +46,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-102 | local `test/contracts/` takes 18.6 min on every commit, and the lever is… | a clean measurement. Every candidate so far has died to a measurement artifact. | 2026-08-11 — full JSON-reporter run, `{"success":true,"type":"done","time":1114598}`. | [:2412](open_issues.md#L2412) |
 | OI-103 | `safe_push.sh` reports OK from a detached HEAD when given an explicit… | nothing; needs its own small analysis, deliberately not bundled into | 2026-08-11 — round-2 review of `safe-push-verifier` corrected the earlier claim. | [:2449](open_issues.md#L2449) |
 | OI-104 | `check_hooks_installed.dart` detects hook PRESENCE, not staleness;… | nothing technical. | 2026-08-11 — `.git/hooks/pre-commit` and `pre-push` both dated `Jul 29 10:28` | [:2470](open_issues.md#L2470) |
+| OI-105 | the `Supabase Integration Tests` CI job has verified NOTHING since it was… | founder — this is not an agent-actionable item.** Adding an Actions secret | 2026-08-11 — queried the authoritative source, not inferred from behaviour: | [:2493](open_issues.md#L2493) |

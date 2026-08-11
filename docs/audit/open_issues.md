@@ -2489,3 +2489,45 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   the platform permits and hash-check only where it does not. Prefer the hash check: it is
   platform-independent and states the real invariant ("the hook that runs IS the hook in git").
 - **Blast radius estimate**: `platform`.
+
+## OI-105 — the `Supabase Integration Tests` CI job has verified NOTHING since it was written: the repo has zero Actions secrets (P2)
+
+- **Status**: OPEN
+- **Blocked on**: **founder — this is not an agent-actionable item.** Adding an Actions secret
+  requires repo-settings access; an agent can neither read nor write them. Nothing else blocks it.
+- **Verified**: 2026-08-11 — queried the authoritative source, not inferred from behaviour:
+  `gh api repos/upendraprasad19/AVYA/actions/secrets` → `{"total_count":0,"secrets":[]}`. Checked
+  the RAW response deliberately, because an empty `--jq` result and a swallowed auth error are
+  indistinguishable at the shell (`feedback_green_check_input_set_width`).
+- **Identified**: 2026-08-11 · carried out of the gate-registry/CI-speedup batch, where it was
+  recorded only as a "founder-only owed" line in a memory index. Filed as a real OI once the §5
+  rule change made clear that a residual living only in agent memory is not tracked at all
+  (`feedback_spawn_task_chip_not_durable`, same class).
+- **Risk class**: silent-inert-gate / false assurance — a green job that proves nothing, which is
+  strictly worse than an absent job because it occupies the slot where real assurance would go.
+- **What's wrong**: `.github/workflows/test.yml:334` defines `supabase-tests`, gated
+  `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`. Its two real steps
+  (`:363` Run Supabase tests, `:371` Run Edge Function tests) each carry
+  `if: env.SUPABASE_URL != ''`. With no secret configured, **both steps skip and the job reports
+  success.** The `ci-speedup` batch (2026-08-10) added an honest announce step at `:344-350` that
+  emits `::warning title=Supabase integration tests did not run::… this job verifies NOTHING. It
+  is green because there is nothing to fail, not because integration tests passed.` — so the
+  condition is *disclosed*, but disclosure is not coverage, and a `::warning::` on a green run is
+  read by nobody.
+- **What is actually uncovered** — 6 test files, and the selection is not incidental; it is
+  precisely the surface with the worst P0 history in this repo:
+  `test/edge_functions/webhook_test.dart` (Razorpay — see the TDZ webhook P0 in
+  `closed_issues.md:708`), `redeem_referral_test.dart`, `ai_proxy_test.dart`, `pgvector_test.dart`,
+  `test/supabase/auth_restore_test.dart`, `sync_service_test.dart`.
+- **Fix shape (founder action, then a verification step that is NOT optional)**:
+  1. Add `SUPABASE_URL` + `SUPABASE_ANON_KEY` as repository Actions secrets. Use the **fitness-app**
+     project `dedsavbjuwgarrhphgnl` (CLAUDE.md §2a — there are two Supabase projects on the account
+     and the other one is a different app entirely). Anon key only; never the service-role key.
+  2. **Expect the job to go RED on first real run and treat that as the point, not a regression.**
+     These 6 files have never executed in CI. Budget for triage rather than assuming green.
+  3. Once green, the `::warning::` at `:344-350` stops firing — that is the observable confirmation
+     the job began verifying something, and it is the cheapest available proof.
+- **Do NOT "fix" this by deleting the job.** That trades a disclosed gap for a silent one. The
+  announce step is the current mitigation and should stay until the secrets land.
+- **Blast radius estimate**: `platform` (`.github/workflows/test.yml` is `docs/blast_radius.yaml:184`)
+  IF the workflow is edited; adding secrets alone touches no tracked file and has no blast radius.
