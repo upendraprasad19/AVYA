@@ -511,7 +511,16 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 [ ] docs/architecture/<topic>.md updated if cross-cutting concept changed
 [ ] feedback_*.md added/updated if user corrected a claim OR recurring class
 [ ] project_*.md retrospective written (every shipped batch)
-[ ] MEMORY.md index updated
+[ ] Agent memory index (the HARNESS `~/.claude/projects/<mangled>/memory/MEMORY.md` — NOT repo
+    `memory/MEMORY.md`, a pointer stub since its mirror sat 3 months stale): a shipped batch's
+    DEFAULT destination is a `MEMORY_ARCHIVED.md` line, NOT an index line. It earns an index
+    line only for something not already on the OI board — and if it is, file the OI instead.
+    The old row said only "MEMORY.md index updated": it mandated the WRITE and defined no
+    removal, the same unclosed loop §4.13 point 6 closed for worktrees, and each of the last
+    three consolidation passes then had to archive 4 shipped lines. Test any surviving
+    `IN-FLIGHT` label with `git merge-base --is-ancestor <branch> main` — on 2026-08-11 one
+    was still labelled in-flight the day after it merged. **No detector: one was built,
+    ×2-reviewed and WITHDRAWN (OI-68/OI-69, 3 generations of parser scars) — don't re-propose.**
 [ ] Worktree retired if merged + clean (incl. ignored) + nothing unpushed (§4.13 point 6):
       dart run scripts/retire_worktree.dart          # dry-run first, ALWAYS
     This row IS the trigger — point 6 is deliberately ungated, so nothing else fires it.
