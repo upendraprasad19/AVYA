@@ -2595,3 +2595,33 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   byte-equivalent verdicts against several real historical SHAs (green, red, absent, re-run), and
   only then swap the two call sites — each swap verified against a real build.
 - **Blast radius estimate**: `platform` (`.claude/commands/build-apk.md` + a new `scripts/*.dart`).
+## OI-108 — `safe_commit.sh` silently accepts a git FLAG as the commit message (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing. The fix is a few lines; it is filed rather than bundled because it
+  belongs to the commit wrapper, not to the batch that tripped over it.
+- **Verified**: 2026-08-12 — hit live while committing branch `ci-reconciler`. Reproduced, then
+  repaired by `git reset --soft HEAD~1` + recommit.
+- **Identified**: 2026-08-12 (post-push CI reconciler batch).
+- **Risk class**: silent-wrong-result in a platform-tier wrapper. No data loss (the tree committed
+  correctly); the damage is a commit whose message is unusable.
+- **What's wrong**: `scripts/safe_commit.sh:27` takes the message as `MSG="${1:-}"` and runs
+  `git commit -m "$MSG"` (`:47`). It supports NO git-style flags. Invoking it the way one invokes
+  `git commit` — `sh scripts/safe_commit.sh -F /tmp/msg.txt` — produces a commit whose **subject is
+  the literal string `-F`**, with the message file silently ignored. Every gate passes, the wrapper
+  reports `OK -- HEAD advanced ...`, and the only symptom is the echoed subject, which is easy to
+  miss in a long gate log. Observed exactly this on `0b3f2125` before it was redone as `32c145b7`.
+- **Why it matters more than a typo**: this wrapper exists BECAUSE "it reported success" and "it
+  actually did the right thing" must not diverge (`feedback_git_landing_verification.md`). A commit
+  that lands with a garbage message while the wrapper prints OK is that same divergence in a
+  different field. It is also a foot-gun aimed squarely at muscle memory: `-m`, `-F`, `--amend` and
+  `-a` are all things a person types at `git commit` by reflex, and every one of them would be
+  swallowed as message text.
+- **Fix shape**: reject a first argument that begins with `-` (a message legitimately starting with
+  a dash can still be passed after an explicit `--`), and separately consider supporting `-F <file>`
+  properly — multi-paragraph messages via `"$(cat file)"` work but are awkward, which is what
+  motivated reaching for `-F` in the first place. Same audit applies to `safe_push.sh` and
+  `safe_merge.sh`, which take positional args and would mis-handle a leading-dash argument the same
+  way — check all three, not just the one that bit.
+- **Blast radius estimate**: `platform` (`scripts/safe_commit.sh` is pinned platform; the hook
+  scripts are individually pinned per `docs/blast_radius.yaml`).

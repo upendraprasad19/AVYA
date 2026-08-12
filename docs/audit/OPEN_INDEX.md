@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**40 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**41 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -48,3 +48,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-105 | the `Supabase Integration Tests` CI job has verified NOTHING since it was… | founder — this is not an agent-actionable item.** Adding an Actions secret | 2026-08-11 — queried the authoritative source, not inferred from behaviour: | [:2497](open_issues.md#L2497) |
 | OI-106 | local `flutter test` runs ~3.9x slower per file than CI, cause unknown… | a contamination-free measurement on a quiet machine. Every candidate so far has | never — this is OI-102's unanswered half, carried forward unmeasured on 2026-08-11. | [:2538](open_issues.md#L2538) |
 | OI-107 | `build-apk.md`'s two inline `gh run list` copies should move onto… | nothing technical. It is deliberately sequenced AFTER the new helper has proven | 2026-08-12 — both call sites read directly while building the reconciler; the | [:2567](open_issues.md#L2567) |
+| OI-108 | `safe_commit.sh` silently accepts a git FLAG as the commit message (P2) | nothing. The fix is a few lines; it is filed rather than bundled because it | 2026-08-12 — hit live while committing branch `ci-reconciler`. Reproduced, then | [:2598](open_issues.md#L2598) |
