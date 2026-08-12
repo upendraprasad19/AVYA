@@ -26,6 +26,7 @@
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
 
 String _strip(String s) => s
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
@@ -35,8 +36,7 @@ void main() {
   late String restoring, splash, sync, home, supa;
   setUpAll(() {
     restoring = _strip(
-        File('lib/features/auth/screens/restoring_screen.dart')
-            .readAsStringSync());
+        readRestoringScreenSource());
     splash = _strip(File('lib/features/auth/screens/splash_screen.dart')
         .readAsStringSync());
     sync = _strip(

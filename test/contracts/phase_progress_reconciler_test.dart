@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/phase_progress_reconciler.dart';
+import '../helpers/read_screen_source.dart';
 
 String _strip(String s) => s
     .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
@@ -45,9 +46,7 @@ void main() {
     final src = _strip(File(
             'lib/core/services/phase_progress_reconciler.dart')
         .readAsStringSync());
-    final boot = _strip(File(
-            'lib/features/auth/screens/restoring_screen.dart')
-        .readAsStringSync());
+    final boot = _strip(readRestoringScreenSource());
 
     test('reconcile() uses the monotonic decision + kill-switch + plan_start guard',
         () {

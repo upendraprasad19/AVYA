@@ -46,6 +46,15 @@ const _helpers = <String>[
   // new_worktree_base runs a script that CREATES worktrees, so a GIT_DIR leak
   // there acts on the real repo destructively, not merely meaninglessly.
   'test/scripts/new_worktree_base_test.dart',
+  // pre_push_analyze_always runs the real pre-push hook, which opens with
+  // `git rev-parse --show-toplevel` and then cd's there — a leaked GIT_DIR
+  // would point the script at whatever repo the surrounding hook was driving.
+  // Registered here as an explicit step of its own batch, per the note above
+  // that this list is only as wide as someone remembers to make it.
+  'test/scripts/pre_push_analyze_always_e2e_test.dart',
+  // pre_commit_lean_path runs the real pre-commit hook, which also opens with
+  // `git rev-parse --show-toplevel` and cd's there. Same leak, same stakes.
+  'test/scripts/pre_commit_lean_path_e2e_test.dart',
 ];
 
 String _strip(String src) => src

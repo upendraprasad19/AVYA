@@ -1735,10 +1735,33 @@ call.
 ## OI-88 — `restoring_screen.dart` split owed (allow-list entry now removed) (P3)
 
 - **Status**: OPEN
-- **Blocked on**: nobody yet — no session has picked up the split. The Gate 43 *exemption* half is
-  closed; the *split* half, which is the actual owed work, is not.
-- **Verified**: 2026-08-05 (`wc -l` = 791 on `repo-gate-pattern-sweep`; allow-list entry removed in
-  the same commit; `check_god_screen_max_lines.dart` passes with the file no longer exempt)
+- **Blocked on**: nothing external — but the split is now known to be **bigger than "move two
+  widgets"**, and the file has **ZERO margin**. See the 2026-08-10 update.
+- **Verified**: 2026-08-10 (`wc -l` = **800** on `main` @ `1e981c82`;
+  `check_god_screen_max_lines.dart` passes — at exactly the ceiling, so the NEXT change to this
+  file fails the gate outright)
+- **UPDATE 2026-08-10** · `google-signin-misroute`, merge `1e981c82`, diagnose `c2e9f4`. The
+  **extraction half shipped**: `_healAfterRestoreInBackground` → `restoring/heal_after_restore.dart`
+  and `_AnimatedDots` → `restoring/animated_dots.dart`, both as `part` files of the same library
+  (private names unchanged, no call site moved). That is exactly the two candidates the fix shape
+  below names. It did **not** close this OI, because the fix's own new code consumed the headroom
+  it bought: 791 → 728 → 800.
+  - ⚠ **The remaining work is the STATE-CLASS split, and it was attempted and REVERTED in that
+    same batch.** Moving `_RestoringScreenState` into `restoring/state.dart` leaves the head file
+    at 63 lines and immediately breaks: **5 `line_range` citations in `docs/sot_registry.yaml`**,
+    `check_reader_manifest_complete.dart`, and `restoring_screen_timeout_test.dart` — because a
+    dozen registry entries and several source-grep tests point at line numbers INSIDE this file.
+    Re-anchoring all of them is the actual owed work, and it is its own batch. Landing a
+    half-migrated registry to save one refactor trades contained hygiene debt for live correctness
+    risk.
+  - One thing that batch DID make safe: `test/helpers/read_screen_source.dart` gained
+    `readLibrarySource()` / `readRestoringScreenSource()`, which resolve parts by parsing the head
+    file's own `part` directives instead of a hardcoded folder map. **17** test files source-read
+    this screen (the figure carried in earlier sessions was "4"); they now follow a split
+    automatically rather than silently reading a subset.
+- **Prior verification**: 2026-08-05 (`wc -l` = 791 on `repo-gate-pattern-sweep`; allow-list entry
+  removed in the same commit; `check_god_screen_max_lines.dart` passes with the file no longer
+  exempt)
 - **UPDATE 2026-08-05** · `repo-gate-pattern-sweep`, diagnose `e7c3b9`. A comment trim took the
   file 824 → 791, so the allow-list entry was removed — the gate protects this file again on its
   own terms. **This did not do the owed work.** No code moved, no file was created; the trim was
@@ -1763,12 +1786,23 @@ call.
 - **Why this is tracked rather than closed**: same rationale as OI-84 — the allow-list's own header
   says it "MUST shrink to empty when the audit ladder closes". An eighth entry with no owed-work
   record would quietly reverse that direction. This OI is that record.
-- **Fix shape (not yet attempted)**: split into a sibling folder, reference layout
-  `lib/features/train/screens/active_workout/` — candidates for extraction: the three key-migrator
-  imports + `_healAfterRestoreInBackground`'s reconciler/migrator fan-out (currently inline), and/or
-  the `_AnimatedDotsState` loading-indicator widget at the bottom of the file, which has no
-  dependency on `_RestoringScreenState`'s fields and could move to its own widget file outright.
-  **Remove the allow-list entry in the same commit.**
+- **Fix shape (revised 2026-08-10 — the easy half is DONE)**: the two named extraction candidates
+  (`_healAfterRestoreInBackground`, `_AnimatedDots`) shipped in `1e981c82` as `part` files under
+  `lib/features/auth/screens/restoring/`. The allow-list entry was already removed on 2026-08-05.
+  **What remains is the state-class split, and its cost is the citation re-anchoring, not the
+  move:**
+  1. Move `_RestoringScreenState` into `restoring/state.dart` as `part of '../restoring_screen.dart'`
+     (mechanical; the head file keeps its `*_screen.dart` name so it stays inside Gate 43's
+     filename regex — deliberately unlike `active_workout/screen.dart`, which the regex does not
+     match at all).
+  2. Re-anchor **every** `docs/sot_registry.yaml` entry whose `file:` is `restoring_screen.dart` —
+     there are ~5 with `line_range`s plus a dozen `forbidden_patterns` exemption rows.
+  3. Fix `check_reader_manifest_complete.dart` and `restoring_screen_timeout_test.dart`, both of
+     which key off content that moves.
+  4. Verify with `sot_registry_completeness_test.dart` (the Gate-7 mirror that catches
+     `line_range` overruns) and `reader_manifest_exhaustiveness_test.dart`.
+  Sequence matters: do this BEFORE any other change to the file, because there is no margin left
+  to absorb one.
 - **Blast radius estimate**: `account` (`restoring_screen.dart` is on the auth post-auth-boot path);
   no migration, no schema.
 
@@ -2489,3 +2523,232 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   did for code before committing to the anchored shape. Land report-only per §4.11, baseline, then
   flip to hard-fail.
 - **Blast radius estimate**: `feature` (docs-only; no migration, no schema, no application code).
+
+## OI-100 — `prior_art_checked:` needs to reference a VERIFIED artifact, not be free text — §4.1.5 has now been skipped twice, the second time inside the batch built to prevent it (P1)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. The design below is settled; it needs implementation plus the
+  fixture updates it forces.
+- **Verified**: 2026-08-11 — round-2 context-blind review of branch `safe-push-verifier`, plus
+  direct counts by the main thread (110 records, 42 with `date:`).
+- **Identified**: 2026-08-11 · ×2 plan review of `safe-push-verifier`.
+- **Risk class**: process-discipline decay — the recurrence class `ci-speedup.closure.yaml` CI-10
+  already documents.
+- **What's wrong**: CI-10 recorded a full plan → ×2 review → B-pass → implement → merge → red CI →
+  revert cycle spent re-deriving an option this repo had measured and rejected 15 days earlier,
+  because the §4.1.5 bug-history lookup was never run. The remedy proposed at the time was a
+  `prior_art_checked:` field on the plan-review record. **It happened again during the very batch
+  that proposed that field**: the dispatched §4.1.5 subagent was stopped and never reported, the
+  plan proceeded anyway, and then asserted in writing that the lookup "paid for itself". It had not
+  run. That is the point: the CI-10 failure was a **false assertion**, and a free-text field
+  receives the same false assertion. As designed it would be, in the reviewer's words, "a habit
+  with a checkbox" — strictly weaker than every other field on that gate, since `bpass:` and
+  `hermes:` already carry anti-fabrication backing.
+- **Fix shape (design settled, not attempted)**: require `prior_art_checked:` to NAME a committed
+  artifact that EXISTS at the merge rev — reusing the `refs` mechanism verbatim at
+  `scripts/check_plan_review_record_exists.dart:842-866`, which already does exactly this for
+  `bpass_review`/`hermes_report` (file must exist at `atRev` AND contain a line-anchored marker).
+  A diagnose-doc, a closure-YAML entry, or a committed grep transcript all qualify.
+  **Do NOT make the requirement date-conditional** — that was tried in review and is worse than the
+  hole: only **42 of 110** existing records carry a `date:` field at all, so the rule needs an
+  implicit "no date ⇒ exempt" clause, and any future record then opts out by omitting one line.
+  Self-attested dates are also trivially back-dated. Gate the requirement on the merge commit's
+  reachability from a marker commit if a cutover is needed at all.
+- **Also required by this fix**: the e2e fixtures at
+  `test/scripts/plan_review_record_gate_e2e_test.dart:136-145` and `:222-231` build records with
+  today's exact field set and will redden; `test/scripts/gate_input_family_e2e_test.dart:601-622`
+  asserts on WHICH failure fires first and can break even while the exit code stays 1;
+  `test/contracts/review_gate_staged_content_not_working_tree_test.dart:278,298,315` writes review
+  artifacts for the same gate. Rule 21 needs a test that FAILS without the new field — updating
+  fixtures is the opposite direction.
+- **Blast radius estimate**: `platform` (`scripts/check_plan_review_record_exists.dart` is the
+  keystone merge gate).
+
+## OI-101 — Gate 41 (`check_test_runtime_budget.dart`) is shipped, dormant, and points at a destination it was never wired to (P2)
+
+- **Status**: OPEN
+- **Blocked on**: a founder scope decision — re-arm or retire. Two named options is precisely why
+  this could not ship inside `safe-push-verifier`.
+- **Verified**: 2026-08-11 — prior-art sweep + round-2 review of `safe-push-verifier`; skip entries
+  read directly at `scripts/pre-commit.sh:222` and `.github/workflows/test.yml:224`.
+- **Identified**: 2026-08-11 · the sweep that found this batch was rebuilding it.
+- **Risk class**: dormant-gate / false-assurance — a closure ledger says a finding is closed by an
+  artifact that never runs.
+- **What's wrong**: `scripts/check_test_runtime_budget.dart` landed 2026-05-21 (commit `4d912d3`)
+  closing audit finding T9, and has **zero invocation sites**: every one of its ~10 references is a
+  skip list, an allowlist, a ledger, or a generated index. `docs/audit/2026_05_20_audit_closures.yaml:485-496`
+  says it was "intended for /build-apk skill + CI artifact runs" — grep of `.claude/commands/build-apk.md`
+  for it returns **nothing**. This is why a later batch proposed building it again from scratch:
+  a shipped-but-dormant gate is invisible to anyone searching for whether the capability exists.
+- **Fix shape (not attempted; ~10 files, 4 platform-tier — this is why it is its own unit)**:
+  - **If RETIRED**: delete the script; remove skip entries at `pre-commit.sh:222` and `test.yml:224`
+    (both platform); remove the Gate 33 allowlist entry at `check_gate_scripts_wired.dart:72-73`
+    (platform); remove the grandfathered name at `check_gate_test_ledger.dart:110`; **remove
+    `docs/audit/gate_test_ledger.yaml:251` or the build HARD-FAILS** — `gate_test_ledger_lib.dart:274`
+    errors on "has a ledger entry but no scripts/$gate on disk" (verified); regenerate
+    `docs/audit/GATE_INDEX.md`; fix the generator line `audit_test_pyramid.dart:338` that still
+    emits the dead name. **Blocker**: retiring deletes the artifact that closed audit finding T9,
+    silently reopening it — which §4.2 forbids. T9 must be re-closed by something else first.
+  - **If RE-ARMED**: standalone mode runs `flutter test --reporter json` over the whole suite, the
+    exact reason it was allow-listed. `--analyze` mode needs a JSON artifact **CI does not produce**
+    (`test.yml:112,369,377` all use `--reporter expanded`), so this also edits `test.yml` (platform).
+    Its default budget is 30s/test against a suite whose measured p95 is 38.4s and max 149.0s per
+    file — arming at default plausibly reddens `main` immediately. §4.11 also mandates a 24h
+    `--warn-only` baseline, which a single-push batch cannot satisfy.
+- **Blast radius estimate**: `platform`.
+
+## OI-102 — local `test/contracts/` takes 18.6 min on every commit, and the lever is not yet known (P2)
+
+- **Status**: CLOSED · 2026-08-11 · ADR-0018 removed the trigger: `pre-commit.sh` no longer runs
+  `flutter test test/contracts/` at all, so the 18.6 min is no longer paid per commit. **The
+  measurement question this was blocked on is NOT answered** — it is carried forward as OI-106
+  rather than closed with it. Closing on "the symptom is gone" while the open question dies
+  quietly would be the deferral §4.2 bans; the successor entry is what makes this terminal.
+- **Blocked on**: nothing — closed. (Was: a clean measurement. That now blocks OI-106.)
+- **Verified**: 2026-08-11 — full JSON-reporter run, `{"success":true,"type":"done","time":1114598}`.
+- **Identified**: 2026-08-11.
+- **Risk class**: developer-cycle-time; secondarily `--no-verify` pressure (the original I10 motive).
+- **What's wrong**: `pre-commit.sh:66` runs `flutter test test/contracts/` — **477 files, 18.6 min,
+  on every commit**. The I10 fast/full split (2026-05-21) sized this at ~3 min when `test/contracts/`
+  held **179** files; it now holds 477, i.e. ~69% of the whole 694-file suite. The "fast path" has
+  eroded into most of the suite.
+- **What has ALREADY been ruled out — do not re-derive**:
+  - *Optimising the slow files*: distribution is flat. Top 10 files = **8.4%**, top 25 = 15.5%,
+    top 200 = 59.7%. Reaching ~5 min needs a 73% cut; no subset optimisation gets there.
+  - *`flutter test` → `dart test` migration*: measured **~18%** against a ≥50% bar set in advance
+    (warm marginal cost 0.83s vs 0.33s/file; fixed 9.2s vs 3.7s). 447 of 477 files import
+    `flutter_test` while only 8 use `testWidgets`, so the migration is broadly *possible* — it just
+    does not carry the problem. **Zero prior art in the repo**; the one untouched idea here.
+  - *`--concurrency` (16 cores, default is cores/2 = 8)*: **UNPROVEN, and the obvious measurement is
+    a trap.** j8-cold 191s → j16-warm 91s looks like 2.1×, but the control refutes it: j8-**warm**
+    90s, j16-**warm** 170s. Runs alternate ~90s/~170s with no relationship to the flag.
+  - *A "37% fixed per-file startup" figure*: **wrong** — inferred from a 6.8s minimum span, but
+    spans are measured under 8-way contention and include queueing (sum-of-spans 8777s ≫ wall 1114.6s).
+  - *Diff-conditional test selection*: rejected in `docs/adr/0013-blast-radius-tiered-gating.md:52-67`
+    alt #3. 93 contract tests read `docs/` and 265 reference `lib/`, so the dependency graph is broad.
+- **Fix shape (measurement first, no predetermined outcome)**: on a QUIET machine (no subagents —
+  contamination is why the above is unproven), use **counterbalanced blocks** (`j8×3, j16×3, j16×3,
+  j8×3`) or randomised order, n≥5 per arm, reporting the paired distribution. **Alternating
+  j8/j16 is the single worst design here** — it is perfectly aliased with the observed period-2
+  oscillation. Identify the oscillator BEFORE assigning a 1.9× swing to either arm. Also unexplained
+  and probably the real lead: **CI runs 690 files in 417s while local runs 478 in 1114.6s** — ~3.9×
+  slower per file locally at ~4× the parallelism.
+- **Interaction**: OI-86 (concurrent `flutter test` runs corrupt each other's Hive state) is the
+  named hazard for any concurrency increase; 112 contract files use Hive. It is intermittent, so
+  "twice consecutively green" does NOT clear it.
+- **Blast radius estimate**: `platform` (`scripts/pre-commit.sh` is `docs/blast_radius.yaml:101`).
+
+## OI-103 — `safe_push.sh` reports OK from a detached HEAD when given an explicit branch argument (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing; needs its own small analysis, deliberately not bundled into
+  `safe-push-verifier` because no fix had been designed and the stated mechanism was wrong.
+- **Verified**: 2026-08-11 — round-2 review of `safe-push-verifier` corrected the earlier claim.
+- **Identified**: 2026-08-11.
+- **Risk class**: landing-verification (`feedback_git_landing_verification.md`).
+- **What's wrong**: `safe_push.sh:64` resolves `LOCAL_SHA` from a branch **name**, so from a
+  detached HEAD with an explicit branch argument it pushes that branch's (possibly stale) sha,
+  ls-remotes the same name, matches, and reports OK — while the commits you are actually sitting on
+  are not the ones that landed. **Correction to the earlier framing**: the NO-argument case is
+  already safe — `BRANCH` becomes the literal `HEAD`, `git push origin HEAD` fails on an unqualified
+  destination, `GIT_EXIT != 0`, and the script exits 1 loudly. Only the explicit-branch-arg form
+  has the misleading shape, and that form is arguably *correct* ("push the branch you named, verify
+  the branch you named").
+- **Fix shape (not attempted)**: probably a WARNING when `HEAD` is detached and an explicit branch
+  arg is given, not an abort — aborting would break the documented 2-positional-arg form
+  (`safe_push.sh:12-17`) that exists precisely so callers don't fall back to raw, unverified git.
+- **Blast radius estimate**: `platform` (`docs/blast_radius.yaml:158`).
+
+## OI-104 — `check_hooks_installed.dart` detects hook PRESENCE, not staleness; installed hooks were 12 days behind their sources (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical.
+- **Verified**: 2026-08-11 — `.git/hooks/pre-commit` and `pre-push` both dated `Jul 29 10:28`
+  against `scripts/pre-commit.sh` `Aug 10 11:30`; the installed copies were missing the `flutter()`
+  env-unset wrapper and the entire gate-index regen block. Fixed for this machine by re-running
+  `sh scripts/setup-hooks.sh`; the structural gap stays open.
+- **Identified**: 2026-08-11 · ×2 plan review of `safe-push-verifier`.
+- **Risk class**: silent-inert-gate — the highest-consequence shape, because everything downstream
+  looks green.
+- **What's wrong**: `scripts/setup-hooks.sh:45` installs by `cp`, not symlink, so `.git/hooks/*`
+  drifts from `scripts/*.sh` the moment either changes. `scripts/check_hooks_installed.dart:40`
+  checks only `if (!content.contains('scripts/pre-commit.sh') && !content.contains('flutter analyze'))`
+  — **any** file containing the string `flutter analyze` passes. So an edit to a hook script is inert
+  until someone remembers to re-run the installer, and the gate that exists to catch that says green.
+  This is a `feedback_green_check_input_set_width` instance sitting under the whole local gate suite.
+- **Fix shape (not attempted)**: compare content, not presence — hash `scripts/<hook>.sh` against
+  `.git/hooks/<hook>` and fail on mismatch with the exact re-run command; or install a symlink where
+  the platform permits and hash-check only where it does not. Prefer the hash check: it is
+  platform-independent and states the real invariant ("the hook that runs IS the hook in git").
+- **Blast radius estimate**: `platform`.
+
+## OI-105 — the `Supabase Integration Tests` CI job has verified NOTHING since it was written: the repo has zero Actions secrets (P2)
+
+- **Status**: OPEN
+- **Blocked on**: **founder — this is not an agent-actionable item.** Adding an Actions secret
+  requires repo-settings access; an agent can neither read nor write them. Nothing else blocks it.
+- **Verified**: 2026-08-11 — queried the authoritative source, not inferred from behaviour:
+  `gh api repos/upendraprasad19/AVYA/actions/secrets` → `{"total_count":0,"secrets":[]}`. Checked
+  the RAW response deliberately, because an empty `--jq` result and a swallowed auth error are
+  indistinguishable at the shell (`feedback_green_check_input_set_width`).
+- **Identified**: 2026-08-11 · carried out of the gate-registry/CI-speedup batch, where it was
+  recorded only as a "founder-only owed" line in a memory index. Filed as a real OI once the §5
+  rule change made clear that a residual living only in agent memory is not tracked at all
+  (`feedback_spawn_task_chip_not_durable`, same class).
+- **Risk class**: silent-inert-gate / false assurance — a green job that proves nothing, which is
+  strictly worse than an absent job because it occupies the slot where real assurance would go.
+- **What's wrong**: `.github/workflows/test.yml:334` defines `supabase-tests`, gated
+  `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`. Its two real steps
+  (`:363` Run Supabase tests, `:371` Run Edge Function tests) each carry
+  `if: env.SUPABASE_URL != ''`. With no secret configured, **both steps skip and the job reports
+  success.** The `ci-speedup` batch (2026-08-10) added an honest announce step at `:344-350` that
+  emits `::warning title=Supabase integration tests did not run::… this job verifies NOTHING. It
+  is green because there is nothing to fail, not because integration tests passed.` — so the
+  condition is *disclosed*, but disclosure is not coverage, and a `::warning::` on a green run is
+  read by nobody.
+- **What is actually uncovered** — 6 test files, and the selection is not incidental; it is
+  precisely the surface with the worst P0 history in this repo:
+  `test/edge_functions/webhook_test.dart` (Razorpay — see the TDZ webhook P0 in
+  `closed_issues.md:708`), `redeem_referral_test.dart`, `ai_proxy_test.dart`, `pgvector_test.dart`,
+  `test/supabase/auth_restore_test.dart`, `sync_service_test.dart`.
+- **Fix shape (founder action, then a verification step that is NOT optional)**:
+  1. Add `SUPABASE_URL` + `SUPABASE_ANON_KEY` as repository Actions secrets. Use the **fitness-app**
+     project `dedsavbjuwgarrhphgnl` (CLAUDE.md §2a — there are two Supabase projects on the account
+     and the other one is a different app entirely). Anon key only; never the service-role key.
+  2. **Expect the job to go RED on first real run and treat that as the point, not a regression.**
+     These 6 files have never executed in CI. Budget for triage rather than assuming green.
+  3. Once green, the `::warning::` at `:344-350` stops firing — that is the observable confirmation
+     the job began verifying something, and it is the cheapest available proof.
+- **Do NOT "fix" this by deleting the job.** That trades a disclosed gap for a silent one. The
+  announce step is the current mitigation and should stay until the secrets land.
+- **Blast radius estimate**: `platform` (`.github/workflows/test.yml` is `docs/blast_radius.yaml:184`)
+  IF the workflow is edited; adding secrets alone touches no tracked file and has no blast radius.
+## OI-106 — local `flutter test` runs ~3.9x slower per file than CI, cause unknown (P3)
+
+- **Status**: OPEN
+- **Blocked on**: a contamination-free measurement on a quiet machine. Every candidate so far has
+  died to a measurement artifact.
+- **Verified**: never — this is OI-102's unanswered half, carried forward unmeasured on 2026-08-11.
+- **Identified**: 2026-08-11 (as OI-102; re-scoped to OI-106 when ADR-0018 removed OI-102's symptom).
+- **Risk class**: developer-cycle-time. No correctness risk.
+- **What's wrong**: CI runs 690 files in 417s while local ran 478 in 1114.6s — roughly 3.9x slower
+  per file locally, at ~4x the parallelism. Nobody knows why. This was the open question underneath
+  OI-102; ADR-0018 removed the *pain* (the suite no longer runs per-commit) without explaining the
+  *gap*, so it survives on its own. It still costs real time at every pre-push and every CI run.
+- **What has ALREADY been ruled out — do not re-derive** (inherited verbatim from OI-102, which was
+  closed 2026-08-11; read that entry for the full evidence):
+  - *Optimising the slow files*: distribution is flat. Top 10 files = 8.4%, top 200 = 59.7%.
+  - *`flutter test` -> `dart test`*: measured ~18% against a >=50% bar set in advance.
+  - *`--concurrency`*: UNPROVEN and the obvious measurement is a trap — the apparent 2.1x died to
+    the reverse-order control. Alternating j8/j16 is perfectly aliased with an observed period-2
+    oscillation; identify the oscillator BEFORE assigning a swing to either arm.
+  - *A "37% fixed per-file startup" figure*: wrong — inferred from spans measured under 8-way
+    contention, which include queueing.
+  - *Diff-conditional test selection*: rejected in `docs/adr/0013-blast-radius-tiered-gating.md:52-67`.
+- **Fix shape (measurement first, no predetermined outcome)**: counterbalanced blocks
+  (`j8x3, j16x3, j16x3, j8x3`) or randomised order, n>=5 per arm, on a machine with no subagents
+  running, reporting the paired distribution.
+- **Interaction**: OI-86 (concurrent `flutter test` runs corrupt each other's Hive state) is the
+  named hazard for any concurrency increase; 112 contract files use Hive. It is intermittent, so
+  "twice consecutively green" does NOT clear it.
+- **Blast radius estimate**: `platform` (any fix touches `scripts/pre-push.sh` or `test.yml`).

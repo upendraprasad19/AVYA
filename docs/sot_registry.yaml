@@ -3855,7 +3855,7 @@ concepts:
       completeOnboarding() stamps both Hive and cloud.
     writers:
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 272-561
+        line_range: 338-660
         method: completeOnboarding
         notes: |
           Stamps onboarding_completed_at in the Hive profile map (durable BEFORE
@@ -3864,6 +3864,19 @@ concepts:
           awaited on the critical REPORT FOR DUTY path. If the background sync is
           missed, pending_onboarding_sync + the RestoringScreen Plan-A self-heal
           (cloud NULL + Hive onboarded -> re-stamp) recover it.
+
+          2026-08-10 (diagnose c2e9f4) — OVERWRITE GUARD at the method entry,
+          before ANY write (so the Hive stamp and the sync fan-out it triggers
+          are both prevented). Re-reads cloud onboarding_completed_at; if
+          already stamped, sets error='already_onboarded' and returns null
+          instead of committing. Rationale: THREE routing bugs (1bfeed,
+          a3f6d9, c2e9f4) have now put a fully-onboarded user in front of
+          onboarding, and a fourth route is always possible — what made all
+          three survivable was luck, not design. Decision extracted to the
+          pure, mutation-proven shouldRefuseOnboardingOverwrite(). FAILS OPEN
+          on any error or when signed out: a false negative costs one wrong
+          screen, a false positive would block every genuine new signup.
+          Kill-switch disable_onboarding_overwrite_guard.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         line_range: 570-637
         method: _syncOnboardingAndPostActions
@@ -3950,19 +3963,57 @@ concepts:
           Hive routes to resume-onboarding. NOT NULL routes to /home
           (15s timeout safety).
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 103-160
+        line_range: 150-208
         method: AuthSessionBootstrapper.resolveDestination
         semantic: flag-check
         fields_read: [user_id, onboarding_completed_at, date_of_birth, primary_goal, current_weight_kg, fitness_experience]
         notes: |
           New canonical reader (audit 2026-05-20 / A1 + A9). Owns the
-          three-way classification (GoHome / ResumeOnboarding(step) /
-          StartMissionBrief). Pure decision logic exposed via
+          classification (GoHome / ResumeOnboarding(step) / StartMissionBrief
+          / DestinationUnknown). Pure decision logic exposed via
           @visibleForTesting classifyDestination(row). 2026-05-30 (diagnose
           e2a4f7): SELECT + identity-step check key off date_of_birth, NOT
           full_name — full_name lives on `users`, not user_profile (prior
           full_name read 42703'd every call; cf. user_full_name concept
           constraint "user_profile has no full_name column").
+
+          2026-08-10 (diagnose c2e9f4) — FOURTH state added:
+          DestinationUnknown. The catch block used to return
+          StartMissionBrief, so a read that FAILED was reported as the
+          positive fact "this user has no profile row" — routing a fully
+          onboarded account into onboarding. Two entrances, neither
+          distinguishable at the call site: (1) the SELECT throws, (2) the
+          SELECT returns HTTP 200 with ZERO ROWS because user_profile's
+          own-row-only RLS (user_profile_select_own) filtered a stale or
+          not-yet-attached token — .maybeSingle() then yields null, identical
+          to "no such user". Now: ensureFreshToken() before the SELECT (the
+          precaution callFunction has always taken, §4.4 rule 9), one retry
+          behind a hard refreshSession(), then DestinationUnknown. The
+          hierarchy is `sealed`, so adding the state makes RestoringScreen's
+          switch non-exhaustive and fails to COMPILE until it is handled.
+          Kill-switch disable_resolve_destination_unknown.
+      - file: lib/core/services/local_onboarding_evidence.dart
+        line_range: 52-89
+        method: hasLocalOnboardedEvidence / hasAllRequiredProfileFields
+        semantic: flag-check
+        fields_read: [onboarding_completed, primary_goal, fitness_experience, current_weight_kg, date_of_birth, gender, height_cm, target_weight_kg, days_per_week, equipment_access]
+        notes: |
+          2026-08-10 (diagnose c2e9f4). Shared pure predicate, extracted from
+          RestoringScreen's ResumeOnboarding branch so ALL THREE
+          not-onboarded branches consult the same evidence — previously only
+          ResumeOnboarding did, and StartMissionBrief (the branch every FAILED
+          read lands on) consulted nothing at all.
+
+          ⚠ CALLER PRECONDITION: both inputs must be read AFTER
+          HiveUserSession.ensureOpenedForCurrentSession(). Under
+          authenticated-but-owner-null, wrapUserScopedBox serves
+          GuardedBox.empty (guarded_box.dart:333) — every read returns null,
+          so the predicate answers "no evidence" while the evidence sits on
+          disk, SILENTLY (the loud StateError at :335 fires only when
+          UNAUTHENTICATED). The pre-fix code relied on the parallel
+          restoreFromCloudForUser having opened the session, but that call
+          (sync_service.dart:454) is fire-and-forget, making it a race.
+          Kill-switch disable_local_onboarded_evidence.
       - file: lib/core/router/app_router.dart
         line_range: 549-560
         method: _authRedirect (onboarding gate)

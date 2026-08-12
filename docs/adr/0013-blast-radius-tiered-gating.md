@@ -27,6 +27,21 @@ Two facts make leaning safe: **CI runs the full suite on every push regardless**
 always-on backstop ~2 min after push), and the project is **solo** (a momentarily-red
 push reaching GitHub before CI flags it has no blast radius to other developers).
 
+> **Correction 2026-08-11 (ADR-0018).** The first of those two facts is FALSE, and it is
+> load-bearing here — it is one of the two stated justifications for the tiering decision.
+> `.github/workflows/test.yml` triggers on `push: [main, develop]` **and `pull_request`
+> targeting them**, not on every push. Counted live: `git ls-remote --heads origin` = 29 refs
+> (28 non-main); 8 have an open PR and so do get CI on every push; the other ~20 — including
+> most `claude/*` working branches — get none. The same false claim was propagated into
+> `CLAUDE.md` §0, `scripts/pre-push.sh` and
+> `docs/handbook/process/tiered-gating-by-blast-radius.md`, and is corrected in all of them.
+>
+> The tiering DECISION still stands: the second fact (solo project) carries it, and ADR-0018
+> closes the exposed gap by making `flutter analyze` unconditional at pre-push, so a PR-less
+> branch push is compile-checked locally before it leaves the machine. What does not stand is
+> reading "CI backstops it" as a reason to skip a local gate on a branch.
+> Refined by ADR-0018 (see the end of this file); this ADR is not superseded.
+
 ## Decision
 
 **Tier local-gate intensity by the change's blast radius; treat CI as the full-suite
@@ -79,6 +94,10 @@ Bad / watch:
 - `feature` tier includes `lib/features/profile/**` (real UI code), so a profile-only
   push skips the local full suite. Accepted: CI runs it ~2 min later, and profile is
   feature-tier by the registry's own design.
+  **(Correction 2026-08-11 / ADR-0018: "CI runs it ~2 min later" holds only for a push to
+  `main`/`develop` or a branch with an open PR — see the Context note. For a PR-less branch
+  push the suite next runs at the merge-to-`main` push; `flutter analyze` does now run
+  unconditionally at pre-push, so such a push is still compile-checked.)**
 - The hooks are the safety net — a tier mis-computation could skip a risky push.
   Mitigated by the fail-safe-to-running default, `PRE_PUSH_FULL=1`, the always-on CI
   backstop, and the two pinning tests
@@ -103,3 +122,6 @@ Active. Shipped 2026-06-01 (lean-workflow batch). Platform blast radius (edits
 - `.claude/skills/code-review/SKILL.md` §0 (reminder, not auto-trigger)
 - `docs/handbook/process/tiered-gating-by-blast-radius.md` (the durable rule)
 - ADR-0004 / the 2026-05-28 six-industry-gap batch (introduced blast_radius.yaml + the gates)
+- **ADR-0018** — moves `flutter analyze` + `flutter test` off pre-commit, makes analyze
+  unconditional at pre-push, and corrects this ADR's "CI runs the full suite on every push"
+  premise (see the Correction note in Context). Refines this decision; does not supersede it.

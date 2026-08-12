@@ -61,21 +61,36 @@ jobs:
       - name: Flutter analyze (zero warnings allowed)
         run: flutter analyze --no-fatal-infos
 
+  # SHARDING WAS TRIED AND REVERTED — 2026-08-10, same day it landed. Both of
+  # the plan's own pre-committed abort conditions fired on the first real run
+  # (31364967041), and they are recorded here so this is not re-proposed:
+  #
+  # 1. MEASURED 18.3%, under the 25% floor the plan fixed IN ADVANCE.
+  #    7m49s -> 6m23s. `--total-shards` slices WITHIN each suite
+  #    (test_core/runner.dart:496-502), so every shard still compiled and loaded
+  #    all ~693 files; only test bodies divided. The fixed cost does not shard,
+  #    so the ceiling was always low. The plan predicted no number precisely
+  #    because this was unknown — and the rule it wrote instead says: below 25%,
+  #    sharding is the wrong lever, use path filters.
+  #
+  # 2. IT BROKE A TEST, exactly where round 2 said it would. Shard 2 failed
+  #    `worktree_config_integrity_e2e_test.dart` "--warn-only ... still reports
+  #    the violation": that test asserts on corruption a PREVIOUS test in the
+  #    same file injects, and within-suite sharding handed shard 2 the assertion
+  #    without its predecessor. Round 2's P1-2 named intra-file carryover as the
+  #    real hazard (as opposed to the cross-file isolation the plan had actually
+  #    verified); it was recorded as "may not work" and shipped past. It fired on
+  #    the first run.
+  #
+  # The `analyze` split above is KEPT — it is a genuine, risk-free 47s off the
+  # critical path and is unaffected by either finding.
   unit-test:
     name: Unit Tests
     runs-on: ubuntu-latest
-    # Per-shard budget. The old 20 min covered a ~10-min single job; a shard is a
-    # fraction of that, so 20 min would let a HUNG shard burn 20 minutes before
-    # failing. 12 min keeps the headroom that test.yml's own 2026-07-01 note
-    # (run 28517992078, cancelled at a 10-min limit) says is needed, without the
-    # 8x slack.
-    timeout-minutes: 12
-    strategy:
-      # One red shard must not cancel the others — otherwise a single failure
-      # hides every other shard's result and the next run re-discovers them.
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2]
+    # Restored to 20 min: this is the full suite again, and test.yml's 2026-07-01
+    # note (run 28517992078, cancelled at a 10-min limit while "All tests passed!"
+    # printed) is why that headroom exists.
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -89,29 +104,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Run unit tests (shard ${{ matrix.shard }})
+      - name: Run unit tests (pure Dart — no device needed)
         # Golden-image tests are platform-specific (Windows-generated PNGs vs
         # CI's Linux render differ in font hinting/anti-aliasing); excluded
         # here, run locally via the pre-push full suite. See dart_test.yaml +
         # feedback_local_ci_env_divergence.md.
-        #
-        # --total-shards comes from strategy.job-total so the shard count is
-        # written ONCE (the matrix list) instead of hand-synced in two places.
-        #
-        # HOW THIS SHARDS, because it is not what the name suggests:
-        # test_core's _shardSuite (runner.dart:496-502) computes
-        # shardSize = suite.group.testCount / totalShards and filters WITHIN each
-        # suite. Every shard still discovers, compiles and loads all ~693 files
-        # and runs every setUpAll; only the test BODIES divide. So wall clock does
-        # NOT divide by N — the speedup is Amdahl-bounded by the compile/load
-        # fraction. Tag exclusion happens BEFORE partitioning (runner.dart:297
-        # passes the tag-filtered suite into _shardSuite), so no shard is
-        # lightened by the 5 excluded golden files.
-        run: |
-          flutter test test/ --exclude-tags golden \
-            --total-shards ${{ strategy.job-total }} \
-            --shard-index ${{ matrix.shard }} \
-            --reporter expanded
+        run: flutter test test/ --exclude-tags golden --reporter expanded
 
   # ── Deno Edge-Function tests (added Unit C 2026-07-08, diagnose a7e2c4) ──
   # Until now NO CI job ran the Deno tests under supabase/functions/**, so a red
@@ -310,8 +308,14 @@ jobs:
   # duplicate runner-minutes per run, and one source of "which job ran this
   # test?" confusion.
   #
-  # `scripts/pre-commit.sh` still runs the `test/contracts/` subset locally as
-  # the fast pre-commit gate — unaffected by this removal.
+  # UPDATE 2026-08-11 (ADR-0018): this paragraph used to end "`scripts/pre-commit.sh`
+  # still runs the `test/contracts/` subset locally as the fast pre-commit gate
+  # — unaffected by this removal", which was the recorded justification for
+  # deleting that job. It no longer holds: pre-commit runs NO tests. The
+  # justification survives on its first ground alone — `test/contracts/` is a
+  # strict subdirectory of `test/`, so the `unit-test` job above already runs
+  # every one of these files. Coverage here is unchanged; what changed is that
+  # this job is now the FIRST place those tests run rather than the second.
 
   # ── Tier 3: Supabase Integration Tests (requires secrets) ──────
   # Only runs if SUPABASE_URL secret is configured.

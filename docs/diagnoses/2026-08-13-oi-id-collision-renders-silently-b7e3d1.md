@@ -107,14 +107,21 @@ impact_analysis: >
   caught it — there is no crash, no failing test, and no alert to notice.
 related_bugs: []
 recurrence: >
-  THIRD recorded instance, and the largest. OI-112 records the first two, both on
-  2026-08-08/09 and both on this same branch: OI-96/97/98 collided and were
+  FOURTH recorded instance at least, and the largest. OI-112 records the first
+  two, both 2026-08-08/09 and both on this branch: OI-96/97/98 collided and were
   renumbered to 99/100/101; within hours origin/main advanced with its own OI-99
-  and they moved again to 100/101/102. This instance is six ids at once, and the
-  renumber went stale TWICE MORE during the plan's own review rounds (ceiling
-  105 → 106 → 108) before landing at 109..114. The pattern across all three: a
-  manual renumber is a patch against a moving target, and every previous fix was
-  a renumber with no detector. This is the first one that leaves a check behind.
+  and they moved again to 100/101/102.
+  A THIRD hit a DIFFERENT session in parallel and was found while verifying this
+  merge — `docs/plan-reviews/claude-commit-merge-push-process-aae061.md:56-58`:
+  "Filed as OI-105 on this branch; renumbered to OI-106 at merge time — an
+  unrelated batch landed its own OI-105 on `main` first." Two sessions therefore
+  hit the same class independently, within a day, neither aware of the other.
+  This instance is the fourth: six ids at once, and the renumber went stale TWICE
+  MORE during this change's own review rounds (ceiling 105 → 106 → 108) before
+  landing at 109..114.
+  The pattern across all four: a manual renumber is a patch against a moving
+  target, and every previous fix was a renumber with no detector left behind.
+  This is the first one that leaves a check.
 ---
 
 # OI ids collide across sessions, and the board renders the corruption silently

@@ -36,8 +36,11 @@ runner (which requires a desktop or device target); the `test/` mirror
 sidesteps that.
 
 When extending: edit BOTH files in the same PR until we wire a device
-runner. Pre-commit (`scripts/pre-commit.sh`) runs the full `flutter test`
-suite, which picks up the `test/` mirror automatically.
+runner. The `test/` mirror is picked up automatically by the full
+`flutter test` suite — which runs at **pre-push** (≥account blast-radius)
+and in CI, not at pre-commit. (This line previously said pre-commit ran the
+full suite; that was already wrong — it ran only the `test/contracts/`
+subset — and since 2026-08-11 / ADR-0018 pre-commit runs no tests at all.)
 
 ## Critical flows covered (data-layer, host-runnable)
 
