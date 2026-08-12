@@ -299,6 +299,15 @@ After observations captured + before brainstorming:
   Escape hatch for a case the hook mis-detects: `ALLOW_RAW_GIT=1`. `--no-verify` has NO such
   hatch — it requires explicit founder approval in chat first, then `FOUNDER_APPROVED_NO_VERIFY=1`
   for that one invocation.
+- **What `safe_push.sh` CANNOT tell you, and what now does.** It proves the push LANDED; CI runs
+  asynchronously *after* it returns, so its verdict says nothing about whether the build went green.
+  On a landed push it therefore arms a reconcile entry (`scripts/arm_ci_reconcile.sh` →
+  `.claude/.ci_reconcile_pending.jsonl`, gitignored), and the `SessionStart` hook
+  `scripts/reconcile_ci.dart` looks the run up later and warns on a **failing** run, or on a run
+  that never happened where one was due (`main`/`develop` — elsewhere no run is the expected
+  outcome per ADR-0018, so it stays silent rather than firing on every `claude/*` push). Warn-only
+  by construction: no gate calls it, no exit code is consumed, every error path exits 0. The arm is
+  `|| true`-wrapped — a failure to record can never turn a landed push into a reported failure.
 - **Don't manually re-run the full `flutter test`** when the hooks/CI will run it anyway — run targeted tests during dev; pre-push (≥account) + CI are the full-suite gates. CI is the full-suite source-of-truth.
 - APK build from a CI-green, already-pushed `main` may use `/build-apk --from-green` to skip the redundant gate re-run (keeps the clean build + size + on-main/versionCode/.env gates).
 - **≥account code-review is SELF-INITIATED, before the merge.** For any batch whose blast-radius is ≥`account` and that touches code / schema / Edge Functions, run `/code-review` (B-pass) BEFORE the `--no-ff` merge to `main` — do NOT wait to be asked. The pre-commit echo (§0) is a reminder, not the gate; the discipline is the agent's. (Docs/process-only ≥account changes — e.g. CLAUDE.md edits — take a self-consistency review of the wording instead of an adversarial bug-hunt.) Codified 2026-06-07 after a ≥account alert batch merged to local `main` un-reviewed and a P0 (alert blind to `event`-coded failures) survived until a founder-prompted push-time review caught it.

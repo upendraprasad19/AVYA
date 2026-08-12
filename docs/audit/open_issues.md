@@ -2564,3 +2564,34 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   named hazard for any concurrency increase; 112 contract files use Hive. It is intermittent, so
   "twice consecutively green" does NOT clear it.
 - **Blast radius estimate**: `platform` (any fix touches `scripts/pre-push.sh` or `test.yml`).
+## OI-107 — `build-apk.md`'s two inline `gh run list` copies should move onto `scripts/gh_run_lib.dart` (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. It is deliberately sequenced AFTER the new helper has proven
+  itself on a low-stakes call site, not blocked by a missing capability.
+- **Verified**: 2026-08-12 — both call sites read directly while building the reconciler; the
+  helper they would move onto (`scripts/gh_run_lib.dart`) shipped in the same batch and is
+  test-covered.
+- **Identified**: 2026-08-12 (post-push CI reconciler batch, branch `ci-reconciler`).
+- **Risk class**: duplication / release-gate correctness. No live user risk.
+- **What's wrong**: the `gh run list --json headSha,conclusion,...` idiom exists twice, inline, in
+  `.claude/commands/build-apk.md` — Gate 3.5 (~`:92-123`, hard-aborts an APK build on a red or
+  mismatched CI conclusion) and the `--from-green` fast path (~`:357-366`). They are near-identical
+  but drift in their flags: `--limit 1` + first-entry vs `--limit 20` + `select(.headSha==...)[0]`.
+  Neither sorts explicitly, so both depend on `gh run list`'s **undocumented** default ordering —
+  checked against `gh run list --help` and the CLI manual on 2026-08-12: no ordering guarantee is
+  stated, and `createdAt` is available precisely so callers can sort themselves. On a **re-run**
+  (several runs for one SHA) that is the difference between reading the original red result and the
+  newer green one. `scripts/gh_run_lib.dart` now does sort explicitly, and its test supplies the
+  rows oldest-first so a naive `.first` reddens.
+- **Why it was NOT done in the batch that created the helper**: Gate 3.5 gates every APK release.
+  Rewriting the highest-stakes `gh` call site in the repo, in service of a session-start warn-only
+  tool, is the wrong order of operations — the helper should earn trust on the call site where a
+  mistake costs a spurious warning before it is put on the one where a mistake costs a bad release.
+  This is an OI with a terminal state, not a prose deferral (§4.2).
+- **Fix shape**: a bash block cannot `import` a Dart library, so this needs a thin CLI wrapper
+  (e.g. `dart run scripts/gh_run_query.dart --sha <sha> --branch <b> --workflow "<w>"` emitting one
+  JSON line) that both markdown blocks call. Land the wrapper + its test FIRST, verify it returns
+  byte-equivalent verdicts against several real historical SHAs (green, red, absent, re-run), and
+  only then swap the two call sites — each swap verified against a real build.
+- **Blast radius estimate**: `platform` (`.claude/commands/build-apk.md` + a new `scripts/*.dart`).

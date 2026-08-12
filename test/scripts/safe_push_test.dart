@@ -66,7 +66,15 @@ String _fileUri(String path) => 'file:///${path.replaceAll('\\', '/')}';
   }
 
   Directory('$primary/scripts').createSync(recursive: true);
-  for (final f in const ['safe_push.sh', '_git_lock.sh']) {
+  for (final f in const [
+    'safe_push.sh',
+    '_git_lock.sh',
+    // safe_push.sh's LANDED path arms a CI-reconcile entry through this. It is
+    // `|| true`-wrapped, so omitting it here would not redden anything -- the
+    // append would just fail silently and the arm assertion below would be
+    // testing nothing.
+    'arm_ci_reconcile.sh',
+  ]) {
     File('$srcRoot/scripts/$f').copySync('$primary/scripts/$f');
   }
   File('$primary/seed.txt').writeAsStringSync('seed\n');
@@ -177,6 +185,21 @@ void main() {
     expect('${r.stdout}', contains(localSha),
         reason: 'success must report the sha it actually OBSERVED on the '
             'remote, not merely announce success.\n${r.stdout}');
+
+    // A landed push must ARM a CI-reconcile entry. safe_push.sh can only prove
+    // the ref moved; the arm is what lets reconcile_ci.dart later report what
+    // CI concluded. The call is `|| true`-wrapped, so if it silently stopped
+    // working nothing else in this suite would notice -- which is exactly why
+    // it is asserted here rather than assumed.
+    final state = File('${repo.primary}/.claude/.ci_reconcile_pending.jsonl');
+    expect(state.existsSync(), isTrue,
+        reason: 'safe_push.sh LANDED path must have armed a reconcile entry.\n'
+            'stdout:\n${r.stdout}');
+    final armed = state.readAsStringSync();
+    expect(armed, contains(localSha),
+        reason: 'the armed entry must name the sha that actually landed');
+    expect(armed, contains('"branch":"main"'),
+        reason: 'the armed entry must name the branch that was pushed');
   });
 
   test(
@@ -278,7 +301,15 @@ void main() {
     }
 
     Directory('$primary/scripts').createSync(recursive: true);
-    for (final f in const ['safe_push.sh', '_git_lock.sh']) {
+    for (final f in const [
+    'safe_push.sh',
+    '_git_lock.sh',
+    // safe_push.sh's LANDED path arms a CI-reconcile entry through this. It is
+    // `|| true`-wrapped, so omitting it here would not redden anything -- the
+    // append would just fail silently and the arm assertion below would be
+    // testing nothing.
+    'arm_ci_reconcile.sh',
+  ]) {
       File('$srcRoot/scripts/$f').copySync('$primary/scripts/$f');
     }
     File('$primary/seed.txt').writeAsStringSync('seed\n');

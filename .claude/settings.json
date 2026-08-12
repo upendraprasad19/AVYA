@@ -20,6 +20,14 @@
             "command": "dart run --verbosity=error scripts/discipline_hook.dart"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dart run --verbosity=error scripts/reconcile_ci.dart"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
