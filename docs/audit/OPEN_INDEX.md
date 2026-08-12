@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**45 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**47 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -47,6 +47,8 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-104 | `check_hooks_installed.dart` detects hook PRESENCE, not staleness;… | nothing technical. | 2026-08-11 — `.git/hooks/pre-commit` and `pre-push` both dated `Jul 29 10:28` | [:2662](open_issues.md#L2662) |
 | OI-105 | the `Supabase Integration Tests` CI job has verified NOTHING since it was… | founder — this is not an agent-actionable item.** Adding an Actions secret | 2026-08-11 — queried the authoritative source, not inferred from behaviour: | [:2685](open_issues.md#L2685) |
 | OI-106 | local `flutter test` runs ~3.9x slower per file than CI, cause unknown… | a contamination-free measurement on a quiet machine. Every candidate so far has | never — this is OI-102's unanswered half, carried forward unmeasured on 2026-08-11. | [:2726](open_issues.md#L2726) |
+| OI-107 | `build-apk.md`'s two inline `gh run list` copies should move onto… | nothing technical. It is deliberately sequenced AFTER the new helper has proven | 2026-08-12 — both call sites read directly while building the reconciler; the | [:2755](open_issues.md#L2755) |
+| OI-108 | `safe_commit.sh` silently accepts a git FLAG as the commit message (P2) | nothing. The fix is a few lines; it is filed rather than bundled because it | 2026-08-12 — hit live while committing branch `ci-reconciler`. Reproduced, then | [:2786](open_issues.md#L2786) |
 | OI-109 | ForgotPasswordSheet's two-step code flow has no test | nothing — bounded work | 2026-08-07 (`grep -rln "ForgotPasswordSheet" test/` → no matches) | [:2355](open_issues.md#L2355) |
 | OI-110 | ~90 diagnose-docs cite a `sot_registry_entry:` concept that does not exist | nothing — bounded, mechanical work. Gate 44 already prevents new instances. | 2026-08-08 (`dart run scripts/check_sot_registry_citations.dart` reports the | [:2379](open_issues.md#L2379) |
 | OI-111 | the stale-`userId` sink guard covers the nutrition fan-out only; ~26… | nothing — this is bounded work, not a decision | 2026-08-07 (grep below run against `post38-auth-fixes`) | [:2326](open_issues.md#L2326) |

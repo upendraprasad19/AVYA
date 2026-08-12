@@ -154,6 +154,16 @@ if [ "$PROBE_EXIT" -eq 0 ] && [ "$REMOTE_SHA" = "$LOCAL_SHA" ]; then
     echo "[safe_push] OK -- $REMOTE/$BRANCH now at $REMOTE_SHA (matches local)."
   fi
   rm -f "$LOG"
+  # Arm a CI-reconcile entry. This wrapper proves the push LANDED; it cannot
+  # know what CI concludes, because CI runs asynchronously after we return.
+  # scripts/reconcile_ci.dart closes that at the next SessionStart.
+  #
+  # `|| true` is load-bearing: the arm is advisory, the push verdict is not.
+  # A failure to record must never turn a landed push into a reported failure.
+  # It lives HERE rather than in the caller because an arm step that depends on
+  # someone remembering to run it decays, and an unarmed push is
+  # indistinguishable from a push that was fine (CLAUDE.md 4.13 point 6).
+  sh "$REPO_ROOT/scripts/arm_ci_reconcile.sh" "$BRANCH" "$LOCAL_SHA" >/dev/null 2>&1 || true
   exit 0
 fi
 

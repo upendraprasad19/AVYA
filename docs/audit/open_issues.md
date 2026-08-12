@@ -2752,3 +2752,64 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   named hazard for any concurrency increase; 112 contract files use Hive. It is intermittent, so
   "twice consecutively green" does NOT clear it.
 - **Blast radius estimate**: `platform` (any fix touches `scripts/pre-push.sh` or `test.yml`).
+## OI-107 — `build-apk.md`'s two inline `gh run list` copies should move onto `scripts/gh_run_lib.dart` (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. It is deliberately sequenced AFTER the new helper has proven
+  itself on a low-stakes call site, not blocked by a missing capability.
+- **Verified**: 2026-08-12 — both call sites read directly while building the reconciler; the
+  helper they would move onto (`scripts/gh_run_lib.dart`) shipped in the same batch and is
+  test-covered.
+- **Identified**: 2026-08-12 (post-push CI reconciler batch, branch `ci-reconciler`).
+- **Risk class**: duplication / release-gate correctness. No live user risk.
+- **What's wrong**: the `gh run list --json headSha,conclusion,...` idiom exists twice, inline, in
+  `.claude/commands/build-apk.md` — Gate 3.5 (~`:92-123`, hard-aborts an APK build on a red or
+  mismatched CI conclusion) and the `--from-green` fast path (~`:357-366`). They are near-identical
+  but drift in their flags: `--limit 1` + first-entry vs `--limit 20` + `select(.headSha==...)[0]`.
+  Neither sorts explicitly, so both depend on `gh run list`'s **undocumented** default ordering —
+  checked against `gh run list --help` and the CLI manual on 2026-08-12: no ordering guarantee is
+  stated, and `createdAt` is available precisely so callers can sort themselves. On a **re-run**
+  (several runs for one SHA) that is the difference between reading the original red result and the
+  newer green one. `scripts/gh_run_lib.dart` now does sort explicitly, and its test supplies the
+  rows oldest-first so a naive `.first` reddens.
+- **Why it was NOT done in the batch that created the helper**: Gate 3.5 gates every APK release.
+  Rewriting the highest-stakes `gh` call site in the repo, in service of a session-start warn-only
+  tool, is the wrong order of operations — the helper should earn trust on the call site where a
+  mistake costs a spurious warning before it is put on the one where a mistake costs a bad release.
+  This is an OI with a terminal state, not a prose deferral (§4.2).
+- **Fix shape**: a bash block cannot `import` a Dart library, so this needs a thin CLI wrapper
+  (e.g. `dart run scripts/gh_run_query.dart --sha <sha> --branch <b> --workflow "<w>"` emitting one
+  JSON line) that both markdown blocks call. Land the wrapper + its test FIRST, verify it returns
+  byte-equivalent verdicts against several real historical SHAs (green, red, absent, re-run), and
+  only then swap the two call sites — each swap verified against a real build.
+- **Blast radius estimate**: `platform` (`.claude/commands/build-apk.md` + a new `scripts/*.dart`).
+## OI-108 — `safe_commit.sh` silently accepts a git FLAG as the commit message (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing. The fix is a few lines; it is filed rather than bundled because it
+  belongs to the commit wrapper, not to the batch that tripped over it.
+- **Verified**: 2026-08-12 — hit live while committing branch `ci-reconciler`. Reproduced, then
+  repaired by `git reset --soft HEAD~1` + recommit.
+- **Identified**: 2026-08-12 (post-push CI reconciler batch).
+- **Risk class**: silent-wrong-result in a platform-tier wrapper. No data loss (the tree committed
+  correctly); the damage is a commit whose message is unusable.
+- **What's wrong**: `scripts/safe_commit.sh:27` takes the message as `MSG="${1:-}"` and runs
+  `git commit -m "$MSG"` (`:47`). It supports NO git-style flags. Invoking it the way one invokes
+  `git commit` — `sh scripts/safe_commit.sh -F /tmp/msg.txt` — produces a commit whose **subject is
+  the literal string `-F`**, with the message file silently ignored. Every gate passes, the wrapper
+  reports `OK -- HEAD advanced ...`, and the only symptom is the echoed subject, which is easy to
+  miss in a long gate log. Observed exactly this on `0b3f2125` before it was redone as `32c145b7`.
+- **Why it matters more than a typo**: this wrapper exists BECAUSE "it reported success" and "it
+  actually did the right thing" must not diverge (`feedback_git_landing_verification.md`). A commit
+  that lands with a garbage message while the wrapper prints OK is that same divergence in a
+  different field. It is also a foot-gun aimed squarely at muscle memory: `-m`, `-F`, `--amend` and
+  `-a` are all things a person types at `git commit` by reflex, and every one of them would be
+  swallowed as message text.
+- **Fix shape**: reject a first argument that begins with `-` (a message legitimately starting with
+  a dash can still be passed after an explicit `--`), and separately consider supporting `-F <file>`
+  properly — multi-paragraph messages via `"$(cat file)"` work but are awkward, which is what
+  motivated reaching for `-F` in the first place. Same audit applies to `safe_push.sh` and
+  `safe_merge.sh`, which take positional args and would mis-handle a leading-dash argument the same
+  way — check all three, not just the one that bit.
+- **Blast radius estimate**: `platform` (`scripts/safe_commit.sh` is pinned platform; the hook
+  scripts are individually pinned per `docs/blast_radius.yaml`).
