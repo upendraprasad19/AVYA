@@ -88,19 +88,44 @@ Installed once per clone via `sh scripts/setup-hooks.sh` (Git Bash on Windows). 
 version-controlled into `.git/hooks/`. Bypass a single run with `--no-verify` (sparingly — CI
 runs the same gates). See §4 process invariants for the no-deferred-failures policy.
 
-- **`scripts/pre-commit.sh` (fast, ~3 min):** `flutter analyze --no-fatal-infos` + the
-  `test/contracts/` subset (NOT the full suite) + the ~72 `check_*.dart` gates (bounded-parallel,
-  `PRE_COMMIT_GATE_JOBS` default 4) + conditional index regens + merge-commit regression-catalog
-  walk. Blocks the commit on any failure. Prints a non-blocking `/code-review` (B-pass) reminder
-  when the staged blast-radius is ≥`account` — the review itself is MANDATORY before the merge per
-  §4.3; the echo is only the reminder, not the gate. Force the full suite here with `PRE_COMMIT_FULL=1`.
-- **`scripts/pre-push.sh` (blast-radius-tiered):** runs the full `flutter test` only when the
-  pushed range's blast-radius is ≥`account` (auth/ai_coach/sync/ai-proxy/payment/migrations/
-  CLAUDE.md/…). `feature`-tier pushes (docs/scripts/.claude/backups/profile-only) **skip** the local
-  full suite — CI is the backstop. Fail-safe: any uncertainty runs the suite. Force it with
-  `PRE_PUSH_FULL=1`. (Tier via `scripts/blast_radius_from_diff.dart`; lean-workflow batch 2026-06-01.)
-- **CI (`.github/workflows/test.yml`) is the full-suite source-of-truth** — analyze + full
-  `flutter test` + all gates + a debug-APK compile on every push, regardless of the local tier.
+- **`scripts/pre-commit.sh` (gates only, ~2 min):** the ~72 `check_*.dart` gates
+  (bounded-parallel, `PRE_COMMIT_GATE_JOBS` default 4) + Gate 40 + conditional index regens +
+  merge-commit regression-catalog walk. Blocks the commit on any failure. Prints a non-blocking
+  `/code-review` (B-pass) reminder when the staged blast-radius is ≥`account` — the review itself
+  is MANDATORY before the merge per §4.3; the echo is only the reminder, not the gate.
+  It does **NOT** run `flutter analyze` or `flutter test` (cost split 2026-08-11 — see ADR-0018).
+  The two flutter steps dominated commit cost and were the most duplicated work in the pipeline:
+  `test/contracts/` is a strict subdirectory of `test/`, so pre-push (≥account) and CI each re-run
+  those same files. ⚠ **The exact seconds are contested and OI-102 owns that question** — an
+  in-session run measured 845s total (analyze 212s cold / ~18s warm, contracts 521s), while
+  OI-102's board-verified JSON-reporter run the same day measured the contracts subset alone at
+  1114.6s over 477 files. Treat 845s as a floor, not a settled figure; the decision holds under
+  either. `PRE_COMMIT_FULL=1` runs analyze + the FULL suite here; `PRE_COMMIT_LEGACY=1` restores
+  the old analyze + contracts-subset behaviour. If both are set, `PRE_COMMIT_FULL` wins.
+- **`scripts/pre-push.sh` (analyze always + blast-radius-tiered suite):**
+  `flutter analyze --no-fatal-infos` runs **unconditionally**, above every early exit — placement
+  is load-bearing, because on a `feature`-tier branch push it is the only compile check that runs
+  anywhere (see the CI row). Then the full `flutter test` runs only when the pushed range's
+  blast-radius is ≥`account` (auth/ai_coach/sync/ai-proxy/payment/migrations/CLAUDE.md/…).
+  `feature`-tier pushes (docs / most of `scripts/` / `.claude/` / `backups/` / profile-only)
+  **skip** the local full suite — note `scripts/` is NOT uniformly feature-tier: the hook scripts
+  and the review/blast-radius machinery are individually pinned `platform` in
+  `docs/blast_radius.yaml`.
+  Fail-safe: any uncertainty runs the suite. Force it with `PRE_PUSH_FULL=1`. (Tier via
+  `scripts/blast_radius_from_diff.dart`; lean-workflow batch 2026-06-01, analyze added 2026-08-11.
+  Pinned by `test/contracts/hook_gate_placement_test.dart` +
+  `test/scripts/pre_push_analyze_always_e2e_test.dart`.)
+- **CI (`.github/workflows/test.yml`) is the full-suite source-of-truth for `main`** — analyze +
+  full `flutter test` + all gates + a debug-APK compile. ⚠ It triggers on `push: [main, develop]`
+  **and `pull_request` targeting them** — **not on every push**. Counted live 2026-08-11:
+  `git ls-remote --heads origin` = 29 refs (28 non-main); 8 have an open PR and so DO get CI on
+  every push; the other ~20, including most `claude/*` working branches, get none. Corrected
+  2026-08-11 — this row previously claimed "on every push, regardless of the local tier", and
+  `pre-push.sh` justified its `feature`-tier skip with "CI runs it ~2 min after push (the
+  backstop)" on the strength of it. (A first correction attempt overshot in the other direction,
+  claiming "42 branches, none run CI"; 42 counts remote-*tracking* refs from `git branch -r`,
+  including `origin/main` and refs deleted upstream, and it missed the PR trigger entirely.)
+  The PR-less majority is exactly why pre-push analyze is unconditional rather than tiered.
 
 ### Riverpod Code Generation
 The project has `riverpod_generator` installed but providers are currently written manually using `flutter_riverpod` directly (no `.g.dart` files). If you add `@riverpod` annotations, run:
@@ -301,7 +326,7 @@ After observations captured + before brainstorming:
 17. **Release error handling:** `kDebugMode` guard — detailed errors only in debug, generic message in release.
 18. **Edge Function input limits:** enforce message (5K) + snapshot (10K) limits server-side on ALL AI endpoints.
 19. **Server-side subscription verification:** high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`) MUST call `verifyFromServer()` in `gate()`.
-20. **No deferred test failures.** Failing tests on `main` are P0 blockers. The label "pre-existing failure" is banned. Pre-commit hook blocks any commit while `flutter test` reports failures; never `--no-verify` to "ship something else first".
+20. **No deferred test failures.** Failing tests on `main` are P0 blockers. The label "pre-existing failure" is banned. **Where this is enforced changed 2026-08-11** (cost split, §0): pre-commit no longer runs `flutter test` at all, so the blocking gate is now the *push* — `scripts/pre-push.sh` at ≥`account` tier, and CI on the push to `main`. The POLICY is unchanged and is deliberately not weakened by the move: never `--no-verify` around either gate, never "ship something else first", and a red `main` is still a P0. Want the old commit-time gate back for a run? `PRE_COMMIT_FULL=1` (analyze + full suite) or `PRE_COMMIT_LEGACY=1` (analyze + `test/contracts/`).
 21. **Regression test required for every fix.** Test that FAILS without the fix and PASSES with it. Cite test path in commit message. Source-grep tests under `test/contracts/` count for PRESENCE only — every SoT registry entry MUST ALSO have a `behavioral_test_path:` (Hive-write → Hive-read assertion, or fakeAsync race harness, or end-to-end flow) that fails when the runtime path is broken even if the source text remains intact. Gate 42 (`scripts/check_sot_behavioral_test_paths.dart`) is **STRICT by default** and BLOCKS the commit: a new entry needs a real `behavioral_test_path:`, or `presence_only: true` documenting why a behavioral test is not feasible (6 entries carry it today — Deno-EF/static concepts). **There is no `behavioral_test_required: true` backlog** — that escape hatch was removed when the gate flipped strict, and the marker is now itself a hard blocker. `--warn-only` exists for in-branch debugging and must never reach main. Corrected 2026-08-07: this rule previously described the pre-strict WARN behaviour, and a session planning OI-75 read it as licence to add a bare registry entry. (The `feedback_source_grep_false_confidence.md` this rule has always cited is NOT in the repo — it lives only in the harness-local memory directory, a trap `memory/MEMORY.md:8` documents for the whole `feedback_*` family. Only two `feedback_*.md` are actually committed. Left cited rather than deleted because the name is load-bearing vocabulary across the board, but flagged here so nobody burns a search on it.)
 22. **Bug fixes require a diagnose-doc.** Every commit on `main` matching `^(fix|bug|regression)(\([^)]*\))?:` MUST reference `docs/diagnoses/<date>-<slug>-<id>.md` via `closes-diagnose: <bug-id>` in the commit body. Doc must pass `dart run scripts/validate_diagnose_doc.dart <path>`. Subagents dispatched for investigation MUST receive `docs/agent_brief_preamble.md` as prefix. Pre-commit hook + `/build-apk` Gate 10 enforce this.
 23. **No stopping mid-batch.** Multi-task instructions ("fix everything", "address each and everything") run through to completion. Valid stops only on: whole batch done / BLOCKED on user-only action / new interrupting instruction. Banned: "context tight", "responsible handoff", "fresh session pickup". Documentation per rule 22 + memory file update for any NEW pattern + CLAUDE.md update for any NEW invariant — always.

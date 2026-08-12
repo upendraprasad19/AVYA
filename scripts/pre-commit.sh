@@ -1,7 +1,10 @@
 #!/bin/sh
-# AVYA pre-commit gate — analyze + test only (APK Test #12.6+).
+# AVYA pre-commit gate — discipline gates only (lean path since 2026-08-11).
 #
-# Blocks the commit if `flutter analyze` or `flutter test` fail.
+# Blocks the commit if any discipline gate fails. It does NOT run
+# `flutter analyze` or `flutter test` on the default path — both moved to
+# scripts/pre-push.sh; see the COST SPLIT note below for the measurements that
+# drove that, and for the two escape hatches that restore the old behaviour.
 # Runs from any working tree under the repo root.
 #
 # The bug-fix discipline gate (rule 22 — closes-diagnose / regression-test-skipped)
@@ -41,30 +44,98 @@ flutter() {
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE flutter "$@"
 }
 
-echo "[pre-commit] flutter analyze..."
-flutter analyze --no-fatal-infos
-
-# Audit 2026-05-20 / I10: pre-commit splits into FAST (here) + FULL
-# (scripts/pre-push.sh). The full `flutter test` suite (~7 min) is moved
-# to pre-push so commits aren't blocked on the slow run. CI runs full
-# suite on every push regardless.
+# COST SPLIT (2026-08-11 — this script is scripts/pre-commit.sh; the literal
+# path is kept in this header because scripts/check_hooks_installed.dart
+# (Gate 32) looks for it in the INSTALLED hook to prove the hook is ours.
+# Gate 32's other accepted anchor is the string `flutter analyze`, which now
+# appears only inside a hatch below — so without this line the gate would hang
+# off an optional string. NOTE it was already 0-occurrence before this batch,
+# i.e. this REPAIRS a pre-existing latent breakage rather than causing one.)
 #
-# Fast path: contract tests + analyzer + the gate loop (~3 min). 86 gate files
-# exist; the loop runs 71 (15 are case-skipped below). 2 of those 15
-# (check_no_deferral_euphemism, check_skipped_discipline_budget) are invoked
-# EXPLICITLY above, so real pre-commit coverage is 73 of 86 — quoting only "71"
+# Audit 2026-05-20 / I10 had already moved the FULL suite to pre-push, leaving
+# analyze + the contract subset here. Measuring each phase separately showed
+# that was still the bulk of the cost:
+#
+#   flutter analyze                212s   (cold; see caveat (a))
+#   flutter test test/contracts/   521s   (see caveat (b))
+#   Gate 40 + 3 explicit gates       7s
+#   71-gate check_*.dart loop      105s
+#   ------------------------------------
+#   total                          845s   (14m05s) on EVERY commit
+#
+# TWO CAVEATS ON THOSE NUMBERS, both surfaced by the round-1 review — do not
+# quote the table as settled:
+#   (a) a WARM `flutter analyze` measures ~18s. 212s is a cold first-run
+#       figure (includes pub get + analyzer startup), not steady state.
+#   (b) OI-102's own JSON-reporter run, the SAME DAY, measured
+#       `flutter test test/contracts/` at 1114.6s over 477 files — 2.1x the
+#       521s above. OI-102 is the board-VERIFIED figure and is itself OPEN
+#       precisely because no contamination-free measurement exists (it warns
+#       that in-session timings are artifact-prone, which the 845s run was).
+#       Treat 845s as a FLOOR, not a measurement.
+#
+# The decision does not turn on which figure is right: under either, the two
+# flutter steps dominate, and both are ALREADY re-run at pre-push (>=account)
+# and in CI, since test/contracts/ is a strict SUBDIRECTORY of test/. Neither
+# step is scoped to the staged diff, so a one-line change paid the full cost.
+#
+# Both now run in scripts/pre-push.sh, which fires ONCE per batch (CLAUDE.md
+# §4.3 "batch commits; push once per logical batch") rather than once per
+# commit. What remains here is ~112s of gates.
+#
+#   - `flutter analyze` runs there UNCONDITIONALLY, which is load-bearing, not
+#     incidental: .github/workflows/test.yml triggers only on
+#     `push: [main, develop]` plus `pull_request` targeting them. Of the 28
+#     non-main branches on origin, the 8 with an open PR DO get CI; the ~20
+#     without one (including most claude/* working branches) get NONE. For
+#     those, local analyze is the only check between the push and the
+#     merge-to-main. (pre-push.sh's older "CI runs it ~2 min after push"
+#     comment held only for the push to main.)
+#   - the full suite stays blast-radius-tiered there, unchanged.
+#
+# 86 gate files exist; the loop below runs 71 (15 are case-skipped). 2 of those
+# 15 (check_no_deferral_euphemism, check_skipped_discipline_budget) are invoked
+# EXPLICITLY below, so real pre-commit coverage is 73 of 86 — quoting only "71"
 # understates it the same way the old "38" overstated it.
-# Heavy: flutter test (full suite, ~7 min) → runs on pre-push instead.
 #
-# Set PRE_COMMIT_FULL=1 to force the full suite locally (e.g. before a
-# merge to main).
+# Escape hatches. STRONGEST FIRST: if both are set, PRE_COMMIT_FULL wins, so
+# asking for more gating never silently yields less (round-1 review finding 9 —
+# the original order handed you the weaker contracts-subset run).
+#   PRE_COMMIT_FULL=1    analyze + the FULL suite here (unchanged meaning —
+#                        e.g. before a merge to main).
+#   PRE_COMMIT_LEGACY=1  the pre-2026-08-11 behaviour verbatim (analyze + the
+#                        contract subset). This is a convenience escape hatch,
+#                        NOT a §4.6 feature flag: §4.6 wants the NEW path
+#                        default-OFF behind the gate, and here the new path is
+#                        the default. ADR-0018 reasons about ship-dark
+#                        (§4.12.4) explicitly and rejects it; see that ADR
+#                        rather than reading a §4.6 compliance claim into this.
+# Gate 32 identity anchor, as CODE rather than a comment (round-2 review).
+# scripts/check_hooks_installed.dart:40 accepts an installed hook containing
+# EITHER this literal path OR `flutter analyze`. The latter is now hatch-only,
+# and a comment is the first thing a cleanup pass deletes — so the anchor lives
+# in a real statement. Asserted by test/contracts/hook_gate_placement_test.dart.
+HOOK_SOURCE="scripts/pre-commit.sh"
+export HOOK_SOURCE
+
+for _hatch in PRE_COMMIT_FULL PRE_COMMIT_LEGACY; do
+  eval "_v=\${$_hatch:-}"
+  if [ -n "$_v" ] && [ "$_v" != "1" ] && [ "$_v" != "0" ]; then
+    echo "[pre-commit] WARNING: $_hatch=$_v is not '1' — the hatch is NOT active (only '1' enables it)."
+  fi
+done
+unset _v _hatch
 if [ "${PRE_COMMIT_FULL:-0}" = "1" ]; then
-  echo "[pre-commit] PRE_COMMIT_FULL=1 → flutter test (full suite)..."
+  echo "[pre-commit] PRE_COMMIT_FULL=1 → flutter analyze + flutter test (full suite)..."
+  flutter analyze --no-fatal-infos
   flutter test
-else
-  echo "[pre-commit] flutter test test/contracts/ (fast path)..."
+elif [ "${PRE_COMMIT_LEGACY:-0}" = "1" ]; then
+  echo "[pre-commit] PRE_COMMIT_LEGACY=1 → flutter analyze + flutter test test/contracts/..."
+  flutter analyze --no-fatal-infos
   flutter test test/contracts/
-  echo "[pre-commit] (full suite deferred to pre-push hook. Set PRE_COMMIT_FULL=1 to force here.)"
+else
+  echo "[pre-commit] lean path — analyze + test suite run at pre-push."
+  echo "[pre-commit] (PRE_COMMIT_FULL=1 runs the full suite here; PRE_COMMIT_LEGACY=1 the old contracts subset.)"
 fi
 
 # Regen bug index if any diagnose-doc was modified (per CLAUDE.md decluttering spec §8)

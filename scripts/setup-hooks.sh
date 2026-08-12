@@ -4,11 +4,24 @@
 # Run once per fresh clone. Re-running is idempotent (overwrites both hooks
 # from scripts/pre-commit.sh and scripts/commit-msg.sh).
 #
-# Three hooks are installed:
-#   pre-commit  — flutter analyze + 38 gates + contract tests (FAST path)
-#                 plus full flutter test if PRE_COMMIT_FULL=1
-#   pre-push    — full flutter test (audit 2026-05-20 / I10 split)
-#   commit-msg  — bug-fix discipline gate (closes-diagnose / regression-test-skipped)
+# FOUR hooks are installed (see the install_hook calls below — the count said
+# "three" while installing four since prepare-commit-msg joined them):
+#   pre-commit        — 73 of 86 discipline gates + Gate 40 + conditional index
+#                       regens. NO flutter analyze / flutter test on the default
+#                       path (cost split 2026-08-11; PRE_COMMIT_LEGACY=1 or
+#                       PRE_COMMIT_FULL=1 bring them back for one run).
+#   pre-push          — flutter analyze ALWAYS, then the full flutter test suite
+#                       when the pushed range is >=account (audit 2026-05-20 /
+#                       I10 split; analyze added 2026-08-11).
+#   commit-msg        — bug-fix discipline gate (closes-diagnose /
+#                       regression-test-skipped) + the closes-oi gate.
+#   prepare-commit-msg— auto-prepends the `Blast-radius:` line.
+#
+# NOTE these are COPIES, not shims: install_hook() does a plain `cp`, so editing
+# scripts/*.sh changes nothing until this script is re-run. And it installs into
+# `git rev-parse --git-common-dir`/hooks, which is SHARED BY EVERY WORKTREE —
+# re-running from an unmerged branch changes the hooks for every concurrent
+# session at once (memory/feedback_worktree_per_session.md).
 #
 # Why two hooks? pre-commit runs BEFORE the commit message is finalized, so it
 # can't reliably read the proposed message. `git commit -m`/`-F`/`--amend` all
@@ -53,7 +66,10 @@ install_hook "$REPO_ROOT/scripts/commit-msg.sh" "$HOOKS_DIR/commit-msg"
 install_hook "$REPO_ROOT/scripts/prepare-commit-msg.sh" "$HOOKS_DIR/prepare-commit-msg"
 
 # SSH keepalive for pushes (2026-05-30 cross-check fix).
-# The pre-push hook runs the full flutter test suite (~8 min). git opens the
+# The pre-push hook runs analyze and (at >=account) the full flutter test suite,
+# so the idle window GREW on 2026-08-11 rather than shrank: analyze now runs on
+# EVERY push, including the feature-tier ones that skip the suite and previously
+# idled for only a moment. git opens the
 # SSH connection to fetch ref advertisements BEFORE running the hook, then the
 # connection sits idle for the whole suite — GitHub's SSH server drops the idle
 # git-receive-pack channel, so the object transfer AFTER the gate passes dies

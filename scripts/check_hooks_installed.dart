@@ -7,8 +7,19 @@
 // and references `scripts/pre-commit.sh`).
 //
 // The audit finding: `setup-hooks.sh` install is opt-in and never verified.
-// Fresh clone or new contributor can commit without the analyze/test gate.
+// Fresh clone or new contributor can commit without the discipline gates.
 // CI catches it on PR but local hygiene degrades + dirty pushes hit main.
+//
+// 2026-08-11 (ADR-0018): this used to say "without the analyze/test gate".
+// There is no commit-time analyze/test gate any more — both moved to pre-push —
+// so the thing an uninstalled hook loses is the ~73 discipline gates. Note the
+// `flutter analyze` disjunct below is now hatch-only in pre-commit.sh; the
+// canonical anchor is the `HOOK_SOURCE="scripts/pre-commit.sh"` statement,
+// pinned by test/contracts/hook_gate_placement_test.dart.
+//
+// STILL OPEN — OI-104: this gate checks hook PRESENCE, not FRESHNESS. Because
+// setup-hooks.sh installs by `cp`, an edited hook script is inert until the
+// installer is re-run, and this gate reports green throughout.
 //
 // Exit 0 = pass: hook installed.
 // Exit 1 = fail: hook missing or doesn't invoke scripts/pre-commit.sh.

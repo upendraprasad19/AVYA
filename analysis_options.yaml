@@ -12,9 +12,12 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   errors:
     # Tier 1 bug-catching rules (Group B-3, 2026-05-11). Severity: warning
-    # so the pre-commit hook (flutter analyze --no-fatal-infos) blocks
-    # regressions. Big-bang policy: every offender fixed in the same
-    # commit that enables the rule.
+    # so that `flutter analyze --no-fatal-infos` blocks regressions — as of
+    # 2026-08-11 (ADR-0018) that runs in the PRE-PUSH hook and in CI, not
+    # pre-commit. `warning` is still the right severity for exactly the same
+    # reason: `--no-fatal-infos` means an `info` would not block anything.
+    # Big-bang policy: every offender fixed in the same commit that enables
+    # the rule.
     unawaited_futures: warning
     avoid_dynamic_calls: warning
     cast_nullable_to_non_nullable: warning
