@@ -118,7 +118,7 @@ findings:
     reason: *s4
     fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: test/contracts/session_owner_inflight_guard_behavioral_test.dart
-    notes: "All four nutrition sinks guarded. Scope beyond that file is OI-102."
+    notes: "All four nutrition sinks guarded. Scope beyond that file is OI-111."
   - id: R1-P2-6
     title: "The guard test's ORDERING case passed inputs identical to an earlier case — asserted nothing new"
     terminal_state: blocked_on_user
@@ -163,13 +163,13 @@ findings:
     reason: *s2
     fix_state: "written, NOT yet in any commit — ships with that slice"
     verification: "grep -rln 'ForgotPasswordSheet' test/ → no matches"
-    notes: "Doc corrected to state the real coverage; the gap itself is tracked as OI-100 rather than implied away."
+    notes: "Doc corrected to state the real coverage; the gap itself is tracked as OI-109 rather than implied away."
   - id: R1-A3
-    title: "OI-102 was never actually filed — e5c2d1 closed its own scope gap against a tracker entry that did not exist"
+    title: "OI-111 was never actually filed — e5c2d1 closed its own scope gap against a tracker entry that did not exist"
     terminal_state: closed_in_commit
     commit: *slice0
     verification: docs/audit/open_issues.md
-    notes: "OI-102 and OI-100 both filed for real, each with Blocked on + Verified so the fail-closed index generator accepts them."
+    notes: "OI-111 and OI-109 both filed for real, each with Blocked on + Verified so the fail-closed index generator accepts them."
   - id: R1-A4
     title: "Fabricated +33 baseline statistic: 184 rows over 11 days, actually 791 rows over 54 days"
     terminal_state: blocked_on_user
@@ -279,14 +279,14 @@ findings:
       unstaged it exits 0. Ships in slice 0 so slices 1–3 are FORCED to register
       their concepts (§4.11 gates-before-refactor). Scoped by doc date because a
       repo-wide hard fail would be unsatisfiable against a 90-doc backlog — the
-      backlog is counted live by the gate and tracked as OI-101.
+      backlog is counted live by the gate and tracked as OI-110.
   - id: R2-N15
     title: "OI numbering collided across sessions — my OI-96/97/98 were already taken on origin/main by another session's merged work"
     terminal_state: closed_in_commit
     commit: *slice0
     verification: "git show origin/main:docs/audit/open_issues.md | grep '^## OI-9'"
     notes: >
-      Renumbered to OI-102/100/101 and every citation updated (closure YAML,
+      Renumbered to OI-111/100/101 and every citation updated (closure YAML,
       e5c2d1, c9e2b7). §4.13's worktrees isolate the git INDEX; they do not
       isolate a shared numbering NAMESPACE, and nothing detects a collision —
       both sides validate fine in isolation. Found only because slice 0 had to
@@ -331,7 +331,7 @@ findings:
     notes: >
       Learned only by fast-forwarding onto origin/main mid-slice. A new SoT
       concept now needs a real `behavioral_test_path:` or `presence_only: true`
-      with a documented reason. OI-101's fix-shape text corrected accordingly —
+      with a documented reason. OI-110's fix-shape text corrected accordingly —
       it would otherwise have sent slices 1-3 down a route the gate now blocks.
       Recorded because the wrong version was written from a CLAUDE.md read that
       was one day stale, which no amount of care at authoring time would have
@@ -403,7 +403,7 @@ findings:
     verification: "comm -12 of the two boards' OI headers -> stops at OI-98"
     notes: >
       Mine renumbered 99 -> 102. Second instance in one day; the manual renumber
-      is a patch, not a fix. Structural gap filed as OI-103 rather than
+      is a patch, not a fix. Structural gap filed as OI-112 rather than
       hand-patched a third time.
   - id: B5
     title: "The SoT-citation gate failed OPEN on a missing registry (exit 0 'SKIP') while failing CLOSED on a zero-concept parse — same meaning, opposite handling"
@@ -493,7 +493,7 @@ findings:
       RESIDUE, filed not swallowed: this script cannot be unit-tested at all
       (top-level IIFE, no require.main guard; CI provisions deno but never
       node), so both fixes had to be proven by extracting and eval-ing source
-      text. That gap is OI-105. It is NOT bundled here because changing the
+      text. That gap is OI-114. It is NOT bundled here because changing the
       execution model of the script that had just run a live production deploy,
       in the same commit as the defects it would test, is the wrong order —
       the guard lands first and standalone (§4.11).

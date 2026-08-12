@@ -7,7 +7,7 @@ bpass: accepted
 tier: full
 blast_radius: platform
 reviewed_at: 2026-08-09T09:45:00+05:30
-bpass_record: docs/reviews/d4a8de00-review.md
+bpass_review: docs/reviews/d4a8de00-review.md
 closure_ledger: docs/audit/post38-auth-fixes.closure.yaml
 ---
 

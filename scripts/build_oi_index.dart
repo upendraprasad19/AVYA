@@ -100,6 +100,37 @@ List<String> unrecognisedStatuses(String content) {
   return bad;
 }
 
+/// Every `## OI-NN` id that appears more than once, as `"OI-NN appears N times"`.
+///
+/// Scans ALL headers deliberately, NOT [parseOpenIssues]' OPEN-only result: the
+/// board is a lookup table keyed by id, so an OPEN entry colliding with a CLOSED
+/// one is the same corruption. Filtering to OPEN first would make this check
+/// narrower than the claim it makes.
+///
+/// THE SCAR THIS EXISTS FOR — OI numbers are minted by eyeballing the board's
+/// tail. There is no allocator, and until this check NOTHING detected a clash.
+/// On 2026-08-13 six ids (OI-100..105) existed twice — once on `main`, once on a
+/// branch — naming entirely different issues. The two boards **merged cleanly**:
+/// git saw additions in different regions of one file, so there was no conflict
+/// to notice. This generator then rendered the corrupt board and exited 0,
+/// because it iterates a List and never asked whether an id repeats. Two index
+/// rows share an id, and `closes-oi: OI-NN` stops naming one thing.
+///
+/// Recorded as OI-112, which predicted this before it happened.
+List<String> duplicateIds(String content) {
+  final lines = content.replaceAll('\r\n', '\n').split('\n');
+  final counts = <String, int>{};
+  for (final line in lines) {
+    final head = _sectionRe.firstMatch(line);
+    if (head == null) continue;
+    final id = head.group(1)!;
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+  final dupes = counts.entries.where((e) => e.value > 1).toList()
+    ..sort((a, b) => _num(a.key).compareTo(_num(b.key)));
+  return [for (final d in dupes) '${d.key} appears ${d.value} times'];
+}
+
 /// Parses the board into its OPEN entries. Closed entries live in
 /// `closed_issues.md`; unknown vocabulary is rejected by [unrecognisedStatuses]
 /// before this result is ever rendered.
@@ -187,6 +218,26 @@ void main() {
     for (final u in unknown) {
       stderr.writeln('  - $u');
     }
+    exit(1);
+  }
+
+  // Duplicate-id check — BEFORE the OPEN-only parse, deliberately. An OPEN
+  // entry colliding with a CLOSED one is the same corruption, and
+  // parseOpenIssues cannot see it.
+  final dupes = duplicateIds(content);
+  if (dupes.isNotEmpty) {
+    stderr.writeln('[OI-INDEX] FAIL: ${dupes.length} OI id(s) appear more than '
+        'once in $_boardPath. The board is a lookup table keyed by id — two '
+        'entries sharing one makes `closes-oi: OI-NN` ambiguous and the index '
+        'silently wrong:');
+    for (final d in dupes) {
+      stderr.writeln('  - $d');
+    }
+    stderr.writeln('  This is the concurrent-minting collision recorded as '
+        'OI-112: six ids were minted twice, on two branches, and the boards '
+        'MERGED CLEANLY because the additions sat in different regions.\n'
+        '  Fix: renumber the NEWER side to the next free id — and sweep EVERY '
+        'branch for the ceiling, not just this one. It moves.');
     exit(1);
   }
 

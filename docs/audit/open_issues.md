@@ -2289,7 +2289,7 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Blast radius estimate**: `account` — touches the sync restore path; no migration, no schema
   change for the first fix shape.
 
-## OI-102 — the stale-`userId` sink guard covers the nutrition fan-out only; ~26 sibling sinks share the shape
+## OI-111 — the stale-`userId` sink guard covers the nutrition fan-out only; ~26 sibling sinks share the shape
 
 - **Status**: OPEN
 - **Blocked on**: nothing — this is bounded work, not a decision
@@ -2318,7 +2318,7 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   lines, so the sweep cannot silently regress (§4.11 gates-before-refactor).
 - **Blast radius estimate**: `platform`.
 
-## OI-100 — ForgotPasswordSheet's two-step code flow has no test
+## OI-109 — ForgotPasswordSheet's two-step code flow has no test
 
 - **Status**: OPEN
 - **Blocked on**: nothing — bounded work
@@ -2342,7 +2342,7 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   tested; the handoff itself is not.
 - **Blast radius estimate**: `platform`.
 
-## OI-101 — ~90 diagnose-docs cite a `sot_registry_entry:` concept that does not exist
+## OI-110 — ~90 diagnose-docs cite a `sot_registry_entry:` concept that does not exist
 
 - **Status**: OPEN
 - **Blocked on**: nothing — bounded, mechanical work. Gate 44 already prevents new instances.
@@ -2379,11 +2379,21 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   identifier or a sentinel closes the gate's remaining blind spot.
 - **Blast radius estimate**: `feature` (docs + a constant), though it touches many files.
 
-## OI-103 — OI numbering collides across concurrent sessions and nothing detects it
+## OI-112 — OI numbering collides across concurrent sessions; the LANDING half is now gated, the MINT-TIME half is not
 
 - **Status**: OPEN
-- **Blocked on**: nothing — a small gate, but it needs a decision on where it runs (see below)
-- **Verified**: 2026-08-09 (two live collisions in one day: OI-96/97/98, then OI-99)
+- **Blocked on**: nothing — the remaining half is a cross-branch check, and where it runs is still the open decision below
+- **Verified**: 2026-08-13 (a THIRD and largest collision: six ids at once — see "Partially closed")
+- **Partially closed 2026-08-13**: `scripts/build_oi_index.dart` now **fails closed on duplicate
+  ids within the board** (`duplicateIds()`), so a corrupt board can no longer render and cannot
+  LAND — the merge commit regenerates the index and the gate fires. What this does NOT do is warn
+  at **mint time**: two sessions on two branches each picking "the next free number" still both
+  validate clean in isolation, because each board is individually duplicate-free. That is the half
+  OI-112's fix-shape below addresses, and it remains open.
+  Evidence it detects: planting a second `## OI-111` made the generator exit 1 naming the id.
+  Mutation-proven — rebuilding the check over `parseOpenIssues` (which drops CLOSED entries)
+  reddens exactly the OPEN-vs-CLOSED test; neutering it reddens 4.
+  Tests: `test/contracts/oi_index_test.dart` (group "OI-112 scar").
 - **Identified**: 2026-08-09 · B-pass Finding 4 on `d4a8de00`
 - **Risk class**: cross-session process drift — silent, and both sides validate clean
 - **What's wrong**: §4.13 worktrees isolate the git INDEX; they do NOT isolate the shared
@@ -2404,7 +2414,7 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   A cheaper complement: allocate from a high, per-session-reserved block instead of "next free".
 - **Blast radius estimate**: `feature` (a script plus wiring).
 
-## OI-104 — the anon telemetry lane's daily budget is a non-atomic count-then-insert
+## OI-113 — the anon telemetry lane's daily budget is a non-atomic count-then-insert
 
 - **Status**: OPEN
 - **Blocked on**: nothing
@@ -2423,7 +2433,7 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   explicitly and say so in the function header, so nobody later reads 200 as a guarantee.
 - **Blast radius estimate**: `platform` (Edge Function + possibly a migration).
 
-## OI-105 — `.claude/deploy_via_api.js` cannot be unit-tested, so its logic is only ever proven by hand
+## OI-114 — `.claude/deploy_via_api.js` cannot be unit-tested, so its logic is only ever proven by hand
 
 - **Status**: OPEN
 - **Blocked on**: nothing

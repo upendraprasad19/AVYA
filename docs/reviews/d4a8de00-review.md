@@ -62,8 +62,8 @@ neutering the reviewer described now turns 3 cases red.
 own `## OI-99`. R2-N15's claim to have closed the numbering collision was stale
 within hours — the same bug-class, recurring live, for the second time in a day.
 
-**Fix:** mine renumbered OI-99 → **OI-102** (100/101 verified free). Overlap
-with origin/main now stops at OI-98. The structural gap is filed as **OI-103**
+**Fix:** mine renumbered OI-99 → **OI-111** (100/101 verified free). Overlap
+with origin/main now stops at OI-98. The structural gap is filed as **OI-112**
 rather than patched again by hand.
 - **verification:** `comm -12 <(git show origin/main:docs/audit/open_issues.md | grep -oE '^## OI-[0-9]+' | sort -u) <(grep -oE '^## OI-[0-9]+' docs/audit/open_issues.md | sort -u) | tail -1` → `## OI-98`
 
@@ -87,7 +87,7 @@ frontmatter, so both must be backdated and the disagreement is visible in review
 opt out. This is a grandfathering mechanism, not a security boundary — that
 sentence is now in the function's own doc comment. The reviewer's second half
 (pre-commit never passes `--strict`) is accurate and intended: `--strict` is for
-clearing the OI-101 backlog, not for daily commits.
+clearing the OI-110 backlog, not for daily commits.
 - **verification:** `--plain-name "backdating the FILENAME"` case
 
 ## Finding 7 — P3 — internal_consistency — **ACCEPTED, CORRECTED HERE**
@@ -111,7 +111,7 @@ correctly rejected for authenticated writers; recorded sha256 matches the file),
 **Reviewer's one un-raised caveat, recorded rather than dropped:** the anon-lane
 budget is a non-atomic count-then-insert, now reachable with the public anon key
 — a soft rather than hard 200/day cap. It follows the codebase's pre-existing
-pattern and is not a regression from this commit; filed as **OI-104**.
+pattern and is not a regression from this commit; filed as **OI-113**.
 
 ## Founder triage
 

@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### oi_board_id_uniqueness (1 bugs)
+- 2026-08-13 b7e3d1 — Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw…
+
 ### deploy_smoke_tolerated_codes (1 bugs)
 - 2026-08-10 a7c3f9 — Deploying log-client-error v13 returned HTTP 201 with a healthy ACTIVE function, and then printed "Smoke FAIL — HTTP 401 (not in tolerated set [400])" followed by rollback instructions. The deploy was…
 
@@ -971,6 +974,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-13 | b7e3d1 | Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw… | oi_board_id_uniqueness | test/contracts/oi_index_test.dart |
 | 2026-08-10 | a7c3f9 | Deploying log-client-error v13 returned HTTP 201 with a healthy ACTIVE function, and then printed "Smoke FAIL — HTTP 401 (not in tolerated set [400])" followed by rollback instructions. The deploy was… | deploy_smoke_tolerated_codes | "not_applicable — see regression_test_planned for why, and what was done instead" |
 | 2026-08-10 | d7b3e9 | `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three… | worktree_retirement_allow_list | test/scripts/retire_worktree_lib_test.dart |
 | 2026-08-09 | a4f7c2 | `git rev-parse --show-toplevel` returned `.../.claude/worktrees/post38-auth-fixes` from EVERY worktree in the repo and from the shared main folder. A session working in… | worktree_config_integrity | test/scripts/worktree_config_integrity_e2e_test.dart |

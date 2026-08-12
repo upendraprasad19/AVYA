@@ -91,7 +91,7 @@ regression_test_planned: >
   op_type auth_send_phone_otp_failed returns 200 {"priority_lane":"pre_auth"}.
   Making this script unit-testable (a require.main guard + module.exports) is a
   real change to the execution model of the tool that had just performed a
-  production deploy, and is filed as OI-105 rather than bundled into the same
+  production deploy, and is filed as OI-114 rather than bundled into the same
   commit that fixes the defects it would test.
 touched_layers_checked:
   - { tier: 1, name: client_code, status: not_applicable, evidence: "no lib/ change; this is .claude/ deploy tooling, classified feature-tier by scripts/blast_radius_from_diff.dart" }
