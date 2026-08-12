@@ -78,6 +78,17 @@ supabase/.supabase/
 # DO NOT commit. See scripts/check_alerts.dart credential-model header.
 .claude/.alerts.env
 
+# Post-push CI reconciler state — pushes that landed whose CI outcome is not
+# yet known. Written by scripts/arm_ci_reconcile.sh, consumed + rewritten by
+# scripts/reconcile_ci.dart (SessionStart). Machine-local and transient; each
+# clone's pending set is its own. The .tmp sibling is the atomic-rename staging
+# file, which only exists mid-rewrite.
+.claude/.ci_reconcile_pending.jsonl
+.claude/.ci_reconcile_pending.jsonl.tmp
+# Kill switch: `touch` this and the reconciler hook does nothing. Machine-local
+# — disabling it in one clone must not disable it for everyone.
+.claude/.reconcile_ci.disabled
+
 # Edge function deploy payloads (regenerable via .claude/emit_payload.js)
 # Contain inlined source — no point checking them in.
 .claude/_payload_*.json
