@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../supabase/supabase_test_helper.dart';
+
 /// Layer 3: pgvector / semantic memory tests.
 ///
 /// Tests the memory_embeddings table and match_memories RPC function
@@ -38,6 +40,12 @@ void main() {
 
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
+    // That binding stubs ALL HTTP to a synthetic 400 without opening a
+    // socket, which kills these INTEGRATION tests in setUpAll before their
+    // first assertion (diagnose 3b7e1c). This file installs the binding
+    // itself rather than calling SupabaseTestHelper.init(), so it must undo
+    // the stub itself too — the original fix reached only test/supabase/.
+    SupabaseTestHelper.restoreRealHttp();
     const channel = MethodChannel('plugins.flutter.io/shared_preferences');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall call) async {

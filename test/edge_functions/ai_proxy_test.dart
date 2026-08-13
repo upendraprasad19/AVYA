@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../supabase/supabase_test_helper.dart';
+
 /// Layer 3: AI proxy Edge Function API tests.
 ///
 /// Direct HTTP calls to Edge Functions — no UI, no Flutter widgets.
@@ -29,6 +31,12 @@ void main() {
 
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
+    // That binding stubs ALL HTTP to a synthetic 400 without opening a
+    // socket, which kills these INTEGRATION tests in setUpAll before their
+    // first assertion (diagnose 3b7e1c). This file installs the binding
+    // itself rather than calling SupabaseTestHelper.init(), so it must undo
+    // the stub itself too — the original fix reached only test/supabase/.
+    SupabaseTestHelper.restoreRealHttp();
     const channel = MethodChannel('plugins.flutter.io/shared_preferences');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall call) async {

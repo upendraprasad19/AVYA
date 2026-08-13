@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -92,13 +93,40 @@ class SupabaseTestHelper {
     HttpOverrides.global = null;
   }
 
+  /// Installs the test binding AND undoes its HTTP stub, in that order.
+  ///
+  /// ORDER IS LOAD-BEARING: `_mockSharedPreferences()` calls
+  /// `TestWidgetsFlutterBinding.ensureInitialized()`, which is what INSTALLS the
+  /// stub. Calling [restoreRealHttp] first and the binding second re-installs it
+  /// and the fix silently evaporates.
+  ///
+  /// Extracted as its own method so both facts are TESTABLE without a live
+  /// Supabase URL — round-2 review showed that deleting the `restoreRealHttp()`
+  /// call from `init()`, and inverting the two lines, BOTH left the suite green.
+  /// The behavioural test drove `restoreRealHttp()` directly and never drove the
+  /// sequence. See test/supabase/http_override_restored_test.dart.
+  ///
+  /// Any test file that installs the binding itself instead of calling
+  /// [init] must call this (or [restoreRealHttp]) too — see
+  /// test/edge_functions/{ai_proxy,pgvector}_test.dart.
+  @visibleForTesting
+  static void prepareBinding() {
+    _mockSharedPreferences();
+    restoreRealHttp();
+  }
+
   /// Initialize Supabase and Hive for testing.
   /// Call once in setUpAll().
-  static Future<void> init() async {
-    _mockSharedPreferences();
-    restoreRealHttp(); // order matters — see the doc comment above.
+  ///
+  /// [url] / [anonKey] override the compile-time `--dart-define` values. They
+  /// exist ONLY so the wiring test can point a real `init()` at a loopback
+  /// server: the defines are `const`, so without an override no test could drive
+  /// this method at all.
+  static Future<void> init({String? url, String? anonKey}) async {
+    prepareBinding();
 
-    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+    await Supabase.initialize(
+        url: url ?? supabaseUrl, anonKey: anonKey ?? supabaseAnonKey);
     _client = Supabase.instance.client;
 
     // Initialize Hive in a temp directory for tests.

@@ -42,11 +42,24 @@ provider_invalidations: not_applicable
 telemetry_op_types: not_applicable
 cross_account_guard: not_applicable
 forbidden_patterns_checked: >-
-  Grepped test/ for other `TestWidgetsFlutterBinding.ensureInitialized()` call sites
-  that are followed by real network I/O. test/supabase/ is the only integration
-  surface in the repo that needs a live socket; the remaining call sites are unit and
-  widget tests whose HTTP is mocked deliberately, where the binding's override is
-  correct and must NOT be cleared. Stated as known-exposure, NOT a census.
+  ⚠ CORRECTED 2026-08-13. The first version of this field claimed "test/supabase/ is
+  the only integration surface in the repo that needs a live socket". That was FALSE
+  and round-2 review disproved it behaviourally: `test/edge_functions/ai_proxy_test.dart`
+  and `pgvector_test.dart` call `TestWidgetsFlutterBinding.ensureInitialized()` inline
+  in their own setUpAll, never call SupabaseTestHelper.init(), and were still returning
+  the identical `AuthUnknownException(... status code 400)` this diagnose is about —
+  in the same CI job, one step later. The fix reached 2 of the 4 affected files while
+  the doc asserted a clean census.
+  THE REAL CENSUS, run per-file rather than asserted: ~150 files under test/ call
+  `ensureInitialized()`. Exactly THREE need the stub undone —
+  `test/supabase/supabase_test_helper.dart` (via `prepareBinding()`, used by
+  auth_restore + sync_service), `test/edge_functions/ai_proxy_test.dart` and
+  `test/edge_functions/pgvector_test.dart` (both now call `restoreRealHttp()`
+  directly). `test/edge_functions/webhook_test.dart` never installs the binding at all
+  and needs nothing. Every other call site is a unit or widget test whose HTTP is
+  mocked DELIBERATELY — clearing the override there would be the bug, not the fix.
+  Verified by listing every `ensureInitialized()` file and checking each for a
+  restoration call, not by a single grep whose result was generalised.
 proposed_fix: >-
   Keep the binding, drop only its HTTP interception. The binding cannot be removed —
   `Supabase.initialize()` needs the mocked `shared_preferences` MethodChannel that
@@ -59,19 +72,26 @@ proposed_fix: >-
   readable side is `HttpOverrides.current`. Reading `.global` is a compile error,
   which is how the first draft of the regression test failed to build.
 regression_test_planned: >-
-  test/supabase/http_override_restored_test.dart (NEW). BEHAVIOURAL, not a
-  source-grep: it binds a real HttpServer on 127.0.0.1:0, counts hits, and asserts
-  (a) with the binding's stub active a GET returns 400 and the server sees ZERO
-  requests, and (b) after restoreRealHttp() the same GET returns 200 and the server
-  sees EXACTLY ONE. Hermetic — loopback only, no credentials, no Supabase project —
-  so it runs in the ordinary unit-test job as well, meaning the protection holds even
-  when the Actions secrets are absent. That is the precise condition under which this
-  bug hid, so a credential-gated test would have been worthless here.
+  TWO files, both BEHAVIOURAL (bind a real socket, count hits) rather than
+  source-greps, and both hermetic — loopback only, no credentials, no Supabase
+  project — so they run in the ordinary unit-test job. Deliberate: this bug hid
+  BECAUSE the credential-gated suite never ran, so a credential-gated test would
+  inherit the same blind spot.
+  (1) test/supabase/http_override_restored_test.dart — asserts the stub answers 400
+  with ZERO server hits, that restoreRealHttp() yields 200 with EXACTLY ONE hit, and
+  that prepareBinding() leaves no override. Order-independent: each test re-installs
+  the captured stub in setUp, verified across 3 randomize-ordering seeds.
+  (2) test/supabase/prepare_binding_order_test.dart — ONE test in its OWN FILE so it
+  gets a VIRGIN isolate. `ensureInitialized()` is idempotent, so once anything has
+  touched the binding both orderings behave identically: the ordering assertion is
+  only observable before the first touch. Measured — with this test inside file (1),
+  inverting the two lines stayed GREEN; in its own file the same mutation is RED.
 touched_layers_checked:
   - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "2/2 green in test/supabase/http_override_restored_test.dart; the helper is test-only code, no lib/ surface touched." }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "Hive is initialized into a systemTemp dir by the helper; unchanged by this fix." }
   - { tier: 10, name: secrets_api_keys, status: verified, evidence: "gh api repos/upendraprasad19/AVYA/actions/secrets -> total_count 2 (SUPABASE_URL, SUPABASE_ANON_KEY, both created 2026-08-12T15:44Z). Their arrival is what un-skipped the suite; the fix does not read or alter them." }
-  - { tier: 12, name: client_server_contract, status: verified, evidence: "MUTATION-PROVEN twice, both non-destructively. (1) Against a bogus host: pre-fix gives `AuthUnknownException ... status code 400` — byte-identical to the CI failure — while post-fix gives `SocketException: Failed host lookup`, i.e. a real socket was attempted. (2) Gutting restoreRealHttp()'s body reddens the new test with `Expected: null / Actual: <Instance of '_MockHttpOverrides'>`, naming the culprit class. Neither run contacted the production project." }
+  - { tier: 12, name: client_server_contract, status: verified, evidence: "MUTATION-PROVEN four ways, none contacting the production project. (1) Bogus-host A/B: pre-fix gives `AuthUnknownException ... status code 400` — byte-identical to the CI failure — post-fix gives `SocketException: Failed host lookup`, i.e. a real socket was attempted. Re-run per file, this is ALSO what proved ai_proxy/pgvector were still broken after the first fix. (2) Gutting restoreRealHttp()'s body reddens the behavioural test. (3) Deleting the restoreRealHttp() call from prepareBinding() reddens it. (4) INVERTING the two lines reddens prepare_binding_order_test.dart — and only there: inside the main file the same mutation stayed GREEN, because ensureInitialized() is idempotent and that file's setUpAll had already installed the binding. The virgin-isolate file exists solely to make (4) observable." }
+  - { tier: 11, name: external_services, status: verified, evidence: "No workflow change in this piece. `.github/workflows/test.yml` runs test/supabase/ then test/edge_functions/ in the same `supabase-tests` job, which is why the two files left unfixed by the first attempt would have failed one step after the ones that were fixed." }
 impact_analysis: >-
   Blocked 100% of the repo's Supabase integration coverage — 6 files that have never
   once executed in CI (test/supabase/auth_restore_test.dart, sync_service_test.dart,
