@@ -111,15 +111,34 @@ void main() {
     });
 
     test('reports every duplicated id, in numeric order', () {
-      final board = [100, 101, 102, 103, 104, 105]
+      // The ids MUST span digit widths or this test cannot fail for the
+      // property it names. B-pass caught the first version using
+      // OI-100..105 — six ids of identical width, where lexical and numeric
+      // order COINCIDE, so a lexical `.sort()` passed it while the `reason:`
+      // string claimed otherwise. Same shape as the sibling parseOpenIssues
+      // sort test above, and the same lesson as Gate 44: a test that cannot
+      // go red proves nothing.
+      //
+      // Numeric:  OI-9, OI-10, OI-100, OI-105
+      // Lexical:  OI-10, OI-100, OI-105, OI-9   <- first AND last both differ
+      final board = [9, 10, 100, 105]
           .map((n) => _entry('OI-$n', 'mine', 'OPEN') +
               _entry('OI-$n', 'theirs', 'OPEN'))
           .join();
       final d = duplicateIds(board);
-      expect(d, hasLength(6), reason: 'the real 2026-08-13 shape');
-      expect(d.first, contains('OI-100'));
+      expect(d, hasLength(4));
+      expect(d.first, contains('OI-9'),
+          reason: 'numeric order — a lexical sort puts OI-10 first');
       expect(d.last, contains('OI-105'),
-          reason: 'numeric order — lexical would put OI-100 last');
+          reason: 'numeric order — a lexical sort puts OI-9 last');
+    });
+
+    test('the real 2026-08-13 shape: six ids duplicated at once', () {
+      final board = [100, 101, 102, 103, 104, 105]
+          .map((n) => _entry('OI-$n', 'mine', 'OPEN') +
+              _entry('OI-$n', 'theirs', 'OPEN'))
+          .join();
+      expect(duplicateIds(board), hasLength(6));
     });
 
     test('three of the same id counts three, not two', () {

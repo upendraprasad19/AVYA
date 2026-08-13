@@ -62,7 +62,7 @@ neutering the reviewer described now turns 3 cases red.
 own `## OI-99`. R2-N15's claim to have closed the numbering collision was stale
 within hours — the same bug-class, recurring live, for the second time in a day.
 
-**Fix:** mine renumbered OI-99 → **OI-111** (100/101 verified free). Overlap
+**Fix:** mine renumbered OI-99 → **OI-111** (109/110 verified free). Overlap
 with origin/main now stops at OI-98. The structural gap is filed as **OI-112**
 rather than patched again by hand.
 - **verification:** `comm -12 <(git show origin/main:docs/audit/open_issues.md | grep -oE '^## OI-[0-9]+' | sort -u) <(grep -oE '^## OI-[0-9]+' docs/audit/open_issues.md | sort -u) | tail -1` → `## OI-98`

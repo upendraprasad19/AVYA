@@ -2417,7 +2417,12 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 
 - **Status**: OPEN
 - **Blocked on**: nothing — the remaining half is a cross-branch check, and where it runs is still the open decision below
-- **Verified**: 2026-08-13 (a THIRD and largest collision: six ids at once — see "Partially closed")
+- **Verified**: 2026-08-13 (a FOURTH and largest collision: six ids at once — see "Partially closed").
+  The third hit a DIFFERENT session in parallel and is recorded at
+  `docs/plan-reviews/claude-commit-merge-push-process-aae061.md:56-58` — "renumbered to OI-106 at
+  merge time, an unrelated batch landed its own OI-105 on `main` first". Two sessions hit this
+  class independently within a day, neither aware of the other. The "Measured" bullet below
+  enumerates only the first two, which are the ones on THIS branch.
 - **Partially closed 2026-08-13**: `scripts/build_oi_index.dart` now **fails closed on duplicate
   ids within the board** (`duplicateIds()`), so a corrupt board can no longer render and cannot
   LAND — the merge commit regenerates the index and the gate fires. What this does NOT do is warn

@@ -286,7 +286,7 @@ findings:
     commit: *slice0
     verification: "git show origin/main:docs/audit/open_issues.md | grep '^## OI-9'"
     notes: >
-      Renumbered to OI-111/100/101 and every citation updated (closure YAML,
+      Renumbered to OI-111/109/110 and every citation updated (closure YAML,
       e5c2d1, c9e2b7). §4.13's worktrees isolate the git INDEX; they do not
       isolate a shared numbering NAMESPACE, and nothing detects a collision —
       both sides validate fine in isolation. Found only because slice 0 had to

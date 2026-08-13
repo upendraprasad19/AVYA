@@ -6,18 +6,47 @@ verdict: converged
 bpass: accepted
 tier: full
 blast_radius: platform
-reviewed_at: 2026-08-09T09:45:00+05:30
-bpass_review: docs/reviews/d4a8de00-review.md
+reviewed_at: 2026-08-13T07:40:00+05:30
+bpass_review: docs/reviews/04e29b25-review.md
 closure_ledger: docs/audit/post38-auth-fixes.closure.yaml
 ---
 
-# Plan review record — post38-auth-fixes (slice 0)
+# Plan review record — post38-auth-fixes (slice 0 + the PR #22 merge resolution)
 
 ## Scope of this record
 
-This record covers **slice 0 only** — the prod/repo reconciliation plus Gate 44,
-landed as `d4a8de00`. The batch's four remaining slices are sequenced under the
-founder-ratified §4.12.1 split and each merges under its own record.
+This record originally covered **slice 0 only** — the prod/repo reconciliation plus the
+new SoT-citation gate, landed as `d4a8de00`, reviewed ×2 on 2026-08-09 with the B-pass at
+`docs/reviews/d4a8de00-review.md`. The batch's four remaining slices are sequenced under
+the founder-ratified §4.12.1 split and each merges under its own record.
+
+**Extended 2026-08-13 — the PR #22 merge resolution.** Two further commits landed on this
+branch and are covered here rather than left implicit, because "converged" on a branch
+record otherwise implies coverage this file did not describe (B-pass finding 5):
+
+- `5fd5b337` — `log-client-error` v13 redeploy; closes OI-93's 4th instance and fixes two
+  defects in the deploy tool itself. Diagnose-doc `a7c3f9`.
+- `babea1a4` + merges `35a5e094`, `04e29b25` — the OI-id renumber (OI-100..105 →
+  OI-109..114), the duplicate-id detector in `build_oi_index.dart`, the
+  `bpass_record:`→`bpass_review:` key fix, and two catch-up merges of `origin/main`
+  (which advanced twice mid-flight). Diagnose-doc `b7e3d1`.
+
+**Review rounds for the extension — ×2 independent, context-blind, both on the plan
+BEFORE execution** (§4.12.1), then a B-pass on the result:
+
+- **Round 1 (Sonnet):** returned UNSOUND. 3 P0s — the `bpass_review` key mismatch that
+  would have hard-failed this very gate; a gate simulation that exits early on `GITHUB_REF`
+  and prints a meaningless PASS; and `safe_push.sh` invoked with its arguments in the wrong
+  order.
+- **Round 2 (Opus, on the hardened plan):** returned UNSOUND again, finding defect *classes*
+  round 1 had not — the renumber target block was already taken (OI-106 existed on unpushed
+  local `main`), and the renumber had to move BEFORE the merge or it would silently rewrite
+  `main`'s six published entries. Per §4.12.1 the successive rounds surfacing *different*
+  classes rather than more of the same is the convergence signal.
+- **B-pass:** `docs/reviews/04e29b25-review.md` — 5 findings, all P2, all fixed. The most
+  important was a test that could not fail for the property it asserted (a same-digit-width
+  fixture where lexical and numeric sort coincide) — the Gate-44 class, inside the commit
+  whose selling point is mutation-proof discipline.
 
 ## Round 1 — context-blind, 2026-08-07 (16 findings)
 

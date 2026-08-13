@@ -105,7 +105,14 @@ impact_analysis: >
   ids were affected in this instance; two prior instances affected three and one.
   Nothing shipped to users was ever at risk, which is precisely why nothing
   caught it — there is no crash, no failing test, and no alert to notice.
-related_bugs: []
+related_bugs: >
+  NONE CITABLE, and that is the finding rather than an omission. §4.1.5 asks for
+  prior instances in BOTH `related_bugs:` and `recurrence:`; the three earlier
+  collisions enumerated below produced no diagnose-doc of their own — each was
+  patched by renumbering and moved past — so there is no bug id to cite. Their
+  only durable record is OI-112's board entry and the plan-review record named
+  in `recurrence:`. Left explicit rather than silently empty: an empty list here
+  would read as "no prior art was looked for", which is the opposite of true.
 recurrence: >
   FOURTH recorded instance at least, and the largest. OI-112 records the first
   two, both 2026-08-08/09 and both on this branch: OI-96/97/98 collided and were
