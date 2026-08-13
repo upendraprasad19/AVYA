@@ -59,3 +59,37 @@ Set<String> extractRecentTestPaths(String indexContent, DateTime cutoff) {
   }
   return (dartPaths: dartPaths, sqlPaths: sqlPaths);
 }
+
+/// The environment to hand the child `flutter test`, with git's hook variables
+/// removed.
+///
+/// WHY THIS EXISTS. This gate runs ONLY on merge commits, i.e. always as a child
+/// of the `pre-commit` hook — and git exports `GIT_DIR`, `GIT_WORK_TREE` and
+/// `GIT_INDEX_FILE` into every hook. Those override BOTH `workingDirectory:` and
+/// `-C <path>`, so a test that builds its OWN throwaway git repo is silently
+/// redirected at the real repository (feedback_mistake_git_hook_env_leak). The
+/// real repo is mid-merge at that moment, so those tests fail on state that has
+/// nothing to do with the change under review.
+///
+/// Measured, not theorised (2026-08-13, merging supabase-http-fix): the walk
+/// reported 9 failures across git_safety_hook_integration_test.dart,
+/// review_gate_staged_content_not_working_tree_test.dart and
+/// blast_radius_content_rule_wired_all_scripts_test.dart. The same three files
+/// run standalone against the same mid-merge repo: 38/38 PASS. Re-running one of
+/// them with `GIT_DIR`/`GIT_INDEX_FILE` exported reproduces the failures exactly.
+/// The gate was manufacturing false failures on every conflicted merge.
+///
+/// `GITHUB_*` and `PUSH_BEFORE` are scrubbed too, matching the hermetic contract
+/// the gate-e2e family already shares (test/contracts/gate_e2e_env_hermetic_test.dart)
+/// — one of the affected files reads `GITHUB_EVENT_PATH` (diagnose c3f8e1).
+///
+/// Everything else — PATH above all — is preserved: the child still has to find
+/// `flutter`.
+Map<String, String> scrubbedChildEnvironment(Map<String, String> parent) {
+  final env = Map<String, String>.from(parent);
+  env.removeWhere((k, _) {
+    final u = k.toUpperCase();
+    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
+  });
+  return env;
+}

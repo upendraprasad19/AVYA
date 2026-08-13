@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### git_hook_env_leak (1 bugs)
+- 2026-08-13 4f2a9e — The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across…
+
 ### test_binding_stubs_http_for_integration_tests (1 bugs)
 - 2026-08-12 3b7e1c — Every file in test/supabase/ dies in setUpAll with `AuthUnknownException(message: Received an empty response with status code 400, originalError: Instance of 'Response', statusCode: 400)` the moment…
 
@@ -975,6 +978,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-13 | 4f2a9e | The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across… | git_hook_env_leak | test/scripts/regression_catalog_lib_test.dart |
 | 2026-08-12 | 3b7e1c | Every file in test/supabase/ dies in setUpAll with `AuthUnknownException(message: Received an empty response with status code 400, originalError: Instance of 'Response', statusCode: 400)` the moment… | test_binding_stubs_http_for_integration_tests | test/supabase/http_override_restored_test.dart |
 | 2026-08-11 | d4f9b2 | scripts/safe_push.sh — the ONLY sanctioned push path and the file whose entire purpose is to be trusted about whether a push landed — exits 0 having verified nothing whenever `git ls-remote` cannot… | landing_verification_probe_conflation | test/scripts/safe_push_test.dart |
 | 2026-08-10 | f3c7a2 | Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,… | test_isolation_intra_file | test/scripts/worktree_config_integrity_e2e_test.dart |
