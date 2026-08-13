@@ -816,8 +816,9 @@ Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weig
     //
     // A3 (APK Test #4, 2026-04-27): restored ICBF_LOG_INSTRUCTIONS as a
     // separate constant after CAPTAIN_MANUAL. The tag protocol is technical,
-    // not persona — the parser at line 101 still consumes these tags but v49
-    // dropped the instructions, silently breaking conversational logging.
+    // not persona — the `extractLogActions` tag parser still consumes these
+    // tags but v49 dropped the instructions, silently breaking conversational
+    // logging.
     //
     // Assemble in the spec'd order: CAPTAIN_MANUAL → ICBF_LOG_INSTRUCTIONS
     // → [3] coach_memory → snapshot → [Phase B] retrieval. The coach_memory
@@ -829,7 +830,8 @@ Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weig
     //   CAPTAIN_MANUAL            ≈ 4–5 KB
     //   ICBF_LOG_INSTRUCTIONS     ≈ 1.5 KB
     //   coachMemoryBlock          ≤ ~2 KB (renderCoachMemoryBlock cap)
-    //   snapshot_json             ≤ 10 KB (input check at line 412)
+    //   snapshot_json             ≤ 10 KB (the snapshot input check in the
+    //                             chat branch, which 400s over 10000 chars)
     //   retrievalBlock            ≤ ~1.2 KB (5 × 200 chars + header)
     // Total ceiling ≈ 19.5 KB, well under Gemini 2.5 Flash context limit.
     const promptParts: string[] = [CAPTAIN_MANUAL, ICBF_LOG_INSTRUCTIONS];

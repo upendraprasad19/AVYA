@@ -20,6 +20,7 @@ import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/exercise_display.dart';
+import 'package:icanbefitter/core/utils/phase_completion.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/detraining.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
@@ -486,6 +487,109 @@ DateTime resolveSessionDate({
   return formatDateKey(scheduledDate) == formatDateKey(now)
       ? scheduledDate
       : now;
+}
+
+/// Resolves the weekly-streak identity, the `streaks` row key, and the day
+/// counts for ONE completion — the four values `completeWorkout` needs to
+/// reckon the weekly streak.
+///
+/// Two defects live in the block this replaces (diagnose `<6hex>`):
+///
+///  1. **The streak was dead during a hold week.** `getCurrentWeekNumber()`
+///     clamps to `[1,4]` and a hold starts at `plan_start + 28`, so the dedup
+///     gate was `4 != 4` → `current_streak_weeks` froze for the whole hold, and
+///     the row key was always week 4's Monday → every hold completion
+///     OVERWROTE that one row (cloud `streaks` is `UNIQUE(user_id, week_start)`).
+///  2. **`planned` and `completedCount` filtered differently.** `planned` took
+///     `type == 'workout'` while the numerator took no type filter at all. At
+///     100% template conversion `planned == 0`, and the caller gates BOTH the
+///     increment and the row write on `planned > 0` — so a PRO user with a
+///     fully self-built week and perfect adherence got zero streak credit and
+///     no cloud row. Both sides now share [isTrainingDayType].
+///
+/// ⚠️ The two arms use DIFFERENT week numbers, and conflating them is a live
+/// regression. The NON-HOLD arm must stay CLAMPED: `redoWeek4` extends only
+/// `plan_end` (it never writes `plan_start`), so a user who has rolled week 4
+/// sits at a true date-index ≥ 5 while `getCurrentWeekNumber()` reports 4.
+/// Feeding an unclamped index to `getWeek()` would hand them a different week's
+/// rows and a different row key — with the flag OFF. The unclamped index exists
+/// ONLY in the hold arm and must never reach `getWeek()`.
+///
+/// ⚠️ [planStart] MUST equal the Hive `plan_start_date`. Both arms re-read it
+/// internally (`getCurrentWeekNumber`, `getWeek`), so a disagreeing value
+/// yields a coherent-looking but meaningless record. Production hoists it from
+/// `getPlanStartDate()`; tests must seed both consistently.
+///
+/// [holdOrdinal] is `null` when not holding — the caller sources it from
+/// `holdStatusProvider`, which returns `HoldStatusData.empty` whenever
+/// `enable_hold_weeks` is OFF. That keeps the flag check in ONE place per the
+/// `hold_display_read_path` contract; this function never reads
+/// `PlanEngineFlags`.
+///
+/// Extracted (both arms, not just the hold math) so every assertion is testable
+/// without driving `completeWorkout`, which needs full `startWorkout` state and
+/// fans out to Sync/Rank/Badge — same pattern as [resolveSessionDate].
+({int streakWeekId, DateTime? weekStartDate, int planned, int completedCount})
+    resolveStreakWeekState({
+  required WorkoutScheduleReadService readSvc,
+  required DateTime? planStart,
+  required int? holdOrdinal,
+  required DateTime workoutDate,
+}) {
+  // The INJECTED ordinal is the FLAG GATE only — it is null whenever
+  // enable_hold_weeks is OFF, because holdStatusProvider returns
+  // HoldStatusData.empty in that case. The ordinal that actually drives the
+  // COUNTS is re-derived from workoutDate, because the two can disagree:
+  // holdStatusProvider computes todayHoldOrdinal from nowWall() at provider-
+  // BUILD time and is cached until currentPlanProvider invalidates, which
+  // completeWorkout does only at its very last statement. A session left
+  // foregrounded across a Sunday→Monday midnight rollover (a late workout with
+  // the screen awake — DayRolloverObserver fires only on resumed/paused, never
+  // mid-foreground) therefore carries an ordinal for the PREVIOUS hold week
+  // while workoutDate is already in the next one. Trusting it would key the
+  // row to one week and populate it from another. Re-deriving makes the
+  // identity, the row key and the counts describe the SAME week by
+  // construction. A null here means workoutDate is not a hold day at all (the
+  // hold elapsed, or the user rolled out of it) → take the clamped arm.
+  final effectiveOrdinal = (holdOrdinal == null || planStart == null)
+      ? null
+      : readSvc.holdOrdinalForDate(workoutDate);
+
+  if (effectiveOrdinal == null || planStart == null) {
+    // NON-HOLD — CLAMPED. Value-identical to the pre-fix behaviour except that
+    // both counts now share one predicate.
+    final weekNum = readSvc.getCurrentWeekNumber();
+    final weekDays = readSvc.getWeek(weekNum);
+    return (
+      streakWeekId: weekNum,
+      weekStartDate: planStart?.add(Duration(days: (weekNum - 1) * 7)),
+      planned: weekDays.where((d) => isTrainingDayType(d['type'])).length,
+      completedCount: weekDays
+          .where((d) =>
+              isTrainingDayType(d['type']) && d['status'] == 'completed')
+          .length,
+    );
+  }
+
+  // HOLD — UNCLAMPED date-week index, derived BY DATE. Never `4 + ordinal`:
+  // `holdWeek()` places the hold in the calendar week containing today, so a
+  // late return leaves a real gap (ordinal 1 can sit at date-week 8) and the
+  // ordinal is a LABEL, not a date offset. Never `HoldWeekInfo.weekStart`
+  // either — that is the first SURVIVING hold date, so a missing Monday row
+  // makes it a Tuesday, which is wrong for a row key.
+  final holdMonday = readSvc.normalizeToMonday(workoutDate);
+  final ps = DateTime(planStart.year, planStart.month, planStart.day);
+  // Date-sourced via `_holdDatesByOrdinal` → `getScheduleForDate`, so the
+  // completed-in-future normalization guard applies; and it already skips rest
+  // rows BEFORE incrementing either counter, so this arm is symmetric by
+  // construction and needs no separate numerator filter.
+  final sessions = readSvc.holdWeekSessionProgress(effectiveOrdinal);
+  return (
+    streakWeekId: (holdMonday.difference(ps).inDays ~/ 7) + 1,
+    weekStartDate: holdMonday,
+    planned: sessions.total,
+    completedCount: sessions.completed,
+  );
 }
 
 /// Builds a [WorkoutDayData] for [date] directly from that date's `schedule_*`
@@ -1762,15 +1866,36 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final streakDays = repo.reckonStreakDecayAndPersist();
 
     // ── Weekly streak (kept for badge logic — not shown in UI) ───
-    final currentWeekNum = WorkoutScheduleService.instance.getCurrentWeekNumber();
-    final weekDays = repo.getWeek(currentWeekNum);
-    final planned = weekDays.where((d) => d['type'] == 'workout').length;
-    final completedCount = weekDays.where((d) => d['status'] == 'completed').length;
+    //
+    // Hold state comes from holdStatusProvider — the SINGLE flag-OFF guarantee
+    // point (`hold_display_read_path`), so nothing here reads PlanEngineFlags or
+    // Hive directly. Only `isHolding`/`todayHoldOrdinal` are taken from it:
+    // its session COUNTS are stale at this point, because this method does not
+    // invalidate currentPlanProvider until the end and the awaited
+    // markCompleted above invalidates nothing (it was handed no ref). A cached
+    // HoldStatusData therefore predates the completion just written and would
+    // under-count by exactly this session — fatal at the 80% threshold.
+    // `isHolding`/`todayHoldOrdinal` cannot go stale that way (a completion
+    // never changes hold membership, and markCompleted preserves is_hold /
+    // hold_ordinal — it merges three keys, it does not replace the row).
+    // NOTE: no test can demonstrate that staleness — a fresh ProviderContainer
+    // computes the provider on first read — so do NOT "simplify" this back to
+    // holdStatus.sessionsCompleted on the strength of a green suite.
+    final planStart = WorkoutScheduleService.instance.getPlanStartDate();
+    final holdStatus = ref.read(holdStatusProvider);
+    final streakWeek = resolveStreakWeekState(
+      readSvc: ref.read(workoutScheduleReadServiceProvider),
+      planStart: planStart,
+      holdOrdinal: holdStatus.isHolding ? holdStatus.todayHoldOrdinal : null,
+      workoutDate: workoutDate,
+    );
+    final planned = streakWeek.planned;
+    final completedCount = streakWeek.completedCount;
     int streakWeeks = (progress['current_streak_weeks'] as int?) ?? 0;
     final lastStreakWeek = (progress['last_streak_week'] as int?) ?? -1;
     if (planned > 0 &&
         completedCount >= (planned * 0.8).ceil() &&
-        currentWeekNum != lastStreakWeek) {
+        streakWeek.streakWeekId != lastStreakWeek) {
       streakWeeks += 1;
     }
 
@@ -1779,14 +1904,16 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       'current_streak_days': streakDays,
       'last_workout_date': dateStr,
       'current_streak_weeks': streakWeeks,
-      'last_streak_week': currentWeekNum,
+      // Still an int. Widens from {1..4} to {1..N} during a hold — verified
+      // safe: this field has exactly one reader (the cast above), no cloud
+      // column, and no badge/rank consumer.
+      'last_streak_week': streakWeek.streakWeekId,
     });
 
     // ── Create/update per-week streak row for Supabase streaks table ──
-    final planStart = WorkoutScheduleService.instance.getPlanStartDate();
-    if (planStart != null && planned > 0) {
-      final weekStart = planStart.add(Duration(days: (currentWeekNum - 1) * 7));
-      final weekStartStr = formatDateKey(weekStart);
+    final weekStartDate = streakWeek.weekStartDate;
+    if (weekStartDate != null && planned > 0) {
+      final weekStartStr = formatDateKey(weekStartDate);
       final streakId = 'streak_$weekStartStr';
 
       final healthBox = HiveService.instance.healthBox;

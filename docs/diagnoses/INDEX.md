@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### streaks (2 bugs)
+- 2026-08-13 a3f8d1 — TWO defects in the same six lines of ActiveWorkoutNotifier.completeWorkout's weekly-streak block. (1) FOB-2, flag-gated: getCurrentWeekNumber() clamps to [1,4] and a hold week starts at plan_start+28,…
+- 2026-05-31 5e8a1c — Surfaced by the year-simulation harness: after amar completed Phase 1 (15 of 16 scheduled workouts over 4 weeks, ~85% adherence with a single missed day), the rank did NOT progress — it stayed at SD2…
+
 ### landing_verification_probe_conflation (1 bugs)
 - 2026-08-11 d4f9b2 — scripts/safe_push.sh — the ONLY sanctioned push path and the file whose entire purpose is to be trusted about whether a push landed — exits 0 having verified nothing whenever `git ls-remote` cannot…
 
@@ -517,9 +521,6 @@ rather than a Hive box. (1 bugs)
 ### ist_date_clock_seam (1 bugs)
 - 2026-05-31 b7c2d9 — The /dev time-travel buttons (and the injectable clock seam in ist_date.dart) did not actually move phase / rank / streak logic: jumping the clock +12 weeks left the Train week selector,…
 
-### streaks (1 bugs)
-- 2026-05-31 5e8a1c — Surfaced by the year-simulation harness: after amar completed Phase 1 (15 of 16 scheduled workouts over 4 weeks, ~85% adherence with a single missed day), the rank did NOT progress — it stayed at SD2…
-
 ### edge_function_dependency_resolution (1 bugs)
 - 2026-05-31 f2d8ae — `ai-proxy` host-shell redeploy failed twice with HTTP 400 "Module not found https://deno.land/x/zod@v3.25.76/mod.ts". The deno.land/x zod module was removed upstream and now returns HTTP 404, so the…
 
@@ -972,6 +973,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-13 | a3f8d1 | TWO defects in the same six lines of ActiveWorkoutNotifier.completeWorkout's weekly-streak block. (1) FOB-2, flag-gated: getCurrentWeekNumber() clamps to [1,4] and a hold week starts at plan_start+28,… | streaks | test/contracts/hold_week_streak_identity_behavioral_test.dart |
 | 2026-08-11 | d4f9b2 | scripts/safe_push.sh — the ONLY sanctioned push path and the file whose entire purpose is to be trusted about whether a push landed — exits 0 having verified nothing whenever `git ls-remote` cannot… | landing_verification_probe_conflation | test/scripts/safe_push_test.dart |
 | 2026-08-10 | f3c7a2 | Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,… | test_isolation_intra_file | test/scripts/worktree_config_integrity_e2e_test.dart |
 | 2026-08-10 | c2e9f4 | Founder (upendraprasad19@gmail.com, auth.users.id d7a67a37-0b05-4f0a- b13c-388bff3cb59b) signed in with GOOGLE to an account created by email in May, force-closed the app during a slow restore,… | onboarding_completed_at | test/contracts/local_onboarding_evidence_behavioral_test.dart |

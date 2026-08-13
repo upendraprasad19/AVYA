@@ -270,7 +270,21 @@ flip_on_blockers:
         the three-surface drift diagnose c9f4a2 closed. If any projected value
         is ever needed it must be programWeekFor(phase, ...) — literal
         `4 + ordinal` demotes a phase-2 holder from 8 to 5.
+    # ── STATUS ANNOTATIONS (added 2026-08-13) ─────────────────────────────
+    # This section has no per-item status field — each item is a single prose
+    # `why:` blob — so closures are recorded as `closed:` lines added here, and
+    # authoritatively in the per-batch closure YAML named on each line.
+    # Terminal states so far:
+    #   FOB-2     CLOSED  → docs/audit/oi60-streak-identity.closure.yaml (a3f8d1)
+    #   FOB-7(c)  VERIFIED CLEAN — the report was stale; both the 10K cap and the
+    #             FC7 nonce fence are present in ai-media-proxy. Same closure YAML.
+    #   FOB-7(d)  CLOSED  → same closure YAML (both stale citations de-numbered;
+    #             the filing named one, a second was found in the same comment).
+    #   FOB-6     SPLIT OUT to OI-106 (a new feature, not a correctness fix).
+    #   FOB-1, FOB-3, FOB-4, FOB-5, FOB-7(a), FOB-7(b) — STILL OPEN.
+    # enable_hold_weeks therefore CANNOT flip yet.
     - id: FOB-2
+      closed: "2026-08-13 — docs/audit/oi60-streak-identity.closure.yaml; diagnose a3f8d1; behavioral test test/contracts/hold_week_streak_identity_behavioral_test.dart (14 cases, 6 mutations proven)"
       title: "Weekly streak + streaks row are dead during a hold"
       why: >
         getCurrentWeekNumber() clamps to 4, so last_streak_week never advances,
@@ -339,6 +353,21 @@ flip_on_blockers:
         over; (f) terminal states (hold elapses, PRO advance empties holds) are
         undefined.
     - id: FOB-7
+      partially_closed: >
+        (c) and (d) are CLOSED — docs/audit/oi60-streak-identity.closure.yaml.
+        (c) was STALE as filed: ai-media-proxy already carries BOTH the
+        10000-char snapshot cap and the fenceAsData nonce fence (documented in
+        that file as a two-stage closure), so it is verified_clean, not fixed.
+        (d) is fixed, and the filing under-counted it — there were TWO stale
+        line citations in that comment region, not one; both are now
+        de-numbered rather than re-numbered, since a line citation inside a
+        1000-line Edge Function re-rots on the next edit.
+        (a) currentPhaseCompletionRate hold-day folding and (b) the
+        PlanIntegrityReconciler scan gap REMAIN OPEN. ⚠ Read the closure YAML
+        before attempting (b): a review found that the 1..4 scan IS the
+        re-anchor trigger, so widening it buys no healing and only makes the
+        re-anchor fire more often — the P0-11 concern d7f3a9 already rejected.
+        The correct shape is to split the trigger from the write.
       title: "Residuals"
       why: >
         currentPhaseCompletionRate's phase>=2 branch scans getWeek(5..12) by

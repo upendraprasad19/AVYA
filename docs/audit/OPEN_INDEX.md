@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**39 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**42 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -47,3 +47,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-103 | `safe_push.sh` reports OK from a detached HEAD when given an explicit… | nothing; needs its own small analysis, deliberately not bundled into | 2026-08-11 — round-2 review of `safe-push-verifier` corrected the earlier claim. | [:2449](open_issues.md#L2449) |
 | OI-104 | `check_hooks_installed.dart` detects hook PRESENCE, not staleness;… | nothing technical. | 2026-08-11 — `.git/hooks/pre-commit` and `pre-push` both dated `Jul 29 10:28` | [:2470](open_issues.md#L2470) |
 | OI-105 | the `Supabase Integration Tests` CI job has verified NOTHING since it was… | founder — this is not an agent-actionable item.** Adding an Actions secret | 2026-08-11 — queried the authoritative source, not inferred from behaviour: | [:2493](open_issues.md#L2493) |
+| OI-106 | Selectable past hold weeks (FOB-6) — 6 named lifecycle traps | none technically — but it is a NEW FEATURE, not a correctness fix, and it is the | 2026-08-13 — filed from `docs/ship_dark_pending_review.yaml` FOB-6, whose trap list | [:2535](open_issues.md#L2535) |
+| OI-107 | The `logged` / `custom_template` training-day predicate split (5 call… | none. Pickable, but it is a live behaviour change for all users, so it needs its | 2026-08-13 — the 5 call sites and the two predicate shapes were read directly while | [:2561](open_issues.md#L2561) |
+| OI-108 | `plan_start` moving under a live hold week: is the streak identity still… | none. Route to the piece that already owns `plan_integrity_reconciler.dart` | 2026-08-13 — the four `plan_start` write sites were enumerated by grep and are fact. | [:2589](open_issues.md#L2589) |

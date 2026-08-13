@@ -25,3 +25,31 @@ double phaseCompletionRate(Iterable<({bool isRest, bool isDone})> days) {
   if (total == 0) return 0.0;
   return done / total;
 }
+
+/// Whether a `schedule_*` row's `type` counts as a training day.
+///
+/// ⚠️ **This is a DIFFERENT, WIDER rule than `phaseCompletionRate`'s `isRest`
+/// above, and the difference is deliberate.** That one is inclusion-shaped
+/// (`workout` | `custom_template`) and accurately describes its two callers
+/// (`WorkoutScheduleReadService.currentPhaseCompletionRate`, `phase_unlock_card`).
+/// This one is EXCLUSION-shaped, because the weekly-streak reckoning must also
+/// count two shapes that inclusion list drops:
+///
+///  - `type: 'logged'` — written by `WorkoutWriteService.markCompleted`'s
+///    no-prior-schedule branch (AI-coach-only logging) and by the restore
+///    synthesize path in `sync/sync_workout.dart`, whose own comment states a
+///    logged row "counts as a workout day in the streak walk".
+///  - a legacy row carrying no `type` at all — `null` is counted here, matching
+///    `WorkoutScheduleReadService.holdWeekSessionProgress`, which coerces via
+///    `(row['type'] ?? '').toString()` and so also counts it. The two must agree:
+///    they are the non-hold and hold day-sources for the SAME ratio.
+///
+/// An inclusion list would have to enumerate all of those and would silently
+/// drop any future `type`. `'off'` is never written anywhere in `lib/` today; it
+/// is excluded defensively because `holdWeekSessionProgress` excludes it, and
+/// these two predicates must not drift.
+///
+/// The repo-wide split between the two shapes (5 call sites still use the
+/// inclusion form, so they treat a `logged` day as REST) is pre-existing and
+/// tracked on the open-issues board — deliberately NOT changed here.
+bool isTrainingDayType(Object? type) => type != 'rest' && type != 'off';
