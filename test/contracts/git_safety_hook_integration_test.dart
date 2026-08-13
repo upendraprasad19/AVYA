@@ -1,3 +1,22 @@
+@Timeout(Duration(minutes: 3))
+library;
+
+// TIMEOUT RAISED FROM THE 30s DEFAULT (2026-08-13, diagnose 4f2a9e).
+//
+// Every test in this file spawns `dart run <script>` as a real subprocess, and a
+// cold `dart run` costs seconds on its own (VM start + kernel compile). Measured
+// standalone with ZERO contention: this file takes ~33s wall for its handful of
+// tests — already brushing the 30s PER-TEST default.
+//
+// The merge-commit regression-catalog walk then runs ~700 tests concurrently, so
+// the same subprocesses take far longer and these tests time out. That produced
+// false failures that blocked a merge twice while the file passed standalone
+// every time. The default is simply wrong for a test whose body starts a Dart VM;
+// this matches what test/scripts/*_e2e_test.dart already declare for the same
+// reason.
+//
+// This is a TIMEOUT, not a retry: a genuine hang still fails, just later.
+
 // Integration test for scripts/git_safety_hook.dart — the actual PreToolUse
 // wire contract, not just the pure lib functions.
 //

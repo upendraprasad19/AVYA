@@ -49,8 +49,21 @@ forbidden_patterns_checked: >-
   gate that spawns a whole `flutter test` run, and the only one that runs exclusively
   from inside a hook. Stated as known-exposure, NOT a census.
 proposed_fix: >-
-  Hand the child a filtered environment: `scrubbedChildEnvironment(Platform.environment)`
-  removing GIT_*, GITHUB_* and PUSH_BEFORE, with `includeParentEnvironment: false`.
+  ⚠ TWO CAUSES, not one. The first version of this doc named only the env leak and
+  claimed it explained the failure. It explained 6 of 9. The remaining 3 survived the
+  fix and were only identified by re-running the merge and reading the actual failure
+  text — `TimeoutException after 0:00:30`, not an assertion failure.
+  (1) ENV LEAK — hand the child a filtered environment:
+  `scrubbedChildEnvironment(Platform.environment)` removing GIT_*, GITHUB_* and
+  PUSH_BEFORE, with `includeParentEnvironment: false`.
+  (2) CONTENTION TIMEOUTS — `git_safety_hook_integration_test.dart` and
+  `review_gate_staged_content_not_working_tree_test.dart` spawn `dart run <script>`
+  per test, and a cold `dart run` costs seconds (VM start + kernel compile). Measured
+  standalone with ZERO contention: 33s wall for one of those files, against a 30s
+  PER-TEST default. They are at the limit before the walk adds ~700 concurrent tests.
+  Both files now declare `@Timeout(Duration(minutes: 3))`, matching what
+  test/scripts/*_e2e_test.dart already do for the same reason. This is a timeout, not
+  a retry: a genuine hang still fails, just later.
   BOTH are required and that is the subtle half — passing `environment:` ALONE merges
   with the parent, so the scrubbed keys come straight back and the fix does nothing.
   PATH is preserved (the child still has to find `flutter`); the filter is a PREFIX
@@ -71,7 +84,7 @@ regression_test_planned: >-
   (feedback_mistake_guard_without_its_mirror).
 touched_layers_checked:
   - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "13/13 green in test/scripts/regression_catalog_lib_test.dart (7 pre-existing + 6 new). No lib/ surface touched — this is build tooling." }
-  - { tier: 12, name: client_server_contract, status: verified, evidence: "A/B ISOLATION, run three ways. (1) Inside the hook during the merge: 9 failures. (2) The SAME three files standalone against the SAME mid-merge repo: 38/38 PASS. (3) Re-running git_safety_hook_integration_test.dart with GIT_DIR + GIT_INDEX_FILE exported reproduces the failures (6 pass / 3 fail). The variable is the environment, not the code under test. MUTATION-PROVEN 3 ways: dropping the GIT_ prefix clause reddens 3 tests; dropping includeParentEnvironment: false reddens 1; dropping the environment: argument reddens 1." }
+  - { tier: 12, name: client_server_contract, status: verified, evidence: "CAUSE 1 (env leak) — A/B run three ways. (a) Inside the hook during the merge: 9 failures. (b) The SAME three files standalone against the SAME mid-merge repo: 38/38 PASS. (c) Re-running git_safety_hook_integration_test.dart with GIT_DIR + GIT_INDEX_FILE exported reproduces failures. MUTATION-PROVEN 3 ways: dropping the GIT_ prefix clause reddens 3 tests; dropping includeParentEnvironment: false reddens 1; dropping the environment: argument reddens 1. CAUSE 2 (timeouts) — the scrub alone took the merge from 9 failures to 3; the survivors' text is `TimeoutException after 0:00:30`, not an assertion. Standalone timing: 33s wall for ONE of those files with zero contention, against a 30s per-test default. Ruled OUT as a cause first: the 3 pass standalone WHILE the repo is mid-merge, so merge state is not the variable." }
 impact_analysis: >-
   The gate manufactured FALSE FAILURES on every conflicted merge, and only on
   conflicted merges — a clean `--no-ff` merge never runs pre-commit, so the walk never
