@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**53 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**52 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -58,6 +58,5 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-115 | the QA fixture account `qa@icanbefitter.com` does not exist, so… | FOUNDER — genuinely not agent-actionable. Creating an account (or setting its | 2026-08-12 — queried the authoritative source, not inferred from the error: | [:2821](open_issues.md#L2821) |
 | OI-116 | `check_regression_catalog.dart` runs `flutter test` with no concurrency… | nothing technical. Needs a measurement before a value is picked — see below. | 2026-08-13 — read directly at `scripts/check_regression_catalog.dart:56-64`: | [:2856](open_issues.md#L2856) |
 | OI-117 | a SIGKILLed gate and a violated gate print the same `GATE FAIL` line (P2) | nothing. | 2026-08-13 — observed live. The backgrounded gate invocation is | [:2878](open_issues.md#L2878) |
-| OI-118 | an AGENT-INVENTED `/tmp` log path is shared across sessions and silently… | nothing. It is a practice fix, not a code fix. | 2026-08-13 (corrected). The OBSERVATION was real: reading `/tmp/safe_commit_run.log` | [:2902](open_issues.md#L2902) |
-| OI-119 | `git_safety_hook.dart` matches command TEXT, so it blocks commands that… | nothing, but it needs a false-positive analysis before a fix — the hook is | 2026-08-13. ⚠ **The two detectors are NOT equally leaky, and the original filing | [:2967](open_issues.md#L2967) |
-| OI-120 | the c3f9a7 timeout raise leaves the CI `unit-test` job with ~2 min of… | nothing; needs the same measurement OI-116 needs, and should probably be picked | 2026-08-13 — both numbers read directly, not inferred. | [:2938](open_issues.md#L2938) |
+| OI-119 | `git_safety_hook.dart` matches command TEXT, so it blocks commands that… | nothing, but it needs a false-positive analysis before a fix — the hook is | 2026-08-13. ⚠ **The two detectors are NOT equally leaky, and the original filing | [:3002](open_issues.md#L3002) |
+| OI-120 | the c3f9a7 timeout raise leaves the CI `unit-test` job with ~2 min of… | nothing; needs the same measurement OI-116 needs, and should probably be picked | 2026-08-13 — both numbers read directly, not inferred. | [:2973](open_issues.md#L2973) |

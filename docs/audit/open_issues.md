@@ -2899,7 +2899,42 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   days of the bad-news-vs-no-news class (`d4f9b2`, `a7e3c1`, `c3f9a7`).
 - **Blast-radius estimate**: `platform` (`scripts/pre-commit.sh` is pinned).
 
-## OI-118 — an AGENT-INVENTED `/tmp` log path is shared across sessions and silently misattributes (P3)
+## OI-118 — CLOSED, NOT A REPO ISSUE: I read a 14-day-old orphan `/tmp` file and formatted the date out of my own evidence (P3)
+
+- **Status**: CLOSED (`verified_clean` — there is no defect in the repo to fix)
+- **Closed**: 2026-08-13, same day as filed, after THREE successive corrections.
+
+> ⚠️ **This entry was WRONG THREE TIMES, each layer found by a different mechanism.** It is kept —
+> not deleted — because a board entry describing a bug that does not exist is worse than no entry
+> (the standard `docs/audit/oi-mechanism.closure.yaml` sets), and because the progression is the
+> most useful thing here.
+>
+> | # | What I claimed | What is true | Found by |
+> |---|---|---|---|
+> | 1 | "`safe_commit.sh` logs to a fixed `/tmp` path" | `:43` is `mktemp` w/ `$$` fallback; `cat` to stdout at `:50`, `rm -f` at `:82`. The literal string appears **0** times in every version in its history. | the B-pass |
+> | 2 | "concurrent sessions collide on that path" | Nobody collided. `/tmp/safe_commit_run.log` mtime is **2026-07-30 10:51** — an orphan abandoned 14 days before I read it. | me, following up on the B-pass |
+> | 3 | "its timestamp looked recent enough to be current" | It looked recent because **my own command discarded the date**: `ls -l --time-style=+%H:%M:%S` prints time-of-day only, so `10:51:04` read as this morning. | me, re-running with `--full-time` |
+>
+> **The root cause is layer 3 and it is mine, not the repo's.** I chose a view that threw away the
+> one field capable of refuting my conclusion, then drew the conclusion — `feedback_green_check_
+> input_set_width` in its purest form, with the narrowing done by a display flag rather than a
+> filter. Sibling instances that week were measurements killed by controls; this one needed no
+> control, only the default `ls` output.
+
+- **Blocked on**: nothing. Nothing to do.
+- **Verified**: 2026-08-13 — `ls -l --full-time /tmp/safe_commit_run.log` → `2026-07-30 10:51:04`,
+  against `date` → `2026-08-13`. And `grep -rn "safe_commit_run" scripts/` → 0 matches, so nothing
+  in the repo writes it at all.
+- **Why it is not merely downgraded**: every proposed fix across all three drafts (embed slug/pid;
+  write inside the worktree `.git`; document a redirect convention) targets a collision that
+  `mktemp` structurally prevents and that did not occur. There is no change to make.
+- **What survives, and where it went**: the real hazard is reading an orphan file at a plausible
+  path and assuming provenance. That is a working-practice lesson, not a backlog item, and belongs
+  in the memory feedback file for the verification class — recorded there rather than left here as
+  a phantom issue.
+- **Terminal state**: `verified_clean`.
+
+<!-- Original entry text retained below for the record. -->
 
 > ⚠️ **This entry was filed with a FALSE diagnosis and corrected the same day by its own B-pass.**
 > The original text claimed "`safe_commit.sh` logs to a fixed `/tmp` path". That is wrong.
