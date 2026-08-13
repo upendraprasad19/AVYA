@@ -2625,3 +2625,37 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   way — check all three, not just the one that bit.
 - **Blast radius estimate**: `platform` (`scripts/safe_commit.sh` is pinned platform; the hook
   scripts are individually pinned per `docs/blast_radius.yaml`).
+## OI-109 — the QA fixture account `qa@icanbefitter.com` does not exist, so `test/supabase/` cannot pass (P1)
+
+- **Status**: OPEN
+- **Blocked on**: FOUNDER — genuinely not agent-actionable. Creating an account (or setting its
+  password) is a prohibited action for the agent, and it must be done against the live prod project.
+- **Verified**: 2026-08-12 — queried the authoritative source, not inferred from the error:
+  `select email, created_at from auth.users where email = 'qa@icanbefitter.com'` on
+  `dedsavbjuwgarrhphgnl` returned **zero rows**.
+- **Identified**: 2026-08-12, while fixing `a7e3c1` (the HTTP-mock bug that was hiding this one).
+- **Risk class**: CI correctness. `main` is RED until this is resolved.
+- **What's wrong**: `test/supabase/supabase_test_helper.dart:21-22` signs in as
+  `qa@icanbefitter.com` / `QA_Test_2024!`. That user is not in `auth.users`. Both integration test
+  files die in `setUpAll`, so **zero assertions in either file have ever executed**. This was
+  invisible until `a7e3c1` was fixed, because the `TestWidgetsFlutterBinding` HTTP mock was
+  answering every request with a fabricated 400 before any of it reached Supabase.
+- **How to confirm the fix worked**: after the account exists, the live error changes from
+  `AuthApiException(... invalid_credentials)` to the tests actually running. Run locally first:
+  `flutter test --dart-define-from-file=.env test/supabase/auth_restore_test.dart`.
+- **⚠ Read before creating it — the tests WRITE to the live prod project.**
+  `supabase_test_helper.dart:116-143` deletes rows for the signed-in user across 12 tables
+  (`user_profile`, `user_preferences`, `workout_logs`, `nutrition_logs`, `weight_logs`, `streaks`,
+  `user_progress`, `body_measurements`, `sleep_logs`, `ai_coach_interactions`, `memory_embeddings`,
+  `user_daily_snapshots`) in `setUp` **and** `tearDownAll`. That is correct for a throwaway fixture
+  account and catastrophic for a real one, so the account MUST be a dedicated QA user and MUST NOT
+  be an address that is ever used as a real login. It also means every green CI run mutates prod
+  data for that user — acceptable for a fixture, worth stating explicitly rather than discovering.
+- **Options, since this is a real decision and not just a chore**:
+  1. Create the QA user in the prod project and leave the job running against prod (what the code
+     assumes today).
+  2. Point the job at a separate Supabase project / branch so CI never writes to prod at all.
+  3. Unset the two Actions secrets, which restores the skip and a green `main` — but that returns
+     the job to verifying nothing, which is precisely what OI-105 was filed about. Listed for
+     completeness, not recommended.
+- **Blast radius estimate**: `account` (`test/supabase/**` plus, for option 2, `.github/workflows/test.yml`).
