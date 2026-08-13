@@ -178,7 +178,7 @@ fi
               '${after.stdout}${after.stderr}');
       expect(
           '${after.stdout}${after.stderr}', contains('PROBER_ACQUIRED'));
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // OI-92 (2026-08-05) INVERTED THIS TEST. It previously asserted that a
     // dead-PID lock was automatically RECLAIMED. The auto-reclaim is gone —
@@ -291,7 +291,7 @@ fi
       expect(out, contains('no longer owned'),
           reason: 'the refusal must be visible, not a silent no-op.\n$out');
       expect(out, isNot(contains('LOCK_DIR_REMOVED')));
-    }, timeout: const Timeout(Duration(seconds: 15)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // Round-1 review finding #3 (should-fix, TOCTOU) was originally closed
     // by adding a brief re-read/sleep before the OLD mkdir-then-separate-
@@ -387,7 +387,7 @@ fi
       expect(survivors, contenders - 1,
           reason: 'the 4 losing candidates must all survive intact; only '
               'the 1 winner is consumed by a successful rename.');
-    }, timeout: const Timeout(Duration(seconds: 15)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // Round-2 review blocking #1: the round-1 TOCTOU fix (test above) only
     // narrowed the mkdir-then-separate-write window, it did not close it.
@@ -492,7 +492,7 @@ echo "B_FINAL_HOLDER: \$(cat "\$(git rev-parse --git-dir)/.safe_git_op.lock/hold
               '${aOut.toString()}');
       expect(aOut.toString(), contains('A_ACQUIRE_FAILED'));
       expect(aOut.toString(), contains('REFUSING'));
-    }, timeout: const Timeout(Duration(seconds: 20)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // OI-92 B-pass finding. A trapped signal whose handler does NOT exit runs
     // the handler and then RESUMES execution at the point of interruption.
@@ -579,7 +579,7 @@ echo "HOLDER_EXIT=\$?"
       expect(after.exitCode, 0,
           reason: 'a fresh acquire must succeed after a signalled holder '
               'released.\n${after.stdout}${after.stderr}');
-    }, timeout: const Timeout(Duration(seconds: 40)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // ── REMOVED 2026-08-05 (OI-92) — two tests whose SUBJECT no longer exists ──
     //

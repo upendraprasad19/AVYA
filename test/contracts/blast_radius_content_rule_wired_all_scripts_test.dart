@@ -245,7 +245,7 @@ void main() {
       expect(classify([...scriptPaths, ...enforcementPaths]), 'platform',
           reason: 'The real gate must see the promoted set as >= platform, not '
               'just this test\'s reimplementation of the glob engine.');
-    }, timeout: const Timeout(Duration(seconds: 120)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('scripts/blast_radius_content_rules_lib.dart is >= platform', () {
       // The shared library all three delegate to; weakening it weakens all

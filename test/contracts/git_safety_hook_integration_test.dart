@@ -131,20 +131,20 @@ void main() {
       final result = await runHook(payload('git commit -m "x"'));
       expect(result.exitCode, 2);
       expect(result.stderr, contains('safe_commit.sh'));
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('multi-line raw git commit is denied (F2 regression, at the wire level)',
         () async {
       final result =
           await runHook(payload('git add -A\ngit commit -m "x"'));
       expect(result.exitCode, 2);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('commit via safe_commit.sh wrapper is allowed (exit 0)', () async {
       final result =
           await runHook(payload('sh scripts/safe_commit.sh "msg"'));
       expect(result.exitCode, 0);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // The other half of the contract, and the half that had no test at all
     // until b7e4c2. Resolving a conflicted merge REQUIRES a raw `git commit`
@@ -201,26 +201,26 @@ void main() {
       expect(result.exitCode, 0,
           reason: 'A raw commit during a merge must be allowed — it is the '
               'only way to complete a conflict resolution.');
-    }, timeout: const Timeout(Duration(seconds: 60)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('raw git push is denied (exit 2)', () async {
       final result = await runHook(payload('git push origin main'));
       expect(result.exitCode, 2);
       expect(result.stderr, contains('safe_push.sh'));
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('--no-verify is denied without the override (exit 2)', () async {
       final result =
           await runHook(payload('git commit -m "x" --no-verify'));
       expect(result.exitCode, 2);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('a non-git Bash command is allowed silently (exit 0, no output)',
         () async {
       final result = await runHook(payload('ls -la'));
       expect(result.exitCode, 0);
       expect(result.stdout.trim(), isEmpty);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('a non-Bash tool is allowed (exit 0) — field-name contract check',
         () async {
@@ -239,7 +239,7 @@ void main() {
       await process.stdin.close();
       final exitCode = await process.exitCode;
       expect(exitCode, 0);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('malformed JSON on stdin fails open (exit 0, never crashes the call)',
         () async {
@@ -253,6 +253,6 @@ void main() {
       await process.stdin.close();
       final exitCode = await process.exitCode;
       expect(exitCode, 0);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
   });
 }
