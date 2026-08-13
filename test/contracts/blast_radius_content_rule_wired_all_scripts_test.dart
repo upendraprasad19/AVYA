@@ -29,6 +29,19 @@
 //      not just present.
 //
 // Run: flutter test test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart
+//
+// TIMEOUT: the behavioural tests here spawn real subprocesses (`dart run` on a
+// real on-disk migration). One test already carried an explicit 120s for that
+// reason; the rest inherited the 30s default and timed out under the
+// merge-commit regression walk's parallelism. Raised file-wide rather than
+// per-test so the next subprocess test added here inherits it. Diagnose: c3f9a7.
+//
+// The live annotation is the 3-minute one below, from diagnose 4f2a9e — a
+// CONCURRENT, independent diagnosis of the same symptom by another session,
+// landed on main while this branch was in flight. A duplicate 2-minute
+// annotation sat here; two `library;` directives in one file is a syntax error,
+// and git auto-merged them without conflict because they sat at different line
+// numbers. The more generous value wins.
 
 @Timeout(Duration(minutes: 3))
 library;

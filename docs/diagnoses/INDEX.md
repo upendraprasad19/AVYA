@@ -12,6 +12,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### git_hook_env_leak (1 bugs)
 - 2026-08-13 4f2a9e — The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across…
 
+### subprocess_test_timeout_under_suite_parallelism (1 bugs)
+- 2026-08-13 c3f9a7 — The merge-commit regression walk (`scripts/check_regression_catalog.dart`) fails intermittently with a DIFFERENT number of failures each run — measured 11, 7, 8, then 4 across four attempts on the…
+
+### test_binding_http_mock_masks_real_network (1 bugs)
+- 2026-08-12 a7e3c1 — Every test in test/supabase/ fails at setUpAll with `AuthUnknownException(message: Received an empty response with status code 400)`. The message reads exactly like Supabase rejecting the anon key, so…
+
 ### test_binding_stubs_http_for_integration_tests (1 bugs)
 - 2026-08-12 3b7e1c — Every file in test/supabase/ dies in setUpAll with `AuthUnknownException(message: Received an empty response with status code 400, originalError: Instance of 'Response', statusCode: 400)` the moment…
 
@@ -989,6 +995,8 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-08-13 | b7e3d1 | Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw… | oi_board_id_uniqueness | test/contracts/oi_index_test.dart |
 | 2026-08-13 | 4f2a9e | The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across… | git_hook_env_leak | test/scripts/regression_catalog_lib_test.dart |
+| 2026-08-13 | c3f9a7 | The merge-commit regression walk (`scripts/check_regression_catalog.dart`) fails intermittently with a DIFFERENT number of failures each run — measured 11, 7, 8, then 4 across four attempts on the… | subprocess_test_timeout_under_suite_parallelism | test/contracts/git_safety_hook_integration_test.dart |
+| 2026-08-12 | a7e3c1 | Every test in test/supabase/ fails at setUpAll with `AuthUnknownException(message: Received an empty response with status code 400)`. The message reads exactly like Supabase rejecting the anon key, so… | test_binding_http_mock_masks_real_network | test/scripts/supabase_test_helper_http_test.dart |
 | 2026-08-12 | 3b7e1c | Every file in test/supabase/ dies in setUpAll with `AuthUnknownException(message: Received an empty response with status code 400, originalError: Instance of 'Response', statusCode: 400)` the moment… | test_binding_stubs_http_for_integration_tests | test/supabase/http_override_restored_test.dart |
 | 2026-08-11 | d4f9b2 | scripts/safe_push.sh — the ONLY sanctioned push path and the file whose entire purpose is to be trusted about whether a push landed — exits 0 having verified nothing whenever `git ls-remote` cannot… | landing_verification_probe_conflation | test/scripts/safe_push_test.dart |
 | 2026-08-10 | a7c3f9 | Deploying log-client-error v13 returned HTTP 201 with a healthy ACTIVE function, and then printed "Smoke FAIL — HTTP 401 (not in tolerated set [400])" followed by rollback instructions. The deploy was… | deploy_smoke_tolerated_codes | "not_applicable — see regression_test_planned for why, and what was done instead" |

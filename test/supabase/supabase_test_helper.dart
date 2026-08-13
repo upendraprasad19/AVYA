@@ -42,10 +42,33 @@ class SupabaseTestHelper {
     return _userId!;
   }
 
+  /// Drops the mock `HttpClient` that `TestWidgetsFlutterBinding` installs.
+  ///
+  /// The binding is REQUIRED here — `Supabase.initialize()` needs the
+  /// shared_preferences platform channel — but it also installs an
+  /// `HttpOverrides` whose mock client answers EVERY request with 400 and never
+  /// touches the network. These are integration tests whose entire purpose is
+  /// to reach the real project, so the mock has to go.
+  ///
+  /// Without this the failure is actively misleading rather than merely
+  /// unhelpful: sign-in throws `AuthUnknownException(... status code 400)`,
+  /// which reads exactly like a rejected anon key, so the natural response is
+  /// to go re-verify credentials that were never the problem. The 400 comes
+  /// from Flutter, not from Supabase. This is what a red `main` looked like on
+  /// 2026-08-12, the first time the CI job ran with real secrets (OI-105).
+  ///
+  /// Exposed (rather than inlined) so a test can assert it actually happened —
+  /// see `test/scripts/supabase_test_helper_http_test.dart`.
+  @visibleForTesting
+  static void debugRemoveHttpMock() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    HttpOverrides.global = null;
+  }
+
   /// Register a mock SharedPreferences channel handler so that
   /// Supabase.initialize() works in pure `flutter test` (no device).
   static void _mockSharedPreferences() {
-    TestWidgetsFlutterBinding.ensureInitialized();
+    debugRemoveHttpMock();
     const channel = MethodChannel('plugins.flutter.io/shared_preferences');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall call) async {

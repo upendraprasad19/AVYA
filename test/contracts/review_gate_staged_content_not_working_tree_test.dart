@@ -80,6 +80,25 @@ library;
 // alone is insufficient once this runs inside a git hook.
 //
 // Run: flutter test test/contracts/review_gate_staged_content_not_working_tree_test.dart
+//
+// TIMEOUT: 4 tests here spawn 8 real subprocesses between them (git plus
+// `dart run`, and every `dart run` boots a fresh VM — slow on Windows). Under
+// the default 30s they time out whenever `flutter test` parallelises them
+// against the rest of the suite, which is exactly what the merge-commit
+// regression walk does. Measured 2026-08-13: five merge attempts failed with
+// 11/7/8/4 TimeoutExceptions, varying per run, while the same files run alone
+// and serially passed 38/38. Not a contract failure in any of them — zero
+// assertion failures across all five runs. Matches the convention already used
+// by the other subprocess-heavy suites (claude_md_citations 3 min,
+// gate_input_family 8 min). Diagnose: c3f9a7.
+//
+// The actual `@Timeout` is at the top of this file at 3 minutes, from diagnose
+// 4f2a9e — a CONCURRENT, independent diagnosis of the same symptom by another
+// session, landed on main while this branch was in flight. This block carried a
+// duplicate 2-minute annotation; two `library;` directives in one file is a
+// syntax error, and git auto-merged them without conflict because they sat at
+// different line numbers. The more generous value wins; the measurement above is
+// kept because it is evidence 4f2a9e does not have.
 
 import 'dart:io';
 
