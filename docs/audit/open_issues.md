@@ -2879,8 +2879,11 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 
 - **Status**: OPEN
 - **Blocked on**: nothing.
-- **Verified**: 2026-08-13 — observed live. `pre-commit.sh` line 318 emitted
-  `3950 Killed  dart run "$GATE"` immediately followed by
+- **Verified**: 2026-08-13 — observed live. The backgrounded gate invocation is
+  `scripts/pre-commit.sh:315` (`if ! dart run "$GATE" >/dev/null 2>&1; then`, inside a subshell
+  closed by `) &` at `:318`); bash's async job-control notice printed
+  `3950 Killed  dart run "$GATE"` — note it appears despite the `>/dev/null 2>&1` redirect, because
+  the notice comes from the shell's job control, not the gate. Immediately followed by
   `[pre-commit] GATE FAIL: check_adr_index_fresh.dart`, and the same for
   `check_app_version_matches_pubspec.dart`. Both gates then **PASSED when run individually**
   (exit 0; "OK: docs/adr/INDEX.md is up to date"; "OK — both at 1.0.0+38").
@@ -2896,34 +2899,89 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   days of the bad-news-vs-no-news class (`d4f9b2`, `a7e3c1`, `c3f9a7`).
 - **Blast-radius estimate**: `platform` (`scripts/pre-commit.sh` is pinned).
 
-## OI-118 — `safe_commit.sh` logs to a fixed `/tmp` path shared by every concurrent session (P2)
+## OI-118 — an AGENT-INVENTED `/tmp` log path is shared across sessions and silently misattributes (P3)
+
+> ⚠️ **This entry was filed with a FALSE diagnosis and corrected the same day by its own B-pass.**
+> The original text claimed "`safe_commit.sh` logs to a fixed `/tmp` path". That is wrong.
+> `scripts/safe_commit.sh:43` is `LOG="$(mktemp 2>/dev/null || echo "/tmp/safe_commit_$$.log")"` —
+> unique per invocation, with a PID-suffixed fallback — and `:50`/`:82` `cat` it to stdout then
+> `rm -f` it. The literal string `safe_commit_run.log` appears **zero** times in that script in
+> **every version in its history** (`git log -p --all -- scripts/safe_commit.sh | grep -c` → 0).
+> The proposed fix (embed slug/pid in the filename) would have "fixed" a collision the code already
+> prevents. **The script requires no change.** Correction retained rather than deleted, because the
+> filing error is the more useful record — see Risk class.
 
 - **Status**: OPEN
-- **Blocked on**: nothing. Mechanical.
-- **Verified**: 2026-08-13 — read `/tmp/safe_commit_run.log` looking for MY failing run's detail and
-  found a **different session's** commit (`e9683418`, branch `progress-map-consolidation`), with a
-  timestamp recent enough to look current. Nothing in the file identifies whose run it describes.
+- **Blocked on**: nothing. It is a practice fix, not a code fix.
+- **Verified**: 2026-08-13 (corrected). The OBSERVATION was real: reading `/tmp/safe_commit_run.log`
+  for my own failing run returned a **different session's** commit (`e9683418`, branch
+  `progress-map-consolidation`) with a plausibly-recent mtime. The CAUSE was not. Nothing in the
+  repo writes that path — `grep -rn "safe_commit_run" scripts/` → 0 matches. It exists because
+  agent sessions redirect `safe_commit.sh`'s stdout there ad hoc, and several independently chose
+  the same obvious name.
 - **Identified**: 2026-08-13.
-- **Risk class**: misattribution — worse than a missing log. I began diagnosing 11 test failures
-  from another branch's output and caught it only because the branch name at the bottom was not
-  mine. Luck, not method.
-- **What's wrong**: the log path is a constant. §4.13 guarantees concurrent sessions, so the file is
-  last-writer-wins with no owner marker.
-- **Fix shape**: include the worktree slug and/or pid in the filename, or write inside the
-  worktree's own `.git` dir. Same conflated-signal family as OI-117 — here "your run" and "someone
-  else's run" are indistinguishable.
-- **Blast-radius estimate**: `platform` (`scripts/safe_commit.sh` is pinned).
+- **Risk class**: misattribution, and the filing error demonstrates it better than the bug does. I
+  read a file at a plausible path, assumed the tool wrote it, and filed a "Verified" board entry
+  naming a mechanism I never checked against the source. That is
+  `feedback_mistake_unverified_done_claims` — the most recurrent class in this repo — committed
+  inside a batch whose own theme is signals that misreport. The near-miss was real: I began
+  diagnosing 11 test failures from another branch's output and caught it only because the branch
+  name at the bottom was not mine.
+- **What's actually wrong**: nothing in the tooling. The hazard is a *convention* — any agent
+  redirecting to a guessable shared `/tmp` name collides with every concurrent session, and the
+  resulting file carries no owner marker.
+- **Fix shape**: don't redirect to a hand-picked shared path. `safe_commit.sh` already `cat`s its
+  log to stdout, so capture ITS output to a session-scoped file (the harness scratchpad dir) rather
+  than inventing `/tmp/<toolname>_run.log`. Worth a line in the §4.3 wrapper docs.
+- **Blast-radius estimate**: `feature` (documentation/practice; no script change).
+
+## OI-120 — the c3f9a7 timeout raise leaves the CI `unit-test` job with ~2 min of headroom (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing; needs the same measurement OI-116 needs, and should probably be picked
+  up with it.
+- **Verified**: 2026-08-13 — both numbers read directly, not inferred.
+  `.github/workflows/test.yml:93` sets `timeout-minutes: 20` on the `unit-test` job, and `:112`
+  runs `flutter test test/ --exclude-tags golden --reporter expanded` — the FULL suite, unfiltered.
+  `test/contracts/git_safety_hook_integration_test.dart` now declares 9 tests × 2 min. Tests within
+  one file run **sequentially** (no `test.parallel` in the file), so that file's worst-case timeout
+  exposure went from 8×30s + 1×60s = **5 min** to **18 min**.
+- **Identified**: 2026-08-13, by the B-pass on `supabase-test-http`. Missed by the author, who
+  checked the local gate (OI-116) and not CI.
+- **Risk class**: signal quality, and it is the same trade `c3f9a7` was meant to improve. This does
+  NOT invalidate the raise — the historical evidence (≈30 failures, 100% `TimeoutException`, 0
+  assertion failures) is solid, and no current test has a code path where waiting longer changes
+  the RESULT rather than the duration (all 21 test bodies read; none has retry or fallback logic).
+  The exposure is forward-looking: if a FUTURE regression genuinely hangs this file, the signal
+  degrades from "9 named TimeoutExceptions in ~5 min, attributable to one file" to "the whole
+  `unit-test` job timed out at 20 min", which names nothing. That is strictly worse, and it is
+  precisely the conflation OI-117 and `c3f9a7` exist to fight.
+- **Why it is separate from OI-116**: OI-116 is scoped to the LOCAL `check_regression_catalog.dart`
+  path. This is the CI job budget. Different runner, different limit, different fix.
+- **Fix shape**: options are (a) raise `unit-test`'s `timeout-minutes`, (b) bound test concurrency
+  so per-file wall-clock stops being the binding constraint, (c) lower the per-test timeout once
+  OI-116's root cause is fixed and the generous value is no longer load-bearing. (c) is the honest
+  end state — the 2-minute value exists to absorb contention, not because any test needs 2 minutes.
+- **Blast-radius estimate**: `platform` (`.github/workflows/test.yml`).
 
 ## OI-119 — `git_safety_hook.dart` matches command TEXT, so it blocks commands that merely mention a banned form (P3)
 
 - **Status**: OPEN
 - **Blocked on**: nothing, but it needs a false-positive analysis before a fix — the hook is
   load-bearing and over-narrowing it would reopen the raw-push hole it exists to close.
-- **Verified**: 2026-08-13 — hit TWICE in one session, both read-only:
-  1. A diagnostic was blocked because the string `git`+`commit` appeared inside a `grep` pattern —
-     it was searching a process list FOR that text, not running it.
-  2. **Writing this very OI board entry was blocked**, because the prose describing the
-     bypass-flag reflex contains the flag's name. Documenting the rule tripped the rule.
+- **Verified**: 2026-08-13. ⚠ **The two detectors are NOT equally leaky, and the original filing
+  conflated them** — corrected by the B-pass, which reproduced the real one involuntarily while
+  reviewing this entry:
+  1. **CONFIRMED, and it is the leaky one.** `scripts/git_safety_lib.dart:32-33`'s
+     `commandHasNoVerifyFlag` is a fully **unanchored** `RegExp(r'--no-verify\b')` over the whole
+     command string. So writing this OI entry was blocked (the prose contains the flag name), and
+     so was the reviewer's read-only `grep -n -- "--no-verify" docs/audit/open_issues.md` — a grep
+     with no `git` in it at all.
+  2. **DOES NOT REPRODUCE as originally described.** I filed a claim that a `grep` for the text
+     `git`+`commit` tripped the hook. `commandInvokesGitSubcommand` (`:18-27`) splits on statements
+     and anchors on `^git`, so a bare `grep "git commit"` does not match it. My original block was
+     almost certainly clause 1 firing on a different part of that same command; I attributed it to
+     the wrong detector without checking.
 - **Identified**: 2026-08-13.
 - **Risk class**: friction that manufactures workaround pressure. A hook firing on mentions makes
   routine diagnosis (grepping logs, process lists, writing docs) fail in a way whose obvious escape
@@ -2931,7 +2989,11 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **What's wrong**: substring matching cannot distinguish "invoke X" from "mention X". Note the
   second instance defeats the obvious cheap fix of "ignore matches inside a `grep` argument" — that
   one was a heredoc writing a Markdown file.
-- **Fix shape**: needs care, and the two instances above bound it. Parsing shell properly is out of
-  scope. Any change MUST keep the raw-push and raw-commit detections intact — verify against
+- **Fix shape**: **split it — the two detectors need different treatment.** `commandHasNoVerifyFlag`
+  is the leaky one and is tightenable at low risk (require the flag to be an actual argument token
+  rather than any substring); `commandInvokesGitSubcommand` is already anchored per statement and
+  should be left alone, since loosening OR tightening it risks reopening the raw-push hole the hook
+  exists to close. Parsing shell properly is out of scope. Any change MUST keep the raw-push and
+  raw-commit detections intact — verify against
   `test/contracts/git_safety_hook_integration_test.dart`, which covers those paths.
 - **Blast-radius estimate**: `platform` (hook script).

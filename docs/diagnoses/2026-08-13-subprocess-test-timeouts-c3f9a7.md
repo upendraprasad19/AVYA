@@ -59,13 +59,23 @@ proposed_fix: >-
   this. No assertion, fixture, or subprocess invocation is touched — only how
   long the harness waits.
 regression_test_planned: >-
-  None added, deliberately, and this is the honest limit of this fix. A test
-  that proves "this test does not time out under suite-wide parallelism" would
-  have to reproduce the whole loaded suite, which is precisely the expensive,
-  nondeterministic condition being fixed. What IS checkable is the invariant
-  that these files declare a non-default timeout, and that is visible in the
-  source with a comment naming this bug id. Recorded as a limitation rather than
-  papered over with a test that would pass whether or not the fix were present.
+  test/contracts/subprocess_test_timeouts_declared_test.dart — asserts all three
+  guarded files declare a timeout >= 90s, parsed by REGEX on the
+  `Timeout(Duration(...))` argument shape rather than by literal source text
+  (this repo has a guard on record that was defeated by one extra space).
+  MUTATION-PROVEN: restoring a single `Duration(seconds: 30)` in place — the way
+  a real revert re-enters — reddens it with `Expected: empty / Actual: [30]`.
+  Also asserts the guarded-file LIST is length 3 and every path exists, so a
+  rename cannot silently shrink what is guarded.
+  ADDED AFTER THE B-PASS. This field originally read "None added, deliberately",
+  reasoning that proving "does not time out under suite-wide parallelism" would
+  require reproducing the expensive nondeterministic condition being fixed. That
+  reasoning is still correct and is why no such test exists. The B-pass (P2-1)
+  accepted it and made the sharper point: the DECLARATION is cheaply checkable,
+  and without a check a merge conflict or IDE tidy-up could silently restore 30s
+  — the bug returning disguised as flakiness, which this very doc calls the
+  dangerous shape. What the guard proves and does not prove is stated in its own
+  header: it proves the declarations survive, NOT that the timeouts suffice.
 touched_layers_checked:
   - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "All three files pass 38/38 with default parallelism after the change (exit 0). NOTE the input-set limit: three files together is a far lighter load than the full regression catalog that actually failed, so this proves the change breaks nothing — the catalog run at commit time is the real verification." }
   - { tier: 12, name: client_server_contract, status: verified, evidence: "The decisive evidence is what did NOT vary: across four failing runs (11/7/8/4 failures) every failure was TimeoutException and ZERO were assertion failures. A timeout raise can only turn a test green if its assertions were already passing and the clock ran out. Had even one been an Expected/Actual mismatch, this fix would have been wrong. Isolated serial run before any change: 38/38 pass, proving the assertions themselves are sound." }
@@ -152,4 +162,18 @@ The repo also already grants this class 3 and 8 minutes
 `check_regression_catalog.dart` still runs unbounded. Bounding it addresses the cause
 rather than the symptom, but it slows every merge commit and touches gate machinery, so it
 wants its own analysis rather than being folded into a batch about an HTTP mock. Filed on
-the board with this diagnose id attached.
+the board with this diagnose id attached (**OI-116**).
+
+**CI headroom shrank and I did not check it — the B-pass did (OI-120).** I verified the local
+gate and stopped there. `.github/workflows/test.yml:93` caps the `unit-test` job at
+`timeout-minutes: 20` and `:112` runs the full suite; tests within one file run sequentially,
+so `git_safety_hook_integration_test.dart`'s worst case went from 8×30s + 1×60s = **5 min** to
+9×120s = **18 min**. That is ~2 minutes of margin.
+
+It does not invalidate the raise — every observed failure was a timeout, none was an assertion,
+and no test here has a path where waiting longer changes the RESULT rather than the duration
+(all 21 bodies were read). But the *forward* risk is real and is the same conflation this doc
+exists to fight: if a future regression genuinely hangs this file, the signal degrades from
+"9 named TimeoutExceptions attributable to one file" to "the job timed out", which names
+nothing. The honest end state is to fix OI-116 and then lower these values again — the 2-minute
+figure absorbs contention, it is not a duration any test needs.
