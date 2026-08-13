@@ -62,7 +62,7 @@ touched_layers_checked:
   - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "test/scripts/supabase_test_helper_http_test.dart green; `flutter analyze` clean for both touched files." }
   - { tier: 10, name: secrets_api_keys, status: verified, evidence: "Ruled the credentials OUT as the cause, which is the whole point of this fix. `gh api repos/upendraprasad19/AVYA/actions/secrets` → SUPABASE_URL + SUPABASE_ANON_KEY both present (created 2026-08-12T15:44Z). The 400 was fabricated by Flutter, never sent by Supabase." }
   - { tier: 12, name: client_server_contract, status: verified, evidence: "MUTATION-PROVEN: removing the `HttpOverrides.global = null` line reddens the new test with `Expected: null / Actual: <Instance of '_MockHttpOverrides'>` — the failure names Flutter's own mock class. LIVE-PROVEN: before the fix `flutter test --dart-define-from-file=.env test/supabase/auth_restore_test.dart` gives AuthUnknownException(empty response, 400); after it, AuthApiException(message: Invalid login credentials, code: invalid_credentials) — a genuine reply from the Supabase auth API, i.e. the request now leaves the process and reaches the server." }
-  - { tier: 4, name: postgres_data, status: verified, evidence: "REMAINING BLOCKER, deliberately not hidden: `select ... from auth.users where email = 'qa@icanbefitter.com'` on dedsavbjuwgarrhphgnl returns ZERO rows. The QA fixture account this suite signs in as does not exist, so the suite still cannot pass. Creating an account is a user-only action (agent is prohibited from account creation), so it is filed as OI-109 rather than worked around." }
+  - { tier: 4, name: postgres_data, status: verified, evidence: "REMAINING BLOCKER, deliberately not hidden: `select ... from auth.users where email = 'qa@icanbefitter.com'` on dedsavbjuwgarrhphgnl returns ZERO rows. The QA fixture account this suite signs in as does not exist, so the suite still cannot pass. Creating an account is a user-only action (agent is prohibited from account creation), so it is filed as OI-115 rather than worked around." }
 impact_analysis: >-
   Two separate things were broken and the first one hid the second. The HTTP mock
   meant these tests could never have passed on any machine, with any credentials,
@@ -135,7 +135,15 @@ AuthApiException(message: Invalid login credentials, statusCode: 400, code: inva
 
 That is a real reply from Supabase's auth API — the request now leaves the process. **The
 job is still red**, because `qa@icanbefitter.com` does not exist in `auth.users` (verified by
-direct query, zero rows). Creating it is a user-only action; filed as **OI-109**.
+direct query, zero rows). Creating it is a user-only action; filed as **OI-115**.
+
+> **Numbering note.** This was filed as OI-109 and renumbered to OI-115 when the branch caught up
+> with `main`. Another session had concurrently landed OI-109…114, and I had picked "next free"
+> against my own branch's copy of the board rather than against `origin/main` — the same
+> stale-input-set error the board's own `babea1a4` ("six OI ids named two issues each") had just
+> fixed six instances of. The duplicate-id detector added in that commit is what would have caught
+> it; here the merge conflict did. The commit message of `1568ba42` still says OI-109 — immutable
+> history, corrected here rather than by rewriting it.
 
 This fix is therefore a prerequisite, not a repair. Saying otherwise would repeat the exact
 error the bug itself embodies — reporting a state you have not actually reached.

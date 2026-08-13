@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **87** (49 numbered, 38 by filename only).
+Total gates: **88** (49 numbered, 39 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -84,6 +84,7 @@ Total gates: **87** (49 numbered, 38 by filename only).
 | — | `check_skipped_discipline_budget.dart` | assert that no `regression-test-skipped:` waiver entry in `docs/skipped-discipline.md` | grandfathered |
 | — | `check_snapshot_contract.dart` | OI-03 gate — enforces the snapshot contract in docs/snapshot_contract.yaml. | grandfathered |
 | 42 | `check_sot_behavioral_test_paths.dart` | assert every SoT registry concept entry carries either: - `behavioral_test_path:` (cite a real behavioral contract test) | grandfathered |
+| — | `check_sot_registry_citations.dart` | SoT-citation gate (post38-auth-fixes, 2026-08-08). Takes NO gate number: rule 24 makes the FILENAME the identity, and 44 is hel... | mutation_proven |
 | 7 | `check_sot_registry_completeness.dart` | SoT registry completeness. | grandfathered |
 | — | `check_sot_registry_parity.dart` | SoT registry parity — file:line references resolve AND no orphan | grandfathered |
 | — | `check_std_encoding_import_rot.dart` | ban importing the REMOVED | grandfathered |

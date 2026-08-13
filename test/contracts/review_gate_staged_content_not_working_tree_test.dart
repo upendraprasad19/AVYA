@@ -61,6 +61,19 @@
 // alone is insufficient once this runs inside a git hook.
 //
 // Run: flutter test test/contracts/review_gate_staged_content_not_working_tree_test.dart
+//
+// TIMEOUT: 4 tests here spawn 8 real subprocesses between them (git plus
+// `dart run`, and every `dart run` boots a fresh VM — slow on Windows). Under
+// the default 30s they time out whenever `flutter test` parallelises them
+// against the rest of the suite, which is exactly what the merge-commit
+// regression walk does. Measured 2026-08-13: five merge attempts failed with
+// 11/7/8/4 TimeoutExceptions, varying per run, while the same files run alone
+// and serially passed 38/38. Not a contract failure in any of them — zero
+// assertion failures across all five runs. Matches the convention already used
+// by the other subprocess-heavy suites (claude_md_citations 3 min,
+// gate_input_family 8 min). Diagnose: c3f9a7.
+@Timeout(Duration(minutes: 2))
+library;
 
 import 'dart:io';
 

@@ -6,11 +6,20 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### oi_board_id_uniqueness (1 bugs)
+- 2026-08-13 b7e3d1 — Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw…
+
+### subprocess_test_timeout_under_suite_parallelism (1 bugs)
+- 2026-08-13 c3f9a7 — The merge-commit regression walk (`scripts/check_regression_catalog.dart`) fails intermittently with a DIFFERENT number of failures each run — measured 11, 7, 8, then 4 across four attempts on the…
+
 ### test_binding_http_mock_masks_real_network (1 bugs)
 - 2026-08-12 a7e3c1 — Every test in test/supabase/ fails at setUpAll with `AuthUnknownException(message: Received an empty response with status code 400)`. The message reads exactly like Supabase rejecting the anon key, so…
 
 ### landing_verification_probe_conflation (1 bugs)
 - 2026-08-11 d4f9b2 — scripts/safe_push.sh — the ONLY sanctioned push path and the file whose entire purpose is to be trusted about whether a push landed — exits 0 having verified nothing whenever `git ls-remote` cannot…
+
+### deploy_smoke_tolerated_codes (1 bugs)
+- 2026-08-10 a7c3f9 — Deploying log-client-error v13 returned HTTP 201 with a healthy ACTIVE function, and then printed "Smoke FAIL — HTTP 401 (not in tolerated set [400])" followed by rollback instructions. The deploy was…
 
 ### test_isolation_intra_file (1 bugs)
 - 2026-08-10 f3c7a2 — Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,…
@@ -55,6 +64,9 @@ rather than a Hive box. (1 bugs)
 ### equipment_exclusion_filter (2 bugs)
 - 2026-08-06 e2d6b8 — A user opens Edit Profile, selects the equipment they do NOT have (e.g. cables), and saves. The selection persists and syncs to cloud. Their generated plan then prescribes exercises requiring exactly…
 - 2026-07-17 b7a4e2 — On every GENERATED workout plan, gym users (basic_gym / full_gym) NEVER received the gym-cardio warmup moves (_gymCardio: Jump Rope / Cycling (Stationary) / Running (Treadmill)) or the gym finisher…
+
+### preauth_error_telemetry (1 bugs)
+- 2026-08-06 b6e4f2 — Founder hits "Could not send reset link. Try again." on the web app. The code that produced that message also calls ErrorTelemetry.logEvent('auth_forgot_password_send_failed'), so there should have…
 
 ### plan_review_record_gate (1 bugs)
 - 2026-08-05 a7f3c2 — scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands…
@@ -975,8 +987,11 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-13 | b7e3d1 | Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw… | oi_board_id_uniqueness | test/contracts/oi_index_test.dart |
+| 2026-08-13 | c3f9a7 | The merge-commit regression walk (`scripts/check_regression_catalog.dart`) fails intermittently with a DIFFERENT number of failures each run — measured 11, 7, 8, then 4 across four attempts on the… | subprocess_test_timeout_under_suite_parallelism | test/contracts/git_safety_hook_integration_test.dart |
 | 2026-08-12 | a7e3c1 | Every test in test/supabase/ fails at setUpAll with `AuthUnknownException(message: Received an empty response with status code 400)`. The message reads exactly like Supabase rejecting the anon key, so… | test_binding_http_mock_masks_real_network | test/scripts/supabase_test_helper_http_test.dart |
 | 2026-08-11 | d4f9b2 | scripts/safe_push.sh — the ONLY sanctioned push path and the file whose entire purpose is to be trusted about whether a push landed — exits 0 having verified nothing whenever `git ls-remote` cannot… | landing_verification_probe_conflation | test/scripts/safe_push_test.dart |
+| 2026-08-10 | a7c3f9 | Deploying log-client-error v13 returned HTTP 201 with a healthy ACTIVE function, and then printed "Smoke FAIL — HTTP 401 (not in tolerated set [400])" followed by rollback instructions. The deploy was… | deploy_smoke_tolerated_codes | "not_applicable — see regression_test_planned for why, and what was done instead" |
 | 2026-08-10 | f3c7a2 | Three tests in worktree_config_integrity_e2e_test.dart pass when the whole file runs but FAIL when run individually — `--plain-name "warn-only"` gives 1 failed, the full file gives 6 passed. Worse,… | test_isolation_intra_file | test/scripts/worktree_config_integrity_e2e_test.dart |
 | 2026-08-10 | c2e9f4 | Founder (upendraprasad19@gmail.com, auth.users.id d7a67a37-0b05-4f0a- b13c-388bff3cb59b) signed in with GOOGLE to an account created by email in May, force-closed the app during a slow restore,… | onboarding_completed_at | test/contracts/local_onboarding_evidence_behavioral_test.dart |
 | 2026-08-10 | d7b3e9 | `scripts/retire_worktree.dart` — the worktree-retirement command — would DELETE gitignored files that no process can recreate, while reporting the worktree as "merged + clean + pushed". Three… | worktree_retirement_allow_list | test/scripts/retire_worktree_lib_test.dart |
@@ -991,6 +1006,7 @@ rather than a Hive box. | test/scripts/claude_md_citations_letter_suffix_test.da
 | 2026-08-07 | a7e3d1 | Two defects on the same surface, both filed as OI-76. (1) COUNT. The Profile tab's Notifications row subtitle reads "N/M enabled". It counted all 10 registry keys, including `protein_alerts` and… | notification_preferences | test/contracts/notification_pro_key_scoping_test.dart |
 | 2026-08-07 | d5b8c2 | `promote-community-item` (daily cron, job `promote_community_item_daily`) opened both of its promotion paths with a call to the Postgres RPC `community_votes_summary`. That function does not exist —… | community_review_queue | test/contracts/promote_community_vote_tally_test.dart |
 | 2026-08-06 | e2d6b8 | A user opens Edit Profile, selects the equipment they do NOT have (e.g. cables), and saves. The selection persists and syncs to cloud. Their generated plan then prescribes exercises requiring exactly… | equipment_exclusion_filter | test/contracts/equipment_exclusion_filter_behavioral_test.dart |
+| 2026-08-06 | b6e4f2 | Founder hits "Could not send reset link. Try again." on the web app. The code that produced that message also calls ErrorTelemetry.logEvent('auth_forgot_password_send_failed'), so there should have… | preauth_error_telemetry | test/contracts/error_telemetry_payload_contract_test.dart |
 | 2026-08-05 | a7f3c2 | scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands… | plan_review_record_gate | test/scripts/plan_review_record_gate_e2e_test.dart |
 | 2026-08-03 | c9f4e1 | Two independent, real (not hypothetical) gaps in the git-safety tooling that CLAUDE.md §4.3 already relies on. (1) A 2026-08-03 near-miss during the terms-accepted-fix backfill follow-up: a foreground… | git_safety_tooling | test/contracts/git_lock_concurrency_test.dart (3a — real concurrent processes, not mocked timing; 5 tests after round-2's fix round, see below), test/scripts/plan_review_record_gate_e2e_test.dart (3b — 3 new tests appended to the existing E2E suite for this gate), test/scripts/safe_merge_test.dart (3c — real bare-remote + clone E2E, including the seeded-stale-origin scenario and, after round-2, the multi-word -m passthrough), test/scripts/safe_push_test.dart (NEW in round-2's fix round — safe_push.sh had zero prior coverage; this pins only the EXTRA_ARGS fix that batch actually changed there, not the pre-existing SSH-keepalive/retry logic). |
 | 2026-08-03 | b4e9c7 | `lib/features/train/screens/graduation_screen.dart` reached 909 lines against Gate 43's 800-line ceiling and passed only because it had been added to the gate's transitional allow-list — the FIRST… | phase_advance_write_path | test/contracts/pro_phase_advance_behavioral_test.dart |
