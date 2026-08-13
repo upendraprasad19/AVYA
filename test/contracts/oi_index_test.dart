@@ -74,6 +74,81 @@ void main() {
     });
   });
 
+  group('OI-112 scar: an id minted twice must ERROR, never render', () {
+    // Six ids (OI-100..105) existed twice on 2026-08-13 — once on `main`, once
+    // on a branch — naming entirely different issues. The two boards MERGED
+    // CLEANLY (git saw additions in different regions of one file), the
+    // generator rendered the result and exited 0, and `closes-oi: OI-NN`
+    // silently stopped naming one thing.
+
+    test('a clean board reports nothing', () {
+      expect(
+          duplicateIds(
+              _entry('OI-1', 'a', 'OPEN') + _entry('OI-2', 'b', 'OPEN')),
+          isEmpty);
+    });
+
+    test('the same id twice is reported with its count', () {
+      final d = duplicateIds(_entry('OI-104', 'one thing', 'OPEN') +
+          _entry('OI-104', 'a DIFFERENT thing', 'OPEN'));
+      expect(d, hasLength(1));
+      expect(d.single, contains('OI-104'));
+      expect(d.single, contains('2'));
+    });
+
+    // THE load-bearing case. An implementation written over parseOpenIssues'
+    // result — the obvious one — passes every other test in this group and
+    // fails this one, because that parser drops CLOSED entries before the
+    // check can see them. The board is keyed by id regardless of status.
+    test('an OPEN id colliding with a CLOSED one is still a duplicate', () {
+      final board = _entry('OI-79', 'still open here', 'OPEN') +
+          _entry('OI-79', 'closed over here', 'CLOSED · 2026-07-28 · `abc123`');
+      expect(parseOpenIssues(board), hasLength(1),
+          reason: 'precondition: the OPEN-only parse sees just one of these');
+      expect(duplicateIds(board), hasLength(1),
+          reason: 'but the duplicate check must see BOTH — scanning headers, '
+              'not the OPEN-only result');
+    });
+
+    test('reports every duplicated id, in numeric order', () {
+      // The ids MUST span digit widths or this test cannot fail for the
+      // property it names. B-pass caught the first version using
+      // OI-100..105 — six ids of identical width, where lexical and numeric
+      // order COINCIDE, so a lexical `.sort()` passed it while the `reason:`
+      // string claimed otherwise. Same shape as the sibling parseOpenIssues
+      // sort test above, and the same lesson as Gate 44: a test that cannot
+      // go red proves nothing.
+      //
+      // Numeric:  OI-9, OI-10, OI-100, OI-105
+      // Lexical:  OI-10, OI-100, OI-105, OI-9   <- first AND last both differ
+      final board = [9, 10, 100, 105]
+          .map((n) => _entry('OI-$n', 'mine', 'OPEN') +
+              _entry('OI-$n', 'theirs', 'OPEN'))
+          .join();
+      final d = duplicateIds(board);
+      expect(d, hasLength(4));
+      expect(d.first, contains('OI-9'),
+          reason: 'numeric order — a lexical sort puts OI-10 first');
+      expect(d.last, contains('OI-105'),
+          reason: 'numeric order — a lexical sort puts OI-9 last');
+    });
+
+    test('the real 2026-08-13 shape: six ids duplicated at once', () {
+      final board = [100, 101, 102, 103, 104, 105]
+          .map((n) => _entry('OI-$n', 'mine', 'OPEN') +
+              _entry('OI-$n', 'theirs', 'OPEN'))
+          .join();
+      expect(duplicateIds(board), hasLength(6));
+    });
+
+    test('three of the same id counts three, not two', () {
+      final d = duplicateIds(_entry('OI-7', 'a', 'OPEN') +
+          _entry('OI-7', 'b', 'OPEN') +
+          _entry('OI-7', 'c', 'OPEN'));
+      expect(d.single, contains('3'));
+    });
+  });
+
   group('missing fields are detectable (the generator fails closed on these)', () {
     test('absent Blocked on surfaces as empty, not as a default', () {
       final i = parseOpenIssues(_entry('OI-44', 'x', 'OPEN', blocked: null));

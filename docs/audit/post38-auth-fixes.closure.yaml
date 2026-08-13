@@ -1,0 +1,500 @@
+# Closure ledger — post38-auth-fixes (5 units; 45 findings).
+#
+# ⚠ COUNTS CORRECTED 2026-08-10. This header previously opened "35 findings =
+# 27 + 8 + 7" — three numbers that sum to 42, against a header that said 35 and
+# a `total_findings:` that said 43. Nobody was lying; the prose was hand-edited
+# as findings accrued while the LIST was the thing actually growing. Recounted
+# mechanically by id prefix, which is the only number that cannot drift:
+#     16  R1-*   round 1 (2026-08-07)
+#     19  R2-N*  round 2 (2026-08-08) — largely defects introduced BY round 1's fixes
+#      8  B*     mandatory pre-merge B-pass on d4a8de00 (2026-08-09)
+#      2  DEP-*  found by RUNNING the authorised v13 deploy and reading its output (2026-08-10)
+#     ---
+#     45  = total_findings = closed_count
+# So only 35 of 45 came from a review ROUND at all: eight came from the B-pass on
+# an already-finished commit, and two from executing a deploy that had already
+# reported success. Reviews are not the only instrument, and were not the most
+# efficient one here.
+#
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key.
+#
+# SCOPE NOTE — read this before interpreting `blocked_on_user` below.
+#
+# Round 1 produced 16 findings, round 2 produced 11 more, and the decisive
+# signal was that round 2's findings were largely defects introduced BY round
+# 1's fixes. That is §4.12.1's explicit trigger ("when successive reviews keep
+# surfacing new material issues, that is the signal the unit is too large —
+# split it and ship the smallest converged piece"). The founder ratified the
+# split on 2026-08-08 into four independently-converging slices, each with its
+# own review round, its own plan-review record, and its own merge under its own
+# founder go.
+#
+# `blocked_on_user` here means: the finding's fix is sequenced into a NAMED
+# approved slice whose merge requires the founder's go. Every such entry carries
+# the slice name in `reason:`. All 45 findings live in THIS one ledger — none is
+# handed to a future ledger to remember — so nothing can fall between slices.
+#
+# ⚠ CONVENTION, corrected after the B-pass (2026-08-08, Finding 1):
+# `closed_in_commit` means THE FIX IS IN A COMMIT THAT EXISTS. Nothing else.
+# The first version of this ledger marked 14 entries `closed_in_commit` +
+# `commit: *slice0` whose fixes were only uncommitted working-tree edits — the
+# starkest being R1-P0-1, a P0 auth defect whose own `notes:` said "the code
+# ships in slice 2" while its terminal_state claimed it was already in slice 0.
+# A reader trusting the ledger would have believed a P0 was safe in git history
+# when it existed nowhere but one machine's working tree. Those 14 are now
+# `blocked_on_user` + `reason: *sN` + an explicit `fix_state:` saying the fix is
+# written but NOT in any commit.
+# The general rule: a closure ledger describes GIT, not the author's intent. If
+# you cannot name the commit that carries it, it is not closed.
+#
+# Slice 0 (this commit) closes the server-side and documentation half: migration
+# 119, log-client-error v12, the b6e4f2 corrections, the board entries, and the
+# new SoT-citation gate that forces slices 1–3 to register their SoT concepts.
+
+batch: post38-auth-fixes
+diagnose: docs/diagnoses/2026-08-06-preauth-failures-unloggable-b6e4f2.md
+related_diagnoses: >
+  docs/diagnoses/2026-08-06-google-signin-never-navigates-d3a7c9.md,
+  docs/diagnoses/2026-08-06-reset-link-device-bound-pkce-c9e2b7.md,
+  docs/diagnoses/2026-08-06-notifications-inbox-nonuuid-id-a4f1c8.md,
+  docs/diagnoses/2026-08-06-account-swap-inflight-writes-e5c2d1.md
+plan_review_record: docs/plan-reviews/post38-auth-fixes.md
+total_findings: 45
+closed_count: 45
+
+_slice0: &slice0 "post38-auth-fixes slice 0 (prod/repo reconciliation + the SoT-citation gate)"
+_s1: &s1 "approved split slice 1 (a4f1c8 uuid) — merges under its own founder go"
+_s2: &s2 "approved split slice 2 (OAuth watch) — merges under its own founder go"
+_s3: &s3 "approved split slice 3 (telemetry lane, client half) — merges under its own founder go"
+_s4: &s4 "approved split slice 4 (sync owner guards) — merges under its own founder go"
+
+findings:
+  # ---- ROUND 1 (2026-08-07) — reviewer B, code ----
+  - id: R1-P0-1
+    title: "OAuth watch trusted the onAuthStateChange PAYLOAD; ReplaySubject with no maxSize replays historical sessions"
+    terminal_state: blocked_on_user
+    reason: *s2
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: test/contracts/google_oauth_session_navigation_behavioral_test.dart
+    notes: >
+      Strictly worse than the bug being fixed — sign-in → sign-out → retry would
+      resolve against a historical session, navigate to /restoring with no
+      session AND disarm the watch. The test could not see it because the stub
+      was a plain non-replaying StreamController: the fake was MORE FORGIVING
+      than production at the exact seam carrying the defect. Fixed by reading
+      live currentAccessToken() and requiring it to change from an arm-time
+      snapshot; replay case added. The code carrying this fix ships in slice 2,
+      but the DEFECT itself is closed — recorded here so it is not re-found.
+  - id: R1-P1-2
+    title: "check_authed_invoke_fresh_token.dart exits 1 on the new direct functions.invoke — pre-commit would block"
+    terminal_state: blocked_on_user
+    reason: *s3
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: scripts/check_authed_invoke_fresh_token.dart
+    notes: >
+      Fixed by putting callFunctionAnonymous in SupabaseService — the one file
+      the gate exempts — so the gate stays strong and error_telemetry.dart is
+      not grandfathered.
+  - id: R1-P1-3
+    title: "Allow-list named 3 op_types with ZERO emitters while auth_send_phone_otp_failed, which IS emitted signed-out, was missing"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "grep -rn '<op_type>' lib/ — all six now have exactly one emitter (re-verified 2026-08-08)"
+    notes: >
+      Emitters were added rather than the entries trimmed, because the point of
+      the lane is that these flows become diagnosable. ⚠ The sixth entry is in
+      the repo source but NOT in deployed v12 — see R2-N12.
+  - id: R1-P1-4
+    title: "The uuid writer test was CIRCULAR — it minted its own uuid, so reverting the writer left all 4 cases green"
+    terminal_state: blocked_on_user
+    reason: *s1
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: test/contracts/notifications_inbox_uuid_id_behavioral_test.dart
+    notes: "Rebound to the production mint NotificationInboxService.newLocalNotificationId(); mutation-proven."
+  - id: R1-P1-5
+    title: "Sink guard covered 1 of 4 stale-userId sinks; its `return` exited _syncNutritionLogs while two siblings ran on under Future.wait"
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: test/contracts/session_owner_inflight_guard_behavioral_test.dart
+    notes: "All four nutrition sinks guarded. Scope beyond that file is OI-111."
+  - id: R1-P2-6
+    title: "The guard test's ORDERING case passed inputs identical to an earlier case — asserted nothing new"
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: test/contracts/session_owner_inflight_guard_behavioral_test.dart
+    notes: "Replaced with a purity/interleaving assertion."
+  - id: R1-P2-7
+    title: "reset_password_screen read _hasSession once in build() with no rebuild trigger — the no-session state could never recover"
+    terminal_state: blocked_on_user
+    reason: *s3
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: test/contracts/password_recovery_code_flow_behavioral_test.dart
+    notes: "_authSub added so the async link path can recover. Its own side effect is R2-N5."
+  - id: R1-P2-8
+    title: "Anon lane's GLOBAL budget fed _maybeHonorRateLimit — a stranger exhausting it would silence THIS device's authed telemetry"
+    terminal_state: blocked_on_user
+    reason: *s3
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: lib/core/services/error_telemetry.dart
+    notes: "Cooldown honoured for the authed lane only in logEvent. recordNonFatal's twin is R2-N4."
+  - id: R1-P3-9
+    title: "recordNonFatal never got the pre-auth lane — only logEvent did"
+    terminal_state: blocked_on_user
+    reason: *s3
+    notes: "Client-side telemetry change; sequenced with the rest of the client lane."
+
+  # ---- ROUND 1 (2026-08-07) — reviewer A, docs ----
+  - id: R1-A1
+    title: "e5c2d1 cited the WRONG capture site: sync_nutrition.dart:185 is inside syncSavedMealsNow(), not _syncNutritionLogs"
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: "read sync_nutrition.dart:185 and :201 directly"
+    notes: >
+      Verified myself before acting. The wrong provenance had already propagated
+      into 2 shipped code comments. Frontmatter corrected; one surviving instance
+      in the doc BODY is R2-N7.
+  - id: R1-A2
+    title: "c9e2b7 described 2 test cases that do not exist — ForgotPasswordSheet has no test at all"
+    terminal_state: blocked_on_user
+    reason: *s2
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: "grep -rln 'ForgotPasswordSheet' test/ → no matches"
+    notes: "Doc corrected to state the real coverage; the gap itself is tracked as OI-109 rather than implied away."
+  - id: R1-A3
+    title: "OI-111 was never actually filed — e5c2d1 closed its own scope gap against a tracker entry that did not exist"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: docs/audit/open_issues.md
+    notes: "OI-111 and OI-109 both filed for real, each with Blocked on + Verified so the fail-closed index generator accepts them."
+  - id: R1-A4
+    title: "Fabricated +33 baseline statistic: 184 rows over 11 days, actually 791 rows over 54 days"
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: "re-queried client_errors"
+    notes: "The 'ZERO of either' half of the claim was and is true; only the baseline was invented."
+  - id: R1-A5
+    title: "Incident window wrong: RLS storm is 12:35:12.72–21.59 and Hive 12:35:22–24.92, not '12:35:17-24'"
+    terminal_state: blocked_on_user
+    reason: *s4
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: "re-queried client_errors"
+    notes: "The real storm starts five seconds before the window the doc claimed."
+  - id: R1-A6
+    title: "a4f1c8 precision defects: op_type attribution 4+2 not 6; _restoreNotificationsInbox line; detector 'sets' vs 'returns'; understated honest-limit"
+    terminal_state: blocked_on_user
+    reason: *s1
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: docs/diagnoses/2026-08-06-notifications-inbox-nonuuid-id-a4f1c8.md
+    notes: "isUuidShaped IS wired at sync_restore_completeness.dart:278; the doc had understated its own coverage."
+  - id: R1-A7
+    title: "Citation convention drift — some docs cite PRE-fix HEAD lines, others POST-fix, with nothing saying which"
+    terminal_state: blocked_on_user
+    reason: *s1
+    notes: "Cross-cutting across all 5 docs; lands with the first slice that touches them."
+
+  # ---- ROUND 2 (2026-08-07) — on the hardened tree ----
+  - id: R2-N1
+    title: "Cooldown gate at error_telemetry.dart:311 runs BEFORE the signed-out branch at :339 — a fifth barrier silencing the very lane this batch built"
+    terminal_state: blocked_on_user
+    reason: *s3
+    notes: "P1. The barrier count went 4 → 5: the batch removed three and its own fix added one."
+  - id: R2-N2
+    title: "Two OAuth hang paths: _watchForOAuthSession() sits outside the try at auth_provider.dart:450"
+    terminal_state: blocked_on_user
+    reason: *s2
+    notes: "P1."
+  - id: R2-N3
+    title: "catch (_) { return; } returns before the Timer assignment, leaving no timeout armed"
+    terminal_state: blocked_on_user
+    reason: *s2
+    notes: "P1. Same function as R2-N2; both close together."
+  - id: R2-N4
+    title: "recordNonFatal honours the anon rate-limit unconditionally at :286 — the twin of R1-P2-8, unfixed"
+    terminal_state: blocked_on_user
+    reason: *s3
+    notes: "P2."
+  - id: R2-N5
+    title: "reset screen's own _authSub fires on its post-success signOut(), rendering the 'expired' state on the SUCCESS path"
+    terminal_state: blocked_on_user
+    reason: *s3
+    notes: "P2. Introduced by R1-P2-7's fix."
+  - id: R2-N6
+    title: "session_owner_inflight_guard_behavioral_test.dart passes with all 16 guard call sites deleted"
+    terminal_state: blocked_on_user
+    reason: *s4
+    notes: >
+      P1. It exercises the pure predicate but never asserts the predicate is
+      CALLED — presence-only confidence of exactly the shape
+      feedback_source_grep_false_confidence.md describes.
+  - id: R2-N7
+    title: "The wrong :185 citation survives at e5c2d1.md:162 and in the guard test header, after R1-A1 corrected only the frontmatter"
+    terminal_state: blocked_on_user
+    reason: *s4
+    notes: "P2. A correction that fixed one instance of a claim and left another."
+  - id: R2-N8
+    title: "Phantom method _replayPendingNutritionSync cited at sync_nutrition.dart:301 — invented while correcting R1-A1"
+    terminal_state: blocked_on_user
+    reason: *s4
+    notes: "P2. A fabricated citation introduced by the act of fixing a fabricated citation."
+  - id: R2-N9
+    title: "Item-loop guard abandons a half-written parent, skipping the tail vacuum"
+    terminal_state: blocked_on_user
+    reason: *s4
+    notes: "P2."
+  - id: R2-N10
+    title: "callFunctionAnonymous is not actually anonymous — it sends whatever bearer the client happens to hold"
+    terminal_state: blocked_on_user
+    reason: *s3
+    notes: "P2. Rename to callFunctionUnauthenticated + assert currentSession == null."
+  - id: R2-N11
+    title: "OAuth test case 3 not mutation-covered; _oauthSub assigned after .listen(); the 90s timeout can leave a session unobserved"
+    terminal_state: blocked_on_user
+    reason: *s2
+    notes: "P3, three related precision points in one finding as originally reported."
+
+  # ---- ROUND 3 (2026-08-08) — found while scoping slice 0 ----
+  - id: R2-N12
+    title: "Deployed log-client-error v12 has FIVE allow-list entries; repo source has six — R1-P1-3's fix was never deployed"
+    terminal_state: blocked_on_user
+    reason: "redeploy to v13 requires its own explicit founder go per §4.3 (plan approval is not deploy approval)"
+    verification: "decode .claude/_payload_log-client-error.json as UTF-8 and diff against the worktree source — sole difference is the PRE_AUTH_OP_TYPES block"
+    notes: >
+      Latent, not live-broken: _kEnablePhoneEnlist = false makes signInWithPhone
+      unreachable, so nothing emits auth_send_phone_otp_failed today. A fresh
+      instance of OI-93's mechanism. Recorded in b6e4f2 tier 6 rather than left
+      silent, because no gate detects EF repo-vs-deploy drift.
+  - id: R2-N13
+    title: "validate_diagnose_doc.dart never checked that sot_registry_entry: RESOLVES — three docs in this batch cite concepts that do not exist"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: test/contracts/sot_registry_citations_test.dart
+    notes: >
+      The SoT-citation gate (scripts/check_sot_registry_citations.dart) added, negative-control
+      proven: with d3a7c9 / a4f1c8 / c9e2b7 staged it exits 1 naming all three;
+      unstaged it exits 0. Ships in slice 0 so slices 1–3 are FORCED to register
+      their concepts (§4.11 gates-before-refactor). Scoped by doc date because a
+      repo-wide hard fail would be unsatisfiable against a 90-doc backlog — the
+      backlog is counted live by the gate and tracked as OI-110.
+  - id: R2-N15
+    title: "OI numbering collided across sessions — my OI-96/97/98 were already taken on origin/main by another session's merged work"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "git show origin/main:docs/audit/open_issues.md | grep '^## OI-9'"
+    notes: >
+      Renumbered to OI-111/109/110 and every citation updated (closure YAML,
+      e5c2d1, c9e2b7). §4.13's worktrees isolate the git INDEX; they do not
+      isolate a shared numbering NAMESPACE, and nothing detects a collision —
+      both sides validate fine in isolation. Found only because slice 0 had to
+      fast-forward onto origin/main (which had advanced 3 commits) before
+      committing. A board-level `check_oi_numbering_unique.dart` would catch it
+      at the merge; not built here, and not claimed as tracked either.
+  - id: R2-N16
+    title: "callFunctionAnonymous bypassed retryColdStart — the pre-auth telemetry lane silently drops its event whenever the function is cold"
+    terminal_state: blocked_on_user
+    reason: *s3
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: test/contracts/edge_function_503_retry_test.dart
+    notes: >
+      Surfaced by the pre-commit suite, not by review: the existing 1-invoke
+      contract test went red. The literal count was the symptom; the defect was
+      real. The code justified skipping retry as "telemetry must never add
+      latency to a failing auth screen" — wrong on its own terms, since every
+      callsite is `unawaited(...)` and cannot delay any UI. Fixed by funnelling
+      both public methods through one private _invokeRaw wrapped in
+      retryColdStart. A cold start also costs no server budget (the request
+      never reaches the handler). Code ships in slice 3; the defect is closed.
+  - id: R2-N17
+    title: "google_oauth_redirect_flow_test pinned kIsWeb via a fixed 700-char forward window from signInWithGoogle, which the launchGoogleOAuth extraction moved out of range"
+    terminal_state: blocked_on_user
+    reason: *s2
+    fix_state: "written, NOT yet in any commit — ships with that slice"
+    verification: test/contracts/google_oauth_redirect_flow_test.dart
+    notes: >
+      The contract still held — the branch simply moved to a helper ABOVE
+      signInWithGoogle, which a forward-only window can never reach. Its two
+      sibling cases stayed green because they grep the whole file, which is what
+      made the failure legible. Re-anchored on `signInWithOAuth(` — the call the
+      contract is actually about — and mutation-proven: hardcoding the redirect
+      turns 2 cases red. Same input-set-width family as the gate work in this
+      slice, in the opposite direction (a RED check whose window drifted).
+      Code ships in slice 2; the defect is closed.
+  - id: R2-N18
+    title: "Gate 42 flipped STRICT on 2026-08-07 — `behavioral_test_required: true` is no longer a backlog escape hatch but a hard blocker, and my OI text still described the old behaviour"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "CLAUDE.md rule 21 as of origin/main 0f2268a6"
+    notes: >
+      Learned only by fast-forwarding onto origin/main mid-slice. A new SoT
+      concept now needs a real `behavioral_test_path:` or `presence_only: true`
+      with a documented reason. OI-110's fix-shape text corrected accordingly —
+      it would otherwise have sent slices 1-3 down a route the gate now blocks.
+      Recorded because the wrong version was written from a CLAUDE.md read that
+      was one day stale, which no amount of care at authoring time would have
+      caught: the fix is to re-read the governing rule after any rebase.
+  - id: R2-N19
+    title: "The pre-commit hook validates the WORKING TREE, so a split's later slices block the earlier one — slice 0 could not commit while slices 1-4 sat uncommitted"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "scripts/check_sot_registry_parity.dart PASS once the 3 slice-4 files were set aside"
+    notes: >
+      Not anticipated when the split was planned, and it cost three commit
+      attempts. The hook runs `flutter test` and the check_*.dart gates against
+      the tree, not the staged set, so uncommitted slice-2/3/4 code failed gates
+      that slice 0's own content passes cleanly. Two of the three failures were
+      REAL defects worth having (R2-N16, R2-N17). The third was an artifact: the
+      SoT registry's `sync_service.dart:821-845` range for compileDailySnapshot
+      is CORRECT at HEAD and stale only against the dirty tree (the method sits
+      at :897 there, +76 from slice-4's edits) — so "fixing" the registry would
+      have made the COMMITTED state wrong. Resolved by setting the 3 slice-4
+      files aside for the commit and restoring them after.
+      The generalisable rule for the remaining slices: a slice must be committed
+      from a tree containing only that slice, or the gates adjudicate code the
+      commit does not contain. Verify a stale-line-range failure against HEAD
+      before editing the registry — the tree is not the artifact being committed.
+  - id: R2-N14
+    title: "Two unverified assertions in my own first landing plan: 'no gate detects EF deploy drift' (OI-93 exists) and 'emit_payload.js mangles non-ASCII' (it does not)"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "docs/audit/OPEN_INDEX.md line 41 (OI-93); .claude/emit_payload.js:123,:188 read 'utf-8'"
+    notes: >
+      Both are feedback_mistake_unverified_done_claims — state asserted without
+      querying the authoritative source. The second nearly sequenced work around
+      fixing a tool that is not broken; the mojibake was Python's open() using
+      cp1252 on Windows. Corrected in the plan before execution.
+
+  # ---- B-PASS on d4a8de00 (2026-08-09) — fresh context-blind reviewer, §4.3 ----
+  # Full artifact: docs/reviews/d4a8de00-review.md
+  - id: B1
+    title: "14 ledger entries claimed closed_in_commit for fixes that existed only as uncommitted working-tree edits — incl. R1-P0-1, a P0"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "grep -c 'terminal_state: closed_in_commit' docs/audit/post38-auth-fixes.closure.yaml -> 7"
+    notes: >
+      The worst finding of the batch, because it made the ledger LIE in the
+      reassuring direction. R1-P0-1's own notes said "ships in slice 2" while its
+      terminal_state said slice 0. Rule now stated in the header: a closure
+      ledger describes GIT, not intent — if you cannot name the commit, it is
+      not closed.
+  - id: B2
+    title: "The SoT-citation gate: prose citations were never added to `failures`, in --strict too — a doc could opt out of the resolve-check with spaces instead of underscores"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "flutter test test/contracts/sot_registry_citations_test.dart --plain-name 'hides behind PROSE'"
+    notes: "Post-cutoff prose is now a violation; pre-cutoff stays grandfathered."
+  - id: B3
+    title: "The SoT-citation gate's contract test never executed main() — neutering `failures` to an empty list left the entire suite green"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "apply the neutering mutation, flutter test -> 3 failures"
+    notes: >
+      Presence-only confidence inside the test of the gate built to end
+      presence-only confidence. Closed with 7 subprocess cases that run the real
+      gate in a throwaway git repo (GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE
+      scrubbed) and assert exit codes. Mutation-proven.
+  - id: B4
+    title: "origin/main advanced to c90fc4c0 mid-review and created its OWN OI-99 — the numbering collision recurred within hours of being 'closed'"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "comm -12 of the two boards' OI headers -> stops at OI-98"
+    notes: >
+      Mine renumbered 99 -> 102. Second instance in one day; the manual renumber
+      is a patch, not a fix. Structural gap filed as OI-112 rather than
+      hand-patched a third time.
+  - id: B5
+    title: "The SoT-citation gate failed OPEN on a missing registry (exit 0 'SKIP') while failing CLOSED on a zero-concept parse — same meaning, opposite handling"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "flutter test ... --plain-name 'FAIL CLOSED'"
+    notes: "A rename or deletion of the registry would have silently disabled the gate."
+  - id: B6
+    title: "The SoT-citation gate's cutoff read only the filename, so a new doc could exempt itself by being NAMED with a pre-cutoff date"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "flutter test ... --plain-name 'backdating the FILENAME'"
+    notes: >
+      Now takes the LATER of filename and `date:` frontmatter. Honest limit kept
+      in the code comment rather than papered over: an author controlling both
+      fields can still opt out — this is grandfathering, not a security boundary.
+  - id: B7
+    title: "d4a8de00's commit message says '34 findings'; the ledger said 35 — the count moved after the message was written"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "grep -c '^  - id:' docs/audit/post38-auth-fixes.closure.yaml"
+    notes: >
+      The commit is already made and its message cannot be corrected without a
+      history rewrite, so the correction lives in docs/reviews/d4a8de00-review.md
+      and in the follow-up commit message. 35 was right at d4a8de00; 42 now.
+  - id: B8
+    title: "The index silently widened from 8 staged files to 23 between staging and committing — I reported '8' from a stale check and nearly committed all four unshipped slices"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    verification: "the failed run's own first line reads `staged: 23`; git reset + re-add brought it back to 8"
+    notes: >
+      Caught only because The SoT-citation gate failed on three slice-1/2 diagnose-docs that
+      had no business being in the index. Had the gate passed, 23 files would
+      have shipped under a message describing 8 — the §4.13 mixing failure, from
+      inside one session rather than across two.
+      CAUSE NOT ESTABLISHED. No hook does `git add -A` (pre-commit stages only 5
+      named INDEX.md files; safe_commit.sh stages nothing; prepare-commit-msg and
+      commit-msg stage nothing). Recorded as unexplained rather than assigned a
+      plausible-sounding cause — inventing one would be the same error this batch
+      keeps making.
+      THE ACTIONABLE HALF, which does not depend on the cause: I printed
+      `staged: N` in the same command as the commit and did not READ it, then
+      told the founder "8 files staged" from a check taken minutes earlier. A
+      staged-set check is only valid at the instant of the commit. Verify the
+      staged list INSIDE the committing command and read the output, every time.
+
+  # ---- DEPLOY (2026-08-10) — found by RUNNING the authorised v13 redeploy ----
+  # Neither of these came from a review round. Both were found by reading the
+  # output of a deploy that had already succeeded — the same lesson as
+  # feedback_git_landing_verification.md: "the tool reported success" and "the
+  # thing is correct" are different claims.
+  - id: DEP-P2-44
+    title: "log-client-error's smoke tolerated-code set omitted 401, so its smoke step false-FAILed on every deploy"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    fix_state: "fixed — .claude/deploy_via_api.js SMOKE_TOLERATED_CODES['log-client-error'] 400 -> [400, 401]"
+    verification: docs/diagnoses/2026-08-10-deploy-smoke-false-fail-and-archive-mislabel-a7c3f9.md
+    notes: >
+      The function is verify_jwt=true, so the gateway answers the headerless
+      {smoke:true} probe with 401 before the module runs — it can never return
+      the 400 the entry was written for. Thirteen sibling auth-required
+      functions in the same table already list 401 with exactly that rationale;
+      this entry was the lone outlier. Not a one-off: it had already fired on
+      the v11 and v12 deploys of this function and been hand-waved each time.
+      A verification step that reports FAIL on every healthy run, complete with
+      rollback instructions, teaches the operator to stop reading it.
+      Proven by executing the REAL edited table with the red path: fixed
+      predicate(401) -> true; pre-fix [400] predicate(401) -> FALSE.
+  - id: DEP-P2-45
+    title: "payload archive stamped cwd's HEAD sha, so a cross-worktree deploy named the archive after a commit that does not contain it"
+    terminal_state: closed_in_commit
+    commit: *slice0
+    fix_state: "fixed — new provenanceSha() verifies the payload against `git show <sha>:...` and returns 'nosha' when it cannot substantiate the claim"
+    verification: docs/diagnoses/2026-08-10-deploy-smoke-false-fail-and-archive-mislabel-a7c3f9.md
+    notes: >
+      archivePayload stamped currentHeadSha() (cwd = REPO_ROOT) while
+      emit_payload.js --functions-dir routinely sources the payload from a
+      DIFFERENT worktree — which §4.13 actively encourages, since the primary
+      worktree is integration-only. Today's v13 deploy wrote v4_4df6ef2.json:
+      a main-branch sha whose tree holds a FIVE-entry allow-list, against a
+      payload holding six. A wrong sha is worse than none — it routes an
+      incident-time rollback to source that never produced the payload.
+      Proven by running the real function: branch sha -> "034e712",
+      main sha -> "nosha" (reproducing today's mislabel), null -> "nosha".
+      The archive from today's deploy was renamed by hand to v4_034e712.json,
+      which is the value the fixed function independently computes.
+      RESIDUE, filed not swallowed: this script cannot be unit-tested at all
+      (top-level IIFE, no require.main guard; CI provisions deno but never
+      node), so both fixes had to be proven by extracting and eval-ing source
+      text. That gap is OI-114. It is NOT bundled here because changing the
+      execution model of the script that had just run a live production deploy,
+      in the same commit as the defects it would test, is the wrong order —
+      the guard lands first and standalone (§4.11).
+

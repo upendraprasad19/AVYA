@@ -2118,6 +2118,24 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   drift it detects is not — this instance sat on the telemetry lane, and OI-73's sits on cron
   auth.
 
+- **FOURTH INSTANCE, 2026-08-08 — same function again, inside a single batch.** During
+  `post38-auth-fixes` slice-0 scoping: deployed `log-client-error` **v12** carries a FIVE-entry
+  `PRE_AUTH_OP_TYPES`; the repo source carries **six**. Round-1 review of that same batch added
+  `auth_send_phone_otp_failed` — the one pre-auth op_type that was already emitted signed-out and
+  therefore still 401'd — and the redeploy never happened. Measured by decoding
+  `.claude/_payload_log-client-error.json` as UTF-8 and diffing against the worktree source
+  (18334 chars deployed vs 19253; the allow-list block is the sole difference). Latent, not
+  live-broken: `_kEnablePhoneEnlist = false` (`lib/features/auth/screens/sign_in_screen.dart:27`)
+  makes `signInWithPhone` unreachable, so nothing emits that op_type today.
+  What this instance adds to the case: the drift opened and went unnoticed **within one batch,
+  between a review round and the commit** — not over seven weeks. So the "release-checklist line
+  item" cheap version above would NOT have caught it; the window was hours, not weeks. Recorded
+  in `docs/diagnoses/2026-08-06-preauth-failures-unloggable-b6e4f2.md` tier 6.
+  ⚠ Note on how it was found: the first diff read the payload with Python's `open()`, which
+  defaults to cp1252 on Windows, producing mojibake that looked like an `emit_payload.js`
+  encoding bug. It is not — that script reads `'utf-8'` at both sites (`:123`, `:188`). Decode
+  explicitly before concluding anything about deployed bytes.
+
 ## OI-94 — `anonKey` is deprecated; production still passes it to `Supabase.initialize`
 
 - **Status**: OPEN
@@ -2305,6 +2323,181 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Blast radius estimate**: `account` — touches the sync restore path; no migration, no schema
   change for the first fix shape.
 
+## OI-111 — the stale-`userId` sink guard covers the nutrition fan-out only; ~26 sibling sinks share the shape
+
+- **Status**: OPEN
+- **Blocked on**: nothing — this is bounded work, not a decision
+- **Verified**: 2026-08-07 (grep below run against `post38-auth-fixes`)
+- **Filed by**: round-1 review of `post38-auth-fixes`, which caught that the e5c2d1 diagnose-doc
+  claimed this OI had already been filed when it had not. Filing it for real is the fix for that
+  claim — a scope statement closed against a tracker entry that does not exist is a deferral to
+  nowhere (`feedback_spawn_task_chip_not_durable`).
+- **What e5c2d1 actually fixed**: `SyncService.ownerChangedSince(ownerId)` is now checked at the
+  WRITE SINK in `sync_nutrition.dart` — all four of that file's sinks (`nutrition_logs`,
+  `nutrition_log_items`, `water_logs`, `user_saved_meals`). The RESTORE half is global, because
+  its guard lives in the shared between-step check (`restoreAbortedFor`).
+- **What remains**: every other sync fan-out method resolves the owner id once — at its own entry
+  or in a caller that passes it down — and then carries it across awaits to a cloud write.
+  `grep -rn "'user_id': userId" lib/core/services/sync/` finds the sibling sinks across
+  `sync_workout`, `sync_health`, `sync_profile`, `sync_coach` and `sync_community`.
+- **Why it matters**: the observed incident was caught by RLS (22 × 42501), which is the LAST
+  line of defence, not the intended one. The same race with the opposite interleaving — captured
+  id equal to the NEW user while the ROWS came from the previous user's Hive box — satisfies
+  `auth.uid() = user_id` and is written, and Postgres cannot distinguish that from a legitimate
+  write. So the unguarded sinks are a silent cross-account-write risk, not just a noise source.
+- **Fix shape**: mechanical sweep — `if (ownerChangedSince(userId)) return;` immediately before
+  each cloud write, plus a case in
+  `test/contracts/session_owner_inflight_guard_behavioral_test.dart` per domain. Consider a
+  `check_*.dart` gate that flags a `'user_id': userId` sink with no preceding guard within N
+  lines, so the sweep cannot silently regress (§4.11 gates-before-refactor).
+- **Blast radius estimate**: `platform`.
+
+## OI-109 — ForgotPasswordSheet's two-step code flow has no test
+
+- **Status**: OPEN
+- **Blocked on**: nothing — bounded work
+- **Verified**: 2026-08-07 (`grep -rln "ForgotPasswordSheet" test/` → no matches)
+- **Filed by**: round-1 review of `post38-auth-fixes`. The c9e2b7 diagnose-doc originally
+  DESCRIBED two sheet test cases that had never been written; correcting the doc without
+  tracking the gap would just move the untruth. Filed so the gap is owed, not implied away.
+- **What is covered today**: `test/contracts/password_recovery_code_flow_behavioral_test.dart`
+  covers the RESET SCREEN's session gate (2 cases, first mutation-proven).
+- **What is NOT covered**: the headline Unit-2 change — `ForgotPasswordSheet`'s step machine
+  (email → code), its client-side code validation (`length != 6 || int.tryParse == null`
+  rejects before any network call), and its `verifyOTP(type: OtpType.recovery)` call plus the
+  `AppRouter.isPasswordRecovery = true` + `router.go('/reset')` sequence on success.
+- **Fix shape**: a widget test using the same MockClient + inline `Supabase.initialize` harness
+  as `password_reset_redirect_flow_test.dart` (note its `:272-279` comment — init must happen
+  INSIDE the testWidgets body, not setUpAll, or a GoTrue timer lands outside the zone `pump()`
+  advances). Assert: send success advances the step and shows the target address; a bad code is
+  rejected with NO request issued; a good code sets the recovery flag and navigates to `/reset`.
+- **Why it matters**: this is the flow a locked-out user depends on, and it is the part of the
+  batch with the largest behaviour change (link → typed code). The screen it hands off to is
+  tested; the handoff itself is not.
+- **Blast radius estimate**: `platform`.
+
+## OI-110 — ~90 diagnose-docs cite a `sot_registry_entry:` concept that does not exist
+
+- **Status**: OPEN
+- **Blocked on**: nothing — bounded, mechanical work. Gate 44 already prevents new instances.
+- **Verified**: 2026-08-08 (`dart run scripts/check_sot_registry_citations.dart` reports the
+  count live on every run; it is not a hand-written snapshot)
+- **Identified**: 2026-08-08 · while building Gate 44 during `post38-auth-fixes` slice 0
+- **Risk class**: documentation integrity — a citation that resolves to nothing
+- **What's wrong**: `scripts/validate_diagnose_doc.dart` — the validator every diagnose-doc must
+  pass — contains **zero** references to the SoT registry. It checks the `sot_registry_entry:`
+  field is present and non-empty; it has never checked the value RESOLVES. Across 370 tracked
+  docs that has accumulated **~90 unresolved identifier-shaped citations across 82 distinct
+  names** since 2026-05-03, plus **29** citations written as free prose that no tool can
+  adjudicate at all.
+- **Why a dangling citation is worse than an absent one**: §4.1's writer/reader discipline sends
+  you to the registry to find the contract. Finding nothing reads as "this concept was never
+  registered" rather than "this doc named something that does not exist" — so the reader
+  concludes the CODE lacks a contract when the real defect is in the doc.
+- **What is already done**: Gate 44 (`scripts/check_sot_registry_citations.dart`, pure logic in
+  `scripts/sot_citation_lib.dart`, test `test/contracts/sot_registry_citations_test.dart`) hard-
+  fails any doc dated >= `2026-08-01` whose citation does not resolve, and reports the older
+  backlog as a live WARN count. Scoped by date because a repo-wide hard fail would have been
+  unsatisfiable on day one, which is how gates end up bypassed
+  (`feedback_mistake_claimed_gate_unsatisfiable.md`).
+- **Fix shape**: walk the 82 distinct dangling names. Each resolves to one of three: a registry
+  concept that was RENAMED (repoint the citation), a concept that genuinely should exist, or a
+  doc where no concept applies (use `not_applicable`).
+  ⚠ Adding a concept is NOT cheap any more: **Gate 42 flipped STRICT on 2026-08-07**, so a new
+  entry needs a real `behavioral_test_path:` or `presence_only: true` with a documented reason.
+  The `behavioral_test_required: true` backlog marker was REMOVED and is now itself a hard
+  blocker. An earlier draft of this entry said otherwise — written from a CLAUDE.md read that
+  was one day stale. Budget a behavioral test per added concept, not a placeholder.
+  Then move `citationCutoff` back and delete the backlog branch —
+  the gate graduates to `--strict` by default. Normalising the 29 prose citations to a bare
+  identifier or a sentinel closes the gate's remaining blind spot.
+- **Blast radius estimate**: `feature` (docs + a constant), though it touches many files.
+
+## OI-112 — OI numbering collides across concurrent sessions; the LANDING half is now gated, the MINT-TIME half is not
+
+- **Status**: OPEN
+- **Blocked on**: nothing — the remaining half is a cross-branch check, and where it runs is still the open decision below
+- **Verified**: 2026-08-13 (a FOURTH and largest collision: six ids at once — see "Partially closed").
+  The third hit a DIFFERENT session in parallel and is recorded at
+  `docs/plan-reviews/claude-commit-merge-push-process-aae061.md:56-58` — "renumbered to OI-106 at
+  merge time, an unrelated batch landed its own OI-105 on `main` first". Two sessions hit this
+  class independently within a day, neither aware of the other. The "Measured" bullet below
+  enumerates only the first two, which are the ones on THIS branch.
+- **Partially closed 2026-08-13**: `scripts/build_oi_index.dart` now **fails closed on duplicate
+  ids within the board** (`duplicateIds()`), so a corrupt board can no longer render and cannot
+  LAND — the merge commit regenerates the index and the gate fires. What this does NOT do is warn
+  at **mint time**: two sessions on two branches each picking "the next free number" still both
+  validate clean in isolation, because each board is individually duplicate-free. That is the half
+  OI-112's fix-shape below addresses, and it remains open.
+  Evidence it detects: planting a second `## OI-111` made the generator exit 1 naming the id.
+  Mutation-proven — rebuilding the check over `parseOpenIssues` (which drops CLOSED entries)
+  reddens exactly the OPEN-vs-CLOSED test; neutering it reddens 4.
+  Tests: `test/contracts/oi_index_test.dart` (group "OI-112 scar").
+- **Identified**: 2026-08-09 · B-pass Finding 4 on `d4a8de00`
+- **Risk class**: cross-session process drift — silent, and both sides validate clean
+- **What's wrong**: §4.13 worktrees isolate the git INDEX; they do NOT isolate the shared
+  `## OI-NN` numbering NAMESPACE in `docs/audit/open_issues.md`. Two sessions filing issues
+  concurrently both pick "the next free number" against *their own* base and both are correct in
+  isolation. Nothing — not the OI index generator, not Gate 40, not the merge — compares the two.
+- **Measured**: 2026-08-08 mine claimed OI-96/97/98, already taken on `origin/main`; renumbered to
+  99/100/101. Within hours `origin/main` advanced again (`c90fc4c0`) with its own OI-99, so mine
+  moved to 100/101/102. **Two collisions, one day, same branch.** The manual renumber is a patch,
+  not a fix — it goes stale the moment another session lands.
+- **Why it matters beyond tidiness**: an OI number is a citation target. Diagnose-docs, closure
+  YAMLs and commit messages all cite `OI-NN`. A collision silently repoints someone else's
+  citation at your issue.
+- **Fix shape**: `scripts/check_oi_numbering_unique.dart` — parse `## OI-(\d+)` from HEAD and from
+  `origin/main`, fail when the same number carries a different title. **Open decision:** a
+  pre-commit gate would read a possibly-stale local `origin/main` ref (fails safe, but weakly);
+  CI is authoritative but only catches it after the push. Probably both, with CI as the real gate.
+  A cheaper complement: allocate from a high, per-session-reserved block instead of "next free".
+- **Blast radius estimate**: `feature` (a script plus wiring).
+
+## OI-113 — the anon telemetry lane's daily budget is a non-atomic count-then-insert
+
+- **Status**: OPEN
+- **Blocked on**: nothing
+- **Verified**: 2026-08-09 (B-pass on `d4a8de00`, reviewer read the deployed function source)
+- **Identified**: 2026-08-09 · raised by the B-pass reviewer as an un-filed caveat rather than a
+  finding, because it is not a regression from that commit
+- **Risk class**: soft rate limit presented as a hard one
+- **What's wrong**: `log-client-error`'s anon lane counts existing rows and then inserts, with no
+  DB-side reservation or trigger — unlike this codebase's own ai-proxy reservation pattern. Under
+  concurrency the effective ceiling exceeds `ANON_DAILY_RATE_LIMIT = 200`. It is now reachable
+  with only the public anon key, which is what makes it worth writing down.
+- **Why it is not urgent**: the lane is allow-list-only (six op_types, all `_failed`), is forced
+  non-high-priority so it cannot bypass the priority budget, and writes `user_id NULL` rows that
+  the authenticated RLS policy still refuses. The exposure is noise volume, not authz.
+- **Fix shape**: either a Postgres-side reservation (the ai-proxy pattern) or accept the soft cap
+  explicitly and say so in the function header, so nobody later reads 200 as a guarantee.
+- **Blast radius estimate**: `platform` (Edge Function + possibly a migration).
+
+## OI-114 — `.claude/deploy_via_api.js` cannot be unit-tested, so its logic is only ever proven by hand
+
+- **Status**: OPEN
+- **Blocked on**: nothing
+- **Verified**: 2026-08-10 (read the file; confirmed the top-level IIFE and CI's node absence)
+- **Identified**: 2026-08-10 · while fixing `a7c3f9` (two defects in this same script)
+- **Risk class**: untestable tooling on the production-deploy path
+- **What's wrong**: the script ends in a bare top-level `async` IIFE with no `require.main === module`
+  guard and no `module.exports`, so importing it *attempts a deploy*. Its pure logic —
+  `SMOKE_TOLERATED_CODES`, `provenanceSha`, `isHighPriority`-style helpers — therefore cannot be
+  exercised by any automated test. Compounding it, `.github/workflows/test.yml` provisions **deno
+  only** (lines 108/125), never node, so even a hand-written JS test would not be gated by CI.
+- **Evidence it matters**: `a7c3f9` fixed two defects here that had shipped through at least the v11
+  and v12 deploys of `log-client-error` unnoticed. Both were proven by *extracting source text and
+  eval-ing it* — a technique that works but tests a copy of the parse, not the module. The
+  `log-client-error` Edge Function this tool deploys already solves exactly this, with
+  `if (import.meta.main) serve(handler)` plus explicit test exports; the deploy tool never adopted
+  the same pattern.
+- **Fix shape**: wrap the IIFE in `if (require.main === module)`, add `module.exports` for the pure
+  helpers, add a node test, and add a `node --test` step to CI (or port the helpers to Dart so the
+  existing `flutter test` gate covers them). Deliberately NOT bundled into `a7c3f9`: changing the
+  execution model of the script that had just performed a live production deploy, in the same commit
+  that fixes the defects that change would test, is the wrong order — the guard lands first and
+  standalone, per §4.11.
+- **Blast radius estimate**: `feature` (`.claude/` + `.github/workflows/`), but the *consequence* of
+  a defect in this file reaches production deploys.
 ## OI-99 — Gate 26 has no `docs/` zone, and the destination files OI-91 rewrote into are themselves not immune to dead/wrong `CLAUDE.md §N` citations (P3)
 
 - **Status**: OPEN

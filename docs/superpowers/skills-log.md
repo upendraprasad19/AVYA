@@ -182,3 +182,40 @@
     the founder answers. Resolved in the previous entry, applied here without re-litigating.
   → Written from the worktree, riding with the unpushed OI-56 commit so both land in one push
     rather than two CI cycles.
+
+- **2026-08-07 ~13:40 IST — `post38-auth-fixes`, mid-batch, ACCEPTED (suggestion approved;
+  founder's `/compact` then reported "Compaction canceled", so this records approval of the
+  curated list, NOT that a compaction ran).**
+  Trigger: round-2 fan-out returned AND a governing invariant had fired with a founder decision
+  pending — §4.12.1 ("successive reviews keep surfacing new material issues ⇒ the unit is too
+  large; split it"). Round 1 produced 16 findings, round 2 produced 11 more, and the decisive
+  signal was not the count but that round 2's findings were largely defects introduced BY
+  round 1's fixes. Diverging, not converging.
+  → **New trigger worth adding to the skill's list: "a governing invariant has fired and a
+    founder decision is open".** The skill currently lists phase-boundary / fan-out / ship /
+    explicit / context-pressure. None of those is the reason this one mattered. An open scope
+    decision is the highest-cost thing to lose, because after compaction the decision looks
+    already-made in whichever direction the summary happens to lean.
+  → **A MISLEADING GREEN STATE is a distinct preserve category, and worse than an unknown one.**
+    Previous entries established "lead with the prohibition, because rules leave no artifact".
+    This session sharpens it: the tree here is not merely silent about its problems, it actively
+    argues FOR merging — 16/16 tests green, `flutter analyze` 0/0, six diagnose-docs passing
+    their validator — while carrying three P1s verified against source (a telemetry cooldown
+    that silences the very lane it was built for; an OAuth hang path outside its own try; a
+    guard test that passes with all 16 guard call sites deleted). A future session doesn't just
+    lack knowledge, it holds positive evidence pointing the wrong way. When green signals and
+    truth disagree, the preserve list must say so FIRST and name the specific file:line, or the
+    green wins by default.
+  → **Live-vs-repo divergence is a preserve item in its own right.** Prod is AHEAD of the branch
+    (migration 119 hand-applied and absent from `schema_migrations`; `log-client-error` v12
+    deployed) while the repo has zero commits. Losing that invites a re-apply or a re-deploy.
+  → **Mid-review tool loss belongs on the preserve list too.** The Supabase MCP disconnected
+    between round 2 and this invocation, so every live claim in the diagnose-docs is currently
+    unverifiable. That is a fact about what CANNOT be checked, which no artifact records.
+  → Step-6 timing held again (3rd consecutive): the outcome is an input to this line, so it is
+    written after the founder answers. Noting that the answer here was two-part — suggestion
+    accepted, compaction itself cancelled — which is exactly the ambiguity that would have been
+    guessed wrong had this been written in advance.
+  → Written in the worktree, not the shared main folder. ⚠ `docs/superpowers/skills-log.md` also
+    has an UNCOMMITTED edit sitting in the primary worktree from the previous session; these two
+    copies will need reconciling before either lands.
