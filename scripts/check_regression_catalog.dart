@@ -56,6 +56,13 @@ void main() async {
   final result = await Process.run(
     'flutter',
     ['test', ...dartPaths],
+    // Git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE into every hook, and
+    // this gate runs only from pre-commit on a merge commit. Those override both
+    // `workingDirectory:` and `-C <path>`, so any test building its own git repo
+    // gets pointed at the REAL repo — mid-merge — and fails on unrelated state.
+    // See scrubbedChildEnvironment's doc comment for the measured evidence.
+    environment: scrubbedChildEnvironment(Platform.environment),
+    includeParentEnvironment: false,
     // Windows: Dart's Process.run cannot resolve `flutter.bat` without a shell,
     // so the merge-commit regression walk threw ProcessException ("cannot find
     // the file specified") whenever the recent-window test list was non-empty.

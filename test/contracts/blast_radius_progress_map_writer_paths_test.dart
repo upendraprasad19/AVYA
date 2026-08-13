@@ -21,6 +21,19 @@
 //
 // Run: flutter test test/contracts/blast_radius_progress_map_writer_paths_test.dart
 
+@Timeout(Duration(minutes: 3))
+library;
+
+// TIMEOUT RAISED FROM THE 30s DEFAULT (2026-08-13, diagnose 4f2a9e).
+// This file spawns real subprocesses (`dart run` / shell), and a cold `dart run`
+// costs seconds on its own — VM start plus kernel compile. Under the
+// merge-commit regression-catalog walk, which runs ~700 tests concurrently,
+// those subprocesses take long enough to blow the 30s PER-TEST default, and the
+// walk reports failures for tests that pass standalone every time. Measured: one
+// such file takes 33s wall with ZERO contention.
+// Applied to the whole subprocess-spawning class, not only the files observed
+// failing — fixing just the observed instances is what let this recur twice.
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';

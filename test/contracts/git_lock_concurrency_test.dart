@@ -25,6 +25,19 @@
 // REAL repo (b7e4c2, feedback_mistake_git_hook_env_leak). Mirrors the pattern
 // established in test/contracts/deferral_euphemism_gate_test.dart.
 
+@Timeout(Duration(minutes: 3))
+library;
+
+// TIMEOUT RAISED FROM THE 30s DEFAULT (2026-08-13, diagnose 4f2a9e).
+// This file spawns real subprocesses (`dart run` / shell), and a cold `dart run`
+// costs seconds on its own — VM start plus kernel compile. Under the
+// merge-commit regression-catalog walk, which runs ~700 tests concurrently,
+// those subprocesses take long enough to blow the 30s PER-TEST default, and the
+// walk reports failures for tests that pass standalone every time. Measured: one
+// such file takes 33s wall with ZERO contention.
+// Applied to the whole subprocess-spawning class, not only the files observed
+// failing — fixing just the observed instances is what let this recur twice.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -165,7 +178,7 @@ fi
               '${after.stdout}${after.stderr}');
       expect(
           '${after.stdout}${after.stderr}', contains('PROBER_ACQUIRED'));
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // OI-92 (2026-08-05) INVERTED THIS TEST. It previously asserted that a
     // dead-PID lock was automatically RECLAIMED. The auto-reclaim is gone —
@@ -278,7 +291,7 @@ fi
       expect(out, contains('no longer owned'),
           reason: 'the refusal must be visible, not a silent no-op.\n$out');
       expect(out, isNot(contains('LOCK_DIR_REMOVED')));
-    }, timeout: const Timeout(Duration(seconds: 15)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // Round-1 review finding #3 (should-fix, TOCTOU) was originally closed
     // by adding a brief re-read/sleep before the OLD mkdir-then-separate-
@@ -374,7 +387,7 @@ fi
       expect(survivors, contenders - 1,
           reason: 'the 4 losing candidates must all survive intact; only '
               'the 1 winner is consumed by a successful rename.');
-    }, timeout: const Timeout(Duration(seconds: 15)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // Round-2 review blocking #1: the round-1 TOCTOU fix (test above) only
     // narrowed the mkdir-then-separate-write window, it did not close it.
@@ -479,7 +492,7 @@ echo "B_FINAL_HOLDER: \$(cat "\$(git rev-parse --git-dir)/.safe_git_op.lock/hold
               '${aOut.toString()}');
       expect(aOut.toString(), contains('A_ACQUIRE_FAILED'));
       expect(aOut.toString(), contains('REFUSING'));
-    }, timeout: const Timeout(Duration(seconds: 20)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // OI-92 B-pass finding. A trapped signal whose handler does NOT exit runs
     // the handler and then RESUMES execution at the point of interruption.
@@ -566,7 +579,7 @@ echo "HOLDER_EXIT=\$?"
       expect(after.exitCode, 0,
           reason: 'a fresh acquire must succeed after a signalled holder '
               'released.\n${after.stdout}${after.stderr}');
-    }, timeout: const Timeout(Duration(seconds: 40)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // ── REMOVED 2026-08-05 (OI-92) — two tests whose SUBJECT no longer exists ──
     //

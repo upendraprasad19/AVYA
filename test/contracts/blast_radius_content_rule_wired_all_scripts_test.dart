@@ -30,6 +30,19 @@
 //
 // Run: flutter test test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart
 
+@Timeout(Duration(minutes: 3))
+library;
+
+// TIMEOUT RAISED FROM THE 30s DEFAULT (2026-08-13, diagnose 4f2a9e).
+// This file spawns real subprocesses (`dart run` / shell), and a cold `dart run`
+// costs seconds on its own — VM start plus kernel compile. Under the
+// merge-commit regression-catalog walk, which runs ~700 tests concurrently,
+// those subprocesses take long enough to blow the 30s PER-TEST default, and the
+// walk reports failures for tests that pass standalone every time. Measured: one
+// such file takes 33s wall with ZERO contention.
+// Applied to the whole subprocess-spawning class, not only the files observed
+// failing — fixing just the observed instances is what let this recur twice.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -232,7 +245,7 @@ void main() {
       expect(classify([...scriptPaths, ...enforcementPaths]), 'platform',
           reason: 'The real gate must see the promoted set as >= platform, not '
               'just this test\'s reimplementation of the glob engine.');
-    }, timeout: const Timeout(Duration(seconds: 120)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('scripts/blast_radius_content_rules_lib.dart is >= platform', () {
       // The shared library all three delegate to; weakening it weakens all

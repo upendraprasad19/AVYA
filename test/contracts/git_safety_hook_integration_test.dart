@@ -1,3 +1,22 @@
+@Timeout(Duration(minutes: 3))
+library;
+
+// TIMEOUT RAISED FROM THE 30s DEFAULT (2026-08-13, diagnose 4f2a9e).
+//
+// Every test in this file spawns `dart run <script>` as a real subprocess, and a
+// cold `dart run` costs seconds on its own (VM start + kernel compile). Measured
+// standalone with ZERO contention: this file takes ~33s wall for its handful of
+// tests — already brushing the 30s PER-TEST default.
+//
+// The merge-commit regression-catalog walk then runs ~700 tests concurrently, so
+// the same subprocesses take far longer and these tests time out. That produced
+// false failures that blocked a merge twice while the file passed standalone
+// every time. The default is simply wrong for a test whose body starts a Dart VM;
+// this matches what test/scripts/*_e2e_test.dart already declare for the same
+// reason.
+//
+// This is a TIMEOUT, not a retry: a genuine hang still fails, just later.
+
 // Integration test for scripts/git_safety_hook.dart — the actual PreToolUse
 // wire contract, not just the pure lib functions.
 //
@@ -112,20 +131,20 @@ void main() {
       final result = await runHook(payload('git commit -m "x"'));
       expect(result.exitCode, 2);
       expect(result.stderr, contains('safe_commit.sh'));
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('multi-line raw git commit is denied (F2 regression, at the wire level)',
         () async {
       final result =
           await runHook(payload('git add -A\ngit commit -m "x"'));
       expect(result.exitCode, 2);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('commit via safe_commit.sh wrapper is allowed (exit 0)', () async {
       final result =
           await runHook(payload('sh scripts/safe_commit.sh "msg"'));
       expect(result.exitCode, 0);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     // The other half of the contract, and the half that had no test at all
     // until b7e4c2. Resolving a conflicted merge REQUIRES a raw `git commit`
@@ -182,26 +201,26 @@ void main() {
       expect(result.exitCode, 0,
           reason: 'A raw commit during a merge must be allowed — it is the '
               'only way to complete a conflict resolution.');
-    }, timeout: const Timeout(Duration(seconds: 60)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('raw git push is denied (exit 2)', () async {
       final result = await runHook(payload('git push origin main'));
       expect(result.exitCode, 2);
       expect(result.stderr, contains('safe_push.sh'));
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('--no-verify is denied without the override (exit 2)', () async {
       final result =
           await runHook(payload('git commit -m "x" --no-verify'));
       expect(result.exitCode, 2);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('a non-git Bash command is allowed silently (exit 0, no output)',
         () async {
       final result = await runHook(payload('ls -la'));
       expect(result.exitCode, 0);
       expect(result.stdout.trim(), isEmpty);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('a non-Bash tool is allowed (exit 0) — field-name contract check',
         () async {
@@ -220,7 +239,7 @@ void main() {
       await process.stdin.close();
       final exitCode = await process.exitCode;
       expect(exitCode, 0);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('malformed JSON on stdin fails open (exit 0, never crashes the call)',
         () async {
@@ -234,6 +253,6 @@ void main() {
       await process.stdin.close();
       final exitCode = await process.exitCode;
       expect(exitCode, 0);
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    }, timeout: const Timeout(Duration(minutes: 3)));
   });
 }

@@ -2818,3 +2818,73 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   way — check all three, not just the one that bit.
 - **Blast radius estimate**: `platform` (`scripts/safe_commit.sh` is pinned platform; the hook
   scripts are individually pinned per `docs/blast_radius.yaml`).
+
+## OI-115 — cleanup() can DELETE from 12 PROD tables and its guard cannot refuse the scenario it was written for (P1)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — the work is understood and scoped; it needs a design decision
+  between a uuid allow-list and a runtime self-check, then implementation.
+- **Verified**: 2026-08-13 — round-2 context-blind review, reproduced by direct read of
+  `test/supabase/supabase_test_helper.dart:30,148,198` on branch `supabase-ci-http-mock`.
+- **Identified**: 2026-08-13 (split out of diagnose 3b7e1c per §4.12.1).
+- **Risk class**: production data loss. Bounded TODAY only because `qa@icanbefitter.com` does
+  not exist, so sign-in fails and `cleanup()` early-returns on a null `_userId`.
+- **What's wrong**: `SupabaseTestHelper.cleanup()` issues `DELETE` across 12 tables of the
+  production project (`dedsavbjuwgarrhphgnl`) and CI runs it on every push to `main`. A guard
+  was written (branch `supabase-ci-http-mock`, commits `29e8484e` + `a2f50316`) but it compares
+  the signed-in email against `disposableTestEmail` — the SAME constant `signIn()` uses via
+  `testEmail = disposableTestEmail`. **Both sides move together**, so the scenario the guard's
+  own doc comment names — "repoint the constant at an account that DOES exist, because sign-in
+  fails" — passes straight through. Real accounts at risk: `test2@gmail.com` … `test7@gmail.com`
+  (test7 holds 133 `memory_embeddings` rows, verified by read-only SELECT).
+  A pin test detects a repoint but runs in the SAME `flutter test test/supabase/` invocation as
+  the file issuing the deletes, alphabetically after it — detection no earlier than the damage.
+- **Also in scope, same file family**:
+  - `test/edge_functions/pgvector_test.dart` deletes from `memory_embeddings` in setUp and
+    tearDownAll; its guard has the same aliasing weakness and cannot fire.
+  - `ai_proxy_test.dart` writes `ai_coach_interactions` and burns the signed-in user's daily
+    quota — not a DELETE, same boundary question.
+  - The guard's `tearDownAll` path throws `LateInitializationError` when `setUpAll` failed
+    (which it does today), adding noise to the first-real-run triage OI-105 budgeted for.
+- **Fix shape (not attempted)**: make the boundary independent of the sign-in identity — either
+  an allow-list of QA **uuids** checked against `targetId`, or a runtime self-check inside
+  `assertDisposableTarget` validating the constant's own value, so a repoint fails in the same
+  call rather than in another file's test. Prefer the uuid list: an email is a mutable label, a
+  uuid is the thing rows are actually keyed by.
+- **Where the work is**: branch `supabase-ci-http-mock` (commits `29e8484e`, `a2f50316`) — a
+  guard, its tests, and 3 mutation proofs already exist and are worth keeping; the boundary
+  design is what needs redoing. Round-2 review findings are the spec.
+- **Blast radius estimate**: `feature` for the helper alone; `platform` if the fix also moves the
+  QA password to a secret (that requires editing `.github/workflows/test.yml`).
+
+## OI-116 — the QA password is committed to git, and creating the account would put it on prod (P2)
+
+- **Status**: OPEN
+- **Blocked on**: founder — creating `qa@icanbefitter.com` and adding a `SUPABASE_TEST_PASSWORD`
+  Actions secret are account/settings actions an agent cannot perform.
+- **Verified**: 2026-08-13 — `git grep QA_Test_2024` across the whole worktree.
+- **Identified**: 2026-08-13 (split out of diagnose 3b7e1c per §4.12.1).
+- **Risk class**: credential exposure. Not yet realised — the account does not exist, so the
+  password currently unlocks nothing.
+- **What's wrong**: `QA_Test_2024!` is a literal in `test/supabase/supabase_test_helper.dart`,
+  `test/edge_functions/{ai_proxy,pgvector}_test.dart` and
+  `integration_test/helpers/auth_helper.dart`, plus `supabase/seed_qa.sql`,
+  `integration_test/app_test.dart` and `testing/e2e/*.md`. Creating the account with it would put
+  a login on the PRODUCTION project whose password anyone with repo access can read. It is in git
+  history regardless, so the account must be created with a NEW password whatever else happens.
+- **What has ALREADY been done — do not re-derive** (branch `supabase-ci-http-mock`, `29e8484e` +
+  `a2f50316`): all four live uses converted to `String.fromEnvironment('SUPABASE_TEST_PASSWORD')`;
+  `hasCredentials` widened to three inputs with a pure `credentialsComplete()` predicate so it is
+  mutation-testable; `test.yml` given the env var and quoted `--dart-define`s on both steps; the
+  announce step widened to name all three missing secrets.
+- **What round 2 found still wrong there**: `integration_test/helpers/auth_helper.dart` has NO
+  skip-gate, so device/integration runs would attempt sign-in with an EMPTY password instead of
+  skipping — fixing a security issue created a functional one. `SUPABASE_TEST_PASSWORD` is absent
+  from `.env.example` and `docs/operations/DEVICE_TESTING.md`, and `scripts/run-device-tests.sh`
+  passes only `--dart-define-from-file=.env`. `testing/e2e/01_auth_onboarding.md:15,93` still
+  publishes the literal. The `hasCredentials` delegation test is tautological once all three
+  secrets exist.
+- **Fix shape**: finish the above, then founder creates the account with a NEW password and adds
+  the secret. Only then can the `supabase-tests` job go green — and per OI-105 expect the first
+  real run to surface genuine failures.
+- **Blast radius estimate**: `platform` (`.github/workflows/test.yml`).

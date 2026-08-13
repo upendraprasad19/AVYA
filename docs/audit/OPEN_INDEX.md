@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**47 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**49 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -55,3 +55,5 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-112 | OI numbering collides across concurrent sessions; the LANDING half is now… | nothing — the remaining half is a cross-branch check, and where it runs is still the open decision below | 2026-08-13 (a FOURTH and largest collision: six ids at once — see "Partially closed"). | [:2416](open_issues.md#L2416) |
 | OI-113 | the anon telemetry lane's daily budget is a non-atomic count-then-insert | nothing | 2026-08-09 (B-pass on `d4a8de00`, reviewer read the deployed function source) | [:2456](open_issues.md#L2456) |
 | OI-114 | `.claude/deploy_via_api.js` cannot be unit-tested, so its logic is only… | nothing | 2026-08-10 (read the file; confirmed the top-level IIFE and CI's node absence) | [:2475](open_issues.md#L2475) |
+| OI-115 | cleanup() can DELETE from 12 PROD tables and its guard cannot refuse the… | nothing — the work is understood and scoped; it needs a design decision | 2026-08-13 — round-2 context-blind review, reproduced by direct read of | [:2822](open_issues.md#L2822) |
+| OI-116 | the QA password is committed to git, and creating the account would put it… | founder — creating `qa@icanbefitter.com` and adding a `SUPABASE_TEST_PASSWORD` | 2026-08-13 — `git grep QA_Test_2024` across the whole worktree. | [:2860](open_issues.md#L2860) |

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -58,12 +59,74 @@ class SupabaseTestHelper {
     });
   }
 
+  /// Restore real networking after the test binding has stubbed it out.
+  ///
+  /// MUST be called AFTER `TestWidgetsFlutterBinding.ensureInitialized()` (which
+  /// `_mockSharedPreferences()` does) and BEFORE any Supabase call, because that
+  /// binding installs an `HttpOverrides.global` returning **status 400 with an
+  /// empty body for every request, without making a network call at all**.
+  /// Flutter says so itself in the run output:
+  ///
+  ///   "When running a test suite that uses TestWidgetsFlutterBinding, all HTTP
+  ///    requests will return status code 400, and no network request will
+  ///    actually be made."
+  ///
+  /// These are INTEGRATION tests: their whole purpose is to talk to real
+  /// Supabase. Under the stub, `signIn()` fails in `setUpAll` with
+  /// `AuthUnknownException(... status code 400)` and every file in
+  /// `test/supabase/` aborts before its first assertion.
+  ///
+  /// The binding itself cannot simply be dropped — `Supabase.initialize()`
+  /// needs the mocked `shared_preferences` MethodChannel, which requires it.
+  /// So: keep the binding, drop only its HTTP interception.
+  ///
+  /// WHY THIS LAY DORMANT UNTIL 2026-08-12: the suite is gated on
+  /// [hasCredentials], and the repo had no Actions secrets, so every file took
+  /// its `SKIPPED` branch and the CI job reported green while verifying nothing
+  /// (OI-105). The moment `SUPABASE_URL` / `SUPABASE_ANON_KEY` were added, the
+  /// tests ran for the first time and hit this immediately. Diagnose: 3b7e1c.
+  /// Public (not `_private`) so the regression test can drive it directly and
+  /// assert the BEHAVIOUR — that a request actually reaches a real socket —
+  /// rather than source-grepping for the assignment. Everything on this class
+  /// is test-facing already.
+  static void restoreRealHttp() {
+    HttpOverrides.global = null;
+  }
+
+  /// Installs the test binding AND undoes its HTTP stub, in that order.
+  ///
+  /// ORDER IS LOAD-BEARING: `_mockSharedPreferences()` calls
+  /// `TestWidgetsFlutterBinding.ensureInitialized()`, which is what INSTALLS the
+  /// stub. Calling [restoreRealHttp] first and the binding second re-installs it
+  /// and the fix silently evaporates.
+  ///
+  /// Extracted as its own method so both facts are TESTABLE without a live
+  /// Supabase URL — round-2 review showed that deleting the `restoreRealHttp()`
+  /// call from `init()`, and inverting the two lines, BOTH left the suite green.
+  /// The behavioural test drove `restoreRealHttp()` directly and never drove the
+  /// sequence. See test/supabase/http_override_restored_test.dart.
+  ///
+  /// Any test file that installs the binding itself instead of calling
+  /// [init] must call this (or [restoreRealHttp]) too — see
+  /// test/edge_functions/{ai_proxy,pgvector}_test.dart.
+  @visibleForTesting
+  static void prepareBinding() {
+    _mockSharedPreferences();
+    restoreRealHttp();
+  }
+
   /// Initialize Supabase and Hive for testing.
   /// Call once in setUpAll().
-  static Future<void> init() async {
-    _mockSharedPreferences();
+  ///
+  /// [url] / [anonKey] override the compile-time `--dart-define` values. They
+  /// exist ONLY so the wiring test can point a real `init()` at a loopback
+  /// server: the defines are `const`, so without an override no test could drive
+  /// this method at all.
+  static Future<void> init({String? url, String? anonKey}) async {
+    prepareBinding();
 
-    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+    await Supabase.initialize(
+        url: url ?? supabaseUrl, anonKey: anonKey ?? supabaseAnonKey);
     _client = Supabase.instance.client;
 
     // Initialize Hive in a temp directory for tests.
