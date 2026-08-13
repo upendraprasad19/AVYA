@@ -2565,7 +2565,7 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   "twice consecutively green" does NOT clear it.
 - **Blast radius estimate**: `platform` (any fix touches `scripts/pre-push.sh` or `test.yml`).
 
-## OI-107 — cleanup() can DELETE from 12 PROD tables and its guard cannot refuse the scenario it was written for (P1)
+## OI-115 — cleanup() can DELETE from 12 PROD tables and its guard cannot refuse the scenario it was written for (P1)
 
 - **Status**: OPEN
 - **Blocked on**: nothing — the work is understood and scoped; it needs a design decision
@@ -2603,7 +2603,7 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Blast radius estimate**: `feature` for the helper alone; `platform` if the fix also moves the
   QA password to a secret (that requires editing `.github/workflows/test.yml`).
 
-## OI-108 — the QA password is committed to git, and creating the account would put it on prod (P2)
+## OI-116 — the QA password is committed to git, and creating the account would put it on prod (P2)
 
 - **Status**: OPEN
 - **Blocked on**: founder — creating `qa@icanbefitter.com` and adding a `SUPABASE_TEST_PASSWORD`
