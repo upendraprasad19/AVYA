@@ -170,6 +170,19 @@ check_nested_claude_md_content.dart:
 check_nlog_key_canonical.dart:
   grandfathered: 2026-08-10
 
+check_no_conflict_markers.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/no_conflict_markers_test.dart
+  evidence: >
+    3 mutations, each RUN on 2026-08-14 rather than asserted. (1) Replacing the
+    open-marker branch condition with `false` — detection dead — reddens 7 of 12.
+    (2) Making the separator count unconditionally (dropping the `sawOpenOrClose`
+    guard) reddens 1: the false-positive case where a lone rule of `=` is prose,
+    not a merge. (3) Changing the gate's final `exit(1)` to `exit(0)` — it still
+    DETECTS and still prints, but no longer fails — reddens 1, which is the
+    Gate-44 class itself. Baseline 12/12 green before and after each restore.
+
 check_no_deferral_euphemism.dart:
   grandfathered: 2026-08-10
 
