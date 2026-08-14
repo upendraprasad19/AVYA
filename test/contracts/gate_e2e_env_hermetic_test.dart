@@ -55,6 +55,12 @@ const _helpers = <String>[
   // pre_commit_lean_path runs the real pre-commit hook, which also opens with
   // `git rev-parse --show-toplevel` and cd's there. Same leak, same stakes.
   'test/scripts/pre_commit_lean_path_e2e_test.dart',
+  // no_conflict_markers enumerates its whole input set with `git ls-files`, so a
+  // leaked GIT_DIR would make it scan the REAL repo instead of the fixture — it
+  // would pass on the real tree's cleanliness while asserting nothing about the
+  // conflicted fixture, the precise "green check wider than its subject" shape.
+  // Registered as an explicit step of its own batch, per the note above.
+  'test/scripts/no_conflict_markers_test.dart',
 ];
 
 String _strip(String src) => src

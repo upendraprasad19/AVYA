@@ -2818,7 +2818,6 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   way — check all three, not just the one that bit.
 - **Blast radius estimate**: `platform` (`scripts/safe_commit.sh` is pinned platform; the hook
   scripts are individually pinned per `docs/blast_radius.yaml`).
-<<<<<<< HEAD
 
 ## OI-115 — cleanup() can DELETE from 12 PROD tables and its guard cannot refuse the scenario it was written for (P1)
 
@@ -2889,7 +2888,6 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   the secret. Only then can the `supabase-tests` job go green — and per OI-105 expect the first
   real run to surface genuine failures.
 - **Blast radius estimate**: `platform` (`.github/workflows/test.yml`).
-=======
 ## OI-121 — the QA fixture account `qa@icanbefitter.com` does not exist, so `test/supabase/` cannot pass (P1)
 
 - **Status**: OPEN
@@ -3104,4 +3102,3 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   raw-commit detections intact — verify against
   `test/contracts/git_safety_hook_integration_test.dart`, which covers those paths.
 - **Blast-radius estimate**: `platform` (hook script).
->>>>>>> supabase-test-http

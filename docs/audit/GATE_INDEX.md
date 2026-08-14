@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **88** (49 numbered, 39 by filename only).
+Total gates: **89** (49 numbered, 40 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -64,6 +64,7 @@ Total gates: **88** (49 numbered, 39 by filename only).
 | — | `check_naming_conventions.dart` | Enforce naming conventions documented in docs/naming_conventions.md. | grandfathered |
 | 44 | `check_nested_claude_md_content.dart` | Nested CLAUDE.md content quality | grandfathered |
 | 53 | `check_nlog_key_canonical.dart` | Drift-fix batch 2026-05-24 / F2 nutrition — source-grep gate. Pins | grandfathered |
+| — | `check_no_conflict_markers.dart` | no unresolved git conflict markers in tracked files. | mutation_proven |
 | — | `check_no_deferral_euphemism.dart` | flag deferral-EUPHEMISM phrases in the | grandfathered |
 | 45 | `check_no_http_package.dart` | Tech-debt audit 2026-05-20 / finding D8 — source-grep gate. | grandfathered |
 | 37 | `check_no_raw_google_fonts.dart` | assert that `GoogleFonts.getFont('DM Sans', ...)` is invoked only via | grandfathered |
