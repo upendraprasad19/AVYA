@@ -165,6 +165,18 @@ class SyncService {
     // teardown site now, so that cannot happen. (unsubscribeRealtime() carries
     // the try/catch this block had.)
     unsubscribeRealtime();
+    // e4a7c9 — the ONLY place the free-tier skip latch resets, and it belongs
+    // here specifically. The latch means "I have already reported that THIS
+    // user is unentitled", so a user swap must clear it or free user A's latch
+    // silently suppresses free user B's first skip event.
+    //
+    // Deliberately NOT inside unsubscribeRealtime(): that is called on every
+    // app background (day_rollover_service.dart), so resetting there re-fires
+    // the event on every resume — an Edge Function call plus a client_errors
+    // row per foreground, across the whole free population. That is the exact
+    // bug-class 2.13 flood the latch exists to prevent, and the first version
+    // of this fix shipped it. Caught by the B-pass.
+    _realtimeSkipLogged = false;
 
     // Complete any in-flight health-sync waiter so callers awaiting
     // the previous user's pass do not hang on the new user's session.

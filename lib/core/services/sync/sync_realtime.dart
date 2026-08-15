@@ -180,9 +180,19 @@ extension SyncServiceRealtime on SyncService {
   /// already cancelled by the reconnect-budget path can throw, and teardown
   /// must never be the thing that fails a sign-out or a downgrade.
   ///
-  /// Also resets the free-tier skip latch, so the NEXT subscribe attempt after
-  /// a teardown can log its skip again — otherwise a downgrade would silence
-  /// the very telemetry that shows the gate working.
+  /// Does NOT reset `_realtimeSkipLogged`. The first version of this fix did,
+  /// and the B-pass caught it as a P0: `day_rollover_service.dart` calls this
+  /// on EVERY `AppLifecycleState.paused`, so re-arming the latch here meant a
+  /// free user re-fired the skip event — an Edge Function call plus a
+  /// `client_errors` row — on every single background/foreground cycle. That is
+  /// bug-class 2.13, the exact flood the latch exists to prevent, reintroduced
+  /// by the anti-flood mechanism itself.
+  ///
+  /// The latch means "I have already reported that THIS user is unentitled", so
+  /// the only thing that should clear it is the user CHANGING — which is
+  /// `_onUserChanged`, and nowhere else. A downgrade needs no reset either: a
+  /// PRO user's latch is false already (the gate never blocked them), so their
+  /// first post-lapse attempt logs once on its own.
   void unsubscribeRealtime() {
     try {
       _realtimeSubscription?.cancel();
@@ -190,6 +200,5 @@ extension SyncServiceRealtime on SyncService {
       // Subscription may already be cancelled; ignore.
     }
     _realtimeSubscription = null;
-    _realtimeSkipLogged = false;
   }
 }

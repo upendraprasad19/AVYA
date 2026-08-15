@@ -30,9 +30,22 @@
 //   2. delete `onDowngrade?.call()` in _downgradeLocally    → 1 red
 //   3. drop the `_realtimeSkipLogged` latch                 → 1 red
 //   4. `proStateSnapshot()` → `isPro()`                     → 1 red
+//   5. restore the B-pass P0 (latch reset back inside
+//      `unsubscribeRealtime`)                               → 1 red (1 vs 5)
+//   6. delete the swap reset from `_onUserChanged`          → 3 red
 // Every guard in this fix has a test that fails without it. Mutation 4 matters
 // most: it is the one a well-meaning future edit is likeliest to make, and it
 // reddens only because of the last group in this file.
+//
+// Mutations 5 and 6 were added AFTER the B-pass found a P0 that the first four
+// missed entirely — see the pause/resume case below. Note 6 reddens 3, not 1:
+// `_realtimeSkipLogged` lives on the SyncService SINGLETON and survives between
+// tests in this file, and `tearDownHiveForTests` → `closeAll()` →
+// `notifyUserChanged()` → `_onUserChanged` is what clears it. So that reset
+// doubles as this file's test isolation. Stated because it means mutation 6's
+// count is partly isolation collapse rather than purely the semantic under
+// test — the account-swap case still reddens on its own terms, but the number
+// would be misleading without this note.
 
 import 'dart:io';
 
@@ -42,6 +55,7 @@ import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
@@ -112,7 +126,7 @@ void main() {
               'also what makes the gate observable in production');
     });
 
-    test('the skip is logged ONCE per attach-cycle, not once per resume',
+    test('the skip is logged ONCE across repeated subscribe attempts',
         () async {
       // didChangeAppLifecycleState fires on every foreground. A bare logEvent
       // here would turn a cost fix into a telemetry flood (bug-class 2.13).
@@ -123,7 +137,54 @@ void main() {
       expect(
         logged.where((e) => e == 'realtime_subscribe_skipped_free_tier').length,
         1,
-        reason: 'three resumes, one event — the latch must hold',
+        reason: 'three attempts, one event — the latch must hold',
+      );
+    });
+
+    test('THE B-PASS P0: a pause/resume CYCLE does not re-fire the skip event',
+        () async {
+      // The case above passes even with a broken latch, because it never
+      // models a pause. Production always does: day_rollover_service calls
+      // unsubscribeRealtime() on EVERY AppLifecycleState.paused. The first
+      // version of this fix reset the latch inside unsubscribeRealtime, so a
+      // free user re-fired an Edge Function call + a client_errors row on
+      // every single foreground — reintroducing, through the anti-flood
+      // mechanism itself, the per-foreground load this whole fix exists to
+      // remove. Measured at 5 events for 5 cycles before the fix.
+      //
+      // This is the mirror the original suite lacked, and it is why the rule
+      // says a diff's own tests are not evidence: they were written from the
+      // same mental model as the code and modelled the same half.
+      for (var i = 0; i < 5; i++) {
+        await SyncService.instance.subscribeToRealtimeSync(); // resumed
+        SyncService.instance.unsubscribeRealtime(); // paused
+      }
+
+      expect(
+        logged.where((e) => e == 'realtime_subscribe_skipped_free_tier').length,
+        1,
+        reason: 'five background/foreground cycles, ONE event — if this is 5, '
+            'the latch is being re-armed by the routine teardown path',
+      );
+    });
+
+    test('an account swap DOES re-arm the latch (the mirror of the P0 fix)',
+        () async {
+      // The counter-case to the one above: the latch must still clear when the
+      // USER changes, or free user A's latch silently suppresses free user B's
+      // first skip event. Fixing the flood by simply deleting the reset would
+      // pass the test above and break this one.
+      await SyncService.instance.subscribeToRealtimeSync();
+      expect(logged.where((e) => e.startsWith('realtime_subscribe')).length, 1);
+
+      SingletonLifecycleRegistry.notifyUserChanged();
+      await SyncService.instance.subscribeToRealtimeSync();
+
+      expect(
+        logged.where((e) => e == 'realtime_subscribe_skipped_free_tier').length,
+        2,
+        reason: 'a new user must get its own skip event, not inherit the '
+            "previous user's latch",
       );
     });
 
