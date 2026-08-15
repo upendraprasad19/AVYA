@@ -71,7 +71,7 @@ void main() {
 
     // Should show either the full name from Hive or the logged-in email.
     final hasIdentity = anyTextVisible(
-        ['QA Tester', 'QA', kTestEmail, 'qa@', 'icanbefitter']);
+        ['QA Tester', 'QA', kTestEmail]);
     expect(hasIdentity, isTrue,
         reason: 'Profile should display the user\'s name or email');
   });

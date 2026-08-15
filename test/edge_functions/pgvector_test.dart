@@ -21,8 +21,14 @@ void main() {
   const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-  if (supabaseUrl.isEmpty || anonKey.isEmpty) {
-    test('SKIPPED: SUPABASE_URL / SUPABASE_ANON_KEY not set', () {});
+  // Delegates to the helper's FOUR-input predicate rather than checking url +
+  // anonKey locally. This file's own two-value gate was the hole: with the
+  // email and password now environment-driven, a run missing either would have
+  // fallen through to a live `signInWithPassword(email: '', password: '')`
+  // instead of skipping — failing with the exact error a WRONG password gives.
+  if (!SupabaseTestHelper.hasCredentials) {
+    test('SKIPPED: SUPABASE_URL / _ANON_KEY / _TEST_EMAIL / _TEST_PASSWORD '
+        'not all set', () {});
     return;
   }
 
@@ -70,8 +76,8 @@ void main() {
     client = Supabase.instance.client;
 
     final response = await client.auth.signInWithPassword(
-      email: 'qa@icanbefitter.com',
-      password: 'QA_Test_2024!',
+      email: SupabaseTestHelper.testEmail,
+      password: SupabaseTestHelper.testPassword,
     );
     userId = response.user!.id;
     setUpSucceeded = true;

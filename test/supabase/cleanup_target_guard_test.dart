@@ -12,7 +12,7 @@
 //
 //   That constraint is the whole reason this file pins a UUID SET rather than
 //   an email literal. An earlier draft of this guard (branch
-//   supabase-ci-http-mock) pinned `disposableTestEmail == 'qa@icanbefitter.com'`.
+//   supabase-ci-http-mock) pinned the email constant against a hardcoded literal.
 //   The moment that constant becomes `String.fromEnvironment(...)` it evaluates
 //   to '' in the dart-define-less Unit Tests job and the pin fails — greening
 //   one CI job by reddening another. A uuid set has no such coupling: it is
@@ -101,6 +101,48 @@ void main() {
 
     test('does not contain a real-looking user id', () {
       expect(SupabaseTestHelper.qaUserIds.contains(_realUserId), isFalse);
+    });
+  });
+
+  group('credentialsComplete — all FOUR inputs', () {
+    // WHY EACH CLAUSE GETS ITS OWN CASE. The predicate previously checked two
+    // inputs (url + anonKey). Adding an environment-driven email and password
+    // without widening it turns a credential-absent run from a loud SKIP into a
+    // live `signInWithPassword(email: '', password: '')` — which fails with
+    // `Invalid login credentials`, byte-identical to a WRONG password and to
+    // the very failure this batch exists to fix. A missing secret would then
+    // present as a code defect. Each case below is the mutation test for one
+    // clause: delete that clause and exactly this case reddens.
+    const url = 'https://example.supabase.co';
+    const key = 'anon-key';
+    const email = 'qa@example.invalid';
+    const pass = 'pw';
+
+    test('true only when all four are present', () {
+      expect(
+          SupabaseTestHelper.credentialsComplete(url, key, email, pass), isTrue);
+    });
+
+    test('false when the URL is missing', () {
+      expect(SupabaseTestHelper.credentialsComplete('', key, email, pass),
+          isFalse);
+    });
+
+    test('false when the anon key is missing', () {
+      expect(
+          SupabaseTestHelper.credentialsComplete(url, '', email, pass), isFalse);
+    });
+
+    test('false when the EMAIL is missing', () {
+      expect(SupabaseTestHelper.credentialsComplete(url, key, '', pass), isFalse,
+          reason: 'the input this batch introduced — without this clause a '
+              'missing SUPABASE_TEST_EMAIL signs in with an empty email and '
+              'reports the same error as a wrong password');
+    });
+
+    test('false when the PASSWORD is missing', () {
+      expect(SupabaseTestHelper.credentialsComplete(url, key, email, ''),
+          isFalse);
     });
   });
 

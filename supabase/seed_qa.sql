@@ -4,9 +4,29 @@
 -- Or apply directly: psql $DATABASE_URL -f supabase/seed_qa.sql
 --
 -- Creates the QA test user used by all integration tests:
---   Email:    qa@icanbefitter.com
---   Password: QA_Test_2024!
+--   Email:    test6@gmail.com
+--   Password: <set via SUPABASE_TEST_PASSWORD>
 -- ──────────────────────────────────────────────────────────────────────────
+
+-- ⚠⚠ READ BEFORE RUNNING — THE UUID BELOW NAMES A REAL ACCOUNT ⚠⚠
+--
+-- This file used to seed a placeholder id (00000000-…-0001) that matched no
+-- auth.users row anywhere, so running it against PRODUCTION by mistake failed
+-- loudly on a foreign-key violation. It now carries test6@gmail.com's REAL
+-- production id, because the tests sign in as that account and the seed has to
+-- agree with them.
+--
+-- That trade makes an accidental prod run WORSE, not better: every statement
+-- below is an upsert (ON CONFLICT DO UPDATE), so instead of erroring it would
+-- SILENTLY overwrite that account's profile, goal, subscription_status and
+-- measurements, and insert synthetic workout/nutrition/weight rows into its
+-- real history. The failure mode moved from loud to silent, which is the
+-- opposite of the direction you want.
+--
+-- So: confirm your target before running.
+--     psql "$DATABASE_URL" -c 'select current_database(), inet_server_addr();'
+-- Local Supabase answers 127.0.0.1/::1. If it answers anything else, STOP.
+-- Raised by the B-pass on 36a5740eae0d; diagnose f7a2c4.
 
 -- NOTE: Supabase local uses GoTrue (auth.users). Use the signup API or
 -- the Supabase Dashboard's "Create user" button for the actual auth user.
@@ -28,8 +48,8 @@ INSERT INTO public.users (
   created_at
 )
 VALUES (
-  '00000000-0000-0000-0000-000000000001',   -- fixed UUID for QA user
-  'qa@icanbefitter.com',
+  '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',   -- fixed UUID for QA user
+  'test6@gmail.com',
   'QA Tester',
   'free',
   NULL,
@@ -67,7 +87,7 @@ INSERT INTO public.user_profile (
   tdee
 )
 VALUES (
-  '00000000-0000-0000-0000-000000000001',
+  '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',
   '1995-06-15',
   'male',
   175,
@@ -98,7 +118,7 @@ INSERT INTO public.user_preferences (
   coaching_notes
 )
 VALUES (
-  '00000000-0000-0000-0000-000000000001',
+  '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',
   'encouraging',
   'consistency',
   'English',
@@ -119,7 +139,7 @@ INSERT INTO public.user_progress (
   detected_experience_level
 )
 VALUES (
-  '00000000-0000-0000-0000-000000000001',
+  '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',
   1,
   1,
   NOW() - INTERVAL '7 days',
@@ -149,7 +169,7 @@ INSERT INTO public.workout_logs (
 )
 VALUES (
   '10000000-0000-0000-0000-000000000001',
-  '00000000-0000-0000-0000-000000000001',
+  '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',
   'Bench Press',
   NOW() - INTERVAL '1 day',
   (NOW() - INTERVAL '1 day')::date,
@@ -176,7 +196,7 @@ INSERT INTO public.nutrition_logs (
 )
 VALUES (
   '20000000-0000-0000-0000-000000000001',
-  '00000000-0000-0000-0000-000000000001',
+  '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',
   CURRENT_DATE,
   1650,
   110,
@@ -198,7 +218,7 @@ INSERT INTO public.weight_logs (
 )
 SELECT
   gen_random_uuid(),
-  '00000000-0000-0000-0000-000000000001',
+  '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',
   CURRENT_DATE - (i || ' days')::interval,
   75.0 - (i * 0.1),
   NOW() - (i || ' days')::interval
@@ -218,7 +238,7 @@ INSERT INTO public.streaks (
 )
 VALUES (
   '30000000-0000-0000-0000-000000000001',
-  '00000000-0000-0000-0000-000000000001',
+  '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',
   date_trunc('week', CURRENT_DATE),
   4,
   3,
@@ -234,5 +254,5 @@ ON CONFLICT (id) DO NOTHING;
 -- ── VERIFICATION ─────────────────────────────────────────────────────────
 -- After running this seed, verify:
 --   SELECT id, email, subscription_status FROM public.users
---     WHERE email = 'qa@icanbefitter.com';
+--     WHERE email = 'test6@gmail.com';
 -- Expected: 1 row, subscription_status = 'free'

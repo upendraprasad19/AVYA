@@ -26,8 +26,8 @@
 //
 // ── Test User ─────────────────────────────────────────────────────
 //
-//   Email:    qa@icanbefitter.com
-//   Password: QA_Test_2024!
+//   Email:    <SUPABASE_TEST_EMAIL secret>
+//   Password: <SUPABASE_TEST_PASSWORD secret>
 //   (Created by supabase/seed_qa.sql — local Supabase only)
 //
 // ── Emulator URL ──────────────────────────────────────────────────

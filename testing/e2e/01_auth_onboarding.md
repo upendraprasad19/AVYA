@@ -11,8 +11,8 @@
 
 **Frontend:**
 1. `preview_snapshot` → verify sign-in screen is visible (email/password fields)
-2. `preview_fill` email field with `qa@icanbefitter.com`
-3. `preview_fill` password field with `QA_Test_2024!`
+2. `preview_fill` email field with `<SUPABASE_TEST_EMAIL secret>`
+3. `preview_fill` password field with `<SUPABASE_TEST_PASSWORD secret>`
 4. `preview_click` "Sign In" button
 5. Wait 3 seconds for auth
 6. `preview_snapshot` → verify navigation away from sign-in
@@ -20,9 +20,9 @@
 **Backend:**
 ```sql
 SELECT id, email, full_name, onboarding_completed FROM users
-WHERE email = 'qa@icanbefitter.com';
+WHERE email = '<SUPABASE_TEST_EMAIL secret>';
 ```
-- **PASS:** Row exists with email = `qa@icanbefitter.com`
+- **PASS:** Row exists with email = `<SUPABASE_TEST_EMAIL secret>`
 
 ---
 
@@ -89,8 +89,8 @@ SELECT * FROM user_profile WHERE user_id = '<USER_ID>';
 ## E5: Re-Login Restore
 
 **Frontend:**
-1. `preview_fill` email with `qa@icanbefitter.com`
-2. `preview_fill` password with `QA_Test_2024!`
+1. `preview_fill` email with `<SUPABASE_TEST_EMAIL secret>`
+2. `preview_fill` password with `<SUPABASE_TEST_PASSWORD secret>`
 3. `preview_click` "Sign In"
 4. Wait 5 seconds for auth + restore
 5. `preview_snapshot` → verify Home screen shows greeting with user name

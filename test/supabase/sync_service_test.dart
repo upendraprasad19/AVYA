@@ -13,12 +13,12 @@ import 'supabase_test_helper.dart';
 ///
 /// Prerequisites:
 ///   - `.env` file with valid SUPABASE_URL and SUPABASE_ANON_KEY
-///   - QA test user (qa@icanbefitter.com) exists in auth.users
+///   - the designated QA user (SUPABASE_TEST_EMAIL) exists in auth.users
 ///
 /// Run: flutter test test/supabase/sync_service_test.dart
 void main() {
   if (!SupabaseTestHelper.hasCredentials) {
-    test('SKIPPED: SUPABASE_URL / SUPABASE_ANON_KEY not set', () {});
+    test('SKIPPED: SUPABASE_URL / _ANON_KEY / _TEST_EMAIL / _TEST_PASSWORD not all set', () {});
     return;
   }
 
@@ -76,7 +76,7 @@ void main() {
         'protein_grams': 150,
         'carb_grams': 350,
         'fat_grams': 80,
-        'email': 'qa@icanbefitter.com',
+        'email': SupabaseTestHelper.testEmail,
       });
 
       // Call syncProfileNow via direct Supabase upsert (mirrors SyncService logic)

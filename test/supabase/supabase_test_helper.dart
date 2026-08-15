@@ -18,15 +18,52 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SupabaseTestHelper {
   SupabaseTestHelper._();
 
-  static const String testEmail = 'qa@icanbefitter.com';
-  static const String testPassword = 'QA_Test_2024!';
+  /// The QA account these suites sign in as. Environment-driven — never a
+  /// literal, because the literal was committed to git and is in its history
+  /// regardless (OI-116), and because a hardcoded account cannot be changed
+  /// without a code change.
+  ///
+  /// Safe to make environment-driven ONLY because the delete boundary no longer
+  /// reads it: [qaUserIds] is keyed on UUID. Under the previous email-comparing
+  /// guard, an environment-driven email would have recreated the aliasing
+  /// tautology by a new route — both sides of the comparison moving together.
+  static const String testEmail =
+      String.fromEnvironment('SUPABASE_TEST_EMAIL');
+  static const String testPassword =
+      String.fromEnvironment('SUPABASE_TEST_PASSWORD');
 
   static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-  /// Returns true if env vars are configured. Tests should skip if false.
-  static bool get hasCredentials =>
-      supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
+  /// Whether ALL FOUR credential inputs are present.
+  ///
+  /// FOUR, not two, and the count is the whole point. This getter previously
+  /// checked only url + anonKey. Adding an environment-driven email and password
+  /// without widening it turns a credential-absent run from a loud SKIP into a
+  /// live `signInWithPassword(email: '', password: '')` — which fails with
+  /// `AuthApiException: Invalid login credentials`, byte-identical to a WRONG
+  /// password and to the failure this whole batch exists to fix. The run would
+  /// look like a code defect instead of a missing secret.
+  static bool get hasCredentials => credentialsComplete(
+        supabaseUrl,
+        supabaseAnonKey,
+        testEmail,
+        testPassword,
+      );
+
+  /// Pure predicate behind [hasCredentials], so the four-input rule is testable
+  /// without compile-time defines (they are `const`; a test cannot vary them).
+  @visibleForTesting
+  static bool credentialsComplete(
+    String url,
+    String anonKey,
+    String email,
+    String password,
+  ) =>
+      url.isNotEmpty &&
+      anonKey.isNotEmpty &&
+      email.isNotEmpty &&
+      password.isNotEmpty;
 
   /// The ONLY user ids `cleanup()` and the pgvector deletes may ever target.
   ///
