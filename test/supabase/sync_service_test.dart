@@ -3,6 +3,9 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 
 import 'supabase_test_helper.dart';
 
@@ -16,36 +19,95 @@ import 'supabase_test_helper.dart';
 ///   - the designated QA user (SUPABASE_TEST_EMAIL) exists in auth.users
 ///
 /// Run: flutter test test/supabase/sync_service_test.dart
+///
+/// ── T3/T4/T5 DRIVE THE REAL WRITERS (2026-08-15) ──────────────────────────
+/// These three used to hand-roll their own `.upsert()` payloads. That made them
+/// unable to detect the thing they claimed to test: a test that re-implements
+/// the writer cannot notice the writer drifting. And they had drifted —
+/// invisibly, because per OI-121 they had never once executed (`setUpAll` always
+/// died on a missing QA account) until `e4121c14` supplied real credentials.
+///
+/// What they had frozen was not a typo but a *fixed production bug*:
+///   - T3 wrote `exercise_name`, renamed to `workout_name` on 2026-05-25.
+///   - T4/T5 sent a client-side string `id` into a `uuid` column with
+///     `onConflict:'id'` — the exact pre-2026-06-02 shape whose cross-user PK
+///     collision made the second user's row vanish, and (nutrition, 2026-04-18)
+///     kept `nutrition_logs` at 0 rows despite dozens of Hive food logs.
+///
+/// So they now seed Hive and call the production sync entry points, asserting
+/// the row ARRIVES in cloud with the right values. That property is
+/// drift-proof: whatever payload shape the writer adopts next, the row still
+/// has to land.
+///
+/// Why the narrow `push*ForSyncDomain()` forwarders and not `weeklyFullSync()`:
+/// each drives ONE domain, so the write surface stays inside what `cleanup()`
+/// already deletes; each calls `_ensureSessionOpen()` (which `weeklyFullSync`
+/// does not), so the user-scoped Hive session opens itself; and none is wrapped
+/// in `_safeRestoreOp`, so a box-access failure reddens the test loudly instead
+/// of being swallowed into a silent "success, 0 rows".
 void main() {
   if (!SupabaseTestHelper.hasCredentials) {
     test('SKIPPED: SUPABASE_URL / _ANON_KEY / _TEST_EMAIL / _TEST_PASSWORD not all set', () {});
     return;
   }
 
-  late Box userBox;
-  late Box healthBox;
   late Box syncBox;
+  late String userId;
+
+  /// Fixed, clearly-synthetic date. Deliberately NOT `DateTime.now()`: the
+  /// cloud `date` columns are IST (CLAUDE.md §4.5) while `DateTime.now()` in CI
+  /// is UTC, so a "today" key would disagree with itself across the IST
+  /// midnight window and flake ~5.5h a day. `cleanup()` wipes every row for
+  /// this user in `setUp`, so a fixed date cannot collide with seed data.
+  const seedDate = '2026-01-15';
 
   setUpAll(() async {
     await SupabaseTestHelper.init();
-    await SupabaseTestHelper.signIn();
+    userId = await SupabaseTestHelper.signIn();
 
-    // Open Hive boxes needed by SyncService
-    userBox = await Hive.openBox('userBox');
-    healthBox = await Hive.openBox('healthBox');
+    // Genuinely shared, non-user-scoped boxes (HiveService._sharedBoxNames).
+    // `configBox` gates the nutrition slot-merge path; `migrationBox` is read
+    // by the legacy-box migration inside openForUser (below).
     syncBox = await Hive.openBox('syncBox');
+    await Hive.openBox('configBox');
+    await Hive.openBox('migrationBox');
+
+    // MUST come before openForUser. `HiveService.getBox` ends in
+    // `Hive.box(name)`, so it needs BOTH `_initialized` true and the box open;
+    // openForUser -> _migrateLegacySharedBoxes reads `migrationBox` through it.
+    // Without this the read throws a StateError that is caught and swallowed
+    // (hive_user_session.dart:299-307) — the migration still runs, so this is
+    // not a behaviour change, but a swallowed exception on the happy path is
+    // exactly the shape these tests exist to stop shipping.
+    HiveService.debugMarkInitializedForTests();
+
+    // Opens the 7 user-scoped boxes under the `<root>_<8hex(uid)>` namespace.
+    // This is the step that makes seeding work at all: `HiveService.workoutBox`
+    // resolves through `wrapUserScopedBox`, so a raw `Hive.openBox('workoutBox')`
+    // would write to a box the writer never opens.
+    //
+    // Note we do NOT set `GuardedBox.testBypassOwnership` or
+    // `HiveUserSession.debugCurrentUidResolverForTests`. Both exist, and both
+    // would work — but we sign in as the same user we namespace for, so the
+    // real ownership check passes on its own. Bypassing it would mask a genuine
+    // mismatch, which is the one thing that guard is for.
+    await HiveUserSession.openForUser(userId);
   });
 
   setUp(() async {
     // Clean Supabase + local Hive state before each test.
     await SupabaseTestHelper.cleanup();
-    await userBox.clear();
-    await healthBox.clear();
+    final hive = HiveService.instance;
+    await hive.userBox.clear();
+    await hive.healthBox.clear();
+    await hive.workoutBox.clear();
+    await hive.nutritionBox.clear();
     await syncBox.clear();
   });
 
   tearDownAll(() async {
     await SupabaseTestHelper.cleanup();
+    await HiveUserSession.closeAll();
     await Hive.close();
     await SupabaseTestHelper.dispose();
   });
@@ -53,9 +115,10 @@ void main() {
   group('SyncService — Profile Sync', () {
     // T1: syncProfileNow() writes complete profile to user_profile table
     test('T1: syncProfileNow writes complete profile to Supabase', () async {
-      final userId = SupabaseTestHelper.userId;
-
-      // Seed Hive with a complete profile
+      // Seed Hive with a complete profile. `HiveService.instance.userBox`, not
+      // a raw `Hive.openBox('userBox')` — `userBox` is a user-scoped root, so
+      // the raw handle would point at a box openForUser deletes from disk.
+      final userBox = HiveService.instance.userBox;
       await userBox.put('profile', {
         'id': userId,
         'full_name': 'QA Test User',
@@ -121,8 +184,6 @@ void main() {
 
     // T2: syncProfileNow() is idempotent — calling twice doesn't duplicate
     test('T2: syncProfileNow is idempotent (upsert, not insert)', () async {
-      final userId = SupabaseTestHelper.userId;
-
       final profileData = {
         'user_id': userId,
         'gender': 'male',
@@ -147,74 +208,107 @@ void main() {
   });
 
   group('SyncService — Weekly Full Sync', () {
-    // T3: weeklyFullSync pushes workout logs
+    // T3: the real workout writer pushes a Hive wlog_* row to workout_logs.
+    //
+    // Seed shape is dictated by `_syncWorkoutLogs` (sync_workout.dart): it scans
+    // `workoutBox` for `wlog_`-prefixed keys and SKIPS (with telemetry) any row
+    // whose `date` or `workout_name` is null/empty, so both are mandatory.
     test('T3: workout logs sync to workout_logs table', () async {
-      final userId = SupabaseTestHelper.userId;
-      final logId = 'wlog_test_${DateTime.now().millisecondsSinceEpoch}';
+      await HiveService.instance.workoutBox.put('wlog_$seedDate', {
+        'date': seedDate,
+        'workout_name': 'Push A',
+        'duration_seconds': 3600,
+        'created_at': '${seedDate}T07:30:00.000Z',
+      });
 
-      // Simulate pushing a workout log directly
-      await SupabaseTestHelper.client.from('workout_logs').upsert({
-        'id': logId,
-        'user_id': userId,
-        'exercise_name': 'Bench Press',
-        'date': DateTime.now().toIso8601String().substring(0, 10),
-        'sets_completed': 3,
-        'reps_completed': 10,
-        'weight_kg': 60.0,
-        'logged_at': DateTime.now().toIso8601String(),
-      }, onConflict: 'id');
+      await SyncService.instance.pushWorkoutLogsForSyncDomain();
 
       final rows = await SupabaseTestHelper.queryTable('workout_logs');
-      expect(rows, isNotEmpty, reason: 'workout_logs should have entries');
-      expect(rows.first['exercise_name'], 'Bench Press');
-      expect(rows.first['weight_kg'], 60.0);
+      // `single`, not `first`: queryTable has no `.order()`, so `first` is
+      // arbitrary once >1 row exists — and `single` additionally proves the
+      // writer inserted exactly once rather than duplicating.
+      final row = rows.single;
+      // `workout_name` — NEVER `exercise_name`. That column does not exist on
+      // this table and asserting it is what made this test fail (PGRST204).
+      expect(row['workout_name'], 'Push A');
+      expect(row['date'], seedDate);
+      expect(row['duration_seconds'], 3600);
     });
 
-    // T4: weeklyFullSync pushes nutrition logs
+    // T4: the real nutrition writer pushes a Hive nlog_* row to nutrition_logs
+    // AND its child rows to nutrition_log_items.
+    //
+    // `items` is seeded deliberately. Without it the child loop never runs and
+    // this test would silently cover only half the writer — and the half it
+    // would miss is a real partial-failure mode: on a failed parent-id lookback
+    // the writer `continue`s (sync_nutrition.dart:326-328), dropping the
+    // children with the parent already landed. No parent-only assertion can
+    // see that.
     test('T4: nutrition logs sync to nutrition_logs table', () async {
-      final userId = SupabaseTestHelper.userId;
-      final logId = 'nlog_test_${DateTime.now().millisecondsSinceEpoch}';
+      await HiveService.instance.nutritionBox.put('nlog_${seedDate}_lunch_qa', {
+        'date': seedDate,
+        // meal_type is NOT NULL with no default on nutrition_logs, and the
+        // writer skips any row missing it.
+        'meal_type': 'lunch',
+        'total_calories': 1800,
+        'total_protein': 120,
+        'total_carbs': 200,
+        'total_fat': 60,
+        'total_fiber': 12,
+        'items': [
+          {'name': 'Dal Tadka', 'quantity_g': 200, 'calories': 350},
+        ],
+      });
 
-      await SupabaseTestHelper.client.from('nutrition_logs').upsert({
-        'id': logId,
-        'user_id': userId,
-        'date': DateTime.now().toIso8601String().substring(0, 10),
-        'total_calories': 1800.0,
-        'total_protein': 120.0,
-        'total_carbs': 200.0,
-        'total_fat': 60.0,
-        'created_at': DateTime.now().toIso8601String(),
-      }, onConflict: 'id');
+      await SyncService.instance.pushNutritionLogsForSyncDomain();
 
       final rows = await SupabaseTestHelper.queryTable('nutrition_logs');
-      expect(rows, isNotEmpty);
-      expect(rows.first['total_calories'], 1800.0);
-      expect(rows.first['total_protein'], 120.0);
+      final parent = rows.single;
+      expect(parent['meal_type'], 'lunch');
+      expect(parent['date'], seedDate);
+      expect(parent['total_calories'], 1800);
+      expect(parent['total_protein'], 120);
+
+      // The child rows cannot go through `queryTable` — it filters on
+      // `user_id`, and `nutrition_log_items` has no such column (it is
+      // user-scoped only transitively, via `log_id` -> `nutrition_logs`).
+      final items = await SupabaseTestHelper.client
+          .from('nutrition_log_items')
+          .select()
+          .eq('log_id', parent['id'] as String);
+      expect(items, hasLength(1),
+          reason: 'the seeded item should have reached nutrition_log_items');
+      expect(items.first['food_name'], 'Dal Tadka');
+      expect(items.first['item_index'], 0);
     });
 
-    // T5: weeklyFullSync pushes weight logs
+    // T5: the real health writer pushes a Hive weight_* row to weight_logs.
+    //
+    // `type: 'weight_log'` is mandatory — `_syncWeightLogs` scans healthBox for
+    // `weight_`-prefixed keys and `continue`s on any row whose `type` is not
+    // exactly that (the box also holds readiness/sleep/steps rows).
     test('T5: weight logs sync to weight_logs table', () async {
-      final userId = SupabaseTestHelper.userId;
-      final logId = 'wt_test_${DateTime.now().millisecondsSinceEpoch}';
-
-      await SupabaseTestHelper.client.from('weight_logs').upsert({
-        'id': logId,
-        'user_id': userId,
-        'date': DateTime.now().toIso8601String().substring(0, 10),
+      await HiveService.instance.healthBox.put('weight_$seedDate', {
+        'type': 'weight_log',
+        'date': seedDate,
         'weight_kg': 74.5,
-        'created_at': DateTime.now().toIso8601String(),
-      }, onConflict: 'id');
+        'notes': 'QA seed',
+        'created_at': '${seedDate}T06:00:00.000Z',
+      });
+
+      await SyncService.instance.pushWeightLogsForSyncDomain();
 
       final rows = await SupabaseTestHelper.queryTable('weight_logs');
-      expect(rows, isNotEmpty);
-      expect(rows.first['weight_kg'], 74.5);
+      final row = rows.single;
+      expect(row['weight_kg'], 74.5);
+      expect(row['date'], seedDate);
+      expect(row['notes'], 'QA seed');
     });
   });
 
   group('SyncService — Daily Snapshot', () {
     // T6: pushSnapshot creates daily snapshot
     test('T6: daily snapshot upserts to user_daily_snapshots', () async {
-      final userId = SupabaseTestHelper.userId;
       final today = DateTime.now().toIso8601String().substring(0, 10);
 
       await SupabaseTestHelper.client.from('user_daily_snapshots').upsert({
