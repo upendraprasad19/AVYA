@@ -159,8 +159,9 @@ That trap is real and was caught in review before it shipped.
 
 ## Coverage — all three delete sites
 
-`git grep -n "\.delete()"` over `test/` and `integration_test/` returns exactly
-three: `supabase_test_helper.dart` (the 12-table loop) and `pgvector_test.dart`
+`git grep -n ".delete()"` over `test/` and `integration_test/` returns 12 lines,
+of which 9 are string literals inside `test/contracts/` source-grep tests. The
+LIVE call sites are three: `supabase_test_helper.dart` (the 12-table loop) and `pgvector_test.dart`
 twice, in `setUp` and `tearDownAll`. The pgvector pair bypass `cleanup()`
 entirely, so each gets its own call to the same guard — placed **outside** the
 surrounding `try/catch (_)`, or the refusal would be swallowed and a blocked
@@ -192,7 +193,7 @@ Only the seam-backed "zero deletes were issued" assertion catches it.
 
 ## Also in this commit — the free-tier doc drift
 
-Root `CLAUDE.md:171` and four other live documents claimed the free AI tier is a
+Root `CLAUDE.md:171` and SIX other live documents claimed the free AI tier is a
 "30-day trial, 15 msg/day". Both authoritative sources — `ai-proxy/index.ts:71`
 (`FREE_DAILY_LIMIT = 10`, with an explicit "never re-introduce a trial window"
 comment) and the live `enforce_chat_app_daily_limit` trigger — say **10/day

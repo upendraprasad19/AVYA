@@ -16,7 +16,7 @@
 ## AI Model Stack
 | Tier | Model | Notes |
 |------|-------|-------|
-| AI Coach (free + PRO, merged 2026-04-18) | Gemini 2.5 Flash via single `ai-proxy` endpoint | Free: 30-day trial, 15 msg/day. PRO: unlimited. Server-side gate. |
+| AI Coach (free + PRO, merged 2026-04-18) | Gemini 2.5 Flash via single `ai-proxy` endpoint | Free: 10 msg/day forever, no trial (CORRECTED 2026-08-15 — OQ-1 removed the trial window; this row recorded the pre-OQ-1 decision). PRO: unlimited. Server-side gate. |
 | Reasoning Tab | RETIRED 2026-04-18 | Chat/Reasoning toggle removed from UI; single coach experience. |
 | Weekly Report (PRO) | Gemini 2.5 Pro | Deepest reasoning, once per week per user |
 | Vision / Food AI | Gemini 2.5 Flash Lite | Scan Meal + Cart Auditor + body composition + media proxy |
@@ -40,7 +40,7 @@ WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
 | Future Prediction Card | One AI forecast card post-onboarding. Bold 90-day prediction |
 | Steps + Sleep Sync | Google Fit / Health Connect basic sync. Display only |
 | Basic Morning Alert | Generic push notification at 7AM. "Time to train — Push Day scheduled." |
-| AI Coach (30-day trial) | 15 messages/day for 30 days on Gemini 2.5 Flash |
+| AI Coach (free tier) | 10 messages/day FOREVER on Gemini 2.5 Flash — no trial window (OQ-1, corrected 2026-08-15) |
 | First Weekly Nutrition Report | First report after Week 1 only. Subsequent reports → PRO |
 | AI Food Text Analysis | 3 logs/day. User types food in plain English → AI parses macros |
 | Scan Meal Camera | 3 scans/month. Point camera at plate → Gemini Vision logs macros |

@@ -23,10 +23,29 @@
 -- real history. The failure mode moved from loud to silent, which is the
 -- opposite of the direction you want.
 --
--- So: confirm your target before running.
---     psql "$DATABASE_URL" -c 'select current_database(), inet_server_addr();'
--- Local Supabase answers 127.0.0.1/::1. If it answers anything else, STOP.
+-- The check below ENFORCES that rather than asking you to run it by hand. A
+-- guard written as a comment is not a guard — the first version of this warning
+-- was exactly that, and a Hermes lens called it correctly.
 -- Raised by the B-pass on 36a5740eae0d; diagnose f7a2c4.
+
+DO $seed_guard$
+BEGIN
+  -- Local Supabase listens on loopback. A managed/remote Postgres does not.
+  -- inet_server_addr() is NULL over a unix socket, which is also local.
+  IF inet_server_addr() IS NOT NULL
+     AND NOT (inet_server_addr() <<= inet '127.0.0.0/8'
+              OR inet_server_addr() = inet '::1') THEN
+    RAISE EXCEPTION
+      'seed_qa.sql refused: this is not a local database (server=%). Every '
+      'statement here is an upsert keyed on a REAL account uuid, so running it '
+      'against a remote/production project would silently overwrite that '
+      'account rather than erroring. There is deliberately NO override flag: if '
+      'you genuinely need to seed a remote project, delete this block in a '
+      'branch and say so in the commit, so the decision is reviewable.',
+      inet_server_addr();
+  END IF;
+END
+$seed_guard$;
 
 -- NOTE: Supabase local uses GoTrue (auth.users). Use the signup API or
 -- the Supabase Dashboard's "Create user" button for the actual auth user.
@@ -217,13 +236,17 @@ INSERT INTO public.weight_logs (
   created_at
 )
 SELECT
-  gen_random_uuid(),
+  -- DETERMINISTIC id per day-offset, not gen_random_uuid(). With a random id a
+  -- bare `ON CONFLICT DO NOTHING` has no arbiter to conflict ON, so it never
+  -- fires: every run inserted 7 MORE rows. This file is meant to be idempotent
+  -- and every other block here is; this one silently was not.
+  md5('qa-seed-weight-' || i)::uuid,
   '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',
   CURRENT_DATE - (i || ' days')::interval,
   75.0 - (i * 0.1),
   NOW() - (i || ' days')::interval
 FROM generate_series(0, 6) AS i
-ON CONFLICT DO NOTHING;
+ON CONFLICT (id) DO NOTHING;
 
 -- ── 8. Sample streak for QA user ────────────────────────────────────────
 

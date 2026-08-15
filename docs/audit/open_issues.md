@@ -2821,7 +2821,14 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 
 ## OI-115 — cleanup() can DELETE from 12 PROD tables and its guard cannot refuse the scenario it was written for (P1)
 
-- **Status**: OPEN
+- **Status**: CLOSED (2026-08-15, `acffbd43` + `e4121c14`)
+- **Resolution**: boundary re-keyed on a `const Set` of QA **uuids**
+  (`assertDisposableTarget`), which does not move when the credential moves — the defect
+  this entry documents. Applied at all THREE delete sites incl. the two in
+  `pgvector_test.dart` that bypass `cleanup()`, AND at `ai_proxy_test.dart`'s WRITE path
+  (bullet 2, "same boundary question"). Bullet 3 (LateInitializationError masking) fixed
+  via `setUpSucceeded`. Mirror-tested: the guard runs BEFORE any delete, proven by moving
+  it after the loop and watching only that assertion redden.
 - **Blocked on**: nothing — the work is understood and scoped; it needs a design decision
   between a uuid allow-list and a runtime self-check, then implementation.
 - **Verified**: 2026-08-13 — round-2 context-blind review, reproduced by direct read of
@@ -2859,7 +2866,12 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 
 ## OI-116 — the QA password is committed to git, and creating the account would put it on prod (P2)
 
-- **Status**: OPEN
+- **Status**: CLOSED (2026-08-15, `e4121c14`)
+- **Resolution — SUPERSEDED in part**: all four credential sites now read
+  `String.fromEnvironment`; `git grep` for both literals is empty outside dated records;
+  `hasCredentials` widened 2→4 inputs; `auth_helper` gained the skip-gate it never had;
+  `.env.example` + `DEVICE_TESTING.md` document the keys. The entry also asked for
+  `qa@icanbefitter.com` to be created — it was NOT; a different account was used instead.
 - **Blocked on**: founder — creating `qa@icanbefitter.com` and adding a `SUPABASE_TEST_PASSWORD`
   Actions secret are account/settings actions an agent cannot perform.
 - **Verified**: 2026-08-13 — `git grep QA_Test_2024` across the whole worktree.
@@ -2890,7 +2902,12 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Blast radius estimate**: `platform` (`.github/workflows/test.yml`).
 ## OI-121 — the QA fixture account `qa@icanbefitter.com` does not exist, so `test/supabase/` cannot pass (P1)
 
-- **Status**: OPEN
+- **Status**: CLOSED (2026-08-15, `e4121c14`)
+- **Resolution — SUPERSEDED, not satisfied**: this entry is worded around CREATING
+  `qa@icanbefitter.com`. That account was abandoned rather than created. The suites now
+  sign in as `test6@gmail.com` via the `SUPABASE_TEST_EMAIL` / `SUPABASE_TEST_PASSWORD`
+  secrets, so the stated blocker no longer exists — but nobody ever created the account
+  this entry asks for, and saying "done" without that distinction would be false.
 - **Blocked on**: FOUNDER — genuinely not agent-actionable. Creating an account (or setting its
   password) is a prohibited action for the agent, and it must be done against the live prod project.
 - **Verified**: 2026-08-12 — queried the authoritative source, not inferred from the error:

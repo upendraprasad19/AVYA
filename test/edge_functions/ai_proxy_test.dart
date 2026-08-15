@@ -68,6 +68,20 @@ void main() {
       password: SupabaseTestHelper.testPassword,
     );
     accessToken = response.session!.accessToken;
+
+    // OI-115's SECOND "also in scope" bullet: this file WRITES —
+    // three live ai-proxy calls insert rows into ai_coach_interactions and
+    // spend the signed-in account's daily quota. The board calls that the "same
+    // boundary question" as the deletes, and the first pass guarded only the
+    // deletes. A write to a non-QA account is less destructive than a delete but
+    // it is still writing to somebody's real account, so it takes the same
+    // membership check. There is no delete here, so this is the only guard on
+    // the path.
+    SupabaseTestHelper.assertDisposableTarget(
+      signedInId: response.user!.id,
+      targetId: response.user!.id,
+    );
+
     setUpSucceeded = true;
   });
 
