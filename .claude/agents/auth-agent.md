@@ -56,7 +56,7 @@ After collection:
 - Write to user_profile in Supabase
 - Write to Hive userBox
 - Run plan_generator.dart locally → save plan to Hive workoutBox
-- Set ai_chat_started_at = now (30-day trial begins)
+- (`ai_chat_started_at` is NOT a trial start — OQ-1 removed the 30-day window; free tier is 10 msg/day forever)
 - Mark onboarding_completed = true
 - Route to (tabs) home
 

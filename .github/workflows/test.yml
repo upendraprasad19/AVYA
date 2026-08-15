@@ -345,14 +345,27 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_TEST_EMAIL: ${{ secrets.SUPABASE_TEST_EMAIL }}
+      SUPABASE_TEST_PASSWORD: ${{ secrets.SUPABASE_TEST_PASSWORD }}
 
     steps:
       - name: Announce whether this job verifies anything
         run: |
-          if [ -z "$SUPABASE_URL" ]; then
-            echo "::warning title=Supabase integration tests did not run::No SUPABASE_URL secret is configured, so this job verifies NOTHING. It is green because there is nothing to fail, not because integration tests passed."
+          # Names ALL FOUR inputs, matching the step guards below. A narrower
+          # announce than the guards is how OI-105 happened: the steps skip, the
+          # job reports green, and nothing says why. Widened when
+          # SUPABASE_TEST_EMAIL / _PASSWORD were introduced — a three-input
+          # announce beside four-input guards would recreate that silent green
+          # keyed on the very secrets this batch adds.
+          MISSING=""
+          [ -z "$SUPABASE_URL" ]           && MISSING="$MISSING SUPABASE_URL"
+          [ -z "$SUPABASE_ANON_KEY" ]      && MISSING="$MISSING SUPABASE_ANON_KEY"
+          [ -z "$SUPABASE_TEST_EMAIL" ]    && MISSING="$MISSING SUPABASE_TEST_EMAIL"
+          [ -z "$SUPABASE_TEST_PASSWORD" ] && MISSING="$MISSING SUPABASE_TEST_PASSWORD"
+          if [ -n "$MISSING" ]; then
+            echo "::warning title=Supabase integration tests did not run::Missing secret(s):$MISSING. This job verifies NOTHING. It is green because there is nothing to fail, not because integration tests passed."
           else
-            echo "SUPABASE_URL is configured — integration tests will run."
+            echo "All four Supabase test secrets are configured — integration tests will run."
           fi
 
       - uses: actions/checkout@v4
@@ -366,20 +379,28 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # All FOUR inputs, matching hasCredentials. A narrower guard would let a
+      # run with three secrets reach a live signInWithPassword with an empty
+      # field — indistinguishable from a wrong password.
+      # Values are quoted: a password may contain shell metacharacters.
       - name: Run Supabase tests
-        if: env.SUPABASE_URL != ''
+        if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' && env.SUPABASE_TEST_EMAIL != '' && env.SUPABASE_TEST_PASSWORD != ''
         run: |
           flutter test test/supabase/ \
-            --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=SUPABASE_TEST_EMAIL="$SUPABASE_TEST_EMAIL" \
+            --dart-define=SUPABASE_TEST_PASSWORD="$SUPABASE_TEST_PASSWORD" \
             --reporter expanded
 
       - name: Run Edge Function tests
-        if: env.SUPABASE_URL != ''
+        if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' && env.SUPABASE_TEST_EMAIL != '' && env.SUPABASE_TEST_PASSWORD != ''
         run: |
           flutter test test/edge_functions/ \
-            --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=SUPABASE_TEST_EMAIL="$SUPABASE_TEST_EMAIL" \
+            --dart-define=SUPABASE_TEST_PASSWORD="$SUPABASE_TEST_PASSWORD" \
             --reporter expanded
 
   # ── Build Gate: Verify APK compiles ─────────────────────────────

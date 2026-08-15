@@ -12,7 +12,7 @@ status: scaffold
 ## PRO Feature Keys
 ```
 phases_2_to_12         → auto-generate new 4-week plan after Week 4
-ai_coach_unlimited     → unlimited AI messages (free = 15/day for 30 days)
+ai_coach_unlimited     → unlimited AI messages (free = 10/day forever, no trial)
 weekly_ai_report       → weekly nutrition report ongoing (free = first report only)
 progress_photos        → full photo timeline
 scan_meal_pro          → 3 scans/day (free = 3/month)

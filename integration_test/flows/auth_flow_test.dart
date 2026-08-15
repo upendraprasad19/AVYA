@@ -72,6 +72,24 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 1));
     }
 
+    // THE ONE BYPASS. Every other flow in integration_test/ reaches the
+    // credential guard through signInWithTestUser(); this test types kTestEmail
+    // itself, so it needs its own check. Without it and without the defines,
+    // kTestEmail is '' — T2 types an empty email, the app cannot navigate away
+    // from an empty email either, and its sole assertion (the sign-in screen is
+    // still shown) PASSES. The test would silently degrade from "a wrong
+    // password is rejected" to "nothing happened", and stay green. Found by two
+    // independent Hermes lenses after a first fix claimed signInWithTestUser was
+    // "the single choke point" — it is the choke point for 95 call sites and
+    // missed this one.
+    if (!kTestCredentialsPresent) {
+      throw StateError(
+        'auth_flow T2: SUPABASE_TEST_EMAIL / SUPABASE_TEST_PASSWORD are not set. '
+        'Typing an empty email here would make this test pass while verifying '
+        'nothing. See .env.example and docs/operations/DEVICE_TESTING.md.',
+      );
+    }
+
     final emailField = find.byType(TextField).first;
     await tester.enterText(emailField, kTestEmail);
     await tester.pumpAndSettle();

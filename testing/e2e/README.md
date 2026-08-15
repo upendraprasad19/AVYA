@@ -18,7 +18,7 @@ Each script file describes a sequence of frontend actions (via Claude Preview MC
    python -m http.server 8080 --directory build/web
    ```
 
-3. **Ensure test user exists:** `qa@icanbefitter.com` / `QA_Test_2024!`
+3. **Ensure test user exists:** `<SUPABASE_TEST_EMAIL secret>` / `<SUPABASE_TEST_PASSWORD secret>`
 
 ## Running Tests
 

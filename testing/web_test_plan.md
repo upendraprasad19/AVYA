@@ -111,7 +111,7 @@
 | 5.1 | Load AI Coach | Chat history loads | 3 |
 | 5.2 | Send message (free trial) | Response received, no crash | 3 |
 | 5.3 | Quick prompt chips | Tap pre-fills message input | 3 |
-| 5.4 | 15 msg/day limit (free) | 16th message blocked, counter + paywall shown | 1 |
+| 5.4 | 10 msg/day limit (free) | 11th message blocked, counter + paywall shown | 1 |
 | 5.5 | Reasoning tab (PRO locked) | PaywallSheet shown, no crash | 3 |
 | 5.6 | Context injection | Response references user's actual data | Skip (live API, flaky) |
 

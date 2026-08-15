@@ -68,6 +68,18 @@ re-prep when a flow's contract changes.
 | `signup_onboarding` | Signed out. Disposable Google account `icanbefitter.qa1@gmail.com` family — pick the first unused suffix. |
 | `delete_account` | Signed in as a DISPOSABLE test account that can be deleted. Re-seed afterward via the seed SQL. |
 
+### QA account credentials
+
+`.env` must contain `SUPABASE_TEST_EMAIL` and `SUPABASE_TEST_PASSWORD` (see
+`.env.example`). These used to be hardcoded literals in
+`integration_test/helpers/auth_helper.dart`; they are now
+`String.fromEnvironment`, so a device run without them types an EMPTY email and
+password into the sign-in form. `kTestCredentialsPresent` is the guard — check
+it before any flow that signs in.
+
+`scripts/run-device-tests.sh` needs no change: it already passes
+`--dart-define-from-file=.env`, which carries every key in that file.
+
 ### Razorpay test mode
 
 `.env` must contain `RAZORPAY_KEY_ID=rzp_test_*`, NOT `rzp_live_*`.

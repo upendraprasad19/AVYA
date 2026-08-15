@@ -14,7 +14,7 @@ import 'supabase_test_helper.dart';
 /// Run: flutter test test/supabase/auth_restore_test.dart
 void main() {
   if (!SupabaseTestHelper.hasCredentials) {
-    test('SKIPPED: SUPABASE_URL / SUPABASE_ANON_KEY not set', () {});
+    test('SKIPPED: SUPABASE_URL / _ANON_KEY / _TEST_EMAIL / _TEST_PASSWORD not all set', () {});
     return;
   }
 
@@ -50,7 +50,7 @@ void main() {
       // Simulate _syncOnboardingToSupabase — write to all 3 tables
       await client.from('users').upsert({
         'id': userId,
-        'email': 'qa@icanbefitter.com',
+        'email': SupabaseTestHelper.testEmail,
         'full_name': 'QA Tester',
         'onboarding_completed': true,
         'last_active_at': DateTime.now().toIso8601String(),
@@ -268,7 +268,7 @@ void main() {
 
       // Restore to Hive
       remoteProfile['id'] = userId;
-      remoteProfile['email'] = 'qa@icanbefitter.com';
+      remoteProfile['email'] = SupabaseTestHelper.testEmail;
       await userBox.put('profile', remoteProfile);
       await configBox.put('onboarding_completed', true);
 
@@ -290,7 +290,7 @@ void main() {
       await configBox.put('onboarding_completed', true);
       await userBox.put('profile', {
         'id': userId,
-        'email': 'qa@icanbefitter.com',
+        'email': SupabaseTestHelper.testEmail,
         'created_at': DateTime.now().toIso8601String(),
         // NO primary_goal, NO height_cm — stub only
       });
@@ -326,7 +326,7 @@ void main() {
       await configBox.put('onboarding_completed', true);
       await userBox.put('profile', {
         'id': userId,
-        'email': 'qa@icanbefitter.com',
+        'email': SupabaseTestHelper.testEmail,
         'primary_goal': 'build_muscle',
         'height_cm': 175.0,
         'current_weight_kg': 75.0,
