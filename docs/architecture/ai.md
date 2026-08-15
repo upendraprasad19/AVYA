@@ -88,7 +88,8 @@ Cron registrations live in `supabase/migrations/031_proactive_triggers_cron.sql`
 Client (free + PRO) → ai-proxy (Gemini 2.5 Flash)
   JWT → auth.getUser(token)
   isPro = SELECT 1 FROM subscriptions WHERE user_id AND active AND end_date > now()
-  If !isPro: enforce 30-day trial window + 15/day cap via ai_coach_interactions
+  If !isPro: enforce 10/day cap via ai_coach_interactions (FOREVER — no trial
+  window; OQ-1 removed it. ai-proxy/index.ts:71 FREE_DAILY_LIMIT = 10.)
   If  isPro: no cap, no trial
   ← Response + model_used + tokens_used
 ```

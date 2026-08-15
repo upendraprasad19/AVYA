@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### delete_boundary_independent_of_credential (1 bugs)
+- 2026-08-15 d3b8f1 — `SupabaseTestHelper.cleanup()` issues `DELETE ... eq('user_id', id)` across 12 tables of the PRODUCTION project `dedsavbjuwgarrhphgnl`, and CI runs it on every push to `main`. On `main` there is NO…
+
 ### unresolved_conflict_markers_committed (1 bugs)
 - 2026-08-14 c9f4e2 — `docs/audit/open_issues.md` on `main` at `5d1c6f12` carried three unresolved git conflict markers — an open marker at :2821, a bare separator at :2892 and a close marker naming `supabase-test-http` at…
 
@@ -996,6 +999,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-15 | d3b8f1 | `SupabaseTestHelper.cleanup()` issues `DELETE ... eq('user_id', id)` across 12 tables of the PRODUCTION project `dedsavbjuwgarrhphgnl`, and CI runs it on every push to `main`. On `main` there is NO… | delete_boundary_independent_of_credential | test/supabase/cleanup_target_guard_test.dart |
 | 2026-08-14 | c9f4e2 | `docs/audit/open_issues.md` on `main` at `5d1c6f12` carried three unresolved git conflict markers — an open marker at :2821, a bare separator at :2892 and a close marker naming `supabase-test-http` at… | unresolved_conflict_markers_committed | test/scripts/no_conflict_markers_test.dart |
 | 2026-08-13 | b7e3d1 | Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw… | oi_board_id_uniqueness | test/contracts/oi_index_test.dart |
 | 2026-08-13 | 4f2a9e | The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across… | git_hook_env_leak | test/scripts/regression_catalog_lib_test.dart |

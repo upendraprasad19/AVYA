@@ -53,17 +53,22 @@ LIMIT 1;
 
 ---
 
-## E19: Daily Limit Check (15 messages/day)
+## E19: Daily Limit Check (10 messages/day, free tier — forever, no trial)
 
-**NOTE:** This test requires sending 15 messages. Run selectively.
+**NOTE:** This test requires sending 10 messages. Run selectively.
+
+The cap is enforced server-side by the `enforce_chat_app_daily_limit` trigger,
+which counts `ai_coach_interactions` rows with `channel='app'` since **IST**
+midnight and raises at `>= 10`. PRO is exempt. `ai-proxy` inserts the row
+BEFORE calling Gemini, so a failed generation still consumes one.
 
 **Frontend:**
-1. Send 14 more quick messages ("hi" x14)
-2. After 15th message, send another
+1. Send 9 more quick messages ("hi" x9), for 10 total
+2. After the 10th, send one more
 3. `preview_snapshot`
 
-- **PASS:** PaywallSheet or "daily limit reached" message appears
-- **FAIL:** 16th message goes through without limit
+- **PASS:** PaywallSheet or "daily limit reached" message appears on the 11th
+- **FAIL:** the 11th message goes through without a limit
 
 ---
 

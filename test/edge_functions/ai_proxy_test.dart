@@ -29,6 +29,14 @@ void main() {
   late SupabaseClient client;
   late String accessToken;
 
+  /// Whether `setUpAll` got all the way through sign-in.
+  ///
+  /// Both fields above are `late`. When `setUpAll` fails — which it does today,
+  /// because the QA account does not exist — they are never assigned, and
+  /// `tearDownAll`'s `signOut()` throws `LateInitializationError`, REPLACING
+  /// the real failure in the output (OI-115, "also in scope" bullet 3).
+  var setUpSucceeded = false;
+
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     // That binding stubs ALL HTTP to a synthetic 400 without opening a
@@ -54,9 +62,11 @@ void main() {
       password: 'QA_Test_2024!',
     );
     accessToken = response.session!.accessToken;
+    setUpSucceeded = true;
   });
 
   tearDownAll(() async {
+    if (!setUpSucceeded) return;
     await client.auth.signOut();
   });
 

@@ -29,6 +29,15 @@ void main() {
   late SupabaseClient client;
   late String userId;
 
+  /// Whether `setUpAll` got all the way through sign-in.
+  ///
+  /// Both fields above are `late`. When `setUpAll` fails — which it does today,
+  /// because the QA account does not exist — they are never assigned, and
+  /// `tearDownAll` touching them throws `LateInitializationError`. That error
+  /// then REPLACES the real one in the output, so triage starts from a symptom
+  /// that has nothing to do with the cause (OI-115, "also in scope" bullet 3).
+  var setUpSucceeded = false;
+
   /// Generates a synthetic 768-dim vector. [seed] controls the direction.
   List<double> syntheticVector(int seed, {double magnitude = 1.0}) {
     final rng = Random(seed);
@@ -65,17 +74,32 @@ void main() {
       password: 'QA_Test_2024!',
     );
     userId = response.user!.id;
+    setUpSucceeded = true;
   });
 
   setUp(() async {
-    // Clean up any test embeddings
+    if (!setUpSucceeded) return;
+    // OUTSIDE the try/catch: `catch (_)` would swallow the guard's StateError
+    // and turn a refusal to delete into a silent skip — the delete would look
+    // like it simply found no rows. This file deletes OUTSIDE
+    // SupabaseTestHelper.cleanup(), so it needs its own call to the same guard.
+    // signedInId and targetId are the same value here because this file signs
+    // in directly rather than through the helper; the membership check against
+    // qaUserIds is what carries the protection on this path.
+    SupabaseTestHelper.assertDisposableTarget(
+        signedInId: userId, targetId: userId);
     try {
       await client.from('memory_embeddings').delete().eq('user_id', userId);
     } catch (_) {}
   });
 
   tearDownAll(() async {
-    // Clean up
+    // Guarded: on a failed setUpAll neither `client` nor `userId` is assigned,
+    // and touching them here would raise LateInitializationError over the top
+    // of the real failure.
+    if (!setUpSucceeded) return;
+    SupabaseTestHelper.assertDisposableTarget(
+        signedInId: userId, targetId: userId);
     try {
       await client.from('memory_embeddings').delete().eq('user_id', userId);
     } catch (_) {}

@@ -28,6 +28,94 @@ class SupabaseTestHelper {
   static bool get hasCredentials =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
+  /// The ONLY user ids `cleanup()` and the pgvector deletes may ever target.
+  ///
+  /// WHY A UUID SET AND NOT AN EMAIL (OI-115).
+  ///   The obvious guard compares the signed-in EMAIL against the constant the
+  ///   sign-in itself uses. Both sides then move together, so the one scenario
+  ///   it exists to stop — "repoint the constant at an account that DOES exist,
+  ///   because sign-in was failing" — passes straight through. A guard that
+  ///   cannot refuse its own stated scenario is not a guard.
+  ///
+  ///   A uuid set does not move when the credential moves. Repointing
+  ///   `testEmail` (or, once it is environment-driven, the secret behind it)
+  ///   yields a `signedInId` simply absent from this set, and the delete is
+  ///   refused. Widening it means consciously editing a literal list of ids — a
+  ///   visible, reviewable diff, which is the point. An email is a mutable
+  ///   label; a uuid is the thing rows are actually keyed by.
+  ///
+  ///   It is also `const`, so it is identical in the dart-define-less "Unit
+  ///   Tests" CI job. An email pin would evaluate to '' there the moment the
+  ///   credential became environment-backed, greening one job by reddening
+  ///   another.
+  ///
+  ///   Real accounts this protects: `test2@gmail.com` … `test7@gmail.com` and
+  ///   every human account on the production project. `cleanup()` DELETEs across
+  ///   12 tables of `dedsavbjuwgarrhphgnl` and CI runs it on every push to main.
+  @visibleForTesting
+  static const Set<String> qaUserIds = <String>{
+    // test6@gmail.com — the designated disposable QA account.
+    '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',
+  };
+
+  /// Seam: issues one table's delete. Overridable so a test can assert that
+  /// ZERO deletes were issued when the guard refuses — asserting only that a
+  /// StateError was thrown would pass against a guard placed AFTER the delete.
+  @visibleForTesting
+  static Future<void> Function(String table, String userId) deleteRows =
+      _realDeleteRows;
+
+  static Future<void> _realDeleteRows(String table, String userId) async {
+    await _client.from(table).delete().eq('user_id', userId);
+  }
+
+  /// Restores [deleteRows] to the real implementation. Call in tearDown.
+  @visibleForTesting
+  static void resetSeams() {
+    deleteRows = _realDeleteRows;
+  }
+
+  /// Refuses any delete whose target is not a designated QA account.
+  ///
+  /// Pure and parameterised (it does not read `currentUser` itself) so it can be
+  /// exercised with no network and no credentials — see
+  /// test/supabase/cleanup_target_guard_test.dart.
+  ///
+  /// Three independent refusals, in order:
+  ///   1. no authenticated session at all;
+  ///   2. the target is not in [qaUserIds];
+  ///   3. the target is not the CURRENT session's own id — so a stray `uid`
+  ///      argument cannot delete a different QA account's rows either.
+  @visibleForTesting
+  static void assertDisposableTarget({
+    required String? signedInId,
+    required String targetId,
+  }) {
+    if (signedInId == null) {
+      throw StateError(
+        'SupabaseTestHelper cleanup REFUSED: no authenticated session. These '
+        'deletes hit 12 tables of the PRODUCTION project and must never run '
+        'without knowing whose rows they are.',
+      );
+    }
+    if (!qaUserIds.contains(targetId)) {
+      throw StateError(
+        'SupabaseTestHelper cleanup REFUSED: target "$targetId" is not a '
+        'designated QA account. If you repointed the test credentials to make '
+        'sign-in work, that is exactly the mistake this guard exists to stop — '
+        'add the new account\'s UUID to qaUserIds deliberately, or point the '
+        'credentials back. Deleting here would wipe 12 tables of real data.',
+      );
+    }
+    if (targetId != signedInId) {
+      throw StateError(
+        'SupabaseTestHelper cleanup REFUSED: asked to delete rows for user '
+        '"$targetId" while signed in as "$signedInId". Cleanup may only ever '
+        'delete the current session\'s own rows.',
+      );
+    }
+  }
+
   static late SupabaseClient _client;
   static String? _userId;
 
@@ -177,7 +265,18 @@ class SupabaseTestHelper {
   /// Call in setUp() to ensure each test starts clean.
   static Future<void> cleanup([String? uid]) async {
     final id = uid ?? _userId;
+    // No session → no id → nothing to delete. This returns SILENTLY rather than
+    // throwing, and that is a deliberate, narrow choice: `cleanup()` runs in
+    // `setUp`, so when `setUpAll`'s sign-in has already failed every test would
+    // otherwise report this instead of the real cause. No delete can be issued
+    // on this path, so it is not a hole — but do not mistake it for the guard.
+    // The guard is [assertDisposableTarget], and it runs whenever there IS an id.
     if (id == null) return;
+
+    // OUTSIDE the try/catch below — a StateError raised here must reach the
+    // runner, and `catch (_)` would swallow it, turning a refusal into a
+    // silent skip. Same reason pgvector's guard sits outside its own catch.
+    assertDisposableTarget(signedInId: _userId, targetId: id);
 
     // Order matters — FK constraints. Delete children before parents.
     final tables = [
@@ -197,7 +296,7 @@ class SupabaseTestHelper {
 
     for (final table in tables) {
       try {
-        await _client.from(table).delete().eq('user_id', id);
+        await deleteRows(table, id);
       } catch (_) {
         // Table might not exist or have no matching rows — skip.
       }
