@@ -250,6 +250,28 @@ class SubscriptionService {
   /// correct (post-refresh) but Riverpod cached the stale snapshot.
   static void Function()? onStateChanged;
 
+  /// e4a7c9 — fires when entitlement LAPSES, so PRO-only resources can be torn
+  /// down. Distinct from [onStateChanged], which is "state changed, re-render";
+  /// this one is "PRO ended, release what PRO owned".
+  ///
+  /// A separate hook rather than a direct `SyncService` call because
+  /// `sync_service.dart` already imports THIS file — calling back would create
+  /// an import cycle and, worse, would touch `SyncService.instance` (a lazy
+  /// singleton whose constructor registers a lifecycle callback) from inside an
+  /// entitlement write. `app.dart` already imports both and is the natural
+  /// wiring point.
+  ///
+  /// FOLLOWS THE THREE-HOOK CONVENTION EXACTLY — both halves are load-bearing
+  /// and each has been got wrong once in this repo:
+  ///   * installed in `app.dart` initState beside onStateChanged / the
+  ///     NutritionWriteService + RankService hooks, and CLEARED in its
+  ///     dispose() beside them. RankService was installed and never cleared
+  ///     (OI-51 / e7b3c5); set and clear must stay symmetric.
+  ///   * NEVER nulled in `AuthNotifier.unbindSessionIdentity` — initState runs
+  ///     once per process, so nulling on sign-out kills it permanently for
+  ///     every later sign-in (auth_provider.dart:562-575).
+  static void Function()? onDowngrade;
+
   /// Atomically writes all subscription keys in a single Hive batch.
   ///
   /// Hive's [Box.putAll] writes all entries in one I/O operation,
@@ -1174,6 +1196,20 @@ class SubscriptionService {
     // with the downgraded state.
     try {
       onStateChanged?.call();
+    } catch (_) {}
+
+    // e4a7c9 — release PRO-owned resources. Today that is the weight_logs
+    // Realtime WAL subscription: subscribeToRealtimeSync's re-entrancy return
+    // means an ALREADY-ATTACHED channel never re-enters the entitlement gate,
+    // so without a teardown here a lapsed PRO user keeps a live PRO channel
+    // (and its share of the 35.4%-of-DB-CPU WAL poll) until app background or
+    // dispose. Gating the subscribe alone is half a fix.
+    //
+    // Separate try/catch from onStateChanged above: a throwing teardown must
+    // not prevent the re-render, and a throwing re-render must not prevent the
+    // teardown. Sharing one block would let either failure eat the other.
+    try {
+      onDowngrade?.call();
     } catch (_) {}
 
     // Phase 2 Unit C — clamp streak_freezes_available back to the

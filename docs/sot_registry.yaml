@@ -1248,7 +1248,7 @@ concepts:
       - aiInsightProvider
       - allExercisePRsProvider
     ist_sites:
-      - { file: lib/core/services/day_rollover_service.dart, line: 114, fn: runRolloverNow }
+      - { file: lib/core/services/day_rollover_service.dart, line: 124, fn: runRolloverNow }
     class_constraints: |
       All "today"-derived providers (todayWorkoutProvider,
       dailyNutritionProvider, streakProvider, aiInsightProvider,
@@ -8972,7 +8972,7 @@ concepts:
       funnel through, so the teardown belongs there.
     writers:
       - file: lib/core/services/sync/sync_realtime.dart
-        line_range: 13
+        line_range: 33
         method: subscribeToRealtimeSync
         semantic: entitlement-gate-at-sink
         canonical: true
@@ -8981,7 +8981,7 @@ concepts:
           refreshSession() — a free user must not pay a POST /token to learn
           it is not entitled.
       - file: lib/core/services/subscription_service.dart
-        line_range: 1152
+        line_range: 1174
         method: _downgradeLocally
         semantic: teardown-on-downgrade
         notes: >-
@@ -8997,11 +8997,11 @@ concepts:
           159-166, so a single teardown site carries any future bookkeeping.
     readers:
       - file: lib/core/services/sync/sync_realtime.dart
-        line_range: 40
+        line_range: 77
         method: _attachRealtimeStream
         semantic: opens-the-wal-stream
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 65
+        line_range: 73
         method: didChangeAppLifecycleState
         semantic: resume-resubscribe
         notes: >-
@@ -9009,7 +9009,7 @@ concepts:
           is also the free-to-PRO recovery path: a newly-PRO user attaches on
           the next resume.
       - file: lib/core/services/sync_service.dart
-        line_range: 789
+        line_range: 808
         method: checkAndSync
         semantic: flag-check
     hive:

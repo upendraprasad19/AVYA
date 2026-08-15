@@ -10,8 +10,45 @@ extension SyncServiceRealtime on SyncService {
   /// Subscribes to Supabase realtime channels for instant cross-device
   /// sync. PRO only — enables Telegram-logged data to appear in the
   /// app immediately without waiting for the 24h batch pull.
+  ///
+  /// e4a7c9 — THE ENTITLEMENT CHECK LIVES HERE, ON THE SINK, and must stay
+  /// here. It used to live on the callers, and `sync_service.dart:789` had it
+  /// while `day_rollover_service.dart:65` did not — under a comment claiming
+  /// it did. Since resume fires on every foreground, every user (free or PRO)
+  /// attached a WAL poller: `realtime.list_changes()` was 35.4% of all
+  /// database CPU over the project's first 143 days, serving a PRO feature
+  /// with a PRO population of ~zero. Guarding one entry while another bypasses
+  /// it is bug-class 2.25; a sink guard cannot be bypassed by a call site
+  /// nobody has written yet.
+  ///
+  /// `proStateSnapshot()` NOT `isPro()`: isPro() is the DECISION path and can
+  /// reach `_downgradeLocally()` — five Hive writes plus an `onStateChanged`
+  /// → `ref.invalidate` cascade. Deciding whether to open a socket must not
+  /// mutate entitlement state (OI-44 Unit 6, diagnose a9c4e1).
+  ///
+  /// The gate is only half the contract: the re-entrancy return below means an
+  /// ALREADY-ATTACHED channel never re-enters it, so the downgrade teardown in
+  /// `SubscriptionService._downgradeLocally` is the other half. Without it a
+  /// lapsed PRO user keeps a live PRO channel until background or dispose.
   Future<void> subscribeToRealtimeSync() async {
     if (_realtimeSubscription != null) return; // Already subscribed
+
+    // e4a7c9 — entitlement gate; rationale in the doc comment above.
+    //
+    // Deliberately BEFORE the currentUser read: entitlement is a purely local
+    // Hive decision, so a free user is turned away without touching Supabase
+    // at all. That is both cheaper and what makes this branch reachable from a
+    // pure-VM behavioral test (Supabase cannot be initialised there, so a gate
+    // placed after the session read could only ever be source-grepped).
+    if (!_realtimeProGateDisabled &&
+        !SubscriptionService.instance.proStateSnapshot()) {
+      if (!_realtimeSkipLogged) {
+        _realtimeSkipLogged = true;
+        unawaited(
+            ErrorTelemetry.logEvent('realtime_subscribe_skipped_free_tier'));
+      }
+      return;
+    }
 
     final userId = _supabase.currentUser?.id;
     if (userId == null) return;
@@ -134,9 +171,25 @@ extension SyncServiceRealtime on SyncService {
     _attachRealtimeStream(userId, attempt: attempt);
   }
 
-  /// Cancels realtime subscriptions (call on app background or logout).
+  /// Cancels realtime subscriptions (call on app background, logout, account
+  /// swap, or entitlement downgrade).
+  ///
+  /// e4a7c9 — the SINGLE teardown site. `_onUserChanged` used to inline an
+  /// equivalent cancel, so anything added here silently skipped that path.
+  /// The try/catch came from that inlined copy and is kept: a subscription
+  /// already cancelled by the reconnect-budget path can throw, and teardown
+  /// must never be the thing that fails a sign-out or a downgrade.
+  ///
+  /// Also resets the free-tier skip latch, so the NEXT subscribe attempt after
+  /// a teardown can log its skip again — otherwise a downgrade would silence
+  /// the very telemetry that shows the gate working.
   void unsubscribeRealtime() {
-    _realtimeSubscription?.cancel();
+    try {
+      _realtimeSubscription?.cancel();
+    } catch (_) {
+      // Subscription may already be cancelled; ignore.
+    }
     _realtimeSubscription = null;
+    _realtimeSkipLogged = false;
   }
 }

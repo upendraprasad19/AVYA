@@ -158,12 +158,13 @@ class SyncService {
   void _onUserChanged() {
     // Drop realtime subscription so the next user does not receive
     // the previous user's broadcast events.
-    try {
-      _realtimeSubscription?.cancel();
-    } catch (_) {
-      // Subscription may already be cancelled; ignore.
-    }
-    _realtimeSubscription = null;
+    //
+    // e4a7c9 — was an INLINE cancel duplicating unsubscribeRealtime(). The two
+    // were equivalent, which is exactly why the drift was invisible: any
+    // bookkeeping added to the public method silently skipped this path. One
+    // teardown site now, so that cannot happen. (unsubscribeRealtime() carries
+    // the try/catch this block had.)
+    unsubscribeRealtime();
 
     // Complete any in-flight health-sync waiter so callers awaiting
     // the previous user's pass do not hang on the new user's session.
@@ -651,6 +652,24 @@ class SyncService {
 
   /// Active realtime subscription (PRO only, for Telegram cross-channel).
   StreamSubscription? _realtimeSubscription;
+
+  /// e4a7c9 — one-shot latch so the free-tier skip is logged per transition,
+  /// not per resume. `didChangeAppLifecycleState` fires on every foreground,
+  /// so a bare `logEvent` here would become its own telemetry flood — the
+  /// bug-class 2.13 shape, in the fix for a cost bug.
+  bool _realtimeSkipLogged = false;
+
+  /// e4a7c9 kill-switch (§4.6, mandatory at platform tier): restores the
+  /// verbatim pre-fix behaviour of subscribing regardless of entitlement.
+  /// Defensive read (see [_syncDebounceDisabled]) — absent configBox defaults
+  /// to fix-ACTIVE, which is also the safe direction (no socket).
+  bool get _realtimeProGateDisabled {
+    try {
+      return _hive.configBox.get('disable_realtime_pro_gate') == true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Completes when health sync finishes (or immediately if disabled).
   /// The home screen awaits this to invalidate [todayStepsProvider] at

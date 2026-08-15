@@ -2,7 +2,7 @@
 bug_id: e4a7c9
 date: 2026-08-13
 batch: backend-cpu-starvation
-status: proposed
+status: fixed
 blast_radius: platform
 symptom: |
   Live pg_stat_statements (143-day window since project creation, never reset)
