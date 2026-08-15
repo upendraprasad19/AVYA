@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**51 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**53 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -59,3 +59,5 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-119 | `git_safety_hook.dart` matches command TEXT, so it blocks commands that… | nothing, but it needs a false-positive analysis before a fix — the hook is | 2026-08-13. ⚠ **The two detectors are NOT equally leaky, and the original filing | [:3089](open_issues.md#L3089) |
 | OI-120 | the c3f9a7 timeout raise leaves the CI `unit-test` job with ~2 min of… | nothing; needs the same measurement OI-116 needs, and should probably be picked | 2026-08-13 — both numbers read directly, not inferred. | [:3060](open_issues.md#L3060) |
 | OI-122 | `check_regression_catalog.dart` runs `flutter test` with no concurrency… | nothing technical. Needs a measurement before a value is picked — see below. | 2026-08-13 — read directly at `scripts/check_regression_catalog.dart:56-64`: | [:2943](open_issues.md#L2943) |
+| OI-123 | the test-suite UPSERT path is guarded only transitively, by file ordering… | nothing — scoped and understood; needs the same treatment the delete | 2026-08-15 — Hermes lens (destructive-op safety) on branch | [:3123](open_issues.md#L3123) |
+| OI-124 | the device delete-account test hard-deletes `auth.users` with NO… | nothing technical. It is currently `skip: true` with its body commented | 2026-08-15 — Hermes lens (destructive-op safety), read directly at | [:3154](open_issues.md#L3154) |

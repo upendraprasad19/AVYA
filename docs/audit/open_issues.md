@@ -3119,3 +3119,58 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   raw-commit detections intact — verify against
   `test/contracts/git_safety_hook_integration_test.dart`, which covers those paths.
 - **Blast-radius estimate**: `platform` (hook script).
+
+## OI-123 — the test-suite UPSERT path is guarded only transitively, by file ordering (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — scoped and understood; needs the same treatment the delete
+  path got in `acffbd43`, applied to the write path.
+- **Verified**: 2026-08-15 — Hermes lens (destructive-op safety) on branch
+  `supabase-creds-test6`, reproduced by direct read.
+  `grep -rn "\.upsert(" test/supabase/ test/edge_functions/` → 12 hits, **none**
+  preceded by a guard call.
+- **Identified**: 2026-08-15, during the test6 credential repoint (diagnose `d3b8f1`).
+- **Risk class**: production data overwrite. NOT data loss — RLS bounds every write to the
+  signed-in user's own rows (live `pg_policies`: all 12 tables `auth.uid()`-qualified, none
+  granted to `anon`), so the ceiling is "corrupt the configured test account", not "reach a
+  third party".
+- **What's wrong**: `acffbd43` put `assertDisposableTarget` in front of all three DELETE
+  sites and (in `7d2582f1`) in front of `ai_proxy_test`'s write path. It did **not** guard
+  `SupabaseTestHelper.insertRow` / `upsertRow`, nor the direct upserts in
+  `test/supabase/auth_restore_test.dart:51` (`from('users').upsert(...)`). Those are safe
+  **today** only because `cleanup()` is the first statement of `setUp` in every file that
+  upserts, and it throws first. That is a property of the current file ordering, not of the
+  write path. A new `test/supabase/` file that upserts without a `cleanup()` in its `setUp`
+  has no boundary at all, and nothing would flag it.
+  ⚠ `users` is **not** in `cleanupTables`, so `auth_restore_test.dart:51`'s write to the
+  account's `email` / `full_name` / `onboarding_completed` is permanent and never cleaned.
+- **Fix shape (not attempted)**: route `insertRow` / `upsertRow` through
+  `assertDisposableTarget` the way `cleanup()` is, and add the same call to the direct
+  upsert sites — OR, better, make the guard structural rather than per-callsite so a new
+  file cannot silently opt out. A contract test asserting "every `.upsert(`/`.insert(` in
+  `test/supabase/` is preceded by a guard" would catch the class rather than the instances.
+- **Blast-radius estimate**: `feature` (test infrastructure only).
+
+## OI-124 — the device delete-account test hard-deletes `auth.users` with NO allow-list (P1)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. It is currently `skip: true` with its body commented
+  out, so there is no live exposure — the decision needed is whether to guard it before it
+  is ever un-skipped, or delete it.
+- **Verified**: 2026-08-15 — Hermes lens (destructive-op safety), read directly at
+  `integration_test/device/delete_account_patrol_test.dart:40-75`.
+- **Identified**: 2026-08-15, during the test6 credential repoint (diagnose `f7a2c4`).
+- **Risk class**: irreversible account destruction. Strictly worse than the `cleanup()`
+  class OI-115 covered: that deletes ROWS for a user, this deletes the USER.
+- **What's wrong**: the batch that closed OI-115 established a thesis —
+  *"environment-driven credentials are safe because the delete boundary is keyed on a uuid
+  allow-list"*. **That thesis does not extend to this file.** It reaches the DPDP
+  delete-account flow, which hard-deletes from `auth.users`, and
+  `integration_test/helpers/auth_helper.dart` gates on credential **presence**
+  (`kTestCredentialsPresent`), never on **identity** — there is no `qaUserIds` equivalent
+  anywhere on the device surface. Whoever un-skips this test inherits an unguarded
+  irreversible delete against whatever account `SUPABASE_TEST_EMAIL` names.
+- **Fix shape (not attempted)**: before un-skipping, assert the signed-in uuid is in
+  `SupabaseTestHelper.qaUserIds` (or a device-side equivalent) and fail closed otherwise.
+  Deleting the test outright is also a legitimate terminal answer — it has never run.
+- **Blast-radius estimate**: `account` if un-skipped as-is; `feature` for adding the guard.
