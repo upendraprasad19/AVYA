@@ -386,7 +386,17 @@ jobs:
       - name: Run Supabase tests
         if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' && env.SUPABASE_TEST_EMAIL != '' && env.SUPABASE_TEST_PASSWORD != ''
         run: |
+          # --concurrency=1 is REQUIRED, not a speed knob. Both files in this
+          # directory (sync_service_test.dart, auth_restore_test.dart) sign in
+          # as the SAME QA account and both call SupabaseTestHelper.cleanup()
+          # in setUp — a DELETE across 12 tables. The dart test runner defaults
+          # to parallel SUITES, so one file's setUp can wipe the other's rows
+          # between its write and its read, failing with a perfectly correct
+          # writer. Integration suites sharing one cloud account cannot run
+          # concurrently. (Found by round-2 plan review, 2026-08-15; the race
+          # pre-dates that batch — it was simply never hit deterministically.)
           flutter test test/supabase/ \
+            --concurrency=1 \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=SUPABASE_TEST_EMAIL="$SUPABASE_TEST_EMAIL" \
@@ -396,7 +406,21 @@ jobs:
       - name: Run Edge Function tests
         if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' && env.SUPABASE_TEST_EMAIL != '' && env.SUPABASE_TEST_PASSWORD != ''
         run: |
+          # --concurrency=1 for the SAME reason as the step above, and it is
+          # here because the B-pass caught the step above being fixed alone.
+          # `ai_proxy_test.dart:67` and `pgvector_test.dart:79` both sign in as
+          # `SupabaseTestHelper.testEmail` — one QA account, two parallel
+          # suites — and `pgvector_test.dart:98,110` DELETEs
+          # `memory_embeddings` for that user in setUp and tearDown while the
+          # sibling suite is live against the same account.
+          #
+          # Fixing the instance and leaving the mirror is this repo's most
+          # recurrent self-inflicted class. The rule is not "test/supabase/
+          # needs serialising", it is "integration suites sharing one cloud
+          # account cannot run concurrently" — which is true of every step in
+          # this job, so every step gets the flag.
           flutter test test/edge_functions/ \
+            --concurrency=1 \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=SUPABASE_TEST_EMAIL="$SUPABASE_TEST_EMAIL" \

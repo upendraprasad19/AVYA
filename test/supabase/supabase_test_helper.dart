@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Shared test helper for all Supabase integration tests.
@@ -273,8 +274,37 @@ class SupabaseTestHelper {
   static Future<void> init({String? url, String? anonKey}) async {
     prepareBinding();
 
-    await Supabase.initialize(
-        url: url ?? supabaseUrl, anonKey: anonKey ?? supabaseAnonKey);
+    if (url != null || anonKey != null) {
+      // Override path: `SupabaseService.initialize()` reads compile-time
+      // constants and cannot accept an override, so this branch keeps the raw
+      // call. NOTE: `grep -rn "init(url:" test/` currently returns ZERO callers
+      // — the "loopback wiring test" this branch was documented for does not
+      // exist. Kept because it is free and the override may yet be wanted;
+      // recorded here so nobody mistakes it for exercised code.
+      await Supabase.initialize(
+          url: url ?? supabaseUrl, anonKey: anonKey ?? supabaseAnonKey);
+    } else {
+      // Route through the PRODUCTION initializer rather than calling
+      // `Supabase.initialize` directly.
+      //
+      // Not cosmetic. `SupabaseService.currentUser` short-circuits to null
+      // unless `SupabaseService._initialized` is true (supabase_service.dart:81),
+      // and that flag is only set by `_doInitialize()`. Every SyncService entry
+      // point resolves its user through `HiveUserSession
+      // .ensureOpenedForCurrentSession()`, which reads exactly that getter — so
+      // with a raw `Supabase.initialize` the sign-in succeeds, the client works,
+      // and every sync forwarder still returns at its first line having written
+      // nothing. Silently. That is what makes a "drive the real SyncService"
+      // test assert zero rows regardless of whether the writer is correct.
+      //
+      // Safe because it reads the SAME two compile-time defines this class
+      // does: `AppConstants.supabaseUrl`/`supabaseAnonKey` are
+      // `String.fromEnvironment('SUPABASE_URL'/'SUPABASE_ANON_KEY')`
+      // (app_constants.dart:11-12), byte-identical to the constants above. It
+      // is a REPLACEMENT, never an addition — `_doInitialize()` calls
+      // `Supabase.initialize` itself, and calling that twice throws.
+      await SupabaseService.instance.initialize();
+    }
     _client = Supabase.instance.client;
 
     // Initialize Hive in a temp directory for tests.
