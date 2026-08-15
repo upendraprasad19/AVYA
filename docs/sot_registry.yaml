@@ -8939,3 +8939,92 @@ concepts:
       - "re-implementing the PRO predicate locally instead of importing _shared/subscription.ts"
       - "advancing the pagination offset by the FILTERED count — .range() walked the raw page, so this skips users"
     contract_test_path: test/contracts/weekly_recap_pro_filter_test.dart
+
+  - concept: sync_realtime_subscription
+    domain: cross_domain
+    behavioral_test_path: test/contracts/realtime_pro_gate_behavioral_test.dart
+    description: |
+      Diagnose e4a7c9. The weight_logs Supabase Realtime subscription is a
+      PRO-ONLY feature, and the entitlement check belongs on the SINK
+      (subscribeToRealtimeSync) — NOT on the callers.
+
+      Measured cost of getting this wrong: realtime.list_changes() was 6,463s
+      of 18,279s total DB CPU (35.4%) across 900,823 calls over the project's
+      first 143 days, serving a feature gated to a PRO population of ~zero.
+      Cost scales with CONNECTED CLIENTS, not with subscribers.
+
+      Root cause was guard-at-one-entry (bug-class 2.25). sync_service.dart
+      wrapped its call in `if (isPro())`; day_rollover_service.dart's resume
+      handler did NOT, under a comment that claimed it did. The callee guarded
+      only re-entrancy. Every AppLifecycleState.resumed therefore attached a
+      WAL poller for every user, free or PRO.
+
+      Use proStateSnapshot(), NOT isPro(). isPro() is the DECISION path and can
+      reach _downgradeLocally() — 5 Hive writes plus an onStateChanged →
+      ref.invalidate cascade. Deciding whether to open a socket must not mutate
+      entitlement state (OI-44 Unit 6, diagnose a9c4e1).
+
+      The gate is only half the contract. subscribeToRealtimeSync's first line
+      is an `_realtimeSubscription != null` early return, so an ALREADY-ATTACHED
+      channel never re-enters the guard. Without a teardown on downgrade a
+      lapsed PRO user keeps a live PRO channel for the rest of the foreground
+      session. _downgradeLocally is the single sink all 8 downgrade call sites
+      funnel through, so the teardown belongs there.
+    writers:
+      - file: lib/core/services/sync/sync_realtime.dart
+        line_range: 13
+        method: subscribeToRealtimeSync
+        semantic: entitlement-gate-at-sink
+        canonical: true
+        notes: >-
+          The gate goes AFTER the re-entrancy return and BEFORE the
+          refreshSession() — a free user must not pay a POST /token to learn
+          it is not entitled.
+      - file: lib/core/services/subscription_service.dart
+        line_range: 1152
+        method: _downgradeLocally
+        semantic: teardown-on-downgrade
+        notes: >-
+          8 call sites funnel here (439, 461, 579, 599, 890, 900, 908, 1066).
+          890/900/908 are refreshFromSupabase's no-row / null-response branches
+          — the most likely real-world lapse path.
+      - file: lib/core/services/sync_service.dart
+        line_range: 158-195
+        method: _onUserChanged
+        semantic: account-swap-teardown
+        notes: >-
+          Calls unsubscribeRealtime() rather than inlining the cancel at
+          159-166, so a single teardown site carries any future bookkeeping.
+    readers:
+      - file: lib/core/services/sync/sync_realtime.dart
+        line_range: 40
+        method: _attachRealtimeStream
+        semantic: opens-the-wal-stream
+      - file: lib/core/services/day_rollover_service.dart
+        line_range: 65
+        method: didChangeAppLifecycleState
+        semantic: resume-resubscribe
+        notes: >-
+          Ungated by design AFTER this fix — the sink owns the decision. This
+          is also the free-to-PRO recovery path: a newly-PRO user attaches on
+          the next resume.
+      - file: lib/core/services/sync_service.dart
+        line_range: 789
+        method: checkAndSync
+        semantic: flag-check
+    hive:
+      box: configBox
+      key: disable_realtime_pro_gate
+      shape: "bool kill-switch in the SHARED configBox (device-level, deliberately not user-scoped — matches disable_sync_debounce and its siblings). Absent/false = gate ACTIVE."
+    cloud:
+      table: weight_logs
+      columns: [id, user_id, date, weight_kg, created_at]
+    sync_methods: [subscribeToRealtimeSync, unsubscribeRealtime]
+    restore_methods: [_restoreWeightLogs]
+    forbidden_legacy_patterns:
+      - "calling isPro() instead of proStateSnapshot() from the gate — isPro() may WRITE via _downgradeLocally and fires ref.invalidate"
+      - "gating a CALLER of subscribeToRealtimeSync instead of the sink — this is the exact shape of the original bug (2.25)"
+      - "a comment asserting an entitlement check on a line that does not perform one"
+      - "adding weight_logs realtime without a teardown on downgrade — the re-entrancy early-return means an attached channel never re-enters the gate"
+      - "adding a table to the supabase_realtime publication with no PRO-gated consumer"
+    contract_test_path: test/contracts/realtime_pro_gate_behavioral_test.dart

@@ -6,11 +6,21 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### edge_function_token_freshness (2 bugs)
+- 2026-08-13 d7b1f8 — During the 2026-08-13 23:03-23:19 IST backend outage, the app issued auth requests that piled up rather than queueing behind one another, and every one of them sat holding a connection for 10-36…
+- 2026-06-09 d3a1c7 — APK +34 obs 3 — AI features (chat, food logging, weekly report) intermittently failed with no useful error, while ai-proxy itself was ACTIVE (v70) and still logging interactions. client_errors showed…
+
 ### oi_board_id_uniqueness (1 bugs)
 - 2026-08-13 b7e3d1 — Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw…
 
+### sync_realtime_subscription (1 bugs)
+- 2026-08-13 e4a7c9 — Live pg_stat_statements (143-day window since project creation, never reset) shows realtime.list_changes() — the Supabase Realtime WAL poller, run as supabase_admin — is the single largest CPU…
+
 ### git_hook_env_leak (1 bugs)
 - 2026-08-13 4f2a9e — The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across…
+
+### auth_signin_completion (1 bugs)
+- 2026-08-13 a9c4e2 — Founder signed in as test6@gmail.com on the prod web build (app.icanbefitter.com/#/sign-in) at 2026-08-13 23:03 IST. The SIGN IN WITH EMAIL button entered its spinner state and never left it — no…
 
 ### test_binding_stubs_http_for_integration_tests (1 bugs)
 - 2026-08-12 3b7e1c — Every file in test/supabase/ dies in setUpAll with `AuthUnknownException(message: Received an empty response with status code 400, originalError: Instance of 'Response', statusCode: 400)` the moment…
@@ -398,9 +408,6 @@ rather than a Hive box. (1 bugs)
 
 ### streak_freeze_progress_merge (1 bugs)
 - 2026-06-11 a8f3d1 — Quarterly audit (L27 concurrency lens) finding. The slow-boot flip (ADR-0014) lands a returning user on /home BEFORE the restore's Step C (_restoreFreezes) runs. On /home the streak walk…
-
-### edge_function_token_freshness (1 bugs)
-- 2026-06-09 d3a1c7 — APK +34 obs 3 — AI features (chat, food logging, weekly report) intermittently failed with no useful error, while ai-proxy itself was ACTIVE (v70) and still logging interactions. client_errors showed…
 
 ### profile_image_url_display (1 bugs)
 - 2026-06-09 b1f3a7 — APK +34 obs 4 — the Profile avatar AND banner images re-download from the network every single time the user navigates to the Profile tab. They are not served from the local cache, so each visit shows…
@@ -987,8 +994,11 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-13 | d7b1f8 | During the 2026-08-13 23:03-23:19 IST backend outage, the app issued auth requests that piled up rather than queueing behind one another, and every one of them sat holding a connection for 10-36… | edge_function_token_freshness | test/contracts/ensure_fresh_token_inflight_join_test.dart |
 | 2026-08-13 | b7e3d1 | Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw… | oi_board_id_uniqueness | test/contracts/oi_index_test.dart |
+| 2026-08-13 | e4a7c9 | Live pg_stat_statements (143-day window since project creation, never reset) shows realtime.list_changes() — the Supabase Realtime WAL poller, run as supabase_admin — is the single largest CPU… | sync_realtime_subscription | test/contracts/realtime_subscription_pro_gated_test.dart |
 | 2026-08-13 | 4f2a9e | The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across… | git_hook_env_leak | test/scripts/regression_catalog_lib_test.dart |
+| 2026-08-13 | a9c4e2 | Founder signed in as test6@gmail.com on the prod web build (app.icanbefitter.com/#/sign-in) at 2026-08-13 23:03 IST. The SIGN IN WITH EMAIL button entered its spinner state and never left it — no… | auth_signin_completion | test/contracts/signin_bounded_completion_test.dart |
 | 2026-08-12 | 3b7e1c | Every file in test/supabase/ dies in setUpAll with `AuthUnknownException(message: Received an empty response with status code 400, originalError: Instance of 'Response', statusCode: 400)` the moment… | test_binding_stubs_http_for_integration_tests | test/supabase/http_override_restored_test.dart |
 | 2026-08-11 | d4f9b2 | scripts/safe_push.sh — the ONLY sanctioned push path and the file whose entire purpose is to be trusted about whether a push landed — exits 0 having verified nothing whenever `git ls-remote` cannot… | landing_verification_probe_conflation | test/scripts/safe_push_test.dart |
 | 2026-08-10 | a7c3f9 | Deploying log-client-error v13 returned HTTP 201 with a healthy ACTIVE function, and then printed "Smoke FAIL — HTTP 401 (not in tolerated set [400])" followed by rollback instructions. The deploy was… | deploy_smoke_tolerated_codes | "not_applicable — see regression_test_planned for why, and what was done instead" |
