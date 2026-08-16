@@ -10,11 +10,29 @@ import 'package:http/http.dart' as http;
 /// Tests the redeem-referral Edge Function endpoint.
 /// These tests hit the actual Supabase Edge Function (staging).
 ///
-/// RR-1  — Missing auth returns 401
-/// RR-2  — Invalid code format returns error
-/// RR-3  — Empty body returns error
-/// RR-4  — Non-existent code returns "Invalid referral code"
+/// RR-1  — Missing auth returns 401 (gateway-rejected — see below)
+/// RR-2  — Invalid JWT is gateway-rejected with 401
 /// RR-5  — OPTIONS request returns CORS headers
+///
+/// (This list used to also claim RR-3 "Empty body returns error" and RR-4
+/// "Non-existent code returns Invalid referral code". NEITHER HAS EVER EXISTED
+/// in this file — `grep "test('RR-"` returns only 1, 2, 5 and the RR-local-*
+/// set. Corrected 2026-08-16; a doc listing tests that do not exist reads as
+/// coverage.)
+///
+/// ── WHO ANSWERS THESE REQUESTS (read before changing an assertion) ──────────
+/// The deployed function runs with **verify_jwt: true**. The Supabase GATEWAY
+/// therefore rejects any request without a valid Authorization header BEFORE
+/// the function body executes, and the gateway's error shape is NOT the
+/// function's:
+///
+///   gateway  → {"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"..."}
+///   function → {"error":"...","request_id":"..."}   (index.ts:57-60, :156-164)
+///
+/// So for RR-1 and RR-2 the function's `{error, ...}` contract is unreachable,
+/// and asserting ANY function-shaped key against them is asserting a contract
+/// nothing produces. `success` is emitted ONLY on the 200 success paths
+/// (index.ts:127, :148).
 ///
 /// NOTE: Tests that require valid JWT and code redemption are covered
 /// in the integration test suite on device (auth_flow_test.dart).
@@ -24,13 +42,11 @@ const _functionUrl =
 const _anonKey = String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
 
 void main() {
-  // Skip all tests if anon key not provided (CI environments without secrets)
+  // Gates ONLY the live-endpoint group below (see the skip: at its close).
   final bool hasKey = _anonKey.isNotEmpty;
 
   group('redeem-referral Edge Function', () {
     test('RR-1: Missing auth returns 401', () async {
-      if (!hasKey) return; // Skip in environments without the key
-
       final response = await http.post(
         Uri.parse(_functionUrl),
         headers: {
@@ -43,12 +59,26 @@ void main() {
       expect(response.statusCode, equals(401),
           reason: 'Missing Authorization header should return 401');
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      expect(body['success'], isFalse);
+
+      // This asserted `body['success'] isFalse` until 2026-08-16 and failed on
+      // every CI run that reached it, because the gateway answers this request
+      // (verify_jwt: true — see the header) and its body carries only
+      // {code, message}. `success` was never present; neither is `error`, so
+      // "assert the function's error key instead" would have failed too.
+      //
+      // What is asserted instead is the property that actually matters and
+      // holds no matter WHO answers: the response must never claim success.
+      // Deliberately NOT pinning the gateway's `code`/`message` strings —
+      // those are Supabase platform copy we do not control, and pinning them
+      // buys nothing while risking a false red on any platform change.
+      //
+      // Still falsifiable: flip verify_jwt off and let the function 200 this
+      // request, and both assertions here red.
+      expect(body['success'], isNot(true),
+          reason: 'an unauthenticated request must never report success');
     });
 
-    test('RR-2: Invalid code format (too long) returns error', () async {
-      if (!hasKey) return;
-
+    test('RR-2: Invalid JWT is gateway-rejected with 401', () async {
       final response = await http.post(
         Uri.parse(_functionUrl),
         headers: {
@@ -59,13 +89,14 @@ void main() {
         body: jsonEncode({'code': 'A' * 50}),
       );
 
-      // Should be 401 (invalid JWT) or 200 with error
-      expect(response.statusCode, anyOf(401, 200));
+      // Was `anyOf(401, 200)`, which accepted both outcomes and so could
+      // barely fail. With verify_jwt: true a malformed bearer token cannot
+      // reach the function at all, so 401 is guaranteed — assert exactly that.
+      expect(response.statusCode, equals(401),
+          reason: 'a malformed JWT is rejected by the gateway, not the function');
     });
 
     test('RR-5: OPTIONS request returns CORS headers', () async {
-      if (!hasKey) return;
-
       final request = http.Request('OPTIONS', Uri.parse(_functionUrl));
       request.headers['Origin'] = 'https://icanbefitter.com';
       final streamed = await request.send();
@@ -74,7 +105,17 @@ void main() {
       expect(response.headers.containsKey('access-control-allow-origin'), isTrue,
           reason: 'CORS preflight should include Allow-Origin header');
     });
-  });
+    // A REPORTED skip, not a silent one. Each test used to open with
+    // `if (!hasKey) return;`, which makes a credential-less run render as a
+    // PASS — indistinguishable from "the endpoint behaved correctly". That is
+    // the OI-105 class: an empty input set reporting in the same colour as
+    // nothing-wrong. A group-level `skip:` with a reason prints the reason and
+    // counts as skipped.
+    //
+    // Scoped to THIS group on purpose: the RR-local-* group below needs no
+    // network and must keep running in the dart-define-less `Unit Tests` CI
+    // job, so an early `return` from main() would silently drop that coverage.
+  }, skip: hasKey ? null : 'SUPABASE_ANON_KEY not set — live-endpoint tests skipped');
 
   // ─────────────────────────────────────────────────────────────────────────
   // Local validation logic tests (always run, no network needed)
