@@ -2532,12 +2532,13 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Blast radius estimate**: `platform` (`.github/workflows/test.yml` is `docs/blast_radius.yaml:184`)
   IF the workflow is edited; adding secrets alone touches no tracked file and has no blast radius.
 
-## OI-106 — Selectable past hold weeks (FOB-6) — 6 named lifecycle traps
+## OI-125 — Selectable past hold weeks (FOB-6) — 6 named lifecycle traps
 
 - **Status**: OPEN
 - **Verified**: 2026-08-13 — filed from `docs/ship_dark_pending_review.yaml` FOB-6, whose trap list
   was produced by a live walkthrough plus two independent context-blind reviews on 2026-07-25. The
   traps themselves have NOT been re-verified against current source since then.
+- ⚠ **Renumbered 2026-08-16 (was OI-106).** Filed on branch `claude/open-issues-triage-976962` while `main` independently advanced to OI-124, so OI-106 collided with a different, unrelated issue already on the board. Commit `0e4d97cd`'s message still cites the OLD number — it was pushed before the collision was found and is not rewritten. Mapping: 106→125, 107→126, 108→127.
 - **Identified**: 2026-08-13 · split out of OI-60 by founder decision when OI-60 was broken into 7
   pieces (round-1 review returned NOT CONVERGED with structural redesigns in four items).
 - **Blocked on**: none technically — but it is a NEW FEATURE, not a correctness fix, and it is the
@@ -2558,11 +2559,12 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   renders "Week 5 hasn't started yet" over a week the user is training
   (`lib/features/train/CLAUDE.md`, `hold_display_read_path`).
 
-## OI-107 — The `logged` / `custom_template` training-day predicate split (5 call sites)
+## OI-126 — The `logged` / `custom_template` training-day predicate split (5 call sites)
 
 - **Status**: OPEN
 - **Verified**: 2026-08-13 — the 5 call sites and the two predicate shapes were read directly while
   fixing a3f8d1; `type: 'logged'`'s two writers were confirmed by grep.
+- ⚠ **Renumbered 2026-08-16 (was OI-107).** Filed on branch `claude/open-issues-triage-976962` while `main` independently advanced to OI-124, so OI-107 collided with a different, unrelated issue already on the board. Commit `0e4d97cd`'s message still cites the OLD number — it was pushed before the collision was found and is not rewritten. Mapping: 106→125, 107→126, 108→127.
 - **Identified**: 2026-08-13 · surfaced by round-1 review of the a3f8d1 batch
 - **Blocked on**: none. Pickable, but it is a live behaviour change for all users, so it needs its
   own review — which is exactly why it was not bundled into a3f8d1.
@@ -2586,11 +2588,12 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   its own function — do not "fix" it to match the exclusion helper. A round-2 review claimed it was
   wrong; round 3 showed both of `phaseCompletionRate`'s callers really do compute the inclusion form.
 
-## OI-108 — `plan_start` moving under a live hold week: is the streak identity still sound?
+## OI-127 — `plan_start` moving under a live hold week: is the streak identity still sound?
 
 - **Status**: OPEN
 - **Verified**: 2026-08-13 — the four `plan_start` write sites were enumerated by grep and are fact.
   The BEHAVIOUR when one fires mid-hold is explicitly NOT verified — that is the whole question.
+- ⚠ **Renumbered 2026-08-16 (was OI-108).** Filed on branch `claude/open-issues-triage-976962` while `main` independently advanced to OI-124, so OI-108 collided with a different, unrelated issue already on the board. Commit `0e4d97cd`'s message still cites the OLD number — it was pushed before the collision was found and is not rewritten. Mapping: 106→125, 107→126, 108→127.
 - **Identified**: 2026-08-13 · §4.12.1 split out of the a3f8d1 batch after three review rounds
 - **Blocked on**: none. Route to the piece that already owns `plan_integrity_reconciler.dart`
   (the FOB-7a/7b piece) so one batch holds the reconciler context.

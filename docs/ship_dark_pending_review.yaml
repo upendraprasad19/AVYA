@@ -280,7 +280,7 @@ flip_on_blockers:
     #             FC7 nonce fence are present in ai-media-proxy. Same closure YAML.
     #   FOB-7(d)  CLOSED  → same closure YAML (both stale citations de-numbered;
     #             the filing named one, a second was found in the same comment).
-    #   FOB-6     SPLIT OUT to OI-106 (a new feature, not a correctness fix).
+    #   FOB-6     SPLIT OUT to OI-125 (a new feature, not a correctness fix).
     #   FOB-1, FOB-3, FOB-4, FOB-5, FOB-7(a), FOB-7(b) — STILL OPEN.
     # enable_hold_weeks therefore CANNOT flip yet.
     - id: FOB-2
