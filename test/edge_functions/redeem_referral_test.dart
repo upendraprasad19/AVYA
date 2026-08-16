@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -40,6 +42,10 @@ import 'package:http/http.dart' as http;
 const _functionUrl =
     'https://dedsavbjuwgarrhphgnl.supabase.co/functions/v1/redeem-referral';
 const _anonKey = String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+
+/// Relative to the package root, which is `flutter test`'s cwd. RR-src-0 is the
+/// positive control that this still resolves.
+const _efSourcePath = 'supabase/functions/redeem-referral/index.ts';
 
 void main() {
   // Gates ONLY the live-endpoint group below (see the skip: at its close).
@@ -105,6 +111,48 @@ void main() {
       expect(response.headers.containsKey('access-control-allow-origin'), isTrue,
           reason: 'CORS preflight should include Allow-Origin header');
     });
+    test('RR-6: a VALID non-user JWT reaches the FUNCTION own 401', () async {
+      // Added 2026-08-16. Every other 401 in this file is the GATEWAY's, so
+      // before this test index.ts:55-60 — the function's own authentication
+      // branch — was covered by nothing: deleting it outright reddened no test
+      // here. The header above states that the function's {error, ...} contract
+      // is unreachable for RR-1/RR-2; this closes that gap rather than only
+      // documenting it.
+      //
+      // The anon key is a structurally VALID JWT, so the gateway admits the
+      // request and index.ts runs; getUser() then resolves to no user and takes
+      // the 401 branch. It carries no user identity, so this cannot read or
+      // mutate anybody's rows.
+      final response = await http.post(
+        Uri.parse(_functionUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': _anonKey,
+          'Authorization': 'Bearer $_anonKey',
+        },
+        body: jsonEncode({'code': 'AVYA-TEST1234'}),
+      );
+
+      expect(response.statusCode, equals(401));
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+      // Pinning the literal string is right HERE and wrong in RR-1: this copy
+      // is ours (index.ts:57), not Supabase platform copy. If someone edits the
+      // function's message, this SHOULD red.
+      expect(body['error'], equals('Authentication required'),
+          reason: 'this 401 comes from index.ts:57, not the gateway');
+      expect(body['request_id'], isA<String>(),
+          reason: 'index.ts stamps a request_id on every response it authors');
+
+      // Guards the test against silently decaying into a third gateway test:
+      // if the gateway ever answers this request, `code` appears and `error`
+      // vanishes, and RR-6 stops covering the function without anyone noticing.
+      expect(body['code'], isNull,
+          reason: 'gateway shape here means the request never reached index.ts '
+              'and this test no longer covers the function');
+      expect(body['success'], isNot(true));
+    });
+
     // A REPORTED skip, not a silent one. Each test used to open with
     // `if (!hasKey) return;`, which makes a credential-less run render as a
     // PASS — indistinguishable from "the endpoint behaved correctly". That is
@@ -118,46 +166,77 @@ void main() {
   }, skip: hasKey ? null : 'SUPABASE_ANON_KEY not set — live-endpoint tests skipped');
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Local validation logic tests (always run, no network needed)
+  // Source pins — no network, no credentials, so these keep running in the
+  // dart-define-less `Unit Tests` CI job (the reason the skip: above is scoped
+  // to the live group rather than to main()).
+  //
+  // These replace five tests that compared literals to themselves — the whole
+  // of RR-local-4 was `expect(50 >= 50, isTrue)`, and RR-local-1 tested Dart's
+  // own `trim().toUpperCase()`. None could fail for any change to the product,
+  // and RR-local-4 pinned `MAX_REDEMPTIONS_PER_CODE = 50`, a constant that
+  // appears NOWHERE in index.ts — so it documented a cap the function has never
+  // enforced. Replaced 2026-08-16 with assertions read from the function
+  // source, which CAN fail when the function changes.
   // ─────────────────────────────────────────────────────────────────────────
 
-  group('redeem-referral — local validation', () {
-    test('RR-local-1: Code trimming and uppercasing', () {
-      const input = '  avya-test1234  ';
-      final processed = input.trim().toUpperCase();
-      expect(processed, equals('AVYA-TEST1234'));
+  group('redeem-referral — source pins', () {
+    late final String source = File(_efSourcePath).readAsStringSync();
+
+    test('RR-src-0: the function source resolves from the test cwd', () {
+      // Positive control. Without it every pin below passes vacuously the
+      // moment this path is wrong — an empty input set wearing the same colour
+      // as nothing-wrong, which is the same class as the skip: above.
+      expect(File(_efSourcePath).existsSync(), isTrue,
+          reason: 'wrong path ⇒ the pins below assert nothing');
+      expect(source, contains('handleRedeemReferral'));
     });
 
-    test('RR-local-2: Code length validation (max 20)', () {
-      const validCode = 'AVYA-UPEN1234';
-      const tooLong = 'AVYA-ABCDEFGHIJKLMNOP';
-      expect(validCode.length <= 20, isTrue);
-      expect(tooLong.length <= 20, isFalse);
+    test('RR-src-1: codes are trimmed and uppercased before matching', () {
+      expect(source, contains(r'(body.code ?? "").trim().toUpperCase()'),
+          reason: 'index.ts:65 — a lowercase code from the UI must still match');
     });
 
-    test('RR-local-3: Self-referral guard logic', () {
-      const referrerId = 'user-aaa-bbb';
-      const refereeIdSame = 'user-aaa-bbb';
-      const refereeIdDiff = 'user-ccc-ddd';
+    test('RR-src-2: CODE_FORMAT accepts AVYA- plus 8 uppercase alphanumerics',
+        () {
+      final decl =
+          RegExp(r'const\s+CODE_FORMAT\s*=\s*/([^/]+)/').firstMatch(source);
+      expect(decl, isNotNull, reason: 'CODE_FORMAT declaration not found');
 
-      expect(referrerId == refereeIdSame, isTrue,
-          reason: 'Same IDs should be caught as self-referral');
-      expect(referrerId == refereeIdDiff, isFalse,
-          reason: 'Different IDs should pass self-referral check');
+      final pattern = RegExp(decl!.group(1)!);
+      expect(pattern.hasMatch('AVYA-TEST1234'), isTrue);
+      expect(pattern.hasMatch('avya-test1234'), isFalse,
+          reason: 'index.ts uppercases first, so the regex itself is strict');
+      expect(pattern.hasMatch('AVYA-SHORT'), isFalse);
+      expect(pattern.hasMatch('A' * 50), isFalse,
+          reason: 'the over-long code RR-2 sends would be rejected here too, '
+              'if a valid JWT ever let it reach the function');
     });
 
-    test('RR-local-4: MAX_REDEMPTIONS_PER_CODE is 50', () {
-      const maxRedemptions = 50;
-      expect(49 >= maxRedemptions, isFalse);
-      expect(50 >= maxRedemptions, isTrue);
-      expect(51 >= maxRedemptions, isTrue);
+    test('RR-src-3: the self-referral guard is still present', () {
+      expect(source, contains('codeRow.user_id === referee.id'),
+          reason: 'index.ts:88 — without it a user can refer themselves');
     });
 
-    test('RR-local-5: PRO_DAYS grant is 7', () {
-      const proDays = 7;
-      final endDate = DateTime(2026, 4, 7).add(Duration(days: proDays));
-      expect(endDate, equals(DateTime(2026, 4, 14)),
-          reason: '7-day PRO grant from Apr 7 should end Apr 14');
+    test('RR-src-4: the PRO grant is still 7 days', () {
+      expect(source, matches(RegExp(r'const\s+DAYS_GRANTED\s*=\s*7\s*;')),
+          reason: 'changes what every redeeming user actually receives');
+    });
+
+    test('RR-src-5: the new-recruit eligibility window is still 7 days', () {
+      expect(
+          source,
+          matches(RegExp(r'const\s+SIGNUP_WINDOW_MS\s*=\s*'
+              r'7\s*\*\s*24\s*\*\s*60\s*\*\s*60\s*\*\s*1000\s*;')),
+          reason: 'index.ts:94 compares the referee signup age against this');
+    });
+
+    test('RR-src-6: both 200 paths still carry success:true', () {
+      // invite_friends_sheet.dart:106 reads `body['success'] == true`, so the
+      // fresh-redeem 200 AND the 23505 idempotent-race 200 must both set it —
+      // else the race path renders as a failure to the user.
+      expect(RegExp(r'success:\s*true').allMatches(source).length,
+          greaterThanOrEqualTo(2),
+          reason: 'index.ts:127 (already-redeemed race) and :148 (fresh)');
     });
   });
 }
