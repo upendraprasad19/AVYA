@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/features/dev/simulation_service.dart';
 import 'package:icanbefitter/features/dev/plan_xls.dart';
@@ -48,6 +49,17 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     if (kDebugMode && (auto == 'lt' || auto == 'diag')) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _autorunToLt());
     }
+    // Standalone flag seed: `/dev?flags=all` (or a CSV subset like
+    // `flags=readiness,plateau_escalation`) seeds the ship-dark plan-engine
+    // flags on mount WITHOUT running the sim — for manual real-UI testing of the
+    // new generator behaviour before the founder-gated global flip. No-op in
+    // release / when absent. (When `autorun` is also present, the sim path seeds
+    // them itself before generating — see [_autorunToLt].)
+    final flagsParam = Uri.base.queryParameters['flags'];
+    if (kDebugMode && auto == null && flagsParam != null && flagsParam.isNotEmpty) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _seedPlanFlagsFromParam(flagsParam));
+    }
   }
 
   /// Full deterministic journey to Lieutenant + plan export, logged to the
@@ -83,6 +95,16 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     await SimulationService.instance.resetJourney(ref);
     debugPrint('[autorun] grant PRO (10-yr sim window)…');
     await _grantPro();
+    // Seed the ship-dark plan-engine flags BEFORE the sim so every phase-boundary
+    // regeneration exercises the new adaptive behaviour (titration / plateau /
+    // variety / deload). Honours `?flags=` (e.g. `&flags=all`); absent → the sim
+    // runs with production-default OFF flags (the OLD generator).
+    final flagsParam = Uri.base.queryParameters['flags'];
+    if (flagsParam != null && flagsParam.isNotEmpty) {
+      await _seedPlanFlagsFromParam(flagsParam);
+      debugPrint('[autorun] seeded plan-engine flags ($flagsParam) → '
+          '$_planFlagsOnCount ON');
+    }
     // diag mode = short 49-day run (covers the Phase 1→2 transition at ~day 28)
     // for fast root-causing; lt mode = full 910-day journey to Lieutenant.
     final isDiag = Uri.base.queryParameters['autorun'] == 'diag';
@@ -224,6 +246,74 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('PRO revoked');
   }
 
+  // ── Plan Engine Flags (debug-only test seam) ─────────────────────────
+  // The 13 ship-dark adaptive-overhaul kill-switches (PlanEngineFlags), ALL
+  // DEFAULT OFF in production with no in-app/server toggle. This card + the
+  // `?flags=` URL param let a local dev build turn them ON so the generator /
+  // sim / real-UI exercise the NEW behaviour BEFORE the founder-gated global
+  // flip + APK. Writes the SAME configBox keys PlanEngineFlags reads. NEVER in
+  // release (the whole /dev route is kDebugMode-gated; guarded again below).
+  static const List<String> _planEngineFlagKeys = [
+    'enable_graded_progression',
+    'enable_session_detraining_cut',
+    'enable_physique_focus_bringup',
+    'enable_equipment_exclusions',
+    'enable_readiness',
+    'enable_phase_arc',
+    'enable_triggered_deload',
+    'enable_adherence_gate',
+    'enable_volume_titration',
+    'enable_exercise_id_history',
+    'enable_injury_substitute_pref',
+    'enable_cross_phase_variety',
+    'enable_plateau_escalation',
+  ];
+
+  int get _planFlagsOnCount {
+    try {
+      final box = HiveService.instance.configBox;
+      return _planEngineFlagKeys.where((k) => box.get(k) == true).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> _setAllPlanFlags(bool on) async {
+    if (!kDebugMode) return;
+    final box = HiveService.instance.configBox;
+    for (final k in _planEngineFlagKeys) {
+      await box.put(k, on);
+    }
+    if (!mounted) return;
+    setState(() {});
+    _toast(on
+        ? 'All ${_planEngineFlagKeys.length} plan-engine flags ON'
+        : 'All plan-engine flags reset (OFF)');
+  }
+
+  /// Seeds flags from a URL param: `all` → every key; else a CSV of full keys
+  /// or short suffixes (`readiness` → `enable_readiness`). Debug-only.
+  Future<void> _seedPlanFlagsFromParam(String param) async {
+    if (!kDebugMode) return;
+    final box = HiveService.instance.configBox;
+    if (param == 'all') {
+      for (final k in _planEngineFlagKeys) {
+        await box.put(k, true);
+      }
+    } else {
+      for (final raw in param.split(',')) {
+        final t = raw.trim();
+        if (t.isEmpty) continue;
+        final key = t.startsWith('enable_') ? t : 'enable_$t';
+        if (_planEngineFlagKeys.contains(key)) await box.put(key, true);
+      }
+    }
+    if (!mounted) return;
+    setState(() {});
+    debugPrint('[dev] seeded plan-engine flags from ?flags=$param '
+        '→ $_planFlagsOnCount ON');
+  }
+
   void _toast(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
@@ -332,6 +422,32 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                   _btn('Grant PRO (1 yr)', _grantPro),
                   _btn('Revoke PRO', _revokePro, outlined: true),
                 ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _card(
+            title: 'Plan Engine Flags (adaptive overhaul)',
+            children: [
+              _kv('Flags ON',
+                  '$_planFlagsOnCount / ${_planEngineFlagKeys.length}'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _btn('Enable all 13', () => _setAllPlanFlags(true)),
+                  _btn('Reset all (OFF)', () => _setAllPlanFlags(false),
+                      outlined: true),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'The 13 ship-dark flags default OFF. Enable to preview the new '
+                'generator behaviour on this local build (never ships to '
+                'release). Or open /dev?autorun=lt&flags=all to seed + run the '
+                'sim to Lieutenant in one shot.',
+                style: TextStyle(color: AppColors.textMute, fontSize: 11),
               ),
             ],
           ),
