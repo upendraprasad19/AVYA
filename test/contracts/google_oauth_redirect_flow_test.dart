@@ -32,14 +32,32 @@ void main() {
 
   group('auth_provider.dart — signInWithGoogle redirectTo', () {
     test('branches redirectTo on kIsWeb', () {
-      final signInIndex = authProvider.indexOf('signInWithGoogle');
-      expect(signInIndex, isNot(-1));
-      final methodBody = authProvider.substring(
-        signInIndex,
-        signInIndex + 700,
+      // Anchored on `signInWithOAuth(` — the actual OAuth launch — NOT on a
+      // fixed 700-char window from `signInWithGoogle`.
+      //
+      // The old window broke (2026-08-08, d3a7c9) when the launch was extracted
+      // into `launchGoogleOAuth()` so the OAuth-completion watch could be
+      // tested. The extracted helper sits ABOVE signInWithGoogle in the file, so
+      // a forward-only window from signInWithGoogle could never reach it: the
+      // contract still held and the test went red anyway. Its two sibling cases
+      // stayed green throughout, because they grep the whole file.
+      //
+      // Anchoring on the call the contract is ABOUT survives that refactor, and
+      // fails for the reason the test exists (a hardcoded single-platform
+      // redirect) rather than for where the code happens to live.
+      final oauthIndex = authProvider.indexOf('signInWithOAuth(');
+      expect(oauthIndex, isNot(-1),
+          reason: 'auth_provider must still launch OAuth via signInWithOAuth.');
+      final start = (oauthIndex - 200).clamp(0, authProvider.length);
+      final end = (oauthIndex + 500).clamp(0, authProvider.length);
+      final launchBody = authProvider.substring(start, end);
+      expect(
+        launchBody,
+        contains('redirectTo'),
+        reason: 'the OAuth launch must pass an explicit redirectTo.',
       );
       expect(
-        methodBody,
+        launchBody,
         contains('kIsWeb'),
         reason:
             'redirectTo must branch on platform — a single hardcoded value '

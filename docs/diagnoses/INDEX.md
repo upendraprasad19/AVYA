@@ -21,6 +21,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### unresolved_conflict_markers_committed (1 bugs)
 - 2026-08-14 c9f4e2 — `docs/audit/open_issues.md` on `main` at `5d1c6f12` carried three unresolved git conflict markers — an open marker at :2821, a bare separator at :2892 and a close marker naming `supabase-test-http` at…
 
+### edge_function_token_freshness (2 bugs)
+- 2026-08-13 d7b1f8 — During the 2026-08-13 23:03-23:19 IST backend outage, the app issued auth requests that piled up rather than queueing behind one another, and every one of them sat holding a connection for 10-36…
+- 2026-06-09 d3a1c7 — APK +34 obs 3 — AI features (chat, food logging, weekly report) intermittently failed with no useful error, while ai-proxy itself was ACTIVE (v70) and still logging interactions. client_errors showed…
+
 ### streaks (2 bugs)
 - 2026-08-13 a3f8d1 — TWO defects in the same six lines of ActiveWorkoutNotifier.completeWorkout's weekly-streak block. (1) FOB-2, flag-gated: getCurrentWeekNumber() clamps to [1,4] and a hold week starts at plan_start+28,…
 - 2026-05-31 5e8a1c — Surfaced by the year-simulation harness: after amar completed Phase 1 (15 of 16 scheduled workouts over 4 weeks, ~85% adherence with a single missed day), the rank did NOT progress — it stayed at SD2…
@@ -30,6 +34,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### git_hook_env_leak (1 bugs)
 - 2026-08-13 4f2a9e — The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across…
+
+### auth_signin_completion (1 bugs)
+- 2026-08-13 a9c4e2 — Founder signed in as test6@gmail.com on the prod web build (app.icanbefitter.com/#/sign-in) at 2026-08-13 23:03 IST. The SIGN IN WITH EMAIL button entered its spinner state and never left it — no…
 
 ### subprocess_test_timeout_under_suite_parallelism (1 bugs)
 - 2026-08-13 c3f9a7 — The merge-commit regression walk (`scripts/check_regression_catalog.dart`) fails intermittently with a DIFFERENT number of failures each run — measured 11, 7, 8, then 4 across four attempts on the…
@@ -86,12 +93,24 @@ rather than a Hive box. (1 bugs)
 ### community_review_queue (1 bugs)
 - 2026-08-07 d5b8c2 — `promote-community-item` (daily cron, job `promote_community_item_daily`) opened both of its promotion paths with a call to the Postgres RPC `community_votes_summary`. That function does not exist —…
 
+### session_owner_inflight_guard (1 bugs)
+- 2026-08-06 e5c2d1 — In one 1.0.0+38 session the founder signed out of user d7a67a37 (12:31:01 UTC) and signed into 9e6bde97 via Google (12:31:37). client_errors then shows, over roughly twelve seconds, 22 × "new row…
+
 ### equipment_exclusion_filter (2 bugs)
 - 2026-08-06 e2d6b8 — A user opens Edit Profile, selects the equipment they do NOT have (e.g. cables), and saves. The selection persists and syncs to cloud. Their generated plan then prescribes exercises requiring exactly…
 - 2026-07-17 b7a4e2 — On every GENERATED workout plan, gym users (basic_gym / full_gym) NEVER received the gym-cardio warmup moves (_gymCardio: Jump Rope / Cycling (Stationary) / Running (Treadmill)) or the gym finisher…
 
+### oauth_signin_completion (1 bugs)
+- 2026-08-06 d3a7c9 — Founder taps CONTINUE WITH GOOGLE on APK 1.0.0+38, completes Google consent, and the app sits on the sign-in screen with BOTH buttons spinning forever. Force-quitting and reopening lands on Home,…
+
+### notifications_inbox_id_contract (1 bugs)
+- 2026-08-06 a4f1c8 — client_errors shows 6 × PostgrestException 22P02 "invalid input syntax for type uuid: local-welcome-1786019702890010" against sync_notifications_inbox_entry in one 1.0.0+38 session. Nobody reported it…
+
 ### preauth_error_telemetry (1 bugs)
 - 2026-08-06 b6e4f2 — Founder hits "Could not send reset link. Try again." on the web app. The code that produced that message also calls ErrorTelemetry.logEvent('auth_forgot_password_send_failed'), so there should have…
+
+### password_recovery_session (1 bugs)
+- 2026-08-06 c9e2b7 — Founder requests a password reset FROM THE ANDROID APP, receives the email, opens the link (which loads the web app), lands on the branded SET NEW PASSWORD screen, types a new password, and gets "Auth…
 
 ### plan_review_record_gate (1 bugs)
 - 2026-08-05 a7f3c2 — scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands…
@@ -423,9 +442,6 @@ rather than a Hive box. (1 bugs)
 
 ### streak_freeze_progress_merge (1 bugs)
 - 2026-06-11 a8f3d1 — Quarterly audit (L27 concurrency lens) finding. The slow-boot flip (ADR-0014) lands a returning user on /home BEFORE the restore's Step C (_restoreFreezes) runs. On /home the streak walk…
-
-### edge_function_token_freshness (1 bugs)
-- 2026-06-09 d3a1c7 — APK +34 obs 3 — AI features (chat, food logging, weekly report) intermittently failed with no useful error, while ai-proxy itself was ACTIVE (v70) and still logging interactions. client_errors showed…
 
 ### profile_image_url_display (1 bugs)
 - 2026-06-09 b1f3a7 — APK +34 obs 4 — the Profile avatar AND banner images re-download from the network every single time the user navigates to the Profile tab. They are not served from the local cache, so each visit shows…
@@ -1014,9 +1030,11 @@ rather than a Hive box. (1 bugs)
 | 2026-08-15 | f7a2c4 | The CI job `Supabase Integration Tests` fails on every push to `main` with `AuthApiException: Invalid login credentials, statusCode: 400`. The suites sign in as `qa@icanbefitter.com`, and a live query… | qa_credentials_from_environment | test/supabase/cleanup_target_guard_test.dart |
 | 2026-08-15 | b6e1d4 | Three tests in `test/supabase/sync_service_test.dart` fail against the live project: T3 with `PGRST204` (no `exercise_name` column on `workout_logs`), T4 and T5 with `22P02` (a client string id into a… | sync_domain_push_writer_to_cloud | test/supabase/sync_service_test.dart |
 | 2026-08-14 | c9f4e2 | `docs/audit/open_issues.md` on `main` at `5d1c6f12` carried three unresolved git conflict markers — an open marker at :2821, a bare separator at :2892 and a close marker naming `supabase-test-http` at… | unresolved_conflict_markers_committed | test/scripts/no_conflict_markers_test.dart |
+| 2026-08-13 | d7b1f8 | During the 2026-08-13 23:03-23:19 IST backend outage, the app issued auth requests that piled up rather than queueing behind one another, and every one of them sat holding a connection for 10-36… | edge_function_token_freshness | test/contracts/ensure_fresh_token_inflight_join_test.dart |
 | 2026-08-13 | a3f8d1 | TWO defects in the same six lines of ActiveWorkoutNotifier.completeWorkout's weekly-streak block. (1) FOB-2, flag-gated: getCurrentWeekNumber() clamps to [1,4] and a hold week starts at plan_start+28,… | streaks | test/contracts/hold_week_streak_identity_behavioral_test.dart |
 | 2026-08-13 | b7e3d1 | Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw… | oi_board_id_uniqueness | test/contracts/oi_index_test.dart |
 | 2026-08-13 | 4f2a9e | The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across… | git_hook_env_leak | test/scripts/regression_catalog_lib_test.dart |
+| 2026-08-13 | a9c4e2 | Founder signed in as test6@gmail.com on the prod web build (app.icanbefitter.com/#/sign-in) at 2026-08-13 23:03 IST. The SIGN IN WITH EMAIL button entered its spinner state and never left it — no… | auth_signin_completion | test/contracts/signin_bounded_completion_test.dart |
 | 2026-08-13 | c3f9a7 | The merge-commit regression walk (`scripts/check_regression_catalog.dart`) fails intermittently with a DIFFERENT number of failures each run — measured 11, 7, 8, then 4 across four attempts on the… | subprocess_test_timeout_under_suite_parallelism | test/contracts/git_safety_hook_integration_test.dart |
 | 2026-08-12 | a7e3c1 | Every test in test/supabase/ fails at setUpAll with `AuthUnknownException(message: Received an empty response with status code 400)`. The message reads exactly like Supabase rejecting the anon key, so… | test_binding_http_mock_masks_real_network | test/scripts/supabase_test_helper_http_test.dart |
 | 2026-08-12 | 3b7e1c | Every file in test/supabase/ dies in setUpAll with `AuthUnknownException(message: Received an empty response with status code 400, originalError: Instance of 'Response', statusCode: 400)` the moment… | test_binding_stubs_http_for_integration_tests | test/supabase/http_override_restored_test.dart |
@@ -1035,8 +1053,12 @@ this drift IS writer/reader drift; the writer just happens to be a document
 rather than a Hive box. | test/scripts/claude_md_citations_letter_suffix_test.dart |
 | 2026-08-07 | a7e3d1 | Two defects on the same surface, both filed as OI-76. (1) COUNT. The Profile tab's Notifications row subtitle reads "N/M enabled". It counted all 10 registry keys, including `protein_alerts` and… | notification_preferences | test/contracts/notification_pro_key_scoping_test.dart |
 | 2026-08-07 | d5b8c2 | `promote-community-item` (daily cron, job `promote_community_item_daily`) opened both of its promotion paths with a call to the Postgres RPC `community_votes_summary`. That function does not exist —… | community_review_queue | test/contracts/promote_community_vote_tally_test.dart |
+| 2026-08-06 | e5c2d1 | In one 1.0.0+38 session the founder signed out of user d7a67a37 (12:31:01 UTC) and signed into 9e6bde97 via Google (12:31:37). client_errors then shows, over roughly twelve seconds, 22 × "new row… | session_owner_inflight_guard | test/contracts/session_owner_inflight_guard_behavioral_test.dart |
 | 2026-08-06 | e2d6b8 | A user opens Edit Profile, selects the equipment they do NOT have (e.g. cables), and saves. The selection persists and syncs to cloud. Their generated plan then prescribes exercises requiring exactly… | equipment_exclusion_filter | test/contracts/equipment_exclusion_filter_behavioral_test.dart |
+| 2026-08-06 | d3a7c9 | Founder taps CONTINUE WITH GOOGLE on APK 1.0.0+38, completes Google consent, and the app sits on the sign-in screen with BOTH buttons spinning forever. Force-quitting and reopening lands on Home,… | oauth_signin_completion | test/contracts/google_oauth_session_navigation_behavioral_test.dart |
+| 2026-08-06 | a4f1c8 | client_errors shows 6 × PostgrestException 22P02 "invalid input syntax for type uuid: local-welcome-1786019702890010" against sync_notifications_inbox_entry in one 1.0.0+38 session. Nobody reported it… | notifications_inbox_id_contract | test/contracts/notifications_inbox_uuid_id_behavioral_test.dart |
 | 2026-08-06 | b6e4f2 | Founder hits "Could not send reset link. Try again." on the web app. The code that produced that message also calls ErrorTelemetry.logEvent('auth_forgot_password_send_failed'), so there should have… | preauth_error_telemetry | test/contracts/error_telemetry_payload_contract_test.dart |
+| 2026-08-06 | c9e2b7 | Founder requests a password reset FROM THE ANDROID APP, receives the email, opens the link (which loads the web app), lands on the branded SET NEW PASSWORD screen, types a new password, and gets "Auth… | password_recovery_session | test/contracts/password_recovery_code_flow_behavioral_test.dart |
 | 2026-08-05 | a7f3c2 | scripts/check_plan_review_record_exists.dart — the keystone merge-to-main gate — carried a numbered, self-documented hole in its own source. OI-58b's "one-record-one-landing" rule (a branch that lands… | plan_review_record_gate | test/scripts/plan_review_record_gate_e2e_test.dart |
 | 2026-08-03 | c9f4e1 | Two independent, real (not hypothetical) gaps in the git-safety tooling that CLAUDE.md §4.3 already relies on. (1) A 2026-08-03 near-miss during the terms-accepted-fix backfill follow-up: a foreground… | git_safety_tooling | test/contracts/git_lock_concurrency_test.dart (3a — real concurrent processes, not mocked timing; 5 tests after round-2's fix round, see below), test/scripts/plan_review_record_gate_e2e_test.dart (3b — 3 new tests appended to the existing E2E suite for this gate), test/scripts/safe_merge_test.dart (3c — real bare-remote + clone E2E, including the seeded-stale-origin scenario and, after round-2, the multi-word -m passthrough), test/scripts/safe_push_test.dart (NEW in round-2's fix round — safe_push.sh had zero prior coverage; this pins only the EXTRA_ARGS fix that batch actually changed there, not the pre-existing SSH-keepalive/retry logic). |
 | 2026-08-03 | b4e9c7 | `lib/features/train/screens/graduation_screen.dart` reached 909 lines against Gate 43's 800-line ceiling and passed only because it had been added to the gate's transitional allow-list — the FIRST… | phase_advance_write_path | test/contracts/pro_phase_advance_behavioral_test.dart |
