@@ -115,7 +115,10 @@ class AuthState2 {
 
 class AuthNotifier extends Notifier<AuthState2> {
   @override
-  AuthState2 build() => const AuthState2();
+  AuthState2 build() {
+    ref.onDispose(cancelOAuthWatch);
+    return const AuthState2();
+  }
 
   SupabaseService get _supabase => SupabaseService.instance;
   HiveService get _hive => HiveService.instance;
@@ -196,6 +199,11 @@ class AuthNotifier extends Notifier<AuthState2> {
       );
 
       if (response.user == null) {
+        // Pre-auth lane (b6e4f2). Before that lane existed this event could
+        // not be stored at all — the caller is signed out by definition — so
+        // sign-in failures left no trace whatsoever.
+        unawaited(ErrorTelemetry.logEvent('auth_sign_in_failed',
+            message: 'signIn returned a null user with no AuthException'));
         state = state.copyWith(
           status: AuthStatus.error,
           errorMessage: 'Sign in failed. Please check your credentials.',
@@ -248,6 +256,9 @@ class AuthNotifier extends Notifier<AuthState2> {
       );
 
       if (response.user == null) {
+        // Pre-auth lane (b6e4f2) — see the sign-in sibling above.
+        unawaited(ErrorTelemetry.logEvent('auth_sign_up_failed',
+            message: 'signUp returned a null user with no AuthException'));
         state = state.copyWith(
           status: AuthStatus.error,
           errorMessage: 'Sign up failed. Please try again.',
@@ -318,26 +329,141 @@ class AuthNotifier extends Notifier<AuthState2> {
     }
   }
 
+  // ── OAuth completion watch (diagnose d3a7c9) ────────────────────
+  //
+  // `signInWithOAuth` returns the moment the external browser is launched —
+  // it has no session to report, because the session arrives LATER and out of
+  // band on `onAuthStateChange`. NOTHING else in the app picks that up:
+  // `refreshListenable` appears zero times in `lib/`, so the router never
+  // re-runs `_authRedirect` on an auth event, and `sign_in_screen.dart`
+  // navigates only on `AuthStatus.success`. So without this watch the notifier
+  // sits at `loading` forever — BOTH sign-in buttons spin (they share one
+  // `isLoading` derived from this status) and the user never leaves the screen
+  // even though Supabase has already issued the token and stamped
+  // `last_sign_in_at`. Force-quitting appeared to "fix" it only because a cold
+  // boot reads the persisted session.
+  //
+  // Same lesson as diagnose c8f1d3 — nothing observes auth state on your
+  // behalf, so navigate explicitly — which was applied to the password-reset
+  // EXIT path and never to the OAuth ENTRY path.
+
+  /// How long to wait for the redirect to produce a session before releasing
+  /// the UI. Google consent in an external browser can legitimately take a
+  /// while; this only has to be shorter than "the user concludes it's broken".
+  static const Duration oauthSessionWait = Duration(seconds: 90);
+
+  StreamSubscription<AuthState>? _oauthSub;
+  Timer? _oauthTimeout;
+
+  /// Tears down the OAuth watch. Safe to call when nothing is armed, and
+  /// wired to `ref.onDispose` so a disposed notifier cannot leak a listener.
+  @visibleForTesting
+  void cancelOAuthWatch() {
+    _oauthSub?.cancel();
+    _oauthSub = null;
+    _oauthTimeout?.cancel();
+    _oauthTimeout = null;
+  }
+
+  /// The auth-state stream the OAuth watch listens to.
+  ///
+  /// `@visibleForTesting` non-private for the same reason as
+  /// [ensureSupabaseReady]: a test subclass swaps in a controllable stream,
+  /// because a real Supabase client cannot exist in a pure VM test.
+  @visibleForTesting
+  Stream<AuthState> authStateChanges() =>
+      _supabase.client.auth.onAuthStateChange;
+
+  /// The access token of the CURRENT live session, or null when signed out.
+  ///
+  /// `@visibleForTesting` for the same reason as the seams above. This exists
+  /// because `onAuthStateChange` is a `ReplaySubject` (gotrue_client.dart:94,
+  /// exposed at :132) with no `maxSize` — it replays EVERY event it has ever
+  /// emitted to each new subscriber. Reading the event payload would therefore
+  /// resolve the OAuth watch against a HISTORICAL session: sign in, sign out,
+  /// tap Google again in the same process, and the replayed `signedIn` from
+  /// before the sign-out would be mistaken for the redirect returning —
+  /// navigating to /restoring with no session AND disarming the watch, so the
+  /// real session then gets no observer at all. Live client state cannot be
+  /// replayed, so this is immune by construction rather than by filtering.
+  @visibleForTesting
+  String? currentAccessToken() =>
+      _supabase.client.auth.currentSession?.accessToken;
+
+  /// Launches the Google consent flow in the platform browser.
+  ///
+  /// `@visibleForTesting` non-private so a test subclass can stub the launch
+  /// and then drive [authStateChanges] to simulate the redirect returning.
+  @visibleForTesting
+  Future<bool> launchGoogleOAuth() {
+    return _supabase.client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      // Web must redirect to the prod SPA origin, NOT the mobile custom
+      // scheme — same bug class as diagnose e9f2a4 (redirectTo not
+      // matching the platform / Supabase's allowed redirect list).
+      redirectTo: kIsWeb
+          ? 'https://app.icanbefitter.com'
+          : 'io.supabase.icanbefitter://login-callback/',
+    );
+  }
+
+  /// Arms the watch for the session the redirect will produce.
+  ///
+  /// Subscribed BEFORE the browser launches so a fast redirect cannot land in
+  /// the gap between the call and the listener. Only a NON-NULL session
+  /// resolves it — `initialSession` on a signed-out client and `signedOut`
+  /// both carry a null session and must not be mistaken for success.
+  void _watchForOAuthSession() {
+    cancelOAuthWatch();
+    // Snapshot the token we start from. The stream is a ReplaySubject (see
+    // [currentAccessToken]), so the EVENT is not evidence of anything — only a
+    // change in the LIVE session is. Requiring a DIFFERENT token also covers
+    // the degenerate case of arming while a session already exists.
+    final tokenAtArm = currentAccessToken();
+    try {
+      _oauthSub = authStateChanges().listen((_) {
+        final live = currentAccessToken();
+        if (live == null || live == tokenAtArm) return;
+        cancelOAuthWatch();
+        state = state.copyWith(status: AuthStatus.success);
+      });
+    } catch (_) {
+      // No client to listen to. `ensureSupabaseReady` already reports that
+      // class of failure through `state`; don't double-report it here.
+      return;
+    }
+    _oauthTimeout = Timer(oauthSessionWait, () {
+      cancelOAuthWatch();
+      // Back to IDLE, not error: by far the likeliest cause is the user
+      // dismissing the consent screen. Releasing the buttons is the whole
+      // fix — an error toast for a deliberate cancel would be noise.
+      if (state.status == AuthStatus.loading) {
+        state = state.copyWith(status: AuthStatus.idle);
+      }
+    });
+  }
+
   /// Sign in with Google OAuth.
   Future<void> signInWithGoogle() async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     if (!await ensureSupabaseReady()) return;
+    _watchForOAuthSession();
     try {
-      await _supabase.client.auth.signInWithOAuth(
-        OAuthProvider.google,
-        // Web must redirect to the prod SPA origin, NOT the mobile custom
-        // scheme — same bug class as diagnose e9f2a4 (redirectTo not
-        // matching the platform / Supabase's allowed redirect list).
-        redirectTo: kIsWeb
-            ? 'https://app.icanbefitter.com'
-            : 'io.supabase.icanbefitter://login-callback/',
-      );
+      await launchGoogleOAuth();
     } on AuthException catch (e) {
+      cancelOAuthWatch();
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: e.message,
       );
     } catch (e) {
+      cancelOAuthWatch();
+      // Pre-auth lane (b6e4f2). This is the one that would have told us what
+      // was happening during the 2026-08-06 Google sign-in report, had it been
+      // recordable at the time.
+      final s = e.toString();
+      unawaited(ErrorTelemetry.logEvent('auth_oauth_launch_failed',
+          message: s.length > 400 ? s.substring(0, 400) : s));
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: 'Google sign-in failed. Please try again.',

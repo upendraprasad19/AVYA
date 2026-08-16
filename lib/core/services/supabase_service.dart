@@ -270,9 +270,62 @@ class SupabaseService {
     //
     // closes-diagnose: 2026-05-15-ai-proxy-cold-start-budget-c01d57
     return retryColdStart(
-      () => client.functions.invoke(name, headers: headers, body: body),
+      () => _invokeRaw(name, headers: headers, body: body),
       functionName: name,
       retryOn500: retryOn500,
+    );
+  }
+
+  /// The ONE raw `functions.invoke` call site in the app.
+  ///
+  /// Both [callFunction] (authed, token-refreshed) and [callFunctionAnonymous]
+  /// (pre-auth lane) funnel through here, so this file contains exactly one
+  /// raw invoke call site. That count is pinned by
+  /// `test/contracts/edge_function_503_retry_test.dart` — which greps the file
+  /// WITHOUT stripping comments, so do not spell the literal out in prose here
+  /// or the doc comment itself trips the gate. Its real concern is
+  /// that nobody reintroduces a naive `try { invoke } catch { invoke }` — an
+  /// unconditional retry would mask sustained outages and auth failures.
+  Future<FunctionResponse> _invokeRaw(
+    String name, {
+    Map<String, String>? headers,
+    Map<String, dynamic>? body,
+  }) =>
+      client.functions.invoke(name, headers: headers, body: body);
+
+  /// Invokes an Edge Function with NO user session — the pre-auth telemetry
+  /// lane (diagnose b6e4f2).
+  ///
+  /// Deliberately does NOT call [ensureFreshToken]: there is no session to
+  /// refresh, and [callFunction] would THROW 'No active session. Please sign in
+  /// again.' before ever reaching the network — which is exactly the barrier
+  /// that made every signed-out failure unloggable. supabase_flutter attaches
+  /// the project's anon key as the Bearer when no session exists, which is what
+  /// `log-client-error`'s allow-listed pre-auth lane expects.
+  ///
+  /// Lives HERE, not at the callsite, on purpose. `check_authed_invoke_fresh_token
+  /// .dart` exempts exactly one file — this one — because it is the sanctioned
+  /// home for a raw `functions.invoke`. That gate's rule is about AUTHED calls
+  /// carrying a STALE token; this call carries no user token at all, so it is
+  /// outside the rule's intent rather than an exception to it. Putting it at the
+  /// callsite would mean grandfathering `error_telemetry.dart` into the
+  /// baseline, which would then silently permit a REAL authed invoke there later.
+  ///
+  /// DOES get the cold-start retry, via the same [retryColdStart] as the authed
+  /// path. An earlier version skipped it, reasoning that "telemetry must never
+  /// add latency to a failing auth screen" — that reason is wrong on its own
+  /// terms: every callsite is `unawaited(...)`, so the retry cannot delay any
+  /// UI. Skipping it only meant the pre-auth lane silently lost its event
+  /// whenever the function happened to be cold, which is precisely the
+  /// observability-silent-drop class the lane exists to end. A cold start also
+  /// costs no server budget, since the request never reaches the handler.
+  Future<FunctionResponse> callFunctionAnonymous(
+    String name, {
+    Map<String, dynamic>? body,
+  }) {
+    return retryColdStart(
+      () => _invokeRaw(name, body: body),
+      functionName: name,
     );
   }
 

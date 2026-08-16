@@ -45,10 +45,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         context.go('/sign-in');
       }
     });
+    // See [_authSub]: the legacy link path can produce the session AFTER this
+    // screen has already built and decided it has none.
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _newPwCtrl.dispose();
     _confirmPwCtrl.dispose();
     super.dispose();
@@ -136,8 +142,36 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     }
   }
 
+  /// Whether a real recovery session exists.
+  ///
+  /// The `initState` guard above checks `AppRouter.isPasswordRecovery`, which
+  /// is only a claim about the URL SHAPE — it is set from the link/OTP
+  /// detector and says nothing about whether a session was ever obtained. That
+  /// gap is diagnose c9e2b7: under PKCE the emailed code can only be exchanged
+  /// by the client that requested the reset, so opening the mail anywhere else
+  /// left this screen rendering a perfectly normal form that could only ever
+  /// fail at submit with GoTrue's "Auth session missing!".
+  ///
+  /// Checking the session itself is the difference between "this looks like a
+  /// recovery" and "we can actually change a password".
+  bool get _hasSession =>
+      Supabase.instance.client.auth.currentSession != null;
+
+  /// Rebuilds this screen when a session arrives AFTER first build.
+  ///
+  /// `_hasSession` is read during `build`, and on the legacy link path the
+  /// session is produced ASYNCHRONOUSLY by `detectSessionInUrl` during
+  /// `Supabase.initialize`. Build first, session second, and the screen would
+  /// have shown "this reset session has expired" permanently, with nothing to
+  /// trigger a rebuild — turning a recoverable wait into a dead end
+  /// (round-1 review, P2-7). Not needed for the new code path, where
+  /// `verifyOTP` completes before we navigate; needed for every email already
+  /// in flight.
+  StreamSubscription<AuthState>? _authSub;
+
   @override
   Widget build(BuildContext context) {
+    if (!_hasSession) return _buildNoSessionState(context);
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
@@ -153,6 +187,22 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _buildHeader(),
+                    // WHOSE password is being set. Founder observation
+                    // 2026-08-06: the screen named no account at all, so there
+                    // was no way to tell a wrong-account reset from a right
+                    // one. This is only knowable because a session now exists
+                    // by the time we get here — with the old link flow there
+                    // was no `currentUser` to read.
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.stackM),
+                      child: Text(
+                        Supabase.instance.client.auth.currentUser?.email ?? '',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodySm.copyWith(
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ),
                     Form(
                       key: _formKey,
                       child: Column(
@@ -217,6 +267,77 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   ],
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Shown when we reached `/reset` with no recovery session (c9e2b7).
+  ///
+  /// Replaces the old behaviour of rendering the form anyway and failing at
+  /// submit with a raw "Auth session missing!" — a message that names an
+  /// internal concept and gives the user nothing to act on. §4.4 rule 13: a
+  /// screen handles its empty/error state, and "we cannot do this here" IS a
+  /// state, not an exception.
+  Widget _buildNoSessionState(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(),
+                Text(
+                  'This reset session has expired, or the link was opened on a '
+                  'different device from the one that requested it.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body.copyWith(
+                    color: AppColors.textDim,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.stackM),
+                Text(
+                  'Start again and we will email you a 6-digit code you can '
+                  'enter right here.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySm.copyWith(
+                    color: AppColors.textMute,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.stackL),
+                GestureDetector(
+                  onTap: () => context.go('/sign-in'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'REQUEST A NEW CODE',
+                        // Matches _buildUpdateButton's label treatment exactly
+                        // so the two primary actions on this screen read as
+                        // one system.
+                        style: AppTypography.h3.copyWith(
+                          fontSize: 12,
+                          color: AppColors.bgDeep,
+                          letterSpacing: 2.5,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
