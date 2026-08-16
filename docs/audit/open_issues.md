@@ -3263,7 +3263,70 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   second same-week credit, and the pre-fix clamped behaviour was strictly worse), which is why this
   was filed rather than blocking the fix.
 
-## OI-128 — concurrent sessions have no way to see what another is working on, so the same bug gets diagnosed and fixed twice (P2)
+## OI-128 — `retire_worktree`'s regenerable list omits test-generated output, so any worktree that ran the full suite can never retire
+
+- **Status**: OPEN
+- **Verified**: 2026-08-16 — hit live while retiring `open-issues-triage-976962`. The tool returned
+  `KEEP [1 non-regenerable ignored file(s)]`; the file was
+  `test/plan_generator/v4_diagnostic_output.md`, 920136 bytes.
+- **Identified**: 2026-08-16
+- **Blocked on**: none. Small and self-contained.
+- **What's missing**: `scripts/retire_worktree_lib.dart` treats an ignored file as *regenerable* only
+  if it matches a fixed set (`.env`, `build/`, `.dart_tool/`, ...). `v4_diagnostic_output.md` is not
+  in it, so leg 3 of the four-leg predicate fails and the worktree is kept. But that file is written
+  by `flutter test test/plan_generator/v4_diagnostic_test.dart` — i.e. by the FULL SUITE, which
+  `pre-push` runs at >=`account` tier. It was also deliberately untracked in `3a07ada1` ("already in
+  .gitignore"), so it is disposable by design.
+- **Why this is worse than one missing filename**: the consequence is inverted. A worktree that did
+  nothing never generates the file and retires cleanly; a worktree that pushed at >=`account` tier
+  always generates it and can NEVER retire without manual intervention. **Retirement silently stops
+  working for exactly the worktrees that did the most work** — the same unclosed-loop shape §4.13
+  point 6 was written to close (creation had no retirement; retirement now has no path for
+  suite-touched trees). Left alone, the 106-directory / 17 GB pile-up regrows.
+- **Fix shape**: add it to the regenerable set, but prefer a RULE over a literal — an ignored file
+  under `test/**` that a test writes is regenerable by re-running that test. A bare literal rots the
+  moment a second diagnostic is added.
+- ⚠ **Do NOT "fix" this by loosening leg 3 generally.** Leg 3 exists because `git status --porcelain`
+  EXCLUDES ignored files and `git worktree remove` does NOT refuse on them — verified 2026-08-09,
+  when a merged worktree holding an ignored `secrets/.env` was removed with exit 0 and the file was
+  gone. Widening the *regenerable list* is safe; widening the *predicate* re-opens that hole.
+- **Workaround until fixed**: confirm the file is regenerable (a named test writes it; a copy exists
+  in primary), delete it, re-run. That is what was done for `open-issues-triage-976962`.
+- **Second, smaller gap found the same day**: `retire_worktree` removes the worktree but leaves the
+  BRANCH, so `new-worktree.sh <same-slug>` then fails with "branch already exists" — the slug is
+  silently burned. Recovery is `git branch -d <slug>` (use `-d`, never `-D`: the safe form refuses an
+  unmerged branch, which is the whole guarantee) and then re-create.
+- **Blast radius estimate**: `platform` — the review/blast-radius machinery under `scripts/` is
+  individually pinned in `docs/blast_radius.yaml`. Per §4.4 rule 24 a new/changed leg needs a
+  mutation-proven test; the existing protective legs already carry one.
+
+## OI-129 — orphaned `pr-ag-handoff-gaps` holds 32 MB of UNTRACKED QA work, including an unfiled critical Health-plugin bug
+
+- **Status**: OPEN
+- **Verified**: 2026-08-16 — inspected directly while auditing retirement candidates.
+- **Identified**: 2026-08-16
+- **Blocked on**: FOUNDER — needs a human call on what to keep. Nothing technical blocks it.
+- **What's missing**: `.claude/worktrees/pr-ag-handoff-gaps` is a FULL repo checkout (`lib/`, `test/`,
+  `supabase/`, `docs/`, `memory/`, `scripts/`, `telegram-bot/`, `web/` — 827 entries outside
+  `build/`, 32 MB) with **no `.git`**, so `git worktree list` cannot see it and `retire_worktree`
+  classifies it `ORPHAN ... manual review`. It holds content that exists NOWHERE in git:
+  - `QA_FINDINGS.md` (2121 B, 65 lines) — opens with **"Critical Issue: Health Plugin
+    ClassCastException"**, `MainActivity cannot be cast to b.l`, stated impact: *"Google Fit / Health
+    Connect integration will NOT work"*.
+  - `QA_TEST_EXECUTION.md` (1918 B) — QA report dated 2026-03-30 against `app-dev-release.apk`
+    (100.3 MB) on a Pixel 5 emulator, status IN PROGRESS.
+  - `memory/project_wardroom_handoff_enforcement.md`, plus 25 files under `screenshots/`.
+  Both `.md` files confirmed untracked: `git log --all -- **/<name>` and `git ls-files **/<name>`
+  are both empty.
+- **Required action, in order**: (1) triage `QA_FINDINGS.md` — the ClassCastException may still be
+  live and was never filed; if it reproduces it needs its own OI + diagnose-doc. (2) salvage anything
+  worth keeping into the repo. (3) only then delete the directory.
+- ⚠ **Do NOT delete this as routine worktree hygiene.** Of the three content-bearing orphans it is
+  the ONLY one with unique content — `wardroom-handoff-enforcement` (100 KB) and the stray
+  `.dart_tool` (1 KB) are pure build output. `retire_worktree` is right to refuse it; `--force` would
+  destroy the only copy.
+
+## OI-130 — concurrent sessions have no way to see what another is working on, so the same bug gets diagnosed and fixed twice (P2)
 
 - **Status**: OPEN
 - **Blocked on**: nothing technical, but the cheap fixes are all partial and the complete ones are
