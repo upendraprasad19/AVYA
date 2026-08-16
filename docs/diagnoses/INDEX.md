@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### edge_function_gateway_vs_function_error_contract (1 bugs)
+- 2026-08-16 c8f4a2 — `main` is RED. The CI job `Supabase Integration Tests` fails on its `Run Edge Function tests` step, on a SINGLE assertion: `test/edge_functions/redeem_referral_test.dart:46`, RR-1 "Missing auth…
+
 ### delete_boundary_independent_of_credential (1 bugs)
 - 2026-08-15 d3b8f1 — `SupabaseTestHelper.cleanup()` issues `DELETE ... eq('user_id', id)` across 12 tables of the PRODUCTION project `dedsavbjuwgarrhphgnl`, and CI runs it on every push to `main`. On `main` there is NO…
 
@@ -1006,6 +1009,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-16 | c8f4a2 | `main` is RED. The CI job `Supabase Integration Tests` fails on its `Run Edge Function tests` step, on a SINGLE assertion: `test/edge_functions/redeem_referral_test.dart:46`, RR-1 "Missing auth… | edge_function_gateway_vs_function_error_contract | test/edge_functions/redeem_referral_test.dart |
 | 2026-08-15 | d3b8f1 | `SupabaseTestHelper.cleanup()` issues `DELETE ... eq('user_id', id)` across 12 tables of the PRODUCTION project `dedsavbjuwgarrhphgnl`, and CI runs it on every push to `main`. On `main` there is NO… | delete_boundary_independent_of_credential | test/supabase/cleanup_target_guard_test.dart |
 | 2026-08-15 | f7a2c4 | The CI job `Supabase Integration Tests` fails on every push to `main` with `AuthApiException: Invalid login credentials, statusCode: 400`. The suites sign in as `qa@icanbefitter.com`, and a live query… | qa_credentials_from_environment | test/supabase/cleanup_target_guard_test.dart |
 | 2026-08-15 | b6e1d4 | Three tests in `test/supabase/sync_service_test.dart` fail against the live project: T3 with `PGRST204` (no `exercise_name` column on `workout_logs`), T4 and T5 with `22P02` (a client string id into a… | sync_domain_push_writer_to_cloud | test/supabase/sync_service_test.dart |

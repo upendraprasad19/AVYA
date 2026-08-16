@@ -93,7 +93,12 @@ class ReferralRepository {
       );
       final body = response.data as Map?;
       if (response.status == 200) {
-        // Server returns either { ok:true, ... } or { error: ... }.
+        // Server returns either { success:true, ... } or { error: ... }.
+        // (Said `ok:true` until 2026-08-16; the EF has always emitted
+        // `success` — redeem-referral/index.ts:127 and :148. Harmless here
+        // because this branch keys off `error` and never reads either flag,
+        // but a comment naming a field that does not exist is how the next
+        // reader writes `body['ok']`.)
         final errorMsg = body?['error'] as String?;
         if (errorMsg != null) {
           return RedemptionResult.failure(errorMsg);
