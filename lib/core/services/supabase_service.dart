@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -194,40 +195,120 @@ class SupabaseService {
   /// neither. This is that same guard, applied to the same shape of problem.
   static Future<String?>? _inFlightRefresh;
 
+  /// The session id [_inFlightRefresh] was armed FOR.
+  ///
+  /// B-pass finding 1 (2026-08-17), and it is the sharpest kind: the first
+  /// version of this join had no identity affinity at all, so a caller acting
+  /// for a DIFFERENT session joined the in-flight future and received the
+  /// other identity's token without ever running its own refresher. The
+  /// reviewer proved it by execution, not argument —
+  /// `refresherARan=true refresherBRan=false resultB=token-for-USER-A`.
+  ///
+  /// That is precisely the bug class this same commit fixes for e5c2d1 ("an
+  /// identity captured before an await is a SNAPSHOT, and every await is a
+  /// chance for the session to change underneath it"), reproduced raw and
+  /// unmirrored in the new auth-layer code shipped alongside it. The lesson is
+  /// `feedback_mistake_guard_without_its_mirror`: a guard written for the
+  /// failure you just hit does not generalise itself.
+  static String? _inFlightRefreshOwner;
+
   /// Test hook — the join state is process-global (mirroring
   /// `AuthNotifier._inFlightSignOut`), so a test that leaves a future parked
   /// here would leak into the next one.
   @visibleForTesting
-  static void resetRefreshJoinForTest() => _inFlightRefresh = null;
+  static void resetRefreshJoinForTest() {
+    _inFlightRefresh = null;
+    _inFlightRefreshOwner = null;
+  }
 
   /// The join, extracted behind an injectable so it is behaviorally testable
   /// without a live Supabase session — same seam as [retryColdStart].
   ///
-  /// Returns the SAME future to every caller that arrives while one is in
-  /// flight, so N concurrent callers produce exactly ONE [refresher] call.
+  /// Returns the SAME future to callers that arrive while one is in flight
+  /// **for the same [ownerId]**, so N concurrent callers of one identity
+  /// produce exactly ONE [refresher] call — and a caller of a DIFFERENT
+  /// identity never joins, because a shared token is a shared identity.
+  ///
+  /// [liveOwnerId] is injectable purely so the cross-account case is testable;
+  /// production passes the real reader.
   @visibleForTesting
   static Future<String?> coalescedRefresh(
-      Future<String?> Function() refresher) {
+    Future<String?> Function() refresher, {
+    required String? ownerId,
+    String? Function()? liveOwnerId,
+  }) {
     if (disableRefreshJoin) return refresher();
+    final live = liveOwnerId ?? () => instance.currentUser?.id;
+
+    // Sink-side re-check on RESOLVE, not just on arm: the refresh takes real
+    // network time, and the session can swap while it is in flight. Handing a
+    // token back to a caller whose identity has since changed is the same
+    // defect one layer up. Null means "no fresh token" — every caller already
+    // handles that.
+    Future<String?> guarded(Future<String?> f) =>
+        f.then((token) => live() == ownerId ? token : null);
+
     final existing = _inFlightRefresh;
-    if (existing != null) return existing; // join, never race
+    if (existing != null && _inFlightRefreshOwner == ownerId) {
+      return guarded(existing); // join, never race — SAME identity only
+    }
+
     final run = refresher();
     _inFlightRefresh = run;
+    _inFlightRefreshOwner = ownerId;
     // Cleared on BOTH paths. `_refreshToken` never rethrows today, but
     // whenComplete still fires if that ever changes, so a throw can never
     // strand the field and wedge every later refresh.
-    return run.whenComplete(() => _inFlightRefresh = null);
+    return guarded(run.whenComplete(() {
+      _inFlightRefresh = null;
+      _inFlightRefreshOwner = null;
+    }));
   }
+
+  /// Test override for [disableRefreshJoin]. `null` = read the real flag.
+  @visibleForTesting
+  static bool? disableRefreshJoinForTest;
 
   /// Kill-switch for the [_inFlightRefresh] join (root CLAUDE.md §4.6 — auth is
   /// on the risky-change list). Set `configBox['disable_token_refresh_join']`
   /// to restore the pre-fix racing behaviour verbatim.
   ///
-  /// Deliberately NOT read from Hive here: `supabase_service.dart` has no Hive
-  /// import and adding one to the auth hot path to service a kill-switch would
-  /// widen this file's dependency surface for no user-facing gain. It is a
-  /// settable static instead, flipped by the same boot code that reads the flag.
-  static bool disableRefreshJoin = false;
+  /// ⚠ B-pass finding 2 (2026-08-17): this was a `static bool` field whose doc
+  /// claimed it was "flipped by the same boot code that reads the flag". No
+  /// such boot code existed anywhere in the repo, and nothing but the tests
+  /// ever assigned it — a kill-switch that is unreachable in production
+  /// satisfies platform tier's `requires: feature_flag` in appearance only.
+  /// The two switches shipped in one commit were asymmetric: `signInTimeout`'s
+  /// read Hive and worked; this one was decorative. It now reads Hive lazily,
+  /// exactly the way its sibling does.
+  ///
+  /// Fails CLOSED to the fix being ON: an unopened configBox leaves the join
+  /// active, because a racing refresh is the defect being repaired.
+  static bool get disableRefreshJoin {
+    final override = disableRefreshJoinForTest;
+    if (override != null) return override;
+    try {
+      return Hive.box(_configBoxName).get('disable_token_refresh_join') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Local copy of the config box name. `hive_service.dart` imports this file,
+  /// so importing it back would be a cycle.
+  static const String _configBoxName = 'configBox';
+
+  /// Ceiling on a single token refresh.
+  ///
+  /// B-pass finding 5 (2026-08-17): the join made an unbounded refresh STRICTLY
+  /// WORSE than before it existed. Pre-fix, a stalled refresh stranded only the
+  /// N callers concurrent with it, and each held an independent connection that
+  /// could resolve on its own. Post-fix, `_inFlightRefresh` is cleared only via
+  /// `whenComplete`, so a refresh that never resolves is joined by every caller
+  /// for the remaining life of the process and no independent attempt is ever
+  /// made again. Bounding it restores retry: the timeout throws, `whenComplete`
+  /// clears the field, and the next caller starts a genuinely new refresh.
+  static const Duration refreshTimeout = Duration(seconds: 20);
 
   /// Returns a fresh access token, refreshing proactively if the current
   /// JWT expires within [buffer]. Returns null if no session exists or
@@ -248,7 +329,10 @@ class SupabaseService {
         // The guard is HERE, not at method entry, so the common fast path (a
         // still-fresh token) stays lock-free and is never serialised behind a
         // refresh — only the expensive network branch coalesces.
-        return coalescedRefresh(() => _refreshToken(session, expiryTime));
+        return coalescedRefresh(
+          () => _refreshToken(session, expiryTime),
+          ownerId: session.user.id,
+        );
       }
     }
 
@@ -259,7 +343,11 @@ class SupabaseService {
   /// The refresh itself. Single call site — see [ensureFreshToken].
   Future<String?> _refreshToken(Session session, DateTime expiryTime) async {
     try {
-      final refreshed = await client.auth.refreshSession();
+      // Bounded — see [refreshTimeout]. A TimeoutException lands in the catch
+      // below like any other failure, and `whenComplete` in [coalescedRefresh]
+      // then clears the in-flight field so a later caller can retry.
+      final refreshed =
+          await client.auth.refreshSession().timeout(refreshTimeout);
       return refreshed.session?.accessToken;
     } catch (e, st) {
       // audit-2026-05-11 H-42 — telemetry pair.

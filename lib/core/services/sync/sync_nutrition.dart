@@ -293,6 +293,26 @@ extension SyncServiceNutrition on SyncService {
           'total_fiber': log['total_fiber'] ?? 0,
           if (log['created_at'] != null) 'created_at': log['created_at'],
         };
+        // closes-diagnose e5c2d1, CLASS 1 — the guard sits AT THE SINK, one
+        // statement before the write, NOT at function entry. Per
+        // feedback_pause_flag_guard_the_sink: an in-flight call that is
+        // already past an entry check still reaches the sink, and every await
+        // between entry and here is a window the account swap can land in.
+        //
+        // On 2026-08-06 this produced 22 x 42501 "new row violates row-level
+        // security policy for table nutrition_logs" in ~9 seconds: `userId`
+        // was captured at entry and the session had since advanced to another
+        // user, so PostgREST carried the NEW token while the payload carried
+        // the OLD id.
+        //
+        // ⚠ RLS rejecting those writes was the LAST line of defence, not the
+        // intended one. The SAME race with the opposite interleaving — a
+        // captured id equal to the NEW user while the ROWS came from the
+        // previous user's Hive box — satisfies auth.uid() = user_id and would
+        // be WRITTEN, and Postgres cannot tell that from a legitimate write.
+        // This client-side check is what makes the direction not matter.
+        if (ownerChangedSince(userId)) return;
+
         // onConflict on the natural key (Audit 2026-05-12 P0-B): the live
         // schema has UNIQUE (user_id, date, meal_type), so PostgREST merges
         // instead of 23505-ing when a dedup key rotates. With `id` omitted the
@@ -356,6 +376,21 @@ extension SyncServiceNutrition on SyncService {
               // Hive nlog_* row produces N nutrition_log_items rows on
               // sync — verified in test/nutrition_write_service/
               // logMeal_creates_logs_and_items_atomically_test.dart.
+              // e5c2d1 CLASS 1 — sink guard. The parent upsert cleared its own
+              // check, but every await since is a fresh swap window, and these
+              // children carry the same user's payload.
+              //
+              // Closure R2-N9 asked whether returning here abandons a
+              // half-written parent and skips the tail vacuum below. It does —
+              // and that is the correct trade, because it SELF-HEALS. Verified,
+              // not assumed: `_syncNutritionLogs` has no fingerprint/skip-
+              // unchanged optimisation (unlike `_syncScheduledWorkouts`), so it
+              // re-walks EVERY nutrition Hive row on every pass. The next pass
+              // under the right owner re-upserts the parent on its natural key,
+              // re-writes the items and re-runs the vacuum, fully repairing the
+              // row. The alternative — finishing the unit under a session that
+              // now belongs to someone else — is not repairable.
+              if (ownerChangedSince(userId)) return;
               await _supabase.client.from('nutrition_log_items').upsert({
                 // `id` OMITTED (gen_random_uuid default) — Diagnose f7e3a1
                 // (2026-06-03): the old `id: _deterministicId('${key}_item_$i')`
@@ -400,6 +435,10 @@ extension SyncServiceNutrition on SyncService {
         // item list (Hermes P1). Mirrors the template_exercises tail-vacuum.
         if (items is List) {
           try {
+            // e5c2d1 CLASS 1 — sink guard. A DELETE under the wrong session is
+            // the most destructive shape this race can take, so it is guarded
+            // like the writes rather than treated as cleanup.
+            if (ownerChangedSince(userId)) return;
             await _supabase.client
                 .from('nutrition_log_items')
                 .delete()
@@ -456,6 +495,11 @@ extension SyncServiceNutrition on SyncService {
       final date = key.substring('water_ml_'.length);
       if (date.isEmpty) continue;
       try {
+        // e5c2d1 CLASS 1 — sink guard. _syncWaterLogs is a SIBLING of
+        // _syncNutritionLogs under Future.wait, so a `return` there does not
+        // stop this loop. Round-1 review caught exactly that: one guard in one
+        // sibling left the other two running on under the swapped session.
+        if (ownerChangedSince(userId)) return;
         await _supabase.client.from('water_logs').upsert({
           'user_id': userId,
           'date': date,
@@ -514,6 +558,9 @@ extension SyncServiceNutrition on SyncService {
           ));
           continue;
         }
+        // e5c2d1 CLASS 1 — sink guard. Third sibling under the same
+        // Future.wait; guarded independently for the same reason as water.
+        if (ownerChangedSince(userId)) return;
         await _supabase.client.from('user_saved_meals').upsert({
           // `id` deliberately OMITTED — never rewrite the PK on conflict.
           'user_id': userId,

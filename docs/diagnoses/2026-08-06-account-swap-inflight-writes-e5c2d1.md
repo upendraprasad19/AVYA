@@ -23,8 +23,15 @@ writers: >
   CLASS 1 — `_syncNutritionLogs(String userId)` (sync_nutrition.dart:201)
   RECEIVES the id as a PARAMETER and stamps it into every row's 'user_id'
   (:279), upserted a few lines later. The capture happens in its CALLERS:
-  sync_nutrition.dart:159 (syncNutritionDataNow), :856
-  (_replayPendingNutritionSync) and sync_service.dart:1063 (restore dispatch).
+  sync_nutrition.dart:159 (syncNutritionDataNow), :885
+  (pushNutritionLogsForSyncDomain) and sync_service.dart:1047 (weeklyFullSync).
+  ⚠ CORRECTED AGAIN 2026-08-17 (closure R2-N8): this line previously cited
+  `:856 (_replayPendingNutritionSync)` and `sync_service.dart:1063 (restore
+  dispatch)`. `_replayPendingNutritionSync` DOES NOT EXIST — it was invented
+  while correcting the R1-A1 fabrication, i.e. a fabricated citation
+  introduced by the act of fixing a fabricated citation. All three callers
+  above were re-derived by `grep -n "_syncNutritionLogs("` and their enclosing
+  methods read directly.
   ⚠ CORRECTED after round-1 review: this first read "sync_nutrition.dart:185
   captures … ONCE at method entry". `:185` is inside `syncSavedMealsNow()`, a
   DIFFERENT writer. The mechanism (an identity resolved once, then carried
@@ -159,7 +166,7 @@ it was working for.
 
 | Class | Captured | Went stale against | Caught by |
 |---|---|---|---|
-| 1 — nutrition | `userId` at `sync_nutrition.dart:185` | the live bearer token | Postgres RLS (42501) |
+| 1 — nutrition | `userId` param of `_syncNutritionLogs` (`sync_nutrition.dart:201`), captured by its callers | the live bearer token | Postgres RLS (42501) |
 | 2 — restore | the whole in-flight restore | the open Hive boxes | Hive (`Box has already been closed`) |
 
 ## The fix I got wrong first

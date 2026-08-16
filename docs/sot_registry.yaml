@@ -8643,7 +8643,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 821-845
+        line_range: 878-902
         method: compileDailySnapshot
         semantic: pass-through
         notes: folds emissionMap() into snapshot_json.notification_preferences at :842.
@@ -8730,7 +8730,7 @@ concepts:
       columns: [snapshot_json]
     # Gate 11 (check_sync_fanout.dart) scopes these two fields to methods
     # declared in sync_service.dart — the fan-out surface — NOT the repository's
-    # own write/read. `compileDailySnapshot` is the assembly point (:821) but
+    # own write/read. `compileDailySnapshot` is the assembly point (:878) but
     # returns Map, so it is not a fan-out method either.
     sync_methods: [pushSnapshotNow]
     # EMPTY, and that is a finding rather than an omission: sync_service.dart
@@ -8860,11 +8860,11 @@ concepts:
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2021-2024
+        line_range: 2078-2081
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2033-2035
+        line_range: 2090-2092
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:
@@ -9158,21 +9158,38 @@ concepts:
     domain: cross_domain
     behavioral_test_path: test/contracts/notifications_inbox_uuid_id_behavioral_test.dart
     description: |
-      diagnose a4f1c8 — the notification inbox derived its row id from the
-      OneSignal notification id, which is not guaranteed to be a UUID. A
-      non-UUID id fails the cloud column type and the row silently never
-      lands. The id is now taken from OneSignal only when non-empty, with a
-      generated fallback otherwise.
+      diagnose a4f1c8 — `notifications_inbox.id` is a uuid column, so any
+      writer that can mint a non-uuid id produces a guaranteed 22P02: the row
+      never reaches cloud, forever, silently.
+
+      TWO writers can reach that column and BOTH must mint uuids. The
+      locally-seeded welcome notification was the one a4f1c8 originally fixed
+      (`newLocalNotificationId()`); the OneSignal ingest path's empty-id
+      fallback was NOT, and shipped `'os-<microseconds>'` until the B-pass on
+      2026-08-17 caught the mirror case. Both now route through the same mint.
+
+      ⚠ This entry first cited `:136` for both writer and reader — the
+      pre-existing ingest line, which the a4f1c8 commit never touched. The
+      registry pointed at code that was not the fix while the diagnose doc
+      cited the right lines. Corrected here with both real writers.
     writers:
       - file: lib/features/profile/services/notification_inbox_service.dart
-        line_range: 136
-        method: id assignment
-        semantic: onesignal-id-when-non-empty-else-generated
-    readers:
+        line_range: 187
+        method: newLocalNotificationId
+        semantic: the-canonical-uuid-mint
       - file: lib/features/profile/services/notification_inbox_service.dart
-        line_range: 136
-        method: inbox read path
-        semantic: reads-the-stored-id
+        line_range: 197
+        method: _seedWelcomeIfFirstLaunch
+        semantic: locally-seeded-row-uses-the-mint
+      - file: lib/features/profile/services/notification_inbox_service.dart
+        line_range: 116-150
+        method: _ingestFromOsNotification
+        semantic: onesignal-id-when-non-empty-else-the-same-mint
+    readers:
+      - file: lib/core/services/sync/sync_restore_completeness.dart
+        line_range: 1-9999
+        method: isUuidShaped
+        semantic: skips-any-non-uuid-id-so-a-bad-writer-cannot-retry-forever
     hive:
       box: notificationsBox
       key: "per-notification id"

@@ -133,9 +133,19 @@ class NotificationInboxService {
         : AppNotificationPriority.normal;
 
     final notification = AppNotification(
+      // B-pass finding 4 (2026-08-17) — a4f1c8's MIRROR case. The fallback
+      // here used to be `'os-${DateTime.now().microsecondsSinceEpoch}'`, which
+      // is NOT uuid-shaped and carries the identical defect a4f1c8 fixed for
+      // the welcome notification: `notifications_inbox.id` is a uuid column,
+      // so a non-uuid id can only ever produce 22P02. It was reachable
+      // whenever a real OneSignal push arrived with an empty notificationId.
+      //
+      // The diagnose doc's own recurrence rule said it plainly — "if the
+      // column is uuid, every writer that can reach it must mint uuids" — and
+      // this writer was left out of the fix that stated it.
       id: osn.notificationId.isNotEmpty
           ? osn.notificationId
-          : 'os-${DateTime.now().microsecondsSinceEpoch}',
+          : newLocalNotificationId(),
       category: category,
       title: osn.title ?? '(no title)',
       body: osn.body ?? '',
