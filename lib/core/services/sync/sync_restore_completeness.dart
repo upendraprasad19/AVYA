@@ -1,5 +1,17 @@
 part of '../sync_service.dart';
 
+/// Canonical 8-4-4-4-12 hex UUID shape.
+///
+/// Shape-only on purpose (diagnose a4f1c8): we are not validating a uuid, we
+/// are rejecting the ids that provably CANNOT cast to Postgres `uuid` and so
+/// can only ever return 22P02. Anything that would cast is left alone.
+final _uuidShapeRe = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+  r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
+bool isUuidShaped(String s) => _uuidShapeRe.hasMatch(s);
+
 /// APK Test #11 — Theme A push + restore for the 4 Hive-only surfaces
 /// that previously vanished on reinstall: streak freezes, notifications
 /// inbox, saved diet plan, rank promotions. See docs/architecture/sync.md
@@ -257,6 +269,13 @@ extension SyncServiceRestoreCompleteness on SyncService {
       if (userId == null) return;
       final id = entry['id'] as String?;
       if (id == null || id.isEmpty) return;
+      // `notifications_inbox.id` is a uuid column, so a non-uuid id can only
+      // ever produce 22P02 — a guaranteed 400 on every attempt, forever
+      // (diagnose a4f1c8: legacy 'local-welcome-<micros>' ids did exactly
+      // that). Skipping is correct rather than lossy: these are locally-seeded
+      // rows with no cloud counterpart to reconcile against, and the writer
+      // now mints real uuids so only pre-fix installs take this branch.
+      if (!isUuidShaped(id)) return;
       final row = <String, dynamic>{
         'id': id,
         'user_id': userId,

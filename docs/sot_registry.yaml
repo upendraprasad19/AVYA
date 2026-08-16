@@ -8643,7 +8643,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 821-845
+        line_range: 878-902
         method: compileDailySnapshot
         semantic: pass-through
         notes: folds emissionMap() into snapshot_json.notification_preferences at :842.
@@ -8730,7 +8730,7 @@ concepts:
       columns: [snapshot_json]
     # Gate 11 (check_sync_fanout.dart) scopes these two fields to methods
     # declared in sync_service.dart — the fan-out surface — NOT the repository's
-    # own write/read. `compileDailySnapshot` is the assembly point (:821) but
+    # own write/read. `compileDailySnapshot` is the assembly point (:878) but
     # returns Map, so it is not a fan-out method either.
     sync_methods: [pushSnapshotNow]
     # EMPTY, and that is a finding rather than an omission: sync_service.dart
@@ -8839,26 +8839,32 @@ concepts:
       .timeout() frees the AWAITER and does NOT cancel the request.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 427
+        line_range: 639
         method: signOutInProgress
         semantic: teardown-window-flag
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 462-485
+        line_range: 685-723
         method: signOut
         semantic: set-in-try-clear-in-finally
         notes: >-
           finally, not a trailing assignment — a stranded ON flag would pin the
-          whole app at /sign-in until process restart.
+          whole app at /sign-in until process restart. The range spans signOut
+          (the join) through _performSignOut, which is where the try/finally
+          actually lives. Ranges re-derived 2026-08-17 by READING the methods
+          after the a9c4e2 ceiling added ~100 lines earlier in the file — a
+          blanket offset would have been wrong, since signInWithEmail was split
+          into signInWithEmail + _performEmailSignIn and the two halves shifted
+          by different amounts.
       - file: lib/core/services/sync_service.dart
         line_range: 1996
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2021-2024
+        line_range: 2078-2081
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2033-2035
+        line_range: 2090-2092
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:
@@ -8961,3 +8967,279 @@ concepts:
       - "re-implementing the PRO predicate locally instead of importing _shared/subscription.ts"
       - "advancing the pagination offset by the FILTERED count — .range() walked the raw page, so this skips users"
     contract_test_path: test/contracts/weekly_recap_pro_filter_test.dart
+
+  # ─── Auth-completion class (2026-08-17) — three unbounded-await defects that
+  # ─── all resolve to "nothing observes this on your behalf; bound it, join it
+  # ─── or watch it explicitly". d3a7c9 / a9c4e2 / d7b1f8 shipped as ONE batch:
+  # ─── fixing one and leaving its siblings is the guard-without-its-mirror
+  # ─── class (feedback_mistake_guard_without_its_mirror.md).
+
+  - concept: auth_signin_completion
+    domain: auth_profile
+    behavioral_test_path: test/contracts/sign_in_timeout_behavioral_test.dart
+    description: |
+      The email sign-in path must always reach a state the UI can render.
+
+      diagnose a9c4e2 (2026-08-13, prod web): POST /token returned 200 in
+      309ms — credentials were never in question — then /user took 9.4s,
+      27.3s, 35.9s against a CPU-starved backend. Nothing on the path carried
+      a deadline, so state stayed AuthStatus.loading forever. The spinner was
+      the loading state rendered faithfully, with no error, no SnackBar, no
+      navigation and no escape affordance.
+
+      The bound is AuthNotifier.signInTimeout (40s) applied via boundSignIn at
+      signInWithEmail's single call site. On TimeoutException the notifier
+      moves to AuthStatus.error and deliberately does NOT sign out: the
+      session usually EXISTS by then (it is the post-auth hydration that
+      wedges), and destroying a valid session during a brown-out makes the
+      user's position worse. Kill-switch configBox.disable_sign_in_timeout.
+    writers:
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 215
+        method: signInTimeout
+        semantic: the-ceiling-constant
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 250
+        method: boundSignIn
+        semantic: applies-the-ceiling-injectable-test-seam
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 257
+        method: signInWithEmail
+        semantic: sets-loading-then-error-on-timeout
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 293
+        method: _performEmailSignIn
+        semantic: the-bounded-sequence-itself
+    readers:
+      - file: lib/features/auth/screens/sign_in_screen.dart
+        line_range: 150
+        method: ref.listen
+        semantic: navigates-on-success-snackbars-on-error
+      - file: lib/features/auth/screens/sign_in_screen.dart
+        line_range: 202
+        method: build
+        semantic: isLoading-renders-the-spinner
+    hive:
+      box: configBox
+      key: disable_sign_in_timeout
+      shape: "bool — kill-switch; true restores the pre-fix unbounded await"
+    cloud:
+      table: null
+      columns: []
+    telemetry:
+      - auth_sign_in_timeout (the ceiling fired)
+    forbidden_legacy_patterns:
+      - "an await on the sign-in path with no enclosing ceiling"
+      - "forcing signOut() on the timeout path — destroys a valid session mid-brown-out"
+    class_constraints: |
+      Sibling of edge_function_token_freshness and oauth_signin_completion.
+      All three are the same class: an await that can never return, with no
+      observer. Bound it (a9c4e2), join it (d7b1f8), or watch it (d3a7c9) —
+      but never leave the UI's only signal to a future that may not resolve.
+
+  - concept: edge_function_token_freshness
+    domain: cross_domain
+    behavioral_test_path: test/contracts/token_refresh_join_behavioral_test.dart
+    description: |
+      Concurrent callers needing a fresh access token must JOIN one refresh,
+      never race N of them.
+
+      diagnose d7b1f8 (2026-08-13): ensureFreshToken held no in-flight future,
+      so every caller inside the 5-minute expiry buffer independently called
+      refreshSession(). During the backend brown-out this amplified an outage
+      the client was already a victim of — edge_logs shows ~15
+      GET /auth/v1/user requests completing inside one 400ms window
+      (17:49:45.375 to 17:49:45.502), the signature of 15 independent
+      in-flight requests released together, not of 15 things being needed.
+
+      The join lives in coalescedRefresh and is applied INSIDE the expiry
+      branch, so the common fast path (still-fresh token) stays lock-free and
+      is never serialised behind a refresh. The in-flight field is cleared via
+      whenComplete, so a throw cannot strand it and wedge later refreshes.
+      Kill-switch SupabaseService.disableRefreshJoin.
+
+      Precedent it mirrors: AuthNotifier._inFlightSignOut and SyncCoalescer.
+    writers:
+      - file: lib/core/services/supabase_service.dart
+        line_range: 195
+        method: _inFlightRefresh
+        semantic: the-shared-in-flight-future
+      - file: lib/core/services/supabase_service.dart
+        line_range: 209
+        method: coalescedRefresh
+        semantic: join-never-race-injectable-test-seam
+      - file: lib/core/services/supabase_service.dart
+        line_range: 235
+        method: ensureFreshToken
+        semantic: expiry-branch-delegates-to-the-join
+      - file: lib/core/services/supabase_service.dart
+        line_range: 260
+        method: _refreshToken
+        semantic: the-refresh-itself-single-call-site
+    readers:
+      - file: lib/core/services/supabase_service.dart
+        line_range: 230
+        method: disableRefreshJoin
+        semantic: kill-switch-read
+    hive:
+      box: null
+      key: null
+      shape: "Not applicable — the kill-switch is a settable static, deliberately not a Hive read (supabase_service.dart has no Hive import and the auth hot path should not gain one)."
+    cloud:
+      table: null
+      columns: []
+    telemetry:
+      - supabase_service_ensure_fresh_token_refresh (refresh failed)
+    forbidden_legacy_patterns:
+      - "calling client.auth.refreshSession() directly outside _refreshToken"
+      - "assigning the in-flight field AFTER the await — reopens the race window"
+      - "clearing the in-flight field only on the success path"
+      - "caching the token instead of coalescing — a stale token served forever is worse than the race"
+    class_constraints: |
+      COALESCE, never CACHE. A caller arriving after completion must start a
+      real new refresh. Sibling of auth_signin_completion and
+      oauth_signin_completion.
+
+  - concept: oauth_signin_completion
+    domain: auth_profile
+    behavioral_test_path: test/contracts/google_oauth_session_navigation_behavioral_test.dart
+    description: |
+      Google OAuth must explicitly observe its own completion.
+
+      diagnose d3a7c9: signInWithOAuth returns the moment the external browser
+      launches — it has no session to report, because the session arrives
+      LATER and out of band on onAuthStateChange. Nothing else in the app
+      picked that up: refreshListenable appears zero times in lib/, so the
+      router never re-runs _authRedirect on an auth event, and
+      sign_in_screen.dart navigates only on AuthStatus.success. The notifier
+      therefore sat at loading forever — both sign-in buttons spinning — even
+      though Supabase had already issued the token and stamped
+      last_sign_in_at. Force-quitting appeared to fix it only because a cold
+      boot reads the persisted session.
+
+      Same lesson as c8f1d3 (nothing observes auth state on your behalf, so
+      navigate explicitly), which had been applied to the password-reset EXIT
+      path and never to the OAuth ENTRY path.
+    writers:
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 418
+        method: OAuth completion watch
+        semantic: subscribes-to-onAuthStateChange-after-launch
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 447
+        method: cancelOAuthWatch
+        semantic: teardown-also-wired-to-ref-onDispose
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 533
+        method: signInWithGoogle
+        semantic: launches-the-redirect-then-arms-the-watch
+    readers:
+      - file: lib/features/auth/screens/sign_in_screen.dart
+        line_range: 167
+        method: ref.listen
+        semantic: navigates-on-success
+    hive:
+      box: null
+      key: null
+      shape: "Not applicable — transient auth state, no Hive projection."
+    cloud:
+      table: null
+      columns: []
+    forbidden_legacy_patterns:
+      - "assuming signInWithOAuth returns a session"
+      - "relying on GoRouter refreshListenable — this app has none"
+      - "wiring OAuth-only work into hydrateFromCloud, which signInWithGoogle never reaches"
+    class_constraints: |
+      signInWithGoogle never calls _ensureLocalUser, so anything wired only
+      into hydrateFromCloud silently never runs for Google users. The watch
+      must be cancelled on dispose or it outlives the notifier.
+
+  - concept: notifications_inbox_id_contract
+    domain: cross_domain
+    behavioral_test_path: test/contracts/notifications_inbox_uuid_id_behavioral_test.dart
+    description: |
+      diagnose a4f1c8 — `notifications_inbox.id` is a uuid column, so any
+      writer that can mint a non-uuid id produces a guaranteed 22P02: the row
+      never reaches cloud, forever, silently.
+
+      TWO writers can reach that column and BOTH must mint uuids. The
+      locally-seeded welcome notification was the one a4f1c8 originally fixed
+      (`newLocalNotificationId()`); the OneSignal ingest path's empty-id
+      fallback was NOT, and shipped `'os-<microseconds>'` until the B-pass on
+      2026-08-17 caught the mirror case. Both now route through the same mint.
+
+      ⚠ This entry first cited `:136` for both writer and reader — the
+      pre-existing ingest line, which the a4f1c8 commit never touched. The
+      registry pointed at code that was not the fix while the diagnose doc
+      cited the right lines. Corrected here with both real writers.
+    writers:
+      - file: lib/features/profile/services/notification_inbox_service.dart
+        line_range: 187
+        method: newLocalNotificationId
+        semantic: the-canonical-uuid-mint
+      - file: lib/features/profile/services/notification_inbox_service.dart
+        line_range: 197
+        method: _seedWelcomeIfFirstLaunch
+        semantic: locally-seeded-row-uses-the-mint
+      - file: lib/features/profile/services/notification_inbox_service.dart
+        line_range: 116-150
+        method: _ingestFromOsNotification
+        semantic: onesignal-id-when-non-empty-else-the-same-mint
+    readers:
+      - file: lib/core/services/sync/sync_restore_completeness.dart
+        line_range: 1-9999
+        method: isUuidShaped
+        semantic: skips-any-non-uuid-id-so-a-bad-writer-cannot-retry-forever
+    hive:
+      box: notificationsBox
+      key: "per-notification id"
+      shape: "Map — id must be a valid UUID for the cloud projection"
+    cloud:
+      table: notifications
+      columns: [id, user_id]
+    forbidden_legacy_patterns:
+      - "using the OneSignal notification id unconditionally as the row id"
+    class_constraints: |
+      An id that fails the cloud type check makes the write silently inert —
+      the local row exists and the cloud row never appears.
+
+  - concept: password_recovery_session
+    domain: auth_profile
+    behavioral_test_path: test/contracts/password_recovery_code_flow_behavioral_test.dart
+    description: |
+      diagnose c9e2b7 — the password-reset link was device-bound under PKCE:
+      the code verifier lives in the originating device's storage, so opening
+      the emailed link on a different device could never complete the
+      exchange. The recovery flow therefore also supports a code-entry path
+      that does not depend on the originating device's verifier.
+
+      Sibling of e9f2a4 (dashboard Site URL overrides client redirectTo) and
+      b7d4e2 (detector must recognise BOTH implicit-fragment and PKCE query
+      shapes). All three are the same surface and are easy to fix singly.
+    writers:
+      - file: lib/features/auth/widgets/forgot_password_sheet.dart
+        line_range: 1-9999
+        method: two-step code flow
+        semantic: sends-then-accepts-a-code
+      - file: lib/features/auth/screens/reset_password_screen.dart
+        line_range: 1-9999
+        method: _updatePassword
+        semantic: completes-the-recovery-and-navigates-explicitly
+    readers:
+      - file: lib/core/utils/password_recovery_detector.dart
+        line_range: 1-9999
+        method: PasswordRecoveryDetector.detect
+        semantic: routes-recovery-links-to-reset
+    hive:
+      box: null
+      key: null
+      shape: "Not applicable — transient auth exchange."
+    cloud:
+      table: null
+      columns: []
+    forbidden_legacy_patterns:
+      - "assuming the PKCE verifier is available on the device opening the link"
+      - "leaving /reset without an explicit navigation — the router has no refreshListenable (c8f1d3)"
+    class_constraints: |
+      Re-verify BOTH the implicit-fragment and PKCE query shapes against a
+      live link after any supabase_flutter upgrade.

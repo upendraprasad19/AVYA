@@ -465,6 +465,63 @@ class SyncService {
     _restoreCancelled = true;
   }
 
+  /// True when a restore owned by [ownerId] must stop — either it was
+  /// explicitly cancelled, or the live session no longer belongs to [ownerId].
+  ///
+  /// closes-diagnose e5c2d1, CLASS 2. On an account swap the outgoing restore
+  /// kept running: `cancelInflightRestore()`'s only two callers are
+  /// RestoringScreen's own decisions, so NOTHING cancelled a restore when the
+  /// user changed. Its next write then landed against boxes the swap had
+  /// already closed — 14 x "HiveError: Box has already been closed" across
+  /// seven restore ops on 2026-08-06.
+  ///
+  /// ⚠ [ownerId] is a PARAMETER, deliberately, and the doc records the first
+  /// attempt as wrong: a private `_restoreOwnerId` FIELD cleared in
+  /// `_onUserChanged` DISARMS the guard at exactly the moment it is needed —
+  /// the outgoing loop reads null, concludes "no owner bound", and keeps
+  /// going. A parameter has no shared state, so there is no ordering to get
+  /// wrong.
+  ///
+  /// Fails SAFE: if the live id cannot be read it is null, which compares
+  /// unequal and aborts. An over-abort costs a retry (Hive is the source of
+  /// truth and the pass re-runs); an under-abort writes one user's rows under
+  /// another's session.
+  bool restoreAbortedFor(String ownerId) =>
+      restoreAborted(_restoreCancelled, ownerId, _supabase.currentUser?.id);
+
+  /// Pure form of [restoreAbortedFor], extracted so the predicate is
+  /// behaviorally testable without a live Supabase session — the same
+  /// extract-a-pure-helper pattern as `shouldPromote(...)`.
+  @visibleForTesting
+  static bool restoreAborted(
+          bool cancelled, String ownerId, String? liveOwnerId) =>
+      cancelled || ownerId != liveOwnerId;
+
+  /// True when the live session no longer belongs to [ownerId].
+  ///
+  /// closes-diagnose e5c2d1, CLASS 1. Call this AT THE WRITE SINK — one
+  /// statement before the network write — never at function entry. Every
+  /// `await` between entry and the sink is a window the account swap can land
+  /// in, and an in-flight call already past an entry check still reaches the
+  /// sink (`feedback_pause_flag_guard_the_sink`).
+  ///
+  /// Unlike [restoreAbortedFor] this ignores [_restoreCancelled]: cancelling a
+  /// RESTORE says nothing about whether an unrelated write fan-out may still
+  /// push its rows. Conflating them would silently stop syncing after any
+  /// cancelled restore.
+  ///
+  /// Fails SAFE for the same reason: an unreadable live id is null, compares
+  /// unequal, and the write is skipped. Hive is the source of truth, so a
+  /// skipped push is retried on the next pass; a wrongly-allowed push writes
+  /// one user's rows under another's session.
+  bool ownerChangedSince(String ownerId) =>
+      ownerChangedFrom(ownerId, _supabase.currentUser?.id);
+
+  /// Pure form of [ownerChangedSince] — see [restoreAborted].
+  @visibleForTesting
+  static bool ownerChangedFrom(String ownerId, String? liveOwnerId) =>
+      ownerId != liveOwnerId;
+
   // ── Hive syncBox Keys ───────────────────────────────────────
 
   static const String _lastSnapshotKey = 'last_snapshot_sync';
@@ -1354,7 +1411,7 @@ class SyncService {
       }
 
       // Step A — profile + lightweight data
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       restoreProgressLabel.value = 'Loading profile & plan';
       final swA = Stopwatch()..start();
       await Future.wait(
@@ -1383,7 +1440,7 @@ class SyncService {
           message: 'step=A ms=${swA.elapsedMilliseconds}'));
 
       // Step B — bulk history
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       restoreProgressLabel.value = 'Catching up your history';
       final swB = Stopwatch()..start();
       await Future.wait(
@@ -1414,21 +1471,21 @@ class SyncService {
       // These are smaller/faster operations run sequentially after bulk
       // history so a cancellation between steps doesn't leave Hive
       // in a partially-populated state.
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       restoreProgressLabel.value = 'Finishing up';
       final swC = Stopwatch()..start();
       await _safeRestoreOp('freezes', _restoreFreezes(userId));
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       await _safeRestoreOp('notifications_inbox', _restoreNotificationsInbox(userId));
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       await _safeRestoreOp('saved_diet_plan', _restoreSavedDietPlan(userId));
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       await _safeRestoreOp('rank_promotions', _restoreRankPromotions(userId));
       // E.10 (F4-S2 / audit 2026-05-16) — referral surfaces.
       // Codes survive reinstall + audit history visible cross-device.
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       await _safeRestoreOp('referral_codes', _restoreReferralCodes(userId));
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       await _safeRestoreOp(
           'referral_redemptions', _restoreReferralRedemptions(userId));
       swC.stop();
@@ -1439,7 +1496,7 @@ class SyncService {
       // step so it's never skipped when the post-auth flow changes.
       // Fire-and-forget posture: failure keeps cached local PRO state
       // (consistent with existing refreshFromSupabase semantics).
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       final swSub = Stopwatch()..start();
       try {
         await SubscriptionService.instance.refreshFromSupabase();
@@ -1456,7 +1513,7 @@ class SyncService {
       unawaited(ErrorTelemetry.logEvent('restore_step_done',
           message: 'step=sub ms=${swSub.elapsedMilliseconds}'));
 
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       swTotal.stop();
       // APK Test #12.8 — restore completion event. Counts every full
       // success path. If client_errors shows restore_started without a
@@ -1527,7 +1584,7 @@ class SyncService {
       // ── Cancellation + owner re-assert (H-7), BEFORE any Hive write ────
       // A StartMissionBrief/ResumeOnboarding cancel, or a fast account-switch
       // mid-call, must not write user A's bundle into user B's boxes.
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       if (_supabase.currentUser?.id != userId) {
         debugPrint('[SyncService._attemptSingleCallRestore] '
             'owner changed mid-call → cancel (no write)');
@@ -1567,7 +1624,7 @@ class SyncService {
       unawaited(ErrorTelemetry.logEvent('restore_step_done',
           message: 'step=A ms=${swA.elapsedMilliseconds} path=singlecall'));
 
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
 
       // Step B (bulk history; scheduled_workouts overlays the planned snapshot;
       // schedule_completions runs AFTER scheduled_workouts on schedule_<date>).
@@ -1625,7 +1682,7 @@ class SyncService {
       unawaited(ErrorTelemetry.logEvent('restore_step_done',
           message: 'step=B ms=${swB.elapsedMilliseconds} path=singlecall'));
 
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
 
       // Step C (restore-completeness surfaces; freezes AFTER user_progress so
       // the refill-aware merge is the last writer on the `progress` key — H-6).
@@ -1654,7 +1711,7 @@ class SyncService {
       // ── Subscription refresh — SAME as the legacy path (H-3:
       // `subscriptions` is NOT in the bundle; refreshFromSupabase applies
       // grace-window / payment-in-progress / downgrade-suppression logic). ──
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       final swSub = Stopwatch()..start();
       try {
         await SubscriptionService.instance.refreshFromSupabase();
@@ -1671,7 +1728,7 @@ class SyncService {
       unawaited(ErrorTelemetry.logEvent('restore_step_done',
           message: 'step=sub ms=${swSub.elapsedMilliseconds} path=singlecall'));
 
-      if (_restoreCancelled) return RestoreResult.cancelled();
+      if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       sw.stop();
       unawaited(ErrorTelemetry.logEvent('restore_completed',
           message: 'userId=${userId.substring(0, 8)} status=success '

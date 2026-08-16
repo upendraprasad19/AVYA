@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -132,9 +133,19 @@ class NotificationInboxService {
         : AppNotificationPriority.normal;
 
     final notification = AppNotification(
+      // B-pass finding 4 (2026-08-17) — a4f1c8's MIRROR case. The fallback
+      // here used to be `'os-${DateTime.now().microsecondsSinceEpoch}'`, which
+      // is NOT uuid-shaped and carries the identical defect a4f1c8 fixed for
+      // the welcome notification: `notifications_inbox.id` is a uuid column,
+      // so a non-uuid id can only ever produce 22P02. It was reachable
+      // whenever a real OneSignal push arrived with an empty notificationId.
+      //
+      // The diagnose doc's own recurrence rule said it plainly — "if the
+      // column is uuid, every writer that can reach it must mint uuids" — and
+      // this writer was left out of the fix that stated it.
       id: osn.notificationId.isNotEmpty
           ? osn.notificationId
-          : 'os-${DateTime.now().microsecondsSinceEpoch}',
+          : newLocalNotificationId(),
       category: category,
       title: osn.title ?? '(no title)',
       body: osn.body ?? '',
@@ -170,6 +181,21 @@ class NotificationInboxService {
     }
   }
 
+  /// Mints the id for a LOCALLY-created notification.
+  ///
+  /// A REAL uuid, not the old `'local-welcome-<micros>'` (diagnose a4f1c8).
+  /// `notifications_inbox.id` is a uuid column and this id is forwarded
+  /// verbatim by `syncNotificationsInboxEntry`, so the old format made every
+  /// sync of the welcome row fail 22P02 "invalid input syntax for type uuid" —
+  /// permanently, on every retry, for every install.
+  ///
+  /// Extracted and `@visibleForTesting` so the regression test asserts THIS
+  /// function's output. The first version of that test minted its own uuid and
+  /// checked that, which was circular: reverting this line to the legacy format
+  /// left all four cases green (round-1 review, P1-4).
+  @visibleForTesting
+  static String newLocalNotificationId() => const Uuid().v4();
+
   Future<void> _seedWelcomeIfFirstLaunch() async {
     try {
       final cfg = HiveService.instance.configBox;
@@ -178,7 +204,7 @@ class NotificationInboxService {
 
       final now = DateTime.now();
       final welcome = AppNotification(
-        id: 'local-welcome-${now.microsecondsSinceEpoch}',
+        id: newLocalNotificationId(),
         category: AppNotificationCategory.system,
         title: 'Welcome aboard',
         body:
