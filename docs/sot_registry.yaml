@@ -2811,7 +2811,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1937-1964
+        line_range: 2070-2161
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -3298,14 +3298,35 @@ concepts:
     domain: workout
     description: |
       Weekly streak rows stored in healthBox['streaks'] as a List of Maps.
-      Each map has {week_start, days_completed, is_current, source}.
+      Each map has {local_id, week_start, workouts_planned, workouts_completed,
+      is_streak_maintained} — corrected 2026-08-13 (a3f8d1). This said
+      {week_start, days_completed, is_current, source} for months: THREE of
+      those four fields do not exist on either side of the wire. `source` in
+      particular was tried and removed — sync_workout.dart records that it
+      caused a PGRST204. Live cloud columns per backups/live_schema_columns.json:
+      [id, user_id, week_start, workouts_planned, workouts_completed,
+      is_streak_maintained, created_at].
+      Per-row local_id = 'streak_' + formatDateKey(weekStartDate).
       Streak freezes stored as separate keys streak_freezes_* in userBox
-      (via MigratedKey). Cloud: streaks table UNIQUE(user_id, week_start).
+      (via MigratedKey). Cloud: streaks table UNIQUE(user_id, week_start) — a
+      DATE, so a new Monday is a new row and keying by date needs no migration.
       Freeze state also mirrors to user_progress columns.
+      ⚠️ The weekly-streak WEEK IDENTITY is not simply getCurrentWeekNumber():
+      that clamps to [1,4], and a hold week (enable_hold_weeks) starts at
+      plan_start+28. The hold arm derives an UNCLAMPED date-week index; the
+      non-hold arm stays clamped. The two must never be conflated — redoWeek4
+      extends only plan_end, so a rolled-week user sits at a true index >= 5
+      while the clamp reports 4. See a3f8d1.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1469-1500
-        method: completeWorkout (streak row upsert)
+        line_range: 491-598
+        method: resolveStreakWeekState (pure extraction — week identity + row key + day counts, both arms; a3f8d1)
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1599-2030
+        method: completeWorkout (streak row upsert — calls resolveStreakWeekState; line_range corrected 2026-08-13 by the B-pass, which caught that BOTH the old value AND my correction were wrong. It read 1469-1500; I "fixed" it citing a method start of 1809, which is not where the method starts in either version — 1809 pre-diff lands inside the streak-row write block. Measured: `grep -n "Future<void> completeWorkout"` gives 1514 pre-diff, 1599 post-diff.)
+      - file: lib/core/utils/phase_completion.dart
+        line_range: 29-55
+        method: isTrainingDayType (the ONE shared training-day predicate — EXCLUSION-shaped so it counts custom_template, logged and a type-less legacy row; applied to BOTH sides of the adherence ratio AND now called by holdWeekSessionProgress so the rule has exactly one copy)
       - file: lib/features/train/repositories/workout_repository.dart
         line_range: 169-240
         method: calculateCurrentStreak (consumes freeze)
@@ -3321,7 +3342,7 @@ concepts:
         line_range: 460-810
         method: _syncStreaks (push) + restore merge
         semantic: pass-through
-        fields_read: [week_start, days_completed, is_current, source]
+        fields_read: [local_id, week_start, workouts_planned, workouts_completed, is_streak_maintained]
         notes: |
           Moved here from sync_service.dart by refactor/sync-service-part-split
           (2026-05-13). Reads healthBox.get('streaks') list + projects
@@ -3377,6 +3398,7 @@ concepts:
       - test/contracts/streak_progress_service_concurrency_test.dart
       - test/contracts/streak_frozen_day_persists_protection_test.dart  # 5e8a1c: a spent freeze protects its day on every recompute (was: walk broke at the frozen day → streak collapse → rank stuck at SD2)
       - test/contracts/streak_decay_reckon_permanent_ledger_test.dart  # f9d2e7: D1 permanent ledger (commitRefill prune-not-clear; a frozen day survives a refill) + D2 gated reckon (rollover persists; tick==0 / empty-schedule do NOT decay)
+      - test/contracts/hold_week_streak_identity_behavioral_test.dart  # a3f8d1: the weekly streak advances once per HOLD week (unclamped date-week identity, correct across a late-return gap) and each hold gets its OWN streaks row instead of overwriting week 4's; PLUS one shared training-day predicate on both sides of the adherence ratio, so an all-custom_template week no longer scores planned==0 and blanks both the streak and the cloud row. FIRST coverage this block has ever had; 5 mutations run, each reddening only its intended cases.
     reader_allow_files:
       # Debug-only year-simulation harness (kDebugMode-gated; release-inert).
       # resetJourney wipes healthBox['streaks'] to re-baseline a clean journey —
@@ -8752,7 +8774,7 @@ concepts:
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1209-1210
+        line_range: 1215-1216
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart

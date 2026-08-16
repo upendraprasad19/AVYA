@@ -863,8 +863,14 @@ class WorkoutScheduleReadService {
     for (final date in dates) {
       final row = getScheduleForDate(date);
       if (row == null) continue;
-      final type = (row['type'] ?? '').toString();
-      if (type == 'rest' || type == 'off') continue;
+      // Shares the ONE training-day predicate with the weekly-streak reckoning
+      // (a3f8d1). This used to restate `type == 'rest' || type == 'off'`
+      // inline; a doc comment asserting the two "must agree" is not
+      // enforcement, and two independently-maintained copies of one rule is
+      // the drift class this batch exists to close. `?? ''` is kept so a
+      // type-less legacy row still counts, which is what isTrainingDayType
+      // does with null.
+      if (!isTrainingDayType((row['type'] ?? '').toString())) continue;
       total++;
       if (row['status'] == 'completed') completed++;
     }

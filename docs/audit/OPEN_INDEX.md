@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**53 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**56 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -61,3 +61,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-122 | `check_regression_catalog.dart` runs `flutter test` with no concurrency… | nothing technical. Needs a measurement before a value is picked — see below. | 2026-08-13 — read directly at `scripts/check_regression_catalog.dart:56-64`: | [:2943](open_issues.md#L2943) |
 | OI-123 | the test-suite UPSERT path is guarded only transitively, by file ordering… | nothing — scoped and understood; needs the same treatment the delete | 2026-08-15 — Hermes lens (destructive-op safety) on branch | [:3123](open_issues.md#L3123) |
 | OI-124 | the device delete-account test hard-deletes `auth.users` with NO… | nothing technical. It is currently `skip: true` with its body commented | 2026-08-15 — Hermes lens (destructive-op safety), read directly at | [:3154](open_issues.md#L3154) |
+| OI-125 | Selectable past hold weeks (FOB-6) — 6 named lifecycle traps | none technically — but it is a NEW FEATURE, not a correctness fix, and it is the | 2026-08-13 — filed from `docs/ship_dark_pending_review.yaml` FOB-6, whose trap list | [:3178](open_issues.md#L3178) |
+| OI-126 | The `logged` / `custom_template` training-day predicate split (5 call… | none. Pickable, but it is a live behaviour change for all users, so it needs its | 2026-08-13 — the 5 call sites and the two predicate shapes were read directly while | [:3205](open_issues.md#L3205) |
+| OI-127 | `plan_start` moving under a live hold week: is the streak identity still… | none. Route to the piece that already owns `plan_integrity_reconciler.dart` | 2026-08-13 — the four `plan_start` write sites were enumerated by grep and are fact. | [:3234](open_issues.md#L3234) |

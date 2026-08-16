@@ -18,6 +18,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### unresolved_conflict_markers_committed (1 bugs)
 - 2026-08-14 c9f4e2 — `docs/audit/open_issues.md` on `main` at `5d1c6f12` carried three unresolved git conflict markers — an open marker at :2821, a bare separator at :2892 and a close marker naming `supabase-test-http` at…
 
+### streaks (2 bugs)
+- 2026-08-13 a3f8d1 — TWO defects in the same six lines of ActiveWorkoutNotifier.completeWorkout's weekly-streak block. (1) FOB-2, flag-gated: getCurrentWeekNumber() clamps to [1,4] and a hold week starts at plan_start+28,…
+- 2026-05-31 5e8a1c — Surfaced by the year-simulation harness: after amar completed Phase 1 (15 of 16 scheduled workouts over 4 weeks, ~85% adherence with a single missed day), the rank did NOT progress — it stayed at SD2…
+
 ### oi_board_id_uniqueness (1 bugs)
 - 2026-08-13 b7e3d1 — Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw…
 
@@ -550,9 +554,6 @@ rather than a Hive box. (1 bugs)
 ### ist_date_clock_seam (1 bugs)
 - 2026-05-31 b7c2d9 — The /dev time-travel buttons (and the injectable clock seam in ist_date.dart) did not actually move phase / rank / streak logic: jumping the clock +12 weeks left the Train week selector,…
 
-### streaks (1 bugs)
-- 2026-05-31 5e8a1c — Surfaced by the year-simulation harness: after amar completed Phase 1 (15 of 16 scheduled workouts over 4 weeks, ~85% adherence with a single missed day), the rank did NOT progress — it stayed at SD2…
-
 ### edge_function_dependency_resolution (1 bugs)
 - 2026-05-31 f2d8ae — `ai-proxy` host-shell redeploy failed twice with HTTP 400 "Module not found https://deno.land/x/zod@v3.25.76/mod.ts". The deno.land/x zod module was removed upstream and now returns HTTP 404, so the…
 
@@ -1009,6 +1010,7 @@ rather than a Hive box. (1 bugs)
 | 2026-08-15 | f7a2c4 | The CI job `Supabase Integration Tests` fails on every push to `main` with `AuthApiException: Invalid login credentials, statusCode: 400`. The suites sign in as `qa@icanbefitter.com`, and a live query… | qa_credentials_from_environment | test/supabase/cleanup_target_guard_test.dart |
 | 2026-08-15 | b6e1d4 | Three tests in `test/supabase/sync_service_test.dart` fail against the live project: T3 with `PGRST204` (no `exercise_name` column on `workout_logs`), T4 and T5 with `22P02` (a client string id into a… | sync_domain_push_writer_to_cloud | test/supabase/sync_service_test.dart |
 | 2026-08-14 | c9f4e2 | `docs/audit/open_issues.md` on `main` at `5d1c6f12` carried three unresolved git conflict markers — an open marker at :2821, a bare separator at :2892 and a close marker naming `supabase-test-http` at… | unresolved_conflict_markers_committed | test/scripts/no_conflict_markers_test.dart |
+| 2026-08-13 | a3f8d1 | TWO defects in the same six lines of ActiveWorkoutNotifier.completeWorkout's weekly-streak block. (1) FOB-2, flag-gated: getCurrentWeekNumber() clamps to [1,4] and a hold week starts at plan_start+28,… | streaks | test/contracts/hold_week_streak_identity_behavioral_test.dart |
 | 2026-08-13 | b7e3d1 | Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw… | oi_board_id_uniqueness | test/contracts/oi_index_test.dart |
 | 2026-08-13 | 4f2a9e | The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across… | git_hook_env_leak | test/scripts/regression_catalog_lib_test.dart |
 | 2026-08-13 | c3f9a7 | The merge-commit regression walk (`scripts/check_regression_catalog.dart`) fails intermittently with a DIFFERENT number of failures each run — measured 11, 7, 8, then 4 across four attempts on the… | subprocess_test_timeout_under_suite_parallelism | test/contracts/git_safety_hook_integration_test.dart |

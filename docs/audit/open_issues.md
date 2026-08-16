@@ -3174,3 +3174,91 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   `SupabaseTestHelper.qaUserIds` (or a device-side equivalent) and fail closed otherwise.
   Deleting the test outright is also a legitimate terminal answer — it has never run.
 - **Blast-radius estimate**: `account` if un-skipped as-is; `feature` for adding the guard.
+
+## OI-125 — Selectable past hold weeks (FOB-6) — 6 named lifecycle traps
+
+- **Status**: OPEN
+- **Verified**: 2026-08-13 — filed from `docs/ship_dark_pending_review.yaml` FOB-6, whose trap list
+  was produced by a live walkthrough plus two independent context-blind reviews on 2026-07-25. The
+  traps themselves have NOT been re-verified against current source since then.
+- ⚠ **Renumbered 2026-08-16 (was OI-106).** Filed on branch `claude/open-issues-triage-976962` while `main` independently advanced to OI-124, so OI-106 collided with a different, unrelated issue already on the board. Commit `0e4d97cd`'s message still cites the OLD number — it was pushed before the collision was found and is not rewritten. Mapping: 106→125, 107→126, 108→127.
+- **Identified**: 2026-08-13 · split out of OI-60 by founder decision when OI-60 was broken into 7
+  pieces (round-1 review returned NOT CONVERGED with structural redesigns in four items).
+- **Blocked on**: none technically — but it is a NEW FEATURE, not a correctness fix, and it is the
+  only FOB item of that kind. Sequence it after the remaining correctness pieces (FOB-1, FOB-3/4,
+  FOB-5, FOB-7a/b) so the flip-on is not gated on feature work.
+- **What's missing**: during a hold the THIS WEEK rows show the phase's ORIGINAL week 4 while the
+  user trains the hold week, and both the W4 chip and the current H chip render gold. Six traps,
+  verbatim from the ledger: (a) extracting the row→WorkoutDayData mapping depends on loop var `w`
+  for dayNumber, so the refactor runs for EVERY user and is NOT hold-gated — it needs a
+  characterization test before extraction; (b) a notifier watching `holdStatusProvider` is reset by
+  every `currentPlanProvider` invalidation, clobbering manual selection; (c) needs the
+  `authUserIdTokenProvider` cross-account guard every sibling Train provider carries; (d) the hero
+  card sources TODAY unconditionally, so selecting a past hold shows today's workout above another
+  hold's rows; (e) `expandedDayProvider` must collapse on selection or a stale index carries over;
+  (f) terminal states (hold elapses, PRO advance empties holds) are undefined.
+- ⚠ **Hold chips must NEVER drive `selectedWeekProvider`** — hold rows are stamped `week = 4 + ordinal`
+  but `CurrentPlanData.weeks` stops at the phase's 4, so `getWeek(5)` is empty and selecting it
+  renders "Week 5 hasn't started yet" over a week the user is training
+  (`lib/features/train/CLAUDE.md`, `hold_display_read_path`).
+
+## OI-126 — The `logged` / `custom_template` training-day predicate split (5 call sites)
+
+- **Status**: OPEN
+- **Verified**: 2026-08-13 — the 5 call sites and the two predicate shapes were read directly while
+  fixing a3f8d1; `type: 'logged'`'s two writers were confirmed by grep.
+- ⚠ **Renumbered 2026-08-16 (was OI-107).** Filed on branch `claude/open-issues-triage-976962` while `main` independently advanced to OI-124, so OI-107 collided with a different, unrelated issue already on the board. Commit `0e4d97cd`'s message still cites the OLD number — it was pushed before the collision was found and is not rewritten. Mapping: 106→125, 107→126, 108→127.
+- **Identified**: 2026-08-13 · surfaced by round-1 review of the a3f8d1 batch
+- **Blocked on**: none. Pickable, but it is a live behaviour change for all users, so it needs its
+  own review — which is exactly why it was not bundled into a3f8d1.
+- **What's missing**: the repo holds TWO shapes of one rule. The EXCLUSION shape
+  (`type != 'rest' && type != 'off'`) now lives in `isTrainingDayType`
+  (`lib/core/utils/phase_completion.dart`) and is used by the weekly-streak reckoning and
+  `holdWeekSessionProgress`. The INCLUSION shape (`type != 'workout' && type != 'custom_template'`)
+  is inlined at 5 sites: `train_provider.dart:507`, `:683`,
+  `workout_schedule_read_service.dart:1016` (`currentPhaseCompletionRate`),
+  `home_screen.dart:589`, `:764`. The two DISAGREE about `type: 'logged'` — written by
+  `WorkoutWriteService.markCompleted`'s no-prior-schedule branch (AI-coach-only logging) and by the
+  restore synthesize path in `sync/sync_workout.dart`, whose own comment states a logged row
+  "counts as a workout day in the streak walk". So a coach-logged or cloud-restored day currently
+  counts as a training day for the streak but as a REST day for phase completion, the home rest-day
+  banner, and the PRO-advance gate input.
+- **Why it was not fixed in a3f8d1**: `currentPhaseCompletionRate` feeds the PRO phase-advance gate.
+  Widening it changes who can advance, for every user, with no kill-switch — a materially different
+  risk class from the flag-dark streak fix, and it deserves its own blast-radius call rather than
+  riding along.
+- ⚠ Note `phase_completion.dart`'s existing doc comment describing the inclusion rule is CORRECT for
+  its own function — do not "fix" it to match the exclusion helper. A round-2 review claimed it was
+  wrong; round 3 showed both of `phaseCompletionRate`'s callers really do compute the inclusion form.
+
+## OI-127 — `plan_start` moving under a live hold week: is the streak identity still sound?
+
+- **Status**: OPEN
+- **Verified**: 2026-08-13 — the four `plan_start` write sites were enumerated by grep and are fact.
+  The BEHAVIOUR when one fires mid-hold is explicitly NOT verified — that is the whole question.
+- ⚠ **Renumbered 2026-08-16 (was OI-108).** Filed on branch `claude/open-issues-triage-976962` while `main` independently advanced to OI-124, so OI-108 collided with a different, unrelated issue already on the board. Commit `0e4d97cd`'s message still cites the OLD number — it was pushed before the collision was found and is not rewritten. Mapping: 106→125, 107→126, 108→127.
+- **Identified**: 2026-08-13 · §4.12.1 split out of the a3f8d1 batch after three review rounds
+- **Blocked on**: none. Route to the piece that already owns `plan_integrity_reconciler.dart`
+  (the FOB-7a/7b piece) so one batch holds the reconciler context.
+- **What's missing**: the hold-week streak identity is `(normalizeToMonday(workoutDate) − plan_start)`
+  in whole weeks + 1, computed at COMPLETION time from the then-current `plan_start`. It is ≥ 5 at
+  materialization. Whether that survives `plan_start` moving mid-hold is unresolved. Four write
+  sites: `workout_schedule_read_service.dart:188` and `:348`, `sync/sync_workout.dart:1126`,
+  `plan_integrity_reconciler.dart:175`. The last two are the concerning pair — both write `reStart`
+  from `PlanWindowReanchor.resolve` with **no `existingStart == null` guard**.
+- ⚠ **READ THIS BEFORE RE-ANALYSING — three rounds produced three different answers:**
+  - R1: "a phase advance sets `plan_start = rollStart + 7`, so the hold drops out of window" —
+    right conclusion, wrong mechanism.
+  - R2: "false — the advance passes `startDate: DateTime.now()`, the hold survives, identity = 1" —
+    **misattributed**: `train_provider.dart:567` is inside `_autoGeneratePlan` (the auto-regenerate
+    path), NOT the PRO advance.
+  - R3: "the advance passes `nextPhaseStartDate()`, so R1 was right after all" — confirmed by direct
+    read: it returns `_normalizeToMonday(max(plan_end + 1, today))`
+    (`workout_schedule_read_service.dart:1446-1458`), and during a hold `plan_end` is the hold week's
+    Sunday, so `plan_start` becomes `holdMonday + 7` and the hold dates ARE before the window
+    (`:803` filters on a strict `isBefore`).
+  So the PRO-advance path looks safe. The OPEN question is the two unguarded re-anchor movers, plus
+  `_autoGeneratePlan`'s first-generation branch (`:345-350`) writing `normalizeToMonday(today)` while
+  `is_hold` rows survive. Live risk assessed as nil by R3 (the `!=` dedup gate only suppresses a
+  second same-week credit, and the pre-fix clamped behaviour was strictly worse), which is why this
+  was filed rather than blocking the fix.
