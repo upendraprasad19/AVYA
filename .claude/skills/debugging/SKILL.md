@@ -505,6 +505,22 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 - **Ask on every ambiguous read:** *which of these two mistakes is unrecoverable?* Route the ambiguity toward the recoverable one. A returning user sent to onboarding can lose months of data; a new user held on a spinner for one more retry loses seconds. Note this asymmetry runs the OTHER way for a guard protecting the commit: there, failing OPEN is correct, because wrongly blocking every new signup beats wrongly allowing one overwrite.
 - **Prior incidents:** 2026-08-10 diagnose `c2e9f4` — third instance of the restore→onboarding misroute class (`1bfeed` 2026-05-16, `a3f6d9` 2026-08-03) and the first to survive its predecessor's fix, because `a3f6d9` fixed the *writers* while the *classifier* deciding which writer runs was the broken part. Tests: `test/contracts/local_onboarding_evidence_behavioral_test.dart`. Sibling of §2.47 (a write placed before its precondition) and §2.48 (a convergence-point claim trusted rather than verified) — all three are "the code is present and correct, and still never does the right thing".
 
+### 2.50 A test asserts on a RESPONSE whose author is not the code you are reading (NEW 2026-08-16)
+
+- **Telltale:** an assertion on an HTTP/RPC response body fails with the field simply **absent** (`Actual: <null>`), while the *status-code* assertion beside it passes. The status is right, the shape is wrong. You open the handler, find its error path, and every line you read is accurate — and irrelevant, because that handler never ran.
+- **Root-cause shape:** something in front of your code answered. On Supabase that is `verify_jwt: true`: the **gateway** rejects a request with no/invalid `Authorization` header *before* the function body executes, and its error schema is not yours. Live proof, diagnose `c8f4a2`:
+  ```
+  gateway  → {"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"Missing authorization header"}
+  function → {"error":"...","request_id":"..."}          (redeem-referral/index.ts:57-60, :156-164)
+  ```
+  Generalises well beyond Supabase — CDNs, WAFs, rate limiters, auth middleware, load balancers and `enforce_https` redirects all answer on your behalf and none share your error contract.
+- **Why review misses it:** there is nothing wrong with the code, and nothing wrong with the reading of it. The mistake happens one level up, in *which file you decided to open*. A reviewer handed "here is the function, does the assertion match it?" will confirm your framing — the input-set-width failure applied to a READ rather than a check (`feedback_green_check_input_set_width` #22).
+- **The check, and it costs one command:** before reading any source that *might* author a response, `curl` the endpoint and look at the actual bytes. Then read the source that matches what came back. On this batch, one curl settled what two careful source reads had got wrong — and the fix the source reads suggested (`expect(body['error'], isNotNull)`) would have failed for the *same* reason as the original bug.
+- **Fix pattern:** assert the property that holds **regardless of who answers** — here, status 401 plus `body['success'] isNot(true)`. Deliberately do NOT pin the intermediary's `code`/`message` strings: that is platform copy you do not control, so pinning it buys nothing and manufactures a false red on any vendor change. Keep the assertion falsifiable — if someone flips `verify_jwt` off and the function starts 200-ing that request, it must still redden.
+- **⚠ Do NOT "fix" this by disabling the gateway check.** Turning `verify_jwt` off makes the handler's own 401 reachable and the test green, and re-creates diagnoses `7ad0c4` / `b3f0d9` (gateway auth removed with only a handler-level gate behind it). The test was wrong, not the auth.
+- **Consequence worth noting:** once an intermediary rejects everything your handler would reject, the handler's own auth branch becomes near-unreachable from outside and effectively untestable end-to-end. Say so rather than implying coverage.
+- **Prior incidents:** 2026-08-16 diagnose `c8f4a2` (`test/edge_functions/redeem_referral_test.dart`), which had never executed in CI because the step above it failed first and Actions halts a job at its first failed step — so check *whether a failing test has ever run* before assuming a regression. Sibling of §2.48 (a claim trusted instead of verified); same session as diagnose `b6e1d4`, where the identical verify-one-hop error appeared on a Hive accessor chain.
+
 ---
 
 ## 6. Cross-references
