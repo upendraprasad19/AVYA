@@ -3325,3 +3325,60 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   the ONLY one with unique content — `wardroom-handoff-enforcement` (100 KB) and the stray
   `.dart_tool` (1 KB) are pure build output. `retire_worktree` is right to refuse it; `--force` would
   destroy the only copy.
+
+## OI-130 — concurrent sessions have no way to see what another is working on, so the same bug gets diagnosed and fixed twice (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical, but the cheap fixes are all partial and the complete ones are
+  expensive — see "Why this is hard" before picking one.
+- **Verified**: 2026-08-16 — three measured instances, all within ~72 hours, all discovered by
+  accident rather than by any mechanism:
+  1. **The same bug diagnosed twice, two diagnose-docs.** Subprocess-test timeouts: I filed
+     `c3f9a7` (`concept: subprocess_test_timeout_under_suite_parallelism`) while another session
+     independently filed `4f2a9e` (`concept: git_hook_env_leak`) for the *same failing files and
+     the same symptom*, landing `80abfbd0` + `a90d3732` on main mid-flight. Different root causes,
+     same remedy shape (raise the timeouts), colliding edits. I found out at merge time.
+  2. **Duplicate OI ids, twice in one day.** `OI-109` and then `OI-115`/`OI-116` were each minted
+     on two branches at once. `build_oi_index.dart`'s duplicate detector caught the second pair;
+     its own error text already names the pattern — *"the boards MERGED CLEANLY because the
+     additions sat in different regions… sweep EVERY branch for the ceiling, not just this one.
+     It moves."* This is OI-112's class, recurring.
+  3. **A whole investigation duplicated.** 2026-08-16: dispatched a 10-agent workflow to determine
+     whether the failing RR-1 test or the redeem-referral EF was wrong. While it ran, another
+     session diagnosed it identically and landed the fix (`62b8892c`, branch `rr1-referral-401`).
+     Both reached the same conclusion — the test asserted the function's contract against a
+     GATEWAY response (`verify_jwt: true` rejects a no-Authorization request before the module
+     boots). Cost: ~1.36M subagent tokens for an answer that was already landing.
+  Live instance while writing this entry: `git log origin/main..main` showed **2 commits from
+  another session, merged into local `main` 55 seconds earlier and not yet pushed**
+  (`80d3d4dd` + `147c8ad3`). Nothing surfaced that; it was noticed only because an unrelated
+  ahead/behind check was run first.
+- **Identified**: 2026-08-16.
+- **Risk class**: wasted work, and — more seriously — **divergent records of the same fact**. Two
+  diagnose-docs for one bug means a future reader finding one has half the picture. Instance 1 is
+  now cross-referenced in both directions by hand, but nothing made that happen except catching it.
+- **What's wrong**: `§4.13` mandates one worktree per session and sessions genuinely run in
+  parallel (three were committing simultaneously on 2026-08-13). Every coordination signal the repo
+  has is **post-hoc**: `git fetch` shows another session's work only once it is pushed, the OI board
+  only once an id is committed, `docs/diagnoses/INDEX.md` only after the doc lands. There is no
+  *pre*-declaration of intent, so two sessions can spend hours on the same problem and only
+  discover it at merge.
+- **Why this is hard (read before proposing a fix)**: the obvious remedies are each partial.
+  - *A shared "who is working on what" file* — needs writing before the work, which is exactly the
+    discipline that decays without a gate (`§4.13` point 6's lesson). And it is itself a
+    concurrently-edited file, i.e. the same collision class one level up.
+  - *Mint OI ids from `origin/main` after a fetch* — narrows instance 2 only, and does not help at
+    all when the other session has not pushed yet (as above, 55 seconds).
+  - *A session registry keyed on the worktree name* — `new-worktree.sh` already names every
+    session's workspace, and `git worktree list` is readable from any session without a fetch. That
+    is the most promising primitive: the data already exists, unpushed, locally. But a worktree slug
+    (`supabase-test-http`) says nothing about which *bug* is being worked; instance 1's two sessions
+    had unrelated slugs.
+  - **No detector was attempted here deliberately.** `docs/audit/oi-mechanism.closure.yaml` D5
+    records a staleness detector for a neighbouring problem that was built, ×2-reviewed and
+    WITHDRAWN wholesale after three generations of parser scars. Do not re-propose that shape.
+- **What a fix must clear to be worth building**: it must (a) surface intent BEFORE the work, not
+  after the push, (b) not itself become a concurrently-edited file with the same collision class,
+  and (c) not depend on a discipline that decays — i.e. it needs a trigger, not a convention.
+- **Blast-radius estimate**: `feature` for a docs/convention change; `platform` if it touches
+  `scripts/new-worktree.sh` or a hook.
