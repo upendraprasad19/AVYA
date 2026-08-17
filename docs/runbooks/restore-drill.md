@@ -65,6 +65,24 @@ dart run scripts/check_migrations_live.dart
 (Point its DB target at the Branch by overriding env vars for the run.)
 All migrations should be present.
 
+### 5b. Run the two-user cross-account isolation gate against the Branch
+
+```
+dart run scripts/check_two_user_cross_account.dart
+```
+
+Inserts a synthetic Alice + Bob with IDENTICAL natural keys (same date / name /
+workout_log_id) across every per-user table and asserts BOTH rows coexist
+(count == 2). A user-less sync key would collapse them onto one row — the
+cross-account leak class this gate exists for. Needs the fitness-app
+Management-API PAT, which is why it cannot run in pre-commit or CI.
+
+**Documented here 2026-08-17 because it had no invocation site at all.** It was
+skip-listed in `pre-commit.sh` and `test.yml` under the "requires live DB" case
+— correctly, it does — but the runbook that exercises live-DB gates never named
+it, so nothing anywhere ever ran it. A gate reachable from no document is a gate
+that does not run.
+
 ### 6. Spot-check a user
 
 Pick the founder's `user_id`. Query their profile, last 7 workout_logs,

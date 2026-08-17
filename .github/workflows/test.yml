@@ -213,7 +213,6 @@ jobs:
               check_apk_release_signed.dart|\
               check_hooks_installed.dart|\
               check_plan_review_record_exists.dart|\
-              check_telemetry_pii_classification.dart|\
               check_unawaited_has_error_sink.dart|\
               check_razorpay_key_flavor.dart|\
               check_migrations_live.dart|\

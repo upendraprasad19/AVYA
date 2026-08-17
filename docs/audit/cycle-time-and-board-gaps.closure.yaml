@@ -1,0 +1,94 @@
+# Closure ledger — cycle-time-and-board-gaps.
+#
+# Two joined halves, one batch: (T) cut the per-commit cycle time, which was the
+# founder's actual question and which the first plan for this work ignored
+# entirely — it only ADDED gates; and (F) close the discipline gaps found while
+# answering "why did the OI board mismatch survive a pipeline where everything
+# passed".
+#
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item, no
+# `deferred:` key. 11 items, over the §4.2 >=4 threshold. Branch:
+# cycle-time-and-board-gaps.
+
+batch: cycle-time-and-board-gaps
+total_findings: 11
+closed_count: 11
+
+_commit: &wip "cycle-time-and-board-gaps (uncommitted at authoring)"
+
+findings:
+  - id: T-1
+    title: "Every hook invoked Dart through `flutter/bin/dart`, a wrapper that takes the SDK update lock and shells out to git on the Flutter checkout on EVERY call — 17 call sites across 4 hooks, and the lock SERIALIZES the parallel gate loop so its cost scaled with the job count instead of dividing by it"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Real-hook A/B, same worktree, same gates, both exit 0 and both reporting all gates passed: 182149 ms (wrapper, forced via DART_BIN_OVERRIDE) -> 98447 ms (SDK exe). Second pair under load: 399370 -> 163744. Isolated cause measured directly: bare `dart --version`, which does no work at all, costs 3357/3665/8048 ms via the wrapper and 216/151/220/206/103 ms via the SDK exe. Fix is scripts/_dart_bin.sh, sourced by all five hooks. Mirror test test/scripts/dart_bin_resolver_test.dart (9 tests) — mutation-proven: reverting the gate-loop line to bare `dart run` reddens the pre-commit case, deleting the `. _dart_bin.sh` source line reddens the commit-msg case."
+    notes: "TWO hypotheses tested and REFUTED, recorded in _dart_bin.sh's header so nobody re-runs them: (a) Windows Defender — the SDK exe is scanned identically and costs 280 ms, so the cost is the wrapper's own work; (b) the hook's GIT_DIR leak reaching dart.bat's `git rev-parse` — wrapper costs 3916-4113 ms without the leak and 4029-4201 ms with it. Also refuted: raising PRE_COMMIT_GATE_JOBS. It bought ~20% while the wrapper was in the path (lock contention, not parallelism headroom) and nothing measurable after. The approved plan listed that as lever T3; the measurement killed its premise and it was NOT shipped."
+
+  - id: T-2
+    title: "The approved plan's headline time lever (T1: add Windows Defender exclusions) rested on an untested hypothesis"
+    terminal_state: verified_clean
+    verification: "Refuted before any change was made. `dart --version` via the SDK exe costs 103-220 ms on the same machine, with the same Defender real-time protection ON (Get-MpComputerStatus -> RealTimeProtectionEnabled: True). If AV scanning were the cost, both binaries would pay it. No exclusions were added and none are needed."
+    notes: "The plan committed to closing T1 either way in one measurement. This is that closure. OI-106's 3.9x local-vs-CI gap therefore still has no tested explanation — the wrapper finding does not explain it either, since CI does not use the wrapper for `dart run` in the gate loop. OI-106 remains OPEN and untouched."
+
+  - id: F-1
+    title: "No mechanism anywhere detected an OI number minted by two branches for two different issues — `build_oi_index.dart:114-115` states it outright: there is no allocator, numbers are minted by eyeballing a tail split across two files"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "New gate scripts/check_oi_numbering_unique.dart + pure scripts/oi_numbering_lib.dart. Proven against REAL data, not only fixtures: run against the live colliding branch `oi-session-coordination` it reports OI-128 naming two different issues, prints both titles, and names the next free number (OI-130). 20 tests in test/scripts/oi_numbering_lib_test.dart. Mutation-proven on FOUR legs, each verified as actually applied before its run: dropping stdoutEncoding utf8 reddens 3, dropping the unparseable-board guard reddens 1, dropping LEG 1 (merge-base) reddens 2, dropping LEG 3 (title comparison) reddens 2. Ledger entry added; check_gate_test_ledger passes at 89 gates."
+    notes: "Closes the MINT-TIME half of OI-112 and resolves its stated open decision (pre-commit reads a possibly-stale origin/main vs CI is authoritative but late) by doing BOTH with different authority. THREE-point predicate, because a two-point HEAD-vs-main comparison calls every ordinary title edit a collision. The gate shipped with its own bug and it was caught by running it against known-bad real data: Process.runSync defaults to systemEncoding, which mangled the em-dash separator so 0 of 77 headings parsed and the gate reported PASS against an EMPTY mainline board. Fixed at the instance (pin utf8) AND the class (_parseStrict refuses to read an unparseable board as a clean one, and the final verdict says SKIPPED rather than PASS when any input was undetermined)."
+
+  - id: F-2
+    title: "`pre-merge-commit` was never installed, so a CLEAN auto-merge ran NO hook at all — the exact shape of the OI collision class, and two places in the repo asserted the opposite"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Verified absent: `.git/hooks/` held exactly 4 non-sample hooks (commit-msg, pre-commit, pre-push, prepare-commit-msg) against git 2.53.0, which invokes pre-merge-commit for an auto-created merge commit. scripts/pre-merge-commit.sh added and installed by setup-hooks.sh (now FIVE hooks). Runs the two board gates only (~2 s), NOT the 75-gate loop — a merge needs board integrity, not a re-scan of a tree already gated on both sides."
+    notes: "The false claims were corrected in the same change: docs/audit/open_issues.md:2426-2428 (OI-112) and docs/diagnoses/2026-08-13-...-b7e3d1.md:56-58, both asserting 'a corrupt board cannot LAND — the merge commit regenerates the index and the gate fires'. Neither was supported by the installed hook set. This is why detection of the 0e4d97cd collision took 3 days 0h 34m and came from a human, not a gate."
+
+  - id: F-3
+    title: "`commandInvokesGitSubcommand` anchored at `^git`, so ANY environment prefix bypassed the raw-git block entirely; and `commandUsesWrapper` was a bare substring check, so merely NAMING safe_commit.sh disarmed the guard"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "16-case behavioural probe, all passing: `FOO=1 git commit -m x`, `env FOO=1 git push`, `command git commit`, `\\git commit`, `env -i PATH=/bin git commit` are now all detected; `echo \"use safe_commit.sh\" && git commit -m x` no longer counts as using the wrapper, while all 7 real invocation forms still do. 30 new assertions in test/contracts/git_safety_lib_test.dart. `sudo`/`nohup` deliberately NOT stripped — over-stripping risks a false BLOCK, the one failure mode this hook must not have."
+    notes: "Consequence worth stating plainly: the documented hatch `ALLOW_RAW_GIT=1 git commit` had been 'working' only because the hook could not SEE the prefixed command — a detection miss, not an authorization check, which made an accidental bypass indistinguishable from an approved one. And `FOUNDER_APPROVED_NO_VERIFY=1 git commit --no-verify` genuinely did NOT work: the `--no-verify` match is unanchored so the deny still fired, while the env read looked at the hook process's own environment, which an inline prefix never sets. Both hatches now read the inline assignment via inlineEnvAssignment(), so the documented incantation IS the mechanism."
+
+  - id: F-4
+    title: "Four gates had ZERO invocation sites anywhere — shipped, ledgered, skip-listed in pre-commit AND CI, and absent from build-apk.md"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Enumerated by intersecting both skip lists and then grepping every .sh/.yml/.md/.dart for a real `dart run` site. check_telemetry_pii_classification.dart (Gate 22) un-skipped from BOTH loops — it is a pure lib/ source scan with no live dependency (436 callsites, 1503 ms, exit 0), and the blanket 'requires live DB' rationale never applied to it; its check_gate_scripts_wired exemption removed, and that gate re-run green at 99 scripts. check_razorpay_key_flavor.dart (Gate 24) wired into .claude/commands/build-apk.md, its only possible home (reads gitignored .env.prod). check_two_user_cross_account.dart documented in docs/runbooks/restore-drill.md alongside check_migrations_live.dart, the runbook that exercises live-DB gates."
+    notes: "The fourth, check_test_runtime_budget.dart (Gate 41), is NOT wired here — see F-5. Its exemption rationale read 'run via /build-apk skill, NOT pre-commit' while /build-apk had no section for it; 'advisory' likewise described how a gate reports, not where it runs, and nothing ran it."
+
+  - id: F-5
+    title: "Gate 41 (check_test_runtime_budget.dart) is shipped, dormant, and arming it at its default 30s budget would plausibly redden main immediately (suite p95 is 38.4s, max 149.0s)"
+    terminal_state: blocked_on_user
+    reason: "Founder must choose between the two options OI-101 already names — RE-ARM the gate (which requires also picking a budget that does not redden main: the suite's p95 is 38.4s against a 30s default, so 're-arm' means 're-arm at N seconds') or RETIRE it and delete the script plus its ledger row. An agent cannot pick: one buys test-runtime discipline at the cost of immediate red, the other gives up the discipline. Neither is a defect to fix."
+    verification: "Already filed as OI-101, Status OPEN, `Blocked on: a founder scope decision — re-arm or retire. Two named options`. Confirmed still OPEN and still accurate at docs/audit/open_issues.md:2572-2576. Nothing technical blocks it; wiring it without the founder's scope call would either redden main or require silently loosening the budget, and choosing between 're-arm' and 'retire' is a product decision about how much test-runtime discipline to buy."
+    notes: "This is a terminal state, not a deferral: the item is on the board with an owner and a named decision, and this batch did not create it. Wiring the other three (F-4) while leaving this one is the honest split — the difference is that the other three had a correct answer available and this one has two, both legitimate."
+
+  - id: F-6
+    title: "The `/update-docs` skill instructed writing a 'Follow-ups deferred' section — the exact semantic §4.2 bans — inside the skill that walks the end-of-batch checklist; and it never mentioned worktree retirement, the row §4.13 names as retirement's ONLY trigger"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Both fixed in .claude/skills/update-docs/SKILL.md: step 9 now requires a terminal state per node and routes genuine non-closure to the OI board; new node 27 carries the retirement command, the four-leg predicate and the run-from-primary constraint. check_no_deferral_euphemism.dart widened from staged-diff-only to a FULL sweep of CLAUDE.md + every .claude/skills/**/SKILL.md, and now passes."
+    notes: "Root cause of the invisibility is structural and was the more important half: a gate scoped to `git diff --cached` can never see a violation older than itself, no matter how often the file is touched. The widened sweep needed a `deu-quote` marker because §4.2 ENUMERATES the banned phrases and several skills quote the rule — 12 of the first 14 hits were the rule describing itself. Two REAL violations survived that filter and were fixed: CLAUDE.md §4.6 step 4 ('Once verified, delete old path in follow-up batch') and hermes-pass's action-item template offering a `<spawn follow-up batch>` bucket. hermes-pass's `spawn_followup_batch` VERDICT is kept and marked: §4.2 bans the agent choosing to defer, not the founder's authority to schedule."
+
+  - id: F-7
+    title: "Four orphaned worktree directories on disk that git could not see, one of them 4,146 entries and growing"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: ".claude/worktrees went 15 dirs / 4 orphans -> 11 dirs / 1 orphan. 3 merged+clean worktrees retired via `retire_worktree.dart --execute`; 1 empty husk auto-removed; 2 orphans (open-issues-triage-976962, wardroom-handoff-enforcement) verified build-artifact-ONLY (`find | grep -v build/ | wc -l` = 0 for both) and removed manually, since the tool correctly refuses non-empty orphans pending human review. Registered worktrees and directories now reconcile exactly: 11 and 11 (10 linked + primary, plus the 1 remaining orphan)."
+    notes: "pr-ag-handoff-gaps was NOT removed and must not be — it is OI-129 and it holds genuinely unrecoverable work. Also fixed here: the orphan scan reported `.dart_tool` as 'an orphan with 2 entries and no git to vouch for them'. It is a tooling artifact, not a worktree; dot-directories are now skipped. Harmless while non-empty (only a 0-entry orphan auto-removes) and still wrong, because it trains the operator to ignore ORPHAN lines — the one category that requires a human to look."
+
+  - id: F-8
+    title: "OI-129's inventory of the surviving orphan's unique content was narrower than the reality"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "OI-129 recorded 2 untracked .md reports + 25 screenshots. Diffing all 526 non-build files against `git ls-files` gives 20 further paths absent from main, and they are not renames: each HAS git history (29/9/3/3 commits for the four sampled) but the orphan's copy matches NO commit in it — checked EXHAUSTIVELY, not sampled, for active_workout_screen.dart (all 29) and prelog.ts (all 3). mtime 2026-04-20 17:53 vs main's last commits to those paths on 2026-05-21 / 2026-06-01 / 2026-06-03. So they are uncommitted April edits on files main has since restructured past, recoverable from nowhere."
+    notes: "OI-129 stays OPEN and `Blocked on: FOUNDER` — unchanged and correct. The entry was widened, not closed: its step (2) 'salvage anything worth keeping' now covers 20 source files rather than two reports, which changes the size of the founder's call. OI-129's own claim that the other two orphans were pure build output was independently re-verified and proved right."
+
+  - id: F-9
+    title: "CLAUDE.md drifted from its own machinery on six specific points"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "All six corrected against measured/re-read state: (1) '~72 check_*.dart gates' -> 89 files, 75 in the loop, 77 real pre-commit coverage (counted, not estimated); (2) hooks 'pre-commit + pre-push' -> FIVE, with the pre-merge-commit row added; (3) 'branches off the latest main' -> new-worktree.sh:65-91's four-way merge-base decision, which prefers LOCAL main in the merged-but-unpushed case and warns rather than fails on divergence; (4) OI-102 called OPEN in CLAUDE.md, pre-commit.sh and ADR-0018 while the board — the authoritative source — had marked it CLOSED the same day all three were written; successor OI-106 now named; (5) safe_push.sh's THREE-outcome contract (0 LANDED / 1 FAILED / 2 UNVERIFIED) documented for the first time; (6) the .claude/.reconcile_ci.disabled kill switch documented. Two §7 pointer rows added for the new gate and the Dart resolver."
+    notes: "One claimed drift was investigated and REFUTED rather than 'fixed': retire_worktree.dart's `_protected` set was reported as holding a stale entry (`train-signout-notif-bugs`). Its worktree is indeed gone, but its BRANCH still exists and still carries owed work, so the protection is load-bearing the moment anyone recreates that worktree. Annotated instead of pruned, with the check that would have caught the mis-read: an audit reading only `git worktree list` will call these stale — read `git branch -a` too."

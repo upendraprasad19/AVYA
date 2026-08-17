@@ -52,7 +52,21 @@ End of any batch that lands a commit on a feature branch. User explicitly says "
 
 9. **Print summary.**
    - List touched files + skipped nodes.
-   - Note any nodes flagged as "should be done in a follow-up" — those go into the retrospective's "Follow-ups deferred" section.
+   - Every node reaches a TERMINAL state in THIS batch: done, `not_applicable`,
+     `upstream_blocked`, or `blocked_on_user`. There is no "follow-up" bucket.
+     This step used to say *"Note any nodes flagged as 'should be done in a
+     follow-up' — those go into the retrospective's 'Follow-ups deferred'
+     section"*, which is precisely the semantic CLAUDE.md §4.2 bans, sitting
+     inside the skill that walks the end-of-batch checklist. It survived because
+     `scripts/check_no_deferral_euphemism.dart` scanned only STAGED ADDED lines,
+     so a violation older than the gate was invisible to it forever. The gate now
+     sweeps `.claude/skills/**` and `CLAUDE.md` in full.
+   - If a node genuinely cannot close in this batch, it becomes an OI on
+     `docs/audit/open_issues.md` with an owner and a `Blocked on:` line — a
+     tracked item on the board, not a note in a retrospective nobody re-reads.
+
+   - Then walk the extended nodes below, ending with **node 27 (worktree
+     retirement)** — the batch is not finished until that one is answered.
 
 ## Extended checklist nodes (added by Tech-debt audit 2026-05-20 / B1)
 
@@ -91,6 +105,32 @@ Beyond the 11-node knowledge-graph protocol above, every batch must also walk th
 25. **Did any new durable rule emerge this batch?** Per `docs/handbook/README.md` (added in 2026-05-28 six-industry-gap closure batch). If yes, promote from memory `feedback_*.md` to `docs/handbook/<category>/<topic>.md`. Memory dir's role going forward is scratch + retros only.
 
 26. **Is the batch's max blast-radius ≥ `account`?** Per `docs/blast_radius.yaml` (added in 2026-05-28 batch). If yes, **propose invoking `/hermes-pass`** before commit. The Hermes deep-pass dispatches parallel Opus subagents per `LENS_REGISTRY.md` lens and consolidates findings into `docs/audit/<date>-hermes-<batch>.md`. Skip the prompt for `feature`-tier batches; mandatory for any `catastrophic`-tier commit.
+
+27. **Retire this batch's worktree** — CLAUDE.md §4.13 point 6, and **this row is
+    the ONLY trigger for it.**
+
+    ```
+    dart run scripts/retire_worktree.dart              # dry-run is the DEFAULT
+    dart run scripts/retire_worktree.dart --execute <slug>
+    ```
+
+    Run from the PRIMARY worktree; the tool refuses from a linked one, because
+    removing the tree you are standing in is undefined. It retires only when all
+    FOUR legs hold — merged into `main` AND no tracked changes AND no
+    non-regenerable ignored files AND nothing unpushed — and reports anything
+    else without touching it. Never `--force`: on 2026-08-09 five worktrees that
+    classified as "merged" held 21 uncommitted files between them.
+
+    **Why this node had to be added (2026-08-17).** §4.13 point 6 is
+    deliberately NOT a blocking gate, and §4.13 names the §5 checklist as the
+    thing that carries it instead — "without which this is just prose". But this
+    skill, which exists to walk §5 mechanically, contained no occurrence of
+    `retire` or `worktree` anywhere in its 111 lines. The trigger's only carrier
+    did not carry it. Measured consequence at the time of writing: 12 registered
+    worktrees, 15 directories, **4 orphans**, one holding 4,146 entries — the
+    same orphan `scripts/retire_worktree_lib.dart:268` already names as a known
+    problem at 1,945 files, i.e. it more than doubled while unwatched. Filed as
+    OI-129.
 
 ## Self-evolution changelog
 

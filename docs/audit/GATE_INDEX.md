@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **89** (49 numbered, 40 by filename only).
+Total gates: **90** (49 numbered, 41 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -69,6 +69,7 @@ Total gates: **89** (49 numbered, 40 by filename only).
 | 45 | `check_no_http_package.dart` | Tech-debt audit 2026-05-20 / finding D8 — source-grep gate. | grandfathered |
 | 37 | `check_no_raw_google_fonts.dart` | assert that `GoogleFonts.getFont('DM Sans', ...)` is invoked only via | grandfathered |
 | 34 | `check_no_raw_ispro_read.dart` | assert that no production code reads `configBox.get('isPro')` / `config.get('isPro')` | grandfathered |
+| — | `check_oi_numbering_unique.dart` | Closes the MINT-TIME half of OI-112. The LANDING half (a corrupt board that | mutation_proven |
 | — | `check_onconflict_live_arbiter.dart` | 2026-05-15 — Runs `test/sql/onconflict_live_arbiter.sql` against the | grandfathered |
 | — | `check_plan_review_record_exists.dart` | P1.A keystone (discipline overhaul 2026-06-18) — the plan-quality forcing | grandfathered |
 | 35 | `check_profile_write_service_only.dart` | assert that no production code outside `ProfileWriteService` writes to userBox under | grandfathered |

@@ -2413,10 +2413,19 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   identifier or a sentinel closes the gate's remaining blind spot.
 - **Blast radius estimate**: `feature` (docs + a constant), though it touches many files.
 
-## OI-112 — OI numbering collides across concurrent sessions; the LANDING half is now gated, the MINT-TIME half is not
+## OI-112 — OI numbering collides across concurrent sessions; BOTH halves now gated
 
-- **Status**: OPEN
-- **Blocked on**: nothing — the remaining half is a cross-branch check, and where it runs is still the open decision below
+- **Status**: CLOSED · 2026-08-17 · diagnose `d3f1a7` · branch `cycle-time-and-board-gaps`
+  · MINT-TIME half: `scripts/check_oi_numbering_unique.dart` (three-point predicate, 20 tests,
+  mutation-proven on 4 legs, proven against the live 7th collision on `oi-session-coordination`).
+  LANDING half: `scripts/pre-merge-commit.sh` — which had to be WRITTEN, because the claim below
+  that landing was already gated was false; git invokes `pre-merge-commit`, not `pre-commit`, for
+  an auto-created merge commit and that hook was never installed, so a CLEAN auto-merge ran no
+  hook at all. This entry's own open decision ("pre-commit reads a possibly-stale `origin/main`;
+  CI is authoritative but only after the push") is resolved by doing BOTH with different
+  authority: pre-commit advisory + no fetch (a stale ref makes it MISS, never misfire), CI
+  authoritative, and pre-merge-commit at the point both boards first coexist.
+- **Blocked on**: nothing — closed.
 - **Verified**: 2026-08-13 (a FOURTH and largest collision: six ids at once — see "Partially closed").
   The third hit a DIFFERENT session in parallel and is recorded at
   `docs/plan-reviews/claude-commit-merge-push-process-aae061.md:56-58` — "renumbered to OI-106 at
@@ -2424,12 +2433,37 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   class independently within a day, neither aware of the other. The "Measured" bullet below
   enumerates only the first two, which are the ones on THIS branch.
 - **Partially closed 2026-08-13**: `scripts/build_oi_index.dart` now **fails closed on duplicate
-  ids within the board** (`duplicateIds()`), so a corrupt board can no longer render and cannot
-  LAND — the merge commit regenerates the index and the gate fires. What this does NOT do is warn
+  ids within the board** (`duplicateIds()`). What this does NOT do is warn
   at **mint time**: two sessions on two branches each picking "the next free number" still both
   validate clean in isolation, because each board is individually duplicate-free. That is the half
-  OI-112's fix-shape below addresses, and it remains open.
+  OI-112's fix-shape below addresses.
   Evidence it detects: planting a second `## OI-111` made the generator exit 1 naming the id.
+- ⚠ **CORRECTED 2026-08-17 — the landing half was NOT gated either, and this entry said it was.**
+  The struck sentence read *"so a corrupt board can no longer render and cannot LAND — the merge
+  commit regenerates the index and the gate fires"*. It could not fire. Git invokes
+  **`pre-merge-commit`** — not `pre-commit` — for an automatically created merge commit, and only
+  FOUR hooks were installed (`pre-commit`, `pre-push`, `commit-msg`, `prepare-commit-msg`). On a
+  **clean auto-merge** — precisely the shape diagnose `b7e3d1` documents, where the two boards'
+  additions sat in different regions and git combined them silently — **no hook ran at all**. Only a
+  *conflicted* merge was covered, and only incidentally, because the human then runs `git commit`.
+  `scripts/pre-merge-commit.sh` now exists and `setup-hooks.sh` installs it (FIVE hooks), so the
+  claim is true as of this correction rather than before it. Diagnose `d3f1a7`; the identical false
+  claim at `docs/diagnoses/2026-08-13-oi-id-collision-renders-silently-b7e3d1.md:56-58` was
+  corrected in the same commit.
+- ✅ **MINT-TIME HALF CLOSED 2026-08-17** by `scripts/check_oi_numbering_unique.dart` (+ pure
+  `scripts/oi_numbering_lib.dart`), exactly the fix-shape below. It resolves this entry's own open
+  decision — "pre-commit reads a possibly-stale `origin/main`; CI is authoritative but only after
+  the push" — by doing **both**, with different authority: pre-commit is advisory-fast and does not
+  fetch (a stale ref makes it MISS, never misfire), CI is authoritative, and `pre-merge-commit` runs
+  it where both boards first coexist. THREE-point predicate, because a two-point HEAD-vs-mainline
+  comparison would call every ordinary title edit a collision. Proven against the live seventh
+  instance: run on unmerged branch `oi-session-coordination` it exits 1, prints both OI-128 titles
+  and names the next free number. 20 tests, mutation-proven on 4 legs.
+- ⚠ **Evidence undercount, corrected 2026-08-17.** The `Verified: 2026-08-13` line was never updated
+  after two further instances: the `0cb4120a` renumber (2026-08-16, OI-106/107/108 → OI-125/126/127,
+  detected by a human **3 days 0 h 34 m** after `0e4d97cd` pushed the collision) and the still-live
+  OI-128 clash. Count as of 2026-08-17: **six** collisions, five renumber commits, three of them on
+  2026-08-13 alone.
   Mutation-proven — rebuilding the check over `parseOpenIssues` (which drops CLOSED entries)
   reddens exactly the OPEN-vs-CLOSED test; neutering it reddens 4.
   Tests: `test/contracts/oi_index_test.dart` (group "OI-112 scar").
@@ -3325,3 +3359,18 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   the ONLY one with unique content — `wardroom-handoff-enforcement` (100 KB) and the stray
   `.dart_tool` (1 KB) are pure build output. `retire_worktree` is right to refuse it; `--force` would
   destroy the only copy.
+- **Re-verified + WIDENED 2026-08-17** (cycle-time-and-board-gaps batch). The other two orphans this
+  entry named as pure build output were re-checked (`find | grep -v build/ | wc -l` = **0** for both)
+  and REMOVED; `.dart_tool` is now skipped by the orphan scan entirely (it is a tooling artifact, not
+  a worktree). `.claude/worktrees` went 15 dirs / 4 orphans → 11 dirs / **1 orphan — this one.**
+  **The unique content is broader than the 2 `.md` files + screenshots recorded above.** Diffing the
+  526 non-build files against `git ls-files` gives **20 paths absent from main**, and they are not
+  simply renames: every one HAS git history (29 / 9 / 3 / 3 commits for the four sampled), but the
+  orphan's copy matches **NO commit in that history** — checked exhaustively, not sampled, for
+  `lib/features/train/screens/active_workout_screen.dart` (all 29) and
+  `supabase/functions/_shared/tools/nutrition/prelog.ts` (all 3). File mtime is **2026-04-20 17:53**
+  while main's last commits to those paths are 2026-05-21 / 2026-06-01 / 2026-06-03, so these are
+  uncommitted April edits on files main has since restructured past — recoverable from nowhere.
+  Whether four-month-old WIP on since-refactored code is worth salvaging is the founder call this
+  entry is already blocked on; the point of this note is that step (2) "salvage anything worth
+  keeping" covers 20 source files, not just the two reports.

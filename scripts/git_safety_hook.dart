@@ -112,7 +112,13 @@ void main() async {
 
     // 1. --no-verify: no general escape hatch.
     if (commandHasNoVerifyFlag(command)) {
-      if (env['FOUNDER_APPROVED_NO_VERIFY'] == '1') {
+      // Both the process env AND an inline `NAME=1 git ...` prefix count. The
+      // inline form is what CLAUDE.md §4.3 and the deny message below actually
+      // tell you to type, and it never reaches this process's environment --
+      // see inlineEnvAssignment's doc comment for why that left this hatch
+      // unusable and the ALLOW_RAW_GIT one working only by detection miss.
+      if (env['FOUNDER_APPROVED_NO_VERIFY'] == '1' ||
+          inlineEnvAssignment(command, 'FOUNDER_APPROVED_NO_VERIFY') == '1') {
         exit(0);
       }
       _deny(
@@ -128,6 +134,10 @@ void main() async {
     // after the first in a multi-line command -- the dominant shape Claude
     // actually emits. git_safety_lib splits on \n/;/&&/||/| and checks each
     // statement, and also tolerates `git -C <dir> commit` / `--no-pager`.
+    // Honoured from either source, for the same reason as the hatch above.
+    final allowRawGit = env['ALLOW_RAW_GIT'] == '1' ||
+        inlineEnvAssignment(command, 'ALLOW_RAW_GIT') == '1';
+
     final hasRawCommit = commandInvokesGitSubcommand(command, 'commit');
     final hasRawPush = commandInvokesGitSubcommand(command, 'push');
     final usesSafeCommit = commandUsesWrapper(command, 'safe_commit.sh');
@@ -139,7 +149,7 @@ void main() async {
           _gitOk(cwd, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']) ||
               _gitOk(cwd, ['rev-parse', '-q', '--verify', 'CHERRY_PICK_HEAD']) ||
               _gitOk(cwd, ['rev-parse', '-q', '--verify', 'REVERT_HEAD']);
-      if (!mergeInProgress && env['ALLOW_RAW_GIT'] != '1') {
+      if (!mergeInProgress && !allowRawGit) {
         _deny(
           '[git-safety] BLOCKED: raw `git commit` -- 6 documented incidents '
           '(memory/feedback_git_landing_verification.md) where a backgrounded '
@@ -151,7 +161,7 @@ void main() async {
     }
 
     // 3. raw `git push`.
-    if (hasRawPush && !usesSafePush && env['ALLOW_RAW_GIT'] != '1') {
+    if (hasRawPush && !usesSafePush && !allowRawGit) {
       _deny(
         '[git-safety] BLOCKED: raw `git push` -- a long pre-push suite can '
         'idle the SSH channel and SIGPIPE silently with no git error '

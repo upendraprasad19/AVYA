@@ -83,20 +83,43 @@ Unit tests live in `test/`. Integration tests (require Hive + real device) live 
 flutter analyze
 ```
 
-### Git hooks (pre-commit + pre-push) — tiered by blast radius
+### Git hooks (FIVE) — tiered by blast radius
 Installed once per clone via `sh scripts/setup-hooks.sh` (Git Bash on Windows). Not
 version-controlled into `.git/hooks/`. Bypass a single run with `--no-verify` (sparingly — CI
 runs the same gates). See §4 process invariants for the no-deferred-failures policy.
 
-- **`scripts/pre-commit.sh` (gates only, ~2 min):** the ~72 `check_*.dart` gates
-  (bounded-parallel, `PRE_COMMIT_GATE_JOBS` default 4) + Gate 40 + conditional index regens +
+> **All five hooks resolve Dart through `scripts/_dart_bin.sh`, never a bare `dart`.**
+> `flutter/bin/dart` is a WRAPPER that takes the SDK update lock and shells out to
+> `git rev-parse` on the Flutter checkout on EVERY invocation — and the lock SERIALIZES
+> concurrent callers, so its cost scales with the gate loop's job count instead of dividing by
+> it. Measured 2026-08-17 on the real hook, same worktree, same gates, both exit 0:
+> **182149 ms → 98447 ms** (a second, load-contended pair: 399370 → 163744). Bare
+> `dart --version`, which does nothing at all, costs **3.4–10.5 s** via the wrapper and
+> **0.10–0.22 s** via the SDK exe. Two hypotheses were tested and REFUTED — do not re-run them:
+> Windows Defender (the exe is scanned identically and costs 280 ms) and the hook's `GIT_DIR`
+> leak reaching `dart.bat`'s git call (no measurable effect). Corollary: **raising
+> `PRE_COMMIT_GATE_JOBS` is not the lever** — it bought ~20% while the wrapper was in the path
+> (that was lock contention, not parallelism headroom) and nothing measurable now that it is not.
+> Pinned by `test/scripts/dart_bin_resolver_test.dart`, whose mirror test fails if any hook
+> reverts to a bare `dart run` or drops the `.` source line.
+
+- **`scripts/pre-commit.sh` (gates only, ~98 s measured):** **89** `check_*.dart` files exist;
+  the loop runs **75** (14 are case-skipped), and 2 more (`check_no_deferral_euphemism`,
+  `check_skipped_discipline_budget`) are invoked explicitly after it, so real pre-commit
+  coverage is **77 of 89** — `check_regression_catalog` makes 78 on a merge only.
+  Bounded-parallel, `PRE_COMMIT_GATE_JOBS` default 4. Plus Gate 40 + conditional index regens +
   merge-commit regression-catalog walk. Blocks the commit on any failure. Prints a non-blocking
   `/code-review` (B-pass) reminder when the staged blast-radius is ≥`account` — the review itself
   is MANDATORY before the merge per §4.3; the echo is only the reminder, not the gate.
   It does **NOT** run `flutter analyze` or `flutter test` (cost split 2026-08-11 — see ADR-0018).
   The two flutter steps dominated commit cost and were the most duplicated work in the pipeline:
   `test/contracts/` is a strict subdirectory of `test/`, so pre-push (≥account) and CI each re-run
-  those same files. ⚠ **The exact seconds are contested and OI-102 owns that question** — an
+  those same files. ⚠ **The exact seconds are contested. OI-102 is CLOSED** (2026-08-11 — ADR-0018
+  removed its trigger); the unanswered measurement half was carried forward as **OI-106** (`Verified:
+  never`), which owns the still-unexplained "CI runs 690 files in 417s while local ran 478 in
+  1114.6s — ~3.9× slower per file locally at ~4× the parallelism". Corrected 2026-08-17: this row,
+  `scripts/pre-commit.sh` and ADR-0018 all still called OI-102 OPEN, while the board — the
+  authoritative source — had marked it CLOSED the same day those three were written. An
   in-session run measured 845s total (analyze 212s cold / ~18s warm, contracts 521s), while
   OI-102's board-verified JSON-reporter run the same day measured the contracts subset alone at
   1114.6s over 477 files. Treat 845s as a floor, not a settled figure; the decision holds under
@@ -115,6 +138,17 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   `scripts/blast_radius_from_diff.dart`; lean-workflow batch 2026-06-01, analyze added 2026-08-11.
   Pinned by `test/contracts/hook_gate_placement_test.dart` +
   `test/scripts/pre_push_analyze_always_e2e_test.dart`.)
+- **`scripts/pre-merge-commit.sh` (OI board integrity at the merge, ~2 s):** git invokes THIS
+  hook — NOT `pre-commit` — for an automatically-created merge commit. Until 2026-08-17 it was
+  not installed, so a **CLEAN auto-merge ran no hook at all**. That is the exact shape of the
+  OI-number collision class: two sessions' board additions sit in different regions of the file,
+  git combines them silently, and one number ends up naming two issues. Two places in the repo
+  asserted the opposite — `open_issues.md:2426-2428` (OI-112) and diagnose `b7e3d1:56-58`, both
+  claiming "corruption cannot LAND — the merge commit regenerates the index and the gate fires" —
+  and both were false for want of this hook. It runs the two board gates only
+  (`build_oi_index.dart` for within-file duplicates, `check_oi_numbering_unique.dart` for
+  cross-branch/cross-board), NOT the full 75-gate loop: a merge needs board integrity, not a
+  re-scan of a tree already gated at every commit on both sides.
 - **CI (`.github/workflows/test.yml`) is the full-suite source-of-truth for `main`** — analyze +
   full `flutter test` + all gates + a debug-APK compile. ⚠ It triggers on `push: [main, develop]`
   **and `pull_request` targeting them** — **not on every push**. Counted live 2026-08-11:
@@ -268,7 +302,8 @@ After observations captured + before brainstorming:
 ### 4.2 No-deferrals
 
 - Multi-bug batches: fix ALL in same batch. No "lower priority" tagging.
-- No "context tight" / "responsible handoff" as a stopping excuse — context management is the agent's job (use TodoWrite, dispatch focused subagents, compact when needed).
+- No "context tight" / "responsible handoff" as a stopping excuse — context management is the agent's job (use TodoWrite, dispatch focused subagents, compact when needed). <!-- deu-quote: enumerates the banned phrases -->
+
 - **The ban is on the SEMANTIC, not the literal string.** Re-wrapping a deferral as `dedicated batch` / `test-maintenance batch` / `cleanup batch` / `next-batch baseline` / `documented baseline for next batch` is the SAME violation as `defer` / `follow-up batch`. When the menu you write would force founder to ratify a deferral to pick any option, the menu is malformed — re-design it. Codified 2026-05-24 as 7th instance per `feedback_mistake_dedicated_batch_is_defer.md` after founder caught the recovery batch's first plan attempting to ship APK +31 with 50 test failures rolled to a "dedicated test-maintenance batch".
 - **Structural closed==N invariant (P1.E, 2026-06-18):** every multi-item batch (≥4 findings/units) or audit MUST produce a `docs/audit/<batch>.closure.yaml` with per-entry `terminal_state:` ∈ {`closed_in_commit`, `upstream_blocked`, `blocked_on_user`, `verified_clean`} and no `deferred:` key. Gate 40 (`scripts/validate_audit_closure.dart`) recomputes the closed tally and FAILS if any item is non-terminal (closed < N). This makes deferrals structurally impossible — a non-terminal item blocks the gate. Small 2–3 item bugfix batches keep the existing per-fix diagnose-doc + TodoWrite discipline instead.
 - Refs: `feedback_no_deferrals.md`, `feedback_no_deferrals_recurrence.md`, `feedback_no_stop_until_done.md`, `feedback_mistake_dedicated_batch_is_defer.md`.
@@ -308,6 +343,13 @@ After observations captured + before brainstorming:
   outcome per ADR-0018, so it stays silent rather than firing on every `claude/*` push). Warn-only
   by construction: no gate calls it, no exit code is consumed, every error path exits 0. The arm is
   `|| true`-wrapped — a failure to record can never turn a landed push into a reported failure.
+  **`safe_push.sh` has THREE outcomes, not two** (documented at its own `:12-21`, and previously
+  absent from this file): `0` LANDED, `1` FAILED, **`2` UNVERIFIED** — git reported success but the
+  remote was unreachable on BOTH probes, so whether it landed is genuinely unknown. A caller that
+  treats non-zero as "failed" misreports a possibly-landed push; a caller that treats it as success
+  misreports the opposite. Kill switch for the reconciler: `.claude/.reconcile_ci.disabled`
+  (gitignored) — its presence makes `reconcile_ci.dart` return before reading any file or calling
+  `gh` at all.
 - **Don't manually re-run the full `flutter test`** when the hooks/CI will run it anyway — run targeted tests during dev; pre-push (≥account) + CI are the full-suite gates. CI is the full-suite source-of-truth.
 - APK build from a CI-green, already-pushed `main` may use `/build-apk --from-green` to skip the redundant gate re-run (keeps the clean build + size + on-main/versionCode/.env gates).
 - **≥account code-review is SELF-INITIATED, before the merge.** For any batch whose blast-radius is ≥`account` and that touches code / schema / Edge Functions, run `/code-review` (B-pass) BEFORE the `--no-ff` merge to `main` — do NOT wait to be asked. The pre-commit echo (§0) is a reminder, not the gate; the discipline is the agent's. (Docs/process-only ≥account changes — e.g. CLAUDE.md edits — take a self-consistency review of the wording instead of an adversarial bug-hunt.) Codified 2026-06-07 after a ≥account alert batch merged to local `main` un-reviewed and a P0 (alert blind to `event`-coded failures) survived until a founder-prompted push-time review caught it.
@@ -356,7 +398,16 @@ When touching payment / sync / auth / AI prompt / plan generator:
 1. Default new code path behind `kDebugMode` gate OR Hive flag OR RemoteConfig.
 2. Old path preserved verbatim, reachable when gate closed.
 3. Roll the gate after manual verification.
-4. Once verified, delete old path in follow-up batch.
+4. Delete the old path in the SAME batch that rolls the gate — that batch is
+   already touching and re-testing this exact code, so the deletion is cheapest
+   and safest there. If the founder schedules the roll for later, the old path
+   is tracked on the OI board (or in `docs/ship_dark_pending_review.yaml`, which
+   §4.12.4 already uses for exactly this shape), never left as an intention.
+   Corrected 2026-08-17: this step read *"Once verified, delete old path in
+   follow-up batch"* — a §4.2 violation sitting inside the process rules, found <!-- deu-quote: records what the step said before it was fixed -->
+   when `check_no_deferral_euphemism.dart` was widened from staged-diff-only to
+   a full sweep of CLAUDE.md and the skills. A diff-scoped gate can never see a
+   violation older than itself.
 
 ### 4.7 Naming conventions
 
@@ -434,8 +485,14 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 **worktree** has its OWN index, so working in a dedicated worktree makes the mixing impossible.
 
 1. **EVERY session that will edit/stage/commit MUST work in its OWN worktree.** Create it with
-   `sh scripts/new-worktree.sh <slug>` (branches off the latest `main`, copies `.env`), then
+   `sh scripts/new-worktree.sh <slug>` (copies `.env`), then
    `cd .claude/worktrees/<slug>` and do ALL edits/commits there.
+   **The base is NOT simply "the latest `main`"** — `new-worktree.sh:65-91` compares local `main`
+   and `origin/main` with `git merge-base --is-ancestor` and picks whichever is ahead, preferring
+   LOCAL `main` in the merged-but-unpushed case (§4.13's own merge-locally-then-push workflow makes
+   that the common state). On genuine divergence it WARNS to stderr and proceeds on local `main`
+   rather than failing — deliberately not a ship-stop. Its header records that "prefer origin/main
+   unconditionally" was the old behaviour and caused a real conflict on 2026-08-10.
 2. **The shared main folder is INTEGRATION-ONLY:** reads, merging a branch into main, `git push`,
    `/build-apk`, and worktree **retirement** (point 6 — `retire_worktree.dart` refuses to run from
    a linked worktree, so the primary is the only place it CAN run). Never `git add`/commit feature
@@ -651,4 +708,6 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Worktree-per-session enforcement (one worktree per session; shared main folder = integration-only; prevents cross-session git-index file-mixing) | **§4.13.** Pre-commit gate `scripts/check_commit_from_worktree.dart` (+ pure `scripts/worktree_guard_lib.dart`, test `test/contracts/check_commit_from_worktree_test.dart`) blocks non-merge commits in the primary worktree; helper `scripts/new-worktree.sh <slug>`; `scripts/discipline_hook.dart` SessionStart warning. Diagnose `f0c2d5`; `memory/feedback_worktree_per_session.md`. |
 | Worktree **lifecycle** — retirement (the half §4.13 originally lacked; the count reached 106 dirs / 17 GB before this existed, reclaimed to 1.4 GB) | **§4.13 point 6.** `dart run scripts/retire_worktree.dart` (dry-run DEFAULT, `--execute` opt-in) + pure `scripts/retire_worktree_lib.dart`. Four-leg predicate: merged AND no tracked changes AND no non-regenerable ignored files AND nothing unpushed — "merged" alone would have destroyed 21 uncommitted files across 5 worktrees on 2026-08-09. Orphans (on disk, not in `git worktree list`) are a stricter separate category: only genuinely empty dirs (0 entries, counting directories) auto-remove. Operator-invoked, NOT a blocking gate. Tests `test/scripts/retire_worktree_lib_test.dart` + `retire_worktree_e2e_test.dart` (mutation-proven). |
 | **Gate registry** — which script owns gate number N, and can that gate's test actually FAIL? (Before this, neither question was mechanically answerable: "Gate 44" named TWO unrelated scripts, five surveys in one session returned five different collision counts, and only 6 test files in the whole repo asserted a red path.) | `docs/audit/GATE_INDEX.md` — **generated**, do not hand-edit; regenerated by `scripts/pre-commit.sh` when a baked input changes. Generator `scripts/build_gate_index.dart` + pure `scripts/gate_index_lib.dart`; freshness gate `scripts/check_gate_index_fresh.dart`. **The registry keys on the FILENAME**; a number is an optional alias (49 of 87 have one). Canonical declaration is `// Gate: N` alone on its line in the first 10 lines — the ONLY form the generator reads. Four claim sources: script headers, `_extraGateScripts` (for numbered non-`check_*` gates like `validate_audit_closure.dart` = Gate 40), `build-apk.md` sections, and the closure ledgers (BOTH `*_closures.yaml` and `*.closure.yaml`, BOTH mint orders) — a ledger mint is EVIDENCE, superseded once the script declares its own number, because ledgers are historical records that are never rewritten. Rule 24 ledger: `docs/audit/gate_test_ledger.yaml` + `scripts/check_gate_test_ledger.dart`. Tests: `test/scripts/gate_index_{lib,e2e,fresh_e2e}_test.dart`, `gate_test_ledger_lib_test.dart`. |
+| **OI number uniqueness across branches** — there is NO allocator (`build_oi_index.dart:114-115`: *"OI numbers are minted by eyeballing the board's tail"*), the ceiling is split across two files, and six collisions had shipped by 2026-08-16 (five renumber commits, three on 2026-08-13 alone; the fifth went **3 days 0h 34m** undetected and its pushed commit message still cites the superseded numbers) | `scripts/check_oi_numbering_unique.dart` + pure `scripts/oi_numbering_lib.dart`; tests `test/scripts/oi_numbering_lib_test.dart` (mutation-proven on 4 legs). **THREE-point predicate** — collision iff the branch MINTED the number (absent at merge-base) AND mainline has it AND the titles differ; a two-point comparison would call every ordinary title edit a collision. Runs at pre-commit (advisory, no fetch — catches the mint as it happens), in CI (authoritative), and in `pre-merge-commit` (where both boards first coexist). **Fails OPEN** when it cannot determine an answer, and says SKIPPED rather than PASS — its own first live run reported PASS against an EMPTY mainline board because `Process.runSync` defaults to `systemEncoding` and mangled the em-dash separator (0 of 77 headings parsed). Closes the mint-time half of **OI-112**. |
+| **Dart binary resolution in the hooks** — `flutter/bin/dart` is a wrapper that takes the SDK update lock + runs git on the Flutter checkout EVERY call, and the lock serializes the parallel gate loop | `scripts/_dart_bin.sh` (sourced by all five hooks; `DART_BIN_OVERRIDE` escapes it). Real-hook A/B: **182149 ms → 98447 ms**. Refuted hypotheses recorded in its header so nobody re-runs them: Defender, and the `GIT_DIR` leak. Mirror test `test/scripts/dart_bin_resolver_test.dart` fails if a hook reverts to bare `dart run` or drops the source line. |
 | Worktree **config integrity** — `core.worktree` must never be set (it silently redirects EVERY worktree at one branch's files, defeating §4.13 from underneath while its gate passes cleanly) | **§4.13 point 7.** Pre-commit gate `scripts/check_worktree_config_integrity.dart` + pure `scripts/worktree_config_integrity_lib.dart`; tests `test/scripts/worktree_config_integrity_lib_test.dart` + `worktree_config_integrity_e2e_test.dart`. Checks ALL git scopes (a global `~/.gitconfig` entry corrupts identically); **fails OPEN** when git cannot answer, so an environment quirk cannot wedge every commit. Diagnose `a4f7c2`. |

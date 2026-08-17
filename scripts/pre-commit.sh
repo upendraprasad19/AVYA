@@ -44,6 +44,31 @@ flutter() {
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE flutter "$@"
 }
 
+# Resolve the Dart binary ONCE. `flutter/bin/dart` is a wrapper that takes the
+# SDK update lock and shells out to git on EVERY call; this script invokes dart
+# 12 times outside the gate loop and 75 times inside it. And the lock SERIALIZES
+# concurrent callers, so the wrapper's cost scales with the job count instead of
+# dividing by it -- which is why it is also wildly VARIABLE. Measured on this
+# whole hook, same gates, all passing, both exit 0:
+#     wrapper : 182149 / 399370 / 639294 ms, plus 2 runs that did not finish
+#               inside a 7-minute window
+#     SDK exe :  97336 /  98447 / 143025 / 146098 ms
+# The spread is the point as much as the mean: commit latency stopped being
+# unpredictable. Falls back to `dart` on PATH -- see scripts/_dart_bin.sh for
+# the measurements and the TWO REFUTED hypotheses (Defender; the GIT_DIR leak).
+if [ -r "$REPO_ROOT/scripts/_dart_bin.sh" ]; then
+  . "$REPO_ROOT/scripts/_dart_bin.sh"
+  DART_BIN="$(resolve_dart_bin)"
+else
+  # Guarded, and the guard is load-bearing: this file runs under `set -e`, so an
+  # unguarded `.` of a missing file ABORTS the hook outright. `_dart_bin.sh`'s
+  # own contract is "never wedge a hook", and sourcing it must honour that too.
+  # Caught by test/scripts/pre_push_analyze_always_e2e_test.dart, which builds a
+  # temp repo holding only the hook script -- the same shape as a partial
+  # checkout or a hook copied somewhere without its helper.
+  DART_BIN="dart"
+fi
+
 # COST SPLIT (2026-08-11 — this script is scripts/pre-commit.sh; the literal
 # path is kept in this header because scripts/check_hooks_installed.dart
 # (Gate 32) looks for it in the INSTALLED hook to prove the hook is ours.
@@ -93,10 +118,14 @@ flutter() {
 #     comment held only for the push to main.)
 #   - the full suite stays blast-radius-tiered there, unchanged.
 #
-# 86 gate files exist; the loop below runs 71 (15 are case-skipped). 2 of those
-# 15 (check_no_deferral_euphemism, check_skipped_discipline_budget) are invoked
-# EXPLICITLY below, so real pre-commit coverage is 73 of 86 — quoting only "71"
-# understates it the same way the old "38" overstated it.
+# 89 `check_*.dart` files exist; the loop below runs 75 (14 are case-skipped).
+# 2 of those 14 (check_no_deferral_euphemism, check_skipped_discipline_budget)
+# are invoked EXPLICITLY below, so real pre-commit coverage is 77 of 89 — 78 on
+# a merge, where check_regression_catalog also runs. Quoting only "75"
+# understates it the same way the old "38" overstated it. Counts corrected
+# 2026-08-17 (they read 86/71/73); re-derive rather than trust them:
+#   ls scripts/check_*.dart | wc -l
+#   grep -cE '^[[:space:]]+check_[a-z_0-9]+\.dart(\||\))' scripts/pre-commit.sh
 #
 # Escape hatches. STRONGEST FIRST: if both are set, PRE_COMMIT_FULL wins, so
 # asking for more gating never silently yields less (round-1 review finding 9 —
@@ -141,7 +170,7 @@ fi
 # Regen bug index if any diagnose-doc was modified (per CLAUDE.md decluttering spec §8)
 if git diff --cached --name-only | grep -q '^docs/diagnoses/'; then
   echo "[pre-commit] Diagnose-docs touched — regenerating INDEX.md..."
-  if ! dart run scripts/build_bug_index.dart; then
+  if ! "$DART_BIN" run scripts/build_bug_index.dart; then
     echo "[pre-commit] FAIL: build_bug_index.dart errored."
     exit 1
   fi
@@ -158,7 +187,7 @@ fi
 # written. This regen is the real one.
 if git diff --cached --name-only | grep -q '^docs/audit/open_issues\.md$'; then
   echo "[pre-commit] Open-issues board touched — regenerating OPEN_INDEX.md..."
-  if ! dart run scripts/build_oi_index.dart; then
+  if ! "$DART_BIN" run scripts/build_oi_index.dart; then
     echo "[pre-commit] FAIL: build_oi_index.dart errored."
     exit 1
   fi
@@ -168,7 +197,7 @@ fi
 # Regen ADR index if any ADR file was modified (six industry-gap closure 2026-05-28).
 if git diff --cached --name-only | grep -qE '^docs/adr/[0-9]{4}-.*\.md$'; then
   echo "[pre-commit] ADR docs touched — regenerating INDEX.md..."
-  if ! dart run scripts/build_adr_index.dart; then
+  if ! "$DART_BIN" run scripts/build_adr_index.dart; then
     echo "[pre-commit] FAIL: build_adr_index.dart errored."
     exit 1
   fi
@@ -178,7 +207,7 @@ fi
 # Regen incident index if any incident file was modified.
 if git diff --cached --name-only | grep -qE '^docs/incidents/[0-9]{4}-.*\.md$'; then
   echo "[pre-commit] Incident docs touched — regenerating INDEX.md..."
-  if ! dart run scripts/build_incident_index.dart; then
+  if ! "$DART_BIN" run scripts/build_incident_index.dart; then
     echo "[pre-commit] FAIL: build_incident_index.dart errored."
     exit 1
   fi
@@ -202,7 +231,7 @@ fi
 # collision baseline it produces could never have been written.
 if git diff --cached --name-only | grep -qE '^(scripts/.+\.dart|\.claude/commands/build-apk\.md|docs/audit/([^/]+_closures\.yaml|[^/]+\.closure\.yaml|closed_issues\.md|gate_test_ledger\.yaml))$'; then
   echo "[pre-commit] Gate-index input touched — regenerating GATE_INDEX.md..."
-  if ! dart run scripts/build_gate_index.dart; then
+  if ! "$DART_BIN" run scripts/build_gate_index.dart; then
     echo "[pre-commit] FAIL: build_gate_index.dart errored."
     exit 1
   fi
@@ -212,7 +241,7 @@ fi
 # Regen handbook index if any handbook file was modified.
 if git diff --cached --name-only | grep -qE '^docs/handbook/.+\.md$'; then
   echo "[pre-commit] Handbook touched — regenerating INDEX.md..."
-  if ! dart run scripts/build_handbook_index.dart; then
+  if ! "$DART_BIN" run scripts/build_handbook_index.dart; then
     echo "[pre-commit] FAIL: build_handbook_index.dart errored."
     exit 1
   fi
@@ -230,7 +259,7 @@ fi
 # multi-item batch/audit must carry a terminal_state; non-terminal items fail.
 # NOT in the check_*.dart loop (Gate 33 globs only check_*.dart names).
 echo "[pre-commit] Gate 40: validate_audit_closure..."
-if ! dart run scripts/validate_audit_closure.dart; then
+if ! "$DART_BIN" run scripts/validate_audit_closure.dart; then
   echo "[pre-commit] FAIL: audit closure ledger has invalid or non-terminal entries. Fix root cause; do NOT use --no-verify."
   exit 1
 fi
@@ -247,7 +276,7 @@ fi
 # (verified by running it). The flag is gone; this is now a hard gate.
 # Note it is ALSO in the case-skip list below, so it does not double-run.
 echo "[pre-commit] Gate-SDB: check_skipped_discipline_budget..."
-if ! dart run scripts/check_skipped_discipline_budget.dart; then
+if ! "$DART_BIN" run scripts/check_skipped_discipline_budget.dart; then
   echo "[pre-commit] FAIL: open skipped-discipline waivers older than 14 days (§4.11). Fix root cause; do NOT use --no-verify."
   exit 1
 fi
@@ -258,7 +287,7 @@ fi
 # as an explicit pre-commit-only invocation (scans the staged index; CI has no
 # staged diff) + allow-listed from the check_*.dart loop to avoid a double-run.
 echo "[pre-commit] Gate-DEU: check_no_deferral_euphemism..."
-if ! dart run scripts/check_no_deferral_euphemism.dart; then
+if ! "$DART_BIN" run scripts/check_no_deferral_euphemism.dart; then
   echo "[pre-commit] FAIL: deferral euphemism in staged docs (§4.2). Fix root cause; do NOT use --no-verify."
   exit 1
 fi
@@ -282,7 +311,6 @@ for GATE in scripts/check_*.dart; do
     check_apk_size_within_bounds.dart|\
     check_apk_release_signed.dart|\
     check_plan_review_record_exists.dart|\
-    check_telemetry_pii_classification.dart|\
     check_unawaited_has_error_sink.dart|\
     check_razorpay_key_flavor.dart|\
     check_migrations_live.dart|\
@@ -294,6 +322,14 @@ for GATE in scripts/check_*.dart; do
     check_no_deferral_euphemism.dart|\
     check_closes_oi_cited.dart|\
     check_skipped_discipline_budget.dart)
+      # check_telemetry_pii_classification.dart (Gate 22) was REMOVED from this
+      # list 2026-08-17. It is a pure source scan of lib/ with no live
+      # dependency -- 436 callsites in 1.5s, exit 0 -- so the blanket
+      # "requires live DB / build artifact" rationale below never applied to
+      # it. It had ZERO invocation sites anywhere: skip-listed here AND in
+      # test.yml AND absent from build-apk.md, i.e. a shipped, ledgered gate
+      # that read as coverage and provided none. It is advisory by design, so
+      # wiring it reports without being able to block.
       # Razorpay gate: .env.prod is user-only / gitignored secret state.
       # Other gates: require live DB / merge context / build artifact —
       # run via /build-apk skill, NOT pre-commit. See
@@ -312,7 +348,7 @@ for GATE in scripts/check_*.dart; do
   esac
   # Run each gate in the background; a failing gate drops a marker file.
   (
-    if ! dart run "$GATE" >/dev/null 2>&1; then
+    if ! "$DART_BIN" run "$GATE" >/dev/null 2>&1; then
       echo "$GATE_NAME" > "$GATE_FAILDIR/$GATE_NAME"
     fi
   ) &
@@ -340,7 +376,7 @@ fi
 # Regression catalog walk — only on merge commits (per spec §9.2)
 if git rev-parse --verify MERGE_HEAD >/dev/null 2>&1; then
   echo "[pre-commit] Merge commit detected — walking regression catalog..."
-  if ! dart run scripts/check_regression_catalog.dart; then
+  if ! "$DART_BIN" run scripts/check_regression_catalog.dart; then
     echo "[pre-commit] FAIL: regression catalog detected a missing or failing test."
     exit 1
   fi
@@ -355,7 +391,7 @@ echo "[pre-commit] All decluttering gates passed."
 # extraction as prepare-commit-msg.sh:41-43; reads the STAGED diff (default mode).
 # (This `case` block carries no check_*.dart names, so Gate 33's allowlist
 # detection is unaffected.)
-REMINDER_TIER=$(dart run scripts/blast_radius_from_diff.dart 2>/dev/null \
+REMINDER_TIER=$("$DART_BIN" run scripts/blast_radius_from_diff.dart 2>/dev/null \
   | grep -oE 'Blast-radius: (feature|account|platform|catastrophic)' \
   | tail -1 | awk '{print $2}' || true)
 case "$REMINDER_TIER" in

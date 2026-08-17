@@ -55,9 +55,18 @@ verdict: pending  # → accepted | spawn_followup_batch | block_ship
 <filled in by founder>
 
 ## Action items
+Every finding takes exactly ONE terminal state — there is no "later" bucket
+(CLAUDE.md §4.2; same shape as the closure-YAML `terminal_state:` invariant).
 - [ ] <fix in this batch> — owner
-- [ ] <spawn follow-up batch for: ...> — owner
+- [ ] <upstream_blocked: what blocks it, where it is tracked> — owner
+- [ ] <blocked_on_user: the exact decision needed> — owner
+- [ ] <verified_clean: why it is a non-finding> — owner
+- [ ] <filed as OI-NN on docs/audit/open_issues.md> — owner
 ```
+
+> The second line used to read `<spawn follow-up batch for: ...>`, offering a <!-- deu-quote: records what the line said before it was fixed -->
+> deferral bucket in the template of the deepest review the repo runs. Replaced
+> 2026-08-17 when the euphemism gate was widened to sweep skills in full.
 
 ## 2. Lens registry
 
@@ -101,7 +110,12 @@ Founder reviews the report. Per finding, mark:
 Verdict:
 - `accepted` — all findings resolved (fixed, annotated, or spawned). Batch can ship.
 - `block_ship` — at least one P0 not yet resolved. Batch cannot ship.
-- `spawn_followup_batch` — P0 findings exist but founder explicitly authorizes a follow-up batch within 24h.
+- `spawn_followup_batch` — P0 findings exist but founder explicitly authorizes a follow-up batch within 24h. <!-- deu-quote: founder-authorized escape, not an agent deferral -->
+  **Founder-authorized only.** §4.2 bans the AGENT choosing to defer; it does not
+  remove the founder's authority to schedule. An agent may never select this
+  verdict on its own — the authorization has to exist in chat first, and the
+  finding still lands on `docs/audit/open_issues.md` with the 24h window stated,
+  so it is a tracked commitment rather than a note in a report.
 
 ## 5. Cost / latency expectations
 

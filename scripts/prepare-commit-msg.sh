@@ -22,6 +22,20 @@ set -e
 COMMIT_MSG_FILE="$1"
 COMMIT_SOURCE="$2"
 
+# Resolve the Dart binary ONCE -- `flutter/bin/dart` is a wrapper that takes the
+# SDK update lock and shells out to git on EVERY call (~4.0s vs ~0.3s for the
+# SDK exe, measured). See scripts/_dart_bin.sh. Falls back to `dart` on PATH, so
+# a failure here is exactly the pre-existing behaviour. Sourced AFTER the early
+# exits above would be wrong -- they exit before any dart call, but the two
+# `case`/`grep` guards are cheap and this must be set before the tier compute.
+_PCM_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$_PCM_ROOT" ] && [ -r "$_PCM_ROOT/scripts/_dart_bin.sh" ]; then
+  . "$_PCM_ROOT/scripts/_dart_bin.sh"
+  DART_BIN="$(resolve_dart_bin)"
+else
+  DART_BIN="dart"
+fi
+
 # Skip merges / squashes / amends — only act on regular commits + templates.
 case "$COMMIT_SOURCE" in
   merge|squash|commit) exit 0 ;;
@@ -38,7 +52,7 @@ fi
 # helper's output line. So we extract the tier token with -oE (match anywhere
 # on the line) rather than an anchored ^Blast-radius: grep, which the preamble
 # defeats. Found during 2026-05-28 cross-check (diagnose b1f4e2 sibling).
-TIER_LINE=$(dart run scripts/blast_radius_from_diff.dart 2>/dev/null \
+TIER_LINE=$("$DART_BIN" run scripts/blast_radius_from_diff.dart 2>/dev/null \
   | grep -oE 'Blast-radius: (feature|account|platform|catastrophic)' \
   | tail -1 || true)
 if [ -z "$TIER_LINE" ]; then
