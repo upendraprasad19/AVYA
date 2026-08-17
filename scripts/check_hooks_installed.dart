@@ -95,16 +95,46 @@ void main(List<String> args) {
     exit(0);
   }
 
-  final hooks = parseInstalledHooks(installerFile.readAsStringSync());
+  final installerSource = installerFile.readAsStringSync();
+  final hooks = parseInstalledHooks(installerSource);
+
+  // CROSS-CHECK THE PARSE AGAINST A COUNT THAT DOES NOT DEPEND ON IT.
+  //
+  // "Derive, don't restate" removes the rot from the LIST — it does not remove
+  // it from the PARSER, and review round 2 (2026-08-17) proved that by mutation:
+  // change one install_hook line to leave its destination unquoted, delete that
+  // hook, and this gate printed `PASS: all 4 hook(s) installed`. A partial parse
+  // read as a complete one, which is the same reassuring-direction failure the
+  // hardcoded list had.
+  //
+  // The independent count is simply how many times `install_hook` is invoked.
+  // If the structured parse finds fewer, some call shape is not understood and
+  // the gate has no idea what it is missing — so it must not answer.
+  final invocationCount = RegExp(r'^\s*install_hook\s', multiLine: true)
+      .allMatches(installerSource)
+      .length;
+
   if (hooks.isEmpty) {
     stderr.writeln('[Gate 32] UNDETERMINED (passing): parsed ZERO install_hook '
-        'lines from $_installer. The installer exists, so either its call shape '
-        'changed or this parser is stale -- either way nothing was verified. '
+        'lines from $_installer (found $invocationCount invocation(s) by a '
+        'looser count). The installer exists, so either its call shape changed '
+        'or this parser is stale -- either way nothing was verified. '
         'An empty input set must never report the same colour as "all present".');
     exit(0);
   }
 
+  if (hooks.length != invocationCount) {
+    stderr.writeln('[Gate 32] UNDETERMINED (passing): $_installer invokes '
+        'install_hook $invocationCount time(s) but only ${hooks.length} could '
+        'be parsed into (source, destination) pairs. The unparsed one(s) are '
+        'invisible to this gate, so a hook could be missing and this would '
+        'still say PASS. Fix the parser or normalise the call shape to:\n'
+        '    install_hook "\$REPO_ROOT/scripts/<name>.sh" "\$HOOKS_DIR/<name>"');
+    exit(0);
+  }
+
   final failures = <String>[];
+  final warnings = <String>[];
   for (final h in hooks) {
     final path = _gitHookPath(h.dst);
     final f = File(path);
@@ -146,10 +176,31 @@ void main(List<String> args) {
         }
       }
     }
+    // IDENTITY MISMATCH IS A WARNING, NOT A FAILURE — and that asymmetry is
+    // the whole point of the gate's stated scope.
+    //
+    // The anchor is a line of CONTENT, so it drifts the moment anyone edits a
+    // hook's header comment without re-running the installer. Review round 2
+    // (2026-08-17) executed exactly that: reword line 2 of scripts/pre-commit.sh
+    // and this gate hard-FAILED every commit, in every worktree, with rc=1.
+    //
+    // That is the deadlock this file's own header says it refuses to create.
+    // The remedy it prints (`sh scripts/setup-hooks.sh`) writes to the COMMON
+    // git dir shared by every concurrent session, from whatever branch happens
+    // to be checked out — so a hard failure here forces a fix that reaches into
+    // other people's live sessions, over a cosmetic edit. Presence is the
+    // contract; sameness is OI-104's job and is warned about, not enforced.
     if (anchor != null && !content.contains(anchor)) {
-      failures.add('hooks/${h.dst} exists but does not match '
-          'scripts/${h.src} (its header line is absent). A stale or '
-          'hand-written hook runs INSTEAD of the canonical one.');
+      warnings.add('hooks/${h.dst} does not carry scripts/${h.src}\'s header '
+          'line — it may be STALE (setup-hooks.sh installs by `cp`, so an '
+          'edited script is inert until re-installed) or hand-written.');
+    }
+    if (anchor == null) {
+      // Fail-open on a missing source, but say so: with no anchor the identity
+      // check silently degrades to presence-only, and an impostor hook would
+      // pass it unnoticed.
+      warnings.add('scripts/${h.src} is absent, so hooks/${h.dst} was checked '
+          'for PRESENCE only — its contents were not verified against anything.');
     }
   }
 
@@ -166,7 +217,11 @@ void main(List<String> args) {
     exit(warnOnly ? 0 : 1);
   }
 
+  for (final w in warnings) {
+    stderr.writeln('[Gate 32] WARN: $w');
+  }
   stdout.writeln('[Gate 32] PASS: all ${hooks.length} hook(s) installed '
-      '(${hooks.map((h) => h.dst).join(', ')}), list derived from $_installer.');
+      '(${hooks.map((h) => h.dst).join(', ')}), list derived from $_installer'
+      '${warnings.isEmpty ? "" : " — ${warnings.length} staleness warning(s) above"}.');
   exit(0);
 }

@@ -280,6 +280,83 @@ void main() {
         isNull,
       );
     });
+    // ---- MULTI-LINE: a mention on its OWN LINE is still only a mention -----
+    //
+    // Round 1 fixed WHERE in a statement the assignment may sit. It did not ask
+    // whether the "statement" was executable text at all, and every test it
+    // added used a SINGLE-LINE message — so these shapes reddened nothing and
+    // shipped. Review round 2 (2026-08-17) found them against the real hook.
+    //
+    // splitStatements splits on every `\n`, so a line inside a heredoc body or
+    // a multi-line `-m` message became its own "statement"; if it happened to
+    // START with the incantation, the leading-prefix walk accepted it.
+    //
+    // This is not exotic. Multi-line commit messages are this repo's only
+    // commit convention (the Co-Authored-By trailer alone guarantees one), so a
+    // commit message that EXPLAINS the hatch policy would have unlocked it.
+    // The heredoc case is worse: it disarms the whole hook, because the
+    // skip-hooks handler exits 0 as soon as it believes it is approved.
+    test('a heredoc BODY line starting with the incantation does not grant it',
+        () {
+      const cmd = 'git commit -F - <<\'EOF\'\n'
+          'FOUNDER_APPROVED_NO_VERIFY=1 git commit was discussed\n'
+          'EOF';
+      expect(
+        inlineEnvAssignment(cmd, 'FOUNDER_APPROVED_NO_VERIFY'),
+        isNull,
+        reason: 'a heredoc body is DATA. Nothing in it is ever executed, so '
+            'nothing in it can grant an execution hatch.',
+      );
+    });
+
+    test('a multi-line commit MESSAGE body line does not grant it', () {
+      const cmd = 'git commit -m "fix: thing\n'
+          '\n'
+          'ALLOW_RAW_GIT=1 git commit is the documented hatch"';
+      expect(
+        inlineEnvAssignment(cmd, 'ALLOW_RAW_GIT'),
+        isNull,
+        reason: 'the text is inside quotes — a shell never executes it',
+      );
+    });
+
+    test('a REAL prefix on a later line of a multi-line command still works',
+        () {
+      // The mirror, and the reason the fix is quote-aware rather than
+      // "first line only": a genuine multi-line Bash command whose second line
+      // carries the hatch is legitimate and must keep working.
+      const cmd = 'cd /tmp\n'
+          'ALLOW_RAW_GIT=1 git commit -m x';
+      expect(inlineEnvAssignment(cmd, 'ALLOW_RAW_GIT'), '1',
+          reason: 'this line IS executable text at top level');
+    });
+
+    test('splitExecutableStatements keeps quoted separators out of the split',
+        () {
+      // Directly pins the primitive, so a future refactor of the splitter has
+      // its own failing test rather than only the indirect ones above.
+      final s = splitExecutableStatements('git commit -m "a; b && c"');
+      expect(s.length, 1,
+          reason: 'separators inside quotes are not separators: got $s');
+
+      final h = splitExecutableStatements(
+          'git commit -F - <<\'EOF\'\nbody; still body\nEOF\ngit push');
+      expect(h.any((x) => x.contains('still body')), isFalse,
+          reason: 'heredoc body must not surface as an executable statement: $h');
+      expect(h.any((x) => x.trim() == 'git push'), isTrue,
+          reason: 'the statement AFTER the heredoc must still be seen: $h');
+    });
+
+    test('an unbalanced quote yields MORE statements, never fewer', () {
+      // The failure direction matters. This splitter feeds an ALLOW decision,
+      // so when it cannot parse something it must not silently swallow a
+      // separator and merge a hatch onto a git call that never had one.
+      final s = splitExecutableStatements('echo "unterminated\nALLOW_RAW_GIT=1 git commit');
+      expect(inlineEnvAssignment('echo "unterminated\nALLOW_RAW_GIT=1 git commit',
+          'ALLOW_RAW_GIT'), isNull,
+          reason: 'inside an unterminated quote it is still data: $s');
+    });
+
     test('the prefix chain is still honoured through env(1) and stacking', () {
       // The strictness above must not cost the documented forms. These are the
       // shapes stripCommandPrefixes already accepts, so the two must agree —

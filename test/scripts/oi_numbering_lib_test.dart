@@ -509,6 +509,71 @@ Some prose mentioning OI-5 — not a heading.
       expect(r.stderr, contains('merge commit'));
     });
 
+    test('e2e — a SHALLOW checkout (what CI actually does) is not silently vacuous',
+        () {
+      // THIS IS THE TEST THAT WOULD HAVE CAUGHT B1.
+      //
+      // The two tests above build a FULL local repo, and the merge-commit one
+      // even says "as on CI after a push to main" — but CI's actions/checkout
+      // defaults to depth 1, and in a shallow clone git reports the merge
+      // commit as PARENTLESS. The `parents.length >= 3` arm never fires, the
+      // gate falls back to comparing HEAD against origin/main (the same commit
+      // in a shallow checkout), and the comparison degenerates to the exact
+      // no-op review round 1 had just fixed — now wearing a "PASS (vacuous):
+      // this is a checked answer, not a skipped one" label, which is worse than
+      // the bug because it reassures.
+      //
+      // The environment fix is `fetch-depth: 0` on the audit-gates job. This
+      // test pins the OTHER half: that when the history genuinely is not there,
+      // the gate must not claim to have checked. Vacuous is a claim about the
+      // BOARD; a truncated history is a claim about the INPUT, and they must
+      // not share a word.
+      final work = _cleanMergeScenario();
+      _git(work, ['checkout', 'main']);
+      _git(work, ['merge', '--no-ff', '--no-edit', 'feature']);
+
+      final shallow = '${work}_shallow';
+      final clone = _run('git',
+          ['clone', '--depth', '1', 'file://${work.replaceAll(r'\', '/')}', shallow],
+          tmp.path);
+      if (clone.exitCode != 0) {
+        markTestSkipped('shallow clone unavailable: ${clone.stderr}');
+        return;
+      }
+      expect(
+        _run('git', ['rev-parse', '--is-shallow-repository'], shallow)
+            .stdout
+            .toString()
+            .trim(),
+        'true',
+        reason: 'the fixture must actually be shallow or this proves nothing',
+      );
+
+      // The fixture copies the gate in AFTER committing, so it is untracked and
+      // does not come through the clone.
+      Directory('$shallow/scripts').createSync(recursive: true);
+      File(gate).copySync('$shallow/scripts/check_oi_numbering_unique.dart');
+      File(lib).copySync('$shallow/scripts/oi_numbering_lib.dart');
+      final r = _runGate(shallow);
+      final out = '${r.stdout}${r.stderr}';
+
+      // ⚠ THIS ASSERTION IS UNCONDITIONAL ON PURPOSE.
+      // Its first version was wrapped in `if (r.exitCode == 0)`, which made it
+      // VACUOUS: the fixture's collision also trips Check A (one number on both
+      // boards), the gate exited 1 for that unrelated reason, and the branch
+      // never executed. A guard clause around an assertion is a silent skip —
+      // exactly the "passes for the wrong reason" defect this very test was
+      // added to close, reproduced inside the fix for it.
+      expect(out, isNot(contains('PASS (vacuous)')),
+          reason: 'A shallow history is UNDETERMINED, not a vacuous PASS. In a '
+              'shallow clone git reports the merge commit as parentless, so the '
+              'gate falls back to HEAD-vs-origin/main — the same commit — and '
+              'the comparison degenerates. Saying "this is a checked answer, '
+              'not a skipped one" about a comparison the history cannot support '
+              'is precisely the false assurance this gate exists to prevent.\n'
+              'exit=${r.exitCode}\n$out');
+    });
+
     test('e2e — a clean merge with NO collision still passes at the merge commit',
         () {
       // The mirror. Without this, a gate that simply failed on every merge

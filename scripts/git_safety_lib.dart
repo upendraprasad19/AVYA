@@ -17,6 +17,119 @@
 List<String> splitStatements(String command) =>
     command.split(RegExp(r'\r?\n|;|&&|\|\|?'));
 
+/// Statements that a shell would REALLY execute: separators inside quotes or a
+/// heredoc body are not separators at all.
+///
+/// WHY THIS EXISTS SEPARATELY FROM [splitStatements].
+/// [splitStatements] splits on every `\n`, which is right for the DENY
+/// detectors -- over-splitting there can only ever produce an extra BLOCK, and
+/// a spurious block is loud and recoverable. It is catastrophically wrong for
+/// the ALLOW path: review round 2 (2026-08-17) showed that a line INSIDE a
+/// multi-line commit message or a heredoc body was treated as its own
+/// statement, so a message merely DESCRIBING the escape hatch granted it.
+/// Verified against the real hook -- these were BLOCKED before this batch and
+/// ALLOWED after the round-1 fix:
+///
+///     git commit --no-verify -F - <<'EOF'
+///     FOUNDER_APPROVED_NO_VERIFY=1 git commit was discussed
+///     EOF
+///
+///     git commit -m "fix: thing
+///
+///     ALLOW_RAW_GIT=1 git commit is the hatch"
+///
+/// The first disarms the hook entirely. And multi-line messages are this repo's
+/// ONLY commit convention, so this is not an exotic shape -- writing a commit
+/// message that explains the hatch policy would have unlocked it.
+///
+/// Round 1 fixed WHERE in a statement the assignment may sit; it did not
+/// question whether the "statement" was executable text at all. Both are needed.
+///
+/// Deliberately NOT a general shell parser. It tracks single quotes, double
+/// quotes, backslash escapes and heredoc bodies -- the constructs that actually
+/// carry prose in this repo's commands. Anything it cannot classify stays a
+/// separator, so an unparseable command yields MORE statements, never fewer:
+/// the failure direction is toward the deny path.
+List<String> splitExecutableStatements(String command) {
+  final out = <String>[];
+  final buf = StringBuffer();
+
+  var inSingle = false;
+  var inDouble = false;
+  String? heredocDelim;
+  var inHeredocBody = false;
+
+  var i = 0;
+  while (i < command.length) {
+    final c = command[i];
+
+    // Inside a heredoc body nothing is a separator until the delimiter line.
+    if (inHeredocBody) {
+      final lineEnd = command.indexOf('\n', i);
+      final line = (lineEnd == -1 ? command.substring(i) : command.substring(i, lineEnd));
+      if (line.trim() == heredocDelim) {
+        inHeredocBody = false;
+        heredocDelim = null;
+      }
+      if (lineEnd == -1) break;
+      i = lineEnd + 1;
+      continue;
+    }
+
+    if (c == r'\' && !inSingle && i + 1 < command.length) {
+      buf.write(c);
+      buf.write(command[i + 1]);
+      i += 2;
+      continue;
+    }
+    if (c == "'" && !inDouble) {
+      inSingle = !inSingle;
+      buf.write(c);
+      i++;
+      continue;
+    }
+    if (c == '"' && !inSingle) {
+      inDouble = !inDouble;
+      buf.write(c);
+      i++;
+      continue;
+    }
+
+    if (!inSingle && !inDouble) {
+      // Heredoc introducer: << or <<- , optional quote, then the delimiter word.
+      final hd = RegExp(r'^<<-?\s*(["\x27]?)([A-Za-z_][A-Za-z0-9_]*)\1')
+          .firstMatch(command.substring(i));
+      if (hd != null) {
+        heredocDelim = hd.group(2);
+        buf.write(command.substring(i, i + hd.end));
+        i += hd.end;
+        // The body starts after the current line ends.
+        final lineEnd = command.indexOf('\n', i);
+        if (lineEnd == -1) break;
+        buf.write(command.substring(i, lineEnd));
+        out.add(buf.toString());
+        buf.clear();
+        inHeredocBody = true;
+        i = lineEnd + 1;
+        continue;
+      }
+
+      final sep = RegExp(r'^(\r?\n|;|&&|\|\|?)').firstMatch(command.substring(i));
+      if (sep != null) {
+        out.add(buf.toString());
+        buf.clear();
+        i += sep.end;
+        continue;
+      }
+    }
+
+    buf.write(c);
+    i++;
+  }
+  out.add(buf.toString());
+  return out;
+}
+
 /// Strips shell noise that sits BEFORE the real command word: leading
 /// `VAR=value` assignments, `env [-i] [VAR=val ...]`, `command` / `builtin`,
 /// and a leading backslash (the standard alias-suppression form).
@@ -127,7 +240,10 @@ bool commandHasNoVerifyFlag(String command) =>
 /// not reach git in a real shell either, so honouring it would be wrong on the
 /// shell's own terms, not merely unsafe.
 String? inlineEnvAssignment(String command, String name) {
-  for (final raw in splitStatements(command)) {
+  // splitExecutableStatements, NOT splitStatements: the ALLOW path must only
+  // consider text a shell would actually run. See that function's header for
+  // the multi-line-message and heredoc bypasses this closes.
+  for (final raw in splitExecutableStatements(command)) {
     final v = _leadingAssignmentIfGitStatement(raw, name);
     if (v != null) return v;
   }

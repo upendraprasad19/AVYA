@@ -191,7 +191,32 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # fetch-depth: 0 IS LOAD-BEARING for check_oi_numbering_unique.dart.
+      #
+      # actions/checkout defaults to depth 1. In a shallow clone git reports the
+      # merge commit as PARENTLESS, so the gate's "am I at a merge commit?"
+      # branch (rev-list --parents -n 1 HEAD) never fires, it falls back to
+      # comparing HEAD against origin/main -- which in a shallow checkout ARE
+      # THE SAME COMMIT -- and the cross-branch comparison degenerates: base ==
+      # mainline makes its legs 1 and 2 mutually exclusive, so no collision is
+      # expressible and it prints "PASS (vacuous)".
+      #
+      # Review round 2 (2026-08-17) executed all three shapes against one origin
+      # repo whose main tip was a merge commit carrying a real OI-2 collision:
+      #   full clone                        -> FAIL, names OI-2, rc=1
+      #   git clone --depth 1               -> PASS (vacuous), rc=0
+      #   replay of actions/checkout's own
+      #   init + fetch --depth=1 + checkout -> PASS (vacuous), rc=0
+      # So this gate's own header calling CI "AUTHORITATIVE" was false for want
+      # of this one line, and the round-1 fix that repaired the shape selection
+      # had relabelled the CI no-op as "a checked answer, not a skipped one" --
+      # strictly worse than the bug it replaced, because it reassured.
+      #
+      # The sibling plan-review-record job below already sets this for the same
+      # class of reason (it needs HEAD^1..HEAD^2 reachable).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: subosito/flutter-action@v2
         with:
@@ -245,6 +270,25 @@ jobs:
             echo "::error::One or more audit gates failed."
             exit 1
           fi
+
+      - name: OI board renders (within-file duplicate numbers)
+        # WIRED 2026-08-17. build_oi_index.dart's duplicateIds() check — the one
+        # that catches a single board file holding TWO `## OI-N` headings — ran
+        # NOWHERE in CI. `grep -c build_oi_index .github/workflows/test.yml`
+        # returned 0. Locally it fires only from pre-commit.sh, and only when
+        # docs/audit/open_issues.md is in the STAGED diff, which a `--no-ff`
+        # merge never produces.
+        #
+        # So the within-file half of the OI-collision class had no CI backstop
+        # at all, and OI-112 / diagnose b7e3d1 both asserted that landing was
+        # gated. Reproduced 2026-08-17 in a throwaway repo: two branches each
+        # mint OI-2 in widely separated regions of the OPEN board, git merges
+        # them cleanly, and the merged file carries two `## OI-2` headings.
+        #
+        # This is the generator, so it also rewrites OPEN_INDEX.md; CI's tree is
+        # disposable, and check_oi_index_fresh (in the loop above) is what
+        # enforces the committed copy is current.
+        run: dart run scripts/build_oi_index.dart
 
       - name: Gate 40 — validate audit closure ledgers (closed==N)
         # P1.E (discipline-overhaul 2026-06-18): validates docs/audit/*.closure.yaml

@@ -7,7 +7,7 @@
 # FIVE hooks are installed (see the install_hook calls below — the count said
 # "three" while installing four since prepare-commit-msg joined them, and
 # pre-merge-commit joined them 2026-08-17):
-#   pre-commit        — 73 of 86 discipline gates + Gate 40 + conditional index
+#   pre-commit        — 77 of 89 discipline gates + Gate 40 + conditional index
 #                       regens. NO flutter analyze / flutter test on the default
 #                       path (cost split 2026-08-11; PRE_COMMIT_LEGACY=1 or
 #                       PRE_COMMIT_FULL=1 bring them back for one run).

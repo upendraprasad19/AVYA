@@ -7,12 +7,13 @@
 # passed".
 #
 # Gate 40 (validate_audit_closure.dart). One terminal_state per item, no
-# `deferred:` key. 11 items, over the §4.2 >=4 threshold. Branch:
+# `deferred:` key. 11 items at first authoring; 22 after review round 1 and 32
+# after round 2 (R1-1..R1-11, R2-1..R2-10). Over the §4.2 >=4 threshold. Branch:
 # cycle-time-and-board-gaps.
 
 batch: cycle-time-and-board-gaps
-total_findings: 22
-closed_count: 22
+total_findings: 32
+closed_count: 32
 
 _commit: &wip "cycle-time-and-board-gaps (uncommitted at authoring)"
 
@@ -181,3 +182,95 @@ findings:
     commit: *wip
     verification: "Re-checked before acting on the founder's 'if Health Connect works, can we delete it?'. EVERY claim failed. The three 'untracked' files are TRACKED and present in main (git ls-files returns all three), byte-identical after CRLF normalization (diff of tr -d CR output = 0 lines each). All 25 screenshots are tracked. The '20 paths matching no commit' is 0 of 9 — each matches a real historical blob once line endings are normalized (b8c7a5c3, 853681bd, c0102b1e, ef878afb, 8a4e30d6, 95ed1f72, 1b27a6d2, 9eea0be6, f8669b54), and they are absent from main because they were split into subdirectories or retired. EXHAUSTIVELY: all 526 non-build files hashed BOTH raw and CRLF-normalized against all 9766 blobs in the object database — 0 unmatched."
     notes: "Both of MY errors share one cause: the orphan's files are CRLF while git blobs are LF, and a git pathspec of `**/<name>` cannot match a root-level file. Each check returned nothing, and nothing was read as evidence of absence — feedback_green_check_input_set_width, the same class as the em-dash systemEncoding bug found in this batch's own gate hours earlier. NORMALIZE THE REPRESENTATION BEFORE CONCLUDING ABSENCE, AND STATE WHICH NORMALIZATION. The Health ClassCastException was fixed the day it was reported (8a5df734, 2026-03-30, the same date as the QA log line); nothing pinned the superclass, so test/contracts/main_activity_flutter_fragment_activity_test.dart now does (mutation: 3 of 4 redden). OI-129 stays OPEN — its blocker is now only that the recursive delete was refused by the harness safety classifier, which is correct and was not worked around."
+
+  # ---------------------------------------------------------------------------
+  # ROUND-2 REVIEW FINDINGS (2026-08-17).
+  #
+  # Run against the HARDENED result, specifically to test whether the round-1
+  # fixes introduced new defects. They had: both BLOCKING findings are
+  # fix-introduced or fix-incomplete. That is the second consecutive round in
+  # which the previous round's corrections were the defect source.
+  # ---------------------------------------------------------------------------
+
+  - id: R2-1
+    title: "BLOCKING — the collision gate is a no-op in CI, and the round-1 fix RELABELLED that no-op as a checked answer"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "test.yml's audit-gates job (the only job running this gate) used actions/checkout with no fetch-depth, i.e. depth 1. In a shallow clone git reports a merge commit as PARENTLESS, so the merge-shape arm never fires, the branch arm compares HEAD against an origin/main that IS HEAD, and the comparison degenerates exactly as before — now printing 'PASS (vacuous) ... this is a checked answer, not a skipped one', which is worse than the original bug because it reassures. Reproduced end-to-end in a throwaway repo whose main tip is a merge commit carrying a real cross-branch OI-2 collision, with Check A deliberately isolated OUT (both sides mint OI-2 on the OPEN board in widely separated regions, so the merge is clean and only the cross-branch predicate can fire): merged board holds 2 `## OI-2` headings; full clone -> the check runs; --depth 1 clone -> 'PASS (vacuous)'. FIXED on both sides: fetch-depth: 0 on the audit-gates checkout, AND the gate now refuses to call a vacuous result checked when the CI signature is present (shallow AND HEAD == the mainline ref AND no second parent)."
+    notes: "The narrowing took three attempts and the first two were wrong in instructive ways. (1) Blanket 'shallow => UNDETERMINED' disabled the check in the REAL repository — this working clone reports is-shallow=true while resolving its merge parents perfectly well, so that traded a false PASS for a permanent SKIPPED: the same loss of coverage wearing an honest label. (2) Narrowing to 'shallow AND branch-arm AND <2 parents' still fired for any branch that has merged main in — the normal local state. What actually identifies the broken case is HEAD and the mainline ref being the SAME COMMIT, which a --depth 1 checkout of main produces and a feature branch never does."
+
+  - id: R2-2
+    title: "BLOCKING — the hatch was still granted by a mention on its own LINE inside a heredoc or multi-line commit message"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "splitStatements splits on every newline, so a line inside a heredoc body or an embedded-newline -m message became its own 'statement'; if it happened to START with the incantation, round 1's leading-prefix walk accepted it. Round 1 fixed WHERE in a statement the assignment may sit and never asked whether the 'statement' was executable text at all. Verified against the real hook, A/B against the pre-batch merge-base with controls in both directions: a heredoc body line and a multi-line commit message body line both went BLOCK (pre-batch) -> ALLOW (after round 1) -> BLOCK (now). The heredoc case disarms the whole hook, since the skip-hooks handler exits 0 as soon as it believes it is approved. FIXED with splitExecutableStatements — a quote- and heredoc-aware splitter used ONLY on the ALLOW path; the DENY detectors keep the broad splitter, because over-splitting there can only produce an extra (loud, recoverable) block. 25/25 across both case matrices; mutation (pointing the ALLOW path back at splitStatements) reddens 3."
+    notes: "Round 1's tests all used SINGLE-LINE messages, which is why nothing reddened. Multi-line commit messages are this repo's only commit convention — the Co-Authored-By trailer alone guarantees one — so a commit message EXPLAINING the hatch policy would have unlocked it. The new splitter fails toward the deny path by construction: an unbalanced quote yields MORE statements, never fewer."
+
+  - id: R2-3
+    title: "MATERIAL — 'derive, don't restate' moved the rot into the parser; Gate 32 could still PASS with a hook missing"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "The install_hook regex requires both arguments double-quoted. Mutation: leave one destination unquoted AND delete that hook -> 'PASS: all 4 hook(s) installed', rc=0. A partial parse read as a complete one — the same reassuring-direction failure the hardcoded list had, one level down. FIXED by cross-checking the structured parse against an independent count of `install_hook` invocations; a mismatch is UNDETERMINED, never PASS. Re-ran the same mutation: now reports '5 invocation(s) but only 4 could be parsed', rc=0 without claiming anything."
+    notes: "Worth keeping as a caution about the pattern this batch leaned on three times: deriving a list removes the rot from the LIST, not from the PARSER. A derived check still needs an input-set-width assertion of its own."
+
+  - id: R2-4
+    title: "MATERIAL — Gate 32's identity anchor is content, so a reworded hook header would hard-FAIL every commit in every worktree"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Executed: reword line 2 of scripts/pre-commit.sh, leave the installed copy alone -> '[Gate 32] FAIL ... its header line is absent', rc=1. That is the deadlock the gate's own header says it refuses to create, because its printed remedy (setup-hooks.sh) writes to the COMMON git dir shared by every concurrent session, from whatever branch is checked out. FIXED: identity mismatch is now a WARNING; PRESENCE remains the hard gate. Sameness is OI-104's job. Also warns (rather than silently degrading) when a source script is absent, since the anchor then goes null and an impostor hook would pass identity unnoticed."
+    notes: "The asymmetry is the point: a missing hook is a real loss of enforcement and must block; a drifted comment is hygiene and must not become a ship-stop. Same reasoning as §4.13 point 6 being deliberately ungated."
+
+  - id: R2-5
+    title: "MATERIAL — pre-merge-commit silently overwrote a tracked file when mktemp failed"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Executed with a failing mktemp stub: OPEN_INDEX.md's md5 changed, git status showed it modified, and the hook still printed OK — the 'stale index' NOTE is itself guarded by the backup variable, so there was no signal at all. The hook could not distinguish 'restored' from 'could not back up' (feedback_bad_news_vs_no_news). FIXED: with no backup the render check is SKIPPED with a loud reason rather than run destructively, and the collision gate (which reads refs and writes nothing) still runs, so a merge is never left completely ungated."
+    notes: "Normal path re-verified in both directions: index-existed -> byte-identical restore, clean tree, no stray temp file; index-absent -> the generated file is removed."
+
+  - id: R2-6
+    title: "MATERIAL — build_oi_index.dart, the within-file duplicate detector, ran NOWHERE in CI"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "`grep -c build_oi_index .github/workflows/test.yml` -> 0. CI runs only the check_*.dart loop plus Gate 40. Locally it fires from pre-commit.sh only when open_issues.md is in the STAGED diff, which a --no-ff merge never produces. So the within-file half of the collision class — two `## OI-N` headings in one file — had no CI backstop at all, while OI-112 and diagnose b7e3d1 both asserted landing was gated. Demonstrated live: two branches mint OI-2 in widely separated regions of the OPEN board, git merges cleanly, merged file carries two `## OI-2` headings. FIXED: wired as an explicit step in the audit-gates job."
+    notes: "Found while verifying R2-1 rather than as a separate hunt — 'which gate would have caught this?' is the question that surfaced it. The gate that was supposed to be the backstop was not wired to the place it was supposed to back up."
+
+  - id: R2-7
+    title: "MINOR — the new shallow-checkout test passed VACUOUSLY, inside the fix for tests that pass for the wrong reason"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "Its assertion was wrapped in `if (r.exitCode == 0)`. The fixture's collision also trips Check A (one number on both boards), so the gate exited 1 for an unrelated reason and the assertion never executed. A guard clause around an assertion is a silent skip. FIXED: the assertion is unconditional and prints the exit code and full output on failure. Confirmed it genuinely fails against the unfixed gate before the gate fix landed."
+    notes: "This is the round-2 counterpart of round 1's ordering bug, and the same lesson: a test added to close a 'passes for the wrong reason' defect must itself be run against the BROKEN code first. Both were caught only because the broken state was still available to test against."
+
+  - id: R2-8
+    title: "MINOR — the resolver mirror test's evidence, the ledger evidence, and three gate counts were stale or overstated"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "scripts/pre-commit.sh:310 still said '86 gate files exist; this loop runs 71 (15 case-skipped)' and setup-hooks.sh:10 said '73 of 86', while CLAUDE.md — corrected earlier in this SAME batch — already said 89/75/77. Live count confirms 89. Both corrected. gate_test_ledger.yaml's entry for the collision gate still described 4 mutations against a 20-test baseline; now 5 against 23, and it explicitly states that ALL of that evidence is LOCAL and does not cover the CI shallow shape. The closure ledger header said '11 items' against total_findings: 22."
+    notes: "F-9 in this same ledger claimed these counts were 'counted, not estimated'. Two files inside the batch's own blast radius still carried the old numbers — the sweep corrected the index and missed the neighbours, which is the recurring shape this repo files under fixed-the-instance-not-the-class."
+
+  - id: R2-9
+    title: "Pre-existing: the git-safety DENY path misses 13+ executable spellings, and the wrapper allow is suffix-matched"
+    terminal_state: blocked_on_user
+    reason: >
+      Founder must decide the scope, because tightening the DENY path is a
+      trade against the one failure mode this hook must never have. Every
+      candidate fix (recognising subshells, absolute/relative git paths,
+      sudo/nohup/time/exec, eval, command substitution, xargs) widens what the
+      hook treats as a git invocation, and a false BLOCK stops all work with no
+      escape but the documented hatch. OI-119 is already explicitly blocked on
+      that false-positive analysis and now carries both directions measured
+      plus the reproduction harness. The choice is: (a) fund the analysis and
+      close both directions together, (b) accept the gap as the price of never
+      false-blocking, or (c) narrow the hook's remit to the wrapper-routing
+      check only. Not an agent call: it sets how much friction the founder is
+      willing to carry on every git operation.
+    commit: *wip
+    verification: "Executed against the real hook: `(git commit …)`, `{ git commit; }`, `/usr/bin/git`, `./git`, `sudo git`, `nohup/time/exec git`, `eval 'git commit'`, backtick and $() capture, `xargs git commit`, `git --git-dir=… commit`, `cd /tmp & git commit` (single `&` is not a separator) and a bare `\\r` separator all ALLOW a raw commit/push. Separately, commandUsesWrapper matches a path SUFFIX and is command-wide, so `sh /tmp/evil_safe_commit.sh && git commit` and `sh scripts/safe_commit.sh \"m\" || git commit -m m` read as wrapper-routed. The --no-verify deny still fires in all of them."
+    notes: "NOT introduced by this batch and NOT worsened by it — stripCommandPrefixes is a net gain in this exact direction (FOO=1 git commit/push went ALLOW -> BLOCK), and the wrapper check is strictly tighter than the command.contains() it replaced. Closing these means touching the DENY path, whose one intolerable failure mode is a false BLOCK, and that false-positive analysis is exactly what OI-119 is already blocked on. Recorded in full on OI-119 with the reproduction harness, both directions now measured, so the next person does not re-derive it. Founder call because it is a scope decision on a load-bearing guard, not a coding task."
+
+  - id: R2-10
+    title: "Pre-existing: the pre-commit gate loop discards all gate output"
+    terminal_state: verified_clean
+    commit: *wip
+    verification: "scripts/pre-commit.sh runs each gate as `if ! \"$DART_BIN\" run \"$GATE\" >/dev/null 2>&1`, recording only the name. So this batch's careful PASS / PASS (vacuous) / SKIPPED / UNDETERMINED vocabulary is invisible at the pre-commit placement, and diagnosing a failure needs a manual re-run to see which OI number clashed. Confirmed by reading the loop."
+    notes: "Left as-is deliberately and marked verified_clean rather than changed: the loop is bounded-parallel, so interleaved gate output would be unreadable, and the failure path already tells the operator which gate to re-run. Changing the loop's output handling is a cycle-time-sensitive edit to the hottest script in the repo and would need its own measurement — the very thing this batch's (T) half was about. Recorded so it is not mistaken for an oversight."

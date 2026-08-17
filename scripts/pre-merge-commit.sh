@@ -105,9 +105,30 @@ _INDEX_BACKUP=""
 _INDEX_EXISTED=0
 if [ -f "$_OPEN_INDEX" ]; then
   _INDEX_EXISTED=1
-  _INDEX_BACKUP="$(mktemp)" || _INDEX_BACKUP=""
-  [ -n "$_INDEX_BACKUP" ] && cp "$_OPEN_INDEX" "$_INDEX_BACKUP"
+  _INDEX_BACKUP="$(mktemp 2>/dev/null)" || _INDEX_BACKUP=""
+  if [ -n "$_INDEX_BACKUP" ]; then
+    cp "$_OPEN_INDEX" "$_INDEX_BACKUP" || _INDEX_BACKUP=""
+  fi
+  # NO BACKUP MEANS DO NOT REGENERATE. Running the generator without one would
+  # OVERWRITE a tracked file with no way to put it back — and review round 2
+  # (2026-08-17) executed exactly that with a failing `mktemp` stub: the file's
+  # md5 changed, `git status` showed it modified, and the hook still printed OK.
+  # The "stale index" NOTE below is itself guarded by $_INDEX_BACKUP, so there
+  # was no signal at all: the hook could not distinguish "restored" from "could
+  # not back up" (feedback_bad_news_vs_no_news).
+  #
+  # Check A is skipped in that case rather than run destructively; Check B (the
+  # cross-branch collision gate, which reads git refs and writes nothing) still
+  # runs, so a merge is never left completely ungated.
+  if [ -z "$_INDEX_BACKUP" ]; then
+    echo "[pre-merge-commit] SKIPPING the board-render check: could not back up" >&2
+    echo "  $_OPEN_INDEX (mktemp or cp failed), and regenerating it without a" >&2
+    echo "  backup would overwrite a tracked file irrecoverably. The collision" >&2
+    echo "  gate below still runs. Re-run the merge once /tmp is writable." >&2
+    _SKIP_RENDER_CHECK=1
+  fi
 fi
+: "${_SKIP_RENDER_CHECK:=0}"
 
 # Restore the tree to exactly what the merge produced. BOTH directions matter:
 # if the file existed, put the original back; if it did NOT, the generator just
@@ -127,7 +148,7 @@ _restore_index() {
   fi
 }
 
-if ! "$DART_BIN" run scripts/build_oi_index.dart; then
+if [ "$_SKIP_RENDER_CHECK" -eq 0 ] && ! "$DART_BIN" run scripts/build_oi_index.dart; then
   _restore_index
   echo "[pre-merge-commit] FAIL: the merged OI board did not validate." >&2
   echo "  Most likely: both sides minted the same OI number and git combined" >&2

@@ -199,6 +199,38 @@ void main(List<String> args) {
     String? baseRev;
     String shapeNote;
 
+    // A SHALLOW repository cannot answer this question, and must say so.
+    //
+    // `actions/checkout` defaults to depth 1. In a shallow clone git reports a
+    // merge commit as PARENTLESS, so the merge-shape arms below never fire, the
+    // branch arm compares HEAD against an origin/main that IS HEAD, and the
+    // comparison degenerates — then gets reported as "PASS (vacuous) ... a
+    // checked answer, not a skipped one". Review round 2 (2026-08-17)
+    // reproduced it end-to-end: a merged board carrying TWO `## OI-2` headings
+    // read as PASS in a `--depth 1` clone and FAIL in a full one.
+    //
+    // The environment fix is `fetch-depth: 0` on the audit-gates job. This is
+    // the other half: even with that in place, any future shallow context must
+    // degrade to UNDETERMINED rather than quietly re-acquiring the old no-op.
+    // A truncated history is a statement about the INPUT; vacuity is a
+    // statement about the BOARD. They must never share a word.
+    // ⚠ SHALLOW IS NOT A BLANKET DISQUALIFIER, and treating it as one was the
+    // first version of this fix — it disabled the check in the REAL repository.
+    // This working clone reports `--is-shallow-repository: true` while still
+    // resolving both parents of its merge commits perfectly well, because a
+    // shallow clone is truncated at some depth, not stripped of recent history.
+    // Blanket-skipping there would have traded a false PASS for a permanent
+    // SKIPPED, which is the same loss of coverage wearing an honest label.
+    //
+    // The genuinely ambiguous combination is narrower: shallow AND we fell
+    // through to the branch arm AND the comparison came out vacuous. Only then
+    // is "nothing was minted on that side" indistinguishable from "the history
+    // that would show the mint was truncated away". That exact combination is
+    // what a `--depth 1` CI checkout produces at a merge commit, and it is
+    // handled where the vacuous verdict is printed, below.
+    final isShallow =
+        _run('git', ['rev-parse', '--is-shallow-repository'])?.trim() == 'true';
+
     final mergeHead =
         _run('git', ['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])?.trim();
     final parentLine =
@@ -303,11 +335,52 @@ void main(List<String> args) {
         final mainlineMintedNothing =
             mainMerged.keys.every(baseMerged.containsKey);
         if (mainlineMintedNothing) {
-          stdout.writeln('[check_oi_numbering_unique] PASS (vacuous): $shapeNote -- the '
-              '$thisSideRev side minted no OI number that the merge-base '
-              'lacked, so no cross-branch collision is expressible. '
-              '${otherMerged.length} entries on the $otherSideRev side were '
-              'read and compared; this is a checked answer, not a skipped one.');
+          // THE ONE COMBINATION WHERE VACUOUS CANNOT BE TRUSTED.
+          //
+          // Shallow + the branch arm + vacuous is exactly what a `--depth 1`
+          // checkout produces AT A MERGE COMMIT: git reports the merge as
+          // parentless, so the merge arms never fire, HEAD and origin/main
+          // resolve to the same commit, and "nothing was minted" is
+          // indistinguishable from "the parents that carried the mint were
+          // truncated away". Verified end-to-end: a merged board holding TWO
+          // `## OI-2` headings read as PASS in a --depth 1 clone and FAIL in a
+          // full one.
+          //
+          // Shallow ALONE is fine — this working repo is shallow and resolves
+          // its merge parents correctly, taking the merge arm, where a vacuous
+          // result is a real answer.
+          // The condition is the CI signature, not "shallow" on its own.
+          //
+          // First attempt was `isShallow && branch-arm && parents.length < 3`,
+          // which fires for ANY branch in a shallow clone that has merged main
+          // in — i.e. the normal local state — and made the gate permanently
+          // SKIPPED on this machine. That trades a false PASS for a permanent
+          // blind spot: the same loss of coverage, wearing an honest label.
+          //
+          // What actually distinguishes the broken case is that HEAD and the
+          // mainline ref are THE SAME COMMIT. That is what a `--depth 1`
+          // checkout of main produces (and why the comparison degenerates), and
+          // it is never true on a feature branch, however shallow the clone.
+          final headRev = _run('git', ['rev-parse', 'HEAD'])?.trim();
+          final untrustworthy = isShallow &&
+              headRev != null &&
+              headRev == mainlineRev &&
+              parents.length < 3;
+          if (untrustworthy) {
+            undetermined = true;
+            _warnPass('the $shapeNote comparison came out vacuous in a SHALLOW '
+                'repository, and those two facts cannot be separated: git '
+                'reports a merge commit as parentless when the history is '
+                'truncated, so "nothing was minted" may simply be "the mint is '
+                'not in this clone". NOT reported as clean. Fix for CI: set '
+                '`fetch-depth: 0` on the checkout step.');
+          } else {
+            stdout.writeln('[check_oi_numbering_unique] PASS (vacuous): $shapeNote -- the '
+                '$thisSideRev side minted no OI number that the merge-base '
+                'lacked, so no cross-branch collision is expressible. '
+                '${otherMerged.length} entries on the $otherSideRev side were '
+                'read and compared; this is a checked answer, not a skipped one.');
+          }
         } else {
           final collisions = findCollisions(
             base: baseMerged,

@@ -3120,11 +3120,38 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   end state — the 2-minute value exists to absorb contention, not because any test needs 2 minutes.
 - **Blast-radius estimate**: `platform` (`.github/workflows/test.yml`).
 
-## OI-119 — `git_safety_hook.dart` matches command TEXT, so it blocks commands that merely mention a banned form (P3)
+## OI-119 — `git_safety_hook.dart` matches command TEXT, so it blocks commands that merely mention a banned form (P3) — and, newly evidenced, MISSES 13 executable spellings
 
 - **Status**: OPEN
 - **Blocked on**: nothing, but it needs a false-positive analysis before a fix — the hook is
   load-bearing and over-narrowing it would reopen the raw-push hole it exists to close.
+- **⚠ BOTH DIRECTIONS ARE NOW MEASURED (2026-08-17, review round 2 of `cycle-time-and-board-gaps`).**
+  This entry was filed about false POSITIVES. The false-NEGATIVE half was executed against the real
+  hook for the first time, and it is the larger number. Each of these is a RAW `git commit` /
+  `git push` that the hook ALLOWS (exit 0):
+  `(git commit …)` · `{ git commit; }` · `/usr/bin/git …` · `./git …` · `sudo git …` ·
+  `nohup git …` · `time git …` · `exec git …` · `eval 'git commit'` · `` OUT=`git commit` `` ·
+  `OUT=$(git commit)` · `echo x | xargs git commit` · `git --git-dir=… commit` ·
+  `cd /tmp & git commit` (a single `&` is not in the separator set) · a bare `\r` separator.
+  The `--no-verify` deny still fires in all of them (its match is unanchored), so the
+  skip-hooks control is intact; what leaks is the use-the-wrapper control.
+  **NOT introduced by that batch, and NOT made worse by it** — `stripCommandPrefixes`, added there,
+  is a net gain in this exact direction (`FOO=1 git commit` and `FOO=1 git push` went ALLOW → BLOCK).
+  Recorded here rather than fixed there because closing them means touching the deny path, whose
+  one intolerable failure mode is a false BLOCK, and that is precisely the analysis this entry is
+  already blocked on. Do the two directions together or not at all.
+- **Sibling gap, same review**: `commandUsesWrapper` (`git_safety_lib.dart`) matches a path
+  **suffix** and is command-WIDE, so `sh /tmp/evil_safe_commit.sh && git commit -m x`,
+  `mysafe_commit.sh && git commit -m x`, and `sh scripts/safe_commit.sh "m" || git commit -m m`
+  all read as "went through the wrapper". Also strictly tighter than the pre-batch
+  `command.contains(basename)` it replaced, so again not a regression. Fix shape: require an exact
+  basename AND pair the allow with the statement that carries the raw git, the same
+  same-statement discipline `inlineEnvAssignment` now uses (diagnose `c8b3e6`).
+- **Reproduction harness exists** — drive the hook by feeding
+  `{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"…"}}` on stdin;
+  exit 2 = blocked, 0 = allowed. ⚠ Put the cases in a FILE: the hook matches command TEXT, so a
+  matrix written inline on a Bash command line blocks the harness itself. Always include a control
+  that must block, or the whole matrix can be measuring nothing.
 - **Verified**: 2026-08-13. ⚠ **The two detectors are NOT equally leaky, and the original filing
   conflated them** — corrected by the B-pass, which reproduced the real one involuntarily while
   reviewing this entry:
