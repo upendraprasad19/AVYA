@@ -180,4 +180,70 @@ void main() {
       expect(r.out, contains('ZERO phrases'));
     });
   });
+
+  group('Gate-DEU — three ways it used to report clean without looking', () {
+    // All three were demonstrated live by review round 1 (2026-08-17), each
+    // with a control first so the harness was proven able to fail. They are the
+    // same class this repo names feedback_green_check_input_set_width, found in
+    // the gate being modified ALONGSIDE the one that built _parseStrict
+    // specifically to avoid it.
+
+    test('CONTROL — a bare deferral instruction still FAILS', () {
+      // Without this control the three tests below could all pass because the
+      // gate is broken in some new way, and prove nothing.
+      final r = runGateOn(
+          '# Plan\n\nRoll the old path deletion into a follow-up batch.\n');
+      expect(r.exitCode, 1, reason: 'the harness must be able to fail\n${r.out}');
+    });
+
+    test('the word "banned" no longer exempts a real deferral', () {
+      // The old _isQuotingTheBan exempted any line containing `banned`. §4.2 and
+      // the skills use that word constantly — it is the vocabulary of the rule —
+      // so a genuine instruction written in the same sentence was invisible.
+      final r = runGateOn('# Plan\n\nThat style is banned, so roll the old path '
+          'deletion into a follow-up batch.\n');
+      expect(r.exitCode, 1,
+          reason: 'an exemption keyed on a word the governed text uses '
+              'habitually is an off switch, not an exemption\n${r.out}');
+    });
+
+    test('the explicit deu-quote marker DOES still exempt', () {
+      // The mirror: having removed the loose markers, the deliberate one must
+      // still work, or every honest citation of the rule becomes unwritable.
+      final r = runGateOn('# Plan\n\nRoll it into a follow-up batch. '
+          '<!-- deu-quote: quoting the banned phrasing -->\n');
+      expect(r.exitCode, 0,
+          reason: 'the auditable marker is how a rule quotes itself\n${r.out}');
+    });
+
+    test('sweeping ZERO governing documents is UNDETERMINED, never PASS', () {
+      // CLAUDE.md absent and no .claude/skills => the sweep reads nothing. The
+      // gate used to print "PASS: ... nor in the governing skill/CLAUDE.md set"
+      // having opened no file at all.
+      final r = runGateOn(null);
+      expect(r.out, contains('UNDETERMINED'),
+          reason: 'an empty input set must not report in the same colour as '
+              'nothing-wrong\n${r.out}');
+      expect(r.out, isNot(contains('PASS:')),
+          reason: 'it must not claim to have swept a set it never read');
+      expect(r.exitCode, 0,
+          reason: 'still fails OPEN — an unexpected CWD must not wedge a commit');
+    });
+
+    test('the PASS message states HOW MANY documents it actually swept', () {
+      // A verdict that names its input set is the cheapest defence against this
+      // whole class: a reader can see "1 document" and know something is wrong.
+      final repoRootClaude = File('CLAUDE.md');
+      expect(repoRootClaude.existsSync(), isTrue,
+          reason: 'this assertion is about the real repo run');
+      final r = Process.runSync('dart', ['run', _gate],
+          environment: scrubbedEnv(),
+          includeParentEnvironment: false,
+          runInShell: true);
+      final out = '${r.stdout}${r.stderr}';
+      expect(r.exitCode, 0, reason: out);
+      expect(out, matches(RegExp(r'\d+ governing document\(s\) swept')),
+          reason: 'the verdict must be countable, not just reassuring\n$out');
+    });
+  });
 }

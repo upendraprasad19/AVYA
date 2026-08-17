@@ -29,9 +29,9 @@ COMMIT_SOURCE="$2"
 # exits above would be wrong -- they exit before any dart call, but the two
 # `case`/`grep` guards are cheap and this must be set before the tier compute.
 _PCM_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [ -n "$_PCM_ROOT" ] && [ -r "$_PCM_ROOT/scripts/_dart_bin.sh" ]; then
-  . "$_PCM_ROOT/scripts/_dart_bin.sh"
-  DART_BIN="$(resolve_dart_bin)"
+if [ -n "$_PCM_ROOT" ] && [ -r "$_PCM_ROOT/scripts/_dart_bin.sh" ] && sh -n "$_PCM_ROOT/scripts/_dart_bin.sh" 2>/dev/null; then
+  . "$_PCM_ROOT/scripts/_dart_bin.sh" || true
+  DART_BIN="$(resolve_dart_bin)" 2>/dev/null || DART_BIN="dart"
 else
   DART_BIN="dart"
 fi

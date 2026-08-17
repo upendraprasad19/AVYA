@@ -172,49 +172,163 @@ void main(List<String> args) {
       exit(0);
     }
   } else {
-    final baseRev = _run('git', ['merge-base', 'HEAD', 'origin/main'])?.trim();
+    // ---- Choose the THREE points from what we are actually standing on ------
+    //
+    // WHY THIS IS NOT SIMPLY (merge-base(HEAD, origin/main), HEAD, origin/main).
+    // That triple DEGENERATES INTO A NO-OP whenever HEAD is at or ahead of
+    // origin/main, because then the merge-base IS origin/main and `base` ==
+    // `mainline`. Leg 1 skips every number the base has; leg 2 skips every
+    // number the mainline lacks; with the two maps equal those are exhaustive,
+    // so leg 3 is unreachable FOR EVERY POSSIBLE INPUT and findCollisions can
+    // only ever return []. That is not a bug that shows up on odd inputs -- it
+    // is structural, provable by construction.
+    //
+    // And "HEAD at or ahead of origin/main" is exactly the state at TWO of this
+    // gate's three documented placements: the pre-merge-commit hook, and CI on
+    // a push to main. So the naive triple works ONLY from a feature branch --
+    // the one placement where a collision has not landed yet. Found by review
+    // round 1 (2026-08-17); the gate had been shipped, ledgered and called
+    // authoritative in all three positions.
+    //
+    // The fix is to compare THE TWO SIDES OF THE MERGE against their own
+    // merge-base, which is the question actually being asked -- "did these two
+    // branches each mint this number independently?" -- rather than a triple
+    // that happens to be right in one context.
+    String thisSideRev;   // plays "mainline": the side already published
+    String otherSideRev;  // plays "head": the side that may have minted
+    String? baseRev;
+    String shapeNote;
+
+    final mergeHead =
+        _run('git', ['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])?.trim();
+    final parentLine =
+        _run('git', ['rev-list', '--parents', '-n', '1', 'HEAD'])?.trim();
+    final parents = (parentLine == null || parentLine.isEmpty)
+        ? const <String>[]
+        : parentLine.split(RegExp(r'\s+'));
+
+    if (mergeHead != null && mergeHead.isNotEmpty) {
+      // Mid-merge: the pre-merge-commit hook. The merge commit does not exist
+      // yet, but both sides do -- HEAD is the branch being merged INTO and
+      // MERGE_HEAD the branch being merged IN.
+      thisSideRev = 'HEAD';
+      otherSideRev = mergeHead;
+      baseRev = _run('git', ['merge-base', 'HEAD', mergeHead])?.trim();
+      shapeNote = 'mid-merge (HEAD vs MERGE_HEAD)';
+    } else if (parents.length >= 3) {
+      // HEAD is a merge commit (>=2 parents after the commit's own sha): CI on
+      // a push to main, after the merge landed. Compare its parents.
+      thisSideRev = parents[1];
+      otherSideRev = parents[2];
+      baseRev = _run('git', ['merge-base', parents[1], parents[2]])?.trim();
+      shapeNote = 'merge commit (HEAD^1 vs HEAD^2)';
+    } else {
+      // Ordinary commit on a branch: the original triple, which is correct here
+      // precisely because HEAD has diverged from origin/main.
+      thisSideRev = 'origin/main';
+      otherSideRev = 'HEAD';
+      baseRev = _run('git', ['merge-base', 'HEAD', 'origin/main'])?.trim();
+      shapeNote = 'branch (HEAD vs origin/main)';
+    }
+
     if (baseRev == null || baseRev.isEmpty) {
       undetermined = true;
-      _warnPass('no merge-base between HEAD and origin/main (unrelated '
+      _warnPass('no merge-base for the $shapeNote comparison (unrelated '
           'histories, or a shallow clone). Collision check skipped.');
     } else {
       final mainOpen =
-          _parseStrict(_showAtRev('origin/main', _openBoard), 'origin/main open board');
+          _parseStrict(_showAtRev(thisSideRev, _openBoard), '$thisSideRev open board');
       final mainClosed = _parseStrict(
-          _showAtRev('origin/main', _closedBoard) ?? '', 'origin/main closed board');
+          _showAtRev(thisSideRev, _closedBoard) ?? '', '$thisSideRev closed board');
       final baseOpen =
           _parseStrict(_showAtRev(baseRev, _openBoard) ?? '', 'merge-base open board');
       final baseClosed =
           _parseStrict(_showAtRev(baseRev, _closedBoard) ?? '', 'merge-base closed board');
 
-      if (mainOpen == null || mainClosed == null || baseOpen == null || baseClosed == null) {
+      // In the two merge shapes the "head" side is a REF, not the working tree.
+      // Reading the working tree there would compare the already-merged board
+      // (which holds BOTH entries) against one side, and every number would look
+      // contested. Only the branch shape wants the working tree, so the mint is
+      // caught before it is even committed.
+      final bool useWorkingTree = otherSideRev == 'HEAD';
+      final otherOpen = useWorkingTree
+          ? headOpen
+          : _parseStrict(_showAtRev(otherSideRev, _openBoard) ?? '',
+              '$otherSideRev open board');
+      final otherClosed = useWorkingTree
+          ? headClosed
+          : _parseStrict(_showAtRev(otherSideRev, _closedBoard) ?? '',
+              '$otherSideRev closed board');
+
+      if (mainOpen == null ||
+          mainClosed == null ||
+          baseOpen == null ||
+          baseClosed == null ||
+          otherOpen == null ||
+          otherClosed == null) {
         undetermined = true;
         // At least one input could not be read or could not be parsed. Compare
         // nothing rather than compare against a board we know is wrong -- an
         // empty mainline makes EVERY number look uncontested.
-        _warnPass('one or more boards at origin/main / merge-base were '
+        _warnPass('one or more boards for the $shapeNote comparison were '
             'unreadable or unparseable (detail above). Collision check skipped.');
       } else {
-        final collisions = findCollisions(
-          base: mergeBoards(baseOpen, baseClosed),
-          head: mergeBoards(headOpen, headClosed),
-          mainline: mergeBoards(mainOpen, mainClosed),
-        );
+        // Guard the degeneracy explicitly rather than trusting the shape
+        // selection above to have avoided it. If base and mainline hold the
+        // same numbers, findCollisions is mathematically incapable of returning
+        // anything, and printing PASS would assert a check that cannot fail --
+        // the precise false assurance this gate exists to prevent elsewhere.
+        final baseMerged = mergeBoards(baseOpen, baseClosed);
+        final mainMerged = mergeBoards(mainOpen, mainClosed);
+        final otherMerged = mergeBoards(otherOpen, otherClosed);
 
-        if (collisions.isNotEmpty) {
-          final next = nextFreeNumber([
-            mergeBoards(headOpen, headClosed),
-            mergeBoards(mainOpen, mainClosed),
-          ]);
-          for (final c in collisions) {
-            failures.add('${c.id} names two different issues.\n$c\n'
-                '    This branch minted ${c.id} against a base that did not '
-                'have it, and origin/main minted it independently.\n'
-                '    FIX: renumber THIS branch\'s entry (origin/main is '
-                'published; its number is fixed). Next free is OI-$next.\n'
-                '    Add a provenance bullet to the renumbered entry -- any '
-                'already-pushed commit message still cites the old number and '
-                'is not rewritten. Precedent: commit 0cb4120a.');
+        // VACUOUS vs UNDETERMINED -- these look identical in the output of a
+        // careless gate and mean opposite things.
+        //
+        // If the mainline side minted no number the merge-base lacked, then
+        // every n in `mainline` is also in `base`, leg 1 skips it, and no
+        // collision is expressible. With the shape selection above that is a
+        // genuine ANSWER ("nothing was minted on that side, so nothing can
+        // clash"), not a failure to look -- so it is a PASS, and calling it
+        // UNDETERMINED would put the word on an ordinary merge and teach the
+        // reader to skip it.
+        //
+        // What is NOT benign is reaching this state because the three points
+        // were chosen wrongly -- which is exactly the bug review round 1 found,
+        // where base was merge-base(HEAD, origin/main) while HEAD was already
+        // ahead of origin/main, so base == mainline in EVERY case and the gate
+        // could never fail. The shape selection above is what prevents that;
+        // this branch just names the vacuous case out loud so the two can never
+        // again be confused in the output.
+        final mainlineMintedNothing =
+            mainMerged.keys.every(baseMerged.containsKey);
+        if (mainlineMintedNothing) {
+          stdout.writeln('[check_oi_numbering_unique] PASS (vacuous): $shapeNote -- the '
+              '$thisSideRev side minted no OI number that the merge-base '
+              'lacked, so no cross-branch collision is expressible. '
+              '${otherMerged.length} entries on the $otherSideRev side were '
+              'read and compared; this is a checked answer, not a skipped one.');
+        } else {
+          final collisions = findCollisions(
+            base: baseMerged,
+            head: otherMerged,
+            mainline: mainMerged,
+          );
+
+          if (collisions.isNotEmpty) {
+            final next = nextFreeNumber([otherMerged, mainMerged]);
+            for (final c in collisions) {
+              failures.add('${c.id} names two different issues.\n$c\n'
+                  '    Comparison: $shapeNote. The $otherSideRev side minted '
+                  '${c.id} against a base that did not have it, and '
+                  '$thisSideRev minted it independently.\n'
+                  '    FIX: renumber the $otherSideRev side\'s entry '
+                  '($thisSideRev is published; its number is fixed). Next free '
+                  'is OI-$next.\n'
+                  '    Add a provenance bullet to the renumbered entry -- any '
+                  'already-pushed commit message still cites the old number and '
+                  'is not rewritten. Precedent: commit 0cb4120a.');
+            }
           }
         }
       }
@@ -241,10 +355,31 @@ void main(List<String> args) {
     // send someone hunting a phantom discrepancy. The number space this gate
     // guards is the union of BOTH files regardless of status, which is exactly
     // why it counts sections.
+    // Report DISTINCT NUMBERS and say so, plus the raw heading count when the
+    // two disagree.
+    //
+    // This line used to claim its figures were "section counts, not status
+    // tallies". They are neither: parseBoard writes `out[n] = title`, so two
+    // `## OI-7` headings collapse into one entry and the count silently drops.
+    // The de-duplication is invisible EXACTLY in the corrupt state this gate
+    // exists to report — a board with a duplicated number reads as one entry
+    // shorter, and the verdict line reassures at the same time. (On the real
+    // board today the two agree, so nothing was visibly wrong; the claim was
+    // still false.) Naming both numbers makes any divergence self-evident.
+    final openHeadings = countHeadingPrefixes(openFile.readAsStringSync());
+    final closedHeadings = closedFile.existsSync()
+        ? countHeadingPrefixes(closedFile.readAsStringSync())
+        : 0;
+    final dedupNote =
+        (openHeadings != headOpen.length || closedHeadings != headClosed.length)
+            ? ' [raw `## OI-N` headings: $openHeadings open / $closedHeadings '
+                'closed — higher than the distinct count means a number appears '
+                'twice in one file]'
+            : '';
     stdout.writeln('[check_oi_numbering_unique] PASS: '
-        '${headOpen.length} entries in open_issues.md + '
-        '${headClosed.length} in closed_issues.md (section counts, not status '
-        'tallies — one number space), no cross-board duplicates, no '
+        '${headOpen.length} distinct numbers in open_issues.md + '
+        '${headClosed.length} in closed_issues.md (one number space across both '
+        'files, regardless of status)$dedupNote, no cross-board duplicates, no '
         'cross-branch collisions.');
     exit(0);
   }

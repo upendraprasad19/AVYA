@@ -57,13 +57,26 @@ cd "$REPO_ROOT"
 # Resolve the Dart binary ONCE -- `flutter/bin/dart` is a wrapper that takes
 # the SDK update lock and shells out to git on EVERY call (~4.0s vs ~0.3s for
 # the SDK exe, measured). See scripts/_dart_bin.sh. Falls back to `dart`.
-if [ -r "$REPO_ROOT/scripts/_dart_bin.sh" ]; then
-  . "$REPO_ROOT/scripts/_dart_bin.sh"
-  DART_BIN="$(resolve_dart_bin)"
+if [ -r "$REPO_ROOT/scripts/_dart_bin.sh" ] && sh -n "$REPO_ROOT/scripts/_dart_bin.sh" 2>/dev/null; then
+  . "$REPO_ROOT/scripts/_dart_bin.sh" || true
+  DART_BIN="$(resolve_dart_bin)" 2>/dev/null || DART_BIN="dart"
 else
   # Guarded, and the guard is load-bearing: this file runs under `set -e`, so an
-  # unguarded `.` of a missing file ABORTS the hook outright. `_dart_bin.sh`'s
+  # unguarded `.` of a missing file ABORTS the hook outright. `_dart_bin.sh`.s
   # own contract is "never wedge a hook", and sourcing it must honour that too.
+  #
+  # `[ -r ]` covers ABSENT. It does NOT cover CORRUPT: a truncated or
+  # syntactically broken helper passes the readable test and then dies inside
+  # `set -e`, wedging commit, push, merge AND commit-msg at once. Review round 1
+  # (2026-08-17) reproduced it -- a stray paren in the helper made a merge exit 1
+  # with `syntax error near unexpected token`.
+  #
+  # `. file || true` DOES NOT FIX THAT, and was tried first: POSIX requires a
+  # non-interactive shell to ABORT on a syntax error in a dotted script, so the
+  # `||` never runs. Verified -- it still exited 2. The working guard is a parse
+  # check BEFORE sourcing (`sh -n`), which reads the file without executing it;
+  # the `|| true` and the `|| DART_BIN="dart"` below then cover the remaining
+  # runtime failures. Corrupt now falls back to a bare `dart` and the hook runs.
   # Caught by test/scripts/pre_push_analyze_always_e2e_test.dart, which builds a
   # temp repo holding only the hook script -- the same shape as a partial
   # checkout or a hook copied somewhere without its helper.

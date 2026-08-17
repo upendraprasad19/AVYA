@@ -97,21 +97,85 @@ bool commandHasNoVerifyFlag(String command) =>
 /// mechanical: CLAUDE.md §4.3 requires founder approval in chat FIRST. This is
 /// the same trust model as `ALLOW_MAIN_COMMIT=1` and rule 21's `presence_only:`
 /// -- self-attested, and read by review.
+///
+/// POSITION IS LOAD-BEARING, and this return value is an ALLOW.
+/// The first version of this function matched `(?:^|\s)NAME=...` ANYWHERE in a
+/// statement. Review round 1 (2026-08-17) demonstrated, against the real hook,
+/// that this disarmed the guard outright -- merely NAMING the variable was
+/// enough, and the worst shape put it in a shell COMMENT:
+///
+///     git push --no-verify origin main # FOUNDER_APPROVED_NO_VERIFY=1 pending
+///     git commit -m "noted ALLOW_RAW_GIT=1 in docs"
+///     echo "try ALLOW_RAW_GIT=1 next time"; git commit -m x
+///
+/// All three were BLOCKED before this batch and ALLOWED after it -- a security
+/// control turned off by a change that claimed to strengthen it. The first is
+/// the whole hook disarmed: `--no-verify` matches, the hatch reads "approved",
+/// and the raw-push check below never runs.
+///
+/// This is EXACTLY the class [commandUsesWrapper] documents twenty lines down
+/// ("merely NAMING the wrapper anywhere disarmed the guard") and had already
+/// fixed. The lesson was applied to one detector and not to its neighbour in
+/// the same commit -- `feedback_mistake_guard_without_its_mirror`, the repo's
+/// most-recurrent class. Both detectors now require an INVOCATION, not a
+/// mention, and both carry a mention-does-not-count test.
+///
+/// So the assignment must (a) sit in the LEADING prefix chain of a statement --
+/// the only position where a real shell would apply it to the command's
+/// environment -- and (b) that same statement must actually invoke `git`. A
+/// prefix on some OTHER statement (`ALLOW_RAW_GIT=1 echo hi; git commit`) does
+/// not reach git in a real shell either, so honouring it would be wrong on the
+/// shell's own terms, not merely unsafe.
 String? inlineEnvAssignment(String command, String name) {
-  final n = RegExp.escape(name);
-  final re = RegExp('(?:^|\\s)$n=("[^"]*"|\'[^\']*\'|\\S*)');
   for (final raw in splitStatements(command)) {
-    final m = re.firstMatch(raw.trim());
-    if (m == null) continue;
-    var v = m.group(1) ?? '';
-    if (v.length >= 2 &&
-        ((v.startsWith('"') && v.endsWith('"')) ||
-            (v.startsWith("'") && v.endsWith("'")))) {
-      v = v.substring(1, v.length - 1);
-    }
-    return v;
+    final v = _leadingAssignmentIfGitStatement(raw, name);
+    if (v != null) return v;
   }
   return null;
+}
+
+/// Walks the leading prefix chain of one statement exactly as
+/// [stripCommandPrefixes] does, returning [name]'s value if it is assigned
+/// there AND the statement's real command word is `git`.
+///
+/// Kept as its own function so the chain-walk stays byte-identical in shape to
+/// [stripCommandPrefixes]; if the two ever drift on what counts as a prefix,
+/// the hatch would apply in positions the strip does not recognise (or vice
+/// versa), which is how the original hole opened.
+String? _leadingAssignmentIfGitStatement(String statement, String name) {
+  var s = statement.trim();
+  String? found;
+
+  // Same alternation as stripCommandPrefixes, but with the assignment arm
+  // captured so its NAME and VALUE can be read as the chain is consumed.
+  final prefix = RegExp(
+    r'^(?:(\\)'
+    r'|(?:command|builtin)\s+'
+    r'|env(?:\s+-i)?\s+'
+    r'|([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|' "'[^']*'" r'|\S*)\s+'
+    r')',
+  );
+
+  for (var i = 0; i < 16; i++) {
+    final m = prefix.firstMatch(s);
+    if (m == null) break;
+    final varName = m.group(2);
+    if (varName == name) {
+      var v = m.group(3) ?? '';
+      if (v.length >= 2 &&
+          ((v.startsWith('"') && v.endsWith('"')) ||
+              (v.startsWith("'") && v.endsWith("'")))) {
+        v = v.substring(1, v.length - 1);
+      }
+      found = v;
+    }
+    s = s.substring(m.end).trimLeft();
+  }
+
+  if (found == null) return null;
+  // (b) the statement carrying the hatch must be the git invocation itself.
+  if (!RegExp(r'^git(\s|$)').hasMatch(s)) return null;
+  return found;
 }
 
 /// True if [command] actually INVOKES the given wrapper script as one of its

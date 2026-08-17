@@ -220,12 +220,77 @@ void main() {
       expect(inlineEnvAssignment('X="1" git push', 'X'), '1');
       expect(inlineEnvAssignment("X='1' git push", 'X'), '1');
     });
-    test('finds it on any statement, not just the first', () {
+    test('finds it on a later statement, when it prefixes THAT git call', () {
       expect(
         inlineEnvAssignment('echo hi && ALLOW_RAW_GIT=1 git push',
             'ALLOW_RAW_GIT'),
         '1',
       );
+    });
+
+    // ---- MENTION IS NOT AN INVOCATION -------------------------------------
+    //
+    // This block is the mirror of the one commandUsesWrapper carries above,
+    // and it exists because the first version of inlineEnvAssignment matched
+    // `(?:^|\s)NAME=` ANYWHERE in a statement. Review round 1 (2026-08-17)
+    // proved against the REAL hook that this disarmed it: each command below
+    // was BLOCKED (exit 2) before the change that introduced the helper and
+    // ALLOWED (exit 0) after it.
+    //
+    // Every case is a real shape, not a contrived one — a commit message
+    // quoting the hatch, a note-to-self echo, and (worst) a shell comment on a
+    // raw force-skip push. In that last one the whole hook stands down: the
+    // skip-hooks flag matches, the hatch reads "approved", and the raw-push
+    // check never runs at all.
+    //
+    // These assert the LIBRARY predicate; the end-to-end exit codes are pinned
+    // by the hook's own e2e coverage. Do not relax either one — a false
+    // positive here is a silent bypass of the only mechanical guard on the
+    // sanctioned write path.
+    test('a mention inside a commit message does NOT grant the hatch', () {
+      expect(
+        inlineEnvAssignment(
+            'git commit -m "noted ALLOW_RAW_GIT=1 in docs"', 'ALLOW_RAW_GIT'),
+        isNull,
+      );
+    });
+    test('a mention in a preceding echo does NOT grant the hatch', () {
+      expect(
+        inlineEnvAssignment(
+            'echo "try ALLOW_RAW_GIT=1 next time"; git commit -m x',
+            'ALLOW_RAW_GIT'),
+        isNull,
+      );
+    });
+    test('a mention in a trailing shell COMMENT does NOT grant the hatch', () {
+      expect(
+        inlineEnvAssignment(
+            'git push origin main # FOUNDER_APPROVED_NO_VERIFY=1 pending',
+            'FOUNDER_APPROVED_NO_VERIFY'),
+        isNull,
+      );
+    });
+    test('a prefix on a NON-git statement does not carry to the git one', () {
+      // In a real shell this assignment applies to `echo`, not to `git`, so
+      // honouring it would be wrong on the shell's own terms — not merely
+      // unsafe. The guard and the shell agree here.
+      expect(
+        inlineEnvAssignment(
+            'ALLOW_RAW_GIT=1 echo hi; git commit -m x', 'ALLOW_RAW_GIT'),
+        isNull,
+      );
+    });
+    test('the prefix chain is still honoured through env(1) and stacking', () {
+      // The strictness above must not cost the documented forms. These are the
+      // shapes stripCommandPrefixes already accepts, so the two must agree —
+      // if they drift, the hatch applies in positions the strip does not
+      // recognise, which is how the original hole opened.
+      expect(inlineEnvAssignment('env ALLOW_RAW_GIT=1 git commit -m x',
+          'ALLOW_RAW_GIT'), '1');
+      expect(inlineEnvAssignment('FOO=1 ALLOW_RAW_GIT=1 git push',
+          'ALLOW_RAW_GIT'), '1');
+      expect(inlineEnvAssignment('cd /tmp && ALLOW_RAW_GIT=1 git commit -m x',
+          'ALLOW_RAW_GIT'), '1');
     });
     test('returns null when absent — never a default that grants the hatch', () {
       expect(inlineEnvAssignment('git push', 'ALLOW_RAW_GIT'), isNull);

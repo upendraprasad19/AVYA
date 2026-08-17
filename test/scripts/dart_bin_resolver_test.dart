@@ -186,13 +186,47 @@ export PATH
   });
 
   group('hooks invoke dart through the resolver (MIRROR TEST)', () {
-    // The four hooks scripts/setup-hooks.sh installs.
-    const hooks = <String>[
-      'scripts/pre-commit.sh',
-      'scripts/pre-push.sh',
-      'scripts/commit-msg.sh',
-      'scripts/prepare-commit-msg.sh',
-    ];
+    // DERIVED from setup-hooks.sh, not restated.
+    //
+    // This list used to be four hardcoded names described as "the four hooks
+    // scripts/setup-hooks.sh installs". setup-hooks.sh installed FIVE by then:
+    // scripts/pre-merge-commit.sh — added in the same batch as this test — was
+    // exempt from every assertion below, so reverting IT to a bare `dart run`
+    // reddened nothing. Review round 1 (2026-08-17) found it.
+    //
+    // A hand-maintained roster of a thing that grows is a guarantee of exactly
+    // this, and always fails in the reassuring direction. Deriving it is the
+    // same design that made
+    // test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart
+    // catch the new hook missing from docs/blast_radius.yaml, and that made
+    // Gate 32 catch it uninstalled.
+    final installer = File('scripts/setup-hooks.sh');
+    final hooks = installer.existsSync()
+        ? (RegExp(
+              r'^\s*install_hook\s+"[^"]*?(scripts/[A-Za-z0-9._-]+)"',
+              multiLine: true,
+            )
+            .allMatches(installer.readAsStringSync())
+            .map((m) => m.group(1)!)
+            .toList()
+          ..sort())
+        : <String>[];
+
+    test('the derived hook list is non-empty and covers every installed hook',
+        () {
+      // An empty list would make every per-hook test below silently vanish —
+      // the suite would go green having asserted nothing. This is the guard on
+      // the guard.
+      expect(installer.existsSync(), isTrue,
+          reason: 'scripts/setup-hooks.sh must exist to derive the list from');
+      expect(hooks, isNotEmpty,
+          reason: 'parsed ZERO install_hook lines — either the installer call '
+              'shape changed or this parser is stale. Either way the per-hook '
+              'assertions below would all disappear without failing.');
+      expect(hooks.length, greaterThanOrEqualTo(5),
+          reason: 'the repo installs at least five hooks (pre-commit, pre-push, '
+              'commit-msg, prepare-commit-msg, pre-merge-commit); got $hooks');
+    });
 
     /// Strips `#` comments and the one user-facing hint line that legitimately
     /// prints the literal `dart run ...` for a human to copy. Matching raw text
@@ -218,6 +252,46 @@ export PATH
           lines.any((l) => RegExp(r'^\s*\.\s+.*_dart_bin\.sh').hasMatch(l)),
           isTrue,
           reason: '$hook must source scripts/_dart_bin.sh.',
+        );
+
+        // 1b. AND THE SOURCE MUST BE GUARDED. Assertion 1 alone is satisfied by
+        //     an UNGUARDED `. scripts/_dart_bin.sh`, so deleting the guard
+        //     reddened nothing — while the guard is the entire reason the
+        //     resolver cannot wedge a hook. Every one of these hooks runs under
+        //     `set -e`, where dotting a missing file aborts outright, and a
+        //     SYNTACTICALLY BROKEN one aborts even through `|| true` (POSIX
+        //     requires a non-interactive shell to abort on a syntax error in a
+        //     dotted script — verified, it exits 2). So the guard must test
+        //     readability AND parse the file before sourcing it.
+        //
+        //     The old comment in these hooks claimed
+        //     pre_push_analyze_always_e2e_test.dart covered this; that test
+        //     copies only scripts/pre-push.sh, so it incidentally covered ONE
+        //     hook and the claim was false for the other four.
+        // Match the `[ -r ... _dart_bin.sh ]` TEST anywhere on the line, not
+        // immediately after `if`. prepare-commit-msg.sh legitimately writes
+        // `if [ -n "$root" ] && [ -r "$root/scripts/_dart_bin.sh" ]`, and an
+        // `if\s+\[` anchor called that unguarded — a false BLOCK on a hook that
+        // was correct, which is the failure mode a guard must never have.
+        final guarded = lines.any((l) =>
+            RegExp(r'\[\s+-r\s+"?[^"]*_dart_bin\.sh"?\s+\]').hasMatch(l));
+        expect(guarded, isTrue,
+            reason: '$hook must guard the source with `[ -r ... ]` — an '
+                'unguarded `.` of a missing helper aborts the hook under set -e.');
+        final parseChecked = lines.any(
+            (l) => RegExp(r'sh\s+-n\s+.*_dart_bin\.sh').hasMatch(l));
+        expect(parseChecked, isTrue,
+            reason: '$hook must parse-check _dart_bin.sh (`sh -n`) before '
+                'sourcing it. `[ -r ]` passes on a CORRUPT helper, which then '
+                'wedges commit, push, merge and commit-msg simultaneously.');
+
+        // 1c. And a fallback must exist, so a resolver that loads but cannot
+        //     answer still leaves DART_BIN usable rather than empty.
+        expect(
+          lines.any((l) => RegExp(r'DART_BIN="dart"').hasMatch(l)),
+          isTrue,
+          reason: '$hook must fall back to a bare `dart` when the resolver is '
+              'unavailable — an empty DART_BIN breaks every gate invocation.',
         );
 
         // 2. It must ASSIGN DART_BIN from the resolver.

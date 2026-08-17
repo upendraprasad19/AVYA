@@ -50,7 +50,7 @@ Total gates: **90** (49 numbered, 41 by filename only).
 | 43 | `check_god_screen_max_lines.dart` | God-screen line ceiling. | grandfathered |
 | — | `check_hardcoded_pricing_and_limits.dart` | ban hardcoded price figures | grandfathered |
 | 19 | `check_hive_map_field_drift.dart` | Hive Map field-key drift detector (Theme G, closes-diagnose | grandfathered |
-| 32 | `check_hooks_installed.dart` | assert that the repo's pre-commit hook is installed (i.e. `.git/hooks/pre-commit` exists | grandfathered |
+| 32 | `check_hooks_installed.dart` | assert that the repo's git | grandfathered |
 | 16 | `check_id_injection_on_get.dart` | repository methods that return List<Map<...>> from a Hive | grandfathered |
 | 27 | `check_import_map_present.dart` | assert `supabase/functions/import_map.json` exists + pins every shared | grandfathered |
 | — | `check_incident_index_fresh.dart` | confirms docs/incidents/INDEX.md is up-to-date. | grandfathered |

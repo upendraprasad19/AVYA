@@ -434,5 +434,98 @@ Some prose mentioning OI-5 — not a heading.
       expect(r.exitCode, 0);
       expect(r.stderr, contains('OI-2'), reason: 'still REPORTS, just does not block');
     });
+
+    // ---- THE MERGE PLACEMENTS ---------------------------------------------
+    //
+    // Everything above returns the FEATURE checkout, so every scenario tested
+    // the one placement where HEAD has diverged from origin/main. Review round
+    // 1 (2026-08-17) showed the gate was a structural no-op at the other two
+    // documented placements -- the pre-merge-commit hook and CI on a push to
+    // main -- because there `merge-base(HEAD, origin/main) == origin/main`, so
+    // `base == mainline`, and legs 1 and 2 become mutually exclusive: leg 3 is
+    // unreachable for every possible input. Deleting the gate's invocation from
+    // pre-merge-commit.sh would have reddened NOTHING.
+    //
+    // These two tests are the ones that would have caught that.
+
+    // The shape MUST merge cleanly, or it tests nothing. A collision where both
+    // sides append the same number to the SAME file conflicts textually, and
+    // git stops -- that case was never the danger, because the operator sees it.
+    // The dangerous shape, and the one every real incident took, is two
+    // additions git can combine without complaint. Here main mints OI-2 on the
+    // OPEN board while the branch mints OI-2 on the CLOSED board: different
+    // files, guaranteed clean merge, and `mergeBoards` is what brings them back
+    // into one number space where the clash is visible.
+    String _cleanMergeScenario() => _scenario(
+          baseOpen: {1: 'one'},
+          mainOpen: {1: 'one', 2: 'mainline two'},
+          branchOpen: {1: 'one'},
+          branchClosed: {2: 'branch two'},
+        );
+
+    test('e2e — MID-MERGE (the pre-merge-commit placement) sees the collision',
+        () {
+      final work = _cleanMergeScenario();
+      // Stand where the hook stands: on main, mid-merge.
+      _git(work, ['checkout', 'main']);
+      final merge =
+          _run('git', ['merge', '--no-commit', '--no-ff', 'feature'], work);
+      expect(merge.exitCode, 0,
+          reason: 'the scenario must merge CLEANLY, else it exercises the case '
+              'git already catches: ${merge.stdout}${merge.stderr}');
+      expect(File('$work/.git/MERGE_HEAD').existsSync(), isTrue,
+          reason: 'the mid-merge state is what this placement inspects');
+
+      final r = _runGate(work);
+      expect(r.exitCode, 1,
+          reason: 'a collision landing THROUGH a clean merge is the whole point '
+              'of this placement; exit 0 here means the gate is decorative');
+      expect(r.stderr, contains('OI-2'));
+      expect(r.stderr, contains('mid-merge'),
+          reason: 'the verdict must name which comparison it made, so a reader '
+              'can tell a real check from a degenerate one');
+    });
+
+    test('e2e — AT THE MERGE COMMIT (the CI-on-main placement) sees it too', () {
+      final work = _cleanMergeScenario();
+      _git(work, ['checkout', 'main']);
+      _git(work, ['merge', '--no-ff', '--no-edit', 'feature']);
+      // HEAD is now a 2-parent merge commit and, as on CI after a push to main,
+      // HEAD is ahead of origin/main -- the exact shape that degenerated.
+      final parents =
+          _run('git', ['rev-list', '--parents', '-n', '1', 'HEAD'], work)
+              .stdout
+              .toString()
+              .trim()
+              .split(RegExp(r'\s+'));
+      expect(parents.length, greaterThanOrEqualTo(3),
+          reason: 'this test is meaningless unless HEAD really is a merge commit');
+
+      final r = _runGate(work);
+      expect(r.exitCode, 1,
+          reason: 'CI is the authoritative placement; a landed collision must '
+              'fail the build');
+      expect(r.stderr, contains('OI-2'));
+      expect(r.stderr, contains('merge commit'));
+    });
+
+    test('e2e — a clean merge with NO collision still passes at the merge commit',
+        () {
+      // The mirror. Without this, a gate that simply failed on every merge
+      // would satisfy both tests above and be just as useless in the other
+      // direction.
+      final work = _scenario(
+        baseOpen: {1: 'one'},
+        mainOpen: {1: 'one', 2: 'mainline two'},
+        branchOpen: {1: 'one'},
+        branchClosed: {3: 'branch three'},
+      );
+      _git(work, ['checkout', 'main']);
+      _git(work, ['merge', '--no-ff', '--no-edit', 'feature']);
+      final r = _runGate(work);
+      expect(r.exitCode, 0,
+          reason: 'distinct numbers on both sides is the NORMAL merge; blocking '
+              'it would make the hook unusable');
+    });
   });
 }
