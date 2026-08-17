@@ -3361,9 +3361,17 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   individually pinned in `docs/blast_radius.yaml`. Per §4.4 rule 24 a new/changed leg needs a
   mutation-proven test; the existing protective legs already carry one.
 
-## OI-129 — orphaned `pr-ag-handoff-gaps`: the "32 MB of UNTRACKED QA work" was a MEASUREMENT ARTEFACT; every byte is in git, only the delete remains
+## OI-129 — orphaned `pr-ag-handoff-gaps`: the "32 MB of UNTRACKED QA work" was a MEASUREMENT ARTEFACT; every byte was in git
 
-- **Status**: OPEN · **the blocker is now purely mechanical, and it is NOT the one below.** Every
+- **Status**: CLOSED · 2026-08-17 · directory removed by the founder after the recoverability proof
+  was re-run immediately before the delete (**526 non-build files vs 9821 blobs, 0 unmatched** — the
+  blob count had moved from 9766, so the proof was redone rather than cited from earlier in the
+  session). `.claude/worktrees` now holds **9 directories and `git worktree list` reports 9** — zero
+  orphans, the first time those two numbers have matched since the orphan class was identified.
+  **The entry is kept in full below rather than trimmed on close, because what it got WRONG is the
+  reusable part** — see "REFUTED 2026-08-17".
+- **Status was**: OPEN · **the blocker was purely mechanical, and it was NOT the one this was filed
+  on.** Every
   file was proven recoverable from git (0 of 526 unmatched — see "REFUTED 2026-08-17"), so nothing
   is at risk and no founder judgement about what to keep is owed any more. What remains is that the
   `rm -rf` was refused by the harness safety classifier on 2026-08-17. That refusal is CORRECT for a
@@ -3372,7 +3380,7 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   is the point of the entry now** — see "REFUTED 2026-08-17".
 - **Verified**: 2026-08-16 — inspected directly while auditing retirement candidates.
 - **Identified**: 2026-08-16
-- **Blocked on**: FOUNDER, but for a completely different and much smaller reason than when this was
+- **Blocked on**: nothing — closed. (Was: FOUNDER, for a much smaller reason than when this was
   filed. It is no longer *"decide what is worth salvaging"* — that question is dissolved, nothing
   needs salvaging. It is now only *"run the recursive delete the classifier refused"*:
   `rm -rf .claude/worktrees/pr-ag-handoff-gaps` (~32 MB, 526 non-build files, all provably in git).
