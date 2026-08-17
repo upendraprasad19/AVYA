@@ -140,7 +140,22 @@ fi
 _restore_index() {
   if [ "$_INDEX_EXISTED" -eq 1 ]; then
     if [ -n "$_INDEX_BACKUP" ] && [ -f "$_INDEX_BACKUP" ]; then
-      cp "$_INDEX_BACKUP" "$_OPEN_INDEX"
+      # Mirror the backup-direction check at :108. Round 2 hardened the copy
+      # INTO the backup and left the copy back OUT unchecked — asymmetric
+      # hardening of the two halves of one operation (B-pass 2026-08-17, P2).
+      # Under `set -e` a failed restore already aborts the hook, so this is
+      # fail-CLOSED rather than a bypass; what it lacked was a legible reason
+      # and a surviving copy. Both matter here: this runs on the shared primary
+      # worktree, and "cp: Permission denied" beside an aborted merge is
+      # indistinguishable from a bad merge to whoever debugs it next.
+      if ! cp "$_INDEX_BACKUP" "$_OPEN_INDEX"; then
+        echo "[pre-merge-commit] ERROR: could not restore $_OPEN_INDEX." >&2
+        echo "  A regenerated copy is in the working tree and the ORIGINAL is" >&2
+        echo "  retained at: $_INDEX_BACKUP" >&2
+        echo "  Restore it by hand before committing; this hook deliberately" >&2
+        echo "  does not delete the backup on this path." >&2
+        return 1
+      fi
       rm -f "$_INDEX_BACKUP"
     fi
   else

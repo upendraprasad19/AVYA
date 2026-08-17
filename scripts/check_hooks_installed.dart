@@ -54,7 +54,7 @@ const _installer = 'scripts/setup-hooks.sh';
 /// installer itself so a newly added hook cannot be silently unchecked.
 ///
 /// Matches the canonical call shape:
-///   install_hook "$REPO_ROOT/scripts/<src>.sh" "$HOOKS_DIR/<dst>"
+///   `install_hook "$REPO_ROOT/scripts/<src>.sh" "$HOOKS_DIR/<dst>"`
 List<({String src, String dst})> parseInstalledHooks(String installerSource) {
   final re = RegExp(
     r'^\s*install_hook\s+"[^"]*?scripts/([A-Za-z0-9._-]+)"\s+"[^"]*?/([A-Za-z0-9._-]+)"',
@@ -120,6 +120,31 @@ void main(List<String> args) {
         'looser count). The installer exists, so either its call shape changed '
         'or this parser is stale -- either way nothing was verified. '
         'An empty input set must never report the same colour as "all present".');
+    exit(0);
+  }
+
+  // A DUPLICATE line keeps the two counts equal while a DIFFERENT hook goes
+  // missing — the cross-check above only catches UNDER-parsing.
+  //
+  // B-pass 2026-08-17 (P1): duplicate `pre-commit`'s install_hook line and drop
+  // `pre-merge-commit`'s entirely, and the installer still has 5 lines parsing
+  // to 5 pairs. The counts agree, the cross-check passes, and the per-hook loop
+  // never looks at pre-merge-commit at all — reproducing the exact "PASS while
+  // the flagship hook is not installed" failure this gate was rewritten to stop,
+  // through a different corruption (a bad merge-conflict resolution that keeps
+  // both sides) than the malformed-line case already closed.
+  final dsts = hooks.map((h) => h.dst).toList();
+  final duplicates = <String>{
+    for (final d in dsts)
+      if (dsts.where((x) => x == d).length > 1) d,
+  };
+  if (duplicates.isNotEmpty) {
+    stderr.writeln('[Gate 32] UNDETERMINED (passing): $_installer installs '
+        'these destination(s) more than once: ${duplicates.join(', ')}. A '
+        'duplicated line keeps the invocation count correct while a DIFFERENT '
+        'hook can be missing entirely, so this gate cannot tell whether the '
+        'full set is installed. Most likely a merge-conflict resolution that '
+        'kept both sides. Not reported as clean.');
     exit(0);
   }
 

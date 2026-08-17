@@ -357,6 +357,108 @@ void main() {
           reason: 'inside an unterminated quote it is still data: $s');
     });
 
+    // ---- THE HATCH BINDS TO A STATEMENT, NOT TO THE COMMAND ---------------
+    //
+    // Generation 3 of this bug, found by the B-pass (2026-08-17) after rounds 1
+    // and 2 had each fixed a different half of it. Rounds 1 and 2 bound the
+    // assignment correctly to a statement — and then the CALLER collapsed that
+    // into one command-wide boolean and applied it to every deny. So a harmless
+    // hatched statement exempted an unrelated dangerous one.
+    //
+    // Reproduced against the real hook with controls blocking:
+    //     ALLOW_RAW_GIT=1 git status; git push origin main --force   -> ALLOWED
+    //     ALLOW_RAW_GIT=1 git status && git commit -m sneaky         -> ALLOWED
+    //     FOUNDER_APPROVED_NO_VERIFY=1 git status; git commit --no-verify -m x
+    //                                                                -> ALLOWED
+    // None of these is even shell-accurate: an inline assignment prefixes ONE
+    // command and is never carried to the next statement.
+    //
+    // These test the LIBRARY predicate. The hook's end-to-end behaviour is
+    // covered by the case matrices driven through its stdin contract.
+    group('unhatchedGitStatements — pairing danger with its own hatch', () {
+      test('a hatch on one statement does NOT exempt another', () {
+        expect(
+          unhatchedGitStatements(
+              'ALLOW_RAW_GIT=1 git status; git push origin main --force',
+              'push',
+              'ALLOW_RAW_GIT'),
+          isNotEmpty,
+          reason: 'the push carries no hatch of its own and must be reported',
+        );
+      });
+
+      test('a hatch on the dangerous statement itself DOES exempt it', () {
+        // The mirror. Without it, a predicate that reported every git statement
+        // unconditionally would satisfy the test above and break every
+        // documented use of the hatch.
+        expect(
+          unhatchedGitStatements(
+              'ALLOW_RAW_GIT=1 git push origin main', 'push', 'ALLOW_RAW_GIT'),
+          isEmpty,
+        );
+      });
+
+      test('each statement is judged on its own hatch, independently', () {
+        expect(
+          unhatchedGitStatements(
+              'ALLOW_RAW_GIT=1 git commit -m a; ALLOW_RAW_GIT=1 git push',
+              'push',
+              'ALLOW_RAW_GIT'),
+          isEmpty,
+          reason: 'both hatched individually — the documented multi-step form',
+        );
+        expect(
+          unhatchedGitStatements(
+              'ALLOW_RAW_GIT=1 git commit -m a; git push', 'push', 'ALLOW_RAW_GIT'),
+          isNotEmpty,
+          reason: 'only the commit was hatched; the push was not',
+        );
+      });
+
+      test('returns the offending statement text, not just a flag', () {
+        // A bool is what let generation 3 happen: the binding existed and the
+        // caller threw it away. Returning the statements keeps the pairing
+        // visible at the call site and lets the deny quote what it objects to.
+        final out = unhatchedGitStatements(
+            'ALLOW_RAW_GIT=1 git status; git push origin main',
+            'push',
+            'ALLOW_RAW_GIT');
+        expect(out.single, contains('git push origin main'));
+        expect(out.single, isNot(contains('git status')));
+      });
+
+      test('no git statement of that subcommand yields empty', () {
+        expect(
+          unhatchedGitStatements('ls -la; echo hi', 'push', 'ALLOW_RAW_GIT'),
+          isEmpty,
+        );
+      });
+    });
+
+    group('unhatchedNoVerifyStatements — same pairing for the skip-hooks flag',
+        () {
+      test('a hatch on an unrelated statement does NOT exempt the flag', () {
+        expect(
+          unhatchedNoVerifyStatements(
+              'FOUNDER_APPROVED_NO_VERIFY=1 git status; '
+              'git commit --no-verify -m x',
+              'FOUNDER_APPROVED_NO_VERIFY'),
+          isNotEmpty,
+          reason: 'this shape exits the hook at the top, before the commit and '
+              'push checks run — it disarms everything',
+        );
+      });
+
+      test('a hatch on the flagged statement itself DOES exempt it', () {
+        expect(
+          unhatchedNoVerifyStatements(
+              'FOUNDER_APPROVED_NO_VERIFY=1 git commit --no-verify -m x',
+              'FOUNDER_APPROVED_NO_VERIFY'),
+          isEmpty,
+        );
+      });
+    });
+
     test('the prefix chain is still honoured through env(1) and stacking', () {
       // The strictness above must not cost the documented forms. These are the
       // shapes stripCommandPrefixes already accepts, so the two must agree —

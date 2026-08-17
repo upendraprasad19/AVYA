@@ -252,18 +252,21 @@ findings:
     title: "Pre-existing: the git-safety DENY path misses 13+ executable spellings, and the wrapper allow is suffix-matched"
     terminal_state: blocked_on_user
     reason: >
-      Founder must decide the scope, because tightening the DENY path is a
-      trade against the one failure mode this hook must never have. Every
-      candidate fix (recognising subshells, absolute/relative git paths,
-      sudo/nohup/time/exec, eval, command substitution, xargs) widens what the
-      hook treats as a git invocation, and a false BLOCK stops all work with no
-      escape but the documented hatch. OI-119 is already explicitly blocked on
-      that false-positive analysis and now carries both directions measured
-      plus the reproduction harness. The choice is: (a) fund the analysis and
-      close both directions together, (b) accept the gap as the price of never
-      false-blocking, or (c) narrow the hook's remit to the wrapper-routing
-      check only. Not an agent call: it sets how much friction the founder is
-      willing to carry on every git operation.
+      DECIDED by the founder 2026-08-17: option (a) — fund the analysis and
+      close both directions together, as ITS OWN unit on OI-119, not inside this
+      batch. The remaining work is therefore scoped and owned, not open-ended.
+      Kept as blocked_on_user rather than closed because the work itself is not
+      in this commit and OI-119 stays OPEN until it lands.
+      Why it could not be folded in here: tightening the DENY path trades
+      against the one failure mode this hook must never have. Every candidate
+      fix (recognising subshells, absolute/relative git paths,
+      sudo/nohup/time/exec, eval, command substitution, xargs, the single-`&`
+      separator) widens what counts as a git invocation, and a false BLOCK stops
+      all work with no escape but the documented hatch. OI-119 predates this
+      batch (filed 2026-08-13) and was already explicitly blocked on exactly
+      that false-positive analysis; it now additionally carries both directions
+      measured and the reproduction harness, so the next session starts from
+      evidence rather than re-deriving it.
     commit: *wip
     verification: "Executed against the real hook: `(git commit …)`, `{ git commit; }`, `/usr/bin/git`, `./git`, `sudo git`, `nohup/time/exec git`, `eval 'git commit'`, backtick and $() capture, `xargs git commit`, `git --git-dir=… commit`, `cd /tmp & git commit` (single `&` is not a separator) and a bare `\\r` separator all ALLOW a raw commit/push. Separately, commandUsesWrapper matches a path SUFFIX and is command-wide, so `sh /tmp/evil_safe_commit.sh && git commit` and `sh scripts/safe_commit.sh \"m\" || git commit -m m` read as wrapper-routed. The --no-verify deny still fires in all of them."
     notes: "NOT introduced by this batch and NOT worsened by it — stripCommandPrefixes is a net gain in this exact direction (FOO=1 git commit/push went ALLOW -> BLOCK), and the wrapper check is strictly tighter than the command.contains() it replaced. Closing these means touching the DENY path, whose one intolerable failure mode is a false BLOCK, and that false-positive analysis is exactly what OI-119 is already blocked on. Recorded in full on OI-119 with the reproduction harness, both directions now measured, so the next person does not re-derive it. Founder call because it is a scope decision on a load-bearing guard, not a coding task."

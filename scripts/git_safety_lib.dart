@@ -294,6 +294,74 @@ String? _leadingAssignmentIfGitStatement(String statement, String name) {
   return found;
 }
 
+/// The statements of [command] that invoke `git <subcommand>` and do NOT carry
+/// [hatchName] as their own leading environment prefix.
+///
+/// THIS IS THE THIRD GENERATION OF ONE BUG, AND THE REASON IT KEEPS COMING BACK
+/// IS THAT EACH FIX ADDRESSED A DIFFERENT HALF OF THE SAME SENTENCE: "the hatch
+/// applies to THIS git command".
+///
+///   gen 1 — `inlineEnvAssignment` matched `NAME=` anywhere in a statement, so
+///           a MENTION granted it. Fixed: must lead the prefix chain.
+///   gen 2 — the "statement" could be a line inside a heredoc or a quoted
+///           multi-line commit message, i.e. text no shell executes. Fixed:
+///           quote/heredoc-aware splitting on the ALLOW path.
+///   gen 3 — (this) the assignment was correctly bound to a statement, and then
+///           the CALLER threw that binding away: `git_safety_hook.dart` reduced
+///           it to one command-wide boolean and applied it to every deny. So a
+///           harmless hatched statement exempted a DIFFERENT dangerous one.
+///           Verified against the real hook, controls blocking:
+///               ALLOW_RAW_GIT=1 git status; git push origin main --force
+///               ALLOW_RAW_GIT=1 git status && git commit -m sneaky
+///               FOUNDER_APPROVED_NO_VERIFY=1 git status; git commit --no-verify -m x
+///           all ALLOWED. No shell applies statement 1's inline assignment to
+///           statement 2's environment, so this was never even shell-accurate.
+///
+/// Returning the offending STATEMENTS rather than a bool is deliberate: a
+/// predicate that collapses to true/false is exactly what let gen 3 happen, and
+/// the deny message can now quote the statement it is objecting to.
+///
+/// Uses the BROAD [splitStatements] on purpose, not [splitExecutableStatements].
+/// Both the danger and its hatch must be judged against the SAME notion of a
+/// statement or they cannot be paired at all — and over-splitting here can only
+/// ever produce an extra BLOCK, which is loud and recoverable, whereas
+/// under-splitting produces a silent bypass. A hatch that lands inside quoted
+/// text can only ever exempt that same quoted pseudo-statement, and the real
+/// command's own statement is judged separately.
+List<String> unhatchedGitStatements(
+  String command,
+  String subcommand,
+  String hatchName,
+) {
+  final pattern = RegExp(
+    r'^git(\s+(-C\s*\S+|--no-pager|-c\s*\S+))*\s+' + subcommand + r'\b',
+  );
+  final out = <String>[];
+  for (final raw in splitStatements(command)) {
+    if (!pattern.hasMatch(stripCommandPrefixes(raw))) continue;
+    if (_leadingAssignmentIfGitStatement(raw, hatchName) == '1') continue;
+    out.add(raw.trim());
+  }
+  return out;
+}
+
+/// The statements of [command] carrying a literal `--no-verify` that do NOT
+/// carry [hatchName] as their own leading environment prefix.
+///
+/// Same pairing rule as [unhatchedGitStatements]. The flag match stays
+/// deliberately broad (any `--no-verify` token in the statement, not only on a
+/// git command word) because over-matching here costs an explicit founder
+/// approval and never a silent bypass.
+List<String> unhatchedNoVerifyStatements(String command, String hatchName) {
+  final out = <String>[];
+  for (final raw in splitStatements(command)) {
+    if (!RegExp(r'--no-verify\b').hasMatch(raw)) continue;
+    if (_leadingAssignmentIfGitStatement(raw, hatchName) == '1') continue;
+    out.add(raw.trim());
+  }
+  return out;
+}
+
 /// True if [command] actually INVOKES the given wrapper script as one of its
 /// statements, i.e. routes through the sanctioned safe_commit.sh /
 /// safe_push.sh path.

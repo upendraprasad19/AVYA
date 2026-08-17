@@ -239,7 +239,49 @@ void main(List<String> args) {
         ? const <String>[]
         : parentLine.split(RegExp(r'\s+'));
 
-    if (mergeHead != null && mergeHead.isNotEmpty) {
+    // OCTOPUS MERGES: this gate compares exactly TWO sides, and says so.
+    //
+    // Both merge arms below are structurally blind to a 3+-parent merge, for
+    // two unrelated mechanisms (B-pass 2026-08-17, P1, both reproduced):
+    //   - post-merge: `parents[1]` vs `parents[2]` only; a third parent's mint
+    //     is never examined;
+    //   - mid-merge: `.git/MERGE_HEAD` holds ONE SHA PER LINE for an octopus,
+    //     and `git rev-parse --verify --quiet MERGE_HEAD` silently resolves to
+    //     the first line with exit 0 — no error to notice.
+    // Verified: three branches, two of them minting OI-31 with different
+    // titles in non-conflicting regions, merge cleanly and the gate printed
+    // PASS while its own diagnostic line reported 32 raw headings vs 31
+    // distinct.
+    //
+    // Reported as UNDETERMINED rather than fixed by looping the parents,
+    // because a correct N-way comparison is a different predicate (every pair,
+    // or mainline vs the union) and would need its own e2e coverage — whereas
+    // this repo produces octopus merges NOWHERE: safe_merge.sh takes a single
+    // branch. Refusing to answer is honest, matches this file's convention
+    // everywhere else, and cannot be mistaken for a clean bill.
+    final mergeHeadFile = File('.git/MERGE_HEAD');
+    final mergeHeadLines = mergeHeadFile.existsSync()
+        ? mergeHeadFile
+            .readAsLinesSync()
+            .where((l) => l.trim().isNotEmpty)
+            .length
+        : 0;
+    final isOctopus = parents.length > 3 || mergeHeadLines > 1;
+    if (isOctopus) {
+      undetermined = true;
+      _warnPass('this is an OCTOPUS merge '
+          '(${parents.length > 3 ? '${parents.length - 1} parents' : '$mergeHeadLines merge heads'}). '
+          'This gate compares exactly two sides, so a number minted on a third '
+          'branch would not be seen. NOT reported as clean. Merge the branches '
+          'one at a time (scripts/safe_merge.sh takes one branch) and the check '
+          'runs normally on each.');
+      // Fall through to the branch triple only so the locals are definitely
+      // assigned; the comparison itself is skipped below on `isOctopus`.
+      thisSideRev = 'origin/main';
+      otherSideRev = 'HEAD';
+      baseRev = null;
+      shapeNote = 'octopus (not compared)';
+    } else if (mergeHead != null && mergeHead.isNotEmpty) {
       // Mid-merge: the pre-merge-commit hook. The merge commit does not exist
       // yet, but both sides do -- HEAD is the branch being merged INTO and
       // MERGE_HEAD the branch being merged IN.
@@ -263,7 +305,11 @@ void main(List<String> args) {
       shapeNote = 'branch (HEAD vs origin/main)';
     }
 
-    if (baseRev == null || baseRev.isEmpty) {
+    if (isOctopus) {
+      // Already reported above as UNDETERMINED. Deliberately no comparison:
+      // running the two-side predicate here would produce a real-looking
+      // verdict about two of the three-or-more sides.
+    } else if (baseRev == null || baseRev.isEmpty) {
       undetermined = true;
       _warnPass('no merge-base for the $shapeNote comparison (unrelated '
           'histories, or a shallow clone). Collision check skipped.');
