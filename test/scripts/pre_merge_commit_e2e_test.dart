@@ -33,12 +33,19 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// The Dart binary to run scripts with.
-///
-/// NOT `Platform.resolvedExecutable`: under `flutter test` that resolves to the
-/// flutter_tester binary, not dart, so `<tester> run script.dart` never returns.
-/// The repo's other e2e suites use a plain `'dart'` for the same reason.
-String _dartBin() => 'dart';
+// This file deliberately spawns NO dart process of its own, so it carries no
+// `_dartBin()` helper — its sibling test/scripts/oi_numbering_lib_test.dart
+// does, and explains the flutter_tester trap there. Everything here goes
+// through `git`, and git invokes the hook, which resolves its own Dart via
+// scripts/_dart_bin.sh. That exercises the REAL resolution path rather than a
+// test-chosen one, which is better coverage anyway.
+//
+// The first draft left an unused `_dartBin()` here and it FAILED THE PUSH:
+// `unused_element` is a WARNING, and pre-push runs `flutter analyze
+// --no-fatal-infos`, so infos pass and warnings do not. It was the only
+// warning in the entire repo. Worth knowing before leaving a helper "for
+// later" in a test — analyze is the one gate that runs on every push,
+// including the feature-tier ones that skip the suite.
 
 /// The parent environment with git's location variables REMOVED.
 ///
