@@ -102,13 +102,22 @@ paths:
   # a3d7b1 (2026-07-27, founder decision) — the THIRD partial sweep of this
   # block, and the one that tries to stop there being a fourth.
   #
-  # scripts/setup-hooks.sh:38-41 installs FOUR hook sources in four consecutive
-  # lines. Before this batch, two were platform (pre-commit.sh, promoted by
-  # d947743d 2026-07-26 under "a change to the reviewer must not be exempt from
-  # review") and two were feature. Promoting a git hook while its siblings stay
-  # exempt is arbitrary, so the rule is now: EVERY hook source setup-hooks.sh
-  # installs is >= platform, asserted by a test that DERIVES the list from
-  # setup-hooks.sh rather than restating it here.
+  # scripts/setup-hooks.sh installs the hook sources in consecutive lines (FOUR
+  # when this comment was written; FIVE since 2026-08-17 added
+  # pre-merge-commit.sh). Before this batch, two were platform (pre-commit.sh,
+  # promoted by d947743d 2026-07-26 under "a change to the reviewer must not be
+  # exempt from review") and two were feature. Promoting a git hook while its
+  # siblings stay exempt is arbitrary, so the rule is now: EVERY hook source
+  # setup-hooks.sh installs is >= platform, asserted by a test that DERIVES the
+  # list from setup-hooks.sh rather than restating it here.
+  #
+  # That derive-from-source design paid for itself on 2026-08-17: the
+  # cycle-time-and-board-gaps batch added a FIFTH hook (pre-merge-commit.sh) and
+  # did not think to add it here, and
+  # blast_radius_content_rule_wired_all_scripts_test.dart failed the commit with
+  # the new filename named in the message. A hand-maintained list would have
+  # silently stayed green while the newest hook — the one that gates every future
+  # merge — sat at feature tier.
   #
   # pre-push.sh is the self-referential one: it decides whether the ~7-min full
   # suite runs before code leaves the machine (:64, a string equality against
@@ -153,6 +162,12 @@ paths:
   #     backstops hook presence.
   #   new-worktree.sh / vercel_build.sh / run-device-tests.sh — not enforcement.
   - { glob: "scripts/pre-push.sh", tier: platform }
+  # The fifth hook source (2026-08-17). It is the ONLY thing git runs for an
+  # automatically-created merge commit, which is precisely where two branches'
+  # OI boards first coexist and where the number-collision class lands. An edit
+  # weakening it would clear no review gate and would re-open that hole
+  # invisibly, so it takes the same tier as its four siblings.
+  - { glob: "scripts/pre-merge-commit.sh", tier: platform }
   - { glob: "scripts/commit-msg.sh", tier: platform }
   - { glob: "scripts/safe_commit.sh", tier: platform }
   - { glob: "scripts/safe_push.sh", tier: platform }

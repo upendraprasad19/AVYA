@@ -69,13 +69,16 @@ _s2: &s2 "approved split slice 2 (OAuth watch) — merges under its own founder 
 _s3: &s3 "approved split slice 3 (telemetry lane, client half) — merges under its own founder go"
 _s4: &s4 "approved split slice 4 (sync owner guards) — merges under its own founder go"
 
+# ── Slices landed 2026-08-17 on branch auth-class-fixes ──
+_ac1: &ac1 "auth-class-fixes ab1886b7 — client half of slices 1-3 rebased onto main (OAuth completion watch, uuid mint, pre-auth telemetry lane, recovery session) + the 5 SoT concepts their docs cite"
+_ac2: &ac2 "auth-class-fixes — slice 4: e5c2d1 owner guards at all 5 nutrition write sinks + restoreAbortedFor(ownerId), with session_owner_inflight_guard_behavioral_test.dart mutation-proven against guard deletion"
+
 findings:
   # ---- ROUND 1 (2026-08-07) — reviewer B, code ----
   - id: R1-P0-1
     title: "OAuth watch trusted the onAuthStateChange PAYLOAD; ReplaySubject with no maxSize replays historical sessions"
-    terminal_state: blocked_on_user
-    reason: *s2
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac1
     verification: test/contracts/google_oauth_session_navigation_behavioral_test.dart
     notes: >
       Strictly worse than the bug being fixed — sign-in → sign-out → retry would
@@ -88,9 +91,8 @@ findings:
       but the DEFECT itself is closed — recorded here so it is not re-found.
   - id: R1-P1-2
     title: "check_authed_invoke_fresh_token.dart exits 1 on the new direct functions.invoke — pre-commit would block"
-    terminal_state: blocked_on_user
-    reason: *s3
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac1
     verification: scripts/check_authed_invoke_fresh_token.dart
     notes: >
       Fixed by putting callFunctionAnonymous in SupabaseService — the one file
@@ -107,51 +109,45 @@ findings:
       the repo source but NOT in deployed v12 — see R2-N12.
   - id: R1-P1-4
     title: "The uuid writer test was CIRCULAR — it minted its own uuid, so reverting the writer left all 4 cases green"
-    terminal_state: blocked_on_user
-    reason: *s1
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac1
     verification: test/contracts/notifications_inbox_uuid_id_behavioral_test.dart
     notes: "Rebound to the production mint NotificationInboxService.newLocalNotificationId(); mutation-proven."
   - id: R1-P1-5
     title: "Sink guard covered 1 of 4 stale-userId sinks; its `return` exited _syncNutritionLogs while two siblings ran on under Future.wait"
-    terminal_state: blocked_on_user
-    reason: *s4
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac2
     verification: test/contracts/session_owner_inflight_guard_behavioral_test.dart
     notes: "All four nutrition sinks guarded. Scope beyond that file is OI-111."
   - id: R1-P2-6
     title: "The guard test's ORDERING case passed inputs identical to an earlier case — asserted nothing new"
-    terminal_state: blocked_on_user
-    reason: *s4
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac2
     verification: test/contracts/session_owner_inflight_guard_behavioral_test.dart
     notes: "Replaced with a purity/interleaving assertion."
   - id: R1-P2-7
     title: "reset_password_screen read _hasSession once in build() with no rebuild trigger — the no-session state could never recover"
-    terminal_state: blocked_on_user
-    reason: *s3
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac1
     verification: test/contracts/password_recovery_code_flow_behavioral_test.dart
     notes: "_authSub added so the async link path can recover. Its own side effect is R2-N5."
   - id: R1-P2-8
     title: "Anon lane's GLOBAL budget fed _maybeHonorRateLimit — a stranger exhausting it would silence THIS device's authed telemetry"
-    terminal_state: blocked_on_user
-    reason: *s3
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac1
     verification: lib/core/services/error_telemetry.dart
     notes: "Cooldown honoured for the authed lane only in logEvent. recordNonFatal's twin is R2-N4."
   - id: R1-P3-9
     title: "recordNonFatal never got the pre-auth lane — only logEvent did"
-    terminal_state: blocked_on_user
-    reason: *s3
+    terminal_state: closed_in_commit
+    commit: *ac1
     notes: "Client-side telemetry change; sequenced with the rest of the client lane."
 
   # ---- ROUND 1 (2026-08-07) — reviewer A, docs ----
   - id: R1-A1
     title: "e5c2d1 cited the WRONG capture site: sync_nutrition.dart:185 is inside syncSavedMealsNow(), not _syncNutritionLogs"
-    terminal_state: blocked_on_user
-    reason: *s4
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac2
     verification: "read sync_nutrition.dart:185 and :201 directly"
     notes: >
       Verified myself before acting. The wrong provenance had already propagated
@@ -159,9 +155,8 @@ findings:
       in the doc BODY is R2-N7.
   - id: R1-A2
     title: "c9e2b7 described 2 test cases that do not exist — ForgotPasswordSheet has no test at all"
-    terminal_state: blocked_on_user
-    reason: *s2
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac1
     verification: "grep -rln 'ForgotPasswordSheet' test/ → no matches"
     notes: "Doc corrected to state the real coverage; the gap itself is tracked as OI-109 rather than implied away."
   - id: R1-A3
@@ -172,96 +167,93 @@ findings:
     notes: "OI-111 and OI-109 both filed for real, each with Blocked on + Verified so the fail-closed index generator accepts them."
   - id: R1-A4
     title: "Fabricated +33 baseline statistic: 184 rows over 11 days, actually 791 rows over 54 days"
-    terminal_state: blocked_on_user
-    reason: *s4
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac2
     verification: "re-queried client_errors"
     notes: "The 'ZERO of either' half of the claim was and is true; only the baseline was invented."
   - id: R1-A5
     title: "Incident window wrong: RLS storm is 12:35:12.72–21.59 and Hive 12:35:22–24.92, not '12:35:17-24'"
-    terminal_state: blocked_on_user
-    reason: *s4
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac2
     verification: "re-queried client_errors"
     notes: "The real storm starts five seconds before the window the doc claimed."
   - id: R1-A6
     title: "a4f1c8 precision defects: op_type attribution 4+2 not 6; _restoreNotificationsInbox line; detector 'sets' vs 'returns'; understated honest-limit"
-    terminal_state: blocked_on_user
-    reason: *s1
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac1
     verification: docs/diagnoses/2026-08-06-notifications-inbox-nonuuid-id-a4f1c8.md
     notes: "isUuidShaped IS wired at sync_restore_completeness.dart:278; the doc had understated its own coverage."
   - id: R1-A7
     title: "Citation convention drift — some docs cite PRE-fix HEAD lines, others POST-fix, with nothing saying which"
-    terminal_state: blocked_on_user
-    reason: *s1
+    terminal_state: closed_in_commit
+    commit: *ac1
     notes: "Cross-cutting across all 5 docs; lands with the first slice that touches them."
 
   # ---- ROUND 2 (2026-08-07) — on the hardened tree ----
   - id: R2-N1
     title: "Cooldown gate at error_telemetry.dart:311 runs BEFORE the signed-out branch at :339 — a fifth barrier silencing the very lane this batch built"
-    terminal_state: blocked_on_user
-    reason: *s3
+    terminal_state: closed_in_commit
+    commit: *ac1
     notes: "P1. The barrier count went 4 → 5: the batch removed three and its own fix added one."
   - id: R2-N2
     title: "Two OAuth hang paths: _watchForOAuthSession() sits outside the try at auth_provider.dart:450"
-    terminal_state: blocked_on_user
-    reason: *s2
+    terminal_state: closed_in_commit
+    commit: *ac1
     notes: "P1."
   - id: R2-N3
     title: "catch (_) { return; } returns before the Timer assignment, leaving no timeout armed"
-    terminal_state: blocked_on_user
-    reason: *s2
+    terminal_state: closed_in_commit
+    commit: *ac1
     notes: "P1. Same function as R2-N2; both close together."
   - id: R2-N4
     title: "recordNonFatal honours the anon rate-limit unconditionally at :286 — the twin of R1-P2-8, unfixed"
-    terminal_state: blocked_on_user
-    reason: *s3
+    terminal_state: closed_in_commit
+    commit: *ac1
     notes: "P2."
   - id: R2-N5
     title: "reset screen's own _authSub fires on its post-success signOut(), rendering the 'expired' state on the SUCCESS path"
-    terminal_state: blocked_on_user
-    reason: *s3
+    terminal_state: closed_in_commit
+    commit: *ac1
     notes: "P2. Introduced by R1-P2-7's fix."
   - id: R2-N6
     title: "session_owner_inflight_guard_behavioral_test.dart passes with all 16 guard call sites deleted"
-    terminal_state: blocked_on_user
-    reason: *s4
+    terminal_state: closed_in_commit
+    commit: *ac2
     notes: >
       P1. It exercises the pure predicate but never asserts the predicate is
       CALLED — presence-only confidence of exactly the shape
       feedback_source_grep_false_confidence.md describes.
   - id: R2-N7
     title: "The wrong :185 citation survives at e5c2d1.md:162 and in the guard test header, after R1-A1 corrected only the frontmatter"
-    terminal_state: blocked_on_user
-    reason: *s4
+    terminal_state: closed_in_commit
+    commit: *ac2
     notes: "P2. A correction that fixed one instance of a claim and left another."
   - id: R2-N8
     title: "Phantom method _replayPendingNutritionSync cited at sync_nutrition.dart:301 — invented while correcting R1-A1"
-    terminal_state: blocked_on_user
-    reason: *s4
+    terminal_state: closed_in_commit
+    commit: *ac2
     notes: "P2. A fabricated citation introduced by the act of fixing a fabricated citation."
   - id: R2-N9
     title: "Item-loop guard abandons a half-written parent, skipping the tail vacuum"
-    terminal_state: blocked_on_user
-    reason: *s4
+    terminal_state: closed_in_commit
+    commit: *ac2
     notes: "P2."
   - id: R2-N10
     title: "callFunctionAnonymous is not actually anonymous — it sends whatever bearer the client happens to hold"
-    terminal_state: blocked_on_user
-    reason: *s3
+    terminal_state: closed_in_commit
+    commit: *ac1
     notes: "P2. Rename to callFunctionUnauthenticated + assert currentSession == null."
   - id: R2-N11
     title: "OAuth test case 3 not mutation-covered; _oauthSub assigned after .listen(); the 90s timeout can leave a session unobserved"
-    terminal_state: blocked_on_user
-    reason: *s2
+    terminal_state: closed_in_commit
+    commit: *ac1
     notes: "P3, three related precision points in one finding as originally reported."
 
   # ---- ROUND 3 (2026-08-08) — found while scoping slice 0 ----
   - id: R2-N12
     title: "Deployed log-client-error v12 has FIVE allow-list entries; repo source has six — R1-P1-3's fix was never deployed"
-    terminal_state: blocked_on_user
-    reason: "redeploy to v13 requires its own explicit founder go per §4.3 (plan approval is not deploy approval)"
+    terminal_state: verified_clean
+    closed_note: "RESOLVED WITHOUT ACTION — log-client-error v13 (deployed 2026-08-10) was read live via the Management API on 2026-08-17 and its PRE_AUTH_OP_TYPES set carries all SIX entries, auth_send_phone_otp_failed included. No redeploy was performed or needed."
     verification: "decode .claude/_payload_log-client-error.json as UTF-8 and diff against the worktree source — sole difference is the PRE_AUTH_OP_TYPES block"
     notes: >
       Latent, not live-broken: _kEnablePhoneEnlist = false makes signInWithPhone
@@ -295,9 +287,8 @@ findings:
       at the merge; not built here, and not claimed as tracked either.
   - id: R2-N16
     title: "callFunctionAnonymous bypassed retryColdStart — the pre-auth telemetry lane silently drops its event whenever the function is cold"
-    terminal_state: blocked_on_user
-    reason: *s3
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac1
     verification: test/contracts/edge_function_503_retry_test.dart
     notes: >
       Surfaced by the pre-commit suite, not by review: the existing 1-invoke
@@ -310,9 +301,8 @@ findings:
       never reaches the handler). Code ships in slice 3; the defect is closed.
   - id: R2-N17
     title: "google_oauth_redirect_flow_test pinned kIsWeb via a fixed 700-char forward window from signInWithGoogle, which the launchGoogleOAuth extraction moved out of range"
-    terminal_state: blocked_on_user
-    reason: *s2
-    fix_state: "written, NOT yet in any commit — ships with that slice"
+    terminal_state: closed_in_commit
+    commit: *ac1
     verification: test/contracts/google_oauth_redirect_flow_test.dart
     notes: >
       The contract still held — the branch simply moved to a helper ABOVE

@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**57 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**58 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -64,4 +64,5 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-126 | The `logged` / `custom_template` training-day predicate split (5 call… | none. Pickable, but it is a live behaviour change for all users, so it needs its | 2026-08-13 — the 5 call sites and the two predicate shapes were read directly while | [:3239](open_issues.md#L3239) |
 | OI-127 | `plan_start` moving under a live hold week: is the streak identity still… | none. Route to the piece that already owns `plan_integrity_reconciler.dart` | 2026-08-13 — the four `plan_start` write sites were enumerated by grep and are fact. | [:3268](open_issues.md#L3268) |
 | OI-128 | `retire_worktree`'s regenerable list omits test-generated output, so any… | none. Small and self-contained. | 2026-08-16 — hit live while retiring `open-issues-triage-976962`. The tool returned | [:3300](open_issues.md#L3300) |
-| OI-129 | orphaned `pr-ag-handoff-gaps` holds 32 MB of UNTRACKED QA work, including… | FOUNDER — needs a human call on what to keep. Nothing technical blocks it. | 2026-08-16 — inspected directly while auditing retirement candidates. | [:3337](open_issues.md#L3337) |
+| OI-129 | orphaned `pr-ag-handoff-gaps`: the "32 MB of UNTRACKED QA work" was a… | FOUNDER, but for a completely different and much smaller reason than when this was | 2026-08-16 — inspected directly while auditing retirement candidates. | [:3337](open_issues.md#L3337) |
+| OI-130 | concurrent sessions have no way to see what another is working on, so the… | nothing technical, but the cheap fixes are all partial and the complete ones are | 2026-08-16 — three measured instances, all within ~72 hours, all discovered by | [:3432](open_issues.md#L3432) |

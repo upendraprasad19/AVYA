@@ -3334,12 +3334,21 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   individually pinned in `docs/blast_radius.yaml`. Per §4.4 rule 24 a new/changed leg needs a
   mutation-proven test; the existing protective legs already carry one.
 
-## OI-129 — orphaned `pr-ag-handoff-gaps` holds 32 MB of UNTRACKED QA work, including an unfiled critical Health-plugin bug
+## OI-129 — orphaned `pr-ag-handoff-gaps`: the "32 MB of UNTRACKED QA work" was a MEASUREMENT ARTEFACT; every byte is in git, only the delete remains
 
-- **Status**: OPEN
+- **Status**: OPEN · **the blocker is now purely mechanical, and it is NOT the one below.** Every
+  file was proven recoverable from git (0 of 526 unmatched — see "REFUTED 2026-08-17"), so nothing
+  is at risk and no founder judgement about what to keep is owed any more. What remains is that the
+  `rm -rf` was refused by the harness safety classifier on 2026-08-17. That refusal is CORRECT for a
+  recursive delete and was not worked around; it needs a human to run it or to approve it.
+  **The premise this entry was filed on was wrong, twice, in the same direction, and the retraction
+  is the point of the entry now** — see "REFUTED 2026-08-17".
 - **Verified**: 2026-08-16 — inspected directly while auditing retirement candidates.
 - **Identified**: 2026-08-16
-- **Blocked on**: FOUNDER — needs a human call on what to keep. Nothing technical blocks it.
+- **Blocked on**: FOUNDER, but for a completely different and much smaller reason than when this was
+  filed. It is no longer *"decide what is worth salvaging"* — that question is dissolved, nothing
+  needs salvaging. It is now only *"run the recursive delete the classifier refused"*:
+  `rm -rf .claude/worktrees/pr-ag-handoff-gaps` (~32 MB, 526 non-build files, all provably in git).
 - **What's missing**: `.claude/worktrees/pr-ag-handoff-gaps` is a FULL repo checkout (`lib/`, `test/`,
   `supabase/`, `docs/`, `memory/`, `scripts/`, `telegram-bot/`, `web/` — 827 entries outside
   `build/`, 32 MB) with **no `.git`**, so `git worktree list` cannot see it and `retire_worktree`
@@ -3359,18 +3368,120 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   the ONLY one with unique content — `wardroom-handoff-enforcement` (100 KB) and the stray
   `.dart_tool` (1 KB) are pure build output. `retire_worktree` is right to refuse it; `--force` would
   destroy the only copy.
-- **Re-verified + WIDENED 2026-08-17** (cycle-time-and-board-gaps batch). The other two orphans this
-  entry named as pure build output were re-checked (`find | grep -v build/ | wc -l` = **0** for both)
-  and REMOVED; `.dart_tool` is now skipped by the orphan scan entirely (it is a tooling artifact, not
-  a worktree). `.claude/worktrees` went 15 dirs / 4 orphans → 11 dirs / **1 orphan — this one.**
-  **The unique content is broader than the 2 `.md` files + screenshots recorded above.** Diffing the
-  526 non-build files against `git ls-files` gives **20 paths absent from main**, and they are not
-  simply renames: every one HAS git history (29 / 9 / 3 / 3 commits for the four sampled), but the
-  orphan's copy matches **NO commit in that history** — checked exhaustively, not sampled, for
-  `lib/features/train/screens/active_workout_screen.dart` (all 29) and
-  `supabase/functions/_shared/tools/nutrition/prelog.ts` (all 3). File mtime is **2026-04-20 17:53**
-  while main's last commits to those paths are 2026-05-21 / 2026-06-01 / 2026-06-03, so these are
-  uncommitted April edits on files main has since restructured past — recoverable from nowhere.
-  Whether four-month-old WIP on since-refactored code is worth salvaging is the founder call this
-  entry is already blocked on; the point of this note is that step (2) "salvage anything worth
-  keeping" covers 20 source files, not just the two reports.
+- **Orphan-scan cleanup 2026-08-17** (still true): the other two orphans this entry named as pure
+  build output were re-checked (`find | grep -v build/ | wc -l` = **0** for both) and REMOVED;
+  `.dart_tool` is now skipped by the orphan scan entirely (it is a tooling artifact, not a
+  worktree). `.claude/worktrees` went 15 dirs / 4 orphans → 11 dirs / 1 orphan — this one.
+
+### ⚠ REFUTED 2026-08-17 — everything above about unique content is wrong, and both errors share ONE cause
+
+  Re-checked before acting on the founder's "if Health Connect works, can we delete it?". Every
+  claim of unique content failed:
+
+  1. **The three "untracked" files are TRACKED and present in main.** `git ls-files QA_FINDINGS.md`
+     → returns the path; same for `QA_TEST_EXECUTION.md` and
+     `memory/project_wardroom_handoff_enforcement.md`. All three are byte-identical to main's copy
+     after CRLF normalization (`diff <(tr -d '\r' <orphan) <(tr -d '\r' <main)` → **0 lines** for
+     each). All **25** screenshots are tracked too (`git ls-files screenshots/ | wc -l` = 25).
+  2. **The "20 paths matching NO commit" is 0 of 9.** The orphan holds 246 `.dart` files under
+     `lib/` vs main's 470; 9 paths exist only in the orphan. Every one's content matches a real
+     historical commit once line endings are normalized — checked **exhaustively over each path's
+     full history**, not sampled: `ai_coach_screen` → `b8c7a5c3`, `prelog_diff` → `853681bd`,
+     `weight_sparkline` → `c0102b1e`, `hydration_section` → `ef878afb`, `my_submissions_screen` →
+     `8a4e30d6`, `profile_screen` → `95ed1f72`, `active_workout_screen` → `1b27a6d2`,
+     `train_screen` → `9eea0be6`, `community_review_sheet` → `f8669b54`. They are absent from main
+     because they were split into subdirectories or retired (`6ed2d9a6` "split 3 god-screens",
+     `7d89b76c` "split active_workout_screen", `bf2b60de` "retire hydration_section"), not because
+     they hold newer work. `test/plan_engine_v3_test.dart` likewise has 3 commits in history.
+
+  **The single root cause of BOTH: a representation mismatch that silently empties the input set.**
+  The orphan's files are CRLF; git blobs are LF, and a git pathspec of `**/<name>` does not match a
+  root-level file. So `git hash-object <crlf-file>` matched no blob and `git ls-files **/QA_FINDINGS.md`
+  returned nothing — and in both cases an **empty result was read as a positive finding**
+  ("uncommitted WIP", "untracked"). Same class as the em-dash `systemEncoding` bug found in
+  `check_oi_numbering_unique.dart`'s own first live run the same day: an encoding difference makes a
+  real match invisible, and nothing distinguishes "no match" from "could not compare".
+  `feedback_green_check_input_set_width` names it; naming it did not prevent it. **Normalize the
+  representation before concluding absence, and state which normalization was applied.**
+
+- **Health-plugin bug: FIXED, and it was fixed the day it was reported.** `QA_FINDINGS.md` logged
+  the ClassCastException at `03-30 13:55:10` and prescribed `FlutterActivity` →
+  `FlutterFragmentActivity`. `android/app/src/main/kotlin/com/icanbefitter/icanbefitter/MainActivity.kt:5`
+  reads `class MainActivity : FlutterFragmentActivity()` today; `6421178e` (2026-03-23) had
+  `FlutterActivity`, `8a5df734` (**2026-03-30**) changed it. No OI or diagnose-doc was owed — the
+  other session's triage was right. ⚠ **Source-level only**: this proves the cast cannot throw, not
+  that Health Connect syncs end-to-end (that needs a device). What DID protect it: **nothing** — no
+  test pinned the superclass, so a one-line revert to `FlutterActivity` would silently re-break
+  health sync, and the failure is invisible (steps read 0, which looks like "no data today"). Closed
+  in this same batch rather than filed as a new OI, per §4.2: `test/contracts/`
+  `main_activity_flutter_fragment_activity_test.dart` pins the superclass by regex, asserts the
+  negative separately (`FlutterFragmentActivity` CONTAINS `FlutterActivity`, so a naive `contains`
+  check reads true on the correct file), and is mutation-proven — restoring the exact 2026-03-23
+  `FlutterActivity` declaration reddens **3 of its 4** tests. The behavioral counterpart is a device
+  test and belongs with the Patrol flows in `docs/operations/DEVICE_TESTING.md`.
+- **Exhaustive recoverability proof (2026-08-17)** — this is what makes the delete safe, and it is
+  stated so nobody has to re-derive it. Every one of the **526** non-build files
+  (excluding `build/`, `node_modules/`, `.dart_tool/`) was hashed BOTH raw and CRLF-normalized and
+  looked up against the full object database (`git cat-file --batch-all-objects`, 9766 blobs).
+  **0 of 526 unmatched.** Not sampled — every file. Method matters here: hashing raw only is
+  exactly the mistake that produced the original false finding, so both representations are checked
+  and the normalization is named.
+- **Resolution**: nothing to salvage. Directory removal is the only step left and is pending the
+  founder action above.
+
+## OI-130 — concurrent sessions have no way to see what another is working on, so the same bug gets diagnosed and fixed twice (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical, but the cheap fixes are all partial and the complete ones are
+  expensive — see "Why this is hard" before picking one.
+- **Verified**: 2026-08-16 — three measured instances, all within ~72 hours, all discovered by
+  accident rather than by any mechanism:
+  1. **The same bug diagnosed twice, two diagnose-docs.** Subprocess-test timeouts: I filed
+     `c3f9a7` (`concept: subprocess_test_timeout_under_suite_parallelism`) while another session
+     independently filed `4f2a9e` (`concept: git_hook_env_leak`) for the *same failing files and
+     the same symptom*, landing `80abfbd0` + `a90d3732` on main mid-flight. Different root causes,
+     same remedy shape (raise the timeouts), colliding edits. I found out at merge time.
+  2. **Duplicate OI ids, twice in one day.** `OI-109` and then `OI-115`/`OI-116` were each minted
+     on two branches at once. `build_oi_index.dart`'s duplicate detector caught the second pair;
+     its own error text already names the pattern — *"the boards MERGED CLEANLY because the
+     additions sat in different regions… sweep EVERY branch for the ceiling, not just this one.
+     It moves."* This is OI-112's class, recurring.
+  3. **A whole investigation duplicated.** 2026-08-16: dispatched a 10-agent workflow to determine
+     whether the failing RR-1 test or the redeem-referral EF was wrong. While it ran, another
+     session diagnosed it identically and landed the fix (`62b8892c`, branch `rr1-referral-401`).
+     Both reached the same conclusion — the test asserted the function's contract against a
+     GATEWAY response (`verify_jwt: true` rejects a no-Authorization request before the module
+     boots). Cost: ~1.36M subagent tokens for an answer that was already landing.
+  Live instance while writing this entry: `git log origin/main..main` showed **2 commits from
+  another session, merged into local `main` 55 seconds earlier and not yet pushed**
+  (`80d3d4dd` + `147c8ad3`). Nothing surfaced that; it was noticed only because an unrelated
+  ahead/behind check was run first.
+- **Identified**: 2026-08-16.
+- **Risk class**: wasted work, and — more seriously — **divergent records of the same fact**. Two
+  diagnose-docs for one bug means a future reader finding one has half the picture. Instance 1 is
+  now cross-referenced in both directions by hand, but nothing made that happen except catching it.
+- **What's wrong**: `§4.13` mandates one worktree per session and sessions genuinely run in
+  parallel (three were committing simultaneously on 2026-08-13). Every coordination signal the repo
+  has is **post-hoc**: `git fetch` shows another session's work only once it is pushed, the OI board
+  only once an id is committed, `docs/diagnoses/INDEX.md` only after the doc lands. There is no
+  *pre*-declaration of intent, so two sessions can spend hours on the same problem and only
+  discover it at merge.
+- **Why this is hard (read before proposing a fix)**: the obvious remedies are each partial.
+  - *A shared "who is working on what" file* — needs writing before the work, which is exactly the
+    discipline that decays without a gate (`§4.13` point 6's lesson). And it is itself a
+    concurrently-edited file, i.e. the same collision class one level up.
+  - *Mint OI ids from `origin/main` after a fetch* — narrows instance 2 only, and does not help at
+    all when the other session has not pushed yet (as above, 55 seconds).
+  - *A session registry keyed on the worktree name* — `new-worktree.sh` already names every
+    session's workspace, and `git worktree list` is readable from any session without a fetch. That
+    is the most promising primitive: the data already exists, unpushed, locally. But a worktree slug
+    (`supabase-test-http`) says nothing about which *bug* is being worked; instance 1's two sessions
+    had unrelated slugs.
+  - **No detector was attempted here deliberately.** `docs/audit/oi-mechanism.closure.yaml` D5
+    records a staleness detector for a neighbouring problem that was built, ×2-reviewed and
+    WITHDRAWN wholesale after three generations of parser scars. Do not re-propose that shape.
+- **What a fix must clear to be worth building**: it must (a) surface intent BEFORE the work, not
+  after the push, (b) not itself become a concurrently-edited file with the same collision class,
+  and (c) not depend on a discipline that decays — i.e. it needs a trigger, not a convention.
+- **Blast-radius estimate**: `feature` for a docs/convention change; `platform` if it touches
+  `scripts/new-worktree.sh` or a hook.

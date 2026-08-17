@@ -251,17 +251,38 @@ class ErrorTelemetry {
       final raw = error.toString();
       final message = raw.length > 500 ? raw.substring(0, 500) : raw;
       final code = error.runtimeType.toString();
-      final resp = await SupabaseService.instance.callFunction(
-        'log-client-error',
-        body: {
-          'error_code': code.isEmpty ? 'UnknownError' : code,
-          'error_message': message,
-          'op_type': reason,
-          'retry_count': 0,
-          'client_version': _currentClientVersion(),
-          'platform': _currentPlatform(),
-        },
-      );
+      // Same signed-out branch as [logEvent] (b6e4f2). Kept CONSISTENT on
+      // purpose: today no `reason` passed here is on the function's
+      // PRE_AUTH_OP_TYPES allow-list, so a signed-out call still 401s and is
+      // swallowed exactly as before — no worse. But the alternative (leaving
+      // this on `callFunction`) means it throws 'No active session' BEFORE the
+      // network, so the day someone adds a pre-auth reason it would fail for a
+      // reason that has nothing to do with the allow-list, and look like the
+      // allow-list was the problem. Round-1 review flagged the inconsistency.
+      final signedOut = SupabaseService.instance.currentUser == null;
+      final resp = signedOut
+          ? await SupabaseService.instance.callFunctionAnonymous(
+              'log-client-error',
+              body: {
+                'error_code': code.isEmpty ? 'UnknownError' : code,
+                'error_message': message,
+                'op_type': reason,
+                'retry_count': 0,
+                'client_version': _currentClientVersion(),
+                'platform': _currentPlatform(),
+              },
+            )
+          : await SupabaseService.instance.callFunction(
+              'log-client-error',
+              body: {
+                'error_code': code.isEmpty ? 'UnknownError' : code,
+                'error_message': message,
+                'op_type': reason,
+                'retry_count': 0,
+                'client_version': _currentClientVersion(),
+                'platform': _currentPlatform(),
+              },
+            );
       _maybeHonorRateLimit(resp.data);
     } catch (_) {
       // log-client-error swallow — telemetry must never throw.
@@ -294,18 +315,45 @@ class ErrorTelemetry {
       final raw = message ?? '';
       final cap = raw.length > math.min(500, raw.length) ? 500 : raw.length;
       final capped = raw.substring(0, cap);
-      final resp = await SupabaseService.instance.callFunction(
-        'log-client-error',
-        body: {
-          'error_code': 'event',
-          'error_message': capped,
-          'op_type': opType,
-          'retry_count': 0,
-          'client_version': _currentClientVersion(),
-          'platform': _currentPlatform(),
-        },
-      );
-      _maybeHonorRateLimit(resp.data);
+      final body = <String, dynamic>{
+        'error_code': 'event',
+        'error_message': capped,
+        'op_type': opType,
+        'retry_count': 0,
+        'client_version': _currentClientVersion(),
+        'platform': _currentPlatform(),
+      };
+      // PRE-AUTH LANE (diagnose b6e4f2). `callFunction` proactively refreshes
+      // the session and THROWS 'No active session. Please sign in again.'
+      // (`supabase_service.dart:246-250`) when there is none — so EVERY
+      // signed-out failure died right here, before the network, and
+      // `auth_forgot_password_send_failed` never produced a single row in the
+      // table's lifetime. That was the earliest of four independent barriers
+      // (the other three: the function 401'd a userless token, the column was
+      // NOT NULL, and RLS INSERT is `auth.uid() = user_id`).
+      //
+      // A direct invoke sends the project's anon key instead, which the
+      // function's allow-listed pre-auth lane accepts and records with a NULL
+      // user_id. Signed-in callers keep the fresh-token path unchanged — rule
+      // 9's `ensureFreshToken` contract still applies to every authed event.
+      final signedOut = SupabaseService.instance.currentUser == null;
+      final resp = signedOut
+          ? await SupabaseService.instance.callFunctionAnonymous(
+              'log-client-error',
+              body: body,
+            )
+          : await SupabaseService.instance.callFunction(
+              'log-client-error',
+              body: body,
+            );
+      // Honour the cooldown ONLY for the authed lane. That budget is per-user,
+      // so `rate_limited` there genuinely means "this device has had its share".
+      // The pre-auth lane shares ONE GLOBAL budget across every anonymous
+      // caller, so honouring its signal would let a stranger who exhausts it
+      // set this device's cooldown — silencing our own LOW-priority authed
+      // events after sign-in. Cross-lane contamination, and exactly the
+      // shape of feedback_backend_collapse_blinds_telemetry.
+      if (!signedOut) _maybeHonorRateLimit(resp.data);
     } catch (_) {
       // Swallow — events must never break the host flow.
     }

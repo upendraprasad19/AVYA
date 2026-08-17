@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
@@ -115,7 +116,10 @@ class AuthState2 {
 
 class AuthNotifier extends Notifier<AuthState2> {
   @override
-  AuthState2 build() => const AuthState2();
+  AuthState2 build() {
+    ref.onDispose(cancelOAuthWatch);
+    return const AuthState2();
+  }
 
   SupabaseService get _supabase => SupabaseService.instance;
   HiveService get _hive => HiveService.instance;
@@ -185,32 +189,92 @@ class AuthNotifier extends Notifier<AuthState2> {
     return result as bool;
   }
 
+  /// Ceiling on the WHOLE email sign-in sequence.
+  ///
+  /// closes-diagnose a9c4e2. On 2026-08-13 23:03 IST the founder signed in on
+  /// the prod web build during a CPU-starved-backend window. `POST /token`
+  /// returned **200 in 309ms** — the credentials were never in question — and
+  /// everything after it hung: `/user` took 9.4s, then 27.3s, then 35.9s
+  /// ("Unhandled server error: context canceled"). The SIGN IN button spun
+  /// forever with no error, no SnackBar, no navigation, no escape affordance.
+  ///
+  /// Nothing on this path carried a deadline. `signInWithPassword` is a network
+  /// call, and [_ensureLocalUser] fans out into `HiveUserSession.openForUser`,
+  /// six one-shot migrators and `hydrateFromCloud` — every one network-touching,
+  /// none bounded. Each swallows its own THROW, but a never-resolving `await`
+  /// does not throw; it simply never returns. So `state` stays
+  /// [AuthStatus.loading], and `sign_in_screen.dart`'s `ref.listen` — which
+  /// navigates only on `success` and SnackBars only on `error` — has nothing to
+  /// react to. The spinner IS the loading state, rendered faithfully forever.
+  ///
+  /// Same wedge class as [signOutTimeout], bounded the same way: ceiling the
+  /// WHOLE sequence so control always leaves the `try` and lands on a state the
+  /// UI can render. Longer than the 20s sign-out ceiling because this path
+  /// legitimately includes first-run cloud hydration; far short of the observed
+  /// 36s-and-climbing so the user gets an actionable error instead of a wedge.
+  static const Duration signInTimeout = Duration(seconds: 40);
+
+  /// Kill-switch for [signInTimeout] (root CLAUDE.md §4.6 — auth is on the
+  /// risky-change list). `true` restores the pre-fix unbounded await verbatim.
+  ///
+  /// Fails CLOSED to the fix being ON: if configBox is not open yet (early boot,
+  /// widget tests) the timeout still applies, because an unbounded sign-in is
+  /// the defect being repaired.
+  /// Test override for [signInTimeoutDisabled]. `null` = read the real flag.
+  /// Exists because configBox is not open in unit tests, so the Hive read
+  /// below always lands in the `catch` and the switch could never be exercised
+  /// — a kill-switch with no test is a kill-switch nobody knows still works.
+  @visibleForTesting
+  static bool? signInTimeoutDisabledForTest;
+
+  static bool get signInTimeoutDisabled {
+    final override = signInTimeoutDisabledForTest;
+    if (override != null) return override;
+    try {
+      return Hive.box(HiveService.configBoxName).get('disable_sign_in_timeout') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The bound applied at [signInWithEmail]'s only call site, extracted behind
+  /// an injectable so the ceiling is behaviorally testable without a live
+  /// Supabase session — same seam as `SupabaseService.coalescedRefresh` and
+  /// `SupabaseService.retryColdStart`.
+  ///
+  /// A source-grep test could only prove `.timeout(` appears in the file; this
+  /// seam lets a test prove a hanging future actually RAISES inside the ceiling
+  /// (`feedback_source_grep_false_confidence.md`).
+  @visibleForTesting
+  static Future<void> boundSignIn(Future<void> Function() run,
+      {Duration? ceiling}) {
+    if (signInTimeoutDisabled) return run();
+    return run().timeout(ceiling ?? signInTimeout);
+  }
+
   /// Sign in with email + password.
   Future<void> signInWithEmail(String email, String password) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     if (!await ensureSupabaseReady()) return;
     try {
-      final response = await _supabase.client.auth.signInWithPassword(
-        email: email,
-        password: password,
+      await boundSignIn(() => _performEmailSignIn(email, password));
+    } on TimeoutException catch (e, st) {
+      // a9c4e2. The session may well EXIST here — the auth call usually
+      // succeeds and it is the post-auth hydration that wedges — so this
+      // deliberately does NOT sign out. Forcing a sign-out during a backend
+      // brown-out would destroy a valid session and make the user's position
+      // worse. Surface a state the UI can render and let them retry; a retry
+      // re-runs signInWithPassword and picks the session straight back up.
+      unawaited(ErrorTelemetry.logEvent('auth_sign_in_timeout',
+          message: 'email sign-in exceeded ${signInTimeout.inSeconds}s'));
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'auth_sign_in_timeout'));
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage:
+            'Sign in is taking longer than usual. Check your connection and try again.',
       );
-
-      if (response.user == null) {
-        state = state.copyWith(
-          status: AuthStatus.error,
-          errorMessage: 'Sign in failed. Please check your credentials.',
-        );
-        return;
-      }
-
-      await _ensureLocalUser(response.user!);
-      // APK Test #12.8 — auth lifecycle event so we can correlate
-      // post-auth bug reports (PRO pill stuck, profile name "USER")
-      // with the exact sign-in instant.
-      unawaited(ErrorTelemetry.logEvent('auth_signed_in',
-          message:
-              'method=email userId=${response.user!.id.substring(0, 8)}'));
-      state = state.copyWith(status: AuthStatus.success);
     } on AuthException catch (e) {
       state = state.copyWith(
         status: AuthStatus.error,
@@ -222,6 +286,36 @@ class AuthNotifier extends Notifier<AuthState2> {
         errorMessage: '[${e.runtimeType}] ${e.toString().split('\n').first}',
       );
     }
+  }
+
+  /// The sign-in sequence itself. Bounded by [signInTimeout] at its only call
+  /// site — see [signInWithEmail].
+  Future<void> _performEmailSignIn(String email, String password) async {
+    final response = await _supabase.client.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
+
+    if (response.user == null) {
+      // Pre-auth lane (b6e4f2). Before that lane existed this event could
+      // not be stored at all — the caller is signed out by definition — so
+      // sign-in failures left no trace whatsoever.
+      unawaited(ErrorTelemetry.logEvent('auth_sign_in_failed',
+          message: 'signIn returned a null user with no AuthException'));
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Sign in failed. Please check your credentials.',
+      );
+      return;
+    }
+
+    await _ensureLocalUser(response.user!);
+    // APK Test #12.8 — auth lifecycle event so we can correlate
+    // post-auth bug reports (PRO pill stuck, profile name "USER")
+    // with the exact sign-in instant.
+    unawaited(ErrorTelemetry.logEvent('auth_signed_in',
+        message: 'method=email userId=${response.user!.id.substring(0, 8)}'));
+    state = state.copyWith(status: AuthStatus.success);
   }
 
   /// Create a new account with email + password.
@@ -248,6 +342,9 @@ class AuthNotifier extends Notifier<AuthState2> {
       );
 
       if (response.user == null) {
+        // Pre-auth lane (b6e4f2) — see the sign-in sibling above.
+        unawaited(ErrorTelemetry.logEvent('auth_sign_up_failed',
+            message: 'signUp returned a null user with no AuthException'));
         state = state.copyWith(
           status: AuthStatus.error,
           errorMessage: 'Sign up failed. Please try again.',
@@ -318,26 +415,141 @@ class AuthNotifier extends Notifier<AuthState2> {
     }
   }
 
+  // ── OAuth completion watch (diagnose d3a7c9) ────────────────────
+  //
+  // `signInWithOAuth` returns the moment the external browser is launched —
+  // it has no session to report, because the session arrives LATER and out of
+  // band on `onAuthStateChange`. NOTHING else in the app picks that up:
+  // `refreshListenable` appears zero times in `lib/`, so the router never
+  // re-runs `_authRedirect` on an auth event, and `sign_in_screen.dart`
+  // navigates only on `AuthStatus.success`. So without this watch the notifier
+  // sits at `loading` forever — BOTH sign-in buttons spin (they share one
+  // `isLoading` derived from this status) and the user never leaves the screen
+  // even though Supabase has already issued the token and stamped
+  // `last_sign_in_at`. Force-quitting appeared to "fix" it only because a cold
+  // boot reads the persisted session.
+  //
+  // Same lesson as diagnose c8f1d3 — nothing observes auth state on your
+  // behalf, so navigate explicitly — which was applied to the password-reset
+  // EXIT path and never to the OAuth ENTRY path.
+
+  /// How long to wait for the redirect to produce a session before releasing
+  /// the UI. Google consent in an external browser can legitimately take a
+  /// while; this only has to be shorter than "the user concludes it's broken".
+  static const Duration oauthSessionWait = Duration(seconds: 90);
+
+  StreamSubscription<AuthState>? _oauthSub;
+  Timer? _oauthTimeout;
+
+  /// Tears down the OAuth watch. Safe to call when nothing is armed, and
+  /// wired to `ref.onDispose` so a disposed notifier cannot leak a listener.
+  @visibleForTesting
+  void cancelOAuthWatch() {
+    _oauthSub?.cancel();
+    _oauthSub = null;
+    _oauthTimeout?.cancel();
+    _oauthTimeout = null;
+  }
+
+  /// The auth-state stream the OAuth watch listens to.
+  ///
+  /// `@visibleForTesting` non-private for the same reason as
+  /// [ensureSupabaseReady]: a test subclass swaps in a controllable stream,
+  /// because a real Supabase client cannot exist in a pure VM test.
+  @visibleForTesting
+  Stream<AuthState> authStateChanges() =>
+      _supabase.client.auth.onAuthStateChange;
+
+  /// The access token of the CURRENT live session, or null when signed out.
+  ///
+  /// `@visibleForTesting` for the same reason as the seams above. This exists
+  /// because `onAuthStateChange` is a `ReplaySubject` (gotrue_client.dart:94,
+  /// exposed at :132) with no `maxSize` — it replays EVERY event it has ever
+  /// emitted to each new subscriber. Reading the event payload would therefore
+  /// resolve the OAuth watch against a HISTORICAL session: sign in, sign out,
+  /// tap Google again in the same process, and the replayed `signedIn` from
+  /// before the sign-out would be mistaken for the redirect returning —
+  /// navigating to /restoring with no session AND disarming the watch, so the
+  /// real session then gets no observer at all. Live client state cannot be
+  /// replayed, so this is immune by construction rather than by filtering.
+  @visibleForTesting
+  String? currentAccessToken() =>
+      _supabase.client.auth.currentSession?.accessToken;
+
+  /// Launches the Google consent flow in the platform browser.
+  ///
+  /// `@visibleForTesting` non-private so a test subclass can stub the launch
+  /// and then drive [authStateChanges] to simulate the redirect returning.
+  @visibleForTesting
+  Future<bool> launchGoogleOAuth() {
+    return _supabase.client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      // Web must redirect to the prod SPA origin, NOT the mobile custom
+      // scheme — same bug class as diagnose e9f2a4 (redirectTo not
+      // matching the platform / Supabase's allowed redirect list).
+      redirectTo: kIsWeb
+          ? 'https://app.icanbefitter.com'
+          : 'io.supabase.icanbefitter://login-callback/',
+    );
+  }
+
+  /// Arms the watch for the session the redirect will produce.
+  ///
+  /// Subscribed BEFORE the browser launches so a fast redirect cannot land in
+  /// the gap between the call and the listener. Only a NON-NULL session
+  /// resolves it — `initialSession` on a signed-out client and `signedOut`
+  /// both carry a null session and must not be mistaken for success.
+  void _watchForOAuthSession() {
+    cancelOAuthWatch();
+    // Snapshot the token we start from. The stream is a ReplaySubject (see
+    // [currentAccessToken]), so the EVENT is not evidence of anything — only a
+    // change in the LIVE session is. Requiring a DIFFERENT token also covers
+    // the degenerate case of arming while a session already exists.
+    final tokenAtArm = currentAccessToken();
+    try {
+      _oauthSub = authStateChanges().listen((_) {
+        final live = currentAccessToken();
+        if (live == null || live == tokenAtArm) return;
+        cancelOAuthWatch();
+        state = state.copyWith(status: AuthStatus.success);
+      });
+    } catch (_) {
+      // No client to listen to. `ensureSupabaseReady` already reports that
+      // class of failure through `state`; don't double-report it here.
+      return;
+    }
+    _oauthTimeout = Timer(oauthSessionWait, () {
+      cancelOAuthWatch();
+      // Back to IDLE, not error: by far the likeliest cause is the user
+      // dismissing the consent screen. Releasing the buttons is the whole
+      // fix — an error toast for a deliberate cancel would be noise.
+      if (state.status == AuthStatus.loading) {
+        state = state.copyWith(status: AuthStatus.idle);
+      }
+    });
+  }
+
   /// Sign in with Google OAuth.
   Future<void> signInWithGoogle() async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     if (!await ensureSupabaseReady()) return;
+    _watchForOAuthSession();
     try {
-      await _supabase.client.auth.signInWithOAuth(
-        OAuthProvider.google,
-        // Web must redirect to the prod SPA origin, NOT the mobile custom
-        // scheme — same bug class as diagnose e9f2a4 (redirectTo not
-        // matching the platform / Supabase's allowed redirect list).
-        redirectTo: kIsWeb
-            ? 'https://app.icanbefitter.com'
-            : 'io.supabase.icanbefitter://login-callback/',
-      );
+      await launchGoogleOAuth();
     } on AuthException catch (e) {
+      cancelOAuthWatch();
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: e.message,
       );
     } catch (e) {
+      cancelOAuthWatch();
+      // Pre-auth lane (b6e4f2). This is the one that would have told us what
+      // was happening during the 2026-08-06 Google sign-in report, had it been
+      // recordable at the time.
+      final s = e.toString();
+      unawaited(ErrorTelemetry.logEvent('auth_oauth_launch_failed',
+          message: s.length > 400 ? s.substring(0, 400) : s));
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: 'Google sign-in failed. Please try again.',
