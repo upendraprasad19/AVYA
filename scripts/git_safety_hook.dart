@@ -110,9 +110,28 @@ void main() async {
     final cwd = (data['cwd'] as String?) ?? Directory.current.path;
     final env = Platform.environment;
 
+    // THE HATCH IS PER STATEMENT, NOT PER COMMAND.
+    //
+    // A real exported environment variable DOES apply to every statement, so
+    // the `env[...]` reads below stay command-wide and are correct. An INLINE
+    // `NAME=1 git ...` prefix applies only to the command it prefixes — no
+    // shell carries it to the next statement — so it must be checked against
+    // the same statement that carries the danger.
+    //
+    // The previous code collapsed the inline form into one command-wide
+    // boolean, which meant a harmless `ALLOW_RAW_GIT=1 git status` exempted an
+    // unrelated `git push --force` in the same call (B-pass 2026-08-17, P0,
+    // reproduced against the real hook). See unhatchedGitStatements' header for
+    // why this is the third generation of one bug.
+    final envAllowsNoVerify = env['FOUNDER_APPROVED_NO_VERIFY'] == '1';
+    final envAllowsRawGit = env['ALLOW_RAW_GIT'] == '1';
+
     // 1. --no-verify: no general escape hatch.
     if (commandHasNoVerifyFlag(command)) {
-      if (env['FOUNDER_APPROVED_NO_VERIFY'] == '1') {
+      final offending = envAllowsNoVerify
+          ? const <String>[]
+          : unhatchedNoVerifyStatements(command, 'FOUNDER_APPROVED_NO_VERIFY');
+      if (offending.isEmpty) {
         exit(0);
       }
       _deny(
@@ -128,18 +147,27 @@ void main() async {
     // after the first in a multi-line command -- the dominant shape Claude
     // actually emits. git_safety_lib splits on \n/;/&&/||/| and checks each
     // statement, and also tolerates `git -C <dir> commit` / `--no-pager`.
-    final hasRawCommit = commandInvokesGitSubcommand(command, 'commit');
-    final hasRawPush = commandInvokesGitSubcommand(command, 'push');
+    // Honoured from either source, for the same reason as the hatch above.
+    // Each list holds the statements that invoke the subcommand and do NOT
+    // carry their own inline hatch. An empty list means either no such
+    // statement exists, or every one of them is individually hatched.
+    final unhatchedCommits = envAllowsRawGit
+        ? const <String>[]
+        : unhatchedGitStatements(command, 'commit', 'ALLOW_RAW_GIT');
+    final unhatchedPushes = envAllowsRawGit
+        ? const <String>[]
+        : unhatchedGitStatements(command, 'push', 'ALLOW_RAW_GIT');
+
     final usesSafeCommit = commandUsesWrapper(command, 'safe_commit.sh');
     final usesSafePush = commandUsesWrapper(command, 'safe_push.sh');
 
     // 2. raw `git commit`.
-    if (hasRawCommit && !usesSafeCommit) {
+    if (unhatchedCommits.isNotEmpty && !usesSafeCommit) {
       final mergeInProgress =
           _gitOk(cwd, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']) ||
               _gitOk(cwd, ['rev-parse', '-q', '--verify', 'CHERRY_PICK_HEAD']) ||
               _gitOk(cwd, ['rev-parse', '-q', '--verify', 'REVERT_HEAD']);
-      if (!mergeInProgress && env['ALLOW_RAW_GIT'] != '1') {
+      if (!mergeInProgress) {
         _deny(
           '[git-safety] BLOCKED: raw `git commit` -- 6 documented incidents '
           '(memory/feedback_git_landing_verification.md) where a backgrounded '
@@ -151,7 +179,7 @@ void main() async {
     }
 
     // 3. raw `git push`.
-    if (hasRawPush && !usesSafePush && env['ALLOW_RAW_GIT'] != '1') {
+    if (unhatchedPushes.isNotEmpty && !usesSafePush) {
       _deny(
         '[git-safety] BLOCKED: raw `git push` -- a long pre-push suite can '
         'idle the SSH channel and SIGPIPE silently with no git error '

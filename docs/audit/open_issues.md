@@ -2413,10 +2413,19 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   identifier or a sentinel closes the gate's remaining blind spot.
 - **Blast radius estimate**: `feature` (docs + a constant), though it touches many files.
 
-## OI-112 — OI numbering collides across concurrent sessions; the LANDING half is now gated, the MINT-TIME half is not
+## OI-112 — OI numbering collides across concurrent sessions; BOTH halves now gated
 
-- **Status**: OPEN
-- **Blocked on**: nothing — the remaining half is a cross-branch check, and where it runs is still the open decision below
+- **Status**: CLOSED · 2026-08-17 · diagnose `d3f1a7` · branch `cycle-time-and-board-gaps`
+  · MINT-TIME half: `scripts/check_oi_numbering_unique.dart` (three-point predicate, 20 tests,
+  mutation-proven on 4 legs, proven against the live 7th collision on `oi-session-coordination`).
+  LANDING half: `scripts/pre-merge-commit.sh` — which had to be WRITTEN, because the claim below
+  that landing was already gated was false; git invokes `pre-merge-commit`, not `pre-commit`, for
+  an auto-created merge commit and that hook was never installed, so a CLEAN auto-merge ran no
+  hook at all. This entry's own open decision ("pre-commit reads a possibly-stale `origin/main`;
+  CI is authoritative but only after the push") is resolved by doing BOTH with different
+  authority: pre-commit advisory + no fetch (a stale ref makes it MISS, never misfire), CI
+  authoritative, and pre-merge-commit at the point both boards first coexist.
+- **Blocked on**: nothing — closed.
 - **Verified**: 2026-08-13 (a FOURTH and largest collision: six ids at once — see "Partially closed").
   The third hit a DIFFERENT session in parallel and is recorded at
   `docs/plan-reviews/claude-commit-merge-push-process-aae061.md:56-58` — "renumbered to OI-106 at
@@ -2424,12 +2433,37 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   class independently within a day, neither aware of the other. The "Measured" bullet below
   enumerates only the first two, which are the ones on THIS branch.
 - **Partially closed 2026-08-13**: `scripts/build_oi_index.dart` now **fails closed on duplicate
-  ids within the board** (`duplicateIds()`), so a corrupt board can no longer render and cannot
-  LAND — the merge commit regenerates the index and the gate fires. What this does NOT do is warn
+  ids within the board** (`duplicateIds()`). What this does NOT do is warn
   at **mint time**: two sessions on two branches each picking "the next free number" still both
   validate clean in isolation, because each board is individually duplicate-free. That is the half
-  OI-112's fix-shape below addresses, and it remains open.
+  OI-112's fix-shape below addresses.
   Evidence it detects: planting a second `## OI-111` made the generator exit 1 naming the id.
+- ⚠ **CORRECTED 2026-08-17 — the landing half was NOT gated either, and this entry said it was.**
+  The struck sentence read *"so a corrupt board can no longer render and cannot LAND — the merge
+  commit regenerates the index and the gate fires"*. It could not fire. Git invokes
+  **`pre-merge-commit`** — not `pre-commit` — for an automatically created merge commit, and only
+  FOUR hooks were installed (`pre-commit`, `pre-push`, `commit-msg`, `prepare-commit-msg`). On a
+  **clean auto-merge** — precisely the shape diagnose `b7e3d1` documents, where the two boards'
+  additions sat in different regions and git combined them silently — **no hook ran at all**. Only a
+  *conflicted* merge was covered, and only incidentally, because the human then runs `git commit`.
+  `scripts/pre-merge-commit.sh` now exists and `setup-hooks.sh` installs it (FIVE hooks), so the
+  claim is true as of this correction rather than before it. Diagnose `d3f1a7`; the identical false
+  claim at `docs/diagnoses/2026-08-13-oi-id-collision-renders-silently-b7e3d1.md:56-58` was
+  corrected in the same commit.
+- ✅ **MINT-TIME HALF CLOSED 2026-08-17** by `scripts/check_oi_numbering_unique.dart` (+ pure
+  `scripts/oi_numbering_lib.dart`), exactly the fix-shape below. It resolves this entry's own open
+  decision — "pre-commit reads a possibly-stale `origin/main`; CI is authoritative but only after
+  the push" — by doing **both**, with different authority: pre-commit is advisory-fast and does not
+  fetch (a stale ref makes it MISS, never misfire), CI is authoritative, and `pre-merge-commit` runs
+  it where both boards first coexist. THREE-point predicate, because a two-point HEAD-vs-mainline
+  comparison would call every ordinary title edit a collision. Proven against the live seventh
+  instance: run on unmerged branch `oi-session-coordination` it exits 1, prints both OI-128 titles
+  and names the next free number. 20 tests, mutation-proven on 4 legs.
+- ⚠ **Evidence undercount, corrected 2026-08-17.** The `Verified: 2026-08-13` line was never updated
+  after two further instances: the `0cb4120a` renumber (2026-08-16, OI-106/107/108 → OI-125/126/127,
+  detected by a human **3 days 0 h 34 m** after `0e4d97cd` pushed the collision) and the still-live
+  OI-128 clash. Count as of 2026-08-17: **six** collisions, five renumber commits, three of them on
+  2026-08-13 alone.
   Mutation-proven — rebuilding the check over `parseOpenIssues` (which drops CLOSED entries)
   reddens exactly the OPEN-vs-CLOSED test; neutering it reddens 4.
   Tests: `test/contracts/oi_index_test.dart` (group "OI-112 scar").
@@ -3086,11 +3120,38 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   end state — the 2-minute value exists to absorb contention, not because any test needs 2 minutes.
 - **Blast-radius estimate**: `platform` (`.github/workflows/test.yml`).
 
-## OI-119 — `git_safety_hook.dart` matches command TEXT, so it blocks commands that merely mention a banned form (P3)
+## OI-119 — `git_safety_hook.dart` matches command TEXT, so it blocks commands that merely mention a banned form (P3) — and, newly evidenced, MISSES 13 executable spellings
 
 - **Status**: OPEN
 - **Blocked on**: nothing, but it needs a false-positive analysis before a fix — the hook is
   load-bearing and over-narrowing it would reopen the raw-push hole it exists to close.
+- **⚠ BOTH DIRECTIONS ARE NOW MEASURED (2026-08-17, review round 2 of `cycle-time-and-board-gaps`).**
+  This entry was filed about false POSITIVES. The false-NEGATIVE half was executed against the real
+  hook for the first time, and it is the larger number. Each of these is a RAW `git commit` /
+  `git push` that the hook ALLOWS (exit 0):
+  `(git commit …)` · `{ git commit; }` · `/usr/bin/git …` · `./git …` · `sudo git …` ·
+  `nohup git …` · `time git …` · `exec git …` · `eval 'git commit'` · `` OUT=`git commit` `` ·
+  `OUT=$(git commit)` · `echo x | xargs git commit` · `git --git-dir=… commit` ·
+  `cd /tmp & git commit` (a single `&` is not in the separator set) · a bare `\r` separator.
+  The `--no-verify` deny still fires in all of them (its match is unanchored), so the
+  skip-hooks control is intact; what leaks is the use-the-wrapper control.
+  **NOT introduced by that batch, and NOT made worse by it** — `stripCommandPrefixes`, added there,
+  is a net gain in this exact direction (`FOO=1 git commit` and `FOO=1 git push` went ALLOW → BLOCK).
+  Recorded here rather than fixed there because closing them means touching the deny path, whose
+  one intolerable failure mode is a false BLOCK, and that is precisely the analysis this entry is
+  already blocked on. Do the two directions together or not at all.
+- **Sibling gap, same review**: `commandUsesWrapper` (`git_safety_lib.dart`) matches a path
+  **suffix** and is command-WIDE, so `sh /tmp/evil_safe_commit.sh && git commit -m x`,
+  `mysafe_commit.sh && git commit -m x`, and `sh scripts/safe_commit.sh "m" || git commit -m m`
+  all read as "went through the wrapper". Also strictly tighter than the pre-batch
+  `command.contains(basename)` it replaced, so again not a regression. Fix shape: require an exact
+  basename AND pair the allow with the statement that carries the raw git, the same
+  same-statement discipline `inlineEnvAssignment` now uses (diagnose `c8b3e6`).
+- **Reproduction harness exists** — drive the hook by feeding
+  `{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"…"}}` on stdin;
+  exit 2 = blocked, 0 = allowed. ⚠ Put the cases in a FILE: the hook matches command TEXT, so a
+  matrix written inline on a Bash command line blocks the harness itself. Always include a control
+  that must block, or the whole matrix can be measuring nothing.
 - **Verified**: 2026-08-13. ⚠ **The two detectors are NOT equally leaky, and the original filing
   conflated them** — corrected by the B-pass, which reproduced the real one involuntarily while
   reviewing this entry:
@@ -3300,12 +3361,21 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   individually pinned in `docs/blast_radius.yaml`. Per §4.4 rule 24 a new/changed leg needs a
   mutation-proven test; the existing protective legs already carry one.
 
-## OI-129 — orphaned `pr-ag-handoff-gaps` holds 32 MB of UNTRACKED QA work, including an unfiled critical Health-plugin bug
+## OI-129 — orphaned `pr-ag-handoff-gaps`: the "32 MB of UNTRACKED QA work" was a MEASUREMENT ARTEFACT; every byte is in git, only the delete remains
 
-- **Status**: OPEN
+- **Status**: OPEN · **the blocker is now purely mechanical, and it is NOT the one below.** Every
+  file was proven recoverable from git (0 of 526 unmatched — see "REFUTED 2026-08-17"), so nothing
+  is at risk and no founder judgement about what to keep is owed any more. What remains is that the
+  `rm -rf` was refused by the harness safety classifier on 2026-08-17. That refusal is CORRECT for a
+  recursive delete and was not worked around; it needs a human to run it or to approve it.
+  **The premise this entry was filed on was wrong, twice, in the same direction, and the retraction
+  is the point of the entry now** — see "REFUTED 2026-08-17".
 - **Verified**: 2026-08-16 — inspected directly while auditing retirement candidates.
 - **Identified**: 2026-08-16
-- **Blocked on**: FOUNDER — needs a human call on what to keep. Nothing technical blocks it.
+- **Blocked on**: FOUNDER, but for a completely different and much smaller reason than when this was
+  filed. It is no longer *"decide what is worth salvaging"* — that question is dissolved, nothing
+  needs salvaging. It is now only *"run the recursive delete the classifier refused"*:
+  `rm -rf .claude/worktrees/pr-ag-handoff-gaps` (~32 MB, 526 non-build files, all provably in git).
 - **What's missing**: `.claude/worktrees/pr-ag-handoff-gaps` is a FULL repo checkout (`lib/`, `test/`,
   `supabase/`, `docs/`, `memory/`, `scripts/`, `telegram-bot/`, `web/` — 827 entries outside
   `build/`, 32 MB) with **no `.git`**, so `git worktree list` cannot see it and `retire_worktree`
@@ -3325,6 +3395,66 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   the ONLY one with unique content — `wardroom-handoff-enforcement` (100 KB) and the stray
   `.dart_tool` (1 KB) are pure build output. `retire_worktree` is right to refuse it; `--force` would
   destroy the only copy.
+- **Orphan-scan cleanup 2026-08-17** (still true): the other two orphans this entry named as pure
+  build output were re-checked (`find | grep -v build/ | wc -l` = **0** for both) and REMOVED;
+  `.dart_tool` is now skipped by the orphan scan entirely (it is a tooling artifact, not a
+  worktree). `.claude/worktrees` went 15 dirs / 4 orphans → 11 dirs / 1 orphan — this one.
+
+### ⚠ REFUTED 2026-08-17 — everything above about unique content is wrong, and both errors share ONE cause
+
+  Re-checked before acting on the founder's "if Health Connect works, can we delete it?". Every
+  claim of unique content failed:
+
+  1. **The three "untracked" files are TRACKED and present in main.** `git ls-files QA_FINDINGS.md`
+     → returns the path; same for `QA_TEST_EXECUTION.md` and
+     `memory/project_wardroom_handoff_enforcement.md`. All three are byte-identical to main's copy
+     after CRLF normalization (`diff <(tr -d '\r' <orphan) <(tr -d '\r' <main)` → **0 lines** for
+     each). All **25** screenshots are tracked too (`git ls-files screenshots/ | wc -l` = 25).
+  2. **The "20 paths matching NO commit" is 0 of 9.** The orphan holds 246 `.dart` files under
+     `lib/` vs main's 470; 9 paths exist only in the orphan. Every one's content matches a real
+     historical commit once line endings are normalized — checked **exhaustively over each path's
+     full history**, not sampled: `ai_coach_screen` → `b8c7a5c3`, `prelog_diff` → `853681bd`,
+     `weight_sparkline` → `c0102b1e`, `hydration_section` → `ef878afb`, `my_submissions_screen` →
+     `8a4e30d6`, `profile_screen` → `95ed1f72`, `active_workout_screen` → `1b27a6d2`,
+     `train_screen` → `9eea0be6`, `community_review_sheet` → `f8669b54`. They are absent from main
+     because they were split into subdirectories or retired (`6ed2d9a6` "split 3 god-screens",
+     `7d89b76c` "split active_workout_screen", `bf2b60de` "retire hydration_section"), not because
+     they hold newer work. `test/plan_engine_v3_test.dart` likewise has 3 commits in history.
+
+  **The single root cause of BOTH: a representation mismatch that silently empties the input set.**
+  The orphan's files are CRLF; git blobs are LF, and a git pathspec of `**/<name>` does not match a
+  root-level file. So `git hash-object <crlf-file>` matched no blob and `git ls-files **/QA_FINDINGS.md`
+  returned nothing — and in both cases an **empty result was read as a positive finding**
+  ("uncommitted WIP", "untracked"). Same class as the em-dash `systemEncoding` bug found in
+  `check_oi_numbering_unique.dart`'s own first live run the same day: an encoding difference makes a
+  real match invisible, and nothing distinguishes "no match" from "could not compare".
+  `feedback_green_check_input_set_width` names it; naming it did not prevent it. **Normalize the
+  representation before concluding absence, and state which normalization was applied.**
+
+- **Health-plugin bug: FIXED, and it was fixed the day it was reported.** `QA_FINDINGS.md` logged
+  the ClassCastException at `03-30 13:55:10` and prescribed `FlutterActivity` →
+  `FlutterFragmentActivity`. `android/app/src/main/kotlin/com/icanbefitter/icanbefitter/MainActivity.kt:5`
+  reads `class MainActivity : FlutterFragmentActivity()` today; `6421178e` (2026-03-23) had
+  `FlutterActivity`, `8a5df734` (**2026-03-30**) changed it. No OI or diagnose-doc was owed — the
+  other session's triage was right. ⚠ **Source-level only**: this proves the cast cannot throw, not
+  that Health Connect syncs end-to-end (that needs a device). What DID protect it: **nothing** — no
+  test pinned the superclass, so a one-line revert to `FlutterActivity` would silently re-break
+  health sync, and the failure is invisible (steps read 0, which looks like "no data today"). Closed
+  in this same batch rather than filed as a new OI, per §4.2: `test/contracts/`
+  `main_activity_flutter_fragment_activity_test.dart` pins the superclass by regex, asserts the
+  negative separately (`FlutterFragmentActivity` CONTAINS `FlutterActivity`, so a naive `contains`
+  check reads true on the correct file), and is mutation-proven — restoring the exact 2026-03-23
+  `FlutterActivity` declaration reddens **3 of its 4** tests. The behavioral counterpart is a device
+  test and belongs with the Patrol flows in `docs/operations/DEVICE_TESTING.md`.
+- **Exhaustive recoverability proof (2026-08-17)** — this is what makes the delete safe, and it is
+  stated so nobody has to re-derive it. Every one of the **526** non-build files
+  (excluding `build/`, `node_modules/`, `.dart_tool/`) was hashed BOTH raw and CRLF-normalized and
+  looked up against the full object database (`git cat-file --batch-all-objects`, 9766 blobs).
+  **0 of 526 unmatched.** Not sampled — every file. Method matters here: hashing raw only is
+  exactly the mistake that produced the original false finding, so both representations are checked
+  and the normalization is named.
+- **Resolution**: nothing to salvage. Directory removal is the only step left and is pending the
+  founder action above.
 
 ## OI-130 — concurrent sessions have no way to see what another is working on, so the same bug gets diagnosed and fixed twice (P2)
 

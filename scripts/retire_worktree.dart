@@ -36,9 +36,28 @@ import 'retire_worktree_lib.dart';
 /// Deliberately a hardcoded floor UNDER the four-leg predicate, not a
 /// replacement for it — belt and braces on the one operation that can destroy
 /// uncommitted work.
+/// Status of each entry, VERIFIED 2026-08-17 against a freshly fetched
+/// `origin/main` — not a stale local `main`, and not `git worktree list` alone,
+/// which answers a different question than "is this protecting anything".
+///
+/// - `post38-auth-fixes` — ACTIVELY LOAD-BEARING. Its worktree exists and holds
+///   4 untracked diagnose-docs (2026-08-06-*-e5c2d1 / d3a7c9 / a4f1c8 / c9e2b7),
+///   and `git merge-base --is-ancestor HEAD origin/main` is FALSE for that
+///   worktree's HEAD even though the branch REF of the same name IS merged.
+///   Those two facts differ, and only the first one matters here.
+/// - `train-signout-notif-bugs` — REMOVED 2026-08-17. Branch merged into
+///   origin/main, no directory, no `git worktree list` entry: it protects
+///   nothing. A concurrent session parked exactly this removal on the session
+///   that owns this file, and the evidence supports that half.
+///
+/// The request as parked was "_protected removal" — i.e. BOTH. Half of it was
+/// wrong, and only re-checking each entry separately showed which half. A
+/// hand-off that names a FILE cannot carry per-entry evidence; that is the
+/// cross-session blind spot OI-130 exists for. Before pruning the remaining
+/// entry, re-run both checks above: a floor removed because nothing is standing
+/// on it is not a floor.
 const _protected = <String>{
   'post38-auth-fixes',
-  'train-signout-notif-bugs',
 };
 
 /// Parent env minus git's own vars.
@@ -276,6 +295,15 @@ void main(List<String> args) {
         parseWorktreePorcelain(_porcelain()).map((e) => _norm(e.path)).toSet();
     for (final e in wtDir.listSync().whereType<Directory>()) {
       if (registered.contains(_norm(e.path))) continue;
+      // Dot-directories are tooling artifacts, not worktrees. `new-worktree.sh`
+      // creates `.claude/worktrees/<slug>` from an operator-supplied slug, and
+      // no slug starts with a dot — but `dart`/`flutter` drop a `.dart_tool/`
+      // here when a command is run from this directory, and it was being
+      // reported as "an orphan with 2 entries and no git to vouch for them".
+      // Harmless while non-empty (only a 0-entry orphan is auto-removed), and
+      // still wrong: it trains the operator to ignore ORPHAN lines, which is
+      // the one category that requires a human to actually look.
+      if (_norm(e.path).split('/').last.startsWith('.')) continue;
       final n = _countEntries(e);
       final d = classifyOrphan(entryCount: n < 0 ? 1 : n);
       final nm = _norm(e.path).split('/').last;

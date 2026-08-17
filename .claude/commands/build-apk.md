@@ -209,6 +209,25 @@ dart run scripts/check_migrations_applied.dart
 
 Local `supabase/migrations/*.sql` files must all appear in `backups/applied_migrations.json` snapshot. Exit 0 if snapshot is absent (first run). Update `backups/applied_migrations.json` after applying new migrations.
 
+### Gate 24 — Razorpay key prefix matches the build flavor
+
+```bash
+dart run scripts/check_razorpay_key_flavor.dart
+```
+
+`rzp_live_*` only in prod-flavor config, `rzp_test_*` only in dev. Shipping a
+prod APK carrying a test key silently fails every payment; the reverse hits the
+live ledger from a dev build. Reads `.env.prod`, which is gitignored user-only
+secret state — that is why it cannot run in pre-commit or CI, and why THIS is
+its home.
+
+**Wired here 2026-08-17.** It previously had zero invocation sites: skip-listed
+in `pre-commit.sh` and `test.yml` with the rationale "run via /build-apk skill,
+NOT pre-commit", while `/build-apk` had no section for it. `LENS_REGISTRY.md`
+L43 records the standing blocker — `.env.prod` currently carries an `rzp_test_`
+prefix — so expect this to FAIL until the founder installs the live key. That
+failure is the gate doing its job on a real, already-documented condition.
+
 ### Gate 15 — Generic error catch blocks must emit telemetry
 
 ```bash

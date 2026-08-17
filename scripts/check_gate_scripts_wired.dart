@@ -49,8 +49,12 @@ const _allowList = <String, String>{
   // 2026-06-07 (in-sync sweep): the constant kept lagging pubspec, so the gate
   // now runs every commit (pre-commit + CI) — not build-time-only.
   // Gates that are advisory-only by design (per their own headers).
-  'check_telemetry_pii_classification.dart':
-      'Advisory per L40; surfaced in audit reports, not pre-commit gate.',
+  // check_telemetry_pii_classification.dart was exempted here as "advisory per
+  // L40; surfaced in audit reports, not pre-commit gate" — but it was surfaced
+  // in NOTHING. Zero invocation sites: skip-listed in pre-commit.sh AND
+  // test.yml AND absent from build-apk.md. "Advisory" described how it reports,
+  // not where it runs, and nothing ran it. Wired into both loops 2026-08-17;
+  // it is a pure lib/ source scan (436 callsites, 1.5s) with no live dependency.
   'check_unawaited_has_error_sink.dart':
       'Advisory per L34; surfaced in audit reports, not pre-commit gate.',
   'check_razorpay_key_flavor.dart':

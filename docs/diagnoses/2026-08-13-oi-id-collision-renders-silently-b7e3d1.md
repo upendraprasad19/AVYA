@@ -54,8 +54,17 @@ proposed_fix: >
   (duplicateIds()). It scans ALL `## OI-NN` headers rather than parseOpenIssues'
   result, deliberately: that parser drops CLOSED entries, so an OPEN id
   colliding with a CLOSED one would have been invisible to the obvious
-  implementation. A corrupt board can no longer render, so corruption cannot
-  LAND — the merge commit regenerates the index and the gate fires.
+  implementation. A corrupt board can no longer render.
+  ⚠ CORRECTED 2026-08-17 (diagnose d3f1a7): this sentence continued "so
+  corruption cannot LAND — the merge commit regenerates the index and the gate
+  fires", and that was FALSE. Git invokes `pre-merge-commit`, not `pre-commit`,
+  for an automatically created merge commit, and that hook was not installed —
+  only pre-commit, pre-push, commit-msg and prepare-commit-msg were. On a CLEAN
+  auto-merge, which is exactly the shape this doc describes above, no hook ran at
+  all; only a CONFLICTED merge was covered, incidentally, via the human's
+  follow-up `git commit`. scripts/pre-merge-commit.sh now exists and
+  setup-hooks.sh installs it. The same false claim at open_issues.md:2426-2428
+  (OI-112) was corrected in the same commit.
   WHAT THIS DOES NOT DO, stated plainly: it gives no warning at MINT time. Two
   sessions on two branches still both validate clean in isolation. That half
   needs a cross-branch comparison against origin/main, whose placement

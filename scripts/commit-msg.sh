@@ -23,6 +23,35 @@ set -e
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# Resolve the Dart binary ONCE -- `flutter/bin/dart` is a wrapper that takes
+# the SDK update lock and shells out to git on EVERY call (~4.0s vs ~0.3s for
+# the SDK exe, measured). See scripts/_dart_bin.sh. Falls back to `dart`.
+if [ -r "$REPO_ROOT/scripts/_dart_bin.sh" ] && sh -n "$REPO_ROOT/scripts/_dart_bin.sh" 2>/dev/null; then
+  . "$REPO_ROOT/scripts/_dart_bin.sh" || true
+  DART_BIN="$(resolve_dart_bin)" 2>/dev/null || DART_BIN="dart"
+else
+  # Guarded, and the guard is load-bearing: this file runs under `set -e`, so an
+  # unguarded `.` of a missing file ABORTS the hook outright. `_dart_bin.sh`.s
+  # own contract is "never wedge a hook", and sourcing it must honour that too.
+  #
+  # `[ -r ]` covers ABSENT. It does NOT cover CORRUPT: a truncated or
+  # syntactically broken helper passes the readable test and then dies inside
+  # `set -e`, wedging commit, push, merge AND commit-msg at once. Review round 1
+  # (2026-08-17) reproduced it -- a stray paren in the helper made a merge exit 1
+  # with `syntax error near unexpected token`.
+  #
+  # `. file || true` DOES NOT FIX THAT, and was tried first: POSIX requires a
+  # non-interactive shell to ABORT on a syntax error in a dotted script, so the
+  # `||` never runs. Verified -- it still exited 2. The working guard is a parse
+  # check BEFORE sourcing (`sh -n`), which reads the file without executing it;
+  # the `|| true` and the `|| DART_BIN="dart"` below then cover the remaining
+  # runtime failures. Corrupt now falls back to a bare `dart` and the hook runs.
+  # Caught by test/scripts/pre_push_analyze_always_e2e_test.dart, which builds a
+  # temp repo holding only the hook script -- the same shape as a partial
+  # checkout or a hook copied somewhere without its helper.
+  DART_BIN="dart"
+fi
+
 COMMIT_MSG_FILE="$1"
 if [ -z "$COMMIT_MSG_FILE" ] || [ ! -f "$COMMIT_MSG_FILE" ]; then
   echo "[commit-msg] ERROR: no message file provided (got: '$COMMIT_MSG_FILE')" >&2
@@ -42,7 +71,7 @@ COMMIT_BODY=$(tail -n +2 "$COMMIT_MSG_FILE")
 # followed in 5 citation lines across 3 of the last 400 commits and enforced by
 # nothing. The gate itself decides by comparing the HEAD blob against the staged
 # blob, never by parsing diff text (see its header for why).
-if ! dart run scripts/check_closes_oi_cited.dart "$COMMIT_MSG_FILE"; then
+if ! "$DART_BIN" run scripts/check_closes_oi_cited.dart "$COMMIT_MSG_FILE"; then
   exit 1
 fi
 
@@ -76,9 +105,9 @@ if [ -n "$CLOSES_ID" ]; then
     echo "[commit-msg] FAIL: closes-diagnose: $CLOSES_ID — no file matching docs/diagnoses/*-${CLOSES_ID}.md"
     exit 1
   fi
-  if ! dart run scripts/validate_diagnose_doc.dart "$DIAGNOSE_FILE" >/dev/null 2>&1; then
+  if ! "$DART_BIN" run scripts/validate_diagnose_doc.dart "$DIAGNOSE_FILE" >/dev/null 2>&1; then
     echo "[commit-msg] FAIL: $DIAGNOSE_FILE does not validate"
-    dart run scripts/validate_diagnose_doc.dart "$DIAGNOSE_FILE"
+    "$DART_BIN" run scripts/validate_diagnose_doc.dart "$DIAGNOSE_FILE"
     exit 1
   fi
   echo "[commit-msg] OK: $DIAGNOSE_FILE validates"

@@ -53,7 +53,7 @@ sync_methods: [restoreFromCloudForUser, callFunction]
 restore_methods: [restoreFromCloudForUser]
 cloud_table: users
 cloud_columns: [id]
-contract_test_path: test/contracts/ensure_fresh_token_inflight_join_test.dart
+contract_test_path: test/contracts/token_refresh_join_behavioral_test.dart
 ist_handling:
   - "Not applicable in the IST sense — the only time arithmetic is the existing UTC epoch expiry comparison (session.expiresAt), which is a timestamp, not a date key. Per docs/architecture/sync.md the IST contract governs date-keys and counter resets only."
 provider_invalidations: []
@@ -113,7 +113,7 @@ proposed_fix: |
   which changes the evidence any breaker should be designed against. Filed as
   its own item rather than smuggled into this one.
 regression_test_planned: |
-  test/contracts/ensure_fresh_token_inflight_join_test.dart — behavioral.
+  test/contracts/token_refresh_join_behavioral_test.dart — behavioral.
 
   Cases:
   1. N=10 concurrent ensureFreshToken() calls against a seeded near-expiry

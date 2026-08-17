@@ -4,9 +4,10 @@
 # Run once per fresh clone. Re-running is idempotent (overwrites both hooks
 # from scripts/pre-commit.sh and scripts/commit-msg.sh).
 #
-# FOUR hooks are installed (see the install_hook calls below — the count said
-# "three" while installing four since prepare-commit-msg joined them):
-#   pre-commit        — 73 of 86 discipline gates + Gate 40 + conditional index
+# FIVE hooks are installed (see the install_hook calls below — the count said
+# "three" while installing four since prepare-commit-msg joined them, and
+# pre-merge-commit joined them 2026-08-17):
+#   pre-commit        — 77 of 89 discipline gates + Gate 40 + conditional index
 #                       regens. NO flutter analyze / flutter test on the default
 #                       path (cost split 2026-08-11; PRE_COMMIT_LEGACY=1 or
 #                       PRE_COMMIT_FULL=1 bring them back for one run).
@@ -16,6 +17,14 @@
 #   commit-msg        — bug-fix discipline gate (closes-diagnose /
 #                       regression-test-skipped) + the closes-oi gate.
 #   prepare-commit-msg— auto-prepends the `Blast-radius:` line.
+#   pre-merge-commit  — OI board integrity at the merge (2 gates, ~2s). Git
+#                       invokes THIS hook, not pre-commit, for an automatically
+#                       created merge commit, so before it existed a CLEAN
+#                       auto-merge ran NO hook at all — which is exactly how one
+#                       OI number came to name two issues six times over. Two
+#                       places in the repo asserted the opposite
+#                       (open_issues.md:2426, diagnose b7e3d1:56); both were
+#                       corrected in the same batch that added this.
 #
 # NOTE these are COPIES, not shims: install_hook() does a plain `cp`, so editing
 # scripts/*.sh changes nothing until this script is re-run. And it installs into
@@ -64,6 +73,7 @@ install_hook "$REPO_ROOT/scripts/pre-commit.sh" "$HOOKS_DIR/pre-commit"
 install_hook "$REPO_ROOT/scripts/pre-push.sh" "$HOOKS_DIR/pre-push"
 install_hook "$REPO_ROOT/scripts/commit-msg.sh" "$HOOKS_DIR/commit-msg"
 install_hook "$REPO_ROOT/scripts/prepare-commit-msg.sh" "$HOOKS_DIR/prepare-commit-msg"
+install_hook "$REPO_ROOT/scripts/pre-merge-commit.sh" "$HOOKS_DIR/pre-merge-commit"
 
 # SSH keepalive for pushes (2026-05-30 cross-check fix).
 # The pre-push hook runs analyze and (at >=account) the full flutter test suite,
@@ -80,4 +90,4 @@ git -C "$REPO_ROOT" config core.sshCommand \
   "ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=30 -o TCPKeepAlive=yes"
 echo "[setup-hooks] configured core.sshCommand keepalive (survives long pre-push)"
 
-echo "[setup-hooks] verify: ls -la $HOOKS_DIR/{pre-commit,pre-push,commit-msg,prepare-commit-msg}"
+echo "[setup-hooks] verify: ls -la $HOOKS_DIR/{pre-commit,pre-push,commit-msg,prepare-commit-msg,pre-merge-commit}"

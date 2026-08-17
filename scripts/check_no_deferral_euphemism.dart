@@ -11,9 +11,21 @@
 // (scripts/discipline_hook.dart) — it catches a deferral being WRITTEN into a
 // plan/review doc.
 //
-// Scope: only staged ADDED lines (git diff --cached) in *.md files. Scanning
-// additions (not whole files) means pre-existing prose that merely DESCRIBES
-// the rule (e.g. this gate's own doc, feedback files) is not re-flagged.
+// Scope: TWO scans, widened 2026-08-17 (diagnose d3f1a7).
+//   1. staged ADDED lines (git diff --cached) in *.md — the original scan.
+//   2. a FULL sweep of CLAUDE.md + every .claude/skills/**/SKILL.md.
+// Scan 1 alone protects the FUTURE and can never see a violation older than the
+// gate, no matter how often the file is touched. That is not hypothetical: a
+// deferral instruction sat inside .claude/skills/update-docs/SKILL.md — the
+// skill that walks the end-of-batch checklist — invisible for as long as the
+// gate had existed. Scan 2 is deliberately NOT repo-wide: diagnose-docs,
+// plan-reviews, retrospectives and closure YAMLs legitimately quote the banned
+// phrases when recording a past violation, and sweeping them would make honest
+// bug-history writing impossible.
+// BOTH scans honour the `deu-quote` exemption (_isQuotingTheBan). Applying it to
+// only one made a marked line pass the sweep and then fail the diff, i.e.
+// correcting a §4.2 violation and recording what it used to say became
+// unpublishable.
 //
 // HARD-FAIL since the baseline soak cleared 2026-06-28. pre-commit.sh:122
 // invokes it with no --warn-only flag. (The header previously still described
@@ -82,6 +94,66 @@ List<String> _loadPhrases(String tag) {
   return phrases;
 }
 
+/// True when a line CITES the ban rather than instructing a deferral.
+///
+/// The full-file sweep hit an obvious problem the moment it ran: §4.2 of
+/// CLAUDE.md ENUMERATES the banned phrases, and several skills quote the rule
+/// verbatim. 12 of the first 14 hits were the rule describing itself. A gate
+/// that cannot read its own charter without failing is not usable.
+///
+/// The marker is EXPLICIT and greppable rather than a cleverness heuristic:
+/// `deu-quote` anywhere on the line exempts it. The three organic markers below
+/// (`banned`, `ban is on`, and a reference to the codifying feedback file) are
+/// included because they are unambiguous and already present at the real
+/// citation sites — but a new exemption should use `deu-quote` so it is
+/// auditable by `grep -rn deu-quote`, the same self-attested-but-visible model
+/// as rule 21's `presence_only:` and rule 24's ledger.
+/// ONLY the explicit marker exempts a line.
+///
+/// The three "organic" markers this used to accept -- `banned`, `ban is on`,
+/// and a reference to the codifying feedback file -- were removed on 2026-08-17
+/// after review round 1 demonstrated the hole with a control:
+///
+///   "Roll the old path deletion into a follow-up batch."          -> FAIL (correct)
+///   "That style is banned, so roll the old path deletion into a
+///    follow-up batch."                                            -> PASS (wrong)
+///
+/// The word `banned` appears constantly in §4.2 and across the skills -- it is
+/// the vocabulary of the rule itself -- so any real deferral instruction written
+/// in the same sentence as the word was invisible. An exemption keyed on a word
+/// the governed text uses habitually is not an exemption, it is an off switch.
+///
+/// `deu-quote` is deliberately a token nobody writes by accident, and every use
+/// is auditable with `grep -rn deu-quote`. Same self-attested-but-visible model
+/// as rule 21's `presence_only:` and rule 24's ledger.
+bool _isQuotingTheBan(String line) =>
+    line.toLowerCase().contains('deu-quote');
+
+/// The documents that INSTRUCT an agent, swept in full rather than by diff.
+///
+/// Not repo-wide, and the exclusion is the point: diagnose-docs, plan-reviews,
+/// retrospectives and closure YAMLs legitimately quote the banned phrases when
+/// recording a past violation. Sweeping them would make honest bug-history
+/// writing impossible and would train everyone to phrase around the gate.
+///
+/// `SKILL.md` files are discovered dynamically -- a hardcoded roster is exactly
+/// the drift this repo has been bitten by before (see node 23 of
+/// .claude/skills/update-docs/SKILL.md, where a hardcoded skill count went
+/// stale and the fix was to make `ls` the source of truth).
+List<String> _governingDocs() {
+  final out = <String>['CLAUDE.md'];
+  final skills = Directory('.claude/skills');
+  if (skills.existsSync()) {
+    for (final e in skills.listSync(recursive: true, followLinks: false)) {
+      if (e is File && e.path.replaceAll(r'\', '/').endsWith('/SKILL.md')) {
+        out.add(e.path.replaceAll(r'\', '/'));
+      }
+    }
+  }
+  out.sort();
+  return out;
+}
+
 void main(List<String> args) {
   final warnOnly = args.contains('--warn-only');
   final tag = warnOnly ? '[Gate-DEU WARN]' : '[Gate-DEU]';
@@ -92,17 +164,31 @@ void main(List<String> args) {
   final euphemisms = _loadPhrases(tag);
 
   // Staged additions only, no color, zero context lines.
+  // stdoutEncoding: utf8 is load-bearing. Process.runSync defaults to
+  // systemEncoding, which on Windows decodes this repo's em-dashes (U+2014) as
+  // cp1252 mojibake -- every reported violation line rendered as `â€”` instead
+  // of `—`, making the gate's own output harder to act on than the source it
+  // quotes. Same defect class that made check_oi_numbering_unique.dart report
+  // PASS against a board it had failed to parse (diagnose d3f1a7).
   final result = Process.runSync(
     'git',
     ['diff', '--cached', '--unified=0', '--no-color', '--', '*.md'],
+    stdoutEncoding: utf8,
   );
-  if (result.exitCode != 0) {
-    // No staged diff / not a git repo / git unavailable → never block.
-    stdout.writeln('$tag SKIP: git diff --cached unavailable.');
-    exit(0);
+  // A failed `git diff --cached` means the STAGED scan cannot run. It must NOT
+  // skip the full-file sweep below, which needs no git at all and exists
+  // precisely to see what a staged diff cannot. The original `exit(0)` here
+  // short-circuited the whole gate: run it outside a git repo, or with git
+  // unavailable, and it printed SKIP while the governing documents went
+  // unread. Review round 1 confirmed it live.
+  final diffUnavailable = result.exitCode != 0;
+  if (diffUnavailable) {
+    stdout.writeln('$tag NOTE: git diff --cached unavailable — the staged-diff '
+        'scan did not run. The full-file sweep of the governing documents '
+        'still runs below.');
   }
 
-  final diff = result.stdout.toString();
+  final diff = diffUnavailable ? '' : result.stdout.toString();
   final violations = <String>[];
   String currentFile = '';
   for (final line in const LineSplitter().convert(diff)) {
@@ -115,6 +201,12 @@ void main(List<String> args) {
     // any line that is just the marker.
     if (!line.startsWith('+') || line.startsWith('+++')) continue;
     final added = line.substring(1);
+    // The SAME quoting exemption the full-file sweep uses. Applying it to only
+    // one of the two scans meant a `deu-quote`-marked line passed the sweep and
+    // was then flagged by the diff -- so correcting a §4.2 violation, and
+    // recording what it used to say, became unpublishable. A marker that does
+    // not hold on every path this gate reads is not an exemption.
+    if (_isQuotingTheBan(added)) continue;
     final lower = added.toLowerCase();
     for (final phrase in euphemisms) {
       if (lower.contains(phrase)) {
@@ -123,8 +215,77 @@ void main(List<String> args) {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // FULL-FILE SWEEP of the governing documents.
+  //
+  // The staged-diff scan above protects the FUTURE and can never see the PAST:
+  // a violation committed before this gate existed is invisible to it forever,
+  // no matter how many times the file is touched afterwards. That is not
+  // hypothetical. `.claude/skills/update-docs/SKILL.md` instructed writing a
+  // "Follow-ups deferred" section -- the exact semantic §4.2 bans -- inside the
+  // skill that walks the end-of-batch checklist, and it sat there unseen
+  // because the gate only ever read `git diff --cached`.
+  //
+  // Scoped deliberately to the files that TELL AN AGENT WHAT TO DO: the skills
+  // and the root CLAUDE.md. A repo-wide sweep would hit diagnose-docs and
+  // retrospectives, which legitimately QUOTE the banned phrases when recording
+  // a past violation -- exactly what this file's own header does.
+  // COUNT WHAT WAS ACTUALLY READ, and say so in the verdict.
+  //
+  // `_governingDocs()` yields CLAUDE.md plus every discovered SKILL.md, and
+  // both sources can silently come back empty: run from the wrong directory and
+  // `CLAUDE.md` does not exist, `.claude/skills` does not exist, the list is
+  // ['CLAUDE.md'], the `existsSync` guard skips it, and the gate printed
+  // "PASS: ... nor in the governing skill/CLAUDE.md set" having read ZERO
+  // files. Review round 1 confirmed that live. An empty input set reported
+  // nothing in the same colour as nothing-wrong -- the exact shape
+  // feedback_green_check_input_set_width names, in the gate modified alongside
+  // the one that built _parseStrict to avoid it.
+  var swept = 0;
+  final missing = <String>[];
+  for (final path in _governingDocs()) {
+    final f = File(path);
+    if (!f.existsSync()) {
+      missing.add(path);
+      continue;
+    }
+    swept++;
+    final lines = const LineSplitter().convert(f.readAsStringSync());
+    for (var i = 0; i < lines.length; i++) {
+      if (_isQuotingTheBan(lines[i])) continue;
+      final lower = lines[i].toLowerCase();
+      for (final phrase in euphemisms) {
+        if (lower.contains(phrase)) {
+          violations.add('$path:${i + 1}:  "$phrase"  →  ${_trim(lines[i])}');
+        }
+      }
+    }
+  }
+
+  // ORDER MATTERS: report violations FIRST.
+  //
+  // The first version of this block exited on `swept == 0` before looking at
+  // `violations`, which meant a repo with no CLAUDE.md swallowed the STAGED
+  // findings the scan had already made — turning a real FAIL into an exit 0.
+  // Caught by this file's own positive control, which is why that control
+  // exists. An "I checked nothing" report must never outrank "I found
+  // something".
+  if (violations.isEmpty && swept == 0) {
+    // Never a PASS. Fails OPEN (a gate must not wedge a commit because the
+    // working directory is unexpected) but says plainly that it checked nothing.
+    stderr.writeln('$tag UNDETERMINED (passing): swept ZERO governing '
+        'documents — CLAUDE.md and .claude/skills/**/SKILL.md were all absent '
+        'from ${Directory.current.path}. The staged-diff scan '
+        '${diffUnavailable ? "did not run either" : "ran and found nothing"}. '
+        'This is NOT a pass; the governing set was not read.');
+    exit(0);
+  }
+
   if (violations.isEmpty) {
-    stdout.writeln('$tag PASS: no deferral euphemisms in staged Markdown additions.');
+    stdout.writeln('$tag PASS: no deferral euphemisms in '
+        '${diffUnavailable ? "(staged scan skipped)" : "staged Markdown additions"}, '
+        'nor in the $swept governing document(s) swept in full'
+        '${missing.isEmpty ? "" : " (${missing.length} listed-but-absent)"}.');
     exit(0);
   }
 

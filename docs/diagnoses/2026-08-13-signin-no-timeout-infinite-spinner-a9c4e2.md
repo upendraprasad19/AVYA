@@ -50,7 +50,7 @@ sync_methods: [hydrateFromCloud]
 restore_methods: []
 cloud_table: users
 cloud_columns: [id, last_active_at]
-contract_test_path: test/contracts/signin_bounded_completion_test.dart
+contract_test_path: test/contracts/sign_in_timeout_behavioral_test.dart
 ist_handling:
   - "Not applicable — the fix introduces a relative Duration ceiling measured with a stopwatch/timeout, never a wall-clock date key. No IST conversion is involved."
 provider_invalidations: []
@@ -113,7 +113,7 @@ proposed_fix: |
   is exactly why the fix has to be located by tracing the awaits rather than by
   guessing at the network call that looks most suspicious.
 regression_test_planned: |
-  test/contracts/signin_bounded_completion_test.dart — behavioral.
+  test/contracts/sign_in_timeout_behavioral_test.dart — behavioral.
 
   Cases:
   1. Phase B hangs (injected never-completing future) → state reaches
