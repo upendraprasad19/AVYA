@@ -113,10 +113,27 @@ if [ -n "$CLOSES_ID" ]; then
   echo "[commit-msg] OK: $DIAGNOSE_FILE validates"
 elif [ -n "$SKIP_REASON" ]; then
   echo "[commit-msg] WAIVER: $SKIP_REASON — logged to docs/skipped-discipline.md"
-  SHA=$(git rev-parse HEAD 2>/dev/null || echo "<pending>")
+  # THE SHA HERE IS THE PARENT, NOT THE WAIVED COMMIT — and it is now labelled
+  # as such. `commit-msg` runs BEFORE the commit object exists, so
+  # `git rev-parse HEAD` can only ever return the commit this one is being
+  # built ON TOP OF. Every entry in the ledger written before 2026-08-17
+  # therefore cites the parent while reading like it cites the waived commit,
+  # which sends an auditor to a commit whose message contains no waiver at all.
+  #
+  # Found while retiring this batch's worktree: the ledger said `7683f54f` for a
+  # waiver that lives in `5a3ac089`, its child.
+  #
+  # Recording `after:<parent>` plus the BRANCH makes it resolvable without
+  # guessing — `git log --first-parent <branch>` finds the commit whose parent
+  # is that sha, deterministically. A post-commit hook could stamp the real sha
+  # instead, but that is a sixth hook and a new install surface for a
+  # one-line labelling problem.
+  PARENT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "<unborn>")
+  WAIVER_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
   TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   mkdir -p docs
-  echo "- $TIMESTAMP · $SHA · $SKIP_REASON" >> docs/skipped-discipline.md
+  echo "- $TIMESTAMP · after:$PARENT_SHA on $WAIVER_BRANCH · $SKIP_REASON" \
+    >> docs/skipped-discipline.md
 else
   echo "[commit-msg] FAIL: bug-fix commit subject ('$COMMIT_SUBJECT')"
   echo "             Body must contain either:"
