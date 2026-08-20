@@ -1084,13 +1084,19 @@ cloud sessions; **this file is the cross-session backlog.**
   (the report was stale — ai-media-proxy already carries both the 10K cap and the FC7 nonce fence),
   **FOB-7(d) CLOSED**, and **FOB-6 SPLIT OUT to OI-125** by founder decision as a FEATURE that is
   explicitly *not* a flip blocker. "Unstarted" was also wrong for the two that had already shipped.
-- **Blocked on**: **4 remaining flip-on blockers** in `docs/ship_dark_pending_review.yaml` —
-  **FOB-3, FOB-4, FOB-5, FOB-7(a)/(b)**. The coach snapshot and the Sunday push / weekly report
-  still tell every holder a false week-4 story; hold telemetry still has zero consumers and its
-  events inflate `ai_messages_today`; `currentPhaseCompletionRate` still folds hold days into the
+- **Blocked on**: **3 remaining flip-on blockers** in `docs/ship_dark_pending_review.yaml` —
+  **FOB-3, FOB-4, FOB-7(a)/(b)**. The coach snapshot and the Sunday push / weekly report still tell
+  every holder a false week-4 story; `currentPhaseCompletionRate` still folds hold days into the
   PRO-advance gate input and `PlanIntegrityReconciler` still scans weeks 1-4 only. FOB-3/FOB-4
-  require ai-proxy + weekly-recap-ready + weekly-report EF redeploys, and FOB-5 a migration apply —
-  each its own explicit authorization (§4.3), plan approval ≠ deploy approval.
+  require ai-proxy + weekly-recap-ready + weekly-report EF redeploys — each its own explicit
+  authorization (§4.3), plan approval ≠ deploy approval.
+- ✅ **FOB-5 CLOSED 2026-08-20** — diagnose `c7a3b9`, closure `docs/audit/fob5-hold-telemetry.closure.yaml`,
+  migration **120 applied live** (founder-authorized). `holdWeek()` now emits `hold_week_started`,
+  consumed by three new `hold_*` columns on `founder_metrics_engagement()` that reach the founder
+  dashboard with no EF redeploy. ⚠ FOB-5's own prescribed fix (`where channel = 'app'`) was
+  **wrong and was not applied** — it matches 7 of 116 rows. The metric now reads **22 instead of
+  116**. One self-inflicted regression was caught and closed inside the batch: the required
+  `DROP`+`CREATE` reset the function's ACL and briefly made it anon-executable (finding FOB-5-E).
   ⚠ Read `oi60-streak-identity.closure.yaml` before attempting FOB-7(b): widening the 1..4 scan is
   already REFUTED (the scan IS the re-anchor trigger, so widening buys no healing and only makes
   the re-anchor fire more often — the P0-11 concern `d7f3a9` rejected). The shape is *split the

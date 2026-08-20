@@ -1,0 +1,206 @@
+# Closure ledger — FOB-5 (hold telemetry + the engagement-metric channel filter),
+# the second of OI-60's flip-on blockers cleared. Gate 40.
+# One terminal_state per finding; no `deferred:` key.
+# Branch: claude/oi-pending-hold-weeks-1od97o.
+#
+# Founder authorized the migration apply explicitly (§4.3), and then a second
+# time for the CORRECTED predicate once verification showed FOB-5's prescribed
+# `where channel = 'app'` was wrong.
+
+batch: fob5-hold-telemetry
+diagnose: docs/diagnoses/2026-08-20-engagement-metric-counts-everything-c7a3b9.md
+migration: supabase/migrations/120_engagement_metric_channel_filter_and_hold_telemetry.sql
+total_findings: 11
+closed_count: 11
+
+_commit: &wip "fob5-hold-telemetry (uncommitted)"
+_test: &t test/contracts/hold_week_mechanic_behavioral_test.dart
+
+findings:
+  - id: FOB-5-A
+    title: "ai_messages_today counted EVERY ai_coach_interactions row — a 5.3x overcount"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "live: select * from public.founder_metrics_engagement() — metric 116 -> 22 all-time"
+    notes: >
+      No channel predicate at all, while AppEventsService writes UI analytics
+      into the same table with channel='app_event'. Measured live before fixing:
+      116 rows all-time, 22 real coach turns. Now restricted to the repo's own
+      _coachChatChannels set AND to rows with real content.
+
+  - id: FOB-5-B
+    title: "FOB-5's PRESCRIBED fix was wrong and was not applied"
+    terminal_state: verified_clean
+    commit: *wip
+    verification: "live: channel='app' returns 7 rows of 116"
+    notes: >
+      The ledger said `add where channel = 'app'`. That matches 7 of 116 rows —
+      it would have swapped a 5.3x overcount for an ~89% UNDERCOUNT, a worse
+      number that looks like a fix. Caught by §4.9 (verify an audit finding's
+      claimed cloud state before applying it). The repo already had the right
+      answer: _coachChatChannels at coach_interaction_repository.dart:282.
+      Recorded as verified_clean rather than closed because the correct outcome
+      was to NOT do what the filing said.
+
+  - id: FOB-5-C
+    title: "38 stuck/pending rows inflate the metric even after a channel filter"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "live: 38 of 53 in_app_orphan rows have empty ai_response or model_used='pending'"
+    notes: >
+      A second inflation source FOB-5 never mentions — the stuck-row class of
+      the 2026-05-16 ai-proxy placeholder diagnose. Closed by the content
+      predicate (both user_message and ai_response non-empty), not by a channel
+      filter, which would still have counted all 38.
+
+  - id: FOB-5-D
+    title: "Holds were unobservable — the phase_1_day_29_* events have zero consumers"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      holdWeek() now emits hold_week_started with its ordinal, at the last
+      statement of the successful path so it cannot claim an unmaterialized
+      hold. Its consumer is REAL: three hold_* columns on
+      founder_metrics_engagement(), which admin-dashboard-data/index.ts:255
+      spreads wholesale — so they reach the dashboard with NO Edge Function
+      redeploy. A separate founder_metrics_holds() RPC was deliberately NOT
+      created: it would have needed a redeploy and would otherwise sit dormant,
+      the shipped-but-uncalled shape OI-101 records. Mutation-proven: removing
+      the emit reddens 3 tests, dropping the ordinal metadata reddens 2.
+
+  - id: FOB-5-E
+    title: "The DROP+CREATE shipped an anon-executable SECURITY DEFINER function (self-inflicted, caught + closed)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "live proacl {postgres=X,service_role=X}; anon/authenticated execute=false; Supabase security advisor lists this function under NEITHER SECURITY DEFINER exposure lint"
+    notes: >
+      Caused by this batch, not pre-existing. Three columns were added to the
+      `returns table` list, so CREATE OR REPLACE raises 42P13 and a DROP is
+      mandatory — and DROP+CREATE does not preserve the ACL. Supabase's default
+      privileges on schema public re-granted EXECUTE to anon and authenticated;
+      `revoke all ... from public`, inherited verbatim from migration 101, does
+      not remove explicit role grants. Live for the minutes between the two
+      applies; exposure was aggregate counts only (no PII, no user rows). Caught
+      by walking tier 8 of the 12-tier checklist, not by any gate. The .sql file
+      now carries the extra revoke plus the reasoning, so a replay is correct in
+      one step. Generalisable rule recorded in the diagnose-doc: any migration
+      that DROPs and recreates a function must re-assert grants and verify
+      proacl afterwards.
+
+  # ── Added by the catastrophic-tier B-pass (docs/reviews/<staging-hash>-review.md).
+  # Deliberately NOT spelled out: check_code_review_pass_exists.dart names the review
+  # file after the sha of the staged diff EXCLUDING docs/reviews/, so writing the hash
+  # into any other staged file moves the hash and renames the file it points at. The
+  # link runs the other way — the review file carries `staged_against:`.
+  # The migration pushed this batch's blast-radius to `catastrophic` (SECURITY
+  # DEFINER content rule), so a review pass was mandatory before the merge.
+
+  - id: FOB-5-F
+    title: "admin_metrics_daily.ai_messages_today is now a MIXED-DEFINITION series"
+    terminal_state: blocked_on_user
+    reason: >
+      Needs founder authorization for a live UPDATE against
+      public.admin_metrics_daily on the prod project (dedsavbjuwgarrhphgnl).
+      §4.3: a live prod apply takes its own explicit go, and approving this
+      batch's plan is not approving a data rewrite of founder metrics. The
+      recompute statement is written out verbatim in the B-pass review file, so
+      the action is a single authorized execute with nothing left to re-derive.
+    commit: *wip
+    verification: "live: 25 snapshot rows 2026-07-26..2026-08-19; recomputed under the new predicate 15 of 25 rows change, series total 58 -> 8"
+    notes: >
+      Migration 120 changed what ai_messages_today MEANS, and the nightly cron
+      persists that value into admin_metrics_daily — which already holds 25 rows
+      computed under the PRE-120 definition. From the first post-120 nightly run
+      the same column carries the new definition with nothing marking the break,
+      so the series shows a ~7x cliff that reads as an engagement collapse.
+      The migration is correct; the persisted history is what is stale.
+      blocked_on_user because the remedy is a live UPDATE on founder metrics,
+      which needs its own explicit authorization per §4.3 — plan approval is not
+      deploy approval. The exact recompute SQL is recorded in the review file so
+      the fix is one authorized step, not a re-derivation.
+
+  - id: FOB-5-G
+    title: "the three hold_* columns never reach the daily snapshot table"
+    terminal_state: verified_clean
+    commit: *wip
+    verification: "compute-admin-metrics-daily/index.ts:87-113 read directly; EngagementRow at :43-49 declares only the 5 original fields"
+    notes: >
+      The migration argues the new columns need no redeploy because
+      admin-dashboard-data spreads the row. True — but there is a SECOND caller,
+      and buildSnapshotRow enumerates named fields, so the hold_* columns are
+      silently dropped and never persist. Safe (no upsert break, which is
+      exactly why no redeploy is owed) and not lossy: all three are computed at
+      read time from raw ai_coach_interactions rows, which persist, so any past
+      window is reconstructible. Recorded so nobody later assumes
+      admin_metrics_daily already carries hold history.
+
+  - id: FOB-5-H
+    title: "holds_started_today and holds_started_7d use different window semantics"
+    terminal_state: verified_clean
+    commit: *wip
+    verification: "read directly in the migration body"
+    notes: >
+      `today` is IST-day-aligned; `7d` is a rolling 168 hours, not 7 IST days.
+      Left as-is deliberately: it matches the existing *_7d siblings and the name
+      says 7d. Recorded so a future reader does not assume day-aligned buckets.
+
+  - id: FOB-5-I
+    title: "the telemetry emit could fail a COMMITTED hold and skip its durability push"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      Introduced by this batch. The emit sat inside holdWeek's try, whose finally
+      only clears the mutex, so a SYNCHRONOUS throw from AppEventsService.log
+      would escape after the hold was already committed to Hive — surfacing a
+      materialized hold to the caller as a failure AND skipping the durability
+      push that runs past the finally. The code comment asserted "log never
+      throws", but that is a property of a different file that nothing pinned,
+      and this batch had just added a new statement to that very method. Closed
+      with a local try/catch so the invariant is enforced at the call site.
+      Mutation-proven: the regression test sets debugCapture to an UNMODIFIABLE
+      list so add() throws UnsupportedError; removing the try/catch reddens it on
+      the holdWeek() await itself.
+
+  - id: FOB-5-J
+    title: "AppEventsService.debugCapture is a static test seam living in production code"
+    terminal_state: verified_clean
+    commit: *wip
+    verification: "grep -rn debugCapture lib/ test/ — assigned in exactly one place, a test file; zero production assignments"
+    notes: >
+      Accepted rather than changed: it defaults null, the production path is
+      byte-identical when null, and the alternative (grepping the writer's source
+      for the event name) is the false-confidence pattern rule 21 exists to ban.
+      One caveat recorded for the NEXT adopter of this seam: the capture branch
+      short-circuits BEFORE _logAsync's `currentUser == null` early return, so a
+      capture-based test cannot observe the signed-out drop. Irrelevant here (a
+      holder is necessarily signed in), relevant to a future caller.
+
+  - id: FOB-5-K
+    title: "the a9d3f1 anon-exec regression test pins migration 103 BY NAME and is blind to 120"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/admin_metrics_functions_role_revoke_test.dart
+    notes: >
+      Found by the B-pass, and it is the mirror of FOB-5-E rather than a repeat
+      of it. E fixed the LIVE ACL and hardened the .sql file; K is about the
+      GUARD. admin_metrics_functions_role_revoke_test.dart asserts that
+      migration 103 carries the role revokes — but 103 is no longer the
+      migration that owns the ACL. Migration 120 DROPs and recreates
+      founder_metrics_engagement, so on any replay past 120 the protection comes
+      from 120's own revoke lines; delete them and the anon-readable
+      business-metrics leak reopens while the existing test stays green. That is
+      a guard whose subject moved out from under it.
+      Closed by a second test in the same file, written against the MIGRATION
+      SET rather than a named file: every migration numbered >103 that creates
+      or drops a public.founder_metrics_* function must re-assert the
+      anon+authenticated revoke for each function it touches. Cutoff is >103
+      because 101 IS the historical bug (creates all three with no role revoke)
+      and 103 is its fix — neither may be rewritten. Future-proof: 121, 122 …
+      are covered on arrival with no edit.
+      Mutation-proven BOTH ways: deleting migration 120's revoke line reddens
+      the new test (control green, mutant red, restored green, verified
+      byte-identical after restore), and the scan carries a `checked > 0`
+      assertion so it cannot silently pass by matching nothing — the Gate-44
+      shape rule 24 exists to make impossible.

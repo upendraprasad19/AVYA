@@ -1,14 +1,26 @@
 ---
 branch: claude/oi-pending-hold-weeks-1od97o
 plan: docs/plan-reviews/claude-oi-pending-hold-weeks-1od97o.md
-blast_radius: account
-tier: ship_dark_build
+blast_radius: catastrophic
+tier: mixed
 review_rounds: 1
 ground_truth_verified: true
-verdict: converged
+verdict: needs_round_2_and_hermes
 bpass: accepted
 bpass_review: docs/reviews/fob1-week-identity-bpass.md
+fob5_bpass_review: docs/reviews/<staging-hash>-review.md
+hermes: not_run
 ---
+
+> ⚠ **This record deliberately does NOT satisfy `check_plan_review_record_exists.dart`,
+> and that is the correct state, not an oversight.** The branch's blast-radius rose from
+> `account` to `catastrophic` when FOB-5 added a SECURITY DEFINER migration, and at that
+> tier the gate requires `review_rounds >= 2`, `verdict: converged`, `bpass: accepted`
+> AND `hermes: accepted`. Two of those are genuinely absent — see
+> "FOB-5 — what is still owed before this branch may merge" at the foot of this file.
+> Writing `converged` here would have made the branch mergeable by fabricating a review
+> that never ran, which is exactly the anti-fabrication case that gate exists to catch.
+> **The branch is safe to push and unsafe to merge, and the frontmatter now says so.**
 
 # Plan Review — FOB-1 (week-identity coherence), OI-60 blocker 1 of 5
 
@@ -111,3 +123,50 @@ This batch does **not** move OI-60 to closeable. Four flip-on blockers remain �
 FOB-4, FOB-5, FOB-7(a)/(b) — and OI-127 is routed to whichever batch takes FOB-7(a)/(b) so
 one batch holds the reconciler context. OI-125 (selectable past hold weeks) is a feature and
 explicitly not a flip blocker.
+
+---
+
+# FOB-5 — what is still owed before this branch may merge
+
+FOB-5 (hold telemetry + the engagement-metric channel filter) landed on this same branch
+after FOB-1. It is **not** a ship-dark change: migration 120 altered live production
+behaviour the moment it applied — the founder dashboard's `ai_messages_today` went from
+116 to 22 all-time — so the §4.12.4 lighter tier that FOB-1 legitimately claimed does
+**not** extend to it.
+
+## What WAS done
+
+- **Blast radius measured, not estimated:** `dart run scripts/blast_radius_from_diff.dart`
+  → `catastrophic`, forced by the content rule on SECURITY DEFINER in the migration.
+- **A full adversarial B-pass, recorded at `docs/reviews/<staging-hash>-review.md`** (the hash is not written
+  out here on purpose — it is the sha of the staged diff excluding `docs/reviews/`, so
+  naming it in a staged file would move it; the review carries `staged_against:`) —
+  6 findings (2 fixed in-commit and mutation-proven, 1 `blocked_on_user`, 3 accepted with
+  rationale) plus 8 properties verified clean against live state or direct file reads.
+- **Gate 40 closure ledger** at `docs/audit/fob5-hold-telemetry.closure.yaml`: 11 findings,
+  every one terminal, no `deferred:` key.
+- **Full suite** run the CI way (`TZ=Asia/Kolkata`, `--exclude-tags golden`).
+
+## What was NOT done, and why
+
+1. **The second independent review round (§4.12.1).** The ×2 rule requires *context-blind*
+   reviewers. This session cannot dispatch subagents, so the B-pass above was run **inline,
+   by the same context that wrote the code** — recorded as such at the top of the review
+   file rather than dressed up as independent. An inline reviewer cannot be surprised by
+   its own assumptions, which is the single property the ×2 rule is buying.
+2. **The Hermes pass (`hermes: accepted`), which `catastrophic` requires.** Same reason.
+   Several Hermes lenses were in fact exercised inline — destructive-op safety, EF semantic
+   correctness, writer/reader drift, secrets-in-tree, guard-without-its-mirror — and one of
+   them produced the batch's most valuable finding (the a9d3f1 guard had gone blind). But
+   covering some lenses inline is not a Hermes pass and is not recorded as one.
+
+## The one open item that needs a founder decision
+
+`FOB-5-F` in the closure ledger, `terminal_state: blocked_on_user`: migration 120 changed
+what `ai_messages_today` MEANS, and `admin_metrics_daily` holds **25 rows (2026-07-26 →
+2026-08-19)** computed under the old definition. Recomputed under the new predicate, **15
+of 25 rows change and the series total goes 58 → 8**. Nothing marks the break, so the
+chart will show a ~7x cliff that reads as an engagement collapse rather than a metric
+correction. The remedy is a live `UPDATE` on founder metrics, which takes its own explicit
+authorization under §4.3 — plan approval is not deploy approval. The exact recompute
+statement is written out verbatim in the B-pass review file.
