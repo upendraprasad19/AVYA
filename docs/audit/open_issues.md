@@ -2747,6 +2747,24 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Identified**: 2026-08-11 · ×2 plan review of `safe-push-verifier`.
 - **Risk class**: silent-inert-gate — the highest-consequence shape, because everything downstream
   looks green.
+- **RECURRED 2026-08-20, and this instance is the strongest evidence yet that presence-checking is
+  the wrong invariant.** Fixing `b2e9f4` (pre-push ran a bare `flutter test` while CI excludes
+  goldens and pins TZ) meant editing `scripts/pre-push.sh`. The edit was correct, its 3-case
+  parity test was green, and all three mutation legs reddened — every signal available said the
+  gate was fixed. The push then failed with **the exact same 4 failures as before the fix**,
+  because `.git/hooks/pre-push` was a stale `cp` dated `Aug 20 06:56` and contained **0**
+  occurrences of `exclude-tags golden`. `check_hooks_installed.dart` was green throughout.
+  Two things this adds to the entry above:
+  1. **The test suite cannot cover this.** `pre_push_matches_ci_invocation_test.dart` reads
+     `scripts/pre-push.sh` — the source — and is right to. No test that reads the source can
+     observe that a different file is what actually runs. So the hash check is not a nicety that
+     duplicates test coverage; it is the ONLY thing that can catch this class.
+  2. **The failure mode is a false NEGATIVE on a fix**, not just a stale gate. The operator sees
+     their own fix appear not to work, with no indication why. The natural next move is to
+     doubt the fix — or to reach for `--no-verify`, which is precisely what `b2e9f4` existed to
+     stop needing.
+  Fixed for this machine again by re-running `sh scripts/setup-hooks.sh` (second time in 9 days);
+  the structural gap stays open, which is the whole point of this entry.
 - **What's wrong**: `scripts/setup-hooks.sh:45` installs by `cp`, not symlink, so `.git/hooks/*`
   drifts from `scripts/*.sh` the moment either changes. `scripts/check_hooks_installed.dart:40`
   checks only `if (!content.contains('scripts/pre-commit.sh') && !content.contains('flutter analyze'))`
@@ -3558,3 +3576,42 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   and (c) not depend on a discipline that decays — i.e. it needs a trigger, not a convention.
 - **Blast-radius estimate**: `feature` for a docs/convention change; `platform` if it touches
   `scripts/new-worktree.sh` or a hook.
+
+## OI-131 — the golden tests are excluded from every gate on every platform, so they only ever pass on one machine (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical — but it needs a decision on WHICH of the two real fixes to
+  buy, and both cost more than a hook edit. See "The two candidates" below.
+- **Verified**: 2026-08-20 — measured while fixing `b2e9f4`, not inferred.
+  - CI has always excluded them: `.github/workflows/test.yml:112` runs
+    `flutter test test/ --exclude-tags golden`.
+  - `scripts/pre-push.sh` used to run them, by accident rather than intent — it ran a bare
+    `flutter test`, which includes the tag. On this Linux container that produced 2 hard
+    failures (`test/goldens/wardroom/ward_rank_pill_golden_test.dart`, Lt and SD1 collapsed)
+    on a commit CI passed cleanly.
+  - `b2e9f4` aligned pre-push with CI, which is correct on its own terms and makes the
+    exclusion **uniform**: the goldens now run in no automated gate anywhere.
+- **What this means concretely**: the wardroom goldens pass only on the machine whose fonts
+  rendered the master images — Windows. Every other environment fails them on rasterisation.
+  So they are not a regression gate; they are a machine-dependent surprise. A real visual
+  regression would reach `main` unnoticed by any gate, and the person who eventually notices
+  would be whoever next runs them on the one machine where they work.
+- **Why this was filed rather than fixed in `b2e9f4`**: that batch was aligning a hook with CI.
+  Making goldens genuinely portable is separate, larger work with its own trade-offs, and
+  bundling it would have widened a `platform`-tier hook fix into a test-infrastructure change.
+  Stated as a deliberate trade in that diagnose-doc's `impact_analysis`, and tracked here so
+  the trade does not decay into an unowned gap — the §4.13-point-6 lesson (a rule with no
+  trigger regrows the problem it solved).
+- **The two candidates**, neither obviously right:
+  1. **Regenerate goldens per platform** and gate them per-runner. Honest, but multiplies the
+     master images by the number of platforms and makes every intentional UI change a
+     multi-machine chore.
+  2. **Run them in ONE pinned container** (a fixed image with fixed fonts) and gate on that,
+     ignoring host rendering entirely. One source of truth, but adds a container step to CI
+     and makes local golden runs advisory-only by design.
+  A third option — delete them — should be considered explicitly rather than by default. They
+  are currently paying no rent.
+- **What a fix must clear**: whichever candidate wins, the goldens must run in an automated
+  gate on every push that can change them, and a failure must be reproducible by anyone
+  rather than only by the master image's author.
+- **Blast-radius estimate**: `platform` (touches CI config and/or the hooks).
