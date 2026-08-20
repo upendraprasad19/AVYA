@@ -10,8 +10,8 @@
 batch: fob5-hold-telemetry
 diagnose: docs/diagnoses/2026-08-20-engagement-metric-counts-everything-c7a3b9.md
 migration: supabase/migrations/120_engagement_metric_channel_filter_and_hold_telemetry.sql
-total_findings: 11
-closed_count: 11
+total_findings: 12
+closed_count: 12
 
 _commit: &wip "fob5-hold-telemetry (uncommitted)"
 _test: &t test/contracts/hold_week_mechanic_behavioral_test.dart
@@ -216,3 +216,31 @@ findings:
       byte-identical after restore), and the scan carries a `checked > 0`
       assertion so it cannot silently pass by matching nothing — the Gate-44
       shape rule 24 exists to make impossible.
+
+  - id: FOB-5-L
+    title: "nothing connected the Dart event name to the SQL predicate that reads it (cross-language writer/reader drift)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/hold_telemetry_writer_reader_parity_test.dart
+    notes: >
+      §4.1 names writer/reader drift the DEFAULT suspect class, and this seam is
+      unusually exposed to it because the two halves are not even in the same
+      language: Dart emits 'hold_week_started' into user_message via
+      Map.toString(), and migration 120 reads it with
+      `user_message like '%hold_week_started%'`.
+      Rename the event in Dart and NOTHING fails — the Dart tests still pass
+      (they assert whatever the writer now emits), the SQL stays valid, the
+      migration still applies, and all three hold_* columns silently return 0
+      forever. The failure is invisible precisely when it would be introduced:
+      0 is the CORRECT reading while enable_hold_weeks is OFF, so "broken" and
+      "working as intended" are the same number.
+      Closed by a parity test that reads BOTH sides and compares them. Three
+      cases: the emitted name must be the matched name; exactly 3 predicates
+      must key off it (a 4th column left on a stale string would read 0 beside
+      working siblings — the hardest shape to spot); and AppEventsService's
+      _channel literal must be the channel the hold metric filters on AND must
+      stay OUT of the coach-message channel set.
+      Mutation-proven on all three legs, files verified byte-identical after
+      restore: renaming the event in Dart only reddens 2; leaving one column on
+      a stale string reddens 1; readmitting app_event into the coach-message set
+      (which would reinstate the 5.3x overcount FOB-5-A removed) reddens 1.
