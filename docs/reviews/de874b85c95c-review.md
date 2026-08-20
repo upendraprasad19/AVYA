@@ -31,7 +31,8 @@ plan-review per §4.12.
 ## Verdict summary
 
 - 2 findings fixed inside this commit (F4, F6).
-- 1 finding needs a founder authorization to close (F1) — recorded `blocked_on_user`, not deferred.
+- 1 finding needed a founder authorization (F1) — since **granted and applied**; see the
+  correction appended to that finding.
 - 3 findings assessed and accepted as-is with rationale (F2, F3, F5).
 - Both fixes are mutation-proven (control green → mutant red → restored green, with the
   restored file confirmed byte-identical by `git diff`).
@@ -52,7 +53,9 @@ plan-review per §4.12.
   hypothetical and not small.
 - **why this is not the migration's bug:** the migration is *correct*; the persisted history is
   what is stale. Fixing it forward would mean leaving 25 wrong rows in place.
-- **suggested-fix (needs founder go — this is a live UPDATE on founder metrics, §4.3):**
+- **suggested-fix (needs founder go — this is a live UPDATE on founder metrics, §4.3).**
+  ⚠ **The statement below is WRONG. It is kept as written so the correction is legible;
+  the applied statement follows it.**
   ```sql
   with recomputed as (
     select (created_at at time zone 'Asia/Kolkata')::date as d, count(*) as c
@@ -67,8 +70,32 @@ plan-review per §4.12.
    where r.d = m.snapshot_date
      and m.ai_messages_today is distinct from coalesce(r.c, 0);
   ```
-  Rows with no matching interaction day are already 0-or-correct and are left untouched by the join.
-- **status:** `blocked_on_user` — authorization for a live data UPDATE. Filed so it cannot be lost.
+  That last sentence is the error. Rows with no matching interaction day are **not** already
+  correct — 13 of the 15 divergent rows needed to become `0` *because* those days had no
+  qualifying interactions, which is exactly why `recomputed` has no row for them and the
+  INNER join skips them. The preview query read correctly only because it used a LEFT join,
+  which is not what the UPDATE did.
+
+- **What was actually applied** (correlated subquery, so a zero-interaction day resolves to `0`):
+  ```sql
+  update public.admin_metrics_daily m
+     set ai_messages_today = (
+       select count(*) from public.ai_coach_interactions a
+        where (a.created_at at time zone 'Asia/Kolkata')::date = m.snapshot_date
+          and a.channel in ('app','chat','in_app_orphan')
+          and coalesce(a.user_message,'') <> '' and coalesce(a.ai_response,'') <> ''
+     )
+   where m.ai_messages_today is distinct from ( /* same subquery */ );
+  ```
+  Caught only because the first attempt hit a connection timeout, which forced a state
+  re-check before retrying. A clean first run would have reported "15 rows updated" and
+  left 13 of them wrong — a silent partial fix that looks exactly like a complete one.
+- **Also verified, not assumed:** `compute_admin_metrics_daily` runs `15 18 * * *` UTC =
+  **23:45 IST**, so each snapshot already covered ~23h45m of its IST day. The delta is
+  definitional, not partial-day-vs-full-day.
+- **status:** `closed_in_commit` — authorized and applied 2026-08-20. Post-verification:
+  `still_divergent = 0` across all 25 rows, series total `58 -> 8`, re-checked with a lateral
+  recompute written independently of the UPDATE.
 
 ## Finding 2 — P3 — coverage — the three `hold_*` columns never reach the daily snapshot table
 

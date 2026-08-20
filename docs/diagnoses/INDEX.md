@@ -12,6 +12,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### hold_week_identity (1 bugs)
 - 2026-08-20 f4c8e1 — FOB-1 of OI-60. Six in-repo surfaces printed the clamped week 4 to a free-tier holder, at every hold ordinal, forever. `getCurrentWeekNumber()` (workout_schedule_read_service.dart:1096) ends in…
 
+### pre_push_ci_parity (1 bugs)
+- 2026-08-20 b2e9f4 — `scripts/pre-push.sh` blocked a push whose commit was fully green in CI's own terms. The full-suite gate ran a bare `flutter test` while CI runs `flutter test test/ --exclude-tags golden` under `TZ:…
+
 ### guard_accepts_mention_instead_of_invocation (1 bugs)
 - 2026-08-17 c8b3e6 — The git-safety PreToolUse hook — the only mechanical guard forcing every commit and push through scripts/safe_commit.sh / safe_push.sh, and the only block on a `--no-verify` bypass — could be turned…
 
@@ -1039,6 +1042,7 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-08-20 | c7a3b9 | FOB-5 of OI-60, two defects in one function, one LIVE on the founder dashboard. (1) `founder_metrics_engagement().ai_messages_today` counted EVERY row of `ai_coach_interactions` with no channel… | founder_metrics_engagement | test/contracts/hold_week_mechanic_behavioral_test.dart |
 | 2026-08-20 | f4c8e1 | FOB-1 of OI-60. Six in-repo surfaces printed the clamped week 4 to a free-tier holder, at every hold ordinal, forever. `getCurrentWeekNumber()` (workout_schedule_read_service.dart:1096) ends in… | hold_week_identity | test/contracts/hold_week_identity_behavioral_test.dart |
+| 2026-08-20 | b2e9f4 | `scripts/pre-push.sh` blocked a push whose commit was fully green in CI's own terms. The full-suite gate ran a bare `flutter test` while CI runs `flutter test test/ --exclude-tags golden` under `TZ:… | pre_push_ci_parity | test/scripts/pre_push_matches_ci_invocation_test.dart |
 | 2026-08-17 | c8b3e6 | The git-safety PreToolUse hook — the only mechanical guard forcing every commit and push through scripts/safe_commit.sh / safe_push.sh, and the only block on a `--no-verify` bypass — could be turned… | guard_accepts_mention_instead_of_invocation | test/contracts/git_safety_lib_test.dart — five new cases in the "MENTION IS NOT AN INVOCATION" block (mention in a commit message, in a preceding echo, in a trailing shell comment, a prefix on a NON-git statement, and the mirror asserting env(1)/stacked/post-cd prefixes still work). The pre-existing case "finds it on any statement, not just the first" had PINNED the broken behaviour and was rewritten to require the prefix to lead the git statement itself. |
 | 2026-08-17 | d3f1a7 | Two symptoms with one shape, both surfaced by the founder asking why the pipeline is slow and why the OI board number mismatch survived it. (1) SPEED: every commit paid ~182 s of discipline gates, of… | hook_coverage_and_dart_invocation_cost | test/scripts/oi_numbering_lib_test.dart (20 tests: pure predicate + e2e against real throwaway git repos) and test/scripts/dart_bin_resolver_test.dart (9 tests, including the MIRROR test that fails if any hook reverts to a bare `dart run` or drops the `. _dart_bin.sh` source line). Plus 30 new assertions in test/contracts/git_safety_lib_test.dart for the env-prefix bypass found en route. |
 | 2026-08-16 | c8f4a2 | `main` is RED. The CI job `Supabase Integration Tests` fails on its `Run Edge Function tests` step, on a SINGLE assertion: `test/edge_functions/redeem_referral_test.dart:46`, RR-1 "Missing auth… | edge_function_gateway_vs_function_error_contract | test/edge_functions/redeem_referral_test.dart |

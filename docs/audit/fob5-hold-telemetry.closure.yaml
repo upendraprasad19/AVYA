@@ -98,27 +98,39 @@ findings:
 
   - id: FOB-5-F
     title: "admin_metrics_daily.ai_messages_today is now a MIXED-DEFINITION series"
-    terminal_state: blocked_on_user
-    reason: >
-      Needs founder authorization for a live UPDATE against
-      public.admin_metrics_daily on the prod project (dedsavbjuwgarrhphgnl).
-      §4.3: a live prod apply takes its own explicit go, and approving this
-      batch's plan is not approving a data rewrite of founder metrics. The
-      recompute statement is written out verbatim in the B-pass review file, so
-      the action is a single authorized execute with nothing left to re-derive.
+    terminal_state: closed_in_commit
     commit: *wip
-    verification: "live: 25 snapshot rows 2026-07-26..2026-08-19; recomputed under the new predicate 15 of 25 rows change, series total 58 -> 8"
+    verification: "live, AFTER the authorized backfill: still_divergent = 0 across all 25 rows; series total 58 -> 8; re-verified with a lateral recompute independent of the UPDATE statement"
     notes: >
       Migration 120 changed what ai_messages_today MEANS, and the nightly cron
       persists that value into admin_metrics_daily — which already holds 25 rows
       computed under the PRE-120 definition. From the first post-120 nightly run
       the same column carries the new definition with nothing marking the break,
       so the series shows a ~7x cliff that reads as an engagement collapse.
-      The migration is correct; the persisted history is what is stale.
-      blocked_on_user because the remedy is a live UPDATE on founder metrics,
-      which needs its own explicit authorization per §4.3 — plan approval is not
-      deploy approval. The exact recompute SQL is recorded in the review file so
-      the fix is one authorized step, not a re-derivation.
+      The migration is correct; the persisted history is what was stale.
+      Founder authorized the backfill explicitly (§4.3 — plan approval is not
+      deploy approval, so this took its own go). Applied 2026-08-20; all 25 rows
+      now agree with the new definition.
+
+      ⚠ THE FIRST RECOMPUTE STATEMENT WAS WRONG AND IS RECORDED HERE RATHER THAN
+      QUIETLY REPLACED. The version written into the B-pass review used
+      `update ... from (select * from recomputed) r where r.d = m.snapshot_date`
+      — an INNER join. 13 of the 15 divergent rows needed to become 0 precisely
+      BECAUSE those days had no qualifying interactions, so `recomputed` has no
+      row for them, so the join matches nothing and those 13 rows would have
+      been left at their old inflated values. The preview query looked right only
+      because it used a LEFT join, which is not what the UPDATE did. Caught
+      because the first attempt hit a connection timeout, which forced a
+      state re-check before retrying; a clean first run would have reported
+      "15 rows updated" and left 13 of them wrong.
+      The applied form uses a correlated subquery per row, so a day with zero
+      qualifying interactions correctly resolves to 0.
+
+      Also verified rather than assumed: the nightly cron runs 18:15 UTC =
+      23:45 IST, so each historical snapshot already covered ~23h45m of its IST
+      day. The delta is therefore definitional, not a partial-day-vs-full-day
+      coverage change — the backfill absorbs at most the last 15 minutes of each
+      day, in the direction of MORE completeness.
 
   - id: FOB-5-G
     title: "the three hold_* columns never reach the daily snapshot table"

@@ -160,13 +160,40 @@ behaviour the moment it applied — the founder dashboard's `ai_messages_today` 
    them produced the batch's most valuable finding (the a9d3f1 guard had gone blind). But
    covering some lenses inline is not a Hermes pass and is not recorded as one.
 
-## The one open item that needs a founder decision
+## FOB-5-F — raised, authorized, applied
 
-`FOB-5-F` in the closure ledger, `terminal_state: blocked_on_user`: migration 120 changed
-what `ai_messages_today` MEANS, and `admin_metrics_daily` holds **25 rows (2026-07-26 →
-2026-08-19)** computed under the old definition. Recomputed under the new predicate, **15
-of 25 rows change and the series total goes 58 → 8**. Nothing marks the break, so the
-chart will show a ~7x cliff that reads as an engagement collapse rather than a metric
-correction. The remedy is a live `UPDATE` on founder metrics, which takes its own explicit
-authorization under §4.3 — plan approval is not deploy approval. The exact recompute
-statement is written out verbatim in the B-pass review file.
+Migration 120 changed what `ai_messages_today` MEANS, and `admin_metrics_daily` held **25
+rows (2026-07-26 → 2026-08-19)** computed under the old definition — a ~7x cliff in the
+persisted series that would read as an engagement collapse rather than a metric correction.
+Founder authorized the backfill explicitly (§4.3, its own go). Applied 2026-08-20;
+post-verification `still_divergent = 0` across all 25 rows, series total **58 → 8**.
+
+**The first recompute statement was wrong, and the ledger records it rather than replacing
+it silently.** The `update ... from (select * from recomputed) r where r.d = m.snapshot_date`
+form is an INNER join, and 13 of the 15 divergent rows needed to become `0` precisely
+because those days had no qualifying interactions — so `recomputed` has no row for them and
+the join skips them. The applied form uses a correlated subquery. It surfaced only because
+the first attempt hit a connection timeout, forcing a state re-check before the retry; a
+clean run would have reported "15 rows updated" and left 13 wrong.
+
+---
+
+# The pre-push gate fix (diagnose `b2e9f4`) — same branch, `platform` tier
+
+Pushing FOB-5 exposed a defect in the gate itself: `scripts/pre-push.sh` ran a bare
+`flutter test` while CI runs `flutter test test/ --exclude-tags golden` under
+`TZ: Asia/Kolkata` (`test.yml:28,112`). Four failures, none touched by the diff — 2 Windows
+goldens and 2 IST date-boundary contracts. The same two non-golden files: bare → 2 failures,
+`TZ=Asia/Kolkata` → 24/24 pass, same commit, same machine.
+
+This is a defect worth its own commit because of the direction it fails in. A gate that
+fails what CI passes produces only false reds, and the sole way past a false red is
+`--no-verify` — which disables every real gate too. Two one-push `--no-verify`
+authorizations had already been spent on this exact divergence before the cause was looked
+at. Founder authorized fixing the cause rather than bypassing it a third time.
+
+Pinned by `test/scripts/pre_push_matches_ci_invocation_test.dart`, which **parses both files
+and compares them** instead of asserting a hardcoded string, so a change to either side
+reddens rather than silently re-opening the gap. Mutation-proven on all three legs (drop the
+tag filter → 1 red; drop TZ → 2; demote the correct command to a comment while a bare
+`flutter test` still executes → 3).
