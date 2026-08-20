@@ -40,7 +40,9 @@ import 'package:icanbefitter/core/services/workout_schedule_write_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart' show formatDateKey;
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart'
     show holdStatusProvider, weekIdentityProvider;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -286,6 +288,149 @@ void main() {
       expect(status.holds, isEmpty);
       expect(status.todayHoldOrdinal, isNull);
     });
+  });
+
+  // ── WIRING, BEHAVIOURALLY (Hermes 2026-08-20 P1-B) ────────────────────────
+  //
+  // The presence-only group below could not fail on the defect that mattered.
+  // Hermes mutated `profile_provider` to pass `holdOrdinal: null` and the FULL
+  // 4757-test suite stayed green; the same held for the home eyebrow, the recap
+  // video and the journey label, singly and together. Its grep tokens
+  // (`weekIdentityProvider`, `journeyWeekLabel(`, `profileWeekSegment(`) all
+  // SURVIVE that defect, because the defect is in the ARGUMENT, not the call —
+  // one mutation kept `ref.read(weekIdentityProvider).holdOrdinal` literally
+  // present while sending null, and passed.
+  //
+  // Rule 21 requires a behavioral test to fail when the runtime path breaks
+  // even if the source text is intact. These do.
+  group('wiring — identity actually REACHES the consumers', () {
+    test('userStatsProvider carries the hold ordinal through a real container',
+        () async {
+      await HiveService.instance.configBox.put('enable_hold_weeks', true);
+      await takeHolds(2);
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final stats = container.read(userStatsProvider);
+
+      expect(stats.holdOrdinal, 2,
+          reason: 'the hold identity must survive the trip through '
+              'UserStatsNotifier.build. Passing a literal null here — the exact '
+              'Hermes mutation — left the whole suite green, because the only '
+              'coverage was a grep for a token that the mutation preserved.');
+      expect(stats.isHolding, isTrue);
+    });
+
+    test('userStatsProvider reports NO hold when the flag is off', () async {
+      await HiveService.instance.configBox.put('enable_hold_weeks', true);
+      await takeHolds(1);
+      await HiveService.instance.configBox.delete('enable_hold_weeks');
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final stats = container.read(userStatsProvider);
+      expect(stats.holdOrdinal, isNull);
+      expect(stats.isHolding, isFalse);
+      expect(stats.currentWeek, read.getCurrentWeekNumber(),
+          reason: 'ship-dark: byte-identical to pre-batch with the flag off, '
+              'even with real hold rows on disk');
+    });
+
+    test('the PERSISTED row never renders its 4+ordinal stamp', () async {
+      // The row-derived surfaces (Home today-card, day-detail sheet) read
+      // `row['week']`, which holdWeek() stamps as 4+n. Drive the REAL writer,
+      // then push its real output through the real formatters.
+      await HiveService.instance.configBox.put('enable_hold_weeks', true);
+      await takeHolds(3);
+
+      final box = HiveService.instance.workoutBox;
+      final holdRows = box.keys
+          .where((k) => k.toString().startsWith('schedule_'))
+          .map((k) => box.get(k))
+          .whereType<Map>()
+          .where((r) => r['is_hold'] == true)
+          .toList();
+
+      expect(holdRows, isNotEmpty,
+          reason: 'takeHolds(3) must have materialized hold rows');
+
+      for (final row in holdRows) {
+        final ordinal = row['hold_ordinal'] as int;
+        final stamped = row['week'] as int;
+
+        expect(stamped, 4 + ordinal,
+            reason: 'pins the writer contract this guards against: if the '
+                'stamp ever stops being 4+ordinal, these labels need rechecking');
+
+        expect(todayCardWeekLabel(row), 'Holding · H$ordinal');
+        expect(dayDetailWeekLabel(row), 'HOLDING · H$ordinal');
+        expect(todayCardWeekLabel(row), isNot(contains('$stamped')));
+        expect(dayDetailWeekLabel(row), isNot(contains('$stamped')));
+      }
+    });
+  });
+
+  // FORBIDDEN-PATTERN control for the two row-derived surfaces.
+  //
+  // Honest about what this is: a NEGATIVE source assertion, not a render
+  // assertion. It is here because the three behavioural tests above still could
+  // not catch a revert of the CALL SITE — verified by mutation: restoring
+  // `workoutMode: 'Week ${schedule?['week']}'` in home_screen, or
+  // `'WEEK ${schedule?['week']}'` in day_detail_sheet, left every one of them
+  // green. That is the same shape as the gap Hermes found, one layer over, and
+  // pretending otherwise would repeat the mistake.
+  //
+  // A negative grep on the FORBIDDEN token is strictly stronger than the
+  // positive grep it replaces: a positive grep passes as long as the desired
+  // call survives ANYWHERE in the file, which is what let mutation 13b keep
+  // `ref.read(weekIdentityProvider).holdOrdinal` present while sending null. A
+  // reverted call site must re-introduce a raw `['week']` read to render the
+  // stamp, and that is what this catches.
+  //
+  // It does NOT prove what the widgets render. A third spelling that reaches
+  // the stamp some other way would slip it. The real closure is a pumped-widget
+  // test for both surfaces; neither has one today and neither is currently
+  // pumpable without a full Riverpod+Hive home harness.
+  //
+  // Comments are stripped first — the sibling tests in this batch all do, and
+  // this file's own explanatory comment above names `['week']` twice, which
+  // would satisfy a raw-text match and silently neuter the check (Hermes L8
+  // P2-3 flagged exactly that against the Remotion assertion).
+  group('row-derived surfaces must not read the 4+ordinal stamp directly', () {
+    String stripDartComments(String src) => src
+        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+        .split('\n')
+        .map((l) {
+          final i = l.indexOf('//');
+          return i == -1 ? l : l.substring(0, i);
+        })
+        .join('\n');
+
+    const rowSurfaces = <String>[
+      'lib/features/home/screens/home_screen.dart',
+      'lib/features/home/widgets/day_detail_sheet.dart',
+    ];
+
+    for (final path in rowSurfaces) {
+      test('${path.split('/').last} delegates to the row formatters', () {
+        final code = stripDartComments(File(path).readAsStringSync());
+
+        expect(code.contains("['week']"), isFalse,
+            reason: '$path must not read the raw `week` field: holdWeek() '
+                'stamps it 4+ordinal, so rendering it prints "Week 5" to a '
+                'holder while the eyebrow says "HOLDING · H1" (Hermes P1-A). '
+                'Use todayCardWeekLabel(row) / dayDetailWeekLabel(row), which '
+                'take the ROW so the projected number is not reachable.');
+
+        expect(
+            RegExp(r'(todayCardWeekLabel|dayDetailWeekLabel)\(')
+                .hasMatch(code),
+            isTrue,
+            reason: '$path must still call a row formatter');
+      });
+    }
   });
 
   group('surface wiring (PRESENCE-ONLY — cannot catch a behavioural revert)',

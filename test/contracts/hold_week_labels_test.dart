@@ -163,4 +163,85 @@ void main() {
           isNot(contains('null')));
     });
   });
+
+  // ── ROW-DERIVED LABELS (Hermes 2026-08-20 P1-A) ───────────────────────────
+  //
+  // The FOB-1 sweep enumerated callers of getCurrentWeekNumber()/getProgramWeek()
+  // and therefore never saw these two: they render `row['week']`, which
+  // holdWeek() stamps as `4 + ordinal`. At flip-on a holder would have read
+  // "Week 5" directly under an eyebrow reading "HOLDING · H1".
+  //
+  // The load-bearing assertion in every hold case below is the NEGATIVE one:
+  // the rendered string must not contain the projected number. `4 + ordinal` is
+  // the exact value diagnose c9f4a2 closed and WeekIdentity's doc-comment
+  // forbids; asserting only the positive form would still pass a label that
+  // appended it.
+  group('todayCardWeekLabel (Home today-card mode line)', () {
+    test('not a hold → the row week, verbatim', () {
+      expect(todayCardWeekLabel({'week': 1}), 'Week 1');
+      expect(todayCardWeekLabel({'week': 4}), 'Week 4');
+    });
+
+    test('hold row → Hn identity, and the 4+ordinal stamp NEVER renders', () {
+      for (var n = 1; n <= 3; n++) {
+        final row = {'week': 4 + n, 'is_hold': true, 'hold_ordinal': n};
+        expect(todayCardWeekLabel(row), 'Holding · H$n');
+        expect(todayCardWeekLabel(row), isNot(contains('${4 + n}')),
+            reason: 'the persisted 4+ordinal stamp must never reach a label');
+        expect(todayCardWeekLabel(row), isNot(contains('Week')));
+      }
+    });
+
+    test('hold row with a corrupt ordinal still SUPPRESSES the number', () {
+      // Fail-safe direction: better an unnumbered "Holding" than "Week 5".
+      expect(todayCardWeekLabel({'week': 5, 'is_hold': true}), 'Holding');
+      expect(
+          todayCardWeekLabel({'week': 5, 'is_hold': true, 'hold_ordinal': 0}),
+          'Holding');
+    });
+
+    test('null / empty row falls back without throwing', () {
+      expect(todayCardWeekLabel(null), 'Week 1');
+      expect(todayCardWeekLabel({}), 'Week 1');
+    });
+  });
+
+  group('dayDetailWeekLabel (day-detail sheet header)', () {
+    test('not a hold → WEEK n, and null when there is no week', () {
+      expect(dayDetailWeekLabel({'week': 3}), 'WEEK 3');
+      expect(dayDetailWeekLabel({'week': 0}), isNull,
+          reason: 'preserves the original `if (week > 0)` suppression');
+      expect(dayDetailWeekLabel(null), isNull);
+    });
+
+    test('hold row → Hn identity, and the 4+ordinal stamp NEVER renders', () {
+      for (var n = 1; n <= 3; n++) {
+        final row = {'week': 4 + n, 'is_hold': true, 'hold_ordinal': n};
+        expect(dayDetailWeekLabel(row), 'HOLDING · H$n');
+        expect(dayDetailWeekLabel(row), isNot(contains('${4 + n}')));
+        expect(dayDetailWeekLabel(row), isNot(contains('WEEK')));
+      }
+    });
+
+    test('a hold row is never suppressed by the week>0 guard', () {
+      // The guard reads the LABEL now, not the raw week, so a hold row with a
+      // 0/absent week still states the identity rather than vanishing.
+      expect(dayDetailWeekLabel({'is_hold': true, 'hold_ordinal': 2}),
+          'HOLDING · H2');
+    });
+  });
+
+  group('rowIsHold / rowHoldOrdinal discriminator', () {
+    test('ordinal is the discriminator; is_hold is the fail-safe', () {
+      expect(rowHoldOrdinal({'hold_ordinal': 2}), 2);
+      expect(rowHoldOrdinal({'hold_ordinal': 0}), isNull);
+      expect(rowHoldOrdinal({'hold_ordinal': 'two'}), isNull);
+      expect(rowHoldOrdinal(null), isNull);
+
+      expect(rowIsHold({'hold_ordinal': 1}), isTrue);
+      expect(rowIsHold({'is_hold': true}), isTrue);
+      expect(rowIsHold({'week': 4}), isFalse);
+      expect(rowIsHold(null), isFalse);
+    });
+  });
 }

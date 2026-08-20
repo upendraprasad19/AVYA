@@ -4,6 +4,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
@@ -99,7 +100,10 @@ class DayDetailSheet extends StatelessWidget {
     final workoutName = schedule?['workout_name'] as String? ?? '';
     final type = schedule?['type'] as String? ?? 'none';
     final isWorkout = type == 'workout' || type == 'custom_template';
-    final week = schedule?['week'] as int? ?? 0;
+    // Row-derived (see hold_week_labels.dart): the raw `week` field carries
+    // `4 + ordinal` on a hold row. Null means "nothing honest to show",
+    // preserving the previous `week > 0` suppression.
+    final weekLabel = dayDetailWeekLabel(schedule);
 
     return Row(
       children: [
@@ -121,10 +125,10 @@ class DayDetailSheet extends StatelessWidget {
                   color: AppColors.textPrimary,
                 ),
               ),
-              if (week > 0) ...[
+              if (weekLabel != null) ...[
                 const SizedBox(height: 2),
                 Text(
-                  'WEEK $week',
+                  weekLabel,
                   style: AppTypography.monoXs.copyWith(
                     color: AppColors.textMute,
                     letterSpacing: 1.5,

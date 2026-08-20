@@ -778,7 +778,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final isCompleted = status == 'completed';
     final workoutName = schedule?['workout_name'] as String? ?? 'Rest Day';
     final exercises = schedule?['exercises'] as List? ?? [];
-    final week = schedule?['week'] as int? ?? 1;
+    // Row-derived, NOT `schedule['week']`: holdWeek() stamps that field
+    // `4 + ordinal`, so rendering it raw prints "Week 5" to a holder while
+    // the eyebrow ~40px above says "HOLDING · H1" (Hermes P1-A).
+    final weekLabel = todayCardWeekLabel(schedule);
 
     // Read current phase dynamically from progress (never hardcode phase number)
     final progress = UserRepository.instance.getProgress() ?? {};
@@ -798,7 +801,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       return TodayWorkoutCard(
         workoutTag: 'PHASE $currentPhase',
         workoutName: 'RECOVERY',
-        workoutMode: 'Week $week',
+        workoutMode: weekLabel,
         durationMin: 0,
         exerciseCount: 0,
         isRestDay: true,

@@ -76,9 +76,18 @@ void main() {
     final dir = Directory('supabase/migrations');
     expect(dir.existsSync(), isTrue);
 
+    // Detector deliberately TOLERANT: `public.` is optional (an unqualified
+    // `create or replace function founder_metrics_x()` resolves to public via
+    // search_path and resets the ACL identically) and the arg-list parens are
+    // optional (`drop function if exists public.founder_metrics_x;` is valid
+    // PostgreSQL when the name is unambiguous, and resets the ACL identically).
+    // Both spellings previously slipped the scan entirely — Hermes 2026-08-20
+    // P1-C, verified by mutation: each returned "All tests passed!".
+    // Case-insensitive because SQL is.
     final touching = RegExp(
         r'(create|drop)\s+(or\s+replace\s+)?function\s+(if\s+exists\s+)?'
-        r'public\.(founder_metrics_[a-z_]+)\s*\(');
+        r'(public\.)?(founder_metrics_[a-z_]+)\s*(\(\s*\))?',
+        caseSensitive: false);
 
     var checked = 0;
     final files = dir.listSync().whereType<File>().toList()
@@ -90,23 +99,52 @@ void main() {
       if (number == null || number <= 103) continue;
 
       final sql = _stripSqlComments(file.readAsStringSync());
-      final fns = touching.allMatches(sql).map((m) => m.group(4)!).toSet();
+      final touches = touching.allMatches(sql).toList();
+      final fns = touches.map((m) => m.group(5)!).toSet();
       if (fns.isEmpty) continue;
 
       for (final fn in fns) {
         checked++;
-        final pattern = RegExp(
-          'revoke\\s+execute\\s+on\\s+function\\s+public\\.$fn\\s*\\(\\s*\\)\\s+'
-          'from\\s+[^;]*\\banon\\b[^;]*\\bauthenticated\\b',
+
+        // ORDER MATTERS, and presence alone does not imply it. Default
+        // privileges are applied by CREATE, so a revoke that runs BEFORE the
+        // last create/drop of this function is discarded by it. A file with the
+        // revoke hoisted above the DROP+CREATE replays anon-executable while
+        // reading, to a presence-only scan, exactly like a correct one.
+        // Hermes 2026-08-20 P1-C (L23 mutation C).
+        final lastTouchEnd = touches
+            .where((m) => m.group(5) == fn)
+            .map((m) => m.end)
+            .reduce((a, b) => a > b ? a : b);
+
+        // Role list matched as a SET, not a sequence: `from authenticated, anon`
+        // is identical SQL with identical effect, and the old sequence-bound
+        // pattern reddened against it (Hermes L23 mutation D — a false positive
+        // on a safe migration, i.e. a trap for the next author).
+        final revokeRe = RegExp(
+          'revoke\\s+execute\\s+on\\s+function\\s+(?:public\\.)?$fn'
+          '\\s*(?:\\(\\s*\\))?\\s+from\\s+([^;]*);',
+          caseSensitive: false,
         );
-        expect(pattern.hasMatch(sql), isTrue,
-            reason: 'migration $name creates or drops public.$fn(), which '
+
+        final effective = revokeRe.allMatches(sql).any((m) {
+          if (m.start < lastTouchEnd) return false; // discarded by a later CREATE
+          final roles = m.group(1)!;
+          return RegExp(r'\banon\b', caseSensitive: false).hasMatch(roles) &&
+              RegExp(r'\bauthenticated\b', caseSensitive: false)
+                  .hasMatch(roles);
+        });
+
+        expect(effective, isTrue,
+            reason: 'migration $name creates or drops $fn(), which '
                 'RESETS its ACL — Supabase default privileges then re-grant '
                 'EXECUTE to anon + authenticated. It must therefore carry its '
                 'OWN `revoke execute on function public.$fn() from anon, '
-                'authenticated;`. Migration 103 does not cover it: 103 revoked '
-                'on the function object that this migration replaced. Without '
-                'the revoke here, a replay re-opens the anon-readable business '
+                'authenticated;`, positioned AFTER the last create/drop of that '
+                'function (an earlier revoke is discarded by the later CREATE). '
+                'Migration 103 does not cover it: 103 revoked on the function '
+                'object that this migration replaced. Without an effective '
+                'revoke here, a replay re-opens the anon-readable business '
                 'metrics leak (a9d3f1).');
       }
     }

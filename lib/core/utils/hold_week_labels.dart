@@ -71,3 +71,66 @@ String roadmapWeekLabel({
     holdOrdinal != null
         ? 'HOLDING · H$holdOrdinal  —  $completePct% complete'
         : 'WK $programWeek / 12  —  $completePct% complete';
+
+// ── ROW-DERIVED LABELS (Hermes 2026-08-20 P1-A) ─────────────────────────────
+//
+// The five formatters above take `holdOrdinal` from `weekIdentityProvider`, and
+// that framing hid a whole class of surface. `holdWeek()` ALSO stamps the row
+// itself (`workout_schedule_write_service.dart:285-289`):
+//
+//     copy['week']         = 4 + n;      // <- the dishonest number, persisted
+//     copy['is_hold']      = true;
+//     copy['hold_ordinal'] = n;
+//
+// Two surfaces render `row['week']` straight out — the Home today-card
+// (`home_screen.dart`) and the day-detail sheet (`day_detail_sheet.dart`) — so
+// at flip-on a holder would read "Week 5" roughly 40px under the eyebrow that
+// this same batch fixed to say "HOLDING · H1". The FOB-1 sweep missed them
+// because it enumerated callers of getCurrentWeekNumber()/getProgramWeek();
+// these read the STAMPED FIELD and never call either.
+//
+// They take the ROW, not a week int, deliberately: a caller cannot reach
+// `4 + ordinal` through these because the raw `week` value is never a parameter.
+// That is the same "no projected number by construction" property WeekIdentity
+// has, applied one layer down. Row-derived rather than provider-derived so a
+// bottom sheet needs no provider dependency, and so a restored row labels
+// itself correctly offline.
+
+/// The hold ordinal stamped on a schedule row, or null when it is not a hold.
+int? rowHoldOrdinal(Map<dynamic, dynamic>? scheduleRow) {
+  final raw = scheduleRow?['hold_ordinal'];
+  return raw is int && raw > 0 ? raw : null;
+}
+
+/// Whether a schedule row is a hold-week row.
+///
+/// Accepts `is_hold` as a fallback discriminator ONLY so that a row with a
+/// corrupt/missing ordinal still SUPPRESSES the week number rather than
+/// printing `4 + n`. The ordinal remains the discriminator for what is shown;
+/// this is purely the fail-safe direction.
+bool rowIsHold(Map<dynamic, dynamic>? scheduleRow) =>
+    scheduleRow?['is_hold'] == true || rowHoldOrdinal(scheduleRow) != null;
+
+/// Home today-card mode line — `Week 4` / `Holding · H1`.
+/// Sentence case, matching the card's existing `Week $week` string.
+String todayCardWeekLabel(Map<dynamic, dynamic>? scheduleRow) {
+  if (rowIsHold(scheduleRow)) {
+    final ordinal = rowHoldOrdinal(scheduleRow);
+    return ordinal != null ? 'Holding · H$ordinal' : 'Holding';
+  }
+  final week = scheduleRow?['week'] as int? ?? 1;
+  return 'Week $week';
+}
+
+/// Day-detail sheet header line — `WEEK 4` / `HOLDING · H1`.
+///
+/// Returns null when there is nothing honest to show, preserving the caller's
+/// existing `if (week > 0)` suppression for rows that carry no week at all.
+String? dayDetailWeekLabel(Map<dynamic, dynamic>? scheduleRow) {
+  if (rowIsHold(scheduleRow)) {
+    final ordinal = rowHoldOrdinal(scheduleRow);
+    return ordinal != null ? 'HOLDING · H$ordinal' : 'HOLDING';
+  }
+  final week = scheduleRow?['week'] as int? ?? 0;
+  return week > 0 ? 'WEEK $week' : null;
+}
