@@ -26,6 +26,7 @@ import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/empty_state.dart';
 import 'package:icanbefitter/shared/widgets/video_share_button.dart';
 import 'package:icanbefitter/features/train/providers/video_render_provider.dart';
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import '../providers/profile_provider.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -1376,7 +1377,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             compositionId: 'WeeklyRecap',
             inputProps: {
               'userName': userName,
+              // FOB-1 (OI-60): getCurrentWeekNumber() clamps to [1,4] and a
+              // hold starts at plan_start+28, so the recap card stamped
+              // "WEEK 4 RECAP" for every hold at every ordinal. `holdOrdinal`
+              // supersedes the counter in the composition when present; it is
+              // null for every user while `enable_hold_weeks` is OFF, so the
+              // rendered video is byte-identical until the flip.
               'weekNumber': WorkoutRepository.instance.getCurrentWeekNumber(),
+              'holdOrdinal': ref.read(weekIdentityProvider).holdOrdinal,
               'totalVolume': workoutSummary['total_volume_kg'] ?? 0,
               'totalWorkouts': workoutSummary['workouts_completed'] ?? 0,
               'totalPrs': workoutSummary['prs_hit'] ?? 0,

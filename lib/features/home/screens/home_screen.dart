@@ -19,6 +19,7 @@ import 'package:icanbefitter/shared/widgets/sync_banner.dart';
 import '../widgets/completeness_nudge.dart';
 import '../providers/home_provider.dart';
 import '../../train/providers/train_provider.dart';
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import '../../train/widgets/readiness_sheet.dart';
 import '../widgets/weekly_calendar.dart';
 import '../widgets/day_detail_sheet.dart';
@@ -307,13 +308,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
             'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
           ];
-          final weekInPhase =
-              WorkoutScheduleService.instance.getCurrentWeekNumber();
+          // FOB-1 (OI-60): a hold week sits OUTSIDE the phase's four weeks, so
+          // there is no honest "WK n" for it — getCurrentWeekNumber() clamps to
+          // [1,4] and a hold starts at plan_start+28, so this printed "WK 4" to
+          // a holder at every ordinal, forever. Unlike the Train header (which
+          // can simply DROP the segment because its HOLDING · Hn pill states
+          // the identity ~40px away, diagnose c8b3f2 D1), Home carries no pill
+          // — so the eyebrow itself takes the Hn identity. Always the week arm
+          // while `enable_hold_weeks` is OFF, byte-identical to the pre-fix
+          // string.
+          final weekId = ref.watch(weekIdentityProvider);
           final progress = UserRepository.instance.getProgress() ?? {};
           final currentPhase = (progress['current_phase'] as int?) ?? 1;
+          final weekSegment = homeWeekSegment(
+            holdOrdinal: weekId.holdOrdinal,
+            weekInPhase: weekId.weekInPhase,
+          );
           final eyebrow =
               'DAILY · ${weekdays[now.weekday - 1]} ${now.day} '
-              '${monthShort[now.month - 1]} · WK $weekInPhase '
+              '${monthShort[now.month - 1]} · $weekSegment '
               '· PHASE $currentPhase';
 
           return Column(

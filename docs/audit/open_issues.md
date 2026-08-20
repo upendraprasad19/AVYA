@@ -1069,16 +1069,48 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-60 — Flip `enable_hold_weeks`
 
 - **Status**: OPEN
-- **Verified**: never
+- **Verified**: 2026-08-20 — the blocker list re-derived from the AUTHORITATIVE ledger
+  (`docs/ship_dark_pending_review.yaml:251-382` + `docs/audit/oi60-streak-identity.closure.yaml`),
+  not carried from this entry's own text, which was wrong. The three `enable_hold_weeks` rows were
+  read directly and all still carry `flip_reviewed: false`. FOB-1's six surfaces were each read in
+  source before being fixed — one (`phase_roadmap_screen.dart`) reaches the clamp through
+  `getProgramWeek`, so the FOB's own file list understated it rather than overstating it, and one
+  (`profile_content.dart`) is a consumer the FOB named only via its provider.
 - **Identified**: 2026-07-26
-- **Blocked on**: 7 unstarted flip-on-blocker items (FOB-1…FOB-7) in
-  `docs/ship_dark_pending_review.yaml` — coach/push/weekly-report tell every holder a false
-  week-4 story, weekly streak is dead during a hold, hold telemetry has zero consumers, selectable
-  past-hold-weeks has 6 named lifecycle traps, and 4 residual scan gaps. None were touched by the
-  OI-59 display batch (that work is additive and inert while the flag is OFF). FOB-3/FOB-4 also
-  require ai-proxy + weekly-recap-ready/weekly-report EF redeploys (own explicit go, §4.3).
-- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — all 7 FOB
-  items closed first.
+- ⚠ **Corrected 2026-08-20.** This entry read *"7 unstarted flip-on-blocker items (FOB-1…FOB-7)"*
+  and `OPEN_INDEX.md` repeated it. That was stale on three counts as of 2026-08-13, and the index
+  is generated from this line, so the whole board carried the wrong number: **FOB-2 CLOSED**
+  (`docs/audit/oi60-streak-identity.closure.yaml`, diagnose `a3f8d1`), **FOB-7(c) verified clean**
+  (the report was stale — ai-media-proxy already carries both the 10K cap and the FC7 nonce fence),
+  **FOB-7(d) CLOSED**, and **FOB-6 SPLIT OUT to OI-125** by founder decision as a FEATURE that is
+  explicitly *not* a flip blocker. "Unstarted" was also wrong for the two that had already shipped.
+- **Blocked on**: **4 remaining flip-on blockers** in `docs/ship_dark_pending_review.yaml` —
+  **FOB-3, FOB-4, FOB-5, FOB-7(a)/(b)**. The coach snapshot and the Sunday push / weekly report
+  still tell every holder a false week-4 story; hold telemetry still has zero consumers and its
+  events inflate `ai_messages_today`; `currentPhaseCompletionRate` still folds hold days into the
+  PRO-advance gate input and `PlanIntegrityReconciler` still scans weeks 1-4 only. FOB-3/FOB-4
+  require ai-proxy + weekly-recap-ready + weekly-report EF redeploys, and FOB-5 a migration apply —
+  each its own explicit authorization (§4.3), plan approval ≠ deploy approval.
+  ⚠ Read `oi60-streak-identity.closure.yaml` before attempting FOB-7(b): widening the 1..4 scan is
+  already REFUTED (the scan IS the re-anchor trigger, so widening buys no healing and only makes
+  the re-anchor fire more often — the P0-11 concern `d7f3a9` rejected). The shape is *split the
+  trigger from the write.* OI-127 is routed to whichever batch takes FOB-7(a)/(b), so one batch
+  holds the reconciler context.
+- ✅ **FOB-1 CLOSED 2026-08-20** — branch `claude/oi-pending-hold-weeks-1od97o`, diagnose `f4c8e1`,
+  behavioral test `test/contracts/hold_week_identity_behavioral_test.dart` (16 cases, mutation-proven
+  on both protective legs: neutering the hold arm reddens 3, removing the flag gate reddens 5 across
+  this file and `hold_display_read_path_test.dart`). Adopted "a hold suppresses the week number; Hn
+  is the identity" on all **six** in-repo surfaces that printed the clamped week 4 to a holder
+  (home eyebrow, profile subtitle, journey timeline ×2, phase-roadmap header, share-as-video stamp
+  + its Remotion composition), behind a new single-gate seam
+  `WorkoutScheduleReadService.weekIdentity()`. Two named residuals, neither deferred:
+  `ai_snapshot_builder.dart` is **FOB-3's** by the board's own division (it rewrites the same lines
+  to add the `hold` block and needs the ai-proxy redeploy — touching it twice would ship a
+  half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, a separate
+  repo on the OpenClaw VPS (§2).
+- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — the four
+  remaining FOB items closed first. The flip-on commit must clear **all three** `enable_hold_weeks`
+  rows in the ledger (`hold-mechanic`, `hold-display`, `hold-display-fixes`) in one commit.
 
 ## OI-61 — Coach-UX: live-verify test7, v74 hardening, temp-PRO cleanup
 

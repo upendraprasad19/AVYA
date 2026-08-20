@@ -84,7 +84,15 @@ extension _JourneyTimeline on _ProfileScreenState {
               ),
               const Spacer(),
               Text(
-                'WEEK ${stats.currentWeek} OF 4',
+                // FOB-1 (OI-60): a holder has no honest "WEEK n OF 4" — the
+                // phase's four weeks are elapsed and the hold sits outside
+                // them, so the clamp printed "WEEK 4 OF 4" forever. Hn is the
+                // identity. `isHolding` is false for every user while
+                // `enable_hold_weeks` is OFF, so this is the pre-fix string.
+                journeyWeekLabel(
+                  holdOrdinal: stats.holdOrdinal,
+                  weekInPhase: stats.currentWeek,
+                ),
                 style: AppTypography.monoXs.copyWith(
                   color: AppColors.accent,
                   letterSpacing: 2,
@@ -104,7 +112,10 @@ extension _JourneyTimeline on _ProfileScreenState {
           ),
           const SizedBox(height: 10),
 
-          // Week progress bar within phase
+          // Week progress bar within phase. Deliberately NOT hold-branched:
+          // `currentWeek` stays clamped at 4 during a hold and the phase's four
+          // weeks genuinely ARE elapsed, so a full bar is the honest reading.
+          // Branching it to the hold ordinal would divide an H-number by 4.
           WardBar(pct: stats.currentWeek / 4.0, color: AppColors.accent, height: 4),
           const SizedBox(height: 10),
 
@@ -167,7 +178,15 @@ extension _JourneyTimeline on _ProfileScreenState {
             const SizedBox(height: 2),
             _journeyInsight(
               icon: Icons.emoji_events_outlined,
-              text: '${(4 - stats.currentWeek).clamp(0, 4)} weeks to complete Phase 1',
+              // A holder has already completed the four weeks, so the countdown
+              // resolved to a flat "0 weeks to complete Phase 1" — technically
+              // true, and useless, on the one surface a holder sees most. State
+              // where they actually are instead (FOB-1 / OI-60). Inert while
+              // `enable_hold_weeks` is OFF.
+              text: journeyPhaseOneMilestone(
+                holdOrdinal: stats.holdOrdinal,
+                weekInPhase: stats.currentWeek,
+              ),
               color: AppColors.proGold,
             ),
           ],

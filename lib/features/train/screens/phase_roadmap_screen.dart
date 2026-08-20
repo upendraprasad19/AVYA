@@ -9,6 +9,8 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet_phase_variant.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/ward_rank_insignia.dart';
 
@@ -53,6 +55,13 @@ class PhaseRoadmapScreen extends ConsumerWidget {
         .read(workoutScheduleReadServiceProvider)
         .getProgramWeek(currentPhase);
     final completePct = ((currentWeek / 12) * 100).clamp(0, 100).round();
+    // FOB-1 (OI-60): getProgramWeek is programWeekFor(phase,
+    // getCurrentWeekNumber()), and that inner call clamps to [1,4] — so a
+    // phase-1 holder read "WK 4 / 12" at every ordinal, forever. The PERCENT
+    // and the bar stay derived from currentWeek (four of twelve program weeks
+    // really are done); only the week COUNTER is dishonest for a holder, so
+    // only it is suppressed. Null while `enable_hold_weeks` is OFF.
+    final holdOrdinal = ref.watch(weekIdentityProvider).holdOrdinal;
     // Header phase name from current_phase (was hardcoded "FOUNDATION" — wrong
     // for any non-phase-1 user; review P2 2026-06-06).
     final phaseName = ref
@@ -81,6 +90,7 @@ class PhaseRoadmapScreen extends ConsumerWidget {
             currentWeek: currentWeek,
             completePct: completePct,
             phaseName: phaseName,
+            holdOrdinal: holdOrdinal,
           ),
           const SizedBox(height: 16),
 
@@ -192,10 +202,14 @@ class _DeploymentHeader extends StatelessWidget {
     required this.currentWeek,
     required this.completePct,
     required this.phaseName,
+    this.holdOrdinal,
   });
   final int currentWeek;
   final int completePct;
   final String phaseName;
+
+  /// 1-based hold number when today is a live hold day, else null (FOB-1).
+  final int? holdOrdinal;
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +227,11 @@ class _DeploymentHeader extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'WK $currentWeek / 12  —  $completePct% complete',
+          roadmapWeekLabel(
+            holdOrdinal: holdOrdinal,
+            programWeek: currentWeek,
+            completePct: completePct,
+          ),
           style: AppTypography.h3.copyWith(
             fontSize: 15,
             color: AppColors.textPrimary,

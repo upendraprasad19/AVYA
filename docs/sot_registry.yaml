@@ -2768,7 +2768,7 @@ concepts:
     restore_methods: [_restoreWorkoutPlan, _restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider, streakProvider]
     ist_sites:
-      - { file: lib/core/services/workout_schedule_read_service.dart, line: 288, fn: generateAndScheduleFromDate }
+      - { file: lib/core/services/workout_schedule_read_service.dart, line: 317, fn: generateAndScheduleFromDate }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.put.*schedule.*status.*planned", reason: "Never overwrite status=completed; check guard first" }
     class_constraints: |
@@ -3584,7 +3584,7 @@ concepts:
       conversational_log_handler). Both paths must be handled in sync/restore.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 425-450
+        line_range: 459-484
         method: BiometricNotifier.logSleep
         notes: writes sleep_log_<IST-date> key
       - file: lib/features/ai_coach/services/conversational_log_handler.dart
@@ -3669,7 +3669,7 @@ concepts:
     sync_methods: [_syncSleepLogs]
     restore_methods: [_restoreSleepLogs]
     ist_sites:
-      - { file: lib/features/profile/providers/profile_provider.dart, line: 541, fn: logSleep }
+      - { file: lib/features/profile/providers/profile_provider.dart, line: 575, fn: logSleep }
     telemetry:
       failure_op_types: [upsert_sleep_log, upsert_sleep_log_chat]
     class_constraints: |
@@ -6599,6 +6599,93 @@ concepts:
         method: WorkoutScheduleWriteService
     reader_manifest_complete: false
 
+  - concept: hold_week_identity
+    domain: workout
+    behavioral_test_path: test/contracts/hold_week_identity_behavioral_test.dart
+    description: |
+      WHAT WEEK IS IT — the one answer every surface that prints a week counter
+      must ask for (FOB-1 of OI-60, diagnose f4c8e1).
+
+      getCurrentWeekNumber() ends in .clamp(1, 4) and a hold week starts at
+      plan_start + 28, so it returns 4 for EVERY hold at EVERY ordinal, forever.
+      Six in-repo surfaces inherited that and printed week 4 to a holder while
+      the Train tab (already fixed by c8b3f2 D1) said HOLDING · Hn — the app
+      contradicting itself across tabs.
+
+      The rule: a hold SUPPRESSES the week number; Hn is the identity.
+      WeekIdentity carries weekInPhase XOR holdOrdinal and NO projected number.
+      Do NOT add a `4 + ordinal` getter — it manufactures the value the UI ruled
+      dishonest and demotes a phase-2 holder from program week 8 to 5 (c9f4a2).
+      A caller needing a program week for a NON-hold day uses programWeekFor().
+
+      ONE GATE. activeHoldWeeks() / activeHoldOrdinalFor() are the only place
+      the read side consults enable_hold_weeks; holdWeeks() / holdOrdinalForDate()
+      stay raw row readers so tests can exercise the row contract directly.
+      holdStatusProvider DELEGATES to the active* pair rather than keeping its
+      own flag check — two copies of one gate is the drift class §4.1 names.
+
+      Ship-dark: with the flag OFF, weekIdentity() == getCurrentWeekNumber()
+      even with is_hold rows on disk, so all six surfaces render their pre-batch
+      strings. Asserted directly, not assumed.
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 890-915
+        method: activeHoldWeeks / activeHoldOrdinalFor / weekIdentity — the seam + the single flag gate
+      - file: lib/core/services/workout_schedule_write_service.dart
+        line_range: 235-353
+        method: holdWeek → stamps is_hold + hold_ordinal (unchanged; the identity is derived from these stamps, so a field rename silently empties every surface below)
+    readers:
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1009-1012
+        method: weekIdentityProvider — widget-side seam, watches currentPlanProvider
+        semantic: latest
+        fields_read: [WeekIdentity.weekInPhase, WeekIdentity.holdOrdinal]
+      - file: lib/features/home/screens/home_screen.dart
+        method: the DAILY eyebrow — SUBSTITUTES "HOLDING · Hn" (Home has no pill, unlike the Train header which can simply drop the segment)
+        semantic: latest
+        fields_read: [WeekIdentity.isHolding, WeekIdentity.holdOrdinal, WeekIdentity.weekInPhase]
+      - file: lib/features/profile/providers/profile_provider.dart
+        method: UserStatsData.holdOrdinal + currentWeek — BOTH from ONE weekIdentity() read so they cannot disagree across a midnight rollover
+        semantic: latest
+        fields_read: [WeekIdentity.weekInPhase, WeekIdentity.holdOrdinal]
+      - file: lib/features/profile/screens/profile/journey_timeline.dart
+        method: "WEEK n OF 4" label + the Phase-1 milestone line
+        semantic: latest
+        fields_read: [UserStatsData.isHolding, UserStatsData.holdOrdinal]
+      - file: lib/features/profile/screens/profile/profile_content.dart
+        method: the profile subtitle "Phase n · Week m · goal"
+        semantic: latest
+        fields_read: [UserStatsData.isHolding, UserStatsData.holdOrdinal]
+      - file: lib/features/train/screens/phase_roadmap_screen.dart
+        method: _DeploymentHeader — counter suppressed while holding; percent + bar keep the program week
+        semantic: latest
+        fields_read: [WeekIdentity.holdOrdinal]
+      - file: lib/core/utils/hold_week_labels.dart
+        method: the five pure formatters every surface renders through (homeWeekSegment / profileWeekSegment / journeyWeekLabel / journeyPhaseOneMilestone / roadmapWeekLabel) — extracted after a B-pass inverted an inlined ternary and all 16 tests still passed; behavioral coverage in test/contracts/hold_week_labels_test.dart
+        semantic: latest
+        fields_read: [WeekIdentity.holdOrdinal, WeekIdentity.weekInPhase]
+      - file: lib/features/profile/screens/reports_screen.dart
+        method: share-as-video inputProps.holdOrdinal → Remotion renders "HOLD Hn RECAP"
+        semantic: latest
+        fields_read: [WeekIdentity.holdOrdinal]
+    class_constraints: |
+      WeekIdentity MUST NOT gain a projected week getter. The hold arm asserts
+      weekInPhase is NULL precisely so a projection cannot be reintroduced.
+
+      SelectedWeekNotifier.build (train_provider.dart) MUST stay clamped: hold
+      rows sit at week 5+ and getWeek(5) is empty, so un-clamping it renders
+      "Week 5 hasn't started yet" over a week the user is training (OI-125 trap).
+
+      Every label MUST take holdOrdinal as its SINGLE discriminator — never a
+      separate isHolding bool alongside it. Two inputs that can disagree
+      ("holding, ordinal null") is a state the formatters must not be able to
+      represent; that incoherence is exactly what the B-pass's inversion printed
+      as "Holding · Hnull".
+
+      Inputs where the clamped 4 is HONEST must not be branched — the journey
+      timeline's /4 progress bar and the roadmap's percentage. During a hold the
+      phase's four weeks really are elapsed. Only the COUNTER lies.
+
   - concept: hold_display_read_path
     domain: workout
     behavioral_test_path: test/contracts/hold_display_read_path_test.dart
@@ -8440,7 +8527,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1092-1107
+        line_range: 1157-1172
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -8770,15 +8857,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1216-1235
+        line_range: 1281-1300
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1215-1216
+        line_range: 1280-1281
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1261-1268
+        line_range: 1326-1333
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
     readers:

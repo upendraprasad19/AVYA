@@ -49,6 +49,7 @@ import '../../widgets/biometric_sync_card.dart';
 import '../../widgets/weekly_report_card.dart';
 import '../../widgets/rank_service_record_sheet.dart';
 import '../invite_friends_sheet.dart';
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 
 
 part 'profile_content.dart';
