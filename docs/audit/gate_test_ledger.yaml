@@ -75,7 +75,34 @@ check_crashlytics_alert_routing.dart:
   grandfathered: 2026-08-10
 
 check_cron_registry.dart:
-  grandfathered: 2026-08-10
+  mutation_proven: true
+  test_path:
+    - test/scripts/cron_registry_snapshot_gate_test.dart
+  evidence: >
+    PROMOTED out of the grandfathered set 2026-08-20 (OI-132), because the gate
+    gained a second, file-independent input and that input needed real proof.
+    Five mutations redden, run against real temp repos with the real gate:
+    (1) THE OI-132 SCENARIO — delete the migration .sql while the jobs remain in
+    the live snapshot: 4 jobs named, tagged "LIVE on the project". This is the
+    case the pre-2026-08-20 gate could not see AT ALL, and it is why the gate
+    reported green for five days while two row-destructive cron jobs ran
+    unregistered on prod;
+    (2) delete backups/live_cron_jobs.json — refuses to silently downgrade to
+    the migration scan alone;
+    (3) empty the snapshot to [] — refuses a vacuous pass (the Gate-44 shape);
+    (4) malformed snapshot JSON — refused;
+    (5) a job declared in a migration file but absent from the registry while
+    the snapshot is clean — input A is NOT masked by adding input B;
+    (6) reorder — move input B's read back BELOW input A's
+    "supabase/migrations absent -> exit 0" SKIP, which is where it sat when
+    this input was first written. A tree with no migrations directory then
+    passes having consulted NEITHER input: the never-ran-so-it-passed shape
+    input B exists to close, reintroduced by the edit that added it. Caught by
+    the B-pass on the OI-132 commit itself, not by the original test set —
+    exactly one test reddens under the mutation and the other six stay green.
+    Green path verified separately. What this does NOT prove, stated rather than
+    implied: that the snapshot is FRESH. Nothing in CI can, without Supabase
+    credentials the repo does not have (OI-105).
 
 check_device_tests_exist.dart:
   grandfathered: 2026-08-10
