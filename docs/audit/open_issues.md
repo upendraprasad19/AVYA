@@ -1090,6 +1090,16 @@ cloud sessions; **this file is the cross-session backlog.**
   PRO-advance gate input and `PlanIntegrityReconciler` still scans weeks 1-4 only. FOB-3/FOB-4
   require ai-proxy + weekly-recap-ready + weekly-report EF redeploys — each its own explicit
   authorization (§4.3), plan approval ≠ deploy approval.
+  ⚠ **FOB-4 needs MORE than a redeploy, and the ledger's `why:` does not say so.** Measured
+  2026-08-20 against the live schema: `information_schema.columns` in schema `public` contains
+  **zero** columns matching `%hold%`, and `user_progress` carries no hold field of any spelling
+  (23 columns, listed live). `is_hold` is written by `holdWeek()` onto local schedule rows and
+  **never reaches the cloud** — there is no `workout_schedule` table in `public` at all. So
+  `weekly-recap-ready` and `weekly-report` cannot branch on a hold no matter what is deployed:
+  the signal does not exist on their side of the wire. Whoever takes FOB-4 must decide how hold
+  state crosses that boundary FIRST (a `user_progress` column, or a derived RPC), which means a
+  MIGRATION and its own live-apply authorization on top of the two redeploys. Do not schedule
+  FOB-4 as a redeploy-only unit.
 - ✅ **FOB-5 CLOSED 2026-08-20** — diagnose `c7a3b9`, closure `docs/audit/fob5-hold-telemetry.closure.yaml`,
   migration **120 applied live** (founder-authorized). `holdWeek()` now emits `hold_week_started`,
   consumed by three new `hold_*` columns on `founder_metrics_engagement()` that reach the founder
@@ -3705,8 +3715,8 @@ allowlist gate OI-78 has been asking for since 2026-07-31.
 ## OI-133 — 92 analytics rows are already inside the LLM's retrievable memory; the fix stops new ones and does not remove them (P1)
 
 - **Status**: OPEN
-- **Blocked on**: nothing technical, but the cleanup is a DELETE against a production table that feeds the coach's memory, so it wants an explicit go and a dry-run count first.
-- **Verified**: 2026-08-20 — counts queried live during the Hermes pass; the two code paths read directly.
+- **Blocked on**: item 2 is DONE (the DELETE ran 2026-08-20, founder-authorized). What remains is item 1 only — the `rolling-context` REDEPLOY, blocked on **credentials, not permission**: no Supabase Management API token reaches the remote container. Commands for the founder laptop: `docs/operations/FOUNDER_LAPTOP_HANDOFF.md` §1.
+- **Verified**: 2026-08-20 — counts queried live during the Hermes pass; the two code paths read directly. Re-verified the same day after the DELETE: 598 → 506 rows, loose-pattern match 0.
 
 `rolling-context` summarized `ai_coach_interactions` with no channel filter, so `app_event`
 analytics rows were embedded into `memory_embeddings` as `source_type='conversation'`. Live count
@@ -3755,8 +3765,21 @@ than adding a predicate to the RPC (that would be a migration apply needing its 
    loudly — it breaks a nightly cron that summarizes and DELETES user conversation rows.
    **To unblock:** either export `SUPABASE_ACCESS_TOKEN_FITNESS` into the session, or run the two
    §0 commands from the founder machine. Live version at time of writing: **18**.
-2. **The 92 existing rows are still retrievable.** Filtering the writer does not unwrite history.
-   They need identifying and deleting, with a dry-run count first.
+2. ✅ **The 92 rows are DELETED — 2026-08-20, founder-authorized, verified either side.**
+   Dry-run reproduced the filing's numbers exactly before anything was removed: **92 of 598**
+   rows, **2** distinct users, longest content **56** characters, **0** carrying a Coach reply,
+   and — the check that mattered — a deliberately looser pattern (`content like '%{event:%'`,
+   no `source_type` constraint) matched the **same 92 and nothing else**, so the strict predicate
+   was not leaving a tail behind. Every matched row was the pure two-line event shape
+   (`^User: \{event: [a-z0-9_]+\}\nCoach: $`); **0** carried extra prose that a human might have
+   written. Deleted with that regex in the `where`, `returning id` (92 ids returned). Re-run of
+   the same counts immediately after: **506 rows remain** (598 − 92), and the loose pattern now
+   matches **0**. `source_type='conversation'` went 575 → 483; the other source type was
+   untouched.
+   Scope note, so the green is not over-read: this removes the rows from `memory_embeddings`,
+   which is what retrieval reads. It does not rewrite any summary text already folded into an
+   older row, and it does not touch `ai_coach_interactions` — whose 22 `app_event` rows are the
+   *writer*-side residue that item 1's redeploy stops feeding forward.
 
 **Related but NOT fixed here, filed together because they share the single root cause — five
 consumers read this table and only one of them knows the channel taxonomy:** the restore path
