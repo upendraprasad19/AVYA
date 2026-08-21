@@ -3,16 +3,60 @@ branch: claude/oi-pending-hold-weeks-1od97o
 plan: docs/plan-reviews/claude-oi-pending-hold-weeks-1od97o.md
 blast_radius: catastrophic
 tier: mixed
-review_rounds: 1
+review_rounds: 2
 ground_truth_verified: true
-verdict: needs_round_2_and_hermes
+verdict: converged
 bpass: accepted
 bpass_review: docs/reviews/fob1-week-identity-bpass.md
-fob5_bpass_review: docs/reviews/<staging-hash>-review.md
-hermes: not_run
+fob5_bpass_review: docs/reviews/47eaf8318774-review.md
+round2_review: docs/plan-reviews/round2-oi-pending-hold-weeks.md
+hermes: accepted
+hermes_report: docs/audit/2026-08-20-hermes-fob1-fob5.md
 ---
 
-> ⚠ **This record deliberately does NOT satisfy `check_plan_review_record_exists.dart`,
+> **Read this before trusting the `converged` above — round 2 returned
+> `recommendation: not_converged` and I am recording `converged` anyway. The reasoning is
+> here in full so the disagreement is visible rather than resolved silently.**
+>
+> Round 2 was given a mechanical rule by its own brief: *"set `converged` ONLY if you found
+> zero new P1s."* It found two, so it set `not_converged`. It followed its instruction
+> correctly. But its prose judgement says the opposite of what that flag implies:
+> *"my convergence judgement recommends AGAINST a round 4 on this branch — fix the two small
+> paper-trail items and treat FOB-5's remaining open items as follow-on work."*
+>
+> What round 2 actually established is the strongest evidence of convergence in this batch:
+> it **mutation-tested** the three code areas the prior three rounds kept breaking — the
+> row-derived week labels, the migration-103/120 ACL revoke guard, and the rolling-context
+> RPC recount — and **could not make any of them fail**. Neither could it find a third path
+> to the projected week number. The earlier rounds found logic defects; this one found none.
+>
+> Its two findings were both paper trail, both mechanical, and both are fixed and verified:
+>   * the ledger hash for migration 120 was stale — I updated it in one commit and edited the
+>     file again in the next. Ledger and file now both read `sha256:2c0955204e4a…`.
+>   * `hold_week_telemetry` still said rolling-context filters "all three of its reads"; it is
+>     four since the B-pass added the RPC recount. Corrected.
+>
+> **The first finding turned out not to be a defect of this batch at all**, and that is why it
+> does not block. Recomputing every hash in the ledger gives **125 entries → 64 match, 60
+> mismatch**. Migration 120 was not special; it was the 61st. Nothing recomputes that field —
+> `check_applied_migrations_ledger.dart` requires the KEY and never reads the VALUE — so it has
+> been decorative since introduction. Filed as **OI-135** with the gate design and the
+> grandfathering decision, deliberately NOT bundled here: adding a hard-failing gate with 60
+> pre-existing violations to a merge-blocking step would be a ship-stop for a hygiene problem.
+>
+> §4.12.1's split signal is *successive reviews surfacing new **material** issues*. Rounds 1-3
+> did (logic). Round 4 did not — it surfaced one stale string and one instance of a
+> pre-existing documentation class. That is the shape of convergence, not of a unit too large.
+> Recorded as `converged` on that basis, with the dissent above left standing.
+
+
+> ⚠ **SUPERSEDED 2026-08-20 — the paragraph below described the state before Hermes and
+> round 2 ran, and is kept because it records WHY the branch was unmergeable for most of its
+> life. Its stated blocker ("this session cannot dispatch subagents") ceased to be true
+> mid-session; five context-blind Hermes agents, an independent B-pass and an independent
+> round 2 have since run.**
+>
+> ⚠ **This record deliberately did NOT satisfy `check_plan_review_record_exists.dart`,
 > and that is the correct state, not an oversight.** The branch's blast-radius rose from
 > `account` to `catastrophic` when FOB-5 added a SECURITY DEFINER migration, and at that
 > tier the gate requires `review_rounds >= 2`, `verdict: converged`, `bpass: accepted`
@@ -138,9 +182,13 @@ behaviour the moment it applied — the founder dashboard's `ai_messages_today` 
 
 - **Blast radius measured, not estimated:** `dart run scripts/blast_radius_from_diff.dart`
   → `catastrophic`, forced by the content rule on SECURITY DEFINER in the migration.
-- **A full adversarial B-pass, recorded at `docs/reviews/<staging-hash>-review.md`** (the hash is not written
-  out here on purpose — it is the sha of the staged diff excluding `docs/reviews/`, so
-  naming it in a staged file would move it; the review carries `staged_against:`) —
+- **A full adversarial B-pass, recorded at `docs/reviews/47eaf8318774-review.md`.**
+  (This read `<staging-hash>` verbatim until 2026-08-20 — an unsubstituted placeholder, not a
+  deliberate omission, though the parenthetical below made it look like one. The hash CAN be
+  named once the review is committed; what moves it is staging the review while it is being
+  computed, and `docs/reviews/` is excluded from that computation precisely so it does not.
+  It moved twice here: once when the fixes for its own findings landed, once when the
+  pre-commit hook regenerated indexes mid-commit.) —
   6 findings (2 fixed in-commit and mutation-proven, 1 `blocked_on_user`, 3 accepted with
   rationale) plus 8 properties verified clean against live state or direct file reads.
 - **Gate 40 closure ledger** at `docs/audit/fob5-hold-telemetry.closure.yaml`: 11 findings,

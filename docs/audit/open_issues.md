@@ -3643,15 +3643,26 @@ Every corroborating artefact is absent:
 | grep `jrd_retention_daily\|cleanup_client_errors` | NOT REFERENCED ANYWHERE |
 | grep `retention` in `backups/applied_migrations.json` | 0 entries |
 
-Both cron jobs it created are **active right now**:
+⚠ **Corrected 2026-08-20: it created FOUR cron jobs, not two.** The original filing said two,
+inherited from a reviewer that had filtered on retention-shaped names; recovering the migration's
+actual statements and re-querying `cron.job` shows four, **all active**:
 
 ```
 jobid | jobname                       | schedule    | active
-   34 | client_errors_retention_daily | 25 4 * * *  | t
    33 | jrd_retention_daily           | 22 4 * * *  | t
+   34 | client_errors_retention_daily | 25 4 * * *  | t
+   35 | jrd_vacuum_daily              | 38 4 * * *  | t
+   36 | client_errors_vacuum_daily    | 41 4 * * *  | t
 ```
 
-`docs/operations/CRON_REGISTRY.md` lists neither.
+`docs/operations/CRON_REGISTRY.md` lists **none of the four**. The two extra are
+`VACUUM (ANALYZE)` jobs — not row-destructive, but equally unregistered and equally invisible to
+Gate 31.
+
+One thing the recovered SQL gets RIGHT, worth recording so the reconstruction does not "fix" it:
+both `cleanup_*` functions are `SECURITY DEFINER` and carry
+`REVOKE ALL ... FROM PUBLIC` **plus** `REVOKE ALL ... FROM anon, authenticated` and
+`GRANT EXECUTE ... TO postgres` — the exact grant hygiene migration 120 got wrong (a9d3f1).
 
 **The compounding half, which is the real finding.** Gate 31
 (`scripts/check_cron_registry.dart:31`) enforces registry parity by scanning
@@ -3785,3 +3796,42 @@ and the §4.12 review dispatch states which tree it is reading. Cheap. The alter
 reviewer that re-verifies every finding against `git show HEAD:` — is what both reviewers were
 forced to invent mid-flight, and it should not be an improvisation.
 
+
+
+---
+
+## OI-135 — 60 of 125 migration-ledger hashes do not match their files, and nothing recomputes them (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. The fix shape is settled (below); what it needs is a decision on whether to backfill the 60 or grandfather them by name.
+- **Verified**: 2026-08-20 — measured, not estimated. Recomputed sha256 for every entry in `backups/applied_migrations.json` against its `supabase/migrations/*.sql` file: **125 entries → 64 match, 60 mismatch, 1 non-hash sentinel (120b, deliberate)**.
+
+`backups/applied_migrations.json` records a `hash` per applied migration. Its documented purpose
+is drift auditing — "recompute hashes on drift", per `applied_migrations_parity_test.dart:36`.
+**Nothing recomputes them.** `check_applied_migrations_ledger.dart` requires the `hash` KEY to be
+present (`_requiredKeys`) and never looks at its value; no other gate reads it. So the field has
+been decorative since it was introduced, and has silently drifted on 48% of entries.
+
+**Found by the round-2 review of `claude/oi-pending-hold-weeks-1od97o`**, which correctly flagged
+migration 120's hash as stale — I had updated it in one commit and then edited the file again in
+the next, invalidating it. That instance is fixed. The finding only became interesting when the
+count was checked: 120 was not special, it was the 61st.
+
+**Why it drifts by construction:** the hash tracks the FILE, and migration files legitimately get
+edited after they are applied — corrected comments, added rollback blocks, clarified headers. Every
+such edit invalidates a hand-maintained hash, and nothing notices. A hash maintained by memory
+across a repo this size will always converge on wrong.
+
+**Fix shape:**
+1. A gate that recomputes sha256 for every ledger entry naming a real file and fails on mismatch.
+   It must skip entries with no file by design (120b's `unverifiable:no-artifact` sentinel) and
+   entries hand-applied outside the migration system (119).
+2. The 60 existing mismatches get **enumerated by name** as `grandfathered:` in that script — a
+   terminal exemption, exactly the precedent `check_gate_test_ledger.dart` set for its 84
+   pre-2026-08-10 gates, and explicitly NOT a deferral. Membership by name, not by date.
+3. Mutation-prove it per rule 24 and add its `gate_test_ledger.yaml` entry.
+
+**Deliberately NOT bundled into the batch that found it.** Adding a hard-failing gate with 60
+pre-existing violations to a merge-blocking step would be a ship-stop for a hygiene problem — the
+same error class as the 2026-07-25/26 required-status-checks incident. The one instance that batch
+caused is fixed in it; the class is filed here.

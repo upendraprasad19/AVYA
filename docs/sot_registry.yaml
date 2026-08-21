@@ -7418,7 +7418,9 @@ concepts:
 
       The metrics are LOWER BOUNDS by construction, and every consumer must say
       so: rolling-context summarize-and-deleted these rows nightly (fixed by
-      excluding channel='app_event' from all three of its reads — INERT until
+      excluding channel='app_event' from all FOUR of its reads (three PostgREST
+      chains plus the RPC-candidate recount added after the B-pass found the first
+      three were dead code on the live path) — INERT until
       that function is redeployed, which is not yet authorized), and
       AppEventsService drops a failed insert with no queue or retry, so a hold
       taken offline emits nothing at all.
