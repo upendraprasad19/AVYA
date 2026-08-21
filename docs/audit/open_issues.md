@@ -3615,3 +3615,163 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   gate on every push that can change them, and a failure must be reproducible by anyone
   rather than only by the master image's author.
 - **Blast-radius estimate**: `platform` (touches CI config and/or the hooks).
+
+---
+
+## OI-132 — a migration is LIVE in prod with no file, no manifest entry and no diagnose-doc — and its absence DEFEATS Gate 31 (P1)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. The reconstruction is mechanical; the judgement call is whether to also re-scope Gate 31, which is the half that actually matters.
+- **Verified**: 2026-08-20 — every claim below read from live `dedsavbjuwgarrhphgnl` or from the repo directly during the FOB-1/FOB-5 Hermes pass. Not inferred.
+
+Live `supabase_migrations.schema_migrations` holds `20260815155823 / log_table_retention`. Its
+stored statement is self-describing and destructive:
+
+```
+-- Destructive?: yes -- deletes ~29,044 run records and ~10,654 client_errors rows on the
+--                      first pass; rows are NOT recoverable
+-- Rollback strategy: inline -- reverse block in the repo file   <-- there is no repo file
+-- Linked diagnose-doc: c8e5b3                                   <-- does not exist
+```
+
+Every corroborating artefact is absent:
+
+| probe | result |
+|---|---|
+| `docs/diagnoses/` grep `c8e5b3` | NOT FOUND |
+| repo-wide grep `c8e5b3` (md/json/yaml/sql) | no output |
+| grep `jrd_retention_daily\|cleanup_client_errors` | NOT REFERENCED ANYWHERE |
+| grep `retention` in `backups/applied_migrations.json` | 0 entries |
+
+Both cron jobs it created are **active right now**:
+
+```
+jobid | jobname                       | schedule    | active
+   34 | client_errors_retention_daily | 25 4 * * *  | t
+   33 | jrd_retention_daily           | 22 4 * * *  | t
+```
+
+`docs/operations/CRON_REGISTRY.md` lists neither.
+
+**The compounding half, which is the real finding.** Gate 31
+(`scripts/check_cron_registry.dart:31`) enforces registry parity by scanning
+`supabase/migrations/*.sql` for `cron.schedule(...)` calls. Because this migration has **no
+file**, its two `cron.schedule` calls are invisible to the gate built to catch exactly this. The
+gate reports green while two undocumented destructive jobs run daily against prod. A missing file
+does not merely skip the gate — it defeats it by construction, and no amount of tightening the
+scan fixes that, because the scan's input is the thing that is missing.
+
+**Full live-vs-repo set difference** (115 live rows vs 124 `.sql` files) — live rows with no repo
+file: `add_gdpr_referral_community_tables`, `028b_fix_coach_signals_formulas`,
+`028c_robust_interval_extraction` (all three pre-existing and old),
+`revoke_anon_authenticated_...engagement` (= 120b, deliberate and documented), and this one.
+
+**Not caused by the FOB batch** — applied 2026-08-15, five days before branch
+`claude/oi-pending-hold-weeks-1od97o` was cut. Surfaced only because the L13 lens asked for the
+live-vs-manifest comparison.
+
+**Fix shape:** author `121_log_table_retention.sql` from the live statements, add its manifest
+entry and the `c8e5b3` diagnose-doc, register both cron jobs. Then the part worth arguing about:
+Gate 31 needs a source of truth that is not the migration files — a live `cron.job` enumeration
+against the registry would have caught this on day one, and is the same shape as the live-query
+allowlist gate OI-78 has been asking for since 2026-07-31.
+
+---
+
+## OI-133 — 92 analytics rows are already inside the LLM's retrievable memory; the fix stops new ones and does not remove them (P1)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical, but the cleanup is a DELETE against a production table that feeds the coach's memory, so it wants an explicit go and a dry-run count first.
+- **Verified**: 2026-08-20 — counts queried live during the Hermes pass; the two code paths read directly.
+
+`rolling-context` summarized `ai_coach_interactions` with no channel filter, so `app_event`
+analytics rows were embedded into `memory_embeddings` as `source_type='conversation'`. Live count
+at the time of writing: **92 of 598 rows (15.4%)**, with content shaped like:
+
+```
+"User: {event: phase_1_cycle_repeat_started}\nCoach: "
+```
+
+`rolling-context:269` fetched with no filter and `ai-proxy:884` concatenates retrieval output into
+the **SYSTEM prompt**, so this text reaches the model as though a user had said it.
+
+**Half-closed by commit `<this batch>`:** every one of rolling-context's reads on
+`ai_coach_interactions` now carries `.neq("channel", "app_event")`, pinned by
+`test/contracts/rolling_context_excludes_app_event_test.dart` (mutation-proven on five shapes,
+including a NEW unfiltered read added beside the filtered ones — the shape a plain grep misses).
+
+⚠ **The first version of this fix did not work in production, and the correction is the more
+useful record.** It filtered three PostgREST chains in the TypeScript and every artifact in the
+batch — the code comment, migration 120's header, the diagnose-doc, the closure YAML and this
+entry — asserted "all three reads now exclude app_event". The B-pass falsified it: rolling-context
+calls the RPC `get_users_with_message_count()` FIRST (`index.ts:143`) and reaches the manual
+queries only if that throws. That RPC (`010_add_indexes_idempotency_rpc.sql:76-83`) has no channel
+predicate, and its `where summarized = false` is a **permanent no-op** because nothing in the
+codebase ever writes `summarized = true`. Two of the three filters were therefore dead code on the
+live path.
+Nothing was mis-deleted — the per-user FETCH filter runs whichever path selected the user — but the
+threshold deciding *who gets processed* stayed as overcounted as before, and now that app_event
+rows are never deleted that count grows without bound: a user whose analytics volume alone crosses
+50 gets their whole history paged in nightly, then skipped.
+Fixed by re-counting the RPC's candidates with the exclusion before the expensive fetch, rather
+than adding a predicate to the RPC (that would be a migration apply needing its own §4.3 go).
+
+**Two things that remain, and neither is cosmetic:**
+
+1. **The fix is INERT until `rolling-context` is redeployed.** An Edge Function deploy needs its
+   own §4.3 authorization and has not been given. Until then the repo and the running function
+   disagree, which is OI-93's class.
+2. **The 92 existing rows are still retrievable.** Filtering the writer does not unwrite history.
+   They need identifying and deleting, with a dry-run count first.
+
+**Related but NOT fixed here, filed together because they share the single root cause — five
+consumers read this table and only one of them knows the channel taxonomy:** the restore path
+renders `app_event` rows as the user's own chat bubbles (the replay path filters, the render path
+does not), and `daily-snapshot` feeds them into the profile-fact-extraction prompt that its own
+comment calls the highest-consequence injection site. Neither has a consent gate and `metadata`
+is unscrubbed.
+
+**Root-cause note worth keeping:** the FOB-5 batch DERIVED the six-channel taxonomy (measuring
+116 rows across six channels to fix a 5.3x overcount) and then applied it to exactly one
+consumer, leaving five others reading unfiltered. Deriving a taxonomy and not sweeping its
+consumers is the writer/reader drift class arriving from the reader side.
+
+---
+
+## OI-134 — mutation-proving runs in the shared worktree, where §4.13's guarantee does not reach (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing. Small and self-contained.
+- **Verified**: 2026-08-20 — observed live, twice, by two independent reviewers in the same session.
+
+§4.13 makes cross-session file-mixing structurally impossible by giving each session its own
+index. Mutation-proving defeats that from a direction the rule does not cover: it deliberately
+edits tracked files **in place** and restores them seconds later, so any concurrent reader sees a
+tree that matches neither HEAD nor any commit.
+
+Both happened during the FOB-1/FOB-5 Hermes pass:
+
+- The L1 reviewer watched `workout_schedule_write_service.dart:338` change from
+  `hold_week_started` to `hold_week_begun`, then saw a second `log()` call appear at `:238`, then
+  saw migration `120:101` flip one of its three predicates. It reverted one edit before
+  recognising the pattern, then stopped touching the tree and re-verified every finding against
+  `git show HEAD:`.
+- The L9/L13 reviewer caught the same two mutations and states plainly that had it sampled once
+  and reported, it would have filed a **phantom P0 against clean code**.
+
+Both landed on the same framing independently: *a mutation run in the primary worktree while a
+reviewer reads it is the §4.13 shared-index problem in a new costume.*
+
+The dispatch was the author's, not the reviewers' — mutation agents and read-only reviewers were
+pointed at one tree at the same time.
+
+**Silver lining worth recording:** because the reviewers caught the mutations in flight and
+identified them as the author's own, the mutation run was **independently corroborated** rather
+than self-attested — a stronger result than rule 24's ledger trust model normally yields. That is
+an argument for making this observable on purpose, not for pretending it did not happen.
+
+**Fix shape:** mutation proving runs in a dedicated worktree (`new-worktree.sh mutate-<slug>`),
+and the §4.12 review dispatch states which tree it is reading. Cheap. The alternative — a
+reviewer that re-verifies every finding against `git show HEAD:` — is what both reviewers were
+forced to invent mid-flight, and it should not be an improvisation.
+

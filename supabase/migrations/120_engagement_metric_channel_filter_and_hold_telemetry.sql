@@ -9,7 +9,10 @@
 -- TWO defects in one function, one of them LIVE for the founder dashboard today.
 --
 -- (1) ai_messages_today had NO channel predicate. AppEventsService
---     (lib/core/services/app_events_service.dart:28,44) writes analytics rows
+--     (lib/core/services/app_events_service.dart:28 channel, :55-70 insert;
+--     these two citations read :28,44 as first written and were stale ON
+--     ARRIVAL — the same commit added the 16-line debugCapture seam to that
+--     file, shifting them. Hermes P1-F5) writes analytics rows
 --     into ai_coach_interactions with channel='app_event', so every UI event
 --     counted as an "AI message". Measured live 2026-08-20: 116 rows all-time,
 --     of which only 22 are real coach turns — a 5.3x overcount.
@@ -43,17 +46,50 @@
 --     They ride on founder_metrics_engagement() DELIBERATELY, rather than a new
 --     founder_metrics_holds() RPC: admin-dashboard-data/index.ts:255 spreads
 --     this function's row wholesale (`...(engagementRes.data ?? {})`), so new
---     COLUMNS reach the dashboard with NO Edge Function redeploy, while a new
+--     COLUMNS reach the EDGE FUNCTION RESPONSE with NO redeploy, while a new
 --     RPC would need one (its own §4.3 authorization) and would otherwise sit
 --     dormant — the exact "shipped but nothing calls it" failure OI-101 records.
 --
+--     ⚠ CORRECTED 2026-08-20 (Hermes P1-D). As first written this comment said
+--     "reach the dashboard", and the batch claimed the consumer was "REAL, not
+--     aspirational". Both were true only as far as the HTTP boundary.
+--     AdminCurrentMetrics.fromJson (admin_dashboard_data.dart) is a NAMED-KEY
+--     parser and engagement_tab renders a FIXED tile list, so a column with no
+--     Dart field is dropped at parse and painted nowhere. Avoiding the RPC
+--     redeploy avoided OI-101 one layer down and reproduced it one layer up.
+--     The three fields + three tiles now exist; pinned by
+--     test/contracts/admin_hold_telemetry_renders_behavioral_test.dart, which
+--     PUMPS the widget rather than asserting the parse.
+--
 --     The rows are matched on user_message LIKE '%hold_week_started%' because
 --     AppEventsService serializes `{event: ..., ...metadata}` with Dart's
---     Map.toString() into user_message (app_events_service.dart:39-52). Not
+--     Map.toString() into user_message (app_events_service.dart:55-70, not the
+--     :39-52 this originally cited — see the stale-citation note above). Not
 --     elegant; it is the existing storage contract and this migration does not
 --     change it.
 --
 --     Expect 0 until enable_hold_weeks flips — that is correct, not a bug.
+--
+--     ⚠ These are LOWER BOUNDS, not counts (Hermes P1-E, 2026-08-20). Two
+--     independent leaks, both outside this file:
+--       * rolling-context summarize-and-deleted from ai_coach_interactions with
+--         no channel filter, so the rows counted here were being pruned nightly
+--         (91 of 92 comparable rows already gone when measured). Fixed at
+--         rolling-context/index.ts by excluding channel='app_event' from all
+--         FOUR reads — the per-user fetch, both fallback candidate queries, and
+--         a re-count of the RPC path's candidates. That last one is the load-
+--         bearing half and was MISSING at first: rolling-context calls
+--         get_users_with_message_count() FIRST and only falls back to the manual
+--         queries on error, and that RPC has no channel predicate (its
+--         `where summarized = false` is a permanent no-op — nothing ever writes
+--         summarized = true), so filtering only the manual branch changed nothing
+--         in production. Caught by the B-pass after every artifact in the batch
+--         had already claimed "all three reads now exclude app_event".
+--         That fix is INERT until the function is redeployed,
+--         which needs its own §4.3 authorization and has NOT been given.
+--       * AppEventsService drops a failed insert with no queue and no retry, so
+--         a hold taken offline emits nothing, ever. Not fixed here.
+--     The dashboard tile is labelled "min, all-time" for this reason.
 -- ─────────────────────────────────────────────────────────────────────
 
 -- Return type gains three columns, so CREATE OR REPLACE alone raises

@@ -217,6 +217,28 @@ findings:
       assertion so it cannot silently pass by matching nothing — the Gate-44
       shape rule 24 exists to make impossible.
 
+      ⚠ CORRECTED 2026-08-20 (Hermes P1-C). The paragraph above is accurate but
+      was over-read as "this guard holds". It proved the guard catches a DELETED
+      revoke. Two independent reviewers then found three mutations it did NOT
+      catch, all of which reset the ACL and ship an anon-executable SECURITY
+      DEFINER function on replay:
+        * the revoke HOISTED above the DROP+CREATE (position, not presence —
+          default privileges reapply at CREATE, so an earlier revoke is
+          discarded);
+        * `drop function if exists public.fn;` with no arg-list parens;
+        * `create or replace function fn()` unqualified, resolving to public
+          via search_path.
+      A fourth mutation went the other way: `from authenticated, anon` —
+      identical SQL, identical effect — falsely REDDENED, because the role list
+      was matched as an ordered pair.
+      The `checked > 0` guard did not help and could not: migration 120 keeps
+      the count above zero forever, so a future migration written either way is
+      silently unscanned while the assertion still passes.
+      All four are fixed and re-mutated in commit 665790f. The lesson kept: a
+      mutation set built only from "delete the protection" proves the guard sees
+      ABSENCE, and says nothing about whether it sees a REORDERING or a
+      RESPELLING of the same protection.
+
   - id: FOB-5-L
     title: "nothing connected the Dart event name to the SQL predicate that reads it (cross-language writer/reader drift)"
     terminal_state: closed_in_commit

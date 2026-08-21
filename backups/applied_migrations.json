@@ -808,19 +808,19 @@
   {
     "migration": "120",
     "applied_at": "2026-08-20T21:48:40+05:30",
-    "hash": "sha256:e9190aef2008502df4ce2ac6b26c4939c9531741b0fd6ed8f805084de708d397",
+    "hash": "sha256:6a2857889f0e9d428e8404bb42ba044326e8f930b76669e4a7b392d5d51eedc6",
     "applier": "claude-via-mcp",
     "diagnose": "c7a3b9",
     "slug": "engagement_metric_channel_filter_and_hold_telemetry",
-    "note": "Applied in TWO steps, deliberately recorded as two. Step 1 (the DROP + CREATE) shipped the function with acl {postgres=X,anon=X,authenticated=X,service_role=X}: CREATE OR REPLACE preserves an ACL but DROP+CREATE does not, and Supabase's default privileges on schema public re-grant EXECUTE to anon+authenticated, which `revoke all ... from public` (inherited verbatim from migration 101) does NOT remove. Step 2 revoked them. Final acl verified {postgres=X,service_role=X}, matching both sibling metric functions; security advisor clean. The .sql file now carries the extra revoke, so a replay is correct in ONE step."
+    "note": "Applied in TWO steps, deliberately recorded as two. Step 1 (the DROP + CREATE) shipped the function with acl {postgres=X,anon=X,authenticated=X,service_role=X}: CREATE OR REPLACE preserves an ACL but DROP+CREATE does not, and Supabase's default privileges on schema public re-grant EXECUTE to anon+authenticated, which `revoke all ... from public` (inherited verbatim from migration 101) does NOT remove. Step 2 revoked them. Final acl verified {postgres=X,service_role=X}, matching both sibling metric functions; security advisor clean. The .sql file now carries the extra revoke, so a replay is correct in ONE step. HASH UPDATED 2026-08-20 (was sha256:e9190aef2008...): the Hermes pass found the header claimed these columns 'reach the dashboard' when they reached only the Edge Function response, and that two writer citations were stale on arrival. Those corrections are COMMENT-ONLY -- every executable statement is byte-identical to what was applied, and the live pg_get_functiondef body still matches. The hash tracks the FILE, so it moves when comments move; that is the convention, not drift."
   },
   {
     "migration": "120b",
     "applied_at": "2026-08-20T21:52:00+05:30",
-    "hash": "sha256:4f9f4c2529366ff494b9907c9b0f52f8ee18560e0d3bf76d32bcbc8503e98c84",
+    "hash": "unverifiable:no-artifact",
     "applier": "claude-via-mcp",
     "diagnose": "c7a3b9",
     "slug": "revoke_anon_authenticated_from_founder_metrics_engagement",
-    "note": "Grant-only follow-up to 120, applied minutes later. NOT a separate .sql file: its statement is folded into 120's file so a replay needs one apply, but it is recorded here because it WAS a distinct live apply and the manifest is a record of what happened, not of what the file now says."
+    "note": "Grant-only follow-up to 120, applied minutes later. NOT a separate .sql file: its statement is folded into 120's file so a replay needs one apply, but it is recorded here because it WAS a distinct live apply and the manifest is a record of what happened, not of what the file now says. HASH CORRECTED 2026-08-20 (Hermes L9-F4): the value previously recorded here (sha256:4f9f4c2529...) matched NO artifact -- not this repo (120b has no file by design) and not the live statement text. Every sibling entry's hash is the sha256 of its .sql file, so a hash on a fileless entry is meaningless by construction and a future drift audit would have chased it. Replaced with an explicit sentinel: the key is required by check_applied_migrations_ledger.dart, so it cannot simply be dropped. Replay fidelity for 120b is covered by 120's file, whose hash IS verifiable."
   }
 ]

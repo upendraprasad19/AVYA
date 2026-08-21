@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**58 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**61 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -66,3 +66,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-128 | `retire_worktree`'s regenerable list omits test-generated output, so any… | none. Small and self-contained. | 2026-08-16 — hit live while retiring `open-issues-triage-976962`. The tool returned | [:3383](open_issues.md#L3383) |
 | OI-130 | concurrent sessions have no way to see what another is working on, so the… | nothing technical, but the cheap fixes are all partial and the complete ones are | 2026-08-16 — three measured instances, all within ~72 hours, all discovered by | [:3523](open_issues.md#L3523) |
 | OI-131 | the golden tests are excluded from every gate on every platform, so they… | nothing technical — but it needs a decision on WHICH of the two real fixes to | 2026-08-20 — measured while fixing `b2e9f4`, not inferred. | [:3580](open_issues.md#L3580) |
+| OI-132 | a migration is LIVE in prod with no file, no manifest entry and no… | nothing technical. The reconstruction is mechanical; the judgement call is whether to also re-scope Gate 31, which is the half that actually matters. | 2026-08-20 — every claim below read from live `dedsavbjuwgarrhphgnl` or from the repo directly during the FOB-1/FOB-5 Hermes pass. Not inferred. | [:3621](open_issues.md#L3621) |
+| OI-133 | 92 analytics rows are already inside the LLM's retrievable memory; the fix… | nothing technical, but the cleanup is a DELETE against a production table that feeds the coach's memory, so it wants an explicit go and a dry-run count first. | 2026-08-20 — counts queried live during the Hermes pass; the two code paths read directly. | [:3681](open_issues.md#L3681) |
+| OI-134 | mutation-proving runs in the shared worktree, where §4.13's guarantee does… | nothing. Small and self-contained. | 2026-08-20 — observed live, twice, by two independent reviewers in the same session. | [:3741](open_issues.md#L3741) |

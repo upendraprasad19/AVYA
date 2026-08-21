@@ -7249,7 +7249,7 @@ concepts:
 
   - concept: admin_dashboard_metrics_snapshot
     domain: cross_domain
-    behavioral_test_path: test/contracts/admin_dashboard_data_parsing_test.dart
+    behavioral_test_path: test/contracts/admin_hold_telemetry_renders_behavioral_test.dart
     description: |
       Live current-state metrics + daily-snapshot trend data, assembled by
       the `admin-dashboard-data` Edge Function and rendered across the 4
@@ -7316,8 +7316,32 @@ concepts:
         line_range: 1-114
         method: EngagementTab.build
         semantic: aggregated
-        fields_read: [current.workoutsLoggedToday, current.aiMessagesToday, current.streakMaintainedCurrentWeek, current.activeLast7d, trend.workoutsLoggedToday, trend.foodLogsToday, trend.aiMessagesToday, trend.streakMaintainedCurrentWeek]
-        notes: current.* tiles are LIVE (Hermes L1-F1 fix — admin-dashboard-data merges founder_metrics_engagement into `current`); trend.* feed the 30d sparklines
+        fields_read: [current.workoutsLoggedToday, current.aiMessagesToday, current.streakMaintainedCurrentWeek, current.activeLast7d, current.holdsStartedToday, current.holdsStarted7d, current.holdersTotal, trend.workoutsLoggedToday, trend.foodLogsToday, trend.aiMessagesToday, trend.streakMaintainedCurrentWeek]
+        notes: |
+          current.* tiles are LIVE (Hermes L1-F1 fix — admin-dashboard-data merges
+          founder_metrics_engagement into `current`); trend.* feed the 30d sparklines.
+
+          TWO CORRECTIONS 2026-08-20 (Hermes P1-4 / P1-D), both against this
+          entry's own `reader_manifest_complete: true`:
+
+          1. current.aiMessagesToday CHANGED MEANING under migration 120. It had
+             no channel predicate and counted every ai_coach_interactions row —
+             analytics, food AI, ceremonies, stuck rows — a measured 5.3x
+             overcount (116 all-time -> 22). It now counts real coach turns only:
+             channel in ('app','chat','in_app_orphan') AND both message and
+             response non-empty, mirroring _coachChatChannels
+             (coach_interaction_repository.dart:282). Any founder reading a
+             pre-2026-08-20 figure is reading a different metric.
+          2. The three hold_* columns migration 120 added were dropped at parse
+             for a day: AdminCurrentMetrics.fromJson is a NAMED-KEY parser and
+             this tab renders a FIXED tile list, so a column with no Dart field
+             painted nowhere. Fields + tiles now exist.
+
+          holders* are LOWER BOUNDS, not counts, and the tile says so: the rows
+          they count were being pruned nightly by rolling-context (fixed, but
+          INERT until that function is redeployed — not yet authorized), and an
+          offline hold never emits because AppEventsService drops failed inserts
+          with no queue.
       - file: lib/features/admin/widgets/revenue_tab.dart
         line_range: 1-174
         method: RevenueTab.build
@@ -7365,6 +7389,98 @@ concepts:
       as promote-community-item / diagnose 7ad0c5) - the client's kIsWeb
       router guard (lib/core/router/app_router.dart) and any client-side
       "is this the founder" check are UX only, never the actual gate.
+
+  - concept: hold_week_telemetry
+    domain: cross_domain
+    behavioral_test_path: test/contracts/hold_telemetry_writer_reader_parity_test.dart
+    description: |
+      The hold_week_started event: a Dart writer, a Postgres reader, and no
+      shared type between them. Registered because it is a CROSS-LANGUAGE
+      writer/reader contract with no compiler on the seam — the exact shape
+      §4.1 calls the default suspect class — and because until 2026-08-20 it
+      had a good parity test that no `concept:` pointed at, so nothing led a
+      maintainer to it (Hermes P1-3).
+
+      The coupling is a STRING match, and deliberately so rather than as an
+      oversight worth "fixing": AppEventsService serializes
+      `{event: ..., ...metadata}` through Dart's Map.toString() into
+      `user_message`, and the SQL matches `like '%hold_week_started%'`. That is
+      the pre-existing storage contract for every app_event; migration 120 reads
+      it rather than changing it. Safe because 'event' is inserted FIRST into
+      the literal map, so the name occupies the opening ~26 chars and can never
+      fall outside the 500-char truncation — and a metadata key named `event`
+      would overwrite in place, not reorder.
+
+      Rename hazard: renaming the Dart literal alone silently zeroes all three
+      metrics. The parity test reads the literal off disk at runtime and asserts
+      the SQL contains it, and pins the predicate COUNT at 3, so a single-column
+      rename reddens too. Both directions are mutation-proven.
+
+      The metrics are LOWER BOUNDS by construction, and every consumer must say
+      so: rolling-context summarize-and-deleted these rows nightly (fixed by
+      excluding channel='app_event' from all three of its reads — INERT until
+      that function is redeployed, which is not yet authorized), and
+      AppEventsService drops a failed insert with no queue or retry, so a hold
+      taken offline emits nothing at all.
+
+      NOT a security boundary: ai_coach_interactions.channel has no CHECK and
+      RLS constrains only user_id, so an authenticated user can forge rows.
+      holders_total is count(distinct user_id) so forgery adds one per account;
+      holds_started_* are unbounded per user. Founder-facing metric only — it
+      gates nothing and moves no money (Hermes L1-F5 / L23-F4).
+    writers:
+      - file: lib/core/services/workout_schedule_write_service.dart
+        line_range: 236-368
+        method: holdWeek
+        notes: |
+          Emitted at the LAST statement of the successful path, so every earlier
+          exit (no-plan early return, any throw) skips it and the event cannot
+          claim a hold that was not materialized. Wrapped in try/catch: `log`
+          not throwing is a property of a different file that nothing pins, and
+          a sync throw here would escape AFTER the hold is committed to Hive,
+          surfacing a materialized hold to the caller as a failure.
+      - file: lib/core/services/app_events_service.dart
+        line_range: 51-82
+        method: _logAsync
+        notes: |
+          Writes channel='app_event' with the serialized payload in user_message
+          and ai_response=''. Fire-and-forget: never awaited, failures dropped
+          silently. That is why the metric is a floor.
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/migrations/120_engagement_metric_channel_filter_and_hold_telemetry.sql
+        line_range: 92-138
+        method: founder_metrics_engagement
+        semantic: aggregated
+        fields_read: [channel, user_message, user_id, created_at]
+        notes: |
+          THREE predicates — holds_started_today (IST midnight), holds_started_7d
+          (rolling 168h, matching the 093/101 house convention), holders_total
+          (all-time distinct users). The parity test pins the count at 3.
+      - file: supabase/functions/admin-dashboard-data/index.ts
+        line_range: 130-258
+        method: handler
+        semantic: pass-through
+        fields_read: [holds_started_today, holds_started_7d, holders_total]
+        notes: spreads the RPC row wholesale, so new COLUMNS need no redeploy
+      - file: lib/features/admin/models/admin_dashboard_data.dart
+        line_range: 118-180
+        method: AdminCurrentMetrics.fromJson
+        semantic: pass-through
+        fields_read: [holds_started_today, holds_started_7d, holders_total]
+        notes: |
+          NAMED-KEY parser — this is the hop FOB-5 originally missed. A column
+          with no field here is dropped silently, which is why "the EF spreads it"
+          was not sufficient for the columns to reach a human.
+      - file: lib/features/admin/widgets/engagement_tab.dart
+        line_range: 7-95
+        method: EngagementTab.build
+        semantic: aggregated
+        fields_read: [current.holdsStartedToday, current.holdsStarted7d, current.holdersTotal]
+        notes: three tiles; the holders tile is labelled "min, all-time" because the number is a floor
+    regression_test: test/contracts/hold_telemetry_writer_reader_parity_test.dart
+    hive:
+      box: null
 
   - concept: detraining_decay
     domain: workout
