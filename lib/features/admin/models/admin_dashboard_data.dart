@@ -107,6 +107,25 @@ class AdminCurrentMetrics {
   final int foodLogsToday;
   final int aiMessagesToday;
   final int streakMaintainedCurrentWeek;
+  // Hold-week telemetry (founder_metrics_engagement, migration 120 / FOB-5).
+  //
+  // These MUST be declared here, not merely returned by the RPC. The Edge
+  // Function spreads the RPC row wholesale (admin-dashboard-data/index.ts:255),
+  // which is why migration 120 needed no redeploy — but this class is a
+  // NAMED-KEY parser, so a column with no field here is silently dropped at
+  // parse and renders nowhere. FOB-5 shipped in exactly that state and its
+  // own claim ("the consumer is REAL, not aspirational") was true only to the
+  // HTTP boundary (Hermes P1-D).
+  //
+  // holdersTotal is a LOWER BOUND, not a count: rolling-context's nightly
+  // summarize-and-delete prunes the ai_coach_interactions rows these are
+  // counted over (91 of 92 comparable rows already gone when measured
+  // 2026-08-20), and an offline hold emits nothing at all because
+  // AppEventsService drops failed inserts with no queue. The tile label says
+  // so rather than implying a census.
+  final int holdsStartedToday;
+  final int holdsStarted7d;
+  final int holdersTotal;
   // Ops (founder_metrics_ops)
   final int clientErrorsToday;
   final int clientErrors7d;
@@ -127,6 +146,9 @@ class AdminCurrentMetrics {
     required this.foodLogsToday,
     required this.aiMessagesToday,
     required this.streakMaintainedCurrentWeek,
+    required this.holdsStartedToday,
+    required this.holdsStarted7d,
+    required this.holdersTotal,
     required this.clientErrorsToday,
     required this.clientErrors7d,
     required this.openAlertsCount,
@@ -148,6 +170,9 @@ class AdminCurrentMetrics {
       foodLogsToday: _int(json['food_logs_today']),
       aiMessagesToday: _int(json['ai_messages_today']),
       streakMaintainedCurrentWeek: _int(json['streak_maintained_current_week']),
+      holdsStartedToday: _int(json['holds_started_today']),
+      holdsStarted7d: _int(json['holds_started_7d']),
+      holdersTotal: _int(json['holders_total']),
       clientErrorsToday: _int(json['client_errors_today']),
       clientErrors7d: _int(json['client_errors_7d']),
       openAlertsCount: _int(json['open_alerts_count']),

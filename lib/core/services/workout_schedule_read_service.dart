@@ -94,6 +94,35 @@ class HoldWeekInfo {
   });
 }
 
+/// The **honest week identity** for today — the one answer every surface that
+/// prints a week counter must ask for.
+///
+/// Exactly one of [weekInPhase] / [holdOrdinal] is non-null. A hold week sits
+/// OUTSIDE the phase's four weeks, so there is no honest "WK n OF 4" for it:
+/// [WorkoutScheduleReadService.getCurrentWeekNumber] clamps to `[1,4]` and a
+/// hold starts at `plan_start + 28`, so it returns **4 for every hold at every
+/// ordinal, forever** (diagnose c8b3f2 D1). The rule the shipped Train surfaces
+/// already chose — and which this type carries to the rest of the app (FOB-1,
+/// OI-60) — is: **a hold suppresses the week number; Hn is the identity.**
+///
+/// Deliberately NOT a projected number. Do not add a `4 + ordinal` getter: that
+/// manufactures the exact value the UI ruled dishonest, and it demotes a
+/// phase-2 holder from program week 8 to 5. A caller that genuinely needs a
+/// program week for a NON-hold day uses
+/// [WorkoutScheduleReadService.programWeekFor] (diagnose c9f4a2).
+class WeekIdentity {
+  /// Week within the current phase (1..4). Null while holding.
+  final int? weekInPhase;
+
+  /// 1-based hold number — H1, H2, H3… Null when not holding.
+  final int? holdOrdinal;
+
+  const WeekIdentity.week(int this.weekInPhase) : holdOrdinal = null;
+  const WeekIdentity.hold(int this.holdOrdinal) : weekInPhase = null;
+
+  bool get isHolding => holdOrdinal != null;
+}
+
 /// Read + plan-generation orchestrator portion of the former
 /// `WorkoutScheduleService`. See file-level doc-comment for the split rationale.
 class WorkoutScheduleReadService {
@@ -846,6 +875,42 @@ class WorkoutScheduleReadService {
               .any((d) => getScheduleForDate(d)?['status'] == 'completed'),
         ),
     ];
+  }
+
+  /// [holdWeeks] **gated on `enable_hold_weeks`** — the ONE place the hold READ
+  /// path consults the flag.
+  ///
+  /// [holdWeeks] and [holdOrdinalForDate] stay raw row readers so tests can
+  /// exercise the row contract directly, but every PRODUCTION consumer goes
+  /// through this pair instead, so the flag empties the whole read surface from
+  /// a single point. `holdStatusProvider` and [weekIdentity] both delegate here
+  /// rather than each restating the check — two independently-maintained copies
+  /// of one gate is the writer/reader drift class CLAUDE.md §4.1 names as the
+  /// default suspect.
+  List<HoldWeekInfo> activeHoldWeeks() =>
+      PlanEngineFlags.holdWeeksEnabled ? holdWeeks() : const [];
+
+  /// [holdOrdinalForDate] gated on `enable_hold_weeks`. Null whenever the flag
+  /// is OFF, whatever `is_hold` rows exist on disk.
+  int? activeHoldOrdinalFor(DateTime date) =>
+      PlanEngineFlags.holdWeeksEnabled ? holdOrdinalForDate(date) : null;
+
+  /// The honest week identity for TODAY — see [WeekIdentity].
+  ///
+  /// Returns [WeekIdentity.hold] only when today is a live hold day AND the
+  /// flag is ON; otherwise the clamped week-in-phase, byte-identical to what
+  /// every caller printed before hold weeks existed. That flag-OFF equality is
+  /// the ship-dark property the §4.12.4 review tier rests on, and it is pinned
+  /// by the flag-OFF group in
+  /// `test/contracts/hold_week_identity_behavioral_test.dart`.
+  ///
+  /// Reads `nowWall()` (not `DateTime.now()`) so the dev time-travel / year-sim
+  /// seam `holdWeek()` writes against also drives what "today" means here.
+  WeekIdentity weekIdentity() {
+    final ordinal = activeHoldOrdinalFor(nowWall());
+    return ordinal == null
+        ? WeekIdentity.week(getCurrentWeekNumber())
+        : WeekIdentity.hold(ordinal);
   }
 
   /// Completed vs. scheduled workout days within hold week [ordinal] — the

@@ -19,6 +19,7 @@
 
 import 'dart:async';
 
+import 'app_events_service.dart';
 import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'migrated_key.dart';
@@ -304,6 +305,42 @@ class WorkoutScheduleWriteService {
 
       final newEnd = rollStart.add(const Duration(days: 6));
       await MigratedKey.write(_planEndKey, newEnd.toIso8601String());
+
+      // FOB-5 (OI-60): holds were UNOBSERVABLE. The five phase_1_day_29_*
+      // events have zero consumers repo-wide, so holds-taken / hold->convert /
+      // hold->churn were all unmeasurable — and the free-tier retention thesis
+      // rests on this mechanic.
+      //
+      // Its consumer is REAL, not aspirational: migration 120 adds
+      // holds_started_today / holds_started_7d / holders_total to
+      // founder_metrics_engagement(), and admin-dashboard-data/index.ts:255
+      // spreads that row wholesale, so these reach the founder dashboard with
+      // NO Edge Function redeploy. An event with no consumer is what FOB-5
+      // filed in the first place.
+      //
+      // Placed HERE, at the last statement of the successful path, rather than
+      // after the durability push below: every earlier exit (the no-plan early
+      // return, any throw) skips it, so the event cannot claim a hold that was
+      // not materialized. A later push failure does not falsify it either —
+      // the hold IS committed locally (offline-first) at this point.
+      //
+      // Fire-and-forget by construction: AppEventsService.log never awaits and
+      // drops a failed insert, so telemetry adds no await inside the mutex.
+      //
+      // The try/catch is NOT redundant belt-and-braces. `log` not throwing is a
+      // property of a DIFFERENT file (app_events_service.dart) that nothing
+      // pins, and this call sits inside the try whose `finally` only clears the
+      // mutex — a sync throw here would propagate out of holdWeek AFTER the
+      // hold is committed to Hive, skipping the durability push below and
+      // surfacing a materialized hold to the caller as a failure. Three lines
+      // make that impossible locally instead of assuming it remotely.
+      try {
+        AppEventsService.instance.log('hold_week_started', metadata: {
+          'ordinal': n,
+        });
+      } catch (_) {
+        // Telemetry must never be able to fail a committed hold.
+      }
     } finally {
       _holdInFlight = false;
     }

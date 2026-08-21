@@ -224,6 +224,90 @@ Per CLAUDE.md rules 21 + 22:
 - **Class rule (NEW 2026-05-24):** Any source-grep contract test added today MUST also have a paired `behavioral_test_path:` in `docs/sot_registry.yaml`. Adding 1 source-grep test creates 1 future post-refactor recovery touch-point. The discipline asymmetry favours behavioural tests.
 - **Prior incidents:** APK Test #16.2 +31 / 2026-05-24 / closes-diagnose `2b705b` — 53 stale source-grep tests caught zero actual bugs (all false positives), blocked pre-commit hook for hours; recovery cost ~3 hours of mechanical setUpAll re-pointing across 21 test files + `docs/sot_registry.yaml` bulk fix (49 stale `file:line_range` entries). One real Edge Function bug (proactive-coach-promotion `user_profile.full_name` query) surfaced as a side-effect of Gate 18 firing during the recovery — validating the gate-as-continuous-audit model. See `project_apk_test_16_2_recovery_2b705b.md` + `feedback_source_grep_false_confidence.md`.
 
+### 2.36 A `DROP` + `CREATE` on a SECURITY DEFINER function RESETS its ACL — `CREATE OR REPLACE` does not
+
+- **Trigger:** any migration that changes a function's RETURN TYPE. Postgres raises 42P13 on
+  `CREATE OR REPLACE` when the `returns table (...)` list changes, so you are FORCED to drop —
+  and the drop silently discards the grants.
+- **Why the obvious fix is not enough:** Supabase's DEFAULT PRIVILEGES on schema `public`
+  re-grant `EXECUTE` to `anon` and `authenticated` at CREATE time. `revoke all ... from public`
+  does NOT remove them — PUBLIC and an explicit role grant are different things — so copying the
+  grant block from a neighbouring migration leaves the function anon-executable.
+  There are **two** `pg_default_acl` entries for functions in `public` (grantors `postgres` and
+  `supabase_admin`); check both, not just the one you expect.
+- **ORDER IS LOAD-BEARING.** The revoke must come AFTER the last create/drop in the file. A
+  revoke hoisted above them is discarded by the later CREATE, and the file still *looks* correct.
+- **Live instance:** 2026-08-20, `founder_metrics_engagement` shipped
+  `{postgres=X,anon=X,authenticated=X,service_role=X}` to prod for ~3m12s while its two siblings
+  carried `{postgres=X,service_role=X}`. Caught by a tier-8 grant check, not by any gate.
+- **Verify, always, after ANY replay:**
+  ```sql
+  select has_function_privilege('anon','public.fn()','execute');           -- expect false
+  select has_function_privilege('authenticated','public.fn()','execute');  -- expect false
+  ```
+  Better: ASSUME the role and execute. A catalog read tells you what the ACL says; role
+  assumption tells you what Postgres will actually do.
+- **Regression test:** `test/contracts/admin_metrics_functions_role_revoke_test.dart`
+
+### 2.37 A positive grep cannot see a defect in an ARGUMENT
+
+- **Trigger:** any "surface wiring" test that asserts a file CONTAINS `someProvider`,
+  `someFormatter(`, or a call name.
+- **The hole:** those tokens survive the defect. `ref.read(weekIdentityProvider).holdOrdinal`
+  stays literally present while the call site passes `null`; the grep passes, the feature is
+  broken. Measured 2026-08-20: mutating one provider to send `null` left a **4757-test suite
+  fully green**, and reverting three more surfaces together also stayed green.
+- **Why it recurs:** it is the same blindness as an inverted ternary (§2.31 class), just one
+  layer up. Fixing it at the formatter layer and leaving the call-site layer untouched is the
+  natural — and wrong — stopping point.
+- **Fix:** assert through a real `ProviderContainer` / pumped widget. Where a render genuinely
+  cannot be pumped, assert the FORBIDDEN token NEGATIVELY (this file must not read `['week']`)
+  and **strip comments first** — an explanatory comment naming the token satisfies a raw-text
+  match and silently neuters the check.
+- **Regression test:** `test/contracts/hold_week_identity_behavioral_test.dart`
+
+### 2.38 Verify one layer FURTHER than the layer you are looking at
+
+- **Trigger:** "the RPC returns it", "the endpoint responds 200", "the EF spreads the row", "the
+  ACL is correct in the catalog".
+- **The hole:** each of those is true at its own layer and says nothing about the next one. Three
+  instances in ONE batch, 2026-08-20:
+  - columns confirmed live in the RPC response — but `fromJson` is a NAMED-KEY parser, so they
+    were dropped at parse and rendered nowhere;
+  - an ACL verified live — but the test guarding it had never been mutated, and three
+    ACL-resetting spellings passed it;
+  - formatters given behavioural tests — but the arguments passed to them had none.
+- **Rule of thumb:** name the consumer AFTER the one you just verified, and check it too. If the
+  claim is "X reaches the user", the last layer is a rendered widget or a pumped assertion — not
+  an HTTP body.
+
+### 2.39 A mutation set built only from "delete the protection" is half a proof
+
+- **Trigger:** a `mutation_proven: true` ledger entry whose evidence is "deleting the check
+  reddens N tests".
+- **The hole:** that proves the guard sees ABSENCE. It says nothing about whether it sees a
+  REORDERING or a RESPELLING of the same protection — and those ship the identical vulnerability.
+  Live 2026-08-20: a revoke-presence guard passed a hoisted revoke, a parenless `drop function
+  ... public.fn;` and an unqualified `create or replace function fn()`, while falsely reddening
+  `from authenticated, anon` (identical, safe SQL).
+- **A `checked > 0` counter does not save you** — an existing compliant file keeps the count
+  above zero forever while a new non-compliant one goes unscanned.
+- **Minimum mutation set for a guard:** delete it · reorder it · respell it (each syntax the DB
+  or language actually accepts) · add a NEW unguarded instance beside the guarded one · demote it
+  to a comment. The last two are the ones greps fail.
+
+### 2.40 Mutation-proving runs in the SHARED worktree, where §4.13's guarantee does not reach
+
+- **Trigger:** dispatching mutation agents and read-only reviewers at the same time.
+- **The hole:** mutation proving edits tracked files in place and restores them seconds later, so
+  a concurrent reader sees a tree matching neither HEAD nor any commit. Two reviewers hit this on
+  2026-08-20; one states it would have filed a **phantom P0 against clean code** had it sampled
+  once and reported.
+- **Fix:** run mutations in a dedicated worktree (`sh scripts/new-worktree.sh mutate-<slug>`), and
+  state in the review dispatch which tree is being read. A reviewer forced to re-verify every
+  finding against `git show HEAD:` is improvising a guarantee the worktree should have given it.
+- **Tracked as:** OI-134.
+
 ---
 
 ## 3. Red flags — if you're thinking X, STOP
@@ -244,6 +328,11 @@ Borrowing from `superpowers:using-superpowers`, `superpowers:systematic-debuggin
 - **"The redirect/guard just reads `InductionService.x` / a service getter — it's cheap."** If that getter reads a user-scoped Hive box (`coachBox`, `userBox`, …) and the call is reachable from a GoRouter `redirect` or any pre-`/restoring` path, it can throw "HiveUserSession not opened" at cold start → router error page. `HiveService.isInitialized` is NOT enough; guard `HiveUserSession.currentOwnerFullId != null`. See §2.21.
 - **"The subagent's fix introduced a regression but Gate XX caught it — I'll skip the fix-up commit since the gate already passed somehow."** Gate scripts may report FAIL but exit 0 during baselining. Re-run the gate standalone and check `$?`. If `[Gate XX] FAIL` appears in output, ALWAYS fix-up and commit, even if exit code says 0. APK Test #16 caught this nuance via Gate 16.
 - **"This sheet/card takes the data as a param and renders it — fine."** If a PROVIDER is the source of truth and the surface renders a value captured at open-time, `invalidateSelf()` won't rebuild it → stale until a remount ("works after navigate-away-and-back" is the tell). Wrap in `Consumer` + `ref.watch`; `await` the mutating callback. See §2.28.
+- **"The test greps for the provider name, so the wiring is covered."** No. That token survives a call site that passes `null`. See §2.37 — a 4757-test suite stayed green through it.
+- **"The RPC returns the column / the endpoint 200s, so the feature works."** That is true at ONE layer. Name the next consumer and check it. See §2.38.
+- **"Mutation-proven — I deleted the check and tests went red."** Half a proof. Reorder it, respell it, and add a NEW unguarded instance beside the guarded one. See §2.39.
+- **"`CREATE OR REPLACE` keeps the grants, so I can add a return column."** You cannot — 42P13 forces a DROP, and the DROP resets the ACL. See §2.36.
+- **"I'll run the mutations here while the reviewers read."** They will see a tree that matches no commit. See §2.40.
 - **"This bug class is novel — I don't need to update the catalog."** Wrong. §5 self-evolution rule below applies.
 
 ---

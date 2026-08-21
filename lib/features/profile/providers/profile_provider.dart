@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -275,9 +276,21 @@ class UserStatsData {
   final double bmi;
   final int currentStreak;
   final int currentPhase;
+
+  /// Week within the phase, clamped [1,4]. During a hold this stays 4 — the
+  /// phase's four weeks ARE elapsed, so it remains the honest input for the
+  /// "weeks of this phase done" progress bar. It is NOT an honest LABEL for a
+  /// holder; read [holdOrdinal] first for that (FOB-1 / OI-60).
   final int currentWeek;
+
+  /// 1-based hold number when today is a live hold day, else null. Null for
+  /// every user while `enable_hold_weeks` is OFF, so every consumer branching
+  /// on it is inert until the flip.
+  final int? holdOrdinal;
   final String primaryGoal;
   final bool isPro;
+
+  bool get isHolding => holdOrdinal != null;
 
   const UserStatsData({
     this.totalWorkouts = 0,
@@ -286,6 +299,7 @@ class UserStatsData {
     this.currentStreak = 0,
     this.currentPhase = 1,
     this.currentWeek = 1,
+    this.holdOrdinal,
     this.primaryGoal = '',
     this.isPro = false,
   });
@@ -297,6 +311,20 @@ class UserStatsNotifier extends Notifier<UserStatsData> {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final profile = UserRepository.instance.getProfile() ?? {};
     final progress = UserRepository.instance.getProgress() ?? {};
+    // B-pass P1 (fob1-week-identity): this MUST be `ref.watch`, not the
+    // singleton call it started as. journey_timeline and profile_content read
+    // their hold state exclusively through this notifier, and neither
+    // hold-taking call site (home_screen's PlanExpiredCard.onRedoComplete,
+    // train/screen.dart) invalidates userStatsProvider — they invalidate
+    // currentPlanProvider. The 5 tabs live under StatefulShellRoute.indexedStack,
+    // so an already-mounted Profile tab is NOT rebuilt on tab-switch. With a
+    // plain singleton read this notifier had NO dependency-graph link to the
+    // hold write, so Profile kept showing the pre-hold "WEEK 4 OF 4" while Home
+    // and Train said "HOLDING · Hn" — reintroducing the exact cross-tab
+    // contradiction this batch exists to close. Watching the provider (which
+    // itself watches currentPlanProvider) fixes it for EVERY current and future
+    // hold-write call site, rather than patching each one with an invalidate.
+    final weekId = ref.watch(weekIdentityProvider);
 
     // H-1 (audit-2026-05-11) — watch `subscriptionInfoProvider`
     // instead of snapshotting `SubscriptionService.isPro()` at build
@@ -327,7 +355,13 @@ class UserStatsNotifier extends Notifier<UserStatsData> {
       // canonical live walk-back. sot_registry entry pins this contract.
       currentStreak: WorkoutRepository.instance.currentStreak(),
       currentPhase: (progress['current_phase'] as int?) ?? 1,
-      currentWeek: WorkoutScheduleService.instance.getCurrentWeekNumber(),
+      // FOB-1 (OI-60): one read of the honest identity feeds BOTH fields —
+      // currentWeek keeps the clamped value the progress bar needs, holdOrdinal
+      // carries the label identity. Reading them from two separate calls would
+      // let them disagree across a midnight rollover.
+      currentWeek: weekId.weekInPhase ??
+          WorkoutScheduleService.instance.getCurrentWeekNumber(),
+      holdOrdinal: weekId.holdOrdinal,
       primaryGoal:
           (profile['primary_goal'] as String?) ?? 'Not set',
       isPro: isPro,

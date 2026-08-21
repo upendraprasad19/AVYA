@@ -25,6 +25,7 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/app_events_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_write_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
@@ -214,6 +215,108 @@ void main() {
             'scan → retry is idempotent (not bumped to 2)');
     expect(MigratedKey.read<String>('plan_end_date'),
         rollStart.add(const Duration(days: 6)).toIso8601String());
+  });
+
+  group('FOB-5 — a hold must be OBSERVABLE (hold_week_started telemetry)', () {
+    setUp(() => AppEventsService.debugCapture = []);
+    tearDown(() => AppEventsService.debugCapture = null);
+
+    test('a materialized hold emits hold_week_started carrying its ordinal',
+        () async {
+      await HiveService.instance.configBox.put('enable_hold_weeks', true);
+      await WorkoutScheduleWriteService.instance.holdWeek();
+
+      final events = AppEventsService.debugCapture!
+          .where((e) => e.event == 'hold_week_started')
+          .toList();
+      expect(events, hasLength(1),
+          reason: 'exactly one event per materialized hold');
+      expect(events.single.metadata?['ordinal'], 1,
+          reason: 'the ordinal is what makes holds COUNTABLE — without it the '
+              'founder metric can total holds but never distinguish H1 from a '
+              'user who has held four times');
+    });
+
+    test('each successive hold emits its own ascending ordinal', () async {
+      await HiveService.instance.configBox.put('enable_hold_weeks', true);
+      await WorkoutScheduleWriteService.instance.holdWeek();
+      setTestClockTo(nowWall().add(const Duration(days: 7)));
+      await WorkoutScheduleWriteService.instance.holdWeek();
+
+      final ordinals = AppEventsService.debugCapture!
+          .where((e) => e.event == 'hold_week_started')
+          .map((e) => e.metadata?['ordinal'])
+          .toList();
+      expect(ordinals, [1, 2]);
+    });
+
+    test('the mutex no-op does NOT emit a second event', () async {
+      // Two overlapping calls yield exactly ONE hold (pinned elsewhere in this
+      // file); the telemetry must agree, or holds_started_* over-counts every
+      // double-tap on the Keep Training button.
+      await HiveService.instance.configBox.put('enable_hold_weeks', true);
+      final f1 = WorkoutScheduleWriteService.instance.holdWeek();
+      final f2 = WorkoutScheduleWriteService.instance.holdWeek();
+      await Future.wait([f1, f2]);
+
+      expect(
+          AppEventsService.debugCapture!
+              .where((e) => e.event == 'hold_week_started')
+              .length,
+          1);
+    });
+
+    test('a THROWING telemetry sink cannot fail or truncate a committed hold',
+        () async {
+      // Guards the try/catch around the emit in workout_schedule_write_service.
+      // `AppEventsService.log never throws` is a property of a DIFFERENT file
+      // that nothing pins; the emit sits inside holdWeek's try, whose `finally`
+      // only clears the mutex, so a sync throw would escape AFTER the hold is
+      // committed to Hive — surfacing a materialized hold to the caller as a
+      // failure AND skipping the durability push that runs past the finally.
+      //
+      // An unmodifiable list makes `add` throw UnsupportedError, which is the
+      // cheapest faithful stand-in for that sink. Remove the try/catch and this
+      // test goes red on the `holdWeek()` await itself.
+      AppEventsService.debugCapture =
+          List<({String event, Map<String, dynamic>? metadata})>.unmodifiable(
+              const []);
+      await HiveService.instance.configBox.put('enable_hold_weeks', true);
+
+      // rollStart is normalizeToMonday(nowWall()), NOT plan_end-derived, so the
+      // clock has to be pinned for the row assertions below to name a date.
+      setTestClockTo(DateTime(2026, 6, 29, 10));
+      final rollStart = DateTime(2026, 6, 29);
+
+      await expectLater(
+          WorkoutScheduleWriteService.instance.holdWeek(), completes,
+          reason: 'telemetry must never be able to fail a committed hold');
+      expect(rowAt(rollStart)?['hold_ordinal'], 1,
+          reason: 'the hold itself still materialized');
+      expect(MigratedKey.read<String>('plan_end_date'),
+          rollStart.add(const Duration(days: 6)).toIso8601String(),
+          reason: 'and plan_end was still extended');
+    });
+
+    test('the legacy redoWeek4 write emits NOTHING', () async {
+      // The ship-dark guarantee reaches telemetry too: with enable_hold_weeks
+      // OFF the free-tier button performs redoWeek4, and that path must not
+      // populate a founder metric.
+      //
+      // ⚠ Asserted on redoWeek4 DIRECTLY, not on "holdWeek with the flag off".
+      // holdWeek() is NOT self-gated — the branch lives once, at
+      // runFreeTierRepeatWrite (keep_training_phase1_action.dart), which picks
+      // between the two writes. A direct holdWeek() call materializes a hold
+      // whatever the flag says, and SHOULD emit; the first draft of this test
+      // asserted otherwise and correctly failed.
+      await HiveService.instance.configBox.delete('enable_hold_weeks');
+      await WorkoutScheduleWriteService.instance.redoWeek4();
+
+      expect(
+          AppEventsService.debugCapture!
+              .where((e) => e.event == 'hold_week_started'),
+          isEmpty);
+    });
   });
 
   test('holdWeek NEVER writes plan_start (the #6 phantom-phase constraint)',

@@ -1069,16 +1069,54 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-60 — Flip `enable_hold_weeks`
 
 - **Status**: OPEN
-- **Verified**: never
+- **Verified**: 2026-08-20 — the blocker list re-derived from the AUTHORITATIVE ledger
+  (`docs/ship_dark_pending_review.yaml:251-382` + `docs/audit/oi60-streak-identity.closure.yaml`),
+  not carried from this entry's own text, which was wrong. The three `enable_hold_weeks` rows were
+  read directly and all still carry `flip_reviewed: false`. FOB-1's six surfaces were each read in
+  source before being fixed — one (`phase_roadmap_screen.dart`) reaches the clamp through
+  `getProgramWeek`, so the FOB's own file list understated it rather than overstating it, and one
+  (`profile_content.dart`) is a consumer the FOB named only via its provider.
 - **Identified**: 2026-07-26
-- **Blocked on**: 7 unstarted flip-on-blocker items (FOB-1…FOB-7) in
-  `docs/ship_dark_pending_review.yaml` — coach/push/weekly-report tell every holder a false
-  week-4 story, weekly streak is dead during a hold, hold telemetry has zero consumers, selectable
-  past-hold-weeks has 6 named lifecycle traps, and 4 residual scan gaps. None were touched by the
-  OI-59 display batch (that work is additive and inert while the flag is OFF). FOB-3/FOB-4 also
-  require ai-proxy + weekly-recap-ready/weekly-report EF redeploys (own explicit go, §4.3).
-- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — all 7 FOB
-  items closed first.
+- ⚠ **Corrected 2026-08-20.** This entry read *"7 unstarted flip-on-blocker items (FOB-1…FOB-7)"*
+  and `OPEN_INDEX.md` repeated it. That was stale on three counts as of 2026-08-13, and the index
+  is generated from this line, so the whole board carried the wrong number: **FOB-2 CLOSED**
+  (`docs/audit/oi60-streak-identity.closure.yaml`, diagnose `a3f8d1`), **FOB-7(c) verified clean**
+  (the report was stale — ai-media-proxy already carries both the 10K cap and the FC7 nonce fence),
+  **FOB-7(d) CLOSED**, and **FOB-6 SPLIT OUT to OI-125** by founder decision as a FEATURE that is
+  explicitly *not* a flip blocker. "Unstarted" was also wrong for the two that had already shipped.
+- **Blocked on**: **3 remaining flip-on blockers** in `docs/ship_dark_pending_review.yaml` —
+  **FOB-3, FOB-4, FOB-7(a)/(b)**. The coach snapshot and the Sunday push / weekly report still tell
+  every holder a false week-4 story; `currentPhaseCompletionRate` still folds hold days into the
+  PRO-advance gate input and `PlanIntegrityReconciler` still scans weeks 1-4 only. FOB-3/FOB-4
+  require ai-proxy + weekly-recap-ready + weekly-report EF redeploys — each its own explicit
+  authorization (§4.3), plan approval ≠ deploy approval.
+- ✅ **FOB-5 CLOSED 2026-08-20** — diagnose `c7a3b9`, closure `docs/audit/fob5-hold-telemetry.closure.yaml`,
+  migration **120 applied live** (founder-authorized). `holdWeek()` now emits `hold_week_started`,
+  consumed by three new `hold_*` columns on `founder_metrics_engagement()` that reach the founder
+  dashboard with no EF redeploy. ⚠ FOB-5's own prescribed fix (`where channel = 'app'`) was
+  **wrong and was not applied** — it matches 7 of 116 rows. The metric now reads **22 instead of
+  116**. One self-inflicted regression was caught and closed inside the batch: the required
+  `DROP`+`CREATE` reset the function's ACL and briefly made it anon-executable (finding FOB-5-E).
+  ⚠ Read `oi60-streak-identity.closure.yaml` before attempting FOB-7(b): widening the 1..4 scan is
+  already REFUTED (the scan IS the re-anchor trigger, so widening buys no healing and only makes
+  the re-anchor fire more often — the P0-11 concern `d7f3a9` rejected). The shape is *split the
+  trigger from the write.* OI-127 is routed to whichever batch takes FOB-7(a)/(b), so one batch
+  holds the reconciler context.
+- ✅ **FOB-1 CLOSED 2026-08-20** — branch `claude/oi-pending-hold-weeks-1od97o`, diagnose `f4c8e1`,
+  behavioral test `test/contracts/hold_week_identity_behavioral_test.dart` (16 cases, mutation-proven
+  on both protective legs: neutering the hold arm reddens 3, removing the flag gate reddens 5 across
+  this file and `hold_display_read_path_test.dart`). Adopted "a hold suppresses the week number; Hn
+  is the identity" on all **six** in-repo surfaces that printed the clamped week 4 to a holder
+  (home eyebrow, profile subtitle, journey timeline ×2, phase-roadmap header, share-as-video stamp
+  + its Remotion composition), behind a new single-gate seam
+  `WorkoutScheduleReadService.weekIdentity()`. Two named residuals, neither deferred:
+  `ai_snapshot_builder.dart` is **FOB-3's** by the board's own division (it rewrites the same lines
+  to add the `hold` block and needs the ai-proxy redeploy — touching it twice would ship a
+  half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, a separate
+  repo on the OpenClaw VPS (§2).
+- **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — the four
+  remaining FOB items closed first. The flip-on commit must clear **all three** `enable_hold_weeks`
+  rows in the ledger (`hold-mechanic`, `hold-display`, `hold-display-fixes`) in one commit.
 
 ## OI-61 — Coach-UX: live-verify test7, v74 hardening, temp-PRO cleanup
 
@@ -2709,6 +2747,24 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 - **Identified**: 2026-08-11 · ×2 plan review of `safe-push-verifier`.
 - **Risk class**: silent-inert-gate — the highest-consequence shape, because everything downstream
   looks green.
+- **RECURRED 2026-08-20, and this instance is the strongest evidence yet that presence-checking is
+  the wrong invariant.** Fixing `b2e9f4` (pre-push ran a bare `flutter test` while CI excludes
+  goldens and pins TZ) meant editing `scripts/pre-push.sh`. The edit was correct, its 3-case
+  parity test was green, and all three mutation legs reddened — every signal available said the
+  gate was fixed. The push then failed with **the exact same 4 failures as before the fix**,
+  because `.git/hooks/pre-push` was a stale `cp` dated `Aug 20 06:56` and contained **0**
+  occurrences of `exclude-tags golden`. `check_hooks_installed.dart` was green throughout.
+  Two things this adds to the entry above:
+  1. **The test suite cannot cover this.** `pre_push_matches_ci_invocation_test.dart` reads
+     `scripts/pre-push.sh` — the source — and is right to. No test that reads the source can
+     observe that a different file is what actually runs. So the hash check is not a nicety that
+     duplicates test coverage; it is the ONLY thing that can catch this class.
+  2. **The failure mode is a false NEGATIVE on a fix**, not just a stale gate. The operator sees
+     their own fix appear not to work, with no indication why. The natural next move is to
+     doubt the fix — or to reach for `--no-verify`, which is precisely what `b2e9f4` existed to
+     stop needing.
+  Fixed for this machine again by re-running `sh scripts/setup-hooks.sh` (second time in 9 days);
+  the structural gap stays open, which is the whole point of this entry.
 - **What's wrong**: `scripts/setup-hooks.sh:45` installs by `cp`, not symlink, so `.git/hooks/*`
   drifts from `scripts/*.sh` the moment either changes. `scripts/check_hooks_installed.dart:40`
   checks only `if (!content.contains('scripts/pre-commit.sh') && !content.contains('flutter analyze'))`
@@ -3520,3 +3576,262 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   and (c) not depend on a discipline that decays — i.e. it needs a trigger, not a convention.
 - **Blast-radius estimate**: `feature` for a docs/convention change; `platform` if it touches
   `scripts/new-worktree.sh` or a hook.
+
+## OI-131 — the golden tests are excluded from every gate on every platform, so they only ever pass on one machine (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical — but it needs a decision on WHICH of the two real fixes to
+  buy, and both cost more than a hook edit. See "The two candidates" below.
+- **Verified**: 2026-08-20 — measured while fixing `b2e9f4`, not inferred.
+  - CI has always excluded them: `.github/workflows/test.yml:112` runs
+    `flutter test test/ --exclude-tags golden`.
+  - `scripts/pre-push.sh` used to run them, by accident rather than intent — it ran a bare
+    `flutter test`, which includes the tag. On this Linux container that produced 2 hard
+    failures (`test/goldens/wardroom/ward_rank_pill_golden_test.dart`, Lt and SD1 collapsed)
+    on a commit CI passed cleanly.
+  - `b2e9f4` aligned pre-push with CI, which is correct on its own terms and makes the
+    exclusion **uniform**: the goldens now run in no automated gate anywhere.
+- **What this means concretely**: the wardroom goldens pass only on the machine whose fonts
+  rendered the master images — Windows. Every other environment fails them on rasterisation.
+  So they are not a regression gate; they are a machine-dependent surprise. A real visual
+  regression would reach `main` unnoticed by any gate, and the person who eventually notices
+  would be whoever next runs them on the one machine where they work.
+- **Why this was filed rather than fixed in `b2e9f4`**: that batch was aligning a hook with CI.
+  Making goldens genuinely portable is separate, larger work with its own trade-offs, and
+  bundling it would have widened a `platform`-tier hook fix into a test-infrastructure change.
+  Stated as a deliberate trade in that diagnose-doc's `impact_analysis`, and tracked here so
+  the trade does not decay into an unowned gap — the §4.13-point-6 lesson (a rule with no
+  trigger regrows the problem it solved).
+- **The two candidates**, neither obviously right:
+  1. **Regenerate goldens per platform** and gate them per-runner. Honest, but multiplies the
+     master images by the number of platforms and makes every intentional UI change a
+     multi-machine chore.
+  2. **Run them in ONE pinned container** (a fixed image with fixed fonts) and gate on that,
+     ignoring host rendering entirely. One source of truth, but adds a container step to CI
+     and makes local golden runs advisory-only by design.
+  A third option — delete them — should be considered explicitly rather than by default. They
+  are currently paying no rent.
+- **What a fix must clear**: whichever candidate wins, the goldens must run in an automated
+  gate on every push that can change them, and a failure must be reproducible by anyone
+  rather than only by the master image's author.
+- **Blast-radius estimate**: `platform` (touches CI config and/or the hooks).
+
+---
+
+## OI-132 — a migration is LIVE in prod with no file, no manifest entry and no diagnose-doc — and its absence DEFEATS Gate 31 (P1)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. The reconstruction is mechanical; the judgement call is whether to also re-scope Gate 31, which is the half that actually matters.
+- **Verified**: 2026-08-20 — every claim below read from live `dedsavbjuwgarrhphgnl` or from the repo directly during the FOB-1/FOB-5 Hermes pass. Not inferred.
+
+Live `supabase_migrations.schema_migrations` holds `20260815155823 / log_table_retention`. Its
+stored statement is self-describing and destructive:
+
+```
+-- Destructive?: yes -- deletes ~29,044 run records and ~10,654 client_errors rows on the
+--                      first pass; rows are NOT recoverable
+-- Rollback strategy: inline -- reverse block in the repo file   <-- there is no repo file
+-- Linked diagnose-doc: c8e5b3                                   <-- does not exist
+```
+
+Every corroborating artefact is absent:
+
+| probe | result |
+|---|---|
+| `docs/diagnoses/` grep `c8e5b3` | NOT FOUND |
+| repo-wide grep `c8e5b3` (md/json/yaml/sql) | no output |
+| grep `jrd_retention_daily\|cleanup_client_errors` | NOT REFERENCED ANYWHERE |
+| grep `retention` in `backups/applied_migrations.json` | 0 entries |
+
+⚠ **Corrected 2026-08-20: it created FOUR cron jobs, not two.** The original filing said two,
+inherited from a reviewer that had filtered on retention-shaped names; recovering the migration's
+actual statements and re-querying `cron.job` shows four, **all active**:
+
+```
+jobid | jobname                       | schedule    | active
+   33 | jrd_retention_daily           | 22 4 * * *  | t
+   34 | client_errors_retention_daily | 25 4 * * *  | t
+   35 | jrd_vacuum_daily              | 38 4 * * *  | t
+   36 | client_errors_vacuum_daily    | 41 4 * * *  | t
+```
+
+`docs/operations/CRON_REGISTRY.md` lists **none of the four**. The two extra are
+`VACUUM (ANALYZE)` jobs — not row-destructive, but equally unregistered and equally invisible to
+Gate 31.
+
+One thing the recovered SQL gets RIGHT, worth recording so the reconstruction does not "fix" it:
+both `cleanup_*` functions are `SECURITY DEFINER` and carry
+`REVOKE ALL ... FROM PUBLIC` **plus** `REVOKE ALL ... FROM anon, authenticated` and
+`GRANT EXECUTE ... TO postgres` — the exact grant hygiene migration 120 got wrong (a9d3f1).
+
+**The compounding half, which is the real finding.** Gate 31
+(`scripts/check_cron_registry.dart:31`) enforces registry parity by scanning
+`supabase/migrations/*.sql` for `cron.schedule(...)` calls. Because this migration has **no
+file**, its two `cron.schedule` calls are invisible to the gate built to catch exactly this. The
+gate reports green while two undocumented destructive jobs run daily against prod. A missing file
+does not merely skip the gate — it defeats it by construction, and no amount of tightening the
+scan fixes that, because the scan's input is the thing that is missing.
+
+**Full live-vs-repo set difference** (115 live rows vs 124 `.sql` files) — live rows with no repo
+file: `add_gdpr_referral_community_tables`, `028b_fix_coach_signals_formulas`,
+`028c_robust_interval_extraction` (all three pre-existing and old),
+`revoke_anon_authenticated_...engagement` (= 120b, deliberate and documented), and this one.
+
+**Not caused by the FOB batch** — applied 2026-08-15, five days before branch
+`claude/oi-pending-hold-weeks-1od97o` was cut. Surfaced only because the L13 lens asked for the
+live-vs-manifest comparison.
+
+**Fix shape:** author `121_log_table_retention.sql` from the live statements, add its manifest
+entry and the `c8e5b3` diagnose-doc, register both cron jobs. Then the part worth arguing about:
+Gate 31 needs a source of truth that is not the migration files — a live `cron.job` enumeration
+against the registry would have caught this on day one, and is the same shape as the live-query
+allowlist gate OI-78 has been asking for since 2026-07-31.
+
+---
+
+## OI-133 — 92 analytics rows are already inside the LLM's retrievable memory; the fix stops new ones and does not remove them (P1)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical, but the cleanup is a DELETE against a production table that feeds the coach's memory, so it wants an explicit go and a dry-run count first.
+- **Verified**: 2026-08-20 — counts queried live during the Hermes pass; the two code paths read directly.
+
+`rolling-context` summarized `ai_coach_interactions` with no channel filter, so `app_event`
+analytics rows were embedded into `memory_embeddings` as `source_type='conversation'`. Live count
+at the time of writing: **92 of 598 rows (15.4%)**, with content shaped like:
+
+```
+"User: {event: phase_1_cycle_repeat_started}\nCoach: "
+```
+
+`rolling-context:269` fetched with no filter and `ai-proxy:884` concatenates retrieval output into
+the **SYSTEM prompt**, so this text reaches the model as though a user had said it.
+
+**Half-closed by commit `<this batch>`:** every one of rolling-context's reads on
+`ai_coach_interactions` now carries `.neq("channel", "app_event")`, pinned by
+`test/contracts/rolling_context_excludes_app_event_test.dart` (mutation-proven on five shapes,
+including a NEW unfiltered read added beside the filtered ones — the shape a plain grep misses).
+
+⚠ **The first version of this fix did not work in production, and the correction is the more
+useful record.** It filtered three PostgREST chains in the TypeScript and every artifact in the
+batch — the code comment, migration 120's header, the diagnose-doc, the closure YAML and this
+entry — asserted "all three reads now exclude app_event". The B-pass falsified it: rolling-context
+calls the RPC `get_users_with_message_count()` FIRST (`index.ts:143`) and reaches the manual
+queries only if that throws. That RPC (`010_add_indexes_idempotency_rpc.sql:76-83`) has no channel
+predicate, and its `where summarized = false` is a **permanent no-op** because nothing in the
+codebase ever writes `summarized = true`. Two of the three filters were therefore dead code on the
+live path.
+Nothing was mis-deleted — the per-user FETCH filter runs whichever path selected the user — but the
+threshold deciding *who gets processed* stayed as overcounted as before, and now that app_event
+rows are never deleted that count grows without bound: a user whose analytics volume alone crosses
+50 gets their whole history paged in nightly, then skipped.
+Fixed by re-counting the RPC's candidates with the exclusion before the expensive fetch, rather
+than adding a predicate to the RPC (that would be a migration apply needing its own §4.3 go).
+
+**Two things that remain, and neither is cosmetic:**
+
+1. **The fix is INERT until `rolling-context` is redeployed.** ⚠ Corrected 2026-08-20: the
+   founder AUTHORIZED this redeploy. It is blocked on **credentials, not permission**. The §0
+   host-shell path needs a Supabase Management API token and every source `deploy_via_api.js`
+   accepts is absent from the remote container — `SUPABASE_ACCESS_TOKEN_FITNESS` and
+   `SUPABASE_ACCESS_TOKEN` unset, `~/.supabase/fitness-app-token` absent, `supabase/.supabase/`
+   gitignored so it never came with the clone.
+   The MCP `deploy_edge_function` fallback was **considered and rejected, not attempted**:
+   `rolling-context` deploys as **7 files** (`source/index.ts` + six siblings under `_shared/`,
+   which is what makes `../_shared/...` resolve), and §0 records the legacy MCP path silently
+   mangling shared-import paths. A mangled deploy of this particular function does not fail
+   loudly — it breaks a nightly cron that summarizes and DELETES user conversation rows.
+   **To unblock:** either export `SUPABASE_ACCESS_TOKEN_FITNESS` into the session, or run the two
+   §0 commands from the founder machine. Live version at time of writing: **18**.
+2. **The 92 existing rows are still retrievable.** Filtering the writer does not unwrite history.
+   They need identifying and deleting, with a dry-run count first.
+
+**Related but NOT fixed here, filed together because they share the single root cause — five
+consumers read this table and only one of them knows the channel taxonomy:** the restore path
+renders `app_event` rows as the user's own chat bubbles (the replay path filters, the render path
+does not), and `daily-snapshot` feeds them into the profile-fact-extraction prompt that its own
+comment calls the highest-consequence injection site. Neither has a consent gate and `metadata`
+is unscrubbed.
+
+**Root-cause note worth keeping:** the FOB-5 batch DERIVED the six-channel taxonomy (measuring
+116 rows across six channels to fix a 5.3x overcount) and then applied it to exactly one
+consumer, leaving five others reading unfiltered. Deriving a taxonomy and not sweeping its
+consumers is the writer/reader drift class arriving from the reader side.
+
+---
+
+## OI-134 — mutation-proving runs in the shared worktree, where §4.13's guarantee does not reach (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing. Small and self-contained.
+- **Verified**: 2026-08-20 — observed live, twice, by two independent reviewers in the same session.
+
+§4.13 makes cross-session file-mixing structurally impossible by giving each session its own
+index. Mutation-proving defeats that from a direction the rule does not cover: it deliberately
+edits tracked files **in place** and restores them seconds later, so any concurrent reader sees a
+tree that matches neither HEAD nor any commit.
+
+Both happened during the FOB-1/FOB-5 Hermes pass:
+
+- The L1 reviewer watched `workout_schedule_write_service.dart:338` change from
+  `hold_week_started` to `hold_week_begun`, then saw a second `log()` call appear at `:238`, then
+  saw migration `120:101` flip one of its three predicates. It reverted one edit before
+  recognising the pattern, then stopped touching the tree and re-verified every finding against
+  `git show HEAD:`.
+- The L9/L13 reviewer caught the same two mutations and states plainly that had it sampled once
+  and reported, it would have filed a **phantom P0 against clean code**.
+
+Both landed on the same framing independently: *a mutation run in the primary worktree while a
+reviewer reads it is the §4.13 shared-index problem in a new costume.*
+
+The dispatch was the author's, not the reviewers' — mutation agents and read-only reviewers were
+pointed at one tree at the same time.
+
+**Silver lining worth recording:** because the reviewers caught the mutations in flight and
+identified them as the author's own, the mutation run was **independently corroborated** rather
+than self-attested — a stronger result than rule 24's ledger trust model normally yields. That is
+an argument for making this observable on purpose, not for pretending it did not happen.
+
+**Fix shape:** mutation proving runs in a dedicated worktree (`new-worktree.sh mutate-<slug>`),
+and the §4.12 review dispatch states which tree it is reading. Cheap. The alternative — a
+reviewer that re-verifies every finding against `git show HEAD:` — is what both reviewers were
+forced to invent mid-flight, and it should not be an improvisation.
+
+
+
+---
+
+## OI-135 — 60 of 125 migration-ledger hashes do not match their files, and nothing recomputes them (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. The fix shape is settled (below); what it needs is a decision on whether to backfill the 60 or grandfather them by name.
+- **Verified**: 2026-08-20 — measured, not estimated. Recomputed sha256 for every entry in `backups/applied_migrations.json` against its `supabase/migrations/*.sql` file: **125 entries → 64 match, 60 mismatch, 1 non-hash sentinel (120b, deliberate)**.
+
+`backups/applied_migrations.json` records a `hash` per applied migration. Its documented purpose
+is drift auditing — "recompute hashes on drift", per `applied_migrations_parity_test.dart:36`.
+**Nothing recomputes them.** `check_applied_migrations_ledger.dart` requires the `hash` KEY to be
+present (`_requiredKeys`) and never looks at its value; no other gate reads it. So the field has
+been decorative since it was introduced, and has silently drifted on 48% of entries.
+
+**Found by the round-2 review of `claude/oi-pending-hold-weeks-1od97o`**, which correctly flagged
+migration 120's hash as stale — I had updated it in one commit and then edited the file again in
+the next, invalidating it. That instance is fixed. The finding only became interesting when the
+count was checked: 120 was not special, it was the 61st.
+
+**Why it drifts by construction:** the hash tracks the FILE, and migration files legitimately get
+edited after they are applied — corrected comments, added rollback blocks, clarified headers. Every
+such edit invalidates a hand-maintained hash, and nothing notices. A hash maintained by memory
+across a repo this size will always converge on wrong.
+
+**Fix shape:**
+1. A gate that recomputes sha256 for every ledger entry naming a real file and fails on mismatch.
+   It must skip entries with no file by design (120b's `unverifiable:no-artifact` sentinel) and
+   entries hand-applied outside the migration system (119).
+2. The 60 existing mismatches get **enumerated by name** as `grandfathered:` in that script — a
+   terminal exemption, exactly the precedent `check_gate_test_ledger.dart` set for its 84
+   pre-2026-08-10 gates, and explicitly NOT a deferral. Membership by name, not by date.
+3. Mutation-prove it per rule 24 and add its `gate_test_ledger.yaml` entry.
+
+**Deliberately NOT bundled into the batch that found it.** Adding a hard-failing gate with 60
+pre-existing violations to a merge-blocking step would be a ship-stop for a hygiene problem — the
+same error class as the 2026-07-25/26 required-status-checks incident. The one instance that batch
+caused is fixed in it; the class is filed here.

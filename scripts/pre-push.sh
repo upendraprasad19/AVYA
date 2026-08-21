@@ -111,9 +111,34 @@ cat > /dev/null
 echo "[pre-push] flutter analyze (always -- runs even when the suite is skipped)..."
 flutter analyze --no-fatal-infos
 
+# The local full suite MUST be invoked the same way CI invokes it, or this gate
+# blocks pushes CI would have passed — which is worse than not gating, because
+# the only way past a false red is `--no-verify`, and that disables the REAL
+# gates too.
+#
+# CI is .github/workflows/test.yml: `TZ: Asia/Kolkata` at workflow level (:28)
+# and `flutter test test/ --exclude-tags golden` (:112). This ran a bare
+# `flutter test`, diverging on BOTH:
+#
+#   - No TZ. Several date-boundary contracts assert IST behaviour and read the
+#     ambient zone; under UTC they fail. Measured 2026-08-20 on a container:
+#     logout_login_round_trip_test.dart and
+#     session_date_and_home_start_behavioral_test.dart failed bare and passed
+#     24/24 under TZ=Asia/Kolkata, same commit, same machine.
+#   - No `--exclude-tags golden`. The goldens are rendered on Windows; on any
+#     other platform they fail on font rasterisation, which is why CI excludes
+#     the TAG. (Not a path exclusion — bare `flutter test` already defaults to
+#     `test/`, so the SCOPE never diverged. `test/` is passed explicitly anyway
+#     to mirror CI literally rather than rely on that default.)
+#
+# Both are environment mismatches, never code defects, so a developer meeting
+# them learns that this gate lies — the failure mode that makes a gate worse
+# than useless. Pinned by test/scripts/pre_push_matches_ci_invocation_test.dart,
+# which parses BOTH files and compares them, so a future edit to either side
+# reddens rather than silently re-opening the gap.
 run_full_suite() {
-  echo "[pre-push] $1 -> flutter test (full suite)..."
-  flutter test
+  echo "[pre-push] $1 -> flutter test (full suite, CI-equivalent invocation)..."
+  TZ=Asia/Kolkata flutter test test/ --exclude-tags golden
   echo "[pre-push] OK -- full suite green."
   exit 0
 }

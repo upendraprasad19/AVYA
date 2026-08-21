@@ -253,6 +253,7 @@ flip_on_blockers:
   raised: 2026-07-25
   items:
     - id: FOB-1
+      closed: "2026-08-20 — docs/audit/fob1-week-identity.closure.yaml; diagnose f4c8e1; behavioral test test/contracts/hold_week_identity_behavioral_test.dart (16 cases, mutation-proven on 2 legs: hold arm -> 3 red, flag gate -> 5 red). New single-gate seam WorkoutScheduleReadService.weekIdentity() + activeHoldWeeks()/activeHoldOrdinalFor(); holdStatusProvider now delegates to it instead of restating the flag check. SIX in-repo surfaces adopted, not the 7 the why: lists: phase_roadmap_screen reaches the clamp via getProgramWeek (the list understated it) and profile_content.dart was named only through its provider. RESIDUALS, neither deferred: ai_snapshot_builder.dart is FOB-3's by the board's own division (same lines, needs the ai-proxy redeploy); telegram-bot/bot.py is upstream_blocked (separate repo, OpenClaw VPS)."
       title: "Week-identity coherence — adopt 'a hold suppresses the week number; Hn is the identity'"
       why: >
         The shipped UI already chose this rule (plan_header.dart drops the week
@@ -281,7 +282,14 @@ flip_on_blockers:
     #   FOB-7(d)  CLOSED  → same closure YAML (both stale citations de-numbered;
     #             the filing named one, a second was found in the same comment).
     #   FOB-6     SPLIT OUT to OI-125 (a new feature, not a correctness fix).
-    #   FOB-1, FOB-3, FOB-4, FOB-5, FOB-7(a), FOB-7(b) — STILL OPEN.
+    #   FOB-1     CLOSED 2026-08-20 -> docs/audit/fob1-week-identity.closure.yaml
+    #             (diagnose f4c8e1; test hold_week_identity_behavioral_test.dart).
+    #   FOB-5     CLOSED 2026-08-20 -> docs/audit/fob5-hold-telemetry.closure.yaml
+    #             (diagnose c7a3b9; migration 120 applied live; test
+    #             hold_week_mechanic_behavioral_test.dart). NOTE its prescribed
+    #             `where channel = 'app'` was WRONG and was not applied — see
+    #             finding FOB-5-B.
+    #   FOB-3, FOB-4, FOB-7(a), FOB-7(b) — STILL OPEN.
     # enable_hold_weeks therefore CANNOT flip yet.
     - id: FOB-2
       closed: "2026-08-13 — docs/audit/oi60-streak-identity.closure.yaml; diagnose a3f8d1; behavioral test test/contracts/hold_week_streak_identity_behavioral_test.dart (14 cases, 6 mutations proven)"
@@ -323,6 +331,7 @@ flip_on_blockers:
         need a hold branch — which means redeploys, so the earlier
         "no EF redeploy needed" framing was false.
     - id: FOB-5
+      closed: "2026-08-20 — docs/audit/fob5-hold-telemetry.closure.yaml; diagnose c7a3b9; migration 120 (applied live, founder-authorized); test test/contracts/hold_week_mechanic_behavioral_test.dart (4 cases, mutation-proven: emit removed -> 3 red, ordinal dropped -> 2 red). ⚠ THE `how:` BELOW IS WRONG AND WAS NOT FOLLOWED: `where channel = 'app'` matches 7 of 116 rows and would have replaced a 5.3x overcount with an ~89% undercount. The correct predicate mirrors the repo's own _coachChatChannels (coach_interaction_repository.dart:282) and also drops 38 stuck/pending rows the filing never mentions. Metric now reads 22 instead of 116. Hold telemetry rides on founder_metrics_engagement()'s new hold_* columns rather than a new RPC, because admin-dashboard-data:255 spreads that row wholesale — so no EF redeploy was needed."
       title: "Holds are unobservable, and the events corrupt the one live metric"
       why: >
         The five phase_1_day_29_* events have ZERO consumers repo-wide — no

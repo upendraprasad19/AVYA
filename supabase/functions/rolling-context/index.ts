@@ -169,7 +169,16 @@ serve(async (req: Request) => {
       let distinctError: unknown = null;
       try {
         distinctUsers = await fetchAllPages<{ user_id: string }>(
-          () => supabaseClient.from("ai_coach_interactions").select("user_id"),
+          () =>
+            supabaseClient
+              .from("ai_coach_interactions")
+              .select("user_id")
+              // Same app_event exclusion as the per-user fetch below. Both
+              // candidate queries must agree with it or the threshold means
+              // something different from what is actually summarized: a user
+              // with 50 analytics events and no conversation would be selected
+              // and then fetched with nothing to summarize.
+              .neq("channel", "app_event"),
           { orderBy: "id", label: "rolling-context distinct-users" },
         );
       } catch (e) {
@@ -207,17 +216,68 @@ serve(async (req: Request) => {
         const { count, error: cErr } = await supabaseClient
           .from("ai_coach_interactions")
           .select("id", { count: "exact", head: true })
-          .eq("user_id", uid);
+          .eq("user_id", uid)
+          .neq("channel", "app_event");
 
         if (!cErr && (count ?? 0) >= MESSAGE_THRESHOLD) {
           usersToProcess.push({ user_id: uid, msg_count: count ?? 0 });
         }
       }
     } else {
-      usersToProcess = userCounts as {
+      // The RPC path. get_users_with_message_count (migration 010:76-83) is
+      // `where summarized = false group by user_id having count(*) >= min_count`
+      // — NO channel predicate, and `summarized` is never written true anywhere
+      // in the codebase (only ADD COLUMN ... DEFAULT false at 010:69), so that
+      // WHERE is a permanent no-op and the count is over EVERY row, app_event
+      // included.
+      //
+      // This path is the one that actually runs: the RPC exists live and has no
+      // reason to throw, so the manual branch above is fallback-only. Filtering
+      // the manual branch alone therefore changed nothing in production — the
+      // B-pass caught exactly that, after this diff's first version claimed
+      // "all three reads now exclude app_event". They do; two of the three are
+      // simply not on the live path.
+      //
+      // Re-validating here rather than adding a channel predicate to the RPC:
+      // changing the RPC is a migration apply, which needs its own §4.3
+      // authorization. This is a code-only fix inside the function already
+      // authorized for redeploy, and it makes the threshold mean the same thing
+      // on BOTH paths — which is the property that was actually wanted.
+      const rpcCandidates = userCounts as {
         user_id: string;
         msg_count: number;
       }[];
+      usersToProcess = [];
+      for (const cand of rpcCandidates) {
+        const { count, error: recountErr } = await supabaseClient
+          .from("ai_coach_interactions")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", cand.user_id)
+          .neq("channel", "app_event");
+
+        if (recountErr) {
+          // Fail OPEN: a transient count error must not silently drop a user
+          // from summarization forever. Worst case is the pre-fix behaviour —
+          // one wasted fetch that the length check below already handles.
+          console.error(
+            `recount failed for ${cand.user_id}, keeping candidate:`,
+            recountErr,
+          );
+          usersToProcess.push(cand);
+          continue;
+        }
+        if ((count ?? 0) >= MESSAGE_THRESHOLD) {
+          usersToProcess.push({ user_id: cand.user_id, msg_count: count ?? 0 });
+        }
+      }
+      const dropped = rpcCandidates.length - usersToProcess.length;
+      if (dropped > 0) {
+        // Deliberately logged rather than silent: this number is the size of the
+        // wasted-work problem the RPC's unfiltered count was creating nightly.
+        console.log(
+          `rolling-context: dropped ${dropped} RPC candidate(s) whose count was app_event-only`,
+        );
+      }
     }
 
     if (usersToProcess.length === 0) {
@@ -268,7 +328,27 @@ serve(async (req: Request) => {
               supabaseClient
                 .from("ai_coach_interactions")
                 .select("id, user_message, ai_response, created_at")
-                .eq("user_id", userId),
+                .eq("user_id", userId)
+                // Analytics rows are NOT conversation. Without this filter they
+                // are summarized like chat turns and then DELETED, which breaks
+                // two things at once (Hermes P1-E / P1-F, 2026-08-20):
+                //
+                //   * they were being embedded into memory_embeddings as
+                //     source_type='conversation' — 92 of 598 rows (15.4%),
+                //     e.g. "User: {event: phase_1_cycle_repeat_started}\nCoach: "
+                //     — and ai-proxy concatenates retrieval into the SYSTEM
+                //     prompt, so app_event text was reaching the model as if a
+                //     user had said it;
+                //   * the delete below then removed the rows that migration
+                //     120's holds_started_* / holders_total count over, making
+                //     an all-time metric silently lossy (91 of 92 comparable
+                //     rows were already gone when measured).
+                //
+                // Excluded by CHANNEL rather than restricted to the three
+                // _coachChatChannels deliberately: an allowlist would silently
+                // stop summarizing any future conversational channel, which
+                // fails in the direction of losing real history.
+                .neq("channel", "app_event"),
             {
               orderBy: [
                 { column: "created_at", ascending: true },

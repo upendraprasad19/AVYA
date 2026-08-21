@@ -171,6 +171,11 @@ class WorkoutScheduleService {
   int getProgramWeek(int currentPhase) =>
       read.WorkoutScheduleReadService.instance.getProgramWeek(currentPhase);
 
+  /// The honest week identity for today — week-in-phase, or the hold ordinal
+  /// while holding. See [read.WeekIdentity]; FOB-1 / OI-60.
+  read.WeekIdentity weekIdentity() =>
+      read.WorkoutScheduleReadService.instance.weekIdentity();
+
   int getCurrentDayInPhase() =>
       read.WorkoutScheduleReadService.instance.getCurrentDayInPhase();
 

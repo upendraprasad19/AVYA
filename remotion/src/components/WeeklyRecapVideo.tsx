@@ -13,6 +13,15 @@ import { formatVolume } from '../utils/format';
 export interface WeeklyRecapProps {
   userName: string;
   weekNumber: number;
+  /**
+   * 1-based free-tier hold number (H1, H2 ...) when the recapped week was a
+   * "Hold the Line" week, else omitted. A hold week sits outside the phase's
+   * four weeks, so `weekNumber` clamps to 4 for every hold at every ordinal —
+   * "WEEK 4 RECAP" forever. When present this supersedes the week counter
+   * (FOB-1 / OI-60). Optional, so a caller that omits it renders exactly as
+   * before.
+   */
+  holdOrdinal?: number;
   totalVolume: number;
   totalWorkouts: number;
   totalPrs: number;
@@ -24,6 +33,7 @@ export interface WeeklyRecapProps {
 export const WeeklyRecapVideo: React.FC<WeeklyRecapProps> = ({
   userName,
   weekNumber,
+  holdOrdinal,
   totalVolume,
   totalWorkouts,
   totalPrs,
@@ -44,7 +54,7 @@ export const WeeklyRecapVideo: React.FC<WeeklyRecapProps> = ({
       {/* Persistent header */}
       <div style={{ padding: '80px 48px 0' }}>
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '2px', color: theme.accent }}>
-          WEEK {weekNumber} RECAP
+          {holdOrdinal == null ? `WEEK ${weekNumber} RECAP` : `HOLD H${holdOrdinal} RECAP`}
         </div>
         <div style={{ fontSize: 36, fontWeight: 900, color: theme.textPrimary, marginTop: 6 }}>
           {userName}

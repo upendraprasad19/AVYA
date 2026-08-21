@@ -27,8 +27,24 @@ class AppEventsService {
 
   static const String _channel = 'app_event';
 
+  /// Test seam. When non-null, [log] records into this list INSTEAD of
+  /// touching the network, so a caller's telemetry contract can be asserted
+  /// behaviourally rather than by grepping its source for the event name.
+  ///
+  /// Added with the FOB-5 hold telemetry (OI-60): that batch's own B-pass had
+  /// just proven a source-grep cannot see a logic change, and an emit with no
+  /// observable effect in tests is the same blind spot one layer down. Null in
+  /// production — `log` behaves exactly as before.
+  @visibleForTesting
+  static List<({String event, Map<String, dynamic>? metadata})>? debugCapture;
+
   /// Fire-and-forget event log. Safe from any screen / any state.
   void log(String event, {Map<String, dynamic>? metadata}) {
+    final capture = debugCapture;
+    if (capture != null) {
+      capture.add((event: event, metadata: metadata));
+      return;
+    }
     unawaited(_logAsync(event, metadata));
   }
 

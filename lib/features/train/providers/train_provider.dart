@@ -969,15 +969,18 @@ class HoldStatusData {
 
 final holdStatusProvider = Provider<HoldStatusData>((ref) {
   ref.watch(currentPlanProvider); // rebuild on (re)materialize / hold write
-  if (!PlanEngineFlags.holdWeeksEnabled) return HoldStatusData.empty;
 
   final readService = ref.read(workoutScheduleReadServiceProvider);
-  final holds = readService.holdWeeks();
+  // `activeHoldWeeks()` / `activeHoldOrdinalFor()` ARE the `enable_hold_weeks`
+  // gate (FOB-1): they return empty/null whenever the flag is OFF, so this
+  // provider no longer restates the check itself. One gate, in the service,
+  // shared with `weekIdentity()` — see WorkoutScheduleReadService.
+  final holds = readService.activeHoldWeeks();
   if (holds.isEmpty) return HoldStatusData.empty;
 
   // `nowWall()` (not DateTime.now()) so the dev time-travel / year-sim seam that
   // holdWeek() writes against also drives what "today" means when reading back.
-  final todayOrdinal = readService.holdOrdinalForDate(nowWall());
+  final todayOrdinal = readService.activeHoldOrdinalFor(nowWall());
   if (todayOrdinal == null) {
     // Past holds exist but today isn't one of them (e.g. the user advanced, or
     // the hold week has elapsed). Show the chips; don't claim to be holding.
@@ -992,6 +995,20 @@ final holdStatusProvider = Provider<HoldStatusData>((ref) {
     sessionsCompleted: progress.completed,
     sessionsTotal: progress.total,
   );
+});
+
+/// The honest week identity for today, reactive to plan (re)materialization —
+/// the widget-side entry point to [WeekIdentity]. Non-widget callers
+/// (`ai_snapshot_builder`, repositories) use
+/// `WorkoutScheduleReadService.weekIdentity()` directly; both share the ONE
+/// flag gate in the service.
+///
+/// Watches `currentPlanProvider` for the same reason `holdStatusProvider` does:
+/// taking a hold writes schedule rows, and a stale identity would print the
+/// pre-hold week counter until something else happened to invalidate.
+final weekIdentityProvider = Provider<WeekIdentity>((ref) {
+  ref.watch(currentPlanProvider);
+  return ref.read(workoutScheduleReadServiceProvider).weekIdentity();
 });
 
 // ── Selected Week ────────────────────────────────────────────────
