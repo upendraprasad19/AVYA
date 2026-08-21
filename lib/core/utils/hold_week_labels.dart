@@ -23,26 +23,38 @@
 // None of these projects `4 + ordinal`. That manufactures the value the UI ruled
 // dishonest and demotes a phase-2 holder from program week 8 to 5 (c9f4a2).
 
+/// The bare hold identity — `H1`, `H2`, `H3`… — and the ONLY place the `H`
+/// prefix is spelled in this codebase.
+///
+/// Every label below composes from it, and so does the AI coach snapshot's
+/// `hold.label` (`workout_schedule_read_service.dart` holdSnapshotBlock). That
+/// matters more than it looks: the snapshot's job is to make the model quote
+/// the SAME identity the user is reading on screen, and two independently
+/// spelled `'H$ordinal'` string literals is exactly the drift this file's
+/// header was written about. One definition, one table-driven test, both
+/// surfaces.
+String holdIdentityLabel(int ordinal) => 'H$ordinal';
+
 /// Home's DAILY eyebrow segment — `WK 4` / `HOLDING · H1`.
 ///
 /// Home carries no HOLDING pill, so unlike the Train header (which DROPS the
 /// segment because its pill states the identity ~40px away, c8b3f2 D1) this
 /// SUBSTITUTES the hold identity into the segment.
 String homeWeekSegment({required int? holdOrdinal, required int? weekInPhase}) =>
-    holdOrdinal != null ? 'HOLDING · H$holdOrdinal' : 'WK $weekInPhase';
+    holdOrdinal != null ? 'HOLDING · ${holdIdentityLabel(holdOrdinal)}' : 'WK $weekInPhase';
 
 /// Profile header subtitle segment — `Week 4` / `Holding · H1`.
 /// Sentence case here, not the eyebrow's all-caps, matching its surrounding
 /// `Phase 1 · … · Build muscle` string.
 String profileWeekSegment(
         {required int? holdOrdinal, required int weekInPhase}) =>
-    holdOrdinal != null ? 'Holding · H$holdOrdinal' : 'Week $weekInPhase';
+    holdOrdinal != null ? 'Holding · ${holdIdentityLabel(holdOrdinal)}' : 'Week $weekInPhase';
 
 /// Journey-timeline header label — `WEEK 4 OF 4` / `HOLDING · H1`.
 String journeyWeekLabel(
         {required int? holdOrdinal, required int weekInPhase}) =>
     holdOrdinal != null
-        ? 'HOLDING · H$holdOrdinal'
+        ? 'HOLDING · ${holdIdentityLabel(holdOrdinal)}'
         : 'WEEK $weekInPhase OF 4';
 
 /// Journey-timeline Phase-1 milestone line.
@@ -53,7 +65,7 @@ String journeyWeekLabel(
 String journeyPhaseOneMilestone(
         {required int? holdOrdinal, required int weekInPhase}) =>
     holdOrdinal != null
-        ? 'Phase 1 complete · holding at H$holdOrdinal'
+        ? 'Phase 1 complete · holding at ${holdIdentityLabel(holdOrdinal)}'
         : '${(4 - weekInPhase).clamp(0, 4)} weeks to complete Phase 1';
 
 /// Roadmap deployment header — `WK 4 / 12  —  33% complete` /
@@ -69,7 +81,7 @@ String roadmapWeekLabel({
   required int completePct,
 }) =>
     holdOrdinal != null
-        ? 'HOLDING · H$holdOrdinal  —  $completePct% complete'
+        ? 'HOLDING · ${holdIdentityLabel(holdOrdinal)}  —  $completePct% complete'
         : 'WK $programWeek / 12  —  $completePct% complete';
 
 // ── ROW-DERIVED LABELS (Hermes 2026-08-20 P1-A) ─────────────────────────────
@@ -116,7 +128,7 @@ bool rowIsHold(Map<dynamic, dynamic>? scheduleRow) =>
 String todayCardWeekLabel(Map<dynamic, dynamic>? scheduleRow) {
   if (rowIsHold(scheduleRow)) {
     final ordinal = rowHoldOrdinal(scheduleRow);
-    return ordinal != null ? 'Holding · H$ordinal' : 'Holding';
+    return ordinal != null ? 'Holding · ${holdIdentityLabel(ordinal)}' : 'Holding';
   }
   final week = scheduleRow?['week'] as int? ?? 1;
   return 'Week $week';
@@ -129,7 +141,7 @@ String todayCardWeekLabel(Map<dynamic, dynamic>? scheduleRow) {
 String? dayDetailWeekLabel(Map<dynamic, dynamic>? scheduleRow) {
   if (rowIsHold(scheduleRow)) {
     final ordinal = rowHoldOrdinal(scheduleRow);
-    return ordinal != null ? 'HOLDING · H$ordinal' : 'HOLDING';
+    return ordinal != null ? 'HOLDING · ${holdIdentityLabel(ordinal)}' : 'HOLDING';
   }
   final week = scheduleRow?['week'] as int? ?? 0;
   return week > 0 ? 'WEEK $week' : null;

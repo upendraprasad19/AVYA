@@ -1090,6 +1090,25 @@ cloud sessions; **this file is the cross-session backlog.**
   PRO-advance gate input and `PlanIntegrityReconciler` still scans weeks 1-4 only. FOB-3/FOB-4
   require ai-proxy + weekly-recap-ready + weekly-report EF redeploys — each its own explicit
   authorization (§4.3), plan approval ≠ deploy approval.
+- ✅ **FOB-3 CODE LANDED 2026-08-21** — branch `claude/oi-pending-hold-weeks-1od97o`, diagnose
+  `b6e1f4`, closure `docs/audit/fob3-coach-hold-block.closure.yaml`, behavioral test
+  `test/contracts/hold_snapshot_block_behavioral_test.dart` (7 cases, mutation-proven on five legs,
+  each reddening exactly one test). The snapshot gains a facts-only `hold` block through a new
+  `holdSnapshotBlock()` seam, emitted with a null-aware element so a non-holder's snapshot gains no
+  key at all, and `hold` joins `trimSnapshotToBudget`'s keep set. The INSTRUCTION half — a HOLD
+  WEEKS section in `captain_manual.ts` telling the coach to read `snapshot.hold`, quote
+  `hold.label`, IGNORE both projected week fields BY NAME and NEVER say final-week-of-Phase-I —
+  is **INERT until ai-proxy is redeployed** (credentials, not permission; see
+  `docs/operations/FOUNDER_LAPTOP_HANDOFF.md` §2-4).
+  ⚠ Two things nearly shipped broken and are worth carrying forward: 20 **unescaped backticks**
+  inside the `CAPTAIN_MANUAL` template literal would have terminated it and boot-failed ai-proxy
+  on the next deploy without failing loudly (deploy-skill 6.5); and the first **keep-set test
+  proved nothing** — dropping `'hold'` from the keep set left every test green, because the
+  trimmer shrinks the LARGEST non-kept field and two giant bloat fields absorbed the whole overage
+  before the ~110-char block was ever reached.
+  Deliberately NOT done: suppressing the two week fields. They are read by non-hold logic, and
+  OI-60's own `do_not` forbids the obvious replacement.
+
   ⚠ **FOB-4 needs MORE than a redeploy, and the ledger's `why:` does not say so.** Measured
   2026-08-20 against the live schema: `information_schema.columns` in schema `public` contains
   **zero** columns matching `%hold%`, and `user_progress` carries no hold field of any spelling
@@ -1125,8 +1144,10 @@ cloud sessions; **this file is the cross-session backlog.**
   half-changed snapshot contract), and `telegram-bot/bot.py` is **upstream_blocked**, a separate
   repo on the OpenClaw VPS (§2).
 - **What's missing**: Own full ×2 per §4.12.4 (flip-on is where real user risk starts) — the four
-  remaining FOB items closed first. The flip-on commit must clear **all three** `enable_hold_weeks`
-  rows in the ledger (`hold-mechanic`, `hold-display`, `hold-display-fixes`) in one commit.
+  remaining FOB items closed first. The flip-on commit must clear **all four** `enable_hold_weeks`
+  rows in the ledger (`hold-mechanic`, `hold-display`, `hold-display-fixes`, and
+  `claude/oi-pending-hold-weeks-1od97o`) in one commit — corrected from "three" on 2026-08-21 when
+  FOB-1+FOB-3 added the fourth.
 
 ## OI-61 — Coach-UX: live-verify test7, v74 hardening, temp-PRO cleanup
 

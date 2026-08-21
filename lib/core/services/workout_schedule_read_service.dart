@@ -27,6 +27,7 @@ import 'sync_service.dart';
 import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
+import '../utils/hold_week_labels.dart';
 import '../utils/ist_date.dart';
 import '../utils/phase_completion.dart';
 import '../../features/profile/services/profile_write_service.dart';
@@ -911,6 +912,65 @@ class WorkoutScheduleReadService {
     return ordinal == null
         ? WeekIdentity.week(getCurrentWeekNumber())
         : WeekIdentity.hold(ordinal);
+  }
+
+  /// The coach snapshot's `hold` block — FOB-3 / OI-60 — or **null** when the
+  /// user is not on a hold day today.
+  ///
+  /// NULL IS THE CONTRACT, not an oversight. The caller must OMIT the key
+  /// entirely rather than emit `"hold": null`: with `enable_hold_weeks` OFF
+  /// [activeHoldOrdinalFor] is always null, so omission is what makes the
+  /// flag-OFF snapshot BYTE-IDENTICAL to the pre-FOB-3 one — the ship-dark
+  /// property §4.12.4's lighter review tier rests on. A literal null key would
+  /// change every snapshot in the fleet and forfeit it.
+  ///
+  /// Carries FACTS ONLY. The instruction for what the coach should DO with them
+  /// lives in `supabase/functions/_shared/captain_manual.ts` (the system
+  /// prompt), not here: the manual is sent once per request while this block
+  /// would repeat the same prose in every holder's snapshot and be charged
+  /// against the 8500-char trim budget. That split is also why FOB-3 needs an
+  /// ai-proxy redeploy for only half of itself.
+  ///
+  /// The caller MUST also add `'hold'` to [AiSnapshotBuilder.trimSnapshotToBudget]'s
+  /// keep set: the trimmer halves a non-kept map BY INSERTION ORDER, so an
+  /// over-budget snapshot would silently drop `sessions_total` first and
+  /// `ordinal` last — leaving a hold block that says less the more the user has
+  /// logged.
+  Map<String, dynamic>? holdSnapshotBlock() {
+    final ordinal = activeHoldOrdinalFor(nowWall());
+    if (ordinal == null) return null;
+    // Read from the SAME gated list every other production consumer reads, so
+    // a hold that the flag hides here cannot be visible there.
+    HoldWeekInfo? info;
+    for (final h in activeHoldWeeks()) {
+      if (h.ordinal == ordinal) {
+        info = h;
+        break;
+      }
+    }
+    // ALL-OR-NOTHING, deliberately. Both reads come from the same rows —
+    // activeHoldOrdinalFor returns TODAY's stamped hold_ordinal, and
+    // activeHoldWeeks groups every hold row by that same stamp — so an ordinal
+    // present in one and absent from the other is not expressible today. The
+    // guard is here for what happens IF it ever becomes expressible: a block
+    // with a missing week_start is a block whose key set varies, and the
+    // trimmer halves a map BY INSERTION ORDER, so a 4-key block degrades to
+    // {ordinal, label} instead of the 6-key block the contract promises.
+    // Emitting nothing is honest; emitting a partial block that looks complete
+    // is not, and inventing a default for is_deload would be worse than both.
+    if (info == null) return null;
+    final progress = holdWeekSessionProgress(ordinal);
+    return <String, dynamic>{
+      'ordinal': ordinal,
+      // The identity the UI prints, from the ONE place the `H` prefix is
+      // spelled, so the coach quotes the same token the user is reading on
+      // screen rather than a second literal that can drift from it.
+      'label': holdIdentityLabel(ordinal),
+      'week_start': istDateStr(info.weekStart),
+      'is_deload': info.isDeload,
+      'sessions_completed': progress.completed,
+      'sessions_total': progress.total,
+    };
   }
 
   /// Completed vs. scheduled workout days within hold week [ordinal] — the

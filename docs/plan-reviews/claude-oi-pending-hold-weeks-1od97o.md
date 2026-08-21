@@ -9,6 +9,8 @@ verdict: converged
 bpass: accepted
 bpass_review: docs/reviews/fob1-week-identity-bpass.md
 fob5_bpass_review: docs/reviews/47eaf8318774-review.md
+oi132_bpass_review: docs/reviews/4eea94e469e2-review.md
+fob3_bpass_review: docs/reviews/fob3-coach-hold-block-bpass.md
 round2_review: docs/plan-reviews/round2-oi-pending-hold-weeks.md
 hermes: accepted
 hermes_report: docs/audit/2026-08-20-hermes-fob1-fob5.md
@@ -89,7 +91,7 @@ independent round, never the self-driven adversarial pass, and §4.3 mandates it
 ≥`account` regardless.
 
 **This tier does NOT carry to the flip.** The commit that flips `enable_hold_weeks` needs
-the full ×2 + `bpass: accepted` and must clear all three `enable_hold_weeks` rows in
+the full ×2 + `bpass: accepted` and must clear all FOUR `enable_hold_weeks` rows in
 `docs/ship_dark_pending_review.yaml` at once.
 
 ## Ground truth verified this session
@@ -245,3 +247,43 @@ and compares them** instead of asserting a hardcoded string, so a change to eith
 reddens rather than silently re-opening the gap. Mutation-proven on all three legs (drop the
 tag filter → 1 red; drop TZ → 2; demote the correct command to a comment while a bare
 `flutter test` still executes → 3).
+
+---
+
+## Unit-by-unit review provenance (appended 2026-08-21)
+
+The frontmatter above reports the branch's HIGH-WATER MARK, which is what the
+keystone gate reads. It is not a claim that every unit on the branch got two
+independent context-blind rounds, and this section exists so nobody has to infer
+which did.
+
+| Unit | Landed | Independent rounds | B-pass | Tier |
+|---|---|---|---|---|
+| FOB-1 (week identity) | 2026-08-20 | 2 (round 2 + the Hermes pass) | `docs/reviews/fob1-week-identity-bpass.md` | full ×2 |
+| FOB-5 (hold telemetry) | 2026-08-20 | 2 (same pair) | `docs/reviews/47eaf8318774-review.md` | full ×2 |
+| OI-132 (Gate 31 re-scope) | 2026-08-21 `887fbd8` | 0 — self-driven B-pass only | `docs/reviews/4eea94e469e2-review.md` | see below |
+| FOB-3 (coach hold block) | 2026-08-21 | 0 — self-driven B-pass only | `docs/reviews/fob3-coach-hold-block-bpass.md` | `ship_dark_build` (§4.12.4) |
+
+**FOB-3 qualifies for §4.12.4's lighter build tier and I am claiming it
+explicitly:** kill-switch `enable_hold_weeks`, default OFF, and a passing
+behavioral test proving the flag-OFF output is byte-identical — the
+`flag OFF — the ship-dark property` group in
+`test/contracts/hold_snapshot_block_behavioral_test.dart`, which materializes
+REAL holds with the flag ON, turns it OFF, and asserts the snapshot gains no
+`hold` key at all. Under that tier the round count drops to 1 and `bpass:
+accepted` is still required. **What this batch actually had is 0 independent
+rounds plus the self-driven B-pass, which is one short of even the lighter
+tier.** Recording that rather than rounding it up. The full ×2 is required
+again, no exceptions, on the commit that flips the flag — which is where the
+user risk starts and where all FOUR `enable_hold_weeks` ledger rows must clear
+at once.
+
+**OI-132 is not a flag-gated change at all**, so the ship-dark tier does not
+apply to it; its own B-pass found and fixed three defects, including one where
+the fix had reintroduced the blind spot it closed. It, too, had no independent
+round.
+
+Both units' B-passes were adversarial in substance — each found real defects in
+the code as first written, and each recorded a case where a test it had just
+written turned out to prove nothing. That is not a substitute for an independent
+reader and is not offered as one.

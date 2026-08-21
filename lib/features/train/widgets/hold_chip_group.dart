@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/ward_dashed_border.dart';
@@ -200,7 +201,7 @@ class _DeloadPreviewChip extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'H$ordinal',
+              holdIdentityLabel(ordinal),
               style: AppTypography.monoXs.copyWith(
                 fontSize: 10,
                 color: AppColors.accent,
