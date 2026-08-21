@@ -227,6 +227,29 @@ Skipping this wrapper = silent cron failure (precedent: morning-alert 401 series
 
 ---
 
+### 6.8 An unescaped backtick in a template literal — the boot failure you WROTE, before you deployed it (NEW 2026-08-21)
+
+**Telltale:** none, until the deploy. The function 503s at boot and the previous bundle keeps
+serving, so nothing looks wrong until a request happens to miss the old pool.
+**Root cause:** several `_shared/*.ts` modules hold large prompts as ONE template literal —
+`export const CAPTAIN_MANUAL = ` + backtick + `...` + backtick. Any edit that mentions a snapshot
+key in prose (`` `snapshot.hold` ``, `` `hold.label` ``) TERMINATES the literal at that point and
+the module stops parsing. Live 2026-08-21 (FOB-3, `b6e1f4`): 20 unescaped backticks written into
+`captain_manual.ts`, caught only by reading the file's OWN existing escapes at lines 403-410.
+`${` is the same hazard for a different reason — it interpolates instead of failing.
+**Fix:** escape as `` \` `` and `\$`. Then PROVE it rather than eyeballing it:
+
+```bash
+# extract the declaration and let a real JS engine parse it
+python3 -c "import io;s=io.open('supabase/functions/_shared/captain_manual.ts',encoding='utf-8').read();i=s.index('export const CAPTAIN_MANUAL = ');io.open('/tmp/probe.mjs','w',encoding='utf-8').write(s[i:s.index(chr(96)+';',i)+2]+'\nconsole.log(CAPTAIN_MANUAL.length)')"
+node /tmp/probe.mjs      # throws on an unterminated literal
+```
+
+A grep for `` ` `` also works as a fast check: the file should contain exactly TWO unescaped
+backticks, the opener and the closer. CI's `deno-edge-functions` type-check is the real gate, so
+never merge a `_shared/*.ts` prompt edit without it going green — and note it runs on the PUSH,
+which is after the point where a local `--no-verify` would have let it through.
+
 ## 7. Verification gates
 
 After every deploy:

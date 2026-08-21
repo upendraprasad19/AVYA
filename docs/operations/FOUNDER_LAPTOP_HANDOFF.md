@@ -63,10 +63,11 @@ is the last argument.
 
 ## 2–4. `ai-proxy`, `weekly-recap-ready`, `weekly-report` — FOB-3 + FOB-4
 
-> ⚠️ **Do not deploy these until the FOB-3/FOB-4 code is on `main`.** As of this note being
-> written it is not. This section is the command reference for when it is; if the repo has no
-> `hold` block in `ai_snapshot_builder.dart`, that work has not landed and there is nothing to
-> deploy.
+> **Status, 2026-08-21: FOB-3 has landed — deploy `ai-proxy`.** The snapshot now emits a `hold`
+> block and `captain_manual.ts` has a HOLD WEEKS section telling the coach to read it. That
+> section is **inert until this redeploy**. FOB-4 has NOT landed and its two functions
+> (`weekly-recap-ready`, `weekly-report`) have nothing new to deploy yet — see the note at the
+> bottom of this section for why FOB-4 turned out to need a migration first.
 
 ```bash
 cd "C:/Upendra/Claude Code/Fitness App"
@@ -80,6 +81,28 @@ done
 `ai-proxy` and `weekly-report` are `verify_jwt=true`; `weekly-recap-ready` is cron-dispatched and
 takes `false`. Run it as three separate commands rather than the loop if you want the flag right
 per function — the loop above is wrong for `weekly-recap-ready` and is shown only for the shape.
+
+**Today, only `ai-proxy` needs deploying:**
+
+```bash
+cd "C:/Upendra/Claude Code/Fitness App"
+git pull
+node .claude/emit_payload.js ai-proxy --auto --functions-dir ./supabase/functions
+node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl ai-proxy .claude/_payload_ai-proxy.json true
+```
+
+⚠️ **Watch for a 503 on the boot-verify below and do not shrug it off.** `captain_manual.ts` is one
+long template literal, and the HOLD WEEKS section this deploy carries refers to `snapshot.hold`,
+`hold.label` and friends. Those backticks are escaped in the repo (verified by parsing the
+extracted declaration with node: 19831 chars, closing backtick at line 412) — but if a later edit
+ever adds an unescaped one, the module stops parsing and ai-proxy 503s at boot while the OLD
+bundle keeps serving. That is the failure mode that looks like nothing happened.
+
+**FOB-4 is not deployable yet, and not for a scheduling reason.** Measured live 2026-08-21: schema
+`public` contains ZERO columns matching `%hold%`, `user_progress` has no hold field of any
+spelling, and there is no `workout_schedule` table in `public` at all — `is_hold` lives only on
+local schedule rows. So `weekly-recap-ready` and `weekly-report` cannot branch on a hold whatever
+is deployed to them. FOB-4 needs a **migration** and its own live-apply authorization first.
 
 **Boot-verify caveat that has bitten this repo before (diagnose `f5d8c3`):** for a
 `verify_jwt=true` function the unauthenticated smoke gets a **401 from the gateway before the

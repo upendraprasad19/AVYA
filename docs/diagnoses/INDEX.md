@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### hold_snapshot_block (1 bugs)
+- 2026-08-21 b6e1f4 — FOB-3 of OI-60. The AI coach asserts a falsehood to every holder, every week. The snapshot sends `progress.current_week` and `current_plan_summary.week` derived from `getCurrentWeekNumber()`, which…
+
 ### founder_metrics_engagement (1 bugs)
 - 2026-08-20 c7a3b9 — FOB-5 of OI-60, two defects in one function, one LIVE on the founder dashboard. (1) `founder_metrics_engagement().ai_messages_today` counted EVERY row of `ai_coach_interactions` with no channel…
 
@@ -1047,6 +1050,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-21 | b6e1f4 | FOB-3 of OI-60. The AI coach asserts a falsehood to every holder, every week. The snapshot sends `progress.current_week` and `current_plan_summary.week` derived from `getCurrentWeekNumber()`, which… | hold_snapshot_block | test/contracts/hold_snapshot_block_behavioral_test.dart |
 | 2026-08-20 | c7a3b9 | FOB-5 of OI-60, two defects in one function, one LIVE on the founder dashboard. (1) `founder_metrics_engagement().ai_messages_today` counted EVERY row of `ai_coach_interactions` with no channel… | founder_metrics_engagement | test/contracts/hold_week_mechanic_behavioral_test.dart |
 | 2026-08-20 | a7e4c2 | Hermes P1-D + P1-E. FOB-5 existed because five phase_1_day_29_* events had ZERO consumers, making the free-tier hold mechanic unobservable. It replaced them with hold_week_started plus three SQL… | hold_week_telemetry | test/contracts/admin_hold_telemetry_renders_behavioral_test.dart |
 | 2026-08-20 | f4c8e1 | FOB-1 of OI-60. Six in-repo surfaces printed the clamped week 4 to a free-tier holder, at every hold ordinal, forever. `getCurrentWeekNumber()` (workout_schedule_read_service.dart:1096) ends in… | hold_week_identity | test/contracts/hold_week_identity_behavioral_test.dart |

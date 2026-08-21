@@ -183,7 +183,7 @@ extension _PlanHeader on _TrainScreenState {
           ),
           const SizedBox(width: 7),
           Text(
-            ordinal == null ? 'HOLDING' : 'HOLDING · H$ordinal',
+            ordinal == null ? 'HOLDING' : 'HOLDING · ${holdIdentityLabel(ordinal)}',
             style: AppTypography.monoXs.copyWith(
               fontSize: 11,
               letterSpacing: 1,

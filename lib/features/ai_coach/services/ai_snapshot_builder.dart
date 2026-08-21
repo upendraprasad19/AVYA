@@ -63,6 +63,11 @@ class AiSnapshotBuilder {
         .length;
     final isFirstEverMessage = priorMessages == 0;
 
+    // FOB-3: read the hold block ONCE. Calling the seam twice inside the map
+    // literal (null-check, then value) would read `nowWall()` twice and could
+    // straddle IST midnight on the last request of a hold's final day.
+    final holdBlock = WorkoutScheduleService.instance.holdSnapshotBlock();
+
     final snapshot = <String, dynamic>{
       'is_first_ever_message': isFirstEverMessage,
       'profile': {
@@ -181,6 +186,21 @@ class AiSnapshotBuilder {
 
       ..._getInductionAndMusterKeys(),
 
+      // FOB-3 / OI-60 — the ONE thing in this snapshot that tells the coach a
+      // holder is holding. The null-aware element omits the KEY ENTIRELY when
+      // the seam returns null, which is every snapshot while
+      // `enable_hold_weeks` is OFF: that omission is what makes the flag-OFF
+      // output BYTE-IDENTICAL to the pre-FOB-3 one, and it is the ship-dark
+      // property the lighter §4.12.4 review tier rests on. `'hold': null` would
+      // change every snapshot in the fleet and forfeit it.
+      // Without this block the coach reads current_week: 4 for every hold day
+      // at every ordinal (holds start at plan_start+28, so the clamp always
+      // yields 4), and with `free locks at Phase I after 4 weeks` in the manual
+      // it synthesizes a repeating "final week of Phase I / upgrade now" aimed
+      // at the user who just chose to stay. `hold` is in
+      // trimSnapshotToBudget's keep set — see the note there; not optional.
+      'hold': ?holdBlock,
+
       'pr_timeline_summary': _getPRTimelineSummary(),
       'goal_changed_at': _getGoalChangedAt(),
       'body_measurements': _getBodyMeasurements(),
@@ -245,6 +265,12 @@ class AiSnapshotBuilder {
       'daily_calorie_target', 'today_workout', 'today_workout_name',
       'today_nutrition', 'meals_today', 'current_plan_summary',
       'subscription', 'current_rank', 'next_rank', 'motivational_style',
+      // FOB-3: never halve the hold block. The loop below shrinks a non-kept
+      // MAP by insertion order (`ks.take(keepN)`), so an over-budget snapshot
+      // would drop `sessions_total` first and keep `ordinal` — a hold block
+      // that says LESS the more the user has logged, while still looking
+      // present. It is ~90 chars; keeping it whole costs nothing that matters.
+      'hold',
     };
 
     var size = jsonEncode(s).length;

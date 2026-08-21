@@ -73,6 +73,32 @@ pending:
       per §4.12.1 the unit was split and those became the flip_on_blockers
       below.
 
+  - flag: enable_hold_weeks
+    branch: claude/oi-pending-hold-weeks-1od97o
+    build_commit: null
+    build_date: 2026-08-21
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      FOB-1 (week identity, 2026-08-20) and FOB-3 (the coach snapshot's `hold`
+      block + the captain_manual HOLD WEEKS section, 2026-08-21) on the same
+      branch. §4.12.4 lighter build tier for FOB-3: kill-switch
+      enable_hold_weeks, default OFF, and the byte-identical evidence is the
+      `flag OFF — the ship-dark property` group in
+      test/contracts/hold_snapshot_block_behavioral_test.dart, which
+      materializes REAL holds with the flag ON, turns it OFF, and asserts the
+      snapshot gains NO `hold` key. Omission rather than `'hold': null` is the
+      load-bearing detail and is asserted directly.
+      ⚠ HALF OF FOB-3 IS INERT FOR A SECOND REASON, on top of the flag:
+      captain_manual.ts does nothing until ai-proxy is redeployed, which needs
+      a Management API token this container does not hold (closure
+      docs/audit/fob3-coach-hold-block.closure.yaml, finding FOB3-F).
+      FOURTH entry for this ONE flag — flipping it on must clear all four in a
+      single commit, with the full ×2 + bpass: accepted.
+      build_commit is null because this note is written in the same commit it
+      describes; resolve it the way the hold-mechanic row's placeholder was
+      resolved by the next batch.
+
   # ── The 13 workout-generator-overhaul flags (OI-53) ─────────────────────
   #
   # BACKFILLED 2026-07-27, gate-input-family batch. OI-53 asserted these were

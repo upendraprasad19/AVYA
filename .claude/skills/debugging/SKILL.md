@@ -296,6 +296,26 @@ Per CLAUDE.md rules 21 + 22:
   or language actually accepts) · add a NEW unguarded instance beside the guarded one · demote it
   to a comment. The last two are the ones greps fail.
 
+### 2.41 The mutation was ABSORBED — the test is green because something else took the damage
+
+- **Trigger:** you delete a protection, the tests stay green, and the protection looks obviously
+  load-bearing when you read it. The instinct is "my mutation was wrong". Usually the TEST is.
+- **The shape:** the code under test has a *competing sink* that swallows the mutation before it
+  can reach the assertion. Live 2026-08-21 (FOB-3, `b6e1f4`): `'hold'` was added to
+  `trimSnapshotToBudget`'s keep set, with a test that bloated the snapshot past budget and
+  asserted the hold block came back whole. Dropping `'hold'` from the keep set reddened NOTHING.
+  The trimmer shrinks the LARGEST non-kept field each pass, so the two giant bloat fields the
+  test used absorbed the entire overage and the ~110-char hold block was never reached. The test
+  exercised the trimmer; it never exercised the line it was written for.
+- **Why this is worse than no test:** it is the Gate-44 shape sitting INSIDE the guard against
+  it, and it reads as coverage in every review and every ledger entry.
+- **The fix is always the same:** construct the input so the protected thing is the ONLY thing
+  left for the mechanism to take. Here: make the KEPT fields alone exceed the budget, so the loop
+  has nothing else to shrink. Then assert the SHAPE precisely (key count, not just "contains") —
+  a loose matcher lets a half-degraded value pass.
+- **Corollary for §4.4 rule 24 evidence:** "N tests redden" is only meaningful if you RAN it.
+  A mutation you reasoned about rather than executed cannot tell you it was absorbed.
+
 ### 2.40 Mutation-proving runs in the SHARED worktree, where §4.13's guarantee does not reach
 
 - **Trigger:** dispatching mutation agents and read-only reviewers at the same time.
@@ -331,6 +351,7 @@ Borrowing from `superpowers:using-superpowers`, `superpowers:systematic-debuggin
 - **"The test greps for the provider name, so the wiring is covered."** No. That token survives a call site that passes `null`. See §2.37 — a 4757-test suite stayed green through it.
 - **"The RPC returns the column / the endpoint 200s, so the feature works."** That is true at ONE layer. Name the next consumer and check it. See §2.38.
 - **"Mutation-proven — I deleted the check and tests went red."** Half a proof. Reorder it, respell it, and add a NEW unguarded instance beside the guarded one. See §2.39.
+- **"I deleted the check and tests stayed green, so the mutation must be wrong."** Usually the TEST is: something else absorbed the damage before it reached the assertion. See §2.41.
 - **"`CREATE OR REPLACE` keeps the grants, so I can add a return column."** You cannot — 42P13 forces a DROP, and the DROP resets the ACL. See §2.36.
 - **"I'll run the mutations here while the reviewers read."** They will see a tree that matches no commit. See §2.40.
 - **"This bug class is novel — I don't need to update the catalog."** Wrong. §5 self-evolution rule below applies.

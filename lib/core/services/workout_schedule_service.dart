@@ -176,6 +176,12 @@ class WorkoutScheduleService {
   read.WeekIdentity weekIdentity() =>
       read.WorkoutScheduleReadService.instance.weekIdentity();
 
+  /// The coach snapshot's `hold` block, or null when not holding today.
+  /// See the read service — null MUST be rendered as an omitted key, never
+  /// as `"hold": null`. FOB-3 / OI-60.
+  Map<String, dynamic>? holdSnapshotBlock() =>
+      read.WorkoutScheduleReadService.instance.holdSnapshotBlock();
+
   int getCurrentDayInPhase() =>
       read.WorkoutScheduleReadService.instance.getCurrentDayInPhase();
 

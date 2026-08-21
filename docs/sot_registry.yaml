@@ -7390,6 +7390,98 @@ concepts:
       router guard (lib/core/router/app_router.dart) and any client-side
       "is this the founder" check are UX only, never the actual gate.
 
+  - concept: hold_snapshot_block
+    domain: ai_coach
+    behavioral_test_path: test/contracts/hold_snapshot_block_behavioral_test.dart
+    description: |
+      FOB-3 of OI-60. The coach snapshot's `hold` block — the ONE field that
+      tells the AI coach a holder is holding. Present only on a live hold day
+      with `enable_hold_weeks` ON; the key is OMITTED entirely otherwise.
+
+      WHY THE KEY IS OMITTED RATHER THAN NULLED, because it looks like a style
+      choice and is not: with the flag OFF the seam returns null for every user,
+      so omission is what makes the snapshot BYTE-IDENTICAL to the pre-FOB-3
+      one across the whole fleet. `'hold': null` would satisfy a naive isNull
+      check and still change every snapshot ever sent, forfeiting the ship-dark
+      property §4.12.4's lighter review tier rests on.
+
+      THE SPLIT BETWEEN FACTS AND INSTRUCTION is deliberate and is why FOB-3
+      needs an ai-proxy redeploy for only half of itself. The block carries
+      FACTS (ordinal, label, week_start, is_deload, sessions_completed,
+      sessions_total) and ships with the APK. What the coach must DO with them
+      lives in `captain_manual.ts` — the static system prompt, sent once per
+      request — rather than being repeated in every holder's snapshot and
+      charged against the 8500-char trim budget.
+
+      WHAT IT DOES NOT DO: it does not suppress or rewrite
+      `progress.current_week` or `current_plan_summary.week`. Those still carry
+      the clamped-derived number (the same value on every hold day at every
+      ordinal, because `getCurrentWeekNumber()` ends in `.clamp(1, 4)` and a
+      hold starts at plan_start+28). They are read by non-hold logic too, so
+      blanking them would trade a wrong number for a missing one. The manual
+      names both fields as things to IGNORE instead.
+
+      THE TRIM KEEP-SET ENTRY IS LOAD-BEARING, not defensive tidiness.
+      `trimSnapshotToBudget` halves a non-kept MAP by insertion order, so an
+      unkept 6-key block becomes {ordinal, label, week_start} — a hold block
+      that says LESS the more the user has logged, while still looking present.
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 939-974
+        method: holdSnapshotBlock
+        notes: |
+          Returns null off a hold day. Reads activeHoldOrdinalFor/activeHoldWeeks
+          — the SAME gated pair every other production consumer reads — so a
+          hold the flag hides here cannot be visible anywhere else. ALL-OR-
+          NOTHING: if the ordinal has no matching HoldWeekInfo it returns null
+          rather than a 4-key block, because a variable key set degrades badly
+          under the trimmer's insertion-order halving and a default for
+          is_deload would be a fabricated value.
+      - file: lib/core/utils/hold_week_labels.dart
+        line_range: 36-36
+        method: holdIdentityLabel
+        notes: |
+          The ONE place the `H` prefix is spelled. The snapshot's hold.label and
+          all nine on-screen hold labels compose from it, so the model quotes
+          the same token the user is reading. Added by this batch's B-pass after
+          the seam was caught inlining a second `'H$ordinal'` literal — the
+          exact drift this util's header was written about.
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 54-205
+        method: buildAiContext
+        notes: |
+          Reads the seam ONCE into a local at :69 (two calls in the map literal
+          would read nowWall() twice and could straddle IST midnight on a hold's
+          final day), then emits `'hold': ?holdBlock` at :202.
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/_shared/captain_manual.ts
+        line_range: 7-412
+        method: CAPTAIN_MANUAL
+        semantic: pass-through
+        fields_read: [ordinal, label, sessions_completed, sessions_total, is_deload]
+        notes: |
+          The HOLD WEEKS section. INERT until ai-proxy is redeployed. Escaping
+          matters: this is inside a template literal, and an unescaped backtick
+          terminates it and boot-fails the function silently (deploy-skill 6.5).
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 236-280
+        method: trimSnapshotToBudget
+        notes: |
+          Keeps the block whole. Reads it only to NOT shrink it, which is why
+          the keep-set line needs its own forcing test — ordinary bloat never
+          reaches a 110-char map.
+    regression_test: test/contracts/hold_snapshot_block_behavioral_test.dart
+    hive:
+      box: workoutBox
+      # READ-ONLY over this prefix — the rows are holdWeek()'s. Declared anyway
+      # rather than left blank, because Gate 9 then requires the writer→reader
+      # contract test, and that test is where the four ways a row can be WRONG
+      # get pinned (renamed ordinal, renamed flag, flag with no ordinal, a hold
+      # week that is not today). A happy-path behavioral test cannot reach any
+      # of them: it only ever writes correct rows, by construction.
+      key_prefix: schedule_
+
   - concept: hold_week_telemetry
     domain: cross_domain
     behavioral_test_path: test/contracts/hold_telemetry_writer_reader_parity_test.dart
@@ -8715,7 +8807,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1157-1172
+        line_range: 1210-1225
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -8759,7 +8851,7 @@ concepts:
         method: buildAiContext (progress block)
         notes: progress.current_week now emits getProgramWeek, not getCurrentWeekNumber().
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1209-1222
+        line_range: 1235-1248
         method: _getCurrentPlanSummary
         notes: current_plan_summary.week now emits getProgramWeek(phase), not the frozen field — the two snapshot week fields are now single-valued.
     reader_manifest_complete: true
@@ -9045,15 +9137,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1281-1300
+        line_range: 1334-1353
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1280-1281
+        line_range: 1340-1341
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1326-1333
+        line_range: 1392-1399
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
     readers:
