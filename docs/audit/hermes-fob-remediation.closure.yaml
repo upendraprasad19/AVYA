@@ -118,13 +118,26 @@ findings:
     title: "the rolling-context fix is inert until the function is redeployed"
     terminal_state: blocked_on_user
     reason: >
-      Deploying an Edge Function to prod requires explicit per-action founder
-      authorization under CLAUDE.md §4.3, and plan approval is not deploy
-      approval. The three redeploys authorized in this session were ai-proxy,
-      weekly-recap-ready and weekly-report for FOB-3/FOB-4; rolling-context is
-      not among them and I will not stretch that grant. Until it is deployed the
-      repo and the running function disagree, which is OI-93's class. Tracked as
-      OI-133.
+      CORRECTED 2026-08-20: the founder DID authorize this redeploy when asked.
+      It is blocked on CREDENTIALS, not permission, and the distinction matters
+      for whoever picks it up.
+      The safe deploy path (§0 host-shell: emit_payload.js -> deploy_via_api.js)
+      needs a Supabase Management API token, and every source deploy_via_api.js
+      accepts is absent from this remote container: SUPABASE_ACCESS_TOKEN_FITNESS
+      and SUPABASE_ACCESS_TOKEN are unset, ~/.supabase/fitness-app-token does not
+      exist, and supabase/.supabase/ is gitignored so it did not come with the
+      clone.
+      The MCP deploy_edge_function fallback was considered and REJECTED rather
+      than attempted. rolling-context is not a single-file function: the live
+      deployment is 7 files (source/index.ts plus six siblings under _shared/,
+      which is what makes ../_shared/... resolve), and §0 records that the legacy
+      MCP path has silently mangled shared-import paths before. A mangled deploy
+      here does not fail loudly — it breaks a nightly cron that summarizes and
+      DELETES user conversation rows. Guessing on that is worse than not
+      deploying.
+      Until it deploys the repo and the running function disagree (OI-93's
+      class), and the P1-E/P1-F fixes have no production effect. Live version at
+      time of writing: 18. Tracked as OI-133.
 
   - id: P1-F
     title: "92 analytics rows are already inside the LLM's retrievable memory"

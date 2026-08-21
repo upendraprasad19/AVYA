@@ -3718,9 +3718,19 @@ than adding a predicate to the RPC (that would be a migration apply needing its 
 
 **Two things that remain, and neither is cosmetic:**
 
-1. **The fix is INERT until `rolling-context` is redeployed.** An Edge Function deploy needs its
-   own §4.3 authorization and has not been given. Until then the repo and the running function
-   disagree, which is OI-93's class.
+1. **The fix is INERT until `rolling-context` is redeployed.** ⚠ Corrected 2026-08-20: the
+   founder AUTHORIZED this redeploy. It is blocked on **credentials, not permission**. The §0
+   host-shell path needs a Supabase Management API token and every source `deploy_via_api.js`
+   accepts is absent from the remote container — `SUPABASE_ACCESS_TOKEN_FITNESS` and
+   `SUPABASE_ACCESS_TOKEN` unset, `~/.supabase/fitness-app-token` absent, `supabase/.supabase/`
+   gitignored so it never came with the clone.
+   The MCP `deploy_edge_function` fallback was **considered and rejected, not attempted**:
+   `rolling-context` deploys as **7 files** (`source/index.ts` + six siblings under `_shared/`,
+   which is what makes `../_shared/...` resolve), and §0 records the legacy MCP path silently
+   mangling shared-import paths. A mangled deploy of this particular function does not fail
+   loudly — it breaks a nightly cron that summarizes and DELETES user conversation rows.
+   **To unblock:** either export `SUPABASE_ACCESS_TOKEN_FITNESS` into the session, or run the two
+   §0 commands from the founder machine. Live version at time of writing: **18**.
 2. **The 92 existing rows are still retrievable.** Filtering the writer does not unwrite history.
    They need identifying and deleting, with a dry-run count first.
 
