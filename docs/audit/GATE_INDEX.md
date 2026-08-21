@@ -34,7 +34,7 @@ Total gates: **90** (49 numbered, 41 by filename only).
 | — | `check_copy_centralization.dart` | WARN-ONLY diagnostic. User-facing copy should live in WardroomCopy (lib/core/copy/wardroom_copy.dart) | grandfathered |
 | — | `check_cqrs_query_naming.dart` | a method whose NAME promises a query must not MUTATE. | grandfathered |
 | 30 | `check_crashlytics_alert_routing.dart` | assert that Firebase Crashlytics alert routing is documented at | grandfathered |
-| 31 | `check_cron_registry.dart` | assert that every `cron.schedule(...)` call in `supabase/migrations/*.sql` is also recorded | grandfathered |
+| 31 | `check_cron_registry.dart` | assert that every `cron.schedule(...)` call in `supabase/migrations/*.sql` is also recorded | mutation_proven |
 | 54 | `check_device_tests_exist.dart` | assert that the 4 named Patrol device-CI flow files exist in `integration_test/device/` and | grandfathered |
 | 25 | `check_diagnose_index_fresh.dart` | assert that `docs/diagnoses/INDEX.md` enumerates every diagnose-doc on disk. | grandfathered |
 | 18 | `check_doc_internal_consistency.dart` | known-drift pairs across CLAUDE.md + AGENTS.md must agree. | grandfathered |

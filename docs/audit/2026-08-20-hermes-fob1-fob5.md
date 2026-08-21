@@ -6,7 +6,7 @@ lens_set: [L1, L2, L8, L9, L10, L13, L23, L40]
 agents_dispatched: 5
 findings_total: 24
 findings_by_severity: { P0: 0, P1: 7, P2: 13, P3: 4, false_alarm: 9 }
-verdict: pending
+verdict: accepted
 ---
 
 # Hermes Pass — FOB-1 (week identity) + FOB-5 (hold telemetry)
@@ -137,10 +137,45 @@ phantom P0 against clean code. **A mutation run in the primary worktree while a 
 it is the §4.13 shared-index problem in a new costume.** Mutation proving needs its own worktree.
 Recorded here because the dispatch was the author's, not the reviewers'.
 
-## Founder triage
+## Triage — every finding has exactly one terminal state
 
-<pending>
+Closure ledger: `docs/audit/hermes-fob-remediation.closure.yaml` (Gate 40 validated).
+Diagnose-docs: `d5b8f3` (P1-A/B/C) and `a7e4c2` (P1-D/E).
+
+| # | terminal state | where |
+|---|---|---|
+| P1-A `4 + ordinal` reaches two labels | `closed_in_commit` | `665790f` |
+| P1-B identity→label wiring untested | `closed_in_commit` | `665790f` |
+| P1-C replay guard: 3 holes | `closed_in_commit` | `665790f` |
+| P1-D columns reach payload, not dashboard | `closed_in_commit` | `310aad0` |
+| P1-E cron deletes the metric's rows | `closed_in_commit` | `310aad0` |
+| P1-E-deploy fix is inert until redeploy | `blocked_on_user` | OI-133 — founder authorized, blocked on CREDENTIALS |
+| P1-F 92 rows already in retrievable memory | `blocked_on_user` | OI-133 — dry-run done, DELETE blocked by the auto-mode classifier |
+| P1-G `log_table_retention` orphan, defeats Gate 31 | `closed_in_commit` | OI-132 — reconstruction + Gate 31 re-scope, this batch |
+| P2 `sync_profile` clamp → 2 PRO EFs (undeclared) | `blocked_on_user` | declared; routes to FOB-3/FOB-4 |
+| P2 SoT registry gaps (×2) | `closed_in_commit` | `310aad0` — new `hold_week_telemetry` concept |
+| P2 manifest hash / stale citations | `closed_in_commit` | `310aad0`, `1e8ff1d` |
+| P2 mutation-proving in the shared worktree | `closed_in_commit` | OI-134 filed |
+| VC security / IST / ship-dark controls | `verified_clean` | evidence in this report |
+
+**Round 2 ran afterwards** (`docs/plan-reviews/round2-oi-pending-hold-weeks.md`) and found **no
+logic defect** — it mutation-tested the three areas the earlier rounds kept breaking and could not
+make any of them fail. Its two paper-trail findings are fixed in `1e8ff1d`; one of them proved to
+be an instance of a pre-existing 60-of-125 class, filed as **OI-135**.
 
 ## Action items
 
-<pending — see triage>
+Everything actionable in this container is done. What remains needs the founder's laptop or a
+separate decision, and is tracked rather than implied:
+
+1. **Redeploy `rolling-context`** — authorized, blocked on a Supabase Management API token absent
+   from this container. Until then P1-E/P1-F have no production effect. (OI-133)
+2. **Delete the 92 `memory_embeddings` rows** — dry-run clean (2 users, 0 with a Coach reply,
+   longest 56 chars). The DELETE was refused by the auto-mode classifier, which per §4.3 is
+   correct and must not be worked around. (OI-133)
+3. **FOB-3 / FOB-4** — carries the undeclared `sync_profile` clamp; needs three EF redeploys.
+4. **OI-135** (60 drifted ledger hashes) and **OI-136** (Gate 40 never parses the YAML it
+   validates) — both filed with fix shapes, both deliberately not bundled here.
+
+**Nothing in this report is closed by assertion.** Each `closed_in_commit` names a sha; each
+`blocked_on_user` names what is blocking and who can unblock it.

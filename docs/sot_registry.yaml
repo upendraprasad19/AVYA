@@ -7484,6 +7484,76 @@ concepts:
     hive:
       box: null
 
+  - concept: cron_registry_parity
+    domain: cross_domain
+    behavioral_test_path: test/scripts/cron_registry_snapshot_gate_test.dart
+    description: |
+      Every pg_cron job that exists on the project must be listed in
+      docs/operations/CRON_REGISTRY.md. Registered as a concept 2026-08-20
+      (OI-132) because the gate enforcing it had a structural blind spot that
+      nothing named, and the diagnose-doc for that incident had no concept to
+      cite.
+
+      THE BLIND SPOT, and why the fix is a second input rather than a better
+      regex: Gate 31 derived its worldview by SCANNING supabase/migrations/*.sql
+      for cron.schedule(...). On 2026-08-15 a migration ran on prod and left no
+      .sql file, so its four cron.schedule calls were not merely un-gated but
+      UNSEEABLE — the gate reported green for five days while two
+      row-destructive jobs ran daily. A missing file does not skip a
+      file-scanning gate; it defeats it by construction. Tightening the scan can
+      never fix that, because the scan's input is the thing that is absent.
+      Measured that day: 28 live jobs, 24 registered, 4 missing, and the 4 were
+      exactly the fileless migration's — the blind spot was 100% of the gap.
+
+      WHY A SNAPSHOT, NOT A LIVE QUERY: CI holds zero Actions secrets (OI-105),
+      so a live query would silently skip there — a gate passing because it
+      never ran, which is the same failure one layer up. The committed snapshot
+      runs identically everywhere. Precedent: backups/live_schema_columns.json.
+
+      WHAT THIS CONCEPT DOES NOT COVER, stated so a green is not over-read: the
+      gate proves registry-vs-snapshot parity, NOT snapshot-vs-live freshness.
+      Nothing in CI can prove the latter without credentials the repo does not
+      have. Regenerating the snapshot is a documented step on any migration that
+      schedules or unschedules a job. Gate 31 also cannot see a WRONG CADENCE —
+      it is a presence check, and the registry's IST column is unenforced.
+    writers:
+      - file: supabase/migrations/121_log_table_retention.sql
+        line_range: 37-113
+        method: cleanup_cron_job_run_details
+        notes: |
+          RECONSTRUCTION of an already-applied migration, marked DO-NOT-APPLY.
+          The four cron.schedule calls here are what input A scans for.
+      - file: backups/live_cron_jobs.json
+        line_range: 5-34
+        method: jobs
+        notes: |
+          Input B. Snapshot of live cron.job — the only input that can see a
+          migration applied without a file. Regenerate with:
+          select jobid, jobname, schedule, active from cron.job order by jobname;
+    reader_manifest_complete: true
+    readers:
+      - file: scripts/check_cron_registry.dart
+        line_range: 52-169
+        method: main
+        semantic: aggregated
+        fields_read: [jobname]
+        notes: |
+          Gate 31. Reads BOTH inputs and hard-fails on a missing, malformed or
+          EMPTY snapshot — an empty snapshot would make every assertion built on
+          it vacuous, which is the Gate-44 shape it is being hardened against.
+          READ ORDER IS LOAD-BEARING: input B (_readSnapshot, :139) is consulted
+          BEFORE input A's "supabase/migrations absent" branch, because that
+          branch used to `exit(0)` above it and would have skipped both inputs.
+      - file: docs/operations/CRON_REGISTRY.md
+        line_range: 1-60
+        method: registry
+        semantic: pass-through
+        fields_read: [jobname]
+        notes: the human-facing side of the contract; 28 of 28 live jobs as of 2026-08-20
+    regression_test: test/scripts/cron_registry_snapshot_gate_test.dart
+    hive:
+      box: null
+
   - concept: detraining_decay
     domain: workout
     behavioral_test_path: test/contracts/progression_resolver_decay_test.dart

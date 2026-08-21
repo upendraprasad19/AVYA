@@ -46,6 +46,24 @@
 | 102 | `compute_admin_metrics_daily` (30) | `15 18 * * *` | 23:45 | `compute-admin-metrics-daily` | `cron_secret` | Late-in-day deliberately: `*_today` fields are cumulative since IST midnight |
 | 109 | `alert_cron_silence` (31) | `17 * * * *` | hourly, :17 UTC | (intra-DB) | n/a | Fires when NO cron has succeeded in ≥2h. Catches a TOTAL outage fast; blind to single-function death — `alert_cron_function_dead` (110) is the complement |
 | 110 | `alert_cron_function_dead` | `47 6 * * *` | 12:17 | (intra-DB) | n/a | Per-function complement: a function that succeeded within 14d but not in 8d is presumed dead. Catches the shape `alert_cron_silence` misses |
+| 121 | `jrd_retention_daily` (33) | `22 4 * * *` | 09:52 | (intra-DB) | n/a | **DELETES `cron.job_run_details`** older than 14d, always sparing the newest row per job. Reconstructed 2026-08-20 — see the note below |
+| 121 | `client_errors_retention_daily` (34) | `25 4 * * *` | 09:55 | (intra-DB) | n/a | **DELETES `public.client_errors`** older than 30d. Reconstructed 2026-08-20 |
+| 121 | `jrd_vacuum_daily` (35) | `38 4 * * *` | 10:08 | (intra-DB) | n/a | `VACUUM (ANALYZE) cron.job_run_details`. Not row-destructive |
+| 121 | `client_errors_vacuum_daily` (36) | `41 4 * * *` | 10:11 | (intra-DB) | n/a | `VACUUM (ANALYZE) public.client_errors`. Not row-destructive |
+
+> **The four `121` rows were invisible to Gate 31 for five days, by construction (OI-132).** Their
+> migration ran on prod on 2026-08-15 as `log_table_retention` and left **no .sql file**. Gate 31
+> enforces parity by SCANNING `supabase/migrations/*.sql` for `cron.schedule(...)`, so a fileless
+> migration is not merely un-gated — it is *unseeable*, and the gate reported green throughout.
+> Measured 2026-08-20: **28 live jobs, 24 registered, 4 missing**, and the 4 were exactly these.
+> Gate 31's blind spot accounted for the entire gap; the registry was otherwise perfect.
+>
+> The gate now ALSO checks a committed snapshot of live `cron.job`
+> (`backups/live_cron_jobs.json`), which a fileless migration cannot hide from. CI has no Supabase
+> credentials (OI-105), so a live query there would silently skip — a gate that passes because it
+> never ran. The snapshot is the CI-safe shape, and follows the precedent
+> `backups/live_schema_columns.json` already sets. **Regenerate it in the same commit as any
+> migration that schedules or unschedules a job** — the regeneration SQL is in the gate's header.
 
 > **Cadence accuracy (corrected 2026-07-26, Hermes L31).** Every row above was regenerated from live
 > `cron.job` rather than hand-maintained — 11 of the previous 20 rows had wrong IST conversions, two

@@ -1090,6 +1090,16 @@ cloud sessions; **this file is the cross-session backlog.**
   PRO-advance gate input and `PlanIntegrityReconciler` still scans weeks 1-4 only. FOB-3/FOB-4
   require ai-proxy + weekly-recap-ready + weekly-report EF redeploys — each its own explicit
   authorization (§4.3), plan approval ≠ deploy approval.
+  ⚠ **FOB-4 needs MORE than a redeploy, and the ledger's `why:` does not say so.** Measured
+  2026-08-20 against the live schema: `information_schema.columns` in schema `public` contains
+  **zero** columns matching `%hold%`, and `user_progress` carries no hold field of any spelling
+  (23 columns, listed live). `is_hold` is written by `holdWeek()` onto local schedule rows and
+  **never reaches the cloud** — there is no `workout_schedule` table in `public` at all. So
+  `weekly-recap-ready` and `weekly-report` cannot branch on a hold no matter what is deployed:
+  the signal does not exist on their side of the wire. Whoever takes FOB-4 must decide how hold
+  state crosses that boundary FIRST (a `user_progress` column, or a derived RPC), which means a
+  MIGRATION and its own live-apply authorization on top of the two redeploys. Do not schedule
+  FOB-4 as a redeploy-only unit.
 - ✅ **FOB-5 CLOSED 2026-08-20** — diagnose `c7a3b9`, closure `docs/audit/fob5-hold-telemetry.closure.yaml`,
   migration **120 applied live** (founder-authorized). `holdWeek()` now emits `hold_week_started`,
   consumed by three new `hold_*` columns on `founder_metrics_engagement()` that reach the founder
@@ -3620,8 +3630,21 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
 
 ## OI-132 — a migration is LIVE in prod with no file, no manifest entry and no diagnose-doc — and its absence DEFEATS Gate 31 (P1)
 
-- **Status**: OPEN
-- **Blocked on**: nothing technical. The reconstruction is mechanical; the judgement call is whether to also re-scope Gate 31, which is the half that actually matters.
+- **Status**: CLOSED · 2026-08-20 · diagnose `c8e5b3` · branch `claude/oi-pending-hold-weeks-1od97o`
+- **Blocked on**: nothing — closed. Both halves shipped: the reconstruction AND the Gate 31 re-scope.
+- **Closed by**: `supabase/migrations/121_log_table_retention.sql` (reconstruction, DO-NOT-APPLY,
+  recovered verbatim from `schema_migrations.statements`), its `backups/applied_migrations.json`
+  entry, the missing `c8e5b3` diagnose-doc, four `CRON_REGISTRY.md` rows, the new
+  `backups/live_cron_jobs.json` snapshot, and Gate 31 re-scoped to read that snapshot as a
+  second, file-independent input. Registry now covers **28 of 28** live jobs (was 24 of 28).
+  Mutation-proven on five shapes — including the OI-132 scenario itself (delete the migration
+  file; the gate still catches all four jobs via the snapshot). Gate 31 was PROMOTED out of the
+  grandfathered set in `gate_test_ledger.yaml` as part of this.
+- **Not closed by this, and deliberately so**: the snapshot proves registry-vs-snapshot parity,
+  NOT snapshot-vs-live freshness. Nothing in CI can prove the latter — the repo has zero Actions
+  secrets (OI-105) — so a live query there would silently skip, which is the same
+  passes-because-it-never-ran failure one layer up. Regenerating the snapshot is a documented step
+  on any migration that schedules or unschedules a job.
 - **Verified**: 2026-08-20 — every claim below read from live `dedsavbjuwgarrhphgnl` or from the repo directly during the FOB-1/FOB-5 Hermes pass. Not inferred.
 
 Live `supabase_migrations.schema_migrations` holds `20260815155823 / log_table_retention`. Its
@@ -3692,8 +3715,8 @@ allowlist gate OI-78 has been asking for since 2026-07-31.
 ## OI-133 — 92 analytics rows are already inside the LLM's retrievable memory; the fix stops new ones and does not remove them (P1)
 
 - **Status**: OPEN
-- **Blocked on**: nothing technical, but the cleanup is a DELETE against a production table that feeds the coach's memory, so it wants an explicit go and a dry-run count first.
-- **Verified**: 2026-08-20 — counts queried live during the Hermes pass; the two code paths read directly.
+- **Blocked on**: item 2 is DONE (the DELETE ran 2026-08-20, founder-authorized). What remains is item 1 only — the `rolling-context` REDEPLOY, blocked on **credentials, not permission**: no Supabase Management API token reaches the remote container. Commands for the founder laptop: `docs/operations/FOUNDER_LAPTOP_HANDOFF.md` §1.
+- **Verified**: 2026-08-20 — counts queried live during the Hermes pass; the two code paths read directly. Re-verified the same day after the DELETE: 598 → 506 rows, loose-pattern match 0.
 
 `rolling-context` summarized `ai_coach_interactions` with no channel filter, so `app_event`
 analytics rows were embedded into `memory_embeddings` as `source_type='conversation'`. Live count
@@ -3742,8 +3765,21 @@ than adding a predicate to the RPC (that would be a migration apply needing its 
    loudly — it breaks a nightly cron that summarizes and DELETES user conversation rows.
    **To unblock:** either export `SUPABASE_ACCESS_TOKEN_FITNESS` into the session, or run the two
    §0 commands from the founder machine. Live version at time of writing: **18**.
-2. **The 92 existing rows are still retrievable.** Filtering the writer does not unwrite history.
-   They need identifying and deleting, with a dry-run count first.
+2. ✅ **The 92 rows are DELETED — 2026-08-20, founder-authorized, verified either side.**
+   Dry-run reproduced the filing's numbers exactly before anything was removed: **92 of 598**
+   rows, **2** distinct users, longest content **56** characters, **0** carrying a Coach reply,
+   and — the check that mattered — a deliberately looser pattern (`content like '%{event:%'`,
+   no `source_type` constraint) matched the **same 92 and nothing else**, so the strict predicate
+   was not leaving a tail behind. Every matched row was the pure two-line event shape
+   (`^User: \{event: [a-z0-9_]+\}\nCoach: $`); **0** carried extra prose that a human might have
+   written. Deleted with that regex in the `where`, `returning id` (92 ids returned). Re-run of
+   the same counts immediately after: **506 rows remain** (598 − 92), and the loose pattern now
+   matches **0**. `source_type='conversation'` went 575 → 483; the other source type was
+   untouched.
+   Scope note, so the green is not over-read: this removes the rows from `memory_embeddings`,
+   which is what retrieval reads. It does not rewrite any summary text already folded into an
+   older row, and it does not touch `ai_coach_interactions` — whose 22 `app_event` rows are the
+   *writer*-side residue that item 1's redeploy stops feeding forward.
 
 **Related but NOT fixed here, filed together because they share the single root cause — five
 consumers read this table and only one of them knows the channel taxonomy:** the restore path
@@ -3835,3 +3871,86 @@ across a repo this size will always converge on wrong.
 pre-existing violations to a merge-blocking step would be a ship-stop for a hygiene problem — the
 same error class as the 2026-07-25/26 required-status-checks incident. The one instance that batch
 caused is fixed in it; the class is filed here.
+
+---
+
+## OI-136 — Gate 40 validates "closure YAML" without ever parsing it as YAML; 2 files in the repo are invalid and it passes all 32 (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Needs the same grandfather-or-backfill decision as OI-135 — 2 pre-existing files would redden a strict parse, so a hard flip is a ship-stop until they are fixed or enumerated.
+- **Verified**: 2026-08-20 — measured, not inferred. `yaml.safe_load` over every `docs/audit/*closure*.yaml` + `*closures*.yaml`: **2 fail to parse**, while `validate_audit_closure.dart` reports `PASS: 32 closure file(s) validated`.
+
+```
+docs/audit/2026_06_11_audit_closures.yaml  -> mapping values are not allowed here
+docs/audit/gate-registry.closure.yaml      -> while scanning a double-quoted scalar
+```
+
+`scripts/validate_audit_closure.dart` is a **line scanner**. It greps for `terminal_state:` and
+the forbidden `deferred:` key and tallies `closed_count:` — all by reading lines, never by loading
+the document. So a closure file can be syntactically broken and still be "validated".
+
+**Found twice in two days, both times by accident**, which is the argument for a real parse:
+1. The B-pass on `47eaf8318774` found `hermes-fob-remediation.closure.yaml` used `*wip` six times
+   with no `&wip` anchor — not valid YAML, Gate 40 green.
+2. Writing `oi132-cron-registry.closure.yaml` the very next hour, **the identical anchor mistake
+   was made again** and Gate 40 was green again. It was caught only because the author happened to
+   run `yaml.safe_load` by hand. Sweeping the rest then turned up the two above.
+
+A gate that cannot detect the mistake its own authors keep making twice in two days is not
+enforcing the thing it appears to enforce.
+
+**Why it matters beyond tidiness.** These files are the §4.2 no-deferrals mechanism — the
+structural claim is that a non-terminal item BLOCKS the gate. That claim rests on the gate
+reading the file correctly. A file that does not parse has never been meaningfully checked, and
+its `terminal_state:` values are being counted by string-matching lines that may not mean what
+they appear to.
+
+**Fix shape:** load each file with a real YAML parser before the line checks; on a parse error,
+fail with the parser's message. The 2 existing failures get fixed (both look mechanical) or
+enumerated by name as a terminal exemption, exactly the precedent
+`check_gate_test_ledger.dart` set. Then the line checks can keep working on the parsed document
+instead of raw text, which also closes the class quietly rather than one anchor at a time.
+
+**Related:** OI-135 (a ledger field nothing recomputes), OI-132 (a gate whose input could not see
+the failure it existed to catch). Same family — the check exists, looks green, and is not
+checking what its name claims.
+
+---
+
+## OI-137 — the migration-ledger gate checks that `hash:` EXISTS, never that it is a hash; a literal `%s` passed it (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Same grandfather-or-backfill decision as OI-135 — 60 of 126 entries already carry hashes that match no artifact, so a strict flip is a ship-stop until they are recomputed or enumerated by name.
+- **Verified**: 2026-08-20 — reproduced, not inferred. The entry for migration `121` was written with `"hash": "sha256:%s"` — an unsubstituted Python format placeholder. `dart run scripts/check_applied_migrations_ledger.dart` reported PASS. Caught by the B-pass on the same commit, and corrected there to `sha256:ac8c01a26e32…`.
+
+`scripts/check_applied_migrations_ledger.dart:26` is the whole story:
+
+```dart
+const _requiredKeys = ['migration', 'applied_at', 'hash', 'applier'];
+```
+
+The gate asserts every entry HAS the four keys. It never looks at what is in them. So
+`sha256:%s`, `sha256:`, `TODO`, or the empty-ish `sha256:x` all satisfy it identically, and the
+field that exists to attest replay fidelity attests nothing.
+
+**Why this one is worth a number rather than a quiet fix.** It is the third instance in two days
+of the same shape — a gate green because it checks the presence of a thing rather than the thing
+(OI-132: Gate 31's input could not see a fileless migration; OI-136: Gate 40 "validates" YAML it
+never parses). And it landed *inside the commit whose own note explains why a meaningless hash on
+this entry must not happen*, which is as close to a controlled demonstration as this class gets:
+the author knew the failure mode, wrote it down, and still shipped an instance of it past the gate
+in the same file.
+
+**Fix shape:** two cheap checks, one strict and one advisory.
+1. Shape: `hash:` must match `^sha256:[0-9a-f]{64}$` OR a documented sentinel string (the `120b`
+   entry deliberately carries one, because a fileless entry has nothing to hash — see its note).
+   That alone would have caught `%s`, and costs nothing.
+2. Value: where a `.sql` file exists for the migration, recompute its sha256 and compare. That is
+   the OI-135 half and is the one that needs the grandfather decision first, because it reddens 60
+   pre-existing entries on day one.
+
+Step 1 is separable and blocks nothing — it is the part worth doing on its own.
+
+**Related:** OI-135 (60 of 126 ledger hashes match nothing, and nothing recomputes them — this is
+its mint-time sibling: 135 is about drift, 137 is about a value that was never a hash at all),
+OI-136, OI-132.
