@@ -1276,3 +1276,73 @@ board.
   structural precedent for `re-engagement`'s fix (batched positive-filter pattern), though the
   anti-join shape of `re-engagement`'s actual check fits `clean-orphan-media`'s RPC pattern
   more directly.
+
+## OI-128 — `retire_worktree`'s regenerable list omits test-generated output, so any worktree that ran the full suite can never retire
+
+- **Status**: CLOSED · 2026-08-25 · branch `board-hygiene`, diagnose `f2a9c7`
+- **Verified**: 2026-08-25 — closed; hit live a SECOND time on `auth-class-fixes` (merged, tracked-clean, held by this one file). Originally 2026-08-16 while retiring `open-issues-triage-976962`. The tool returned
+  `KEEP [1 non-regenerable ignored file(s)]`; the file was
+  `test/plan_generator/v4_diagnostic_output.md`, 920136 bytes.
+- **Identified**: 2026-08-16
+- **Blocked on**: none. Small and self-contained.
+- **What's missing**: `scripts/retire_worktree_lib.dart` treats an ignored file as *regenerable* only
+  if it matches a fixed set (`.env`, `build/`, `.dart_tool/`, ...). `v4_diagnostic_output.md` is not
+  in it, so leg 3 of the four-leg predicate fails and the worktree is kept. But that file is written
+  by `flutter test test/plan_generator/v4_diagnostic_test.dart` — i.e. by the FULL SUITE, which
+  `pre-push` runs at >=`account` tier. It was also deliberately untracked in `3a07ada1` ("already in
+  .gitignore"), so it is disposable by design.
+- **Why this is worse than one missing filename**: the consequence is inverted. A worktree that did
+  nothing never generates the file and retires cleanly; a worktree that pushed at >=`account` tier
+  always generates it and can NEVER retire without manual intervention. **Retirement silently stops
+  working for exactly the worktrees that did the most work** — the same unclosed-loop shape §4.13
+  point 6 was written to close (creation had no retirement; retirement now has no path for
+  suite-touched trees). Left alone, the 106-directory / 17 GB pile-up regrows.
+- **Fix shape**: add it to the regenerable set, but prefer a RULE over a literal — an ignored file
+  under `test/**` that a test writes is regenerable by re-running that test. A bare literal rots the
+  moment a second diagnostic is added.
+- ⚠ **Do NOT "fix" this by loosening leg 3 generally.** Leg 3 exists because `git status --porcelain`
+  EXCLUDES ignored files and `git worktree remove` does NOT refuse on them — verified 2026-08-09,
+  when a merged worktree holding an ignored `secrets/.env` was removed with exit 0 and the file was
+  gone. Widening the *regenerable list* is safe; widening the *predicate* re-opens that hole.
+- **Workaround until fixed**: confirm the file is regenerable (a named test writes it; a copy exists
+  in primary), delete it, re-run. That is what was done for `open-issues-triage-976962`.
+- **Second, smaller gap found the same day**: `retire_worktree` removes the worktree but leaves the
+  BRANCH, so `new-worktree.sh <same-slug>` then fails with "branch already exists" — the slug is
+  silently burned. Recovery is `git branch -d <slug>` (use `-d`, never `-D`: the safe form refuses an
+  unmerged branch, which is the whole guarantee) and then re-create.
+- **Blast radius estimate**: `platform` — the review/blast-radius machinery under `scripts/` is
+  individually pinned in `docs/blast_radius.yaml`. Per §4.4 rule 24 a new/changed leg needs a
+  mutation-proven test; the existing protective legs already carry one.
+
+- **CLOSED 2026-08-25** (`board-hygiene` batch, diagnose `f2a9c7`). Five EXACT, root-anchored
+  paths added to `regenerableIgnoredPaths` — `test/plan_generator/v4_diagnostic_output.md`
+  (`.gitignore:112`), `analyze_output.txt` (:107), `flutter_test_output.txt` (:108),
+  `baseline.json` (:132), `baseline-lints.json` (:133). The set was **enumerated from
+  `.gitignore`**, not extrapolated from the one observed instance.
+- ⚠ **This entry's own "Fix shape" was NOT followed, deliberately.** It said *"prefer a RULE over
+  a literal — an ignored file under `test/**` that a test writes is regenerable"*. That is wrong
+  on the merits here, and the function's own header explains why: **exact-match only, no prefix,
+  no basename, no `contains`** — three successive review rounds each found a P0 in that one
+  function caused by looser matching (prefix matching destroyed `.envrc` and `.envs/`;
+  basename-at-any-depth destroyed `supabase/.env`, a real 518-byte credentials file). A `test/**`
+  rule would make an ignored `test/fixtures/real_credentials.json` destroyable — the same class
+  again. The header's instruction for the needs-a-pattern case is to KEEP the worktree instead,
+  and that is what was done: `test/goldens/**/failures/` is genuinely regenerable but is a
+  PATTERN, so it stays non-regenerable and is called out in the code.
+  The entry's concern — *"a bare literal rots the moment a second diagnostic is added"* — is real
+  but resolves the other way once failure DIRECTION is considered: a missing literal fails INERT
+  (a worktree is kept that could have been retired), a too-wide glob fails DESTRUCTIVE.
+- **Second gap in this entry (the branch is left behind after `worktree remove`, burning the
+  slug): still OPEN**, filed separately rather than silently closed with the parent. Verified
+  2026-08-25 by reading `scripts/retire_worktree.dart:275-282` — it calls `git worktree remove`
+  and never touches the branch. The safe repair is `git branch -d` (never `-D`: the safe form
+  refuses an unmerged branch, which is the whole guarantee), and it must delete the worktree's
+  ACTUAL branch, not its slug — `post38-auth-fixes` sits on `rescue/post38-auth-inflight`, so a
+  slug-keyed delete would target the wrong ref or none.
+- **Regression tests**: `test/scripts/retire_worktree_lib_test.dart` — the five new paths must be
+  regenerable, AND near-misses of each must still BLOCK (`…output.md.bak`,
+  `archive/analyze_output.txt`, `flutter_test_output.txt.orig`, `data/baseline.json`, the bare
+  `test/plan_generator/` directory, and `test/goldens/home/failures/`). Mutation: deleting the
+  five entries reddens the first (34 → 33 pass / 1 fail). The near-miss test does NOT redden
+  under that mutation and is not claimed to — it is a WIDENING guard and reddens on the opposite
+  mutation (swapping exact match for a glob).
