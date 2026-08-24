@@ -3735,9 +3735,9 @@ allowlist gate OI-78 has been asking for since 2026-07-31.
 
 ## OI-133 — 92 analytics rows are already inside the LLM's retrievable memory; the fix stops new ones and does not remove them (P1)
 
-- **Status**: OPEN
-- **Blocked on**: item 2 is DONE (the DELETE ran 2026-08-20, founder-authorized). What remains is item 1 only — the `rolling-context` REDEPLOY, blocked on **credentials, not permission**: no Supabase Management API token reaches the remote container. Commands for the founder laptop: `docs/operations/FOUNDER_LAPTOP_HANDOFF.md` §1.
-- **Verified**: 2026-08-20 — counts queried live during the Hermes pass; the two code paths read directly. Re-verified the same day after the DELETE: 598 → 506 rows, loose-pattern match 0.
+- **Status**: CLOSED · 2026-08-24 · `rolling-context` redeployed from the founder laptop (v18 → **v19**, `verify_jwt=false`, HTTP 201). Both items are now terminal.
+- **Blocked on**: nothing. Item 2 (the DELETE) closed 2026-08-20; item 1 (the redeploy) closed 2026-08-24 — the credential blocker was environmental, and the founder laptop has the token at `supabase/.supabase/supabase access token.txt`.
+- **Verified**: 2026-08-24 — deploy returned HTTP 201 with `version: 19`; live config re-read independently via the Management API (v19, `verify_jwt: false`, ACTIVE); unauthenticated POST returns 401, not 503, so the module booted. Baseline for the behavioural check recorded the same day: `memory_embeddings` = 506 rows, `content like '%{event:%'` = **0**. ⚠ The behavioural half is NOT yet observed — see "What is still owed" below.
 
 `rolling-context` summarized `ai_coach_interactions` with no channel filter, so `app_event`
 analytics rows were embedded into `memory_embeddings` as `source_type='conversation'`. Live count
@@ -3815,6 +3815,33 @@ consumer, leaving five others reading unfiltered. Deriving a taxonomy and not sw
 consumers is the writer/reader drift class arriving from the reader side.
 
 ---
+
+**CLOSED 2026-08-24 — what actually ran, and what is still owed.**
+
+Deployed from the founder laptop via the §0 host-shell path (`emit_payload.js --auto` →
+`deploy_via_api.js ... false`), dry-run first to confirm `verify_jwt=false` before any prod call.
+Payload archived at `backups/edge_function_payloads/rolling-context/v3_e78adb6.json`.
+
+⚠ **Correction to this entry's own text:** item 1 above says `rolling-context` "deploys as
+**7 files**". The actual emit produced **8** (`index.ts` + seven under `_shared/`:
+`gemini.ts`, `sanitize_for_prompt.ts`, `paged_fetch.ts`, `cron_auth.ts`, `cron_telemetry.ts`,
+`tools/zodToGemini.ts`, `embeddings.ts`). The count was never load-bearing — it was cited only
+to argue the MCP path would mangle shared imports, which remains true — but it was wrong, and a
+number stated in a closed issue gets trusted later.
+
+**What is still owed (tracked, not deferred):** the third verification check is behavioural and
+cannot be run on the deploy day. `rolling-context-nightly` (cron jobid 19) fires at
+`0 21 * * *` UTC = **02:30 IST**. After the first run on/after 2026-08-25, re-run:
+
+```sql
+select count(*) from public.memory_embeddings where content like '%{event:%';
+```
+
+It must still be **0**. A non-zero count means the filter is not live despite v19 being
+deployed, and this entry should be REOPENED rather than a new one filed. Closing on the two
+checks that CAN be verified today, with the third named explicitly, is deliberate: leaving the
+whole issue open for a scheduled cron would misreport a completed deploy as outstanding work.
+
 
 ## OI-134 — mutation-proving runs in the shared worktree, where §4.13's guarantee does not reach (P2)
 
