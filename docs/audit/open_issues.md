@@ -3402,12 +3402,30 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
     path), NOT the PRO advance.
   - R3: "the advance passes `nextPhaseStartDate()`, so R1 was right after all" — confirmed by direct
     read: it returns `_normalizeToMonday(max(plan_end + 1, today))`
-    (`workout_schedule_read_service.dart:1446-1458`), and during a hold `plan_end` is the hold week's
+    (`workout_schedule_read_service.dart:1577`), and during a hold `plan_end` is the hold week's
     Sunday, so `plan_start` becomes `holdMonday + 7` and the hold dates ARE before the window
-    (`:803` filters on a strict `isBefore`).
+    (`:833` filters on a strict `isBefore`).
+    ⚠ **CITATIONS CORRECTED 2026-08-25** (batch `oi60-client-blockers`, found by that batch's review
+    round 1 and re-verified by reading each line). R3's text said `:1446-1458` for
+    `nextPhaseStartDate` — that range is `pastPhaseBlocks()`'s legacy 28-day bucketing — and `:803`
+    for the `isBefore` filter, which is prose. **Both were labelled "confirmed by direct read" and
+    neither was.** They survived three rounds and were copied verbatim into a fourth batch's plan
+    before anyone opened the file. `:1577` is the pre-batch line; the `oi60-client-blockers` changes
+    push it to `:1615`.
   So the PRO-advance path looks safe. The OPEN question is the two unguarded re-anchor movers, plus
-  `_autoGeneratePlan`'s first-generation branch (`:345-350`) writing `normalizeToMonday(today)` while
-  `is_hold` rows survive. Live risk assessed as nil by R3 (the `!=` dedup gate only suppresses a
+  `_autoGeneratePlan`'s first-generation branch writing `normalizeToMonday(today)` while `is_hold`
+  rows survive.
+  ⚠ **CITATION CORRECTED 2026-08-25** (same batch): this read `_autoGeneratePlan`'s "first-generation
+  branch (`:345-350`)". That range is exercise-category resolution and `_autoGeneratePlan` starts at
+  **`train_provider.dart:638`** — a DIFFERENT FILE from the one the surrounding text is citing, which
+  is what made the error invisible.
+  ⚠ **A fix REFUTED here so it is not re-attempted (round 1, `oi60-client-blockers`, 2026-08-25):**
+  guarding the re-anchor with `existingStart == null` would be a P0. `plan_window_reanchor.dart:46-56`
+  treats `localStart == null` as the documented FRESH-INSTALL path that seeds a new device's
+  `plan_start` at all, so the guard would break every fresh install and first restore. That batch
+  instead declined to WIDEN the exposure: `plan_integrity_reconciler.dart`'s re-anchor now fires only
+  on `triggers.mayReanchor`, which reduces to exactly the pre-batch condition — identical, NOT
+  narrower (an overstated "narrows" claim was struck after review round 2 proved the reduction). Live risk assessed as nil by R3 (the `!=` dedup gate only suppresses a
   second same-week credit, and the pre-fix clamped behaviour was strictly worse), which is why this
   was filed rather than blocking the fix.
 
@@ -4040,3 +4058,37 @@ OI-136, OI-132.
   registry that every other tier decision reads.
 - **Related**: OI-128 (CLOSED 2026-08-25, whose own `platform` estimate was wrong and propagated
   into a commit message), OI-138 (adds the branch deletion that makes this sharper), §4.13 point 6.
+## OI-140 — nothing detects a duplicate diagnose `bug_id`, though the identical OI-number bug shipped six times and got its own gate
+
+- **Status**: OPEN
+- **Verified**: 2026-08-25 — `ls docs/diagnoses/*.md | sed -E 's/.*-([0-9a-f]{6})\.md$/\1/' | sort |
+  uniq -c | awk '$1>1'` returned `2 d3b8f1`, a live collision between
+  `2026-08-15-cleanup-delete-boundary-keyed-on-uuid-d3b8f1.md` (landed `acffbd43`) and a doc minted
+  in the `oi60-client-blockers` batch. Read `scripts/validate_diagnose_doc.dart` directly: it takes
+  exactly one path argument and never enumerates the directory, so it cannot see the class at all.
+- **Identified**: 2026-08-25, by the B-pass on `2e9503eb`. The colliding doc was renamed to `b9d4c2`
+  before merge, so no collision is live — but nothing would have caught it, and nothing would catch
+  the next one.
+- **Blocked on**: none.
+- **What's missing**: `scripts/check_diagnose_id_unique.dart`, mirroring
+  `scripts/check_oi_numbering_unique.dart` — wired into `pre-commit.sh` and CI.
+- **Why this is worth a gate rather than care**: the repo ALREADY concluded this, for the sibling
+  identity space. `check_oi_numbering_unique.dart` exists because OI numbers are minted by
+  eyeballing the board's tail and six collisions shipped by 2026-08-16 — one undetected for 3 days
+  0h 34m, with its pushed commit message still citing superseded numbers. Diagnose ids are minted
+  the same way (a human picks six hex chars), have the same one-number-space-across-two-locations
+  problem (`docs/diagnoses/` plus every `closes-diagnose:` trailer in git history), and carry a
+  sharper consequence: rule 22 makes `closes-diagnose: <id>` the ONLY machine-readable link between
+  a fix commit and its rationale, so a duplicate id makes that link ambiguous **forever**, and git
+  history cannot be rewritten to repair it.
+- ⚠ **The mint-time half is the tractable half, and the cross-branch half may not be worth it.**
+  Within-tree duplicate detection is a directory scan and is trivially correct. Cross-BRANCH
+  detection (two sessions minting the same id concurrently) is the part that made
+  `check_oi_numbering_unique.dart` hard — it needed a three-point predicate, fails OPEN, and its own
+  first live run reported PASS against an empty parse because `Process.runSync` defaults to
+  `systemEncoding` and mangled an em-dash. Read that script before writing this one, and consider
+  shipping only the within-tree scan rather than re-deriving the three-point machinery.
+- **Blast radius estimate**: `platform` — a new `check_*.dart` gate wired into pre-commit and CI.
+  Per rule 24 it ships mutation-proven with a `docs/audit/gate_test_ledger.yaml` entry.
+- **Related**: OI-112 (the OI-number version, whose mint-time half is closed), rule 22, the
+  `id_collision_note:` in `docs/diagnoses/2026-08-25-hold-days-dilute-phase-completion-b9d4c2.md`.

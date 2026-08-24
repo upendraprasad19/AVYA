@@ -104,6 +104,69 @@ class PlanIntegrityReconciler {
     return false;
   }
 
+  /// PURE (visible for testing): the two INDEPENDENT decisions a reconcile pass
+  /// makes — FOB-7(b) / OI-60.
+  ///
+  /// Returns a RECORD, not a bool, and that is the point. The whole fix is the
+  /// distinction between "fetch and heal the schedule rows" and "move the plan
+  /// window", and a single bool cannot carry a distinction its caller then has
+  /// to re-derive. (Sibling of the recurring guard-without-its-mirror class: a
+  /// `bool` return that throws away the binding the fix exists to make.)
+  ///
+  ///  - [shouldFetch]  — EITHER symptom justifies pulling the cloud snapshot and
+  ///                     merging `schedule_*` rows. Hold weeks included.
+  ///  - [mayReanchor]  — ONLY the weeks-1-4 symptom may authorise the
+  ///                     `plan_start_date` / `plan_end_date` writes. Widening
+  ///                     this is REFUTED (P0-11 / d7f3a9): that scan IS the
+  ///                     re-anchor trigger, so widening buys no healing and only
+  ///                     makes the window move more often.
+  /// The current hold weeks' schedule rows — the second symptom source
+  /// FOB-7(b) feeds to [computeTriggers].
+  ///
+  /// Extracted and `@visibleForTesting` because it was INLINE in [reconcile]
+  /// and therefore untestable without a live Supabase client — which is exactly
+  /// how it shipped the `weekStart` bug below past two review rounds' test
+  /// suites. A loop no test can reach is a loop no test protects.
+  ///
+  /// ⚠ ANCHORS ON THE NORMALIZED MONDAY, never on `weekStart` directly.
+  /// [HoldWeekInfo.weekStart] is `byOrdinal[ordinal]!.first` — the first
+  /// SURVIVING hold date (`workout_schedule_read_service.dart:870`) — so a hold
+  /// week whose Monday row is missing yields a TUESDAY, and a 0..6 walk from
+  /// there reads [Tue..Sun, next Mon]: one day short at the front, one day of
+  /// the FOLLOWING week at the back. This pattern was already found, rejected
+  /// BY NAME and scar-commented for the streak arm
+  /// (`train_provider.dart:577-579`; `oi60-streak-identity.closure.yaml:51`),
+  /// with a missing-Monday reproduction in
+  /// `hold_week_streak_identity_behavioral_test.dart`. Round 2 caught this
+  /// batch reintroducing it here — the same class, one file over.
+  ///
+  /// Returns `const []` when `enable_hold_weeks` is OFF, because
+  /// [WorkoutScheduleReadService.activeHoldWeeks] does; that is what keeps the
+  /// whole FOB-7(b) path byte-identical with the flag off.
+  @visibleForTesting
+  static List<Map<String, dynamic>> gatherHoldRows(
+      WorkoutScheduleReadService scheduleService) {
+    final out = <Map<String, dynamic>>[];
+    for (final h in scheduleService.activeHoldWeeks()) {
+      final monday = scheduleService.normalizeToMonday(h.weekStart);
+      for (var d = 0; d < 7; d++) {
+        final row =
+            scheduleService.getScheduleForDate(monday.add(Duration(days: d)));
+        if (row != null) out.add(row);
+      }
+    }
+    return out;
+  }
+
+  @visibleForTesting
+  static ({bool shouldFetch, bool mayReanchor}) computeTriggers({
+    required Iterable<Map<String, dynamic>> windowRows,
+    required Iterable<Map<String, dynamic>> holdRows,
+  }) {
+    final window = needsHeal(windowRows);
+    return (shouldFetch: window || needsHeal(holdRows), mayReanchor: window);
+  }
+
   /// Reconcile the current user's local schedule against the cloud `plan_json`
   /// snapshot. [scheduleService] is injected so this is callable from the boot
   /// path (via the Riverpod provider) and from tests, mirroring
@@ -131,8 +194,47 @@ class PlanIntegrityReconciler {
       for (var w = 1; w <= 4; w++) {
         local.addAll(scheduleService.getWeek(w));
       }
+
+      // FOB-7(b) / OI-60 — THE TRIGGER IS SPLIT FROM THE WRITE.
+      //
+      // The 1..4 scan above is date-driven off plan_start, so a hold week (which
+      // sits at plan_start+28 and beyond) is invisible to it. A holder whose
+      // hold-week exercises were dropped by the restore-skip bug therefore never
+      // healed — the exact failure this reconciler exists to cure, on the only
+      // week a free user is training.
+      //
+      // ⚠ WIDENING THE 1..4 SCAN IS REFUTED and must not be re-proposed:
+      // docs/audit/oi60-streak-identity.closure.yaml, P0-11 concern d7f3a9. That
+      // scan is ALSO the re-anchor trigger, so widening it buys no healing and
+      // only makes the plan_start/plan_end write below fire more often.
+      //
+      // So this is a SECOND, INDEPENDENT predicate over the SAME fetch. It can
+      // authorise the schedule merge (which only ever touches `schedule_*` keys)
+      // and it deliberately CANNOT authorise the re-anchor (which only touches
+      // plan_start_date / plan_end_date). The two key sets are disjoint, so the
+      // merge cannot move the plan window by any path.
+      //
+      // Gated seam on purpose: activeHoldWeeks() returns const [] when
+      // `enable_hold_weeks` is OFF, so with the flag off this whole block is a
+      // no-op and the function behaves byte-identically to before FOB-7(b).
+      //
+      // ⚠ ANCHOR ON THE NORMALIZED MONDAY, never on `weekStart` directly.
+      // `HoldWeekInfo.weekStart` is `byOrdinal[ordinal]!.first` — the first
+      // SURVIVING hold date (workout_schedule_read_service.dart:870), so a hold
+      // week whose Monday row is missing yields a TUESDAY. Walking 0..6 from
+      // there reads [Tue..Sun, next Mon]: one day short at the front and one day
+      // of the following week at the back. This exact pattern was already found,
+      // rejected by name and scar-commented for the streak arm
+      // (`train_provider.dart:577-579`, `oi60-streak-identity.closure.yaml:51`),
+      // and its missing-Monday reproduction lives in
+      // `hold_week_streak_identity_behavioral_test.dart`. Round 2 caught this
+      // batch reintroducing it here.
+      final holdRows = gatherHoldRows(scheduleService);
+      final triggers =
+          computeTriggers(windowRows: local, holdRows: holdRows);
+
       // healthy → no-op, no fetch
-      if (!needsHeal(local)) {
+      if (!triggers.shouldFetch) {
         return PlanReconcileOutcome.skipped('healthy');
       }
 
@@ -172,8 +274,18 @@ class PlanIntegrityReconciler {
       );
       final reStart = reanchor.planStart;
       final reEnd = reanchor.planEnd;
-      if (reStart != null) await MigratedKey.write(_planStartKey, reStart);
-      if (reEnd != null) await MigratedKey.write(_planEndKey, reEnd);
+      // FOB-7(b): the re-anchor stays on its ORIGINAL trigger. A hold-only
+      // symptom brings us here to heal `schedule_*` rows and must not move the
+      // plan window — that is the whole point of splitting the two predicates.
+      // This DECLINES TO WIDEN OI-127's exposure — it does not narrow it, and
+      // round 2 caught the stronger claim as false. `shouldFetch` is a superset
+      // of `mayReanchor`, so `shouldFetch && mayReanchor` reduces to exactly the
+      // pre-batch `needsHeal(weeks 1-4)`. Adding the hold trigger gave these two
+      // writes no new way to fire; OI-127 itself stays fully OPEN.
+      if (triggers.mayReanchor) {
+        if (reStart != null) await MigratedKey.write(_planStartKey, reStart);
+        if (reEnd != null) await MigratedKey.write(_planEndKey, reEnd);
+      }
 
       final schedules = bundle['schedules'];
       var healed = 0;
