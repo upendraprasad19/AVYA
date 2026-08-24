@@ -3411,43 +3411,6 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   second same-week credit, and the pre-fix clamped behaviour was strictly worse), which is why this
   was filed rather than blocking the fix.
 
-## OI-128 — `retire_worktree`'s regenerable list omits test-generated output, so any worktree that ran the full suite can never retire
-
-- **Status**: OPEN
-- **Verified**: 2026-08-16 — hit live while retiring `open-issues-triage-976962`. The tool returned
-  `KEEP [1 non-regenerable ignored file(s)]`; the file was
-  `test/plan_generator/v4_diagnostic_output.md`, 920136 bytes.
-- **Identified**: 2026-08-16
-- **Blocked on**: none. Small and self-contained.
-- **What's missing**: `scripts/retire_worktree_lib.dart` treats an ignored file as *regenerable* only
-  if it matches a fixed set (`.env`, `build/`, `.dart_tool/`, ...). `v4_diagnostic_output.md` is not
-  in it, so leg 3 of the four-leg predicate fails and the worktree is kept. But that file is written
-  by `flutter test test/plan_generator/v4_diagnostic_test.dart` — i.e. by the FULL SUITE, which
-  `pre-push` runs at >=`account` tier. It was also deliberately untracked in `3a07ada1` ("already in
-  .gitignore"), so it is disposable by design.
-- **Why this is worse than one missing filename**: the consequence is inverted. A worktree that did
-  nothing never generates the file and retires cleanly; a worktree that pushed at >=`account` tier
-  always generates it and can NEVER retire without manual intervention. **Retirement silently stops
-  working for exactly the worktrees that did the most work** — the same unclosed-loop shape §4.13
-  point 6 was written to close (creation had no retirement; retirement now has no path for
-  suite-touched trees). Left alone, the 106-directory / 17 GB pile-up regrows.
-- **Fix shape**: add it to the regenerable set, but prefer a RULE over a literal — an ignored file
-  under `test/**` that a test writes is regenerable by re-running that test. A bare literal rots the
-  moment a second diagnostic is added.
-- ⚠ **Do NOT "fix" this by loosening leg 3 generally.** Leg 3 exists because `git status --porcelain`
-  EXCLUDES ignored files and `git worktree remove` does NOT refuse on them — verified 2026-08-09,
-  when a merged worktree holding an ignored `secrets/.env` was removed with exit 0 and the file was
-  gone. Widening the *regenerable list* is safe; widening the *predicate* re-opens that hole.
-- **Workaround until fixed**: confirm the file is regenerable (a named test writes it; a copy exists
-  in primary), delete it, re-run. That is what was done for `open-issues-triage-976962`.
-- **Second, smaller gap found the same day**: `retire_worktree` removes the worktree but leaves the
-  BRANCH, so `new-worktree.sh <same-slug>` then fails with "branch already exists" — the slug is
-  silently burned. Recovery is `git branch -d <slug>` (use `-d`, never `-D`: the safe form refuses an
-  unmerged branch, which is the whole guarantee) and then re-create.
-- **Blast radius estimate**: `platform` — the review/blast-radius machinery under `scripts/` is
-  individually pinned in `docs/blast_radius.yaml`. Per §4.4 rule 24 a new/changed leg needs a
-  mutation-proven test; the existing protective legs already carry one.
-
 ## OI-129 — orphaned `pr-ag-handoff-gaps`: the "32 MB of UNTRACKED QA work" was a MEASUREMENT ARTEFACT; every byte was in git
 
 - **Status**: CLOSED · 2026-08-17 · directory removed by the founder after the recoverability proof
@@ -4002,3 +3965,78 @@ Step 1 is separable and blocks nothing — it is the part worth doing on its own
 **Related:** OI-135 (60 of 126 ledger hashes match nothing, and nothing recomputes them — this is
 its mint-time sibling: 135 is about drift, 137 is about a value that was never a hash at all),
 OI-136, OI-132.
+
+## OI-138 — `retire_worktree` removes the worktree but leaves the BRANCH, silently burning the slug
+
+- **Status**: OPEN
+- **Verified**: 2026-08-25 — read `scripts/retire_worktree.dart:275-282` directly: it calls
+  `git worktree remove <path>`, reports RETIRED on exit 0, and never references the branch.
+- **Identified**: 2026-08-16, as a "second, smaller gap" inside OI-128. **Split out 2026-08-25**
+  when OI-128 closed, rather than being closed with its parent — the parent's fix (the
+  regenerable list) does not touch this at all, so closing both on one commit would have recorded
+  a fix that was never written.
+- **Blocked on**: none. Small, but see the trap below — it is not a one-liner.
+- **What's missing**: after a successful `git worktree remove`, delete the branch with
+  `git branch -d`. Use `-d`, NEVER `-D`: the safe form refuses an unmerged branch, and that
+  refusal is the entire guarantee. The four-leg predicate has already proven the branch merged by
+  the time we get here, so `-d` is expected to succeed; if it does not, that is new information
+  and the branch must be KEPT and reported, not force-deleted.
+- ⚠ **THE TRAP: the worktree slug is NOT the branch name.** Verified live 2026-08-25 —
+  `git worktree list` shows `.claude/worktrees/post38-auth-fixes` sitting on branch
+  `rescue/post38-auth-inflight`, and three other `rescue/*` branches are in the same shape. A
+  delete keyed on the directory slug would either fail to find a ref or, worse, match an
+  unrelated branch that happens to share the name. The loop already has the real branch in scope
+  (`classifyWorktree` is called with `merged.contains(branch)`), so the fix must use THAT value,
+  not `name`.
+- **Symptom when it bites**: `sh scripts/new-worktree.sh <same-slug>` fails with "branch already
+  exists". The slug is burned and the operator has to `git branch -d <slug>` by hand — which is
+  exactly the state OI-128's own workaround note describes.
+- **Regression test shape**: extend `test/scripts/retire_worktree_e2e_test.dart` (it already
+  builds real linked worktrees). Two cases, and the second is the one that matters: (1) retiring a
+  merged worktree deletes its branch and the slug is immediately reusable; (2) a worktree whose
+  BRANCH NAME DIFFERS FROM ITS SLUG deletes the branch, not the slug-named ref — construct it the
+  way `rescue/*` did, with `git worktree add -b rescue/<x> .claude/worktrees/<x>`.
+- **Blast radius estimate**: `platform` — `scripts/retire_worktree*.dart` is individually pinned
+  above the `scripts/** → feature` catch-all in `docs/blast_radius.yaml`. Adds a DESTRUCTIVE
+  operation (branch deletion) to a tool that currently only removes directories, so it needs the
+  mutation-proven treatment its siblings already carry.
+- **Related**: OI-128 (parent, CLOSED 2026-08-25 — the regenerable-list half), §4.13 point 6.
+
+## OI-139 — the only tool that DELETES developer work is tiered `feature`; every tool that merely BLOCKS a commit is pinned `platform`
+
+- **Status**: OPEN
+- **Verified**: 2026-08-25 — `grep -n retire_worktree docs/blast_radius.yaml` returns NOTHING, and
+  `git diff --name-only main...board-hygiene | dart run scripts/blast_radius_from_diff.dart -`
+  printed `Blast-radius: feature` for a branch whose only code change is to
+  `scripts/retire_worktree_lib.dart`.
+- **Identified**: 2026-08-25, while closing OI-128 — surfaced by the tier coming back `feature`
+  when both OI-128's own estimate and the closing commit message said `platform`.
+- **Blocked on**: FOUNDER. This is a governance decision, not a defect fix: pinning changes the
+  REVIEW BURDEN for every future change to these files (≥account ⇒ ×2 plan review + plan-review
+  record + B-pass). Deliberately not applied unilaterally inside a hygiene commit, which would
+  also have retroactively changed the required review for the very commit adding it.
+- **What's missing**: two lines in `docs/blast_radius.yaml`, above the `scripts/** → feature`
+  catch-all:
+  `- { glob: "scripts/retire_worktree.dart", tier: platform }` and
+  `- { glob: "scripts/retire_worktree_lib.dart", tier: platform }`.
+- **Why the current tiering is backwards**: `retire_worktree` is the ONLY tool in this repo that
+  destroys developer work — it runs `git worktree remove`, and OI-138 proposes adding
+  `git branch -d` on top. Its four-leg predicate exists precisely because a wrong answer is
+  unrecoverable: on 2026-08-09 five worktrees held 21 uncommitted files while classifying as
+  merged, and a merged worktree holding an ignored `secrets/.env` was removed with exit 0 and the
+  file was gone. Meanwhile every sibling whose worst failure is a REFUSED COMMIT is pinned
+  `platform`: `git_safety_hook.dart`, `git_safety_lib.dart`, `check_commit_from_worktree.dart`,
+  `worktree_guard_lib.dart` (`blast_radius.yaml:76-79`). The tiering is inverted with respect to
+  blast radius: block-a-commit is recoverable in seconds, delete-a-worktree is not recoverable at
+  all.
+- **What it cost already**: this exact gap is why the three P0s in `isRegenerableIgnored`
+  (none→prefix→basename→exact) each shipped and were caught only by the NEXT round rather than by
+  a required review — a `feature`-tier change needs neither a ×2 plan review nor a B-pass.
+- **Counter-argument, stated fairly**: §4.13 point 6 makes retirement deliberately NOT a blocking
+  gate, and pinning `platform` raises the cost of routine maintenance on a tool that is
+  operator-invoked and dry-run by default. The counter to the counter is that tier governs REVIEW
+  of changes to the tool, not how often the tool runs.
+- **Blast radius estimate**: `platform` — editing `docs/blast_radius.yaml` itself is the
+  registry that every other tier decision reads.
+- **Related**: OI-128 (CLOSED 2026-08-25, whose own `platform` estimate was wrong and propagated
+  into a commit message), OI-138 (adds the branch deletion that makes this sharper), §4.13 point 6.
