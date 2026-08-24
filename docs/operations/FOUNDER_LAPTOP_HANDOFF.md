@@ -1,4 +1,4 @@
-# Hand-off — what only the founder laptop can do (2026-08-20)
+# Hand-off — what only the founder laptop can do (2026-08-20, updated 2026-08-21)
 
 > **Why this file exists.** The remote container that produced this batch can read and write the
 > live Supabase project over MCP, so migrations, live queries and the `memory_embeddings` cleanup
@@ -9,6 +9,62 @@
 >
 > Keep it current: delete a section once its deploy is verified, rather than leaving a stale
 > instruction that reads as still-pending.
+
+## START HERE — pulling this onto the laptop
+
+**Nothing is unsaved.** Everything the container produced is committed and pushed:
+`origin/main` is at `476bcc1` (CI run #337 green, all 7 jobs) and
+`origin/claude/oi-pending-hold-weeks-1od97o` at `aad7b7f`, which is fully contained in `main`.
+A pull is all that is needed.
+
+**Check whether your local `main` is ahead BEFORE pulling.** This repo's normal workflow is
+merge-locally-then-push (§4.13), so the laptop's `main` can legitimately hold commits `origin`
+does not, and a blind `git pull` would turn that into a merge commit.
+
+```bash
+cd "C:/Upendra/Claude Code/Fitness App"
+git fetch origin main
+git rev-list --left-right --count main...origin/main
+```
+
+Read the two numbers as `<local-only> <remote-only>`:
+
+| Output | Meaning | Do |
+|---|---|---|
+| `0 N` | simply behind — the expected case | `git pull origin main` fast-forwards |
+| `M N` | **divergence** — you have commits that never reached GitHub | do NOT force anything; start the session and say so |
+| `M 0` | ahead, nothing new upstream | nothing to pull |
+
+Then:
+
+```bash
+git pull origin main
+git log --oneline -4        # expect 476bcc1 at the top
+```
+
+**Start the session in a worktree, not in the main folder.** §4.13 is non-negotiable: the shared
+main folder is integration-only (merges, pushes, `/build-apk`), because two sessions in it share
+one git index and a commit from either can silently mix in the other's staged files.
+
+```bash
+sh scripts/new-worktree.sh <slug>     # copies .env for you
+cd .claude/worktrees/<slug>
+claude
+```
+
+`.env` is gitignored and already on the laptop; `new-worktree.sh` copies it in. Nothing else needs
+restoring, re-running or re-applying.
+
+### State of play, so a fresh session has its bearings
+
+Landed and green on `main`: FOB-1 (week identity), FOB-5 (hold telemetry), OI-132 (the fileless
+migration reconstructed + Gate 31 given a live-snapshot input), and FOB-3 (the coach's `hold`
+block). `enable_hold_weeks` is still **OFF** — none of it is live for users yet, and the flip is
+its own commit needing the full ×2 review and clearing all FOUR ledger rows at once.
+
+Waiting on this machine: the two deploys in §1 and §2 below. Not next: FOB-4 — see the end of §2.
+
+---
 
 ## Why not from the container, stated once
 
@@ -26,9 +82,13 @@ account (root CLAUDE.md §2a). Do not use it for these.
 
 ## Order matters
 
-1 is independent. 2–4 ship one behaviour change together — the coach, the Sunday push and the
-weekly report must stop telling a holder the same false week-4 story in the same window, or a
-holder sees it corrected in one surface and not the others.
+**Two deployable items today, and they are independent of each other:** §1 `rolling-context` and
+§2 `ai-proxy`. Either order is fine.
+
+Corrected 2026-08-21 — this section used to read *"2–4 ship one behaviour change together"*, on
+the assumption FOB-3 and FOB-4 would land in the same batch and had to reach users in the same
+window. FOB-4 did not land: it turned out to need a migration first (see the end of §2), so there
+is no third or fourth deploy to sequence against.
 
 ---
 
@@ -61,42 +121,38 @@ is the last argument.
 
 ---
 
-## 2–4. `ai-proxy`, `weekly-recap-ready`, `weekly-report` — FOB-3 + FOB-4
+## 2. `ai-proxy` — FOB-3's HOLD WEEKS manual section
 
-> **Status, 2026-08-21: FOB-3 has landed — deploy `ai-proxy`.** The snapshot now emits a `hold`
-> block and `captain_manual.ts` has a HOLD WEEKS section telling the coach to read it. That
-> section is **inert until this redeploy**. FOB-4 has NOT landed and its two functions
-> (`weekly-recap-ready`, `weekly-report`) have nothing new to deploy yet — see the note at the
-> bottom of this section for why FOB-4 turned out to need a migration first.
+FOB-3 landed 2026-08-21. The snapshot now emits a `hold` block and `captain_manual.ts` has a HOLD
+WEEKS section telling the coach to read it, quote `hold.label`, and never tell a holder this is
+their final week of Phase I. **That section is inert until this redeploy.**
 
 ```bash
 cd "C:/Upendra/Claude Code/Fitness App"
-git pull
-for fn in ai-proxy weekly-recap-ready weekly-report; do
-  node .claude/emit_payload.js "$fn" --auto --functions-dir ./supabase/functions
-  node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl "$fn" ".claude/_payload_$fn.json" true
-done
-```
-
-`ai-proxy` and `weekly-report` are `verify_jwt=true`; `weekly-recap-ready` is cron-dispatched and
-takes `false`. Run it as three separate commands rather than the loop if you want the flag right
-per function — the loop above is wrong for `weekly-recap-ready` and is shown only for the shape.
-
-**Today, only `ai-proxy` needs deploying:**
-
-```bash
-cd "C:/Upendra/Claude Code/Fitness App"
-git pull
+git pull origin main
 node .claude/emit_payload.js ai-proxy --auto --functions-dir ./supabase/functions
 node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl ai-proxy .claude/_payload_ai-proxy.json true
 ```
 
-⚠️ **Watch for a 503 on the boot-verify below and do not shrug it off.** `captain_manual.ts` is one
-long template literal, and the HOLD WEEKS section this deploy carries refers to `snapshot.hold`,
-`hold.label` and friends. Those backticks are escaped in the repo (verified by parsing the
-extracted declaration with node: 19831 chars, closing backtick at line 412) — but if a later edit
-ever adds an unescaped one, the module stops parsing and ai-proxy 503s at boot while the OLD
-bundle keeps serving. That is the failure mode that looks like nothing happened.
+`ai-proxy` is `verify_jwt=true`, which is the last argument.
+
+⚠️ **Watch for a 503 on the boot-verify and do not shrug it off.** `captain_manual.ts` is one long
+template literal, and the section this deploy carries refers to `snapshot.hold`, `hold.label` and
+friends. Those backticks are escaped in the repo (verified by parsing the extracted declaration
+with node: 19831 chars, closing backtick at line 412) — but if a later edit ever adds an unescaped
+one, the module stops parsing and ai-proxy 503s at boot while the OLD bundle keeps serving. That
+is the failure mode that looks like nothing happened. Recorded as deploy-skill bug-class §6.8.
+
+**ONE function, deliberately — there is no loop here any more.** This section used to open with a
+`for fn in ai-proxy weekly-recap-ready weekly-report` block, above the correct single-function one.
+Removed 2026-08-21 because it was the first copy-pasteable thing in the section and it is wrong to
+run: `weekly-recap-ready` and `weekly-report` have no changes in this batch, so it would rewrite
+two prod function configs for nothing, and it passed `verify_jwt=true` for `weekly-recap-ready`
+whose documented value is `false`. (Checked rather than assumed: migration `061` has the Sunday
+cron send `Authorization: Bearer <service_role_key>`, which IS a valid JWT, so the cron would most
+likely still pass the gateway. "Most likely survives" is not a reason to run an unrequested prod
+config change — and §4.3 wants explicit per-action authorization for each deploy anyway.)
+FOB-4's commands get written when FOB-4 lands, not before.
 
 **FOB-4 is not deployable yet, and not for a scheduling reason.** Measured live 2026-08-21: schema
 `public` contains ZERO columns matching `%hold%`, `user_progress` has no hold field of any
@@ -118,7 +174,7 @@ curl -i -X POST https://dedsavbjuwgarrhphgnl.supabase.co/functions/v1/ai-proxy \
 
 ---
 
-## 5. APK build
+## 3. APK build
 
 Only from `main`, only via `/build-apk` (root CLAUDE.md §4.3) — a raw `flutter build apk` can hang
 silently on that machine without the skill's pre-flight cleanup. `main` must be CI-green first.
