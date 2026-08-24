@@ -6709,7 +6709,8 @@ concepts:
       surface reads, and returns HoldStatusData.empty whenever
       enable_hold_weeks is OFF — so all of it is inert until the flag flips.
       Deliberately does NOT touch getCurrentWeekNumber / getProgramWeek /
-      currentPhaseCompletionRate (still clamped) — see
+      currentPhaseCompletionRate (which as of 2026-08-25 / FOB-7(a) DOES exclude is_hold
+      rows from its accumulator via _withoutHoldRows, though its week counter is still clamped) — see
       docs/plan-reviews/free-tier-hold-findings.md.
     writers:
       - file: lib/core/services/workout_schedule_write_service.dart
@@ -7897,11 +7898,20 @@ concepts:
       - file: lib/core/services/workout_schedule_read_service.dart
         method: currentPhaseCompletionRate (reconstructs {isRest,isDone} from getWeek rows)
         notes: >
-          totalWeeks MIRRORS the card's `phase<=1?4:scan` EXACTLY (phase from
+          totalWeeks mirrors the card's `phase<=1?4:scan` (phase from
           UserRepository.getProgress current_phase, the same source train_provider uses). NOT a bare
           scan — a mid-phase Edit-Profile regen (generateAndScheduleFromDate keeps plan_start when
           !isFirstGeneration) can leave a phase-1 plan with week-5/6 rows, so a bare scan would drift
           (B-pass P2). Pinned by the phase-1-cap + phase≥2 test cases.
+          ⚠ 2026-08-25 / FOB-7(a): the mirror is now DELIBERATELY IMPERFECT and "EXACTLY" was struck.
+          The ACCUMULATOR drops `is_hold` rows via _withoutHoldRows; the card
+          (train_provider.dart:767-777) does NOT. Asymmetry is intentional — what the Train screen
+          renders during a hold is FOB-6 → OI-125, a feature that explicitly does not gate the
+          enable_hold_weeks flip, so filtering the card here would ship half of OI-125 by accident.
+          The SCAN loop deliberately keeps walking the RAW week: filtering it too made a fully-hold
+          week read empty, break the scan, and drop real phase-2 weeks beyond it from both numerator
+          and denominator (caught by review round 2). Holds EXTEND the schedule; they must not COUNT.
+          Behavioral: test/contracts/phase_completion_excludes_holds_behavioral_test.dart.
     readers:
       - file: lib/features/train/screens/train/phase_unlock_card.dart
         method_or_widget: _computePhaseCompletionRate (byte-identical adapter → phaseCompletionRate)
@@ -8807,7 +8817,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1210-1225
+        line_range: 1267-1282
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -9137,15 +9147,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1334-1353
+        line_range: 1391-1410
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1340-1341
+        line_range: 1384-1385
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1392-1399
+        line_range: 1436-1444
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
     readers:
