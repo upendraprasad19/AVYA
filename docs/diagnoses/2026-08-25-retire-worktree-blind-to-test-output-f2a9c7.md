@@ -3,7 +3,7 @@ bug_id: f2a9c7
 date: 2026-08-25
 batch: board-hygiene
 status: fixed
-blast_radius: platform
+blast_radius: feature
 symptom: >
   Any worktree that had merely RUN the full test suite could never be retired. `retire_worktree.dart`
   reported "1 non-regenerable ignored file(s)" and KEPT the worktree forever, because
@@ -13,6 +13,18 @@ symptom: >
   `auth-class-fixes` (2026-08-25, merged and tracked-clean, held by that one file alone). The
   practical consequence is the one CLAUDE.md §4.13 point 6 exists to prevent — the worktree count
   regrows unbounded, and it previously reached 106 directories / 17 GB.
+blast_radius_note: >
+  CORRECTED before merge. This doc first said `platform`, copying OI-128's own
+  "Blast radius estimate: platform — the review/blast-radius machinery under
+  scripts/ is individually pinned". That claim is FALSE:
+  `grep -n retire_worktree docs/blast_radius.yaml` returns nothing, so both files
+  fall through to the `scripts/** -> feature` catch-all, and
+  `blast_radius_from_diff.dart` classifies this branch `feature`. The commit
+  message says `Blast-radius: platform` for the same reason and is likewise wrong;
+  left uncorrected rather than rewriting pushed history, and recorded here instead.
+  ⚠ The MISMATCH itself is filed as OI-139: retire_worktree is the only tool in the
+  repo that DELETES developer work, yet it is tiered the same as a docs edit, while
+  every sibling that merely BLOCKS a commit is pinned platform.
 concept: >
   An allow-list whose input set was enumerated from one source (things new-worktree.sh copies in, and
   Flutter build products) while a SECOND producer of ignored files — the test suite itself — wrote

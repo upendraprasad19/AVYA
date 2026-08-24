@@ -4001,3 +4001,42 @@ OI-136, OI-132.
   operation (branch deletion) to a tool that currently only removes directories, so it needs the
   mutation-proven treatment its siblings already carry.
 - **Related**: OI-128 (parent, CLOSED 2026-08-25 — the regenerable-list half), §4.13 point 6.
+
+## OI-139 — the only tool that DELETES developer work is tiered `feature`; every tool that merely BLOCKS a commit is pinned `platform`
+
+- **Status**: OPEN
+- **Verified**: 2026-08-25 — `grep -n retire_worktree docs/blast_radius.yaml` returns NOTHING, and
+  `git diff --name-only main...board-hygiene | dart run scripts/blast_radius_from_diff.dart -`
+  printed `Blast-radius: feature` for a branch whose only code change is to
+  `scripts/retire_worktree_lib.dart`.
+- **Identified**: 2026-08-25, while closing OI-128 — surfaced by the tier coming back `feature`
+  when both OI-128's own estimate and the closing commit message said `platform`.
+- **Blocked on**: FOUNDER. This is a governance decision, not a defect fix: pinning changes the
+  REVIEW BURDEN for every future change to these files (≥account ⇒ ×2 plan review + plan-review
+  record + B-pass). Deliberately not applied unilaterally inside a hygiene commit, which would
+  also have retroactively changed the required review for the very commit adding it.
+- **What's missing**: two lines in `docs/blast_radius.yaml`, above the `scripts/** → feature`
+  catch-all:
+  `- { glob: "scripts/retire_worktree.dart", tier: platform }` and
+  `- { glob: "scripts/retire_worktree_lib.dart", tier: platform }`.
+- **Why the current tiering is backwards**: `retire_worktree` is the ONLY tool in this repo that
+  destroys developer work — it runs `git worktree remove`, and OI-138 proposes adding
+  `git branch -d` on top. Its four-leg predicate exists precisely because a wrong answer is
+  unrecoverable: on 2026-08-09 five worktrees held 21 uncommitted files while classifying as
+  merged, and a merged worktree holding an ignored `secrets/.env` was removed with exit 0 and the
+  file was gone. Meanwhile every sibling whose worst failure is a REFUSED COMMIT is pinned
+  `platform`: `git_safety_hook.dart`, `git_safety_lib.dart`, `check_commit_from_worktree.dart`,
+  `worktree_guard_lib.dart` (`blast_radius.yaml:76-79`). The tiering is inverted with respect to
+  blast radius: block-a-commit is recoverable in seconds, delete-a-worktree is not recoverable at
+  all.
+- **What it cost already**: this exact gap is why the three P0s in `isRegenerableIgnored`
+  (none→prefix→basename→exact) each shipped and were caught only by the NEXT round rather than by
+  a required review — a `feature`-tier change needs neither a ×2 plan review nor a B-pass.
+- **Counter-argument, stated fairly**: §4.13 point 6 makes retirement deliberately NOT a blocking
+  gate, and pinning `platform` raises the cost of routine maintenance on a tool that is
+  operator-invoked and dry-run by default. The counter to the counter is that tier governs REVIEW
+  of changes to the tool, not how often the tool runs.
+- **Blast radius estimate**: `platform` — editing `docs/blast_radius.yaml` itself is the
+  registry that every other tier decision reads.
+- **Related**: OI-128 (CLOSED 2026-08-25, whose own `platform` estimate was wrong and propagated
+  into a commit message), OI-138 (adds the branch deletion that makes this sharper), §4.13 point 6.
