@@ -126,6 +126,42 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-08-25** — blast-radius **platform** — branch `discipline-enforcement` @ `fbbea768`.
+  **4 findings (2 P0, 2 P1); 0 false_alarm.** All fixed in-batch.
+  Review: `docs/reviews/discipline-enforcement-bpass.md`.
+  **This pass reviewed the batch that BUILT this gate, and found the gate would have
+  silently passed its own first real use.** `hasTuningEntryFor` matched any bullet carrying
+  the review's date — and `SKILL.md` already held a 2026-08-25 entry for an unrelated batch,
+  so THIS review would have been reported satisfied by somebody else's entry. Date is not
+  identity, and two reviews on one calendar date is ordinary here, not exotic. Fixed with a
+  block scan that requires the dated entry to NAME the review.
+  **The second P0 is the same shape one layer out:** the Stop hook measured its batch with
+  `origin/main..HEAD` while local `main` sat 7 commits ahead of origin — so three derived
+  rows reported green on three unrelated batches' evidence (another batch's review file
+  satisfied the skill-tuning row; another batch's `fix(...)` subjects set the feedback row;
+  the retrospective check anchored to an unrelated commit's date). `new-worktree.sh:65-91`
+  had solved that exact range-selection problem already and the fix was not carried across.
+  **Generalisable, and it is why this pass earned its keep after TWO ×2 rounds found nothing
+  of the kind:** when a batch builds a checker, point the checker at ITSELF and at the
+  repo's real state, not at a fixture. Both P0s were invisible to 52 passing tests and to
+  two context-blind rounds, and both fell out immediately from running the thing against the
+  live tree. A fixture encodes the author's model of the world; the working tree does not.
+  ⚠ Process: the reviewer's own failed `cd` left it in the target worktree and an
+  `ALLOW_RAW_GIT=1 git commit` landed a stray commit there. Self-caught and fully reverted
+  (author verified independently). Two lessons recorded in the review: chain `cd <dir> && …`,
+  and a review subagent should not hold a raw-git escape hatch at all.
+  False-alarm rate 0/4 → no tuning to lenses 1-6.
+
+- **2026-08-25** — blast-radius **account** (self-declared platform) — branch `oi60-client-blockers` @ `2e9503eb` (OI-60 FOB-7a/7b). **4 findings (0 P0, 1 P1, 3 P2); 0 false_alarm.** All fixed in-batch. Review: `docs/reviews/2e9503eb-review.md`.
+  **NEW OBSERVATION, and it is the reason this entry matters: all four findings were defects in the EVIDENCE, none in the CODE.** Every prior entry in this history records the pass catching a code or guard defect. Here the ×2 plan review had already caught the design defects — including a P0 it prevented — and the code shipped correct. What the B-pass found was that the ARTIFACTS DESCRIBING the code were false:
+  (1) **P1 — a past-tense claim for work never done.** The plan-review record AND the closure YAML both stated the three wrong OI-127 board citations had been "corrected on the board in this batch". They were corrected in the plan document only; `git log <base>..HEAD -- docs/audit/open_issues.md` returned ZERO commits and the board still showed all three verbatim. The batch existing partly to stop the board misdirecting the next session was about to merge leaving it misdirecting, while asserting the opposite.
+  (2) **P2 — `docs/sot_registry.yaml` described superseded behaviour** in two entries, one of which (`still clamped`) the same commit's own new code comment directly contradicted.
+  (3) **P2 — the diagnose `bug_id` COLLIDED** with an unrelated doc, making `closes-diagnose:` ambiguous forever (git history cannot be rewritten to repair it). No detector exists: `validate_diagnose_doc.dart` takes ONE path and never scans the corpus, though the OI-number version of this identical bug shipped six times and earned its own gate. Filed OI-140.
+  (4) **P2 — a stale mutation count** (claimed 4-of-7 red, actual 5-of-7). Measured when the file had SIX tests, never re-measured after a seventh was added, then copied into two documents.
+  **Generalisable, and worth adding to how this skill is USED rather than to a lens:** the ×2 plan review reads the DESIGN; the B-pass reads the ARTIFACTS. Neither pass would have found the other's findings, and a batch can be entirely correct while shipping documents that lie about it. When the code is clean, do not conclude the pass found nothing — turn the lenses on the commit's own claims: does every past-tense assertion have a diff behind it, does every cited count come from a run against the file as it now stands, and is every id unique in its space.
+  **Second, mechanical lesson (feeds the new Gate `check_skill_tuning_history.dart` added the same day):** this very entry was NOT written until founder asked whether discipline had been followed. §5.1 mandates it and nothing enforced it, so the skill's own self-evolution loop was the thing decaying. It is now gated: a commit adding `docs/reviews/<sha>-review.md` must also add a same-dated entry here.
+  False-alarm rate 0/4 → no tuning to lenses 1-6.
+
 - **2026-08-20** — blast-radius **account** — branch `claude/oi-pending-hold-weeks-1od97o` (FOB-1 week identity, OI-60). **2 findings (0 P0, 1 P1, 1 P2); 0 false_alarm.** Both fixed in-batch. Review: `docs/reviews/fob1-week-identity-bpass.md`.
   **Lens 6 found the P1 by asking its question one level OUT — not "is this guard correct?" but "is the value it produces REACTIVE where it is consumed?"** The seam, the provider and four of six surfaces were all correct. The defect: `UserStatsNotifier.build()` read the identity through a plain singleton call, so `userStatsProvider` had NO dependency-graph edge to the hold write. The five tabs sit under `StatefulShellRoute.indexedStack`, so an already-mounted Profile tab never rebuilds on tab-switch — Profile would have kept printing `WEEK 4 OF 4` while Home and Train said `HOLDING · H1`, **reintroducing the exact cross-tab contradiction the batch existed to close, on two of its own six surfaces.** This is the 2026-08-17 "follow the return value to its CALL SITE" note generalising once more: the tell was again structural — a `build()` that watches nothing it derives from.
   **The P2 is the second consecutive batch where `test_can_actually_fail` beat a mutation-proven change, and the sharper lesson is new.** The batch shipped TWO mutation proofs on the service seam and cited both in its commit message — while the LABEL layer, which is what a user actually reads, had zero behavioral coverage: the only assertion was `body.contains('stats.isHolding')` against raw source. The reviewer inverted that ternary (a real defect printing "Holding · Hnull" to every non-holding user) and **all 16 tests still passed**. Fixed by extracting the five label ternaries to pure functions with a table-driven test; the same inversion now reddens 4. **Generalisable: mutation-proving a SEAM does not mutation-prove the SURFACES that consume it.** A source-grep over a widget is presence, not behaviour — when the logic is a ternary in a `build()`, extract it to a pure function so it can be asserted at all.

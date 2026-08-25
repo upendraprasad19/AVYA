@@ -339,3 +339,46 @@ check_writeservice_contracts.dart:
 
 check_writeservice_only.dart:
   grandfathered: 2026-08-10
+
+check_skill_tuning_history.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/skill_tuning_lib_test.dart
+    - test/scripts/skill_tuning_history_e2e_test.dart
+  evidence: >
+    NEW 2026-08-25. Gates CLAUDE.md 5.1: a commit that ADDS any review file under
+    docs/reviews/ must also append a same-dated entry to
+    .claude/skills/code-review/SKILL.md's Tuning history. Born from the omission
+    that motivated it - a B-pass produced a 4-finding review that day and nothing
+    was appended; it surfaced only when founder asked whether discipline had been
+    followed. 5.1 had no gate, so the skill's own self-evolution loop was the
+    thing decaying.
+    THREE MUTATIONS, each RE-MEASURED against the files as they now stand rather
+    than carried from an earlier run:
+    (1) WEAKEN THE MATCHER to skillMarkdown.contains(isoDate) -> 4 red. The
+    realistic regression, since a bare contains looks like a simplification. It
+    matters because the fixture's 2026-08-20 entry mentions 2026-08-25 in its
+    PROSE, so contains() lets an OLD entry satisfy a NEW review and the gate goes
+    permanently inert.
+    (2) COLLAPSE THE FAIL-OPEN - return satisfied instead of undetermined when the
+    skill file cannot be read -> 3 red, including the explicit "undetermined is
+    NOT reported as satisfied" case. That test is why the predicate returns an
+    enum rather than a bool: a caller handed false cannot tell "nothing to check"
+    from "could not check" and would claim a PASS it never established.
+    (3) NARROW THE FILE FILTER back to -review.md only -> 2 red. Review round 1
+    measured the input set: of 164 files in docs/reviews/, 81 end -bpass.md and
+    only 79 end -review.md, and the skill's own Tuning history cites -bpass.md for
+    most recent entries. The first version was blind to the MAJORITY convention -
+    the very omission the gate exists to catch, reopened by an over-narrow
+    pattern. The fix identifies a review by WHERE IT LIVES, not by suffix, with
+    only INDEX.md/README.md excluded by name.
+    The e2e additionally proves the gate reads the STAGED blob rather than the
+    working tree (OI-72's failure shape), and that a dateless stray .md cannot
+    MASK a dated review beside it that is missing its entry.
+    A defect in the gate was found BY these tests before commit: the HEAD fallback
+    returned git show's stdout without checking exitCode, so a missing skill file
+    yielded '' rather than null. An empty string is not "unreadable" - it is a
+    file with no entry - so fail-open had silently become fail-closed.
+    SCOPE, so the pass is not read as wider than it is: code-review only.
+    /hermes-pass writes to the same directory but keeps its own tuning section;
+    wiring that needs its own decision and is not assumed here.
