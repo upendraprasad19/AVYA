@@ -6,7 +6,7 @@ review_rounds: 2
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
-bpass_review: docs/plan-reviews/e2e-timeout-convention.md
+bpass_review: docs/reviews/e2e-timeout-convention-bpass.md
 ---
 
 # Plan-review record — e2e-timeout-convention (platform)
