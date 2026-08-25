@@ -89,6 +89,85 @@ Future<void> _settle() async {
   }
 }
 
+/// Every entitlement key a test in this file can leave behind.
+const _entitlementKeys = <String>[
+  'isPro',
+  'expiresAt',
+  'plan',
+  'pro_lapsed_at',
+  'lastVerifiedAt',
+  'localActivationAt',
+];
+
+/// Clears the entitlement keys and KEEPS clearing until the clear STICKS.
+///
+/// WHY A LOOP AND NOT SIX `delete` CALLS (2026-08-25).
+/// ---------------------------------------------------
+/// A single delete pass is not enough, and [_settle] cannot rescue it. The
+/// enforcement path stamps the lapse marker FIRE-AND-FORGET —
+/// `subscription_service.dart:458`:
+///
+///     unawaited(MigratedKey.write(_proLapsedAtKey, expiresAt.toIso8601String()));
+///
+/// That write is issued OUTSIDE `_downgradeLocally`, so it is never awaited by
+/// anything. [_settle] samples for quiescence, which closes the "write is
+/// in-flight" window but NOT the "write has not been scheduled yet" one — an
+/// unstarted write looks exactly like a finished one to a sampler. On a loaded
+/// machine the write can fail to start inside `_settle`'s 3x10ms stability
+/// window, land after the NEXT test's `setUp` has already deleted the keys, and
+/// resurrect `pro_lapsed_at` with the PREVIOUS test's `expiresAt` value.
+///
+/// That is the observed failure verbatim: `Expected: null, Actual:
+/// '2026-08-24T01:39:16'` — a `_pastIso()` value, i.e. a prior test's seed.
+/// Reproduced 1-in-3 under CPU load, 0-in-9 idle.
+///
+/// This is the SECOND time this file has flaked this way. The 2026-08-10 fix
+/// replaced a fixed 20ms sleep with [_settle]'s quiescence sampler and its
+/// docstring records that history — but it hardened the sampler while leaving
+/// the one genuinely unawaited write outside its reach.
+///
+/// ⚠ WHAT THIS DOES AND DOES NOT CLOSE (corrected 2026-08-25 after a Hermes
+/// pass called out the overclaim). It closes the setUp-CONTAMINATION window:
+/// no prior test's late write can survive into the next test's body. It does
+/// NOT remove the unawaited write itself — `subscription_service.dart:458`
+/// still reads `unawaited(MigratedKey.write(_proLapsedAtKey, …))`, so a write
+/// scheduled on a longer timer could in principle still land mid-test. Closing
+/// that for real means exposing an awaitable from the enforcement path, which
+/// is a production change this test-side fix deliberately does not make. Say
+/// the smaller true thing rather than the larger satisfying one.
+///
+/// Converging by construction: a late write resurrects a key, the next pass
+/// deletes it again, and we only exit once a full pass observes every key null
+/// AND that holds for consecutive rounds.
+Future<void> _drainAndClearEntitlementKeys() async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  var cleanRounds = 0;
+
+  while (cleanRounds < 3 && DateTime.now().isBefore(deadline)) {
+    for (final k in _entitlementKeys) {
+      if (MigratedKey.read<dynamic>(k) != null) await MigratedKey.delete(k);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final allNull =
+        _entitlementKeys.every((k) => MigratedKey.read<dynamic>(k) == null);
+    cleanRounds = allNull ? cleanRounds + 1 : 0;
+  }
+
+  // Fail LOUDLY rather than letting a later assertion blame the production
+  // code for leftover test state — the exact misattribution that cost an hour
+  // of investigation on 2026-08-25.
+  final leftovers = _entitlementKeys
+      .where((k) => MigratedKey.read<dynamic>(k) != null)
+      .toList();
+  if (leftovers.isNotEmpty) {
+    throw StateError(
+      'entitlement keys survived the drain: $leftovers — a fire-and-forget '
+      'write is outrunning a 5s converging clear. Do NOT paper over this by '
+      'raising the deadline; find the new unawaited writer.',
+    );
+  }
+}
+
 void main() {
   late Directory tempDir;
   const user = 'cccc3333-cccc-cccc-cccc-cccccccccccc';
@@ -125,16 +204,7 @@ void main() {
     // the 2026-06-06 cross-account banner leak). Re-opening the same user id
     // therefore re-attaches the previous test's `pro_lapsed_at`, which made a
     // "no lapse happened" assertion fail against perfectly correct code.
-    for (final k in const [
-      'isPro',
-      'expiresAt',
-      'plan',
-      'pro_lapsed_at',
-      'lastVerifiedAt',
-      'localActivationAt',
-    ]) {
-      await MigratedKey.delete(k);
-    }
+    await _drainAndClearEntitlementKeys();
   });
 
   // ignore: deprecated_member_use

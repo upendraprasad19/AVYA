@@ -91,11 +91,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   /// immediately (B-pass finding 4, 96afd825-review.md).
   bool _checkingEmail = false;
 
-  /// Pre-checked per Q2 decision (DPDP-compliant: visible + tickable
-  /// checkbox present; tapping CREATE ACCOUNT with checkbox checked
-  /// is the affirmative action). Common Indian fintech pattern
-  /// (CRED, Zerodha, Razorpay).
-  bool _privacyAccepted = true;
+  /// Starts UNCHECKED — the user's tick is the clear affirmative action.
+  ///
+  /// ⚠ THIS REVERSES THE EARLIER Q2 DECISION, which pre-checked the box to
+  /// reduce signup friction on the grounds that "tapping CREATE ACCOUNT with
+  /// the checkbox checked is the affirmative action", citing the common Indian
+  /// fintech pattern (CRED, Zerodha, Razorpay).
+  ///
+  /// Changed for the Play Store launch. DPDP §6(1) requires consent given by a
+  /// "clear affirmative action", and a pre-ticked box is the textbook example
+  /// of what does NOT qualify (the GDPR equivalent was settled in Planet49).
+  /// The button-press argument is arguable, but this app processes HEALTH data
+  /// and is going through Play review with a Data Safety declaration — the
+  /// weaker reading is not worth defending there.
+  ///
+  /// COST, stated plainly: CREATE ACCOUNT is now disabled until the user ticks,
+  /// which will cost some signup conversion. That is a product trade-off, not a
+  /// pure compliance win. Reverting is a one-word change back to `true`.
+  bool _privacyAccepted = false;
 
   @override
   void initState() {
@@ -104,7 +117,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     //
     // The Q2 design (APK Test #2) covers ToS/Privacy via:
     //   (a) inline footer on welcome screen
-    //   (b) pre-checked checkbox above SIGN UP button (gates the button)
+    //   (b) UNCHECKED consent checkbox above SIGN UP (gates the button) —
+    //       un-ticked 2026-08-25; the tick is the DPDP affirmative action
     //   (c) returning users have users.terms_accepted_at synced from cloud
     //       to Hive on _ensureLocalUser (auth_provider.dart:466)
     //
@@ -994,9 +1008,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Privacy/Terms checkbox. Pre-checked (true) to reduce
-              // friction while still providing a visible, tickable
-              // affordance for DPDP compliance.
+              // Privacy/Terms checkbox. Starts UNCHECKED — the tick is the
+              // DPDP §6(1) "clear affirmative action". See `_privacyAccepted`.
               _PrivacyCheckboxRow(
                 value: _privacyAccepted,
                 onChanged: (v) => setState(() => _privacyAccepted = v ?? false),
@@ -1013,8 +1026,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   final email = _emailController.text.trim();
                   final password = _passwordController.text;
                   // closes-diagnose: b3f9e7
-                  // The pre-checked checkbox + visible link affordance is the
-                  // affirmative-action signal per DPDP §11. The original E.3 fix
+                  // The user's own TICK on the (unchecked-by-default) consent
+                  // box is the affirmative-action signal — DPDP §6(1), a clear
+                  // affirmative action. Corrected 2026-08-25: this said
+                  // "pre-checked … per DPDP §11", which stopped being true when
+                  // `_privacyAccepted` was flipped to false, and cited a
+                  // different section than the field's own docstring. The original E.3 fix
                   // (audit 2026-05-16, F3-1.2) wrote ToS/Privacy acceptance
                   // straight to `HiveService.instance.userBox` HERE, before
                   // signUp — but no Supabase session (and therefore no open

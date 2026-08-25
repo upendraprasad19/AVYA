@@ -218,7 +218,7 @@ extension _ProfileContent on _ProfileScreenState {
                       ),
                     );
                   } else {
-                    showPaywallSheet(context, feature: 'PRO Upgrade');
+                    showPaywallSheet(context, feature: PaywallSheet.genericUpgradeProfile);
                   }
                 },
               ),

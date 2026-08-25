@@ -6,6 +6,16 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### terms_acceptance (2 bugs)
+- 2026-08-25 d8f2c1 — The sign-up consent checkbox for Privacy Policy and Terms was PRE-TICKED. A user could create an account having made no affirmative gesture toward the policies at all — the box arrived already…
+- 2026-08-02 b3f9e7 — Founder spotted `users.terms_accepted_at` / `terms_version` NULL for every row in the live Supabase dashboard, including a row created the same day (2026-08-02 13:11:55, hours before this…
+
+### A sampler cannot observe a write that has not started. The enforcement path stamps the lapse marker fire-and-forget, OUTSIDE the method whose writes the test's quiescence helper was built around. Quiescence closes the "write in flight" window but not the "write not yet scheduled" window — an unstarted write is byte-identical to a finished one from the sampler's point of view. Under load the write misses the stability window entirely, lands after the NEXT test's setUp has cleared the keys, and resurrects one with the previous test's value. (1 bugs)
+- 2026-08-25 f3c7d2 — `test/contracts/subscription_cqrs_behavioral_test.dart` fails intermittently with `Expected: null, Actual: '2026-08-24T01:39:16.286648'` on a `pro_lapsed_at` assertion. It is load-dependent:…
+
+### A display template applied to inputs it was never meant to receive. PaywallSheet.feature is a DISPLAY STRING interpolated verbatim into "<feature> is a PRO feature". That sentence is correct when the sheet was opened BY a specific locked feature, and degenerate when it was opened by a general "go PRO" affordance, where there is no feature to name. Both kinds of caller went through one unconditional template, so the second kind produced a tautology. (1 bugs)
+- 2026-08-24 c2b8e5 — The paywall's hero letterhead reads "PRO is a PRO feature" — and, from the Profile upgrade chip, "PRO Upgrade is a PRO feature". It appears on the three highest-intent surfaces in the app: the Profile…
+
 ### Documentation-as-executable-input drift. A runbook command is not prose — it is an input to a prod control plane, and it had drifted from the live state it addresses with nothing pinning the two together. The failure would also have been SILENT: deploy_via_api.js tolerates HTTP 401 for ai-proxy in its post-deploy smoke step, so the deploy prints "Smoke OK" over a dead function. This is the bad-news-vs-no-news class — a 401 meant "healthy module rejected you" before the change and would have meant "gateway killed everything" after it, with no way to tell them apart from the smoke output alone. (1 bugs)
 - 2026-08-24 b2d8e4 — The operator runbook docs/operations/FOUNDER_LAPTOP_HANDOFF.md instructed the founder to redeploy ai-proxy with verify_jwt=true. Live config is false, and deliberately so. Running the documented line…
 
@@ -166,9 +176,6 @@ rather than a Hive box. (1 bugs)
 
 ### workout_receipt_rendering + workout_log_edit_surface (exlog aggregate read) (1 bugs)
 - 2026-08-02 d4e7c2 — A cloud-restored workout renders wrong on two surfaces. The receipt shows 0 duration for a timed/cardio exercise that has a real total, and the Edit Workout Log sheet shows a BLANK sets box and a…
-
-### terms_acceptance (1 bugs)
-- 2026-08-02 b3f9e7 — Founder spotted `users.terms_accepted_at` / `terms_version` NULL for every row in the live Supabase dashboard, including a row created the same day (2026-08-02 13:11:55, hours before this…
 
 ### auth_password_reset_post_success_navigation (1 bugs)
 - 2026-08-01 c8f1d3 — A user requests a password reset from the web app, gets the email, clicks the link, lands on the "SET NEW PASSWORD" screen (Wardroom-branded, "RECRUIT REGISTRY" / "SET NEW PASSWORD", two password…
@@ -1053,6 +1060,9 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-25 | d8f2c1 | The sign-up consent checkbox for Privacy Policy and Terms was PRE-TICKED. A user could create an account having made no affirmative gesture toward the policies at all — the box arrived already… | terms_acceptance | test/auth/terms_skip_test.dart |
+| 2026-08-25 | f3c7d2 | `test/contracts/subscription_cqrs_behavioral_test.dart` fails intermittently with `Expected: null, Actual: '2026-08-24T01:39:16.286648'` on a `pro_lapsed_at` assertion. It is load-dependent:… | A sampler cannot observe a write that has not started. The enforcement path stamps the lapse marker fire-and-forget, OUTSIDE the method whose writes the test's quiescence helper was built around. Quiescence closes the "write in flight" window but not the "write not yet scheduled" window — an unstarted write is byte-identical to a finished one from the sampler's point of view. Under load the write misses the stability window entirely, lands after the NEXT test's setUp has cleared the keys, and resurrects one with the previous test's value. | test/contracts/subscription_cqrs_behavioral_test.dart |
+| 2026-08-24 | c2b8e5 | The paywall's hero letterhead reads "PRO is a PRO feature" — and, from the Profile upgrade chip, "PRO Upgrade is a PRO feature". It appears on the three highest-intent surfaces in the app: the Profile… | A display template applied to inputs it was never meant to receive. PaywallSheet.feature is a DISPLAY STRING interpolated verbatim into "<feature> is a PRO feature". That sentence is correct when the sheet was opened BY a specific locked feature, and degenerate when it was opened by a general "go PRO" affordance, where there is no feature to name. Both kinds of caller went through one unconditional template, so the second kind produced a tautology. | test/contracts/paywall_generic_upgrade_title_behavioral_test.dart |
 | 2026-08-24 | b2d8e4 | The operator runbook docs/operations/FOUNDER_LAPTOP_HANDOFF.md instructed the founder to redeploy ai-proxy with verify_jwt=true. Live config is false, and deliberately so. Running the documented line… | Documentation-as-executable-input drift. A runbook command is not prose — it is an input to a prod control plane, and it had drifted from the live state it addresses with nothing pinning the two together. The failure would also have been SILENT: deploy_via_api.js tolerates HTTP 401 for ai-proxy in its post-deploy smoke step, so the deploy prints "Smoke OK" over a dead function. This is the bad-news-vs-no-news class — a 401 meant "healthy module rejected you" before the change and would have meant "gateway killed everything" after it, with no way to tell them apart from the smoke output alone. | test/contracts/runbook_deploy_verify_jwt_test.dart |
 | 2026-08-21 | b6e1f4 | FOB-3 of OI-60. The AI coach asserts a falsehood to every holder, every week. The snapshot sends `progress.current_week` and `current_plan_summary.week` derived from `getCurrentWeekNumber()`, which… | hold_snapshot_block | test/contracts/hold_snapshot_block_behavioral_test.dart |
 | 2026-08-20 | c7a3b9 | FOB-5 of OI-60, two defects in one function, one LIVE on the founder dashboard. (1) `founder_metrics_engagement().ai_messages_today` counted EVERY row of `ai_coach_interactions` with no channel… | founder_metrics_engagement | test/contracts/hold_week_mechanic_behavioral_test.dart |

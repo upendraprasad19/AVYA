@@ -135,6 +135,30 @@ void main() {
           reason: 'CREATE ACCOUNT button must be disabled when unchecked');
     });
 
+    test('the consent checkbox starts UNCHECKED (DPDP affirmative action)', () {
+      // Play-Store-launch change (2026-08-24), reversing the earlier Q2
+      // "pre-check to reduce friction" decision. DPDP §6(1) requires consent
+      // by a "clear affirmative action"; a pre-ticked box is the textbook
+      // example of what does not qualify, and this app processes HEALTH data
+      // under a Play Data Safety declaration.
+      //
+      // Matched by REGEX, not a literal line, so reformatting or a doc-comment
+      // rewrite cannot silently un-pin it — only the VALUE is the contract.
+      // (feedback_mistake_guard_without_its_mirror: match by regex, never by a
+      // literal.)
+      final decl = RegExp(r'bool\s+_privacyAccepted\s*=\s*(true|false)\s*;')
+          .firstMatch(src);
+
+      expect(decl, isNotNull,
+          reason: 'could not find the _privacyAccepted declaration at all — '
+              'this guard has stopped checking anything');
+      expect(decl!.group(1), 'false',
+          reason: 'the consent box must not be pre-ticked. Reverting this to '
+              'true re-introduces the DPDP §6(1) problem the launch batch '
+              'fixed; if that is a deliberate product call, change this test '
+              'in the same commit and say why.');
+    });
+
     test('sign_in_screen links to icanbefitter.com/privacy', () {
       expect(src, contains('icanbefitter.com/privacy'),
           reason: 'Privacy Policy URL must be present in sign-up checkbox');
