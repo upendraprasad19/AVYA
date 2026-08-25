@@ -8,7 +8,7 @@ verdict: converged
 bpass: accepted
 bpass_review: docs/reviews/a51a2ba9de14-review.md
 hermes: accepted
-hermes_review: docs/reviews/eb37932a4218-review.md
+hermes_report: docs/audit/2026-08-25-hermes-launch-blockers-1a.md
 ---
 
 # Plan-review record — launch-blockers-1a (catastrophic)
@@ -65,8 +65,8 @@ the checklist's STILL-OPEN framing against the live exercise library.
 **On `hermes: accepted`, stated precisely.** The Hermes pass ran against the SUPERSET
 (`d45d7182`), not against this exact diff. Everything it flagged in the half that remains here was
 fixed; everything it flagged in the removed half went with that half. No Hermes finding against
-this content is outstanding. Recording it as accepted with the superset's review path is the
-honest reading, and the distinction is written here rather than left for someone to infer from
+this content is outstanding. Recording it as accepted, with the scope stated in the report itself
+(`docs/audit/2026-08-25-hermes-launch-blockers-1a.md`), is the honest reading, and the distinction is written here rather than left for someone to infer from
 two different hashes.
 
 ## Ground truth verified
