@@ -192,7 +192,7 @@ extension _SubscriptionSection on _ProfileScreenState {
                   )),
               const Spacer(),
               GestureDetector(
-                onTap: () => showPaywallSheet(context, feature: 'PRO'),
+                onTap: () => showPaywallSheet(context, feature: PaywallSheet.genericUpgrade),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(

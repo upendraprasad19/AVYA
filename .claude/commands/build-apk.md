@@ -290,6 +290,44 @@ flutter build apk --dart-define-from-file=.env --flavor prod --release -t lib/ma
 
 Run with 10-minute timeout. Long-running command.
 
+### Build App Bundle instead — `--bundle` in `$ARGUMENTS`
+
+**The Play Store cannot accept an APK.** A production or closed-testing track
+requires an `.aab`. Until 2026-08-24 this pipeline produced APK only — the
+appbundle command was documented in CLAUDE.md §0 and README but no script, skill
+or gate ever ran it, so the Play upload artifact had never once been built.
+
+When `--bundle` is present, replace the build command above with:
+
+```bash
+flutter build appbundle --dart-define-from-file=.env --flavor prod --release -t lib/main.dart
+```
+
+Everything else about the run is unchanged — **every pre-build gate still
+applies** (clean tree, on-main, versionCode bump, `.env` present, Razorpay key
+flavor, diagnose-doc, all of it). Only the artifact differs:
+
+| | APK (default) | `--bundle` |
+|---|---|---|
+| Artifact | `build/app/outputs/flutter-apk/app-prod-release.apk` | `build/app/outputs/bundle/prodRelease/app-prod-release.aab` |
+| Installable via adb | yes | **no** — an `.aab` is an upload format, not an install format |
+| Play Store accepts | no | yes |
+| Size gate 13 | applies as written | bounds are for the APK; an `.aab` is normally smaller, so record it separately rather than comparing to `apk_sizes.json` |
+| Signing gate 48 | applies as written | **still applies** — verify with `jarsigner -verify -verbose -certs <aab>` or `bundletool`, pinning the same `CN=ICANBEFITTER` |
+
+⚠ **Do not device-verify a release by installing the bundle** — you cannot.
+To smoke-test the exact artifact Play will serve, generate a universal APK from
+the bundle with `bundletool build-apks --mode=universal`, or keep building an
+APK for device testing and the `.aab` for upload. Verifying the APK and shipping
+the bundle assumes they are equivalent; they are built from the same code but
+are not the same artifact.
+
+⚠ **First upload only:** Play App Signing takes over signing after the first
+upload. Back up `android/app/release.jks` + `android/key.properties` offsite,
+twice, BEFORE the first upload — losing the upload key means publishing under a
+new package name and losing every installed user
+(`docs/operations/SECRET_INVENTORY.md`).
+
 ---
 
 ## Post-build verification and Gate 13

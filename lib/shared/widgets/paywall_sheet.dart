@@ -33,7 +33,62 @@ void showPaywallSheet(BuildContext context, {required String feature}) {
   );
 }
 
+/// TRUE when [feature] is a general "go PRO" affordance rather than a specific
+/// locked feature.
+///
+/// Matched trimmed + case-insensitively so a call site passing `'pro'` or
+/// `'PRO Upgrade'` cannot slip a tautology back into the letterhead.
+bool isGenericUpgradeLabel(String feature) {
+  final f = feature.trim().toLowerCase();
+  // Derived from the constants, never re-typed. A literal 'pro upgrade' here
+  // could silently drift from `genericUpgradeProfile` and leave that surface
+  // rendering the tautology again.
+  return f.isEmpty ||
+      f == PaywallSheet.genericUpgrade.toLowerCase() ||
+      f == PaywallSheet.genericUpgradeProfile.toLowerCase();
+}
+
+/// The paywall hero letterhead title for [feature].
+///
+/// A specific gated feature names itself ("Progress Photos is a PRO feature").
+/// A general upgrade prompt must NOT, or the letterhead reads "PRO is a PRO
+/// feature" — which is exactly what the Profile upgrade chip, the subscription
+/// card and the expiry renew banner rendered before this existed.
+///
+/// Pure and top-level so it is directly testable without pumping the sheet,
+/// whose `initState` fires telemetry and whose tree needs Riverpod + Hive.
+String paywallLetterheadTitle(String feature) => isGenericUpgradeLabel(feature)
+    ? 'Unlock every PRO feature'
+    : '$feature is a PRO feature';
+
 class PaywallSheet extends ConsumerStatefulWidget {
+  /// Sentinel for entry points that are a GENERAL upgrade prompt rather than a
+  /// specific locked feature — the Profile upgrade chip, the subscription card,
+  /// and the expiry renew banner. The user tapped "upgrade"; they did not walk
+  /// into a gate.
+  ///
+  /// Without this, those call sites fed a bare label into the
+  /// `'<feature> is a PRO feature'` letterhead and rendered the tautologies
+  /// "PRO is a PRO feature" / "PRO Upgrade is a PRO feature" — on the three
+  /// highest-intent surfaces in the app. See [_featureTitle].
+  static const String genericUpgrade = 'PRO';
+
+  /// The Profile FREE PLAN → UPGRADE chip's sentinel.
+  ///
+  /// Deliberately a DIFFERENT string from [genericUpgrade], and that difference
+  /// is load-bearing (Hermes L1). `initState` logs `paywall_shown` with
+  /// `feature=<raw value>`, so collapsing this site onto `'PRO'` — which the
+  /// first version of this fix did — would have merged the Profile chip's
+  /// funnel segment into the same bucket as the subscription card and the
+  /// renew banner, silently ending a conversion series that predates this
+  /// batch. A query filtering `feature=PRO Upgrade` would return zero from
+  /// that build forward.
+  ///
+  /// [isGenericUpgradeLabel] matches BOTH, so the letterhead is fixed for both
+  /// while telemetry stays distinguishable. The paywall's own diagnose-doc
+  /// (c2b8e5) promised exactly this preservation; the first cut broke it.
+  static const String genericUpgradeProfile = 'PRO Upgrade';
+
   final String feature;
 
   const PaywallSheet({super.key, required this.feature});
@@ -69,6 +124,10 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     'Diet plan PDF download',
     'Adjustable food portions',
   ];
+
+  /// The hero letterhead title. Delegates to the pure, tested
+  /// [paywallLetterheadTitle].
+  String get _featureTitle => paywallLetterheadTitle(widget.feature);
 
   /// Feature-specific compelling copy for the paywall subtitle.
   String get _featureSubtitle {
@@ -364,7 +423,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
               // Hero letterhead
               WardLetterhead(
                 eyebrow: 'GO PRO',
-                title: '${widget.feature} is a PRO feature',
+                title: _featureTitle,
                 divider: false,
                 padding: EdgeInsets.zero,
               ),

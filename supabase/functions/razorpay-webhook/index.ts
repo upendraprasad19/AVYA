@@ -8,8 +8,19 @@
  *   { event: "payment.captured" | "subscription.activated" | "subscription.cancelled" | ...,
  *     payload: { payment: {...} | subscription: {...} },
  *     created_at: number }
- *   Plus the `X-Razorpay-Signature` HMAC-SHA256 header signed with the
- *   webhook secret (NOT the Razorpay key secret; separate value).
+ *   Plus the `X-Razorpay-Signature` HMAC-SHA256 header, verified below at
+ *   `verifySignature(rawBody, signature, RAZORPAY_KEY_SECRET)`.
+ *
+ *   ⚠ THE DASHBOARD WEBHOOK SECRET **IS** `RAZORPAY_KEY_SECRET`. This block
+ *   previously said the opposite ("NOT the Razorpay key secret; separate
+ *   value") and listed a `RAZORPAY_WEBHOOK_SECRET` env var that is read
+ *   NOWHERE in this repo. Prod worked only because the configured dashboard
+ *   secret happened to equal the key secret.
+ *   When creating the LIVE-mode webhook, Razorpay prompts for a secret: enter
+ *   the live `RAZORPAY_KEY_SECRET` verbatim. Generating a distinct value makes
+ *   every live payment fail this HMAC with a 400 — silently, with no crash and
+ *   no user ever upgraded to PRO. Open since 2026-06-11
+ *   (`docs/audit/2026_06_11_audit_closures.yaml:93`).
  *
  * Output shape: 200 `{ ok: true }` on success / processed.
  *               400 on signature mismatch or malformed body (no PII).
@@ -17,7 +28,6 @@
  *
  * Env secrets used:
  *   - RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (Authorization for outbound API calls)
- *   - RAZORPAY_WEBHOOK_SECRET (HMAC verification of inbound signature)
  *   - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (DB writes to subscriptions, payment_audit_log)
  *
  * verify_jwt: false (Razorpay does not send JWT; we authenticate via signature).

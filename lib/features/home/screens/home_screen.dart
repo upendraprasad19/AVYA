@@ -565,7 +565,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return SubscriptionExpiryBanner(
       severity: state.severity,
       daysLeft: state.daysLeft,
-      onRenew: () => showPaywallSheet(context, feature: 'PRO'),
+      onRenew: () => showPaywallSheet(context, feature: PaywallSheet.genericUpgrade),
       onDismiss: () => ref
           .read(subscriptionExpiryBannerProvider.notifier)
           .dismissForToday(),
