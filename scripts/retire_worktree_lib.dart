@@ -245,6 +245,23 @@ const regenerableIgnoredPaths = <String>[
   'android/local.properties',
   'android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java',
   'ios/Flutter/Generated.xcconfig',
+  // Test-generated output written INTO the worktree (OI-128). Each is listed in
+  // .gitignore and rewritten from scratch by the run that produces it, so a
+  // worktree that merely RAN the suite is not thereby holding anything precious.
+  // Before this, any worktree that ran the full suite could never retire — the
+  // tool reported "1 non-regenerable ignored file" for a file a test had just
+  // written. Enumerated from .gitignore, not guessed:
+  'test/plan_generator/v4_diagnostic_output.md', // .gitignore:112, written by
+  // test/plan_generator/v4_diagnostic_test.dart:234
+  'analyze_output.txt', // .gitignore:107
+  'flutter_test_output.txt', // .gitignore:108
+  'baseline.json', // .gitignore:132
+  'baseline-lints.json', // .gitignore:133
+  // DELIBERATELY ABSENT: `test/goldens/**/failures/` (.gitignore:183). It is
+  // genuinely regenerable, but it is a PATTERN, and this list's whole rule is
+  // exact-match-only — three review rounds each found a P0 here from looser
+  // matching. The header's own instruction for this case is to keep the
+  // worktree instead: inertness is recoverable, a deleted file is not.
 ];
 
 /// True when an ignored path is reconstructible and so may be destroyed.

@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **90** (49 numbered, 41 by filename only).
+Total gates: **91** (49 numbered, 42 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -83,6 +83,7 @@ Total gates: **90** (49 numbered, 41 by filename only).
 | 52 | `check_schema_payload_parity.dart` | every NOT NULL column on user-tagged Supabase tables must | grandfathered |
 | 23 | `check_secrets_gitignored.dart` | assert that Android signing artifacts and other sensitive secret patterns are never tracked | grandfathered |
 | 46 | `check_singleton_provider_migration.dart` | assert the 7 singleton services targeted by A7 have: | grandfathered |
+| — | `check_skill_tuning_history.dart` | a commit that ADDS a `docs/reviews/<x>-review.md` must also append a | mutation_proven |
 | — | `check_skipped_discipline_budget.dart` | assert that no `regression-test-skipped:` waiver entry in `docs/skipped-discipline.md` | grandfathered |
 | — | `check_snapshot_contract.dart` | OI-03 gate — enforces the snapshot contract in docs/snapshot_contract.yaml. | grandfathered |
 | 42 | `check_sot_behavioral_test_paths.dart` | assert every SoT registry concept entry carries either: - `behavioral_test_path:` (cite a real behavioral contract test) | grandfathered |

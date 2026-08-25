@@ -275,6 +275,48 @@ void main() {
       expect(isRegenerableIgnored('vendor/.dart_tool/'), isFalse);
     });
 
+
+    test('OI-128: gitignored TEST OUTPUT is regenerable, so a worktree that '
+        'merely RAN the suite can still retire', () {
+      // Before this, `test/plan_generator/v4_diagnostic_output.md` — written by
+      // test/plan_generator/v4_diagnostic_test.dart:234 and ignored at
+      // .gitignore:112 — counted as a non-regenerable ignored file, so ANY
+      // worktree that had run the full suite was permanently unretirable. Hit
+      // live on `auth-class-fixes` (merged, tracked-clean, held by this file
+      // alone) and on `open-issues-triage-976962` before it.
+      //
+      // The set is ENUMERATED FROM .gitignore, not guessed — the completeness
+      // rule is "re-run the enumeration to empty", not "the symptom stopped".
+      for (final p in const [
+        'test/plan_generator/v4_diagnostic_output.md',
+        'analyze_output.txt',
+        'flutter_test_output.txt',
+        'baseline.json',
+        'baseline-lints.json',
+      ]) {
+        expect(isRegenerableIgnored(p), isTrue,
+            reason: '$p is test output listed in .gitignore');
+      }
+    });
+
+    test('OI-128 did NOT widen the matcher: near-misses of the new entries '
+        'still BLOCK', () {
+      // The new entries must inherit the exact-match rule that three review
+      // rounds paid for. If any of these pass, the fix reintroduced prefix or
+      // basename matching under a new name.
+      expect(isRegenerableIgnored('test/plan_generator/v4_diagnostic_output.md.bak'),
+          isFalse);
+      expect(isRegenerableIgnored('archive/analyze_output.txt'), isFalse);
+      expect(isRegenerableIgnored('flutter_test_output.txt.orig'), isFalse);
+      expect(isRegenerableIgnored('data/baseline.json'), isFalse);
+      expect(isRegenerableIgnored('test/plan_generator/'), isFalse,
+          reason: 'the DIRECTORY holds tracked fixtures, not just the output');
+      // Deliberately absent from the list because it is a PATTERN, not an exact
+      // path — the header forbids patterns outright. Asserting it stays FALSE
+      // pins that decision, so a later "just add a glob" change reddens here.
+      expect(isRegenerableIgnored('test/goldens/home/failures/'), isFalse);
+    });
+
     test('handles Windows backslashes', () {
       expect(isRegenerableIgnored(r'android\local.properties'), isTrue);
       expect(isRegenerableIgnored(r'secrets\creds.txt'), isFalse);

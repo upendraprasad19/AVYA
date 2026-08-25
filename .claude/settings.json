@@ -59,6 +59,16 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dart run --verbosity=error scripts/batch_close_hook.dart"
+          }
+        ]
+      }
     ]
   }
 }

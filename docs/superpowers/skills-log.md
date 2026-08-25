@@ -219,3 +219,75 @@
   → Written in the worktree, not the shared main folder. ⚠ `docs/superpowers/skills-log.md` also
     has an UNCOMMITTED edit sitting in the primary worktree from the previous session; these two
     copies will need reconciling before either lands.
+- **2026-08-06 · trigger: batch shipped (APK + web live), verification phase still ahead ·
+  founder ACCEPTED.**
+  Batch `deps-board-equipment`: supabase_flutter 2.12.4→2.17.1 + the equipment-exclusions
+  flip-on (e2d6b8). `main` at `2470953e`, APK `1.0.0+38` built and release-signed, Vercel
+  production live on the same SHA. Three founder-only device/web checks outstanding.
+  → **The preserve list was led by a NEGATIVE, and that was the right call.** Item 1 was not
+    a state fact but a prohibition: `flip_reviewed` MUST stay `false` until three specific
+    checks come back clean. Everything else in the batch — the SHA, the md5, the gate results
+    — is recoverable from disk or git. The one thing that is only in conversation is *why the
+    ledger is not yet allowed to say verified*. A future session that loses that could flip it
+    on a build nobody ever ran, and every artifact on disk would look consistent with the lie.
+    Generalisation: **when a batch ends in a state that is deliberately incomplete, the
+    preserve list should lead with the constraint that keeps it incomplete**, not with the
+    achievement.
+  → **Applied the previous entry's "lead with dependencies" lesson, and it composed.** That
+    lesson said state what is blocked on what. This session added: some blocks are *rules*
+    rather than *pending work*, and rules survive compaction worse, because they leave no
+    artifact whose absence is noticeable.
+  → **The drop list was unusually large and unusually safe** — four full reviewer reports, a
+    mutation-testing transcript, changelog fetches, lock-file parsing. All droppable ONLY
+    because the review discipline had already forced their conclusions into
+    `docs/audit/deps-board-equipment.closure.yaml` (15 terminal findings), the plan-review
+    record and the B-pass doc. Worth noting the causality: **the closure-YAML discipline is
+    what makes aggressive compaction safe.** A session without it would have to preserve far
+    more, because the findings would exist nowhere else.
+  → Step-6 timing held again (log written after the accept, not before). Third consecutive
+    invocation; treat as settled and stop re-deriving it.
+  → ⚠ Written in the SHARED main worktree, not a feature worktree — no feature worktree exists
+    post-merge, and `backups/apk_sizes.json` (Gate 13's +38 record) was already sitting
+    uncommitted here. Both ride into the close-out commit together. Flagged rather than
+    silently done, because §4.13 makes the shared folder integration-only and this is an
+    edit in it.
+
+- 2026-08-09 — /strategic-compact — trigger: **phase boundary** (sync + rebase phase closed:
+  local `main` fast-forwarded `2470953e`→`c90fc4c0`, branch `train-signout-notif-bugs` rebased
+  onto it and re-verified analyze-clean; the tests/docs/gates phase had not started).
+  Founder: **ACCEPTED**.
+  → Nothing was committed at this boundary — 9 modified + 1 new file still uncommitted. That is
+    unusual for this log (most entries fire at a batch SHIP) but it is still a clean boundary:
+    no half-landed state, and every conclusion already written to the in-flight memory file.
+  → **Pre-compaction memory repair was the load-bearing step, not the compaction.** The handoff
+    section still instructed a rebase onto `0f2268a6` — already done and superseded — and carried
+    ZERO mention of two gates that changed under the batch on 2026-08-07 (Gate 42 flipped STRICT,
+    killing the `behavioral_test_required: true` backlog marker; `validate_diagnose_doc.dart`'s
+    24 required fields + placeholder rejection). Both would have been lost. Checked by grep
+    rather than assumed — the grep is what found the stale SHA.
+  → Generalisable: **before compacting, grep the in-flight memory for the SHAs and gate names the
+    session just changed.** A handoff written earlier in the same session goes stale within it.
+  → ⚠ Written in the SHARED main worktree again, but for the OPPOSITE reason to the entry above:
+    a feature worktree DOES exist here, and this log entry is session-operational, not batch
+    work — putting it in the branch would pollute the bug batch's diff and its plan-review
+    record. The file was also already dirty in main at session start. Flagged per §4.13.
+
+- 2026-08-10 — /strategic-compact — trigger: **phase boundary + context pressure** (Units 1+2 of a
+  4-unit batch shipped: `worktree-config-integrity` merged to main `329cdb41` and pushed,
+  origin verified via `ls-remote`, full suite 4351 green; Unit 3 `gate-registry` just opened with
+  ground truth established). Founder: **ACCEPTED**.
+    Invoked by the agent only AFTER founder pushback — I had offered a "clean stopping point",
+    which is the §4.2 / rule-23 banned "fresh session pickup" framing. Founder's correction ("no <!-- deu-quote: records the banned framing verbatim so the founder correction that followed is legible -->
+    defer right?") was the trigger for doing it properly: §4.2 names compaction as the tool for
+    exactly this ("context management is the agent's job … compact when needed"), so compacting
+    and CONTINUING was always the disciplined move — offering to stop never was.
+    Preserve list emphasised the two things a fresh context would otherwise re-derive wrongly:
+    (a) there are exactly **2** real gate-number collisions, not the 3 then 4 my own surveys
+    claimed — the extras were `// Mirrors gate 17` references and `/build-apk Gate 18`, and
+    (b) **two numbering namespaces exist** (pre-commit vs /build-apk), so a flat registry would
+    invent collisions and force harmful renames.
+    Logged in the SHARED main worktree deliberately, same rationale as the entry above: this is
+    session-operational, not batch work, and putting it in the `gate-registry` branch would
+    pollute that unit's diff and its plan-review record. File was already dirty in main at session
+    start. Flagged per §4.13.
+- 2026-08-10 18:42 IST — trigger: explicit founder invocation + context pressure (session 08:30→18:42, ~14 commits, ~10 subagent reviews, two full plan→review→implement→revert cycles). Founder ACCEPTED. Preserve list led with the git recovery (local main has a defective merge whose tree lacks the plan-review record) because that is the one item a fresh context cannot re-derive. Note: /compact is a built-in CLI command, not a skill — the agent cannot invoke it; founder must run it. Same limitation hit at the earlier invocation this session.

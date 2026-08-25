@@ -103,10 +103,14 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
 > Pinned by `test/scripts/dart_bin_resolver_test.dart`, whose mirror test fails if any hook
 > reverts to a bare `dart run` or drops the `.` source line.
 
-- **`scripts/pre-commit.sh` (gates only, ~98 s measured):** **89** `check_*.dart` files exist;
-  the loop runs **75** (14 are case-skipped), and 2 more (`check_no_deferral_euphemism`,
+- **`scripts/pre-commit.sh` (gates only, ~98 s measured):** **90** `check_*.dart` files exist
+  (`ls scripts/check_*.dart | wc -l`, 2026-08-25 — `check_skill_tuning_history` is the 90th);
+  the loop runs **76** (14 are case-skipped), and 2 more (`check_no_deferral_euphemism`,
   `check_skipped_discipline_budget`) are invoked explicitly after it, so real pre-commit
-  coverage is **77 of 89** — `check_regression_catalog` makes 78 on a merge only.
+  coverage is **78 of 90** — `check_regression_catalog` makes 79 on a merge only.
+  ⚠ These counts are PROSE and no gate validates them (`check_claude_md_citations.dart` checks
+  `§N` heading citations, not numeric claims), so they go stale on any commit that adds a gate —
+  as this row did. Re-run the `ls` above rather than trusting the number.
   Bounded-parallel, `PRE_COMMIT_GATE_JOBS` default 4. Plus Gate 40 + conditional index regens +
   merge-commit regression-catalog walk. Blocks the commit on any failure. Prints a non-blocking
   `/code-review` (B-pass) reminder when the staged blast-radius is ≥`account` — the review itself
@@ -591,6 +595,22 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 > At the end of any batch that lands a commit, walk this checklist.
 > "No update needed" is a valid answer — the agent MUST consider each row.
 > Invoke `/update-docs` to walk it mechanically.
+>
+> **ENFORCED since 2026-08-25 by a `Stop` hook** (`scripts/batch_close_hook.dart`),
+> because "the agent MUST consider each row" is an intention and intentions decay —
+> this file says so itself at §4.13 point 6: *everything with a gate holds, everything
+> on intention decays.* An audit that day found **four** rows unwalked in one
+> three-part batch (skill tuning, feedback memory, the CLAUDE.md rows, and an
+> unstated full-suite scope); none surfaced until founder asked directly.
+> The three previously-wired hook events all fire BEFORE work, so nothing was
+> watching the END of a batch — which is where §5 lives.
+> It fires ONCE per HEAD (not per turn), only when commits have landed and are
+> unpushed, and hands the checklist back with each row marked `[x]` / `[ ]` / `[?]`.
+> **`[?]` means the hook could not determine it, NOT that it is fine** — several rows
+> are unknowable to any script and exist to be ANSWERED, not assumed. What is enforced
+> is that the rows are answered, not that they were done; the content stays
+> self-attested, same trust model as rule 21's `presence_only:` and rule 24's ledger.
+> Kill switch `.claude/.batch_close.disabled`; every error path exits 0.
 
 ```
 [ ] Diagnose-doc written + validated (every bug fix; rule §4.5)
@@ -619,6 +639,18 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 ```
 
 ### 5.1 Skill self-evolution
+
+**GATED since 2026-08-25 for the code-review skill** by
+`scripts/check_skill_tuning_history.dart`: a commit that ADDS
+`docs/reviews/<x>-review.md` must also append a same-dated entry to
+`.claude/skills/code-review/SKILL.md`'s Tuning history, or the commit is blocked.
+Born from the omission that motivated it — a B-pass produced a 4-finding review
+that day and nothing was appended, so the skill's own self-evolution loop was the
+thing decaying. **Scope, so this is not read as wider than it is:** code-review
+only. `/hermes-pass` writes to the same directory but keeps its own tuning
+section, and wiring that needs its own decision. Everything below — a new
+bug-class in ANY skill — remains unenforceable by script and is prompted by the
+§5 Stop hook instead.
 
 After a batch that surfaced a new bug-class, red flag, or anti-pattern:
 1. Check whether an existing skill's "Bug classes" or "Red flags" table covers it. If not, add an entry.
@@ -705,6 +737,8 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | Subagent brief preamble | `docs/agent_brief_preamble.md` |
 | End-of-batch maintenance skill | `/update-docs` (`.claude/skills/update-docs/SKILL.md`) |
 | Discipline harness hooks (prompt-time §4 reminders + euphemism gate + MEMORY.md size nudge + worktree warning) | `scripts/discipline_hook.dart` (UserPromptSubmit / PreToolUse:Skill / SessionStart → `.claude/settings.json`; the SessionStart matcher fires on ALL sources — startup/resume/compact: compact re-injects the hot-set, the shared-main worktree triggers the §4.13 warning, and an over-cap MEMORY.md index nudges `/consolidate-memory` — user-level skill `~/.claude/skills/consolidate-memory/`) + `scripts/check_no_deferral_euphemism.dart` (pre-commit gate, §4.2). Audit retrospectives: `memory/project_discipline_harness_hooks_2026_06_27.md`, `memory/project_memory_consolidation_2026_07_04.md`. |
+| **End-of-batch enforcement — the `Stop` hook** (§5). Before 2026-08-25 the three wired hook events all fired BEFORE work, so nothing watched the END of a batch, which is exactly where §5's rows live and exactly where four of them went unwalked in one batch. | `scripts/batch_close_hook.dart` + pure `scripts/batch_close_lib.dart`; wired at `Stop` in `.claude/settings.json`. Fires ONCE per HEAD (state file `.claude/.batch_close_state`, gitignored), only when commits have landed unpushed. Three states per row — `[x]` satisfied, `[ ]` not, **`[?]` COULD NOT DETERMINE, which is not the same as fine**. Safety, in order: `stop_hook_active` short-circuit (blocking on Stop re-triggers Stop — an infinite loop), once-per-HEAD, kill switch `.claude/.batch_close.disabled`, and every error path exits 0. ⚠ Derives the harness memory dir from **`--git-common-dir`, never `--show-toplevel`** — every session works in a linked worktree per §4.13, so the worktree path never matches the harness's mangled directory name. Found by live-testing, not by a unit test. ⚠ Cost, stated because this file is intensely sensitive to exactly this lever elsewhere: `Stop` fires at turn-END, so Dart-wrapper startup (~2.2 s here) is now paid TWICE per turn rather than once. The 3 s stdin timeout is NOT added per turn — only when stdin stays open, which the harness's normal write-then-close does not do. Like its three siblings this hook does not route through `scripts/_dart_bin.sh`; wiring the hooks in `.claude/settings.json` to that resolver is a separate, unmade decision. Tests: `test/scripts/batch_close_lib_test.dart` (**22**) + `batch_close_hook_e2e_test.dart` (**7**, real repos), mutation-proven on six legs — the three safety guards plus `primaryRootFrom`, the `-+` collapse, and the `readLineSync` hang. |
+| **Skill self-evolution gate** (§5.1) — a code-review pass that produces a review file must also record what it learned, or the skill stops evolving | `scripts/check_skill_tuning_history.dart` + pure `scripts/skill_tuning_lib.dart`. Matches the dated-bullet SHAPE, never `contains(date)` — a date also appears inside older entries' prose, so a substring test would let an OLD entry satisfy a NEW review and the gate would go permanently inert. Reads the STAGED blob (OI-72's lesson). Fails OPEN on an unreadable skill file or unparseable `reviewed_at:`. A review is identified by WHERE IT LIVES — any `docs/reviews/**.md` except `INDEX.md`/`README.md` — not by suffix: the first version matched only `-review.md` while **81 of 164** files use `-bpass.md`, so it was blind to the majority convention. ⚠ Its "code-review only" scope is currently protected BY ACCIDENT, not by a provenance check: the one hermes output living in `docs/reviews/` happens to use `staged_against:` rather than `reviewed_at:`, so it fails open. If `/hermes-pass` ever adopts `reviewed_at:`, this gate silently widens to cover it — and its `hermes-pass/SKILL.md` contract says it writes to `docs/audit/` anyway, which that file already contradicts. Tests: `test/scripts/skill_tuning_lib_test.dart` (**13**) + `skill_tuning_history_e2e_test.dart` (**10**), mutation-proven on three legs (matcher→`contains` 4 red, fail-open→satisfied 3, filter→`-review.md` 2). |
 | Worktree-per-session enforcement (one worktree per session; shared main folder = integration-only; prevents cross-session git-index file-mixing) | **§4.13.** Pre-commit gate `scripts/check_commit_from_worktree.dart` (+ pure `scripts/worktree_guard_lib.dart`, test `test/contracts/check_commit_from_worktree_test.dart`) blocks non-merge commits in the primary worktree; helper `scripts/new-worktree.sh <slug>`; `scripts/discipline_hook.dart` SessionStart warning. Diagnose `f0c2d5`; `memory/feedback_worktree_per_session.md`. |
 | Worktree **lifecycle** — retirement (the half §4.13 originally lacked; the count reached 106 dirs / 17 GB before this existed, reclaimed to 1.4 GB) | **§4.13 point 6.** `dart run scripts/retire_worktree.dart` (dry-run DEFAULT, `--execute` opt-in) + pure `scripts/retire_worktree_lib.dart`. Four-leg predicate: merged AND no tracked changes AND no non-regenerable ignored files AND nothing unpushed — "merged" alone would have destroyed 21 uncommitted files across 5 worktrees on 2026-08-09. Orphans (on disk, not in `git worktree list`) are a stricter separate category: only genuinely empty dirs (0 entries, counting directories) auto-remove. Operator-invoked, NOT a blocking gate. Tests `test/scripts/retire_worktree_lib_test.dart` + `retire_worktree_e2e_test.dart` (mutation-proven). |
 | **Gate registry** — which script owns gate number N, and can that gate's test actually FAIL? (Before this, neither question was mechanically answerable: "Gate 44" named TWO unrelated scripts, five surveys in one session returned five different collision counts, and only 6 test files in the whole repo asserted a red path.) | `docs/audit/GATE_INDEX.md` — **generated**, do not hand-edit; regenerated by `scripts/pre-commit.sh` when a baked input changes. Generator `scripts/build_gate_index.dart` + pure `scripts/gate_index_lib.dart`; freshness gate `scripts/check_gate_index_fresh.dart`. **The registry keys on the FILENAME**; a number is an optional alias (49 of 87 have one). Canonical declaration is `// Gate: N` alone on its line in the first 10 lines — the ONLY form the generator reads. Four claim sources: script headers, `_extraGateScripts` (for numbered non-`check_*` gates like `validate_audit_closure.dart` = Gate 40), `build-apk.md` sections, and the closure ledgers (BOTH `*_closures.yaml` and `*.closure.yaml`, BOTH mint orders) — a ledger mint is EVIDENCE, superseded once the script declares its own number, because ledgers are historical records that are never rewritten. Rule 24 ledger: `docs/audit/gate_test_ledger.yaml` + `scripts/check_gate_test_ledger.dart`. Tests: `test/scripts/gate_index_{lib,e2e,fresh_e2e}_test.dart`, `gate_test_ledger_lib_test.dart`. |

@@ -1119,13 +1119,27 @@ class WorkoutScheduleReadService {
   /// the SAME rule: `type ∈ {workout, custom_template}` counts, `status ==
   /// 'completed'` is done) — reads via [getWeek] → [getScheduleForDate], so the
   /// completed→planned demotion the card also reads through is inherited. The
-  /// `totalWeeks` span MIRRORS the card EXACTLY (`train_provider.dart:582-592`):
+  /// `totalWeeks` span mirrors the card (`train_provider.dart:767-777`, citation
+  /// corrected 2026-08-25 — it read `:582-592`, which is hold-streak code):
   /// `phase<=1 ? 4 : scan(weeks 5-12)`, with `phase` from the SAME source
   /// (`current_phase`). This matters — a mid-phase Edit-Profile regen
   /// (`generateAndScheduleFromDate`, which does NOT move `plan_start` when
   /// `!isFirstGeneration`) can leave a `current_phase==1` plan with week-5/6 rows,
-  /// so a bare scan would over-count vs the card's 4-week cap (B-pass P2). INERT —
-  /// ⑧ 8-B's advance seam is the only production reader (wired later).
+  /// so a bare scan would over-count vs the card's 4-week cap (B-pass P2). That
+  /// concern is a `phase<=1` one and both sides still cap at 4, so it is untouched
+  /// by the hold filter below.
+  ///
+  /// ⚠ **FOB-7(a), 2026-08-25: the mirror is now DELIBERATELY IMPERFECT.** This
+  /// function drops `is_hold` rows; the card does NOT. That asymmetry is correct
+  /// and must not be "repaired" by filtering the card: what the Train screen
+  /// renders during a hold is FOB-6, which founder split out to **OI-125** as a
+  /// FEATURE explicitly not gating the `enable_hold_weeks` flip. Filtering the
+  /// card here would ship half of OI-125 by accident.
+  ///
+  /// Ⓐ No longer INERT-by-two-flags in the sense the old note implied: this
+  /// function still runs only when `enable_adherence_gate` is ON (both readers
+  /// `&&`-short-circuit), but the hold rows it now excludes are produced by a
+  /// SEPARATE flag (`enable_hold_weeks`), and the defect needed both.
   double currentPhaseCompletionRate() {
     final progress = UserRepository.instance.getProgress();
     final phase = (progress?['current_phase'] as int?) ?? 1;
@@ -1135,6 +1149,12 @@ class WorkoutScheduleReadService {
     } else {
       var scanned = 4;
       for (int w = 5; w <= 12; w++) {
+        // RAW week, deliberately NOT _withoutHoldRows. Round 2 caught the
+        // filtered form here as an UNDERCOUNT: a fully-hold week 5 filters to
+        // empty, breaks the scan, and silently drops real phase-2 weeks 7-12
+        // from BOTH numerator and denominator. This loop answers "how far does
+        // the schedule extend", which hold rows legitimately answer; the
+        // accumulator below is where holds must not COUNT.
         if (getWeek(w).isEmpty) break;
         scanned = w;
       }
@@ -1142,7 +1162,7 @@ class WorkoutScheduleReadService {
     }
     final days = <({bool isRest, bool isDone})>[];
     for (int w = 1; w <= totalWeeks; w++) {
-      for (final day in getWeek(w)) {
+      for (final day in _withoutHoldRows(getWeek(w))) {
         final type = (day['type'] as String?) ?? 'rest';
         final isRest = type != 'workout' && type != 'custom_template';
         final status = (day['status'] as String?) ?? 'planned';
@@ -1151,6 +1171,30 @@ class WorkoutScheduleReadService {
     }
     return phaseCompletionRate(days);
   }
+
+  /// Schedule rows with hold weeks removed — the input every PHASE-completion
+  /// reckoning wants (FOB-7(a) / OI-60).
+  ///
+  /// A hold week is a free-tier pause the user CHOSE; its days are materialized
+  /// `planned` and are not part of any phase's prescribed work. Folding them in
+  /// dilutes the rate, and the dilution lands on precisely the user who stayed.
+  /// Measured on a seeded reproduction (28 of 28 real days completed, two holds
+  /// taken): the rate read **0.667 instead of 1.0** — a perfect record scored as
+  /// two-thirds, which `shouldOfferAdvanceChoice` would then read as low
+  /// adherence and offer the "detrained / repeat the phase" path to.
+  ///
+  /// UNGATED on `enable_hold_weeks`, and that is deliberate. It matches the
+  /// established precedent one screen over — [completedWeekNumbers] excludes
+  /// `row['is_hold'] == true` with no flag check either, and these two are the
+  /// non-hold day-sources for closely-related ratios, so they must not drift.
+  /// Gating it would leave the rate wrong for exactly the population that can
+  /// have hold rows while the flag reads OFF (held once, flag later turned off)
+  /// — a byte-identical flag-OFF path bought by keeping a known-wrong number.
+  /// Rows can only carry `is_hold` if `holdWeek()` ever ran, so for every user
+  /// who never held, this filter is a no-op and behaviour IS byte-identical.
+  static Iterable<Map<String, dynamic>> _withoutHoldRows(
+          List<Map<String, dynamic>> rows) =>
+      rows.where((r) => r['is_hold'] != true);
 
   /// Current week number (1-4) based on today.
   int getCurrentWeekNumber() {

@@ -1,0 +1,138 @@
+_commit: &wip "oi60-client-blockers (uncommitted)"
+batch: oi60-client-blockers
+date: 2026-08-25
+branch: oi60-client-blockers
+blast_radius: platform
+source: >
+  docs/audit/open_issues.md OI-60 (FOB-7a, FOB-7b) + OI-127, routed to this batch
+  by the board because it owns the plan_integrity_reconciler.dart context.
+context: >
+  The two CLIENT-SIDE flip blockers for enable_hold_weeks, plus the OI-127 question
+  the board routed to whichever batch touched the reconciler. FOB-3 (ai-proxy
+  redeploy) and FOB-4 (needs a migration first) are separate and carry their own
+  terminal states below rather than being silently omitted. Two independent
+  context-blind review rounds ran: round 1 returned 3 BLOCKING, round 2 returned
+  3 MAJOR + 1 MINOR; every one was accepted and fixed. Record:
+  docs/plan-reviews/oi60-client-blockers.md.
+findings:
+
+  - id: FOB7A
+    title: "hold days dilute the phase completion rate that gates the PRO advance"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/phase_completion_excludes_holds_behavioral_test.dart
+    notes: >
+      Reachability was settled by EXECUTION after three board rounds and one review
+      round produced four different answers by analysis. Seeded reproduction: 28 of
+      28 real days completed, two holds taken, current_phase 2 with plan_start
+      unmoved -> 0.6667 instead of 1.0. Fixed with _withoutHoldRows() on the days
+      accumulator, deliberately UNGATED to match completedWeekNumbers (:1032).
+      Mutation: restoring the unfiltered getWeek(w) accumulator reddens 5 of 7; the 2
+      that hold are deliberate no-op controls ('NO holds taken' and 'phase 1 is
+      unaffected'). ⚠ CORRECTED by the B-pass, which re-ran it: this said 4-of-7,
+      measured when the file had SIX tests and never re-measured after the seventh
+      was added. Diagnose b9d4c2.
+
+  - id: FOB7A-R2
+    title: "the first fix filtered the scan too, which UNDERCOUNTS real weeks past a hold"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/phase_completion_excludes_holds_behavioral_test.dart
+    notes: >
+      Round 2 constructed it: weeks 5-6 fully hold, real phase-2 content at week 7+.
+      A filtered scan reads week 5 as empty, breaks, and drops weeks 7+ from BOTH
+      numerator and denominator — inflating the rate. The scan now walks the RAW
+      week; only the accumulator filters. Holds EXTEND the schedule even though they
+      must not COUNT. Mutation: re-applying the filtered scan reddens the dedicated
+      regression test.
+
+  - id: FOB7B
+    title: "the reconciler never heals a hold week — the failure it exists to cure"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/reconciler_hold_heal_split_behavioral_test.dart
+    notes: >
+      Trigger split from write. computeTriggers() returns a RECORD (shouldFetch,
+      mayReanchor), not a bool — the distinction IS the fix, and a bool would make
+      the caller re-derive it (the guard-without-its-mirror class). Widening the 1..4
+      scan stays REFUTED (P0-11 / d7f3a9) and the refutation is recorded in the code.
+      Mutation: re-implementing the widened design reddens exactly the test built for
+      it. Diagnose e7c4a2.
+
+  - id: FOB7B-R2
+    title: "the hold-row gather reintroduced a pattern already rejected BY NAME"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/reconciler_gather_hold_rows_behavioral_test.dart
+    notes: >
+      HoldWeekInfo.weekStart is the first SURVIVING hold date, so a hold missing its
+      Monday yields a Tuesday and a 0..6 walk spills into the next week. Already
+      rejected at oi60-streak-identity.closure.yaml:51 and scar-commented at
+      train_provider.dart:577-579 — a second §4.1.5 bug-history miss in this batch.
+      It survived two review rounds because the loop was INLINE in reconcile(), which
+      needs a live Supabase client; extracting gatherHoldRows() is the durable fix.
+      ⚠ The first regression test was VACUOUS — it passed under the very mutation it
+      existed to catch, because with one hold the spill target has no row. Rebuilt
+      with two holds; now reddens. Caught by the mutation run, not by either reviewer.
+
+  - id: OI127
+    title: "plan_start moving under a live hold week — is the streak identity sound?"
+    terminal_state: blocked_on_user
+    reason: >
+      Founder must decide scope. The originally-planned fix is refuted, so what
+      remains is an open design question needing its own unit — not work this
+      batch can finish. No code action is available to close it here.
+    notes: >
+      NOT closed, and explicitly not claimed to be. The batch's originally-planned fix
+      — guard the re-anchor with existingStart == null — was REFUTED by review round 1
+      and would have been a P0: plan_window_reanchor.dart:46-56 treats localStart ==
+      null as the documented fresh-install path that seeds a new device's plan_start
+      at all, so the guard would have broken every fresh install and first restore.
+      What this batch DID do: (a) declines to widen the exposure — round 2 proved the
+      re-anchor's reachability condition is IDENTICAL before and after, not narrower,
+      and the overstated "narrows" claim was struck from both the plan and the code;
+      (b) corrected three wrong citations the board carries under the label "confirmed
+      by direct read" (nextPhaseStartDate is :1577 in main / :1615 post-batch, not
+      :1446-1458; the isBefore filter is :833, not :803; _autoGeneratePlan is at
+      train_provider.dart:638, not :345-350). Blocked on founder for scope: the open
+      question needs its own unit, and the refuted approach is now recorded so a
+      fourth round does not re-derive it.
+
+  - id: FOB3
+    title: "ai-proxy redeploy — the captain_manual HOLD WEEKS instruction is inert"
+    terminal_state: blocked_on_user
+    reason: >
+      Founder must give the explicit per-action go for a LIVE ai-proxy redeploy at
+      the moment of execution (§4.3 — plan approval is not deploy approval).
+    notes: >
+      Code landed 2026-08-21. Founder authorized the redeploy during planning for this
+      batch, but it is a live prod action and §4.3 requires its own explicit go at the
+      moment of execution — plan approval is not deploy approval. Not performed in this
+      batch. Two traps recorded for whoever runs it: verify_jwt MUST stay false
+      (ai-proxy/index.ts:26-27 self-authenticates around a Supabase middleware bug, and
+      deploy_via_api.js:669 tolerates 401 so a wrong value would still print HEALTHY),
+      and the CAPTAIN_MANUAL template literal must be checked for unescaped backticks.
+
+  - id: FOB4
+    title: "Sunday push and weekly report need hold copy, not a number"
+    terminal_state: blocked_on_user
+    reason: >
+      Founder must choose how hold state crosses the wire (a user_progress column
+      vs a derived RPC) and authorize the resulting live migration apply plus two
+      Edge Function redeploys. No client-side change can close it.
+    notes: >
+      Unbuildable as specified, and this is measured rather than asserted: as of
+      2026-08-20 information_schema.columns in schema public contains ZERO columns
+      matching %hold%, and there is no workout_schedule table in public at all.
+      is_hold is written onto local schedule rows and never reaches the cloud, so
+      weekly-recap-ready and weekly-report cannot branch on hold state no matter what
+      is deployed. Requires a design decision (a user_progress column vs a derived
+      RPC), a migration with its own live-apply authorization, and two more EF
+      redeploys. Correctly out of scope for a client-only batch.
+
+# closed_count is the TERMINAL tally (every entry holds a terminal state), not the
+# closed_in_commit subset — Gate 40 recomputes it and fails on any drift.
+closed_count: 7
+closed_in_commit_count: 4
+blocked_on_user_count: 3
+total: 7
