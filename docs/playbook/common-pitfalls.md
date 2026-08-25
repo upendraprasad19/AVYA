@@ -57,3 +57,42 @@ First-run reports: `docs/audit/2026-05-24-{claude-md-drift,drift-scan-workout,dr
 Founder gates: T3 first-run surfaced 4 P1 + 2 P2 in CLAUDE.md (count drifts + version-stamp annotation), all closed in same batch (commit `85a47ba`). T4 first-run drift findings escalated to a dedicated drift-fix follow-on batch — shipped 2026-05-24 in commit `14cda1b` (see "DRIFT-FIX BATCH 2026-05-24" entry above); 10/10 findings closed (9 from scan + 1 orphan from T16 verification re-run), migration 068 applied live, Gate 23 added, weekly-report Edge Function v21 deployed.
 
 Explicitly NOT adopted: PostToolUse hooks (Windows fragility), memory TTL (deferred to separate batch), cross-harness adapters (Claude Code only), ECC's 230+ generic skills (only adopted what we'll actually invoke).
+
+---
+
+## Subprocess-spawning tests need a file-level `@Timeout` (2026-08-25)
+
+**Symptom.** A test file passes when run targeted and FAILS in the full suite, with a timeout.
+
+**The class is "spawns a subprocess", not "is an e2e file".** Any test that calls
+`Process.run`/`Process.start` — directly, or indirectly via a git hook or script it invokes —
+belongs to it. All 20 such files under `test/scripts/` carry the annotation today: 11 named
+`*e2e*` and 9 not (`safe_push_test`, `safe_merge_test`, `dart_bin_resolver_test`, …).
+
+**Why the suite is a different input set, not a superset.** Each spawned child pays the
+`flutter/bin/dart` wrapper cost — measured at **3.4–10.5 s for a no-op** (root CLAUDE.md §0),
+because the wrapper takes the SDK update lock and shells out to git on every invocation, and that
+lock SERIALIZES concurrent callers. Two sequential spawns fit inside the default **30 s**
+(`package:test_api` `Timeout`) when the file runs alone, and do not when ~40 files run
+concurrently. **A targeted run cannot create contention**, which is the condition most likely to
+break a subprocess test — so a green targeted run is not evidence.
+
+**The fix.**
+```dart
+@Timeout(Duration(minutes: 5))
+library;
+```
+before the first `import`. Sibling values: `gate_index_e2e` 3, `retire_worktree_e2e` 4,
+`plan_review_record_gate_e2e` 5, `batch_close_hook_e2e` / `skill_tuning_history_e2e` 6.
+
+**Make teardown never throw.** A timed-out child still holds a Windows handle into the temp dir,
+so `deleteSync` raises `PathAccessException` and stacks a SECOND failure that HIDES the real one.
+Cleanup is hygiene, not an assertion; `%TEMP%` is reaped by the OS regardless.
+
+**⚠ This convention is unenforced, and the class has recurred 4×.** `aac52fb6` records three
+consecutive merge attempts failing on it (9 → 3 → 1 failures); it then recurred on 2026-08-25
+(`main` red at 4897/-2). A per-file convention held only by memory is the weaker fix. `dart_test.yaml`
+exists and currently configures only the `golden` tag — a repo-wide `timeout:` there, or `--timeout`
+on the `flutter test` invocations in `scripts/pre-push.sh` and `.github/workflows/test.yml`, would
+close the class in one place. A `check_*.dart` gate asserting "spawns a subprocess ⇒ has
+`@Timeout`" is the other option. Neither is done; both are the real fix and are tracked as such.

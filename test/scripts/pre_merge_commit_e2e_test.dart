@@ -28,6 +28,9 @@
 //      exists to prevent, and it would happen on the PRIMARY worktree, the one
 //      shared by every session.
 
+@Timeout(Duration(minutes: 5))
+library;
+
 import 'dart:convert';
 import 'dart:io';
 
