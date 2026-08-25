@@ -10,6 +10,14 @@
 // the gate read the working tree. A test that only wrote files to disk without
 // staging them would pass against a gate carrying that same bug.
 
+// File-level timeout: this spawns REAL `dart run` subprocesses, each paying the
+// flutter/bin/dart wrapper cost (3.4-10.5s for a no-op per CLAUDE.md). The
+// default 30s holds when run alone and does not when the full suite runs many
+// files in parallel. Sibling e2e files all carry one; this one did not, and the
+// full suite is what surfaced it.
+@Timeout(Duration(minutes: 6))
+library;
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -106,6 +114,25 @@ Directory _repo(Map<String, String> files) {
   return dir;
 }
 
+
+/// Remove a fixture directory without ever failing the test.
+///
+/// On Windows a child process that has just exited can still hold a handle into
+/// the directory, and `deleteSync` then throws PathAccessException — which the
+/// full suite reported as a SECOND failure stacked on top of the real one (a
+/// timeout), obscuring it. Cleanup is hygiene, not an assertion: the OS reaps
+/// %TEMP% regardless, so a failure here must never redden a test.
+void _cleanup(Directory d) {
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (d.existsSync()) d.deleteSync(recursive: true);
+      return;
+    } catch (_) {
+      sleep(const Duration(milliseconds: 200));
+    }
+  }
+}
+
 void main() {
   setUpAll(() {
     _gate = '${Directory.current.path}/scripts/check_skill_tuning_history.dart';
@@ -117,7 +144,7 @@ void main() {
       'docs/reviews/2e9503eb-review.md': _review,
       '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
     });
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
 
     final r = _runGate(d.path);
     expect(r.exitCode, 1,
@@ -131,13 +158,13 @@ void main() {
       'docs/reviews/2e9503eb-review.md': _review,
       '.claude/skills/code-review/SKILL.md': _skillWithEntry,
     });
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     expect(_runGate(d.path).exitCode, 0);
   });
 
   test('PASSES: a commit that adds no review at all', () {
     final d = _repo({'lib/whatever.dart': 'void main() {}\n'});
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     expect(_runGate(d.path).exitCode, 0);
   });
 
@@ -149,7 +176,7 @@ void main() {
       'docs/reviews/2e9503eb-review.md': _review,
       '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
     });
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     File('${d.path}/.claude/skills/code-review/SKILL.md')
         .writeAsStringSync(_skillWithEntry); // working tree only — NOT staged
 
@@ -162,7 +189,7 @@ void main() {
       'docs/reviews/2e9503eb-review.md': _review,
       '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
     });
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     final r = _runGate(d.path, args: ['--warn-only']);
     expect(r.exitCode, 0);
     expect('${r.stdout}${r.stderr}', contains('WARN'));
@@ -170,7 +197,7 @@ void main() {
 
   test('FAILS OPEN when the skill file is absent entirely', () {
     final d = _repo({'docs/reviews/2e9503eb-review.md': _review});
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     final r = _runGate(d.path);
     expect(r.exitCode, 0,
         reason: 'an unreadable input must never wedge a commit');
@@ -182,7 +209,7 @@ void main() {
       'docs/reviews/x-review.md': '# no frontmatter here\n',
       '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
     });
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     expect(_runGate(d.path).exitCode, 0);
   });
 
@@ -196,7 +223,7 @@ void main() {
       'docs/reviews/some-batch-bpass.md': _review,
       '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
     });
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
 
     final r = _runGate(d.path);
     expect(r.exitCode, 1,
@@ -216,7 +243,7 @@ void main() {
       'docs/reviews/a-totally-different-batch-bpass.md': _review,
       '.claude/skills/code-review/SKILL.md': _skillWithEntry, // names 2e9503eb
     });
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
 
     final r = _runGate(d.path);
     expect(r.exitCode, 1,
@@ -229,7 +256,7 @@ void main() {
       'docs/reviews/INDEX.md': '# Reviews',
       '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
     });
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     expect(_runGate(d.path).exitCode, 0);
   });
 
@@ -243,7 +270,7 @@ void main() {
       'docs/reviews/real-bpass.md': _review,
       '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
     });
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     final r = _runGate(d.path);
     expect(r.exitCode, 1);
     expect('${r.stdout}${r.stderr}', contains('real-bpass'));

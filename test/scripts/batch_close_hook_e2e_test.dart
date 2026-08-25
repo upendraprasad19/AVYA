@@ -13,6 +13,17 @@
 // `--show-toplevel`, because every session works in a linked worktree per §4.13
 // and the worktree path never matches the harness's mangled directory name.
 
+// ⚠ FILE-LEVEL TIMEOUT — omitted when this file was written, and the full suite
+// caught it. Every sibling e2e here carries one (`gate_index_e2e` 3 min,
+// `retire_worktree_e2e` 4 min) for the same reason: these tests spawn REAL `dart
+// run` subprocesses, and each pays the flutter/bin/dart wrapper cost CLAUDE.md
+// measures at 3.4-10.5s for a NO-OP. Two sequential spawns plus git work fits
+// comfortably in the default 30s when run alone — and does NOT when the full
+// suite runs many files in parallel. It passed in isolation and timed out in the
+// suite, which is exactly the shape a targeted run cannot show you.
+@Timeout(Duration(minutes: 6))
+library;
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -99,6 +110,25 @@ Map<String, dynamic>? _decision(({int exitCode, String stdout}) r) {
   return null;
 }
 
+
+/// Remove a fixture directory without ever failing the test.
+///
+/// On Windows a child process that has just exited can still hold a handle into
+/// the directory, and `deleteSync` then throws PathAccessException — which the
+/// full suite reported as a SECOND failure stacked on top of the real one (a
+/// timeout), obscuring it. Cleanup is hygiene, not an assertion: the OS reaps
+/// %TEMP% regardless, so a failure here must never redden a test.
+void _cleanup(Directory d) {
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (d.existsSync()) d.deleteSync(recursive: true);
+      return;
+    } catch (_) {
+      sleep(const Duration(milliseconds: 200));
+    }
+  }
+}
+
 void main() {
   setUpAll(() {
     _hook = '${Directory.current.path}/scripts/batch_close_hook.dart';
@@ -107,7 +137,7 @@ void main() {
 
   test('BLOCKS once when a batch has landed unpushed', () async {
     final d = _repoWithUnpushed();
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
 
     final r = await _runHook(d.path);
     expect(r.exitCode, 0, reason: 'a Stop hook must NEVER exit non-zero');
@@ -120,7 +150,7 @@ void main() {
 
   test('SILENT on the second run at the same HEAD', () async {
     final d = _repoWithUnpushed();
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
 
     await _runHook(d.path); // first run records the sha
     final second = await _runHook(d.path);
@@ -132,7 +162,7 @@ void main() {
 
   test('stop_hook_active NEVER blocks (infinite-loop guard)', () async {
     final d = _repoWithUnpushed();
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     final r = await _runHook(d.path, stdinJson: '{"stop_hook_active":true}');
     expect(r.exitCode, 0);
     expect(_decision(r), isNull);
@@ -140,7 +170,7 @@ void main() {
 
   test('SILENT when nothing is unpushed', () async {
     final d = _repoWithUnpushed(commits: 0);
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     final r = await _runHook(d.path);
     expect(r.exitCode, 0);
     expect(_decision(r), isNull);
@@ -148,7 +178,7 @@ void main() {
 
   test('kill switch silences it', () async {
     final d = _repoWithUnpushed();
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     Directory('${d.path}/.claude').createSync(recursive: true);
     File('${d.path}/.claude/.batch_close.disabled').writeAsStringSync('');
     final r = await _runHook(d.path);
@@ -158,7 +188,7 @@ void main() {
 
   test('garbage on stdin does not wedge or crash it', () async {
     final d = _repoWithUnpushed();
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
     final r = await _runHook(d.path, stdinJson: 'not json at all');
     expect(r.exitCode, 0, reason: 'every error path exits 0');
   });
@@ -175,7 +205,7 @@ void main() {
     // fixed for this exact class (git_safety_hook.dart:85-95,
     // discipline_hook.dart:82,221) — hasTerminal guard + a 3s timeout.
     final d = _repoWithUnpushed();
-    addTearDown(() => d.deleteSync(recursive: true));
+    addTearDown(() => _cleanup(d));
 
     final p = await Process.start(
       'dart',
