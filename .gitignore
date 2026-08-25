@@ -181,3 +181,9 @@ node_modules/zod
 # They are per-run output of a failing test, never source. Untracked previously,
 # which meant a failed golden run left 8 PNGs staged by the next `git add -A`.
 test/goldens/**/failures/
+
+# Stop-hook state: the HEAD sha the §5 batch-close checklist last reported on.
+# Per-machine and per-clone; committing it would make the hook silent for
+# everyone else at that sha. Kill switch lives beside it.
+.claude/.batch_close_state
+.claude/.batch_close.disabled
