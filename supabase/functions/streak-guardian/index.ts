@@ -233,6 +233,28 @@ serve(async (req: Request) => {
       }
 
       // 5. Build a contextual message based on streak + snapshot data.
+      //
+      // ⚠ This snapshot read is for MESSAGE COPY ONLY (weight / target weight),
+      // NOT for notification preferences — those now come from
+      // `user_preferences.notification_preferences` via the batched helper
+      // above (OI-98 / e4a1b7). The original query served BOTH purposes; when
+      // the preference half moved to the helper the whole query went with it,
+      // orphaning the two `snap?.*` reads below. CI's `deno check` caught it as
+      // TS2304 `Cannot find name 'snapshot'` — there is no local Deno here, so
+      // the type-check gap is real and this is what it costs.
+      //
+      // Deliberately per-user and `maybeSingle`: a user with no snapshot row
+      // yields `data: null` -> `snap = {}` -> both reads are null, which the
+      // copy below already tolerates. It is NOT batched because, unlike the
+      // preference lookup, a miss here degrades one message rather than
+      // silently changing a send/don't-send decision.
+      const { data: snapshot } = await supabase
+        .from("user_daily_snapshots")
+        .select("snapshot_json")
+        .eq("user_id", userId)
+        .order("snapshot_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       const snap = snapshot?.snapshot_json ?? {};
       // From the user_progress row this user was SELECTED on — not from the
       // snapshot — so the number gating the send is the number the copy quotes.

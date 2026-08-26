@@ -196,16 +196,23 @@ serve(async (req: Request) => {
         `weekly-recap-ready: batch ${batchNum}, ${users.length} users (offset ${offset})`,
       );
 
-      // ── Batch fetch snapshots + progress for this page ──────
-      // Two parallel bulk queries instead of 2N sequential queries
+      // ── Batch fetch preferences + progress for this page ──────
+      // Two parallel bulk queries instead of 2N sequential queries.
+      //
       // OI-79 — found by check_unbounded_cron_reads.dart, not by the manual
-      // sweep. `user_daily_snapshots` holds ~5.7 rows per user (97 rows / 17
-      // users live), so a 200-user page yields ~1140 rows and clipped at 1000
-      // with no error. The rows dropped are the OLDEST-dated ones, and the
-      // "first row per user wins" reduction below reads that as "this user has
-      // no snapshot" — so users at the tail of a page silently lost their recap
-      // data. Chunked + paged; the compound sort key keeps snapshot_date DESC
-      // authoritative with `id` as the unique tiebreaker.
+      // sweep: a bare `.in()` is clipped at PostgREST's db-max-rows (1000) with
+      // HTTP 200 and `error === null`, so a truncated result is
+      // indistinguishable from a complete one. Both reads below stay PAGED for
+      // that reason.
+      //
+      // ⚠ This block used to describe a `user_daily_snapshots` batch and its
+      // "first row per user wins = most recent" reduction. That query is GONE
+      // (OI-98) — it existed only to read notification preferences, and the
+      // shared helper now owns that read along with its paging, its ordering
+      // and its fallback. The description was left behind for one commit,
+      // which is the stale-comment class this batch spent its time removing;
+      // corrected here rather than left to mislead the next reader about a
+      // query that no longer exists.
       const [prefsResult, progressResult] = await Promise.allSettled([
         // OI-98 — the snapshot batch this replaced existed ONLY to read
         // notification preferences off the newest row per user (`snapshotMap`
