@@ -132,7 +132,13 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
 - **`scripts/pre-push.sh` (analyze always + blast-radius-tiered suite):**
   `flutter analyze --no-fatal-infos` runs **unconditionally**, above every early exit — placement
   is load-bearing, because on a `feature`-tier branch push it is the only compile check that runs
-  anywhere (see the CI row). Then the full `flutter test` runs only when the pushed range's
+  anywhere (see the CI row).
+  ⚠ **`--no-fatal-infos` suppresses INFOS, not WARNINGS.** A single `warning -` line makes analyze
+  exit non-zero, the hook aborts, and git prints only `error: failed to push some refs` — no hint,
+  no `remote:` line, nothing naming the file or the rule. **That error shape on a clean
+  fast-forward means the LOCAL hook failed; read its output, not git's.** Measured 2026-08-26: one
+  `avoid_dynamic_calls` warning among 268 infos cost a full push cycle, and it sat in the one file
+  that had never been named in a `dart analyze` invocation. Analyze the files you WROTE. Then the full `flutter test` runs only when the pushed range's
   blast-radius is ≥`account` (auth/ai_coach/sync/ai-proxy/payment/migrations/CLAUDE.md/…).
   `feature`-tier pushes (docs / most of `scripts/` / `.claude/` / `backups/` / profile-only)
   **skip** the local full suite — note `scripts/` is NOT uniformly feature-tier: the hook scripts
@@ -154,7 +160,17 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   cross-branch/cross-board), NOT the full 75-gate loop: a merge needs board integrity, not a
   re-scan of a tree already gated at every commit on both sides.
 - **CI (`.github/workflows/test.yml`) is the full-suite source-of-truth for `main`** — analyze +
-  full `flutter test` + all gates + a debug-APK compile. ⚠ It triggers on `push: [main, develop]`
+  full `flutter test` + all gates + a debug-APK compile + **the `deno-edge-functions` job**
+  (`test.yml:120`), which runs `deno test` AND a `deno check` type-check over the WHOLE
+  `supabase/functions/` tree.
+  ⚠ **That job was missing from this list until 2026-08-26, and the omission has teeth: there is
+  no Deno on the dev machine, so NOTHING type-checks an Edge Function locally** — not
+  `flutter analyze`, not the pre-commit gates (which are Dart source-greps), not pre-push. An EF
+  type error is invisible until CI. It cost a red `main` that day: a removed `user_daily_snapshots`
+  query orphaned two reads 60 lines below the edit, and `deno check` reported `TS2304 Cannot find
+  name 'snapshot'` only after the push had landed. Also note CI's analyze step is named
+  *"Flutter analyze (zero warnings allowed)"* (`test.yml:61`) — stricter than a casual reading of
+  the pre-push row suggests. ⚠ It triggers on `push: [main, develop]`
   **and `pull_request` targeting them** — **not on every push**. Counted live 2026-08-11:
   `git ls-remote --heads origin` = 29 refs (28 non-main); 8 have an open PR and so DO get CI on
   every push; the other ~20, including most `claude/*` working branches, get none. Corrected
