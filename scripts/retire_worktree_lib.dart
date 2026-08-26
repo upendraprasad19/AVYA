@@ -257,6 +257,15 @@ const regenerableIgnoredPaths = <String>[
   'flutter_test_output.txt', // .gitignore:108
   'baseline.json', // .gitignore:132
   'baseline-lints.json', // .gitignore:133
+  // The Stop hook's own once-per-HEAD marker (.gitignore:188, written by
+  // scripts/batch_close_hook.dart:29). 41 bytes holding one sha; the hook
+  // rewrites it whenever it fires. Added 2026-08-26 after it blocked THIS
+  // batch's own retirement — and it would have blocked EVERY worktree from
+  // then on, because §5's Stop hook writes it into any worktree where a batch
+  // closes. Exactly OI-128's shape: a tool that writes into the worktree made
+  // the worktree permanently unretirable, and the hygiene loop §4.13 point 6
+  // exists to close would have decayed silently, one worktree at a time.
+  '.claude/.batch_close_state', // .gitignore:188
   // DELIBERATELY ABSENT: `test/goldens/**/failures/` (.gitignore:183). It is
   // genuinely regenerable, but it is a PATTERN, and this list's whole rule is
   // exact-match-only — three review rounds each found a P0 here from looser
