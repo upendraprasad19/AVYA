@@ -33,8 +33,20 @@ priority: medium
    - Exploratory subagent transcripts whose findings already landed in code.
 
 4. **Surface the suggested compaction:** present the curated preserve/drop list to the founder. **Do NOT auto-run /compact.** Wait for explicit approval.
+   **State the BOUNDARY QUALITY explicitly, as part of the suggestion rather than a footnote.**
+   Say plainly whether this is a clean boundary or a bad one — mid-push, red CI, unmerged branch,
+   uncommitted files, a deploy owed. A compaction offered at a bad boundary reads as routine
+   unless the badness is said out loud, and the founder cannot weigh what they are not told.
+   Added 2026-08-26: at that invocation the caveat CHANGED the founder's answer from accept to
+   "finish the merge and CI check first" — which was the better call. The information was in the
+   agent's head either way; surfacing it is what made it usable.
 
-5. **After founder approves:** invoke /compact with the preserve list as guidance for what to keep in the summary.
+5. **After founder approves: HAND THE PRESERVE LIST TO THE FOUNDER TO RUN.**
+   ⚠ **The agent CANNOT invoke `/compact` — it is a built-in CLI command, not a skill.** This step
+   read "invoke /compact" and was not executable as written; three separate invocations
+   (2026-08-10 ×2, 2026-08-26) each hit the limitation and each logged it, which is two more times
+   than a documented-but-unfixed defect should survive. Present the preserve list in a form the
+   founder can paste, and ask them to run `/compact` themselves.
 
 ## What this skill is NOT
 
