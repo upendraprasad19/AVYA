@@ -17,6 +17,11 @@ import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_ded
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds } from "../_shared/paged_fetch.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+  type PrefsByUser,
+} from "../_shared/notification_prefs.ts";
 import { fetchProUserIds } from "../_shared/subscription.ts";
 
 const corsHeaders = {
@@ -42,7 +47,7 @@ interface ActiveUser {
  */
 async function processUser(
   user: ActiveUser,
-  snapshotMap: Map<string, Record<string, unknown>>,
+  notifPrefs: PrefsByUser,
   progressMap: Map<string, number>,
   supabase: SupabaseClient,
 ): Promise<"sent" | "skipped" | "error"> {
@@ -50,14 +55,11 @@ async function processUser(
     const userId = user.id;
     const firstName = (user.full_name ?? "").split(" ")[0] || "Champion";
 
-    // Check notification preferences from pre-fetched snapshot
-    const snapshot = snapshotMap.get(userId);
-    const prefs = (snapshot as Record<string, unknown>)?.notification_preferences as
-      | Record<string, unknown>
-      | undefined;
-    if (
-      (prefs?.weekly_recap as Record<string, unknown>)?.enabled === false
-    ) {
+    // Check notification preferences (OI-98 / e4a1b7 — now sourced from
+    // `user_preferences.notification_preferences`, snapshot as fallback, via
+    // the shared helper rather than read inline off a snapshot row).
+    // ABSENT => SEND is unchanged; only a literal `false` skips.
+    if (!isNotificationEnabled(notifPrefs, userId, "weekly_recap")) {
       return "skipped";
     }
 
@@ -204,22 +206,14 @@ serve(async (req: Request) => {
       // no snapshot" — so users at the tail of a page silently lost their recap
       // data. Chunked + paged; the compound sort key keeps snapshot_date DESC
       // authoritative with `id` as the unique tiebreaker.
-      const [snapshotResult, progressResult] = await Promise.allSettled([
-        fetchAllByIds<Record<string, unknown>>(
-          (chunk) =>
-            supabase
-              .from("user_daily_snapshots")
-              .select("user_id, snapshot_json")
-              .in("user_id", chunk),
-          userIds,
-          {
-            orderBy: [
-              { column: "snapshot_date", ascending: false },
-              { column: "id", ascending: true },
-            ],
-            label: "weekly-recap-ready snapshots",
-          },
-        ),
+      const [prefsResult, progressResult] = await Promise.allSettled([
+        // OI-98 — the snapshot batch this replaced existed ONLY to read
+        // notification preferences off the newest row per user (`snapshotMap`
+        // had no other consumer). The shared helper now owns that read, its
+        // paging, and its fallback, so the whole reduction below went away with
+        // it. `fetchNotificationPrefs` never throws, so the allSettled wrapper
+        // is belt-and-braces rather than load-bearing here.
+        fetchNotificationPrefs(supabase, userIds),
         fetchAllByIds<Record<string, unknown>>(
           (chunk) =>
             supabase.from("user_progress").select("user_id, current_week").in(
@@ -237,19 +231,15 @@ serve(async (req: Request) => {
       // to unpack any more. Promise.allSettled still absorbs a rejection into
       // `status: "rejected"`, preserving this loop's existing "degrade to an
       // empty map rather than abort the page" behaviour.
-      const snapshotMap = new Map<string, Record<string, unknown>>();
-      if (snapshotResult.status === "fulfilled") {
-        for (const row of snapshotResult.value) {
-          const uid = row.user_id as string;
-          // Only keep the first (most recent) per user
-          if (!snapshotMap.has(uid)) {
-            snapshotMap.set(uid, (row.snapshot_json ?? {}) as Record<string, unknown>);
-          }
-        }
+      // An empty map degrades to ABSENT => SEND for everyone, which is the
+      // same fail-safe direction this loop had before.
+      let notifPrefs: PrefsByUser = new Map();
+      if (prefsResult.status === "fulfilled") {
+        notifPrefs = prefsResult.value;
       } else {
         console.error(
-          "weekly-recap-ready: snapshot batch failed:",
-          snapshotResult.reason,
+          "weekly-recap-ready: notification preference batch failed:",
+          prefsResult.reason,
         );
       }
 
@@ -270,7 +260,7 @@ serve(async (req: Request) => {
         const chunk = proUsers.slice(i, i + CONCURRENCY);
         const results = await Promise.allSettled(
           chunk.map((user: ActiveUser) =>
-            processUser(user, snapshotMap, progressMap, supabase)
+            processUser(user, notifPrefs, progressMap, supabase)
           ),
         );
 

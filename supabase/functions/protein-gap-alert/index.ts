@@ -23,7 +23,8 @@
  * _shared/proactive_dedup.ts → coach_memory.last_proactive_type.
  *
  * Notification preference: respects
- * snapshot_json.notification_preferences.protein_alerts.enabled
+ * `protein_alerts.enabled`, read via _shared/notification_prefs.ts
+ * (source: user_preferences.notification_preferences since OI-98 / e4a1b7)
  * (default = enabled when absent — most permissive default per T1 pattern).
  */
 

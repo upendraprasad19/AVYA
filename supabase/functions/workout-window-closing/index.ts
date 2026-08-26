@@ -13,14 +13,20 @@
  * Dedup: each user gets at most one workout_window push per day, gated
  * via _shared/proactive_dedup.ts → coach_memory.last_proactive_type.
  *
- * Notification preference: respects
- * snapshot_json.notification_preferences.workout_reminders.enabled
- * (default = enabled when absent — new users haven't toggled).
+ * Notification preference: respects `workout_reminders.enabled` via
+ * _shared/notification_prefs.ts (source: user_preferences.notification_preferences,
+ * legacy snapshot as fallback — OI-98 / e4a1b7).
+ * Default = enabled when absent (new users haven't toggled); a GENUINE failure
+ * to read preferences skips the user rather than risking a disabled nudge.
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
+import {
+  fetchNotificationPrefsDetailed,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 import {
   markProactiveSent,
   shouldSendProactive,
@@ -207,6 +213,21 @@ serve(async (req: Request) => {
       ]),
     );
 
+    // OI-98 / e4a1b7 — ONE batched preference lookup instead of a per-user
+    // query inside the loop, reading `user_preferences.notification_preferences`
+    // with the legacy snapshot as fallback.
+    //
+    // `Detailed` is REQUIRED here, not a preference. This function is the one
+    // caller whose documented behaviour on "could not read preferences" differs
+    // from its behaviour on "no preferences set": it skips rather than risk a
+    // nudge the user disabled. The plain `fetchNotificationPrefs` collapses both
+    // into ABSENT => SEND, which would silently flip that decision.
+    const { prefs: notifPrefs, degraded: prefsDegraded } =
+      await fetchNotificationPrefsDetailed(
+        supabase,
+        [...atRiskByUser.keys()],
+      );
+
     let sent = 0;
     let dedupSkipped = 0;
     let prefSkipped = 0;
@@ -214,28 +235,28 @@ serve(async (req: Request) => {
 
     for (const [userId, sched] of atRiskByUser) {
       // 4a. Notification preference check.
-      const { data: snapshot, error: snapErr } = await supabase
-        .from("user_daily_snapshots")
-        .select("snapshot_json")
-        .eq("user_id", userId)
-        .order("snapshot_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      // Unit C (§2.24) — per-user read: on a GENUINE error skip THIS user (do NOT
-      // send — we can't verify they didn't disable workout_reminders). `.maybeSingle`
-      // returns {data:null,error:null} for a user with no snapshot → that falls
-      // through to the most-permissive send below (unchanged for new users).
-      if (snapErr) {
+      //
+      // Unit C (§2.24) — on a GENUINE inability to read preferences, skip (do
+      // NOT send: we cannot verify they did not disable workout_reminders).
+      // That is counted as an error, exactly as the per-user read did. A user
+      // with NO stored preferences is a different case and still sends —
+      // `isNotificationEnabled` applies the most-permissive ABSENT => SEND
+      // default, unchanged for new users.
+      //
+      // ⚠ ONE WAY THIS IS NOT IDENTICAL, stated rather than glossed (B-pass
+      // Finding 4). The old per-user query failed per USER; `degraded` is
+      // batch-wide, because `fetchAllByIds` raises on any page and one lost
+      // page makes the whole lookup untrustworthy. So a transient error now
+      // skips EVERY candidate this run instead of one. That is the same
+      // direction (skip rather than risk an unwanted push) and it is
+      // self-healing — the next scheduled run re-reads — but it is a wider
+      // blast radius for a transient fault, and calling it "preserved
+      // verbatim" would have been an over-claim.
+      if (prefsDegraded) {
         errors++;
         continue;
       }
-
-      const prefs = snapshot?.snapshot_json?.notification_preferences;
-      // Most-permissive default: only skip if explicitly disabled.
-      // Field name 'workout_reminders' is the natural fit for this
-      // trigger. If the client hasn't surfaced a toggle yet, it's
-      // absent → we send.
-      if (prefs?.workout_reminders?.enabled === false) {
+      if (!isNotificationEnabled(notifPrefs, userId, "workout_reminders")) {
         prefSkipped++;
         continue;
       }
