@@ -152,13 +152,23 @@ touched_layers_checked:
   - { tier: 3, name: postgres_schema, status: fixed_in_this_batch, evidence: "Migration 122 adds user_preferences.notification_preferences (jsonb, nullable, no default). backups/live_schema_columns.json regenerated in the same commit so check_schema_column_refs.dart validates the new refs." }
   - { tier: 4, name: postgres_data, status: verified, evidence: "126 snapshot rows / 18 users; 14 rows carry the key across 5 users; ZERO rows have any key set to false; 3 of those 5 users have a newest row lacking the key while an older row has it. Nothing to back-fill — no user's real OFF survives anywhere, so the move cannot lose data." }
   - { tier: 5, name: migrations_applied, status: fixed_in_this_batch, evidence: "backups/applied_migrations.json entry paired in the same commit per §4.5. Live apply is a separate explicit authorization per §4.3." }
-  - { tier: 6, name: edge_function_code_vs_deploy, status: fixed_in_this_batch, evidence: "_shared/notification_prefs.ts plus four inline readers move to the column; deployed version recorded post-deploy. Each function's live verify_jwt is read from the API rather than a runbook." }
+  - { tier: 6, name: edge_function_code_vs_deploy, status: fixed_in_this_batch, evidence: "DEPLOYED 2026-08-26, all ten ACTIVE, versions bumped: morning-alert 31->32, plateau-alert 10->11, pr-detection 12->13, proactive-coach-promotion 10->11, protein-gap-alert 11->12, re-engagement 12->13, streak-guardian 22->23, expiry-reminder 18->19, workout-window-closing 10->11, weekly-recap-ready 20->21. Ten, not five: Deno bundles _shared at deploy, so the helper edit is inert until every importer is redeployed. Each verify_jwt read live from the API (all false) rather than from a runbook. BOOT-VERIFIED rather than smoked: an anon-Bearer POST returns the FUNCTION's {error:Unauthorized} shape, not the gateway's UNAUTHORIZED_NO_AUTH_HEADER, so the module loaded (a 503 would mean boot-broken). workout-window-closing's smoke reported FAIL on a 401 its nine siblings tolerate - an empty tolerated-status config in deploy_via_api.js, not a deploy fault." }
   - { tier: 7, name: cron_jobs, status: verified, evidence: "Schedules read from cron.job: rolling-context-nightly 0 21 * * * UTC (02:30 IST, every user) is the writer that creates the preference-less newest row; the ten reader jobs run from every-15-min (pr-detection) through Sunday 20:00 IST (weekly-recap-ready)." }
   - { tier: 8, name: rls_policies, status: verified, evidence: "user_preferences already carries own-row policies exercised by the existing _syncUserPreferences / _restoreUserPreferences round trip; server readers use SERVICE_ROLE and scope by explicit user_id filter." }
   - { tier: 9, name: storage, status: not_applicable, evidence: "No bucket or object involved." }
   - { tier: 10, name: secrets_api_keys, status: not_applicable, evidence: "No secret added, read, or rotated." }
   - { tier: 11, name: external_services, status: not_applicable, evidence: "OneSignal delivery is downstream of the send/don't-send decision and is unchanged; no Razorpay or Firebase surface touched." }
   - { tier: 12, name: client_to_server_contract, status: fixed_in_this_batch, evidence: "The transport for this concept changes from a snapshot key to a column. The dual-read fallback means no deploy ordering constraint between client and server." }
+deploy_state_after_batch: >
+  ⚠ THE SERVER IS READY AND THE FEATURE IS NOT LIVE, which are different things and the
+  difference is the whole point of this line. Measured immediately after the deploys:
+  `select count(*) from user_preferences where notification_preferences is not null` = 0. The
+  column is populated for NOBODY, because the client that writes it is merged to main and has
+  never shipped — users are on APK +38. Every reader therefore finds NULL and falls back to the
+  snapshot, exactly as before, so user-visible behaviour is UNCHANGED. That is the fallback
+  working, not a defect. OI-98 is not delivered to users until an APK ships.
+  `any_false_anywhere` is still 0, which is OI-141's precondition for retiring the fallback
+  losslessly; it stops being 0 the moment a +39 user turns something off.
 impact_analysis: >
   Product impact TODAY is zero, and saying so plainly matters more than the headline number.
   Every preference currently stored in production is `true` — there are no `false` values
