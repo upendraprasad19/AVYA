@@ -312,9 +312,14 @@ void main() {
       expect(populated.containsKey('notification_preferences'), isTrue,
           reason: 'a device that HAS a record still publishes it, so a user on '
               'the previous APK keeps being honoured through the fallback');
+      // Typed through to the leaf: `emitted['streak_alerts']` is `dynamic`, so
+      // chaining `?['enabled']` off it is an `avoid_dynamic_calls` WARNING —
+      // and `flutter analyze --no-fatal-infos` (what pre-push runs) does not
+      // suppress warnings, only infos.
       final emitted =
           populated['notification_preferences'] as Map<String, dynamic>;
-      expect(emitted['streak_alerts']?['enabled'], isFalse);
+      final streakAlerts = emitted['streak_alerts'] as Map<String, dynamic>?;
+      expect(streakAlerts?['enabled'], isFalse);
       expect(emitted.length, NotificationPrefsRepository.allKeys.length,
           reason: 'when it DOES emit, it emits the full padded map — a partial '
               'map in a newer row would shadow a complete older one');
