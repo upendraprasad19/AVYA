@@ -291,3 +291,27 @@
     pollute that unit's diff and its plan-review record. File was already dirty in main at session
     start. Flagged per §4.13.
 - 2026-08-10 18:42 IST — trigger: explicit founder invocation + context pressure (session 08:30→18:42, ~14 commits, ~10 subagent reviews, two full plan→review→implement→revert cycles). Founder ACCEPTED. Preserve list led with the git recovery (local main has a defective merge whose tree lacks the plan-review record) because that is the one item a fresh context cannot re-derive. Note: /compact is a built-in CLI command, not a skill — the agent cannot invoke it; founder must run it. Same limitation hit at the earlier invocation this session.
+- 2026-08-26 22:1x IST — trigger: batch shipped but follow-up continues in-session + context
+    pressure (OI-98: 3 plan-review rounds, 1 B-pass, 4 full-suite runs, 4 push cycles, 2 live
+    migrations). Founder initially ACCEPTED, then — after the caveat below was surfaced —
+    **DEFERRED compaction** until the merge + CI check were done. Recorded as DEFERRED, because
+    that is what happened; the earlier "ACCEPTED" line in this entry was written before the
+    reversal and would otherwise stand as a false record of a founder decision.
+    **Tuning signal for this skill:** the caveat ("this is not a clean boundary") changed the
+    answer. Step 4 should require the agent to state boundary QUALITY — mid-push / red CI /
+    unmerged branch — as part of the suggestion, not as an afterthought. A compaction offered at
+    a bad boundary reads as routine unless the badness is said out loud.
+    Preserve list led with the SPLIT STATE, because that is the one thing a fresh context cannot
+    re-derive and gets dangerously wrong if it guesses: local main `485b1960` vs remote
+    `3afb02db` (push in flight), worktree branch at `e7848603` UNMERGED, and **CI RED on
+    `3afb02db`** with the fix merged but unverified. A resume that assumes "batch shipped" would
+    skip the CI check and the ten owed Edge Function deploys.
+    ⚠ Compacting at this moment is NOT a clean boundary — offered the founder the alternative of
+    finishing the merge + CI check first; they approved compaction anyway, which is their call.
+    Logged in the SHARED main worktree deliberately, same rationale as the two entries above:
+    session-operational, not batch work, and committing it on `oi98-notification-prefs` would
+    pollute that unit's diff and its plan-review record. Flagged per §4.13.
+    ⚠ Third invocation to hit the same limitation: **/compact is a built-in CLI command, not a
+    skill — the agent cannot invoke it.** Recorded again rather than left implicit, since it has
+    now cost three entries; the skill's step 5 ("After founder approves: invoke /compact") is
+    not executable as written and should say "hand the preserve list to the founder to run".
