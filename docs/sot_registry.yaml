@@ -3718,7 +3718,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 445-528
+        line_range: 567-650
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [full_name, email]
@@ -3856,7 +3856,7 @@ concepts:
           after Unit 3b's own P1 fix (pushOnboardingProgressSnapshot, inserted
           earlier in the file) shifted both down ~80 lines each.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 445-528
+        line_range: 567-650
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [avatar_url, banner_url]
@@ -9010,7 +9010,7 @@ concepts:
           snapshot so the server sees the change today rather than at next
           launch. Returns false rather than throwing when it did not persist.
       - file: lib/features/profile/services/notification_prefs_repository.dart
-        line_range: 187-204
+        line_range: 194-204
         method: emissionMap
         semantic: pass-through
         notes: |
@@ -9023,7 +9023,31 @@ concepts:
         line_range: 878-902
         method: compileDailySnapshot
         semantic: pass-through
-        notes: folds emissionMap() into snapshot_json.notification_preferences at :842.
+        notes: >
+          Folds emissionMap() into snapshot_json.notification_preferences at :899
+          (the citation said :842 until 2026-08-26 — wrong by 57 lines). Since
+          OI-98 the key is OMITTED entirely when the device has no local
+          record, so an unrestored device can no longer assert an all-enabled
+          default over the stored copy.
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 476-520
+        method: _syncUserPreferences
+        semantic: latest
+        notes: |
+          NEW 2026-08-26 (OI-98 / e4a1b7) — THE cloud writer for the column.
+          Partial-column upsert on user_id: it names only the columns it owns,
+          so siblings survive (verified empirically — daily-snapshot wrote
+          coaching_notes three days after insert and left created_at /
+          updated_at / preferred_language / motivational_style untouched).
+          OMITS notification_preferences entirely when the device has no local
+          record, never {} and never an all-enabled default — same putIfPresent
+          shape as sync_coach.dart:19-32. Two traps closed here in the same
+          change: the method used to early-return on a null
+          userBox['preferences'], a key written ONLY by _restoreUserPreferences
+          (UserRepository.savePreferences has zero call sites), so hanging the
+          new field off it would have shipped inert for 12 of 18 live users;
+          and it used to name 'coaching_notes' unconditionally, nulling an
+          Edge-Function-owned column the client does not own.
       - file: lib/features/profile/services/notification_prefs_repository.dart
         line_range: 78-100
         method: proOnlyKeys (const) + controllableKeys
@@ -9043,6 +9067,35 @@ concepts:
           THE reader. Normalises every shape; only a literal `false` disables, so
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 655-720
+        method: _restoreUserPreferences
+        semantic: latest
+        fields_read: [enabled]
+        notes: |
+          NEW 2026-08-26 (OI-98 / e4a1b7) — THE restore leg, the half this
+          concept never had. Lifts the column OUT of the cloud row before the
+          generic `preferences` merge (otherwise it lands in two Hive keys with
+          only one merged) and hands it to adoptFromCloud behind an
+          `ownerChangedSince(userId)` re-check at the write sink. Already
+          reached from all four restore call sites, so the leg added no wiring.
+      - file: lib/features/profile/services/notification_prefs_repository.dart
+        line_range: 240-290
+        method: adoptFromCloud + mergeCloudNotificationPrefs (pure)
+        semantic: latest
+        fields_read: [enabled]
+        notes: |
+          NEW 2026-08-26. Per-key LOCAL-wins (ADR-0014): empty local restores
+          everything, one toggled key keeps that key and restores the rest, a
+          full local map is a no-op. Containment is tested in CANONICAL space
+          (so a box holding the legacy singular `workout_reminder` blocks the
+          cloud's `workout_reminders` — otherwise emissionMap's `direct ??
+          alias` would prefer the adopted value forever and flip a deliberate
+          OFF back ON on every sign-in) while the result is written in local's
+          own key space (so the box is never silently migrated). The merge is a
+          PURE top-level function precisely so production and its test call the
+          same code — the previous attempt's test re-implemented it inline and
+          stayed green against a cloud-wins body.
       - file: lib/features/profile/screens/notification_settings_screen.dart
         line_range: 42-61
         method: initState
@@ -9064,7 +9117,7 @@ concepts:
           user cannot toggle the 2 PRO keys, so counting them pinned the
           subtitle at >= 2/10 forever.
       - file: supabase/functions/_shared/notification_prefs.ts
-        line_range: 76-132
+        line_range: 112-230
         method: fetchNotificationPrefs (read at :106) + isNotificationEnabled (:133)
         semantic: flag-check
         fields_read: [enabled]
@@ -9103,20 +9156,34 @@ concepts:
       key: notification_preferences
       shape: "Map<String, Map<String, dynamic>> — {key: {enabled: bool, ...}}"
     cloud:
-      table: user_daily_snapshots
-      columns: [snapshot_json]
+      # CHANGED 2026-08-26 (OI-98 / e4a1b7). `user_preferences` is now the HOME;
+      # the snapshot key survives only as a read fallback for devices on the
+      # previous APK and retires with it. The old arrangement put user intent —
+      # derivable from nothing, and the only copy — inside a DERIVED document
+      # that four writers replace wholesale, which is why it was destroyed on
+      # every reinstall.
+      table: user_preferences
+      columns: [notification_preferences]
+      legacy_fallback:
+        table: user_daily_snapshots
+        columns: [snapshot_json]
+        retires_with: "APK +39 adoption — tracked on the OI board"
     # Gate 11 (check_sync_fanout.dart) scopes these two fields to methods
     # declared in sync_service.dart — the fan-out surface — NOT the repository's
     # own write/read. `compileDailySnapshot` is the assembly point (:878) but
     # returns Map, so it is not a fan-out method either.
-    sync_methods: [pushSnapshotNow]
-    # EMPTY, and that is a finding rather than an omission: sync_service.dart
-    # mentions notification_preferences exactly once, at :842 (emission). No
-    # restore path reads it back, so on a reinstall userBox is empty, read()
-    # returns {}, and the server's ABSENT => SEND rule re-enables every
-    # notification the user had switched off. Filed as OI-98 rather than fixed
-    # inside a registry entry.
-    restore_methods: []
+    sync_methods: [pushSnapshotNow, _syncUserPreferences]
+    # POPULATED 2026-08-26. This list was EMPTY, and its comment recorded the
+    # bug as a fact: "sync_service.dart mentions notification_preferences
+    # exactly once (emission). No restore path reads it back, so on a reinstall
+    # userBox is empty, read() returns {}, and the server's ABSENT => SEND rule
+    # re-enables every notification the user had switched off." That is OI-98,
+    # written down and accepted. The leg now exists: `_restoreUserPreferences`
+    # lifts the column out of the cloud row and hands it to
+    # `NotificationPrefsRepository.adoptFromCloud`, which merges per-key
+    # LOCAL-wins behind an owner re-check. No new wiring was needed — that
+    # method is already called from all four restore paths.
+    restore_methods: [_restoreUserPreferences]
     forbidden_legacy_patterns:
       - "configBox.get('notification_preferences') — the shared, ownerless box (Unit C bug (c))"
       - "MigratedKey for this key — both its paths fall back to configBox"
@@ -9237,11 +9304,11 @@ concepts:
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2078-2081
+        line_range: 2094-2097
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2090-2092
+        line_range: 2106-2108
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:

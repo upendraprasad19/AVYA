@@ -879,6 +879,22 @@ class SyncService {
     final today = istDateStr(DateTime.now());
     final aiContext = AiCoachRepository.instance.buildAiContext();
 
+    // OI-98 / e4a1b7 — the snapshot copy is now a FALLBACK, not the home.
+    // `user_preferences.notification_preferences` is authoritative; this key
+    // survives only so a device on the previous APK keeps being honoured while
+    // the new one rolls out. Both halves retire together, tracked on the board.
+    //
+    // OMITTED ENTIRELY when this device has no local record — never an
+    // all-enabled default. That default is the whole defect: an empty Hive box
+    // and "the user enabled everything" were the same value, so a reinstalled
+    // device asserted preferences it did not have and the wholesale snapshot
+    // upsert replaced the stored copy with them. Omission is safe by
+    // construction — the server rule is ABSENT => SEND, and the reader's
+    // fallback only consults a row's key when it is present.
+    final notificationPrefs = NotificationPrefsRepository.read().isEmpty
+        ? null
+        : NotificationPrefsRepository.emissionMap();
+
     return {
       'snapshot_date': today,
       ...aiContext,
@@ -896,7 +912,7 @@ class SyncService {
       // Repository, not raw Hive: §4.4 r4, and the accessor is where the
       // session check and the never-throw contract live. An exception here
       // would be swallowed by pushSnapshotNow and kill the whole snapshot.
-      'notification_preferences': NotificationPrefsRepository.emissionMap(),
+      'notification_preferences': ?notificationPrefs,
     };
   }
 

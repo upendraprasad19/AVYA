@@ -13,6 +13,10 @@ import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllPages } from "../_shared/paged_fetch.ts";
+import {
+  fetchNotificationPrefsDetailed,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 
 const corsHeaders = {
@@ -85,6 +89,24 @@ serve(async (req: Request) => {
       );
     }
 
+    // OI-98 / e4a1b7 — ONE batched preference lookup instead of a per-user
+    // query inside the loop, reading `user_preferences.notification_preferences`
+    // with the legacy snapshot as fallback.
+    //
+    // `Detailed` because this function skips a user it cannot verify rather
+    // than risk a reminder they switched off; the plain helper collapses
+    // "could not ask" into ABSENT => SEND.
+    const { prefs: notifPrefs, degraded: prefsDegraded } =
+      await fetchNotificationPrefsDetailed(
+        supabase,
+        expiringSubs.map((s) => s.user_id as string),
+      );
+    if (prefsDegraded) {
+      console.error(
+        "[expiry-reminder] preference lookup degraded — skipping all sends",
+      );
+    }
+
     let sent = 0;
     let skipped = 0;
 
@@ -98,25 +120,26 @@ serve(async (req: Request) => {
       );
 
       // Check notification preferences.
-      const { data: snapshot, error: snapErr } = await supabase
-        .from("user_daily_snapshots")
-        .select("snapshot_json")
-        .eq("user_id", userId)
-        .order("snapshot_date", { ascending: false })
-        .limit(1)
-        .single();
-      // Unit C (§2.24) — `.single()` returns PGRST116 for a user with NO snapshot
-      // row; that is NOT an error — fall through to send (a lapsing PAYING user must
-      // still get their expiry reminder, preserving pre-fix behavior). Only a GENUINE
-      // error (network/permission) skips this user — pre-fix a silent failure coerced
-      // to `snapshot=null` and sent the reminder regardless of a disabled preference.
-      if (snapErr && snapErr.code !== "PGRST116") {
+      //
+      // Unit C (§2.24) direction preserved through the OI-98 move: a lapsing
+      // PAYING user with no stored preferences must still get their reminder
+      // (ABSENT => SEND, which `isNotificationEnabled` applies), and only a
+      // GENUINE inability to read preferences skips them (`prefsDegraded`).
+      //
+      // ⚠ ONE WAY THIS IS NOT IDENTICAL, stated rather than glossed (B-pass
+      // Finding 4). The old per-user query failed per USER; `degraded` is
+      // batch-wide, because `fetchAllByIds` raises on any page and one lost
+      // page makes the whole lookup untrustworthy. So a transient error now
+      // skips EVERY candidate this run instead of one. That is the same
+      // direction (skip rather than risk an unwanted push) and it is
+      // self-healing — the next scheduled run re-reads — but it is a wider
+      // blast radius for a transient fault, and calling it "preserved
+      // verbatim" would have been an over-claim.
+      if (prefsDegraded) {
         skipped++;
         continue;
       }
-
-      const prefs = snapshot?.snapshot_json?.notification_preferences;
-      if (prefs?.subscription_reminders?.enabled === false) {
+      if (!isNotificationEnabled(notifPrefs, userId, "subscription_reminders")) {
         skipped++;
         continue;
       }

@@ -198,10 +198,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (stored.isNotEmpty) {
       return Map<String, dynamic>.from(stored);
     }
-    // Default preferences
+    // Default preferences.
+    //
+    // ⚠ `workout_reminders` is PLURAL here on purpose (OI-98 / e4a1b7). This
+    // map is not display-only: `_saveNotificationPreferences` persists it
+    // verbatim through `NotificationPrefsRepository.write`, so seeding the
+    // legacy SINGULAR `workout_reminder` meant a user's very first toggle
+    // stored an alias-shaped blob that every canonical reader then had to
+    // resolve around. Renaming a DEFAULT orphans nothing — it is only reached
+    // when the box is empty. It also makes
+    // `notification_prefs_repository.dart`'s "nothing writes the singular form
+    // any more" true, which it was not before this change.
+    // `_legacyAliases` stays: devices that already stored the singular form
+    // still need it.
     return {
       'morning_checkin': {'enabled': true, 'time': '07:00'},
-      'workout_reminder': {'enabled': true, 'time': '18:30'},
+      'workout_reminders': {'enabled': true, 'time': '18:30'},
       'streak_alerts': {'enabled': true},
       'weekly_recap': {'enabled': true, 'day': 'sunday'},
       'subscription_reminders': {'enabled': true},

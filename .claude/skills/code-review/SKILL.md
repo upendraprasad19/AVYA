@@ -126,6 +126,29 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-08-26** — blast-radius **platform** — branch `oi98-notification-prefs` @ `885ebd47f4c0`.
+  **6 findings (1 P0, 2 P1, 2 P2, 1 P3); 0 false_alarm.** All fixed in-batch.
+  Review: `docs/reviews/885ebd47f4c0-review.md`.
+  **The P0 was the batch's own bug class, surviving into its own fix.** OI-98 was
+  "authoritative data living in a wholesale-replaced document". The fix moved it to a
+  dedicated jsonb column — and a jsonb COLUMN is also replaced wholesale by an upsert, so
+  a device holding a sparse map deleted every key it had not personally seen. Per-key merge
+  had been written on the RESTORE side and wholesale replace left on the WRITE side.
+  **Tuning made — a seventh lens, `same_class_in_the_fix`:** when the batch under review
+  fixes a named bug CLASS, ask explicitly whether the replacement re-creates that class in
+  its new shape, and check the mirror side of any per-key/merge/guard semantics the fix
+  introduces. The existing `guard_without_its_mirror` lens found it, but only because the
+  reviewer generalised on its own; the prompt did not ask. Note also that the same lens
+  fired on the fix's OWN new guard (Finding 3 — the owner re-check protected the new call
+  and not its sibling two lines above), which is evidence the lens is worth its cost on any
+  batch that adds a guard.
+  **Second tuning — assert the WRITE payload, not just the read path.** Finding 6 named why
+  the P0 survived a suite that was already mutation-proven: every test exercised restore and
+  emission, and none asserted the SHAPE of what the client sends. When a batch changes a
+  cloud write, require a pure extracted payload builder and a test over it; a round-trip
+  test that never inspects the outgoing payload is blind in exactly the direction that
+  matters.
+
 - **2026-08-25** — blast-radius **platform** — branch `discipline-enforcement` @ `fbbea768`.
   **4 findings (2 P0, 2 P1); 0 false_alarm.** All fixed in-batch.
   Review: `docs/reviews/discipline-enforcement-bpass.md`.

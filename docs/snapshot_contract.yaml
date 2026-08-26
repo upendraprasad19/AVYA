@@ -529,14 +529,23 @@ keys:
 extra_server_written_keys:
   - key: notification_preferences
     written_by: |
+      ⚠ THIS KEY IS NOW A FALLBACK, NOT THE HOME (OI-98 / e4a1b7, 2026-08-26).
+      The source of truth is `user_preferences.notification_preferences`
+      (migration 122, written per-key via migration 123's merge RPC). The
+      snapshot copy survives only so devices on the previous APK keep being
+      honoured, and retires with them — tracked as OI-141.
+
       SyncService.compileDailySnapshot (lib/core/services/sync_service.dart),
       emitting NotificationPrefsRepository.emissionMap() AFTER the buildAiContext
       spread — outside the already-trimmed map, so the snapshot trimmer cannot
-      drop it. The Hive-side single writer is
-      NotificationPrefsRepository.write (user-scoped box; the pre-d4e8b2 writer
-      at profile/screen.dart:330 wrote the SHARED configBox and is gone).
-      Connected 2026-07-27 by d4e8b2; before that no writer existed anywhere and
-      the key appeared in 0 of 91 rows.
+      drop it. Since OI-98 the key is OMITTED ENTIRELY when the device holds no
+      local record: an empty Hive box and "the user enabled everything" were the
+      same value, so an unrestored device asserted preferences it did not have
+      and the wholesale upsert destroyed the stored copy. The Hive-side single
+      writer is NotificationPrefsRepository.write (user-scoped box; the
+      pre-d4e8b2 writer at profile/screen.dart:330 wrote the SHARED configBox
+      and is gone). Connected 2026-07-27 by d4e8b2; before that no writer
+      existed anywhere and the key appeared in 0 of 91 rows.
     readers:
       # ⚠ UNVERIFIED BY THE GATE — see OI-80. Measured 2026-08-01: setting the
       # `_shared/notification_prefs` entry's `line:` to 700 (600+ past EOF)
@@ -548,17 +557,29 @@ extra_server_written_keys:
       # leading-comment theory is refuted). Its `line: 106` below was therefore
       # verified BY HAND against the file, not by the gate. Do not trust this
       # entry's line number to be gate-maintained until OI-80 closes.
-      - { fn: _shared/notification_prefs, file: supabase/functions/_shared/notification_prefs.ts, line: 106 }
-      - { fn: streak-guardian, file: supabase/functions/streak-guardian/index.ts, line: 177 }
-      - { fn: workout-window-closing, file: supabase/functions/workout-window-closing/index.ts, line: 233 }
-      - { fn: expiry-reminder, file: supabase/functions/expiry-reminder/index.ts, line: 118 }
-      - { fn: weekly-recap-ready, file: supabase/functions/weekly-recap-ready/index.ts, line: 54 }
-      # Unit E: morning-alert and protein-gap-alert no longer read the key
-      # directly. They delegate to the shared helper (the first entry above),
-      # which is the single server-side reader for them — and, unlike their own
-      # snapshot reads, is latest-desc rather than date-pinned. Their old direct
-      # reads were pinned to today / yesterday and were therefore inert for ~16
-      # of 17 live users.
+      - { fn: _shared/notification_prefs, file: supabase/functions/_shared/notification_prefs.ts, line: 231 }
+      # FOUR ENTRIES REMOVED 2026-08-26 (OI-98) — streak-guardian,
+      # workout-window-closing, expiry-reminder and weekly-recap-ready no longer
+      # read this key off a snapshot row at all. Each ran a per-user query inside
+      # its own send loop; all four now go through the shared helper above, which
+      # reads `user_preferences.notification_preferences` first and only falls
+      # back to a snapshot row for users the column does not answer for.
+      # Verified before removal, not assumed:
+      #   grep -cE "snap(shot)?[.\[]'?notification_preferences" <each>/index.ts
+      # returns 0 for all four.
+      #
+      # ⚠ THE GATE CAUGHT THIS, and that is worth recording. Removing the inline
+      # reads made `check_snapshot_contract.dart` fail on two of the four stale
+      # citations — reader-read verification doing exactly its job. It flagged
+      # only TWO of the four because of the ±15-line slack, so a passing gate
+      # here still would not have proven all four were updated; the grep above
+      # is what settles it.
+      #
+      # Unit E: morning-alert and protein-gap-alert likewise delegate to the
+      # shared helper rather than reading directly — and, unlike their old
+      # snapshot reads, it is latest-desc rather than date-pinned. Their old
+      # direct reads were pinned to today / yesterday and were therefore inert
+      # for ~16 of 17 live users.
       # The other four already read latest-desc and keep their own direct reads.
       # All five `line:` values were re-derived from the files on 2026-08-01
       # after OI-79's paging refactor moved them (the reads themselves are

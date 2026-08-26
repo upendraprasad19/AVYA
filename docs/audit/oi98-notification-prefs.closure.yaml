@@ -1,0 +1,339 @@
+# Closure ledger — oi98-notification-prefs (2026-08-26).
+#
+# Counted mechanically by id prefix:
+#     4  MIG-*  / SCHEMA-*  migration 122 + the two paired artifacts
+#     5  CLI-*  client write, restore, emission, default-key, test
+#     3  SRV-*  shared helper + four inline readers + degraded signal
+#     3  DOC-*  registry, diagnose-doc, board
+#     2  HOLD-* items whose terminal state is a named user action
+#     7  BP-*   B-pass findings on 885ebd47f4c0 (1 P0, 2 P1, 2 P2, 1 P3) + migration 123
+#    ---
+#    24  = total_findings = closed_count
+#
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key.
+#
+# ORIGIN. OI-98 filed this as a reinstall bug. It is that, but the dominant
+# failure needed no reinstall at all: all ten server readers took the user's
+# NEWEST user_daily_snapshots row with no fall-through, and FOUR Edge Functions
+# write that row — three of which create a preference-less one when the day has
+# none. Measured live at batch start: 3 of the 5 users who had ever stored a
+# preference were being ignored outright.
+#
+# ⚠ THE DECISION THAT SHAPED THE BATCH. Two earlier revisions tried to patch the
+# preferences INSIDE the snapshot blob and were each blocked by independent
+# review, on a different leak from the same root cause. A wholesale-replaced
+# document cannot represent "I know these three settings and nothing about the
+# other seven", which is exactly a reinstalled device's state — so the container
+# was wrong, not the patch. Founder chose to move the data. That deleted more
+# work than it added: no multi-row reduce, no newest-row-wins, no shadowing, and
+# NO new detector gate, because the failure mode stops existing rather than
+# needing to be caught.
+
+batch: oi98-notification-prefs
+date: 2026-08-26
+blast_radius: platform
+plan_review_record: docs/plan-reviews/oi98-notification-prefs.md
+bpass_review: docs/reviews/885ebd47f4c0-review.md
+related_diagnoses: >
+  docs/diagnoses/2026-08-26-notification-prefs-push-only-e4a1b7.md
+total_findings: 24
+closed_count: 24
+
+_wt: &wt "oi98-notification-prefs (uncommitted working tree)"
+
+findings:
+  # ---- Migration + the artifacts §4.5 pairs with it ----
+  - id: MIG-122
+    title: "notification_preferences had no home — it existed only as a key inside a derived, wholesale-replaced blob"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "information_schema.columns — notification_preferences | jsonb | is_nullable=YES | column_default=null"
+    notes: >
+      Applied live via MCP apply_migration under explicit founder authorization
+      ("122 apply"), §4.3. NULLABLE with NO DEFAULT is load-bearing: NULL means
+      "no record" and must stay distinguishable from {} — collapsing those two
+      is the root of OI-98, so a DEFAULT '{}'::jsonb would have re-created the
+      bug in its new home on day one.
+
+  - id: MIG-BACKFILL
+    title: "Whether to back-fill the 14 existing snapshot preference blobs into the new column"
+    terminal_state: verified_clean
+    evidence: >
+      Live query at apply time: 126 snapshot rows / 18 users, 14 rows carrying
+      the key across 5 users, and ZERO rows with any key set to `false`. No
+      user's real "off" survives anywhere in the cloud, so there is no earlier
+      truth to recover. Back-filling would only write the bug's own all-enabled
+      output into the new column and make it authoritative.
+
+  - id: SCHEMA-SNAPSHOT
+    title: "backups/live_schema_columns.json was 2.5 months stale and would fail the column-ref gate on the new column"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "dart run scripts/check_schema_column_refs.dart → 837 refs validated, 0 drift"
+    notes: >
+      Regenerated 50→51 tables / 570→580 columns, captured_at 2026-06-08 →
+      2026-08-26. DIFFED before overwriting rather than blindly replacing: ZERO
+      columns dropped since the old capture, so the regeneration is purely
+      additive. 9 of the 10 additions are the coach_tool_invocations_v view —
+      pre-existing drift from other batches, not this one.
+
+  - id: SCHEMA-MANIFEST
+    title: "backups/applied_migrations.json must record the apply in the same commit (§4.5)"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "entry 127, migration 122, sha256 of the .sql file"
+    notes: >
+      The note records honestly that the applied statement was the file's two
+      DDL statements with its explanatory comment block trimmed, so a replay
+      from the file is equivalent in EFFECT, not byte-identical to what was sent.
+
+  # ---- Client ----
+  - id: CLI-PUSH-INERT
+    title: "P0 — the new column would never have been written for 12 of 18 live users"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "grep: UserRepository.savePreferences has 1 occurrence (its own declaration), 0 call sites; live: 6 user_preferences rows vs 18 users; all 6 preferred_language='English' (column DEFAULT), 0 at 'en' (what the client writes)"
+    notes: >
+      `_syncUserPreferences` opened with `if (prefs == null) return;` on a Hive
+      key written ONLY by the restore leg, so it is null unless a cloud row
+      already existed to restore FROM — and the client has demonstrably never
+      created one. The payload is now built from two INDEPENDENT sources and
+      issued when either is non-empty. Found by review round 3; every test in
+      the original plan would have passed with the feature inert.
+
+  - id: CLI-COACHING-NOTES
+    title: "P0 — the same upsert nulled an Edge-Function-owned column, on a path this batch makes fire per toggle"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "grep: 'coaching_notes' no longer appears in the client upsert payload in sync_profile.dart"
+    notes: >
+      `'coaching_notes': p['coaching_notes']` was named unconditionally, and a
+      key present with a null value lands in the generated SET list. Its real
+      writers are daily-snapshot (extracted AI facts) and
+      assess-body-composition (the last_bf_assessed_at 30-day PRO rate-limit
+      stamp). Removed rather than guarded: the client is a pure CONSUMER of that
+      column. Fixed in-batch rather than filed — this batch is what would have
+      made a narrow pre-existing exposure routine.
+
+  - id: CLI-RESTORE-LEG
+    title: "The concept had NO restore path anywhere — grep returned zero hits"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: test/contracts/notification_prefs_round_trip_behavioral_test.dart
+    notes: >
+      `_restoreUserPreferences` lifts the column out of the cloud row BEFORE the
+      generic merge (otherwise it lands in two Hive keys with only one merged)
+      and hands it to `adoptFromCloud` behind an `ownerChangedSince(userId)`
+      re-check at the write sink — needed because the GuardedBox assert compares
+      the BOX's owner to the live session, not the entry-captured userId. No new
+      wiring: that method already runs on all four restore paths.
+
+  - id: CLI-EMISSION-OMIT
+    title: "An empty Hive box and 'the user enabled everything' were the same value on the wire"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "the snapshot fallback OMITS the key when the device has no record — pinned in the round-trip behavioral test"
+    notes: >
+      `compileDailySnapshot` now omits the key entirely when `read()` is empty.
+      Deliberately NOT the plan's original "delete the emission outright": that
+      would leave devices on the NEW APK with no fallback while devices on the
+      old one still depend on it. The PADDING was the harm, not the emission, so
+      both halves of the old path now stay symmetric and retire together.
+
+  - id: CLI-LEGACY-DEFAULT
+    title: "The profile screen's default map seeded the LEGACY singular key, so a user's first toggle stored an alias-shaped blob"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "grep: no `'workout_reminder'` (singular) remains in lib/ — the only surviving reference is the alias-handling test that exists to pin it"
+    notes: >
+      `screen.dart:204` wrote `workout_reminder` into a map `:341` persists
+      verbatim. Renaming a DEFAULT orphans nothing — it is only reached when the
+      box is empty. `_legacyAliases` deliberately KEPT: devices that already
+      stored the singular form still resolve through it.
+
+  # ---- Server ----
+  - id: SRV-SHARED-HELPER
+    title: "All ten readers took the NEWEST snapshot row with no fall-through, while three cron functions create preference-less rows"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "_shared/notification_prefs.ts reads user_preferences first; snapshot consulted only for users the column does not answer for"
+    notes: >
+      Live at batch start: 3 of 5 users with a stored preference had a newest
+      row lacking the key while an older row had it. Paging KEPT — "one row per
+      user" does not make a bare `.in()` safe; it moves the db-max-rows cliff
+      from ~175 users to 1000 and truncation still fails toward SEND (OI-79).
+
+  - id: SRV-INLINE-READERS
+    title: "Four functions read the snapshot inline with a per-user query inside their send loop"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "grep: no `snapshot_json.notification_preferences` code reference remains in supabase/functions — only the shared helper's fallback"
+    notes: >
+      streak-guardian, expiry-reminder, workout-window-closing and
+      weekly-recap-ready now use the shared helper. Also removes N per-user
+      round-trips per cron run. weekly-recap-ready simplified furthest — its
+      whole snapshot batch existed ONLY to read preferences, so it went away.
+
+  - id: SRV-DEGRADED-SIGNAL
+    title: "Converting the inline readers would have collapsed 'could not ask' into 'asked, no answer'"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "fetchNotificationPrefsDetailed returns {prefs, degraded}; the plain fetchNotificationPrefs delegates to it, so its six existing callers are untouched"
+    notes: >
+      workout-window-closing (and streak-guardian / expiry-reminder) deliberately
+      SKIP a user they cannot verify rather than risk a nudge that user switched
+      off. The shared helper's contract is send-on-failure. Converting straight
+      would have silently flipped that decision — the bad-news-vs-no-news class.
+      Each function's own semantics are preserved explicitly.
+
+  # ---- Documentation / registry ----
+  - id: DOC-SOT
+    title: "The SoT entry recorded the bug as a fact: restore_methods was empty with a comment explaining why"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "Gate 42 PASS (118 concepts) + Gate 11 PASS (58 sync/restore methods declared)"
+    notes: >
+      restore_methods populated; the cloud block now names user_preferences with
+      the snapshot recorded as a `legacy_fallback` carrying its retirement
+      trigger; writers/readers extended. Two stale `at :842` citations corrected
+      to :899 (wrong by 57 lines, in BOTH places) and emissionMap's line_range
+      corrected 187-204 → 194-204.
+
+  - id: DOC-DIAGNOSE
+    title: "Diagnose-doc required per §4.4 r22, recording the TRACED mechanism rather than the plausible one"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "dart run scripts/validate_diagnose_doc.dart → OK"
+    notes: >
+      Records THREE refuted hypotheses so they are not re-derived: the
+      splash_screen:189 reinstall story (refuted — allowBackup=false plus the
+      data-extraction rules mean session and Hive die together, so that push
+      cannot fire pre-sign-in; it is live only from the SECOND cold start), the
+      padded-emission design (would have pushed five FABRICATED `true` values),
+      and the claim that 79 keyless rows were snapshot damage (refuted by live
+      data — 90 of 93 fitness_summary values are the empty string the CLIENT
+      writes, and beat_my_coach / future_prediction appear in 0 of 126 rows).
+
+  - id: DOC-BOARD
+    title: "OI-98 closed; the surviving fallback needs a tracked retirement trigger, not an intention"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "OI-98 status CLOSED with closes-oi in the commit message; a new OI carries the fallback retirement"
+    notes: >
+      OI-98's own `Blocked on:` demanded the reinstall ordering be established
+      before a fix was designed. It now is — and it resolves OPPOSITE to the
+      board's assumption.
+
+  # ---- Terminal-but-not-by-us ----
+  - id: HOLD-EF-DEPLOY
+    title: "Ten Edge Functions must be redeployed before any server-side change takes effect"
+    terminal_state: blocked_on_user
+    reason: >
+      §4.3 — deploying to the prod project requires explicit per-action founder
+      authorization, separate from plan approval and separate from the migration
+      apply already given. It is TEN deploys, not five edits: Deno bundles
+      `_shared` at deploy time, so the helper change is inert until all six of
+      its importers are redeployed, plus the four converted inline readers.
+    notes: >
+      Until the deploys land, the client half is harmless: it writes the new
+      column, the old readers keep reading the snapshot, and the snapshot
+      emission is unchanged for any device that has a local record.
+
+  - id: HOLD-FALLBACK-RETIRE
+    title: "The snapshot fallback (client emission + server read) survives and must retire together"
+    terminal_state: blocked_on_user
+    reason: >
+      Retirement is gated on APK +39 adoption, which is a founder release
+      decision, not a code state. Removing the server fallback while users are
+      on +38 would take honoured users from 2 of 5 to 0 of 5. §4.6's own
+      provision for a roll the founder schedules later: the surviving path is
+      tracked on the OI board with a NAMED trigger — +39 adoption AND a re-run
+      of the zero-`false`-values query immediately before — rather than left as
+      an intention.
+    notes: >
+      Both halves are marked in code as fallback-only with the same retirement
+      note, so neither can be removed without the other being noticed.
+
+  # ---- B-pass on 885ebd47f4c0 (verdict accepted, zero false alarms) ----
+  - id: BP-1
+    title: "P0 — the fix re-created OI-98's own root cause in the new home: a jsonb COLUMN is also replaced wholesale, so a sparse map deletes keys it never saw"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "buildUserPreferencesPayload never carries notification_preferences — 4 tests, mutation-proven (reinstating the removed columns reddens 4)"
+    notes: >
+      `notification_settings_screen.dart:50-56` seeds `_prefs` from `read()` —
+      `{}` on a fresh device — and each toggle adds ONE key, so a one-key stored
+      map is ordinary. Device A storing {streak_alerts:false} and device B
+      storing {weekly_recap:false} would each delete the other's key, reverting
+      it to ABSENT => SEND. Per-key merge had been applied on the RESTORE side
+      and wholesale replace left on the WRITE side — guard without its mirror,
+      inside the fix for a bug of that same class. Closed by migration 123.
+
+  - id: BP-2
+    title: "P1 — the plan-review record CI requires for a platform-tier merge did not exist"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: docs/plan-reviews/oi98-notification-prefs.md
+    notes: >
+      Correct finding: `check_plan_review_record_exists.dart` would have failed
+      the build. It was unwritten rather than thought unnecessary.
+
+  - id: BP-3
+    title: "P2 — the new owner re-check guarded only the new call, leaving its sibling write two lines above exposed to the identical race"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "one `if (ownerChangedSince(userId)) return;` now sits ABOVE both writes in _restoreUserPreferences"
+    notes: >
+      Same shape as BP-1 and as the batch's own subject. Finding a
+      guard-without-its-mirror inside the guard this batch added is fair, and it
+      is the second instance in one review.
+
+  - id: BP-4
+    title: "P2 — `degraded` is batch-wide, so a transient failure skips every candidate rather than one user"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "the three skip-on-error readers now carry an explicit caveat naming the difference"
+    notes: >
+      Behaviour KEPT, claim corrected. `fetchAllByIds` raises on any page, so one
+      lost page makes the whole lookup untrustworthy and per-user isolation is
+      not representable. Same direction (skip rather than risk an unwanted push)
+      and self-healing next run, but a wider blast radius for a transient fault.
+      The defect was the COMMENT claiming semantics were "preserved verbatim".
+
+  - id: BP-5
+    title: "P3 — a stale file:line citation in the diagnose-doc, in the same commit that boasts fixing two others"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "grep-derived: read 162->170, emissionMap 194->202, write 212->220"
+    notes: >
+      The finding under-counted it — my own additions had shifted three
+      citations, not one. All re-derived by grep rather than patched singly.
+
+  - id: BP-6
+    title: "P1 — the test suite was blind in the same direction as the code, which is why BP-1 survived a mutation-proven suite"
+    terminal_state: closed_in_commit
+    commit: *wt
+    verification: "test/contracts/notification_prefs_round_trip_behavioral_test.dart — 4 new payload tests, mutation-proven"
+    notes: >
+      Every test exercised the RESTORE path and the snapshot emission; none
+      asserted the shape of what the client SENDS. `buildUserPreferencesPayload`
+      was extracted as a pure function precisely so that path became assertable.
+      This is the finding that explains the other one.
+
+  - id: MIG-123
+    title: "Per-key additive write for the new column — jsonb merge RPC"
+    terminal_state: blocked_on_user
+    reason: >
+      §4.3 — applying a migration to the prod project requires explicit
+      per-action founder authorization. The authorization given covered
+      migration 122; 123 is a separate apply and has not been requested yet.
+      Until it is applied the RPC call fails at runtime, so the client half of
+      BP-1's fix is written and tested but not yet live.
+    notes: >
+      `merge_notification_preferences(jsonb)` — jsonb `||` (right wins per key),
+      SECURITY INVOKER and keyed on `auth.uid()` so the caller's own RLS
+      applies and a user cannot write another's row. REVOKE is FROM PUBLIC, not
+      from `anon`/`authenticated`, which inherit through PUBLIC and would make a
+      per-role revoke a no-op. Rejects a non-object payload and no-ops on `{}`.
+

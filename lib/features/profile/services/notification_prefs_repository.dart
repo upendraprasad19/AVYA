@@ -109,6 +109,14 @@ class NotificationPrefsRepository {
     'workout_reminders': 'workout_reminder',
   };
 
+  /// [_legacyAliases] inverted — legacy key -> canonical key.
+  ///
+  /// Derived rather than hand-written so the two can never disagree: a second
+  /// literal map is a rename away from silently disabling alias handling.
+  static final Map<String, String> _canonicalByLegacy = <String, String>{
+    for (final e in _legacyAliases.entries) e.value: e.key,
+  };
+
   /// True when a user session owns the Hive boxes.
   ///
   /// Without this, `userBox` is a GuardedBox with no owner and every access
@@ -228,6 +236,28 @@ class NotificationPrefsRepository {
       // Hive write above is already durable, so a failed push costs a delay,
       // never the setting.
       unawaited(SyncService.instance.pushSnapshot());
+
+      // OI-98 / e4a1b7 — push the NEW home too, so a toggle lands in
+      // `user_preferences.notification_preferences` now rather than waiting for
+      // the next profile sync. Both pushes run during the cutover window; the
+      // snapshot one goes away with the rest of the old path once the server
+      // fallback is retired.
+      //
+      // `.catchError` is NOT decoration. Unlike `pushSnapshot` — whose
+      // `pushSnapshotNow` wraps everything including `_ensureSessionOpen` in
+      // its own try/catch — this forwarder awaits `_ensureSessionOpen()`
+      // OUTSIDE any handler, so a throw there escapes an unawaited future as an
+      // unhandled async error. The Hive write above is already durable, so a
+      // failed push costs a delay, never the setting.
+      unawaited(
+        SyncService.instance
+            .pushUserPreferencesForSyncDomain()
+            .catchError((Object e, StackTrace st) {
+          debugPrint('[NotificationPrefs] user_preferences push failed: $e');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'notification_prefs_push_user_preferences'));
+        }),
+      );
       return true;
     } catch (e, st) {
       debugPrint('[NotificationPrefs] write failed: $e');
@@ -236,4 +266,106 @@ class NotificationPrefsRepository {
       return false;
     }
   }
+
+  /// Adopts the cloud copy of the preferences (OI-98 / e4a1b7) — THE restore
+  /// leg this concept never had.
+  ///
+  /// Deliberately NOT [write]: that writer fires
+  /// `unawaited(SyncService.instance.pushSnapshot())`, which is right for a
+  /// user flipping a switch and wrong here — this runs mid-restore, so it would
+  /// publish a snapshot built from half-restored Hive state, and a restore leg
+  /// triggering a push is backwards on its face.
+  ///
+  /// Session-checked through the SAME `_hasSession` gate [read] uses. That
+  /// pairing is load-bearing: `read()` short-circuits to `{}` with no session,
+  /// so a writer that did not consult the same gate would see a spuriously
+  /// empty `local`, degrade the merge to cloud-wins, and adopt over real
+  /// preferences. One gate, both sides.
+  ///
+  /// Returns true only when the box was actually written.
+  static Future<bool> adoptFromCloud(dynamic cloudValue) async {
+    if (!_hasSession) return false;
+    try {
+      final cloud = normalize(cloudValue);
+      if (cloud.isEmpty) return false;
+
+      final local = read();
+      final merged = mergeCloudNotificationPrefs(local: local, cloud: cloud);
+
+      // `merged` starts as a copy of `local` and only ever grows, so an equal
+      // length means nothing was adopted. Skip the write rather than churn the
+      // box with an identical value.
+      if (merged.length == local.length) return false;
+
+      await HiveService.instance.userBox.put(hiveKey, merged);
+      return true;
+    } catch (e, st) {
+      debugPrint('[NotificationPrefs] adoptFromCloud failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'notification_prefs_adopt_from_cloud'));
+      return false;
+    }
+  }
+}
+
+/// Rewrites legacy keys to their canonical form. Pure and total.
+///
+/// An explicit canonical entry OUTRANKS a legacy one, mirroring
+/// [NotificationPrefsRepository.emissionMap]'s `direct ?? alias` — otherwise
+/// the two would disagree about which value is authoritative for the same
+/// notification, which is how a user's choice gets read one way and written
+/// another.
+Map<String, Map<String, dynamic>> canonicalizeNotificationPrefs(
+    Map<String, Map<String, dynamic>> input) {
+  final out = <String, Map<String, dynamic>>{};
+  // Pass 1 — anything already in canonical form.
+  input.forEach((k, v) {
+    if (!NotificationPrefsRepository._canonicalByLegacy.containsKey(k)) {
+      out[k] = v;
+    }
+  });
+  // Pass 2 — legacy keys, only where the canonical form is absent.
+  input.forEach((k, v) {
+    final canonical = NotificationPrefsRepository._canonicalByLegacy[k];
+    if (canonical != null && !out.containsKey(canonical)) out[canonical] = v;
+  });
+  return out;
+}
+
+/// Merges a cloud preference map into a local one. PER-KEY LOCAL-WINS.
+///
+/// Extracted as a pure top-level function (the shape `paywallLetterheadTitle`
+/// already uses in this repo) so production and its test call the SAME code. A
+/// test that re-implements the merge inline proves nothing about the merge that
+/// actually runs — replacing this body with cloud-wins would leave such a test
+/// green.
+///
+/// TWO RULES, both learned the hard way:
+///
+/// 1. **Local wins per key, not all-or-nothing.** `RestoringScreen` surfaces a
+///    CONTINUE escape at 30s while the restore keeps writing in the background,
+///    so a reinstalling user really can flip one switch before this runs. An
+///    all-or-nothing guard would let that single toggle discard every other
+///    preference the cloud still held. Per-key is what ADR-0014's
+///    additive/local-wins actually means.
+///
+/// 2. **Containment is tested in CANONICAL space, but the result is written in
+///    LOCAL's own key space.** A box holding the legacy singular
+///    `workout_reminder` has no canonical `workout_reminders` key; a naive
+///    `local.containsKey(canonical)` test would therefore adopt the cloud's
+///    canonical entry, and `emissionMap`'s `direct ?? alias` would then prefer
+///    that adopted value forever — flipping a deliberate OFF back ON, on every
+///    sign-in. Comparing canonically stops that. Writing in local's own shape
+///    stops the mirror error: silently migrating the box would strip the legacy
+///    key that other readers still resolve through.
+Map<String, Map<String, dynamic>> mergeCloudNotificationPrefs({
+  required Map<String, Map<String, dynamic>> local,
+  required Map<String, Map<String, dynamic>> cloud,
+}) {
+  final localCanonical = canonicalizeNotificationPrefs(local);
+  final out = <String, Map<String, dynamic>>{...local};
+  canonicalizeNotificationPrefs(cloud).forEach((key, value) {
+    if (!localCanonical.containsKey(key)) out[key] = value;
+  });
+  return out;
 }

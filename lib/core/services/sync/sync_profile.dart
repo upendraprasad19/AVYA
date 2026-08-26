@@ -475,18 +475,80 @@ extension SyncServiceProfile on SyncService {
   /// Pushes user preferences to Supabase user_preferences table.
   Future<void> _syncUserPreferences(String userId) async {
     try {
+      // TWO INDEPENDENT SOURCES — and the independence IS the fix (OI-98 /
+      // e4a1b7). This method used to open with
+      //   final prefs = _hive.userBox.get('preferences');
+      //   if (prefs == null) return;
+      // and that guard made the whole method unreachable for most installs.
+      // `userBox['preferences']` has exactly ONE writer in the tree —
+      // `_restoreUserPreferences` below — and `UserRepository.savePreferences`
+      // has ZERO call sites, so the key is null unless a cloud row already
+      // existed to restore FROM. Measured 2026-08-26: 6 `user_preferences` rows
+      // against 18 users with snapshots, and all 6 carry
+      // `preferred_language='English'` (the column DEFAULT) with none at the
+      // `'en'` this method writes — i.e. every row was created by an Edge
+      // Function and the client has never created one. Hanging the new
+      // notification column off that guard would have shipped it inert for
+      // two-thirds of users while every test passed.
       final prefs = _hive.userBox.get('preferences');
-      if (prefs == null) return;
-      final p = Map<String, dynamic>.from(prefs as Map);
+      final p = prefs is Map
+          ? Map<String, dynamic>.from(prefs)
+          : const <String, dynamic>{};
+      final notificationPrefs = NotificationPrefsRepository.read();
 
-      // audit-2026-05-16 E.12 — migration 067 dropped
-      // `user_preferences.biggest_obstacle` (no UI writer; 100% NULL).
-      await _supabase.client.from('user_preferences').upsert({
-        'user_id': userId,
-        'motivational_style': p['motivational_style'] ?? 'encouraging',
-        'preferred_language': p['preferred_language'] ?? 'en',
-        'coaching_notes': p['coaching_notes'],
-      }, onConflict: 'user_id');
+      final payload = buildUserPreferencesPayload(
+        userId: userId,
+        preferences: p,
+      );
+
+      // ⚠ notification_preferences is DELIBERATELY NOT in this payload — it
+      // goes through the merge RPC below instead (B-pass Finding 1).
+      //
+      // A partial upsert protects sibling COLUMNS, but the value of a jsonb
+      // column is still replaced WHOLESALE: PostgREST emits
+      // `SET col = EXCLUDED.col`, which is assignment, not a merge. The stored
+      // map is legitimately sparse — `notification_settings_screen.dart:50-56`
+      // seeds from `read()` (`{}` on a fresh device) and each toggle adds ONE
+      // key — so writing it through this upsert would let a device delete every
+      // preference it had not personally seen:
+      //   device A stores {streak_alerts:false}  -> column = {streak_alerts:false}
+      //   device B stores {weekly_recap:false}   -> column = {weekly_recap:false}
+      // and A's key is gone, reverting to ABSENT => SEND. That is OI-98 itself,
+      // reached through the NEW home — the same defect the restore side's
+      // per-key merge already guards against, missing from its mirror.
+
+      // `coaching_notes` REMOVED from this payload (OI-98 round-3 review).
+      // The client is a pure CONSUMER of that column; its writers are
+      // `daily-snapshot` (extracted AI facts) and `assess-body-composition`
+      // (the `last_bf_assessed_at` 30-day PRO rate-limit stamp). It was named
+      // unconditionally here as `p['coaching_notes']`, and a key present with a
+      // null value still lands in the generated SET list — so a client with no
+      // local copy nulled the server's, destroying coach memory and reopening
+      // the BF% rate limit. Harmless-looking until this batch, which adds a
+      // push on every notification toggle and would have made it routine.
+      if (payload.length > 1) {
+        await _supabase.client
+            .from('user_preferences')
+            .upsert(payload, onConflict: 'user_id');
+      }
+
+      // OI-98 — PER-KEY ADDITIVE write, via migration 123's jsonb merge.
+      // `||` lets the keys this device actually knows win while leaving every
+      // other key stored by another device alone. The RPC is SECURITY INVOKER
+      // and keys the row on `auth.uid()`, so the caller's own RLS applies and a
+      // user cannot write someone else's preferences.
+      //
+      // Issued SEPARATELY from the upsert above, not folded into it, because
+      // the two have different merge semantics and folding them would silently
+      // give this one the upsert's wholesale replace. It also creates the row
+      // when none exists, which is what makes the write reach the ~12 of 18
+      // users who have no `user_preferences` row at all.
+      if (notificationPrefs.isNotEmpty) {
+        await _supabase.client.rpc(
+          'merge_notification_preferences',
+          params: <String, dynamic>{'p_prefs': notificationPrefs},
+        );
+      }
     } catch (e, st) {
       debugPrint('[SyncService._syncUserPreferences] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -661,6 +723,15 @@ extension SyncServiceProfile on SyncService {
       final cloud = Map<String, dynamic>.from(rows.first as Map);
       cloud.remove('user_id');
 
+      // OI-98 / e4a1b7 — pull `notification_preferences` OUT before the merge
+      // below. It belongs to `userBox['notification_preferences']`, whose sole
+      // owner is NotificationPrefsRepository; the generic merge would otherwise
+      // fold it into `userBox['preferences']` as well, leaving the concept in
+      // TWO Hive keys with only one of them merged per-key. Nothing reads the
+      // shadow copy today, which is precisely how the next reader would come to
+      // pick the wrong one.
+      final cloudNotificationPrefs = cloud.remove('notification_preferences');
+
       // F6 · Merge semantics — cloud non-null wins, Hive preserved for nulls.
       final existing = _hive.userBox.get('preferences');
       final existingMap = existing is Map
@@ -671,7 +742,33 @@ extension SyncServiceProfile on SyncService {
         for (final e in cloud.entries)
           if (e.value != null) e.key: e.value,
       };
+
+      // OWNER RE-CHECK AT THE SINK — guarding BOTH writes below, not just the
+      // notification one (B-pass Finding 3: the first version guarded only the
+      // new call and left its older sibling two lines above exposed to the
+      // identical race, which is the guard-without-its-mirror shape this very
+      // batch exists to close).
+      //
+      // The GuardedBox assert is NOT sufficient on its own: it compares the
+      // BOX's owner to the LIVE session, while `userId` was captured at this
+      // method's entry and the rows below were fetched under it. After an
+      // A -> B account swap where Hive has already reopened for B, that assert
+      // passes happily and A's cloud data lands in B's box. `ownerChangedSince`
+      // compares the captured id instead, which is the distinction that
+      // matters, and its own doc says to call it AT THE WRITE SINK — one
+      // statement before the write, never at function entry, so nothing can
+      // await in between.
+      if (ownerChangedSince(userId)) return;
+
       await _hive.userBox.put('preferences', merged);
+
+      // OI-98 — THE restore leg this concept never had. Local-wins per key,
+      // so a preference the user set on THIS device (including one set seconds
+      // ago through RestoringScreen's 30s CONTINUE escape, while this restore
+      // was still running) is never overwritten by an older cloud copy.
+      if (cloudNotificationPrefs != null) {
+        await NotificationPrefsRepository.adoptFromCloud(cloudNotificationPrefs);
+      }
     } catch (e, st) {
       debugPrint('[SyncService._restoreUserPreferences] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -720,4 +817,45 @@ extension SyncServiceProfile on SyncService {
     if (userId == null) return;
     await _restoreUserPreferences(userId);
   }
+}
+
+/// Builds the `user_preferences` upsert payload. PURE — no Hive, no network.
+///
+/// Extracted so the WRITE path is behaviourally testable at all. The B-pass on
+/// this batch found a P0 here that every test missed for exactly one reason:
+/// the suite exercised the restore path and the snapshot emission, and NOTHING
+/// asserted the shape of what this method sends.
+///
+/// TWO COLUMNS IT MUST NEVER CARRY, both learned the hard way:
+///
+///   - `notification_preferences` — a jsonb column is replaced WHOLESALE by an
+///     upsert (`SET col = EXCLUDED.col` is assignment, not a merge), and the
+///     stored map is legitimately sparse, so sending it here lets a device
+///     delete every preference it has not personally seen. It goes through
+///     migration 123's `merge_notification_preferences` RPC instead, which
+///     merges per key.
+///   - `coaching_notes` — the client is a pure CONSUMER of it. Its writers are
+///     `daily-snapshot` (extracted AI facts) and `assess-body-composition` (the
+///     `last_bf_assessed_at` 30-day PRO rate-limit stamp). Naming it here with a
+///     null local value put an explicit NULL in the generated SET list and wiped
+///     both.
+///
+/// Returns `{user_id: ...}` alone when there is nothing to say; the caller
+/// treats a single-key payload as "skip the upsert" rather than sending a row
+/// that asserts defaults over real values.
+///
+/// audit-2026-05-16 E.12 — migration 067 dropped
+/// `user_preferences.biggest_obstacle` (no UI writer; 100% NULL).
+@visibleForTesting
+Map<String, dynamic> buildUserPreferencesPayload({
+  required String userId,
+  required Map<String, dynamic> preferences,
+}) {
+  final payload = <String, dynamic>{'user_id': userId};
+  if (preferences.isNotEmpty) {
+    payload['motivational_style'] =
+        preferences['motivational_style'] ?? 'encouraging';
+    payload['preferred_language'] = preferences['preferred_language'] ?? 'en';
+  }
+  return payload;
 }

@@ -4,8 +4,9 @@
  * Finds users with streak > 2 weeks who have NOT logged a workout today.
  * Sends a push notification via OneSignal to nudge them.
  *
- * Respects user notification_preferences.streak_alerts setting
- * stored in the user_daily_snapshots.snapshot_json field.
+ * Respects the user's streak_alerts setting, read via
+ * _shared/notification_prefs.ts from user_preferences.notification_preferences
+ * (legacy snapshot as fallback — OI-98 / e4a1b7).
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -13,6 +14,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { captainPrompt } from "../_shared/captain_manual.ts";
+import {
+  fetchNotificationPrefsDetailed,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
@@ -159,7 +164,32 @@ serve(async (req: Request) => {
       );
     }
 
-    // 4. Check notification preferences from user_daily_snapshots.
+    // 4. Check notification preferences.
+    //
+    // OI-98 / e4a1b7 — ONE batched lookup instead of a per-user query inside
+    // the loop, reading `user_preferences.notification_preferences` with the
+    // legacy snapshot as fallback. `_shared/notification_prefs.ts` carries the
+    // reasoning; the short version is that the snapshot copy was push-only,
+    // destroyed on reinstall, and read from whichever row happened to be
+    // newest.
+    //
+    // `Detailed` rather than the plain helper because THIS function
+    // deliberately skips a user it cannot verify rather than risk a nudge they
+    // switched off — so it needs "could not ask" kept apart from "asked, no
+    // preferences set". The plain helper collapses both into ABSENT => SEND,
+    // which is right for its six callers and wrong here.
+    const { prefs: notifPrefs, degraded: prefsDegraded } =
+      await fetchNotificationPrefsDetailed(
+        supabase,
+        atRiskUsers.map((u) => u.user_id as string),
+      );
+    if (prefsDegraded) {
+      console.error(
+        "[streak-guardian] preference lookup degraded — skipping all sends " +
+          "rather than pushing to users whose streak_alerts may be off",
+      );
+    }
+
     let sent = 0;
     let skipped = 0;
 
@@ -167,27 +197,27 @@ serve(async (req: Request) => {
       const userId = user.user_id as string;
       const streakWeeks = user.current_streak_weeks as number;
 
-      // Check if user has streak_alerts enabled via configBox sync.
-      // We store notification_preferences in snapshot_json for server access.
-      const { data: snapshot, error: snapErr } = await supabase
-        .from("user_daily_snapshots")
-        .select("snapshot_json")
-        .eq("user_id", userId)
-        .order("snapshot_date", { ascending: false })
-        .limit(1)
-        .single();
-      // Unit C (§2.24) — `.single()` returns PGRST116 for a user with NO snapshot
-      // row; that is NOT an error — fall through to send (a user whose streak is on
-      // the line must still get the guard nudge, preserving pre-fix behavior). Only a
-      // GENUINE error (network/permission) skips — pre-fix a silent failure coerced to
-      // `snapshot=null` and pushed regardless of a disabled streak_alerts preference.
-      if (snapErr && snapErr.code !== "PGRST116") {
+      // Unit C (§2.24), preserved in DIRECTION through the OI-98 move:
+      // a user with NO stored preferences still gets the nudge (a user whose
+      // streak is on the line must), and only a GENUINE inability to read the
+      // preferences skips them. `isNotificationEnabled` applies ABSENT => SEND,
+      // so the first half needs no special case; `prefsDegraded` carries the
+      // second.
+      //
+      // ⚠ ONE WAY THIS IS NOT IDENTICAL, stated rather than glossed (B-pass
+      // Finding 4). The old per-user query failed per USER; `degraded` is
+      // batch-wide, because `fetchAllByIds` raises on any page and one lost
+      // page makes the whole lookup untrustworthy. So a transient error now
+      // skips EVERY candidate this run instead of one. That is the same
+      // direction (skip rather than risk an unwanted push) and it is
+      // self-healing — the next scheduled run re-reads — but it is a wider
+      // blast radius for a transient fault, and calling it "preserved
+      // verbatim" would have been an over-claim.
+      if (prefsDegraded) {
         skipped++;
         continue;
       }
-
-      const prefs = snapshot?.snapshot_json?.notification_preferences;
-      if (prefs?.streak_alerts?.enabled === false) {
+      if (!isNotificationEnabled(notifPrefs, userId, "streak_alerts")) {
         skipped++;
         continue;
       }

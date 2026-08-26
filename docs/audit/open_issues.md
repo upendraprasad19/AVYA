@@ -2346,12 +2346,70 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   stays fixed).
 - **Blast radius estimate**: `feature` — one widget, copy only.
 
-## OI-98 — notification preferences are push-only: a reinstall overwrites the server's copy with all-enabled (P2)
+## OI-141 — retire the notification-preferences snapshot fallback once APK +39 is adopted (P3)
 
 - **Status**: OPEN
-- **Blocked on**: nothing technical. The mechanism is understood and read from code; what is NOT
-  established is the exact ordering on a real reinstall (see the caveat below), and that should be
-  confirmed before designing the fix.
+- **Blocked on**: APK +39 adoption — a founder release decision, not a code state. Nothing
+  technical blocks the removal itself; the code is written and marked.
+- **Verified**: 2026-08-26 — filed as the tracked half of OI-98's fix, per §4.6's provision that
+  an old path whose roll the founder schedules later is tracked on the board, never left as an
+  intention.
+- **What survives, and why**: OI-98 moved notification preferences to
+  `user_preferences.notification_preferences`. Two pieces of the old path were deliberately KEPT
+  so client and server deploys did not have to be ordered:
+  1. **Client** — `compileDailySnapshot` (`sync_service.dart:899`) still emits the key into
+     `snapshot_json`, but ONLY when the device has a local record (it omits it entirely
+     otherwise, which is what stopped a reinstalled device asserting an all-enabled default).
+  2. **Server** — `_shared/notification_prefs.ts` reads the column first and falls back to the
+     newest snapshot row **only for users the column does not answer for**.
+- **Why they must retire TOGETHER**: removing the server fallback alone would strand every user
+  still on APK +38 — they would read ABSENT ⇒ SEND, taking honoured users from 2 of 5 to 0 of 5.
+  Removing the client emission alone would strand a +39 user whose column write failed. Both are
+  marked in code with the same retirement note so neither can be removed without the other being
+  noticed.
+- **The trigger, stated so it is checkable**: +39 adoption sufficient that the snapshot path is
+  dead weight, AND a re-run of the zero-`false`-values query immediately before the removal:
+  ```sql
+  select count(*) from user_daily_snapshots d, jsonb_each(d.snapshot_json->'notification_preferences') e
+  where d.snapshot_json ? 'notification_preferences' and e.value->>'enabled' = 'false';
+  ```
+  It was **0** when OI-98 shipped, which is what made the cutover lossless. It stops being 0 the
+  moment a user on +38 turns something off, and at that point the fallback is carrying real data
+  and must not be dropped without reading it first.
+- **What to remove when it fires**: the client emission + `emissionMap()`'s padding + the
+  `pushSnapshot()` call in `NotificationPrefsRepository.write` that exists only to feed it; the
+  server fallback block; the `legacy_fallback:` stanza in `docs/sot_registry.yaml`; and the
+  `notification_preferences` entry under `extra_server_written_keys:` in
+  `docs/snapshot_contract.yaml`. ⚠ `emissionMap()`'s removal retires the sole send-side pin on
+  **OI-76/a7e3d1** (PRO-locked keys must never be scoped out of what is sent) — re-express that
+  against the column writer rather than deleting it.
+- **Blast radius estimate**: `platform` — `_shared/**` plus `lib/core/services/sync/**`.
+
+## OI-98 — notification preferences are push-only: a reinstall overwrites the server's copy with all-enabled (P2)
+
+- **Status**: CLOSED (2026-08-26, batch `oi98-notification-prefs`, diagnose `e4a1b7`)
+- **How it closed**: the concept MOVED out of `snapshot_json` into its own column,
+  `user_preferences.notification_preferences` (migration 122). The snapshot was a DERIVED
+  document — replaced wholesale, by four different writers — and this was the last piece of
+  authoritative user intent living in it. Two earlier revisions tried to patch the preferences
+  in place and were each blocked by independent review on a different leak from the same root
+  cause: a wholesale-replaced document cannot represent *"I know these three settings and
+  nothing about the other seven"*, which is exactly a reinstalled device's state.
+- **The `Blocked on:` below is ANSWERED, and it resolves opposite to what this entry assumed.**
+  `AndroidManifest.xml:21` sets `android:allowBackup="false"` and
+  `res/xml/data_extraction_rules.xml` excludes `app_flutter` from BOTH `<cloud-backup>` and
+  `<device-transfer>` — so on a real reinstall the Supabase session and Hive die TOGETHER,
+  `pushSnapshotNow` returns at `sync_service.dart:936-937` for want of a session, and
+  `splash_screen.dart:189` cannot poison anything before sign-in. That push is live only from
+  the SECOND cold start onward.
+- **⚠ The dominant failure was not the reinstall at all.** All ten server readers took the
+  user's NEWEST snapshot row with no fall-through, and three cron functions
+  (`rolling-context` nightly for every user, `future-prediction`, `beat-my-coach`) create a
+  preference-less row when the day has none. Measured live 2026-08-26: **3 of the 5 users** who
+  had ever stored a preference were being ignored outright, no reinstall involved.
+- **Residual, tracked separately**: the snapshot fallback (client emission + server read) still
+  exists so devices on APK +38 keep being honoured. Its retirement is **OI-141**.
+- **Superseded by the fix — kept for the record:**
 - **Verified**: 2026-08-07 — by grep across `lib/core/services/` and `lib/features/auth/`, while
   writing OI-75's SoT registry entry. Gate 11 (`check_sync_fanout.dart`) is what forced the
   question: it demanded a `restore_methods:` list and there was nothing truthful to put in it.
