@@ -2,7 +2,7 @@
 bug_id: e4a1b7
 date: 2026-08-26
 batch: oi98-notification-prefs
-status: in_progress
+status: fixed
 blast_radius: platform
 symptom: >
   A notification the user switched OFF silently turns back ON. Two independent routes, both

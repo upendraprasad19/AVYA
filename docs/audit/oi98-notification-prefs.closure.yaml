@@ -40,7 +40,7 @@ related_diagnoses: >
 total_findings: 24
 closed_count: 24
 
-_wt: &wt "oi98-notification-prefs (uncommitted working tree)"
+_wt: &wt "oi98-notification-prefs 6bdb00b3 — OI-98: preferences moved to their own column, restore leg added, ten readers repointed"
 
 findings:
   # ---- Migration + the artifacts §4.5 pairs with it ----
