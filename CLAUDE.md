@@ -627,7 +627,7 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 > are unknowable to any script and exist to be ANSWERED, not assumed. What is enforced
 > is that the rows are answered, not that they were done; the content stays
 > self-attested, same trust model as rule 21's `presence_only:` and rule 24's ledger.
-> Kill switch `.claude/.batch_close.disabled`; every error path exits 0.
+> Kill switch `.claude/.batch_close.disabled`; every error path exits 0. ⚠ Its state file `.claude/.batch_close_state` is ALSO listed in `retire_worktree_lib.dart`'s `regenerableIgnoredPaths` — it must be, or the hook silently makes every worktree it fires in permanently unretirable (diagnose `b4d7e9`, 2026-08-27; the same shape OI-128 fixed for test outputs). Any future tool that WRITES a gitignored file into a worktree owes that list an entry.
 
 ```
 [ ] Diagnose-doc written + validated (every bug fix; rule §4.5)

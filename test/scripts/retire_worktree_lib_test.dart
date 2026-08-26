@@ -307,6 +307,24 @@ void main() {
       expect(isRegenerableIgnored('test/plan_generator/v4_diagnostic_output.md.bak'),
           isFalse);
       expect(isRegenerableIgnored('archive/analyze_output.txt'), isFalse);
+    });
+
+    test('the Stop hook marker is regenerable, or every worktree that closes a '
+        'batch becomes permanently unretirable', () {
+      // Found live 2026-08-26: `.claude/.batch_close_state` (.gitignore:188,
+      // written by batch_close_hook.dart:29) is 41 bytes holding one sha, and
+      // the hook rewrites it on every fire. It is not precious. But the §5
+      // Stop hook writes it into ANY worktree where a batch closes, so before
+      // this entry EVERY such worktree reported "1 non-regenerable ignored
+      // file" forever — the same silent decay OI-128 fixed for test outputs,
+      // reintroduced two days after that hook shipped.
+      expect(isRegenerableIgnored('.claude/.batch_close_state'), isTrue);
+      // Still EXACT-match only. The three review rounds recorded in the lib
+      // header each found a P0 from looser matching, so a neighbour must NOT
+      // inherit regenerability.
+      expect(isRegenerableIgnored('.claude/.batch_close_state.bak'), isFalse);
+      expect(isRegenerableIgnored('.claude/settings.local.json'), isFalse);
+      expect(isRegenerableIgnored('backup/.claude/.batch_close_state'), isFalse);
       expect(isRegenerableIgnored('flutter_test_output.txt.orig'), isFalse);
       expect(isRegenerableIgnored('data/baseline.json'), isFalse);
       expect(isRegenerableIgnored('test/plan_generator/'), isFalse,
