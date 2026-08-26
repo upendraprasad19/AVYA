@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**64 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**65 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -72,3 +72,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-139 | the only tool that DELETES developer work is tiered `feature`; every tool… | FOUNDER. This is a governance decision, not a defect fix: pinning changes the | 2026-08-25 — `grep -n retire_worktree docs/blast_radius.yaml` returns NOTHING, and | [:4081](open_issues.md#L4081) |
 | OI-140 | nothing detects a duplicate diagnose `bug_id`, though the identical… | none. | 2026-08-25 — `ls docs/diagnoses/*.md | sed -E 's/.*-([0-9a-f]{6})\.md$/\1/' | sort | | [:4119](open_issues.md#L4119) |
 | OI-141 | retire the notification-preferences snapshot fallback once APK +39 is… | APK +39 adoption — a founder release decision, not a code state. Nothing | 2026-08-26 — filed as the tracked half of OI-98's fix, per §4.6's provision that | [:2349](open_issues.md#L2349) |
+| OI-142 | deploy-artifact commits are unenforced: prod runs Edge Function code whose… | none. | 2026-08-27 — the class was LIVE in the working tree at filing time, not inferred. | [:4154](open_issues.md#L4154) |

@@ -4150,3 +4150,46 @@ OI-136, OI-132.
   Per rule 24 it ships mutation-proven with a `docs/audit/gate_test_ledger.yaml` entry.
 - **Related**: OI-112 (the OI-number version, whose mint-time half is closed), rule 22, the
   `id_collision_note:` in `docs/diagnoses/2026-08-25-hold-days-dilute-phase-completion-b9d4c2.md`.
+
+## OI-142 — deploy-artifact commits are unenforced: prod runs Edge Function code whose deploy record exists only in one machine's working tree (P2)
+
+- **Status**: OPEN
+- **Verified**: 2026-08-27 — the class was LIVE in the working tree at filing time, not inferred.
+  Ten Edge Functions were deployed at `5416431a` (confirmed against prod: `list_edge_functions`
+  shows all ten — `streak-guardian` v23, `morning-alert` v32, `expiry-reminder` v19,
+  `weekly-recap-ready` v21, `workout-window-closing` v11, `protein-gap-alert` v12, `pr-detection`
+  v13, `plateau-alert` v11, `re-engagement` v13, `proactive-coach-promotion` v11 — with
+  `updated_at` in that window). Their payload archives were written under
+  `backups/edge_function_payloads/`, and the result sat UNCOMMITTED across two subsequent merges
+  (`d7930a2a`, `1ea33bb7`) before `300f5563` landed it.
+- **Identified**: 2026-08-27, while cross-checking whether OI-98 had actually shipped. Found by
+  reading `git status` in the primary worktree, not by any gate.
+- **Blocked on**: none.
+- **Recurrence — twice in three days**: `6ad1a28e` (2026-08-25) is literally
+  *"chore(repo): land the deps-board-equipment close-out that never committed"*. Same class, same
+  directory, two days earlier. Neither instance was caught by tooling; both were caught by a human
+  reading `git status` for an unrelated reason.
+- **What's wrong — and the trap is the near-miss, not the absence**: nothing gates this. The
+  obvious candidate is NOT one. `scripts/check_edge_function_payloads.dart` is **Gate 12**, which
+  validates that a Flutter caller's payload KEYS are a subset of what the Edge Function reads from
+  the request body — a different concern entirely — and it currently returns
+  `PASS (no-op) — no edge_function_payloads defined in registry yet`. Its NAME reads as coverage it
+  does not provide, which is the more dangerous half: an auditor grepping for a payload gate finds
+  one, sees green, and moves on.
+- **Why this is more than tidiness**: between deploy and commit, prod runs code whose deploy record
+  exists only in one machine's working tree. §6 tier 6 ("Edge Function code vs deploy") is
+  unanswerable during that window — the repo cannot say what is live. It also hard-fails
+  `/build-apk` **Gate 1** (`git status --porcelain` non-empty, untracked files included), so it
+  silently blocks every APK build until somebody notices. That is how this instance surfaced: it
+  was standing between the repo and APK +39.
+- **What's missing**: an assertion that a deploy's payload archive is committed. The cheapest
+  correct place is `deploy_via_api.js` itself — it already writes and prunes the archives at
+  `:585-600`, so it is the one process that KNOWS a deploy happened and can refuse to exit clean
+  while they are unstaged. A `scripts/check_*.dart` gate is the alternative, but it must answer
+  "was there a deploy?" from repo state alone, which is the harder question.
+- **Blast radius estimate**: `platform` — `.claude/deploy_via_api.js`, plus (if taken as a gate) a
+  new `check_*.dart` shipping mutation-proven with a `docs/audit/gate_test_ledger.yaml` entry per
+  rule 24.
+- **Related**: OI-140 (same shape — a real class with no detector, filed the same week), §6 tier 6,
+  `/build-apk` Gate 1, `GO_LIVE_CHECKLIST.md` row 5.4 (the `+38` size-ledger entry that also sat
+  uncommitted — the third instance of this family).
