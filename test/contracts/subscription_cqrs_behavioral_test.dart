@@ -73,19 +73,68 @@ String _futureIso() =>
 /// `_downgradeLocally` writes several keys in sequence; the run is done when the
 /// observed tuple stops changing. Sampling stops as soon as it is stable, so an
 /// idle machine pays ~30 ms rather than a blanket sleep.
+/// THIRD occurrence, 2026-08-27 — quiescence alone is still not enough, and
+/// this is why. `isPro()` calls `_downgradeLocally()` WITHOUT awaiting it
+/// (`subscription_service.dart:464`), so at the moment `_settle` starts, the
+/// five writes inside it may not have been SCHEDULED yet. The sampler cannot
+/// distinguish "not yet started" from "finished" — this docstring said exactly
+/// that about the `:458` marker and then relied on the sampler anyway for the
+/// five writes that follow it.
+///
+/// Observed on the pre-push full suite: `isPro` had been wiped (that assertion
+/// passed) while `expiresAt` still held this test's own `_pastIso()` seed, so
+/// the run was caught mid-`_downgradeLocally` — between its first awaited write
+/// and its second. Three stable 10 ms rounds elapsed inside that gap under
+/// load.
+///
+/// The fix stops guessing. `_downgradeLocally` fires [onStateChanged] only
+/// AFTER awaiting all five of its writes (`subscription_service.dart:1175`),
+/// so that hook is the one observable that MEANS "every write landed". Waiting
+/// on the signal is a synchronization primitive; sampling for stability is a
+/// heuristic. Quiescence observed BEFORE the hook is now treated as the false
+/// positive it is, and the count restarts.
+///
+/// Widening the heuristic (more rounds, longer interval) was rejected: it moves
+/// the failure rate without closing the window, and every previous fix here has
+/// been a wider guess that held until the next loaded machine.
+///
+/// Not every call site downgrades — a healthy active row never fires the hook —
+/// so the hook is a FLOOR, not a replacement. With no downgrade this behaves
+/// exactly as before. The caller's own handler is chained, never replaced, so
+/// the test that counts hook fires still counts them.
 Future<void> _settle() async {
   const keys = ['isPro', 'expiresAt', 'pro_lapsed_at', 'plan'];
   String snapshot() =>
       keys.map((k) => '$k=${MigratedKey.read<dynamic>(k)}').join('|');
 
+  final previousHook = SubscriptionService.onStateChanged;
+  var hookFired = false;
+  SubscriptionService.onStateChanged = () {
+    previousHook?.call();
+    hookFired = true;
+  };
+
   final deadline = DateTime.now().add(const Duration(seconds: 5));
-  var previous = snapshot();
-  var stableRounds = 0;
-  while (stableRounds < 3 && DateTime.now().isBefore(deadline)) {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-    final current = snapshot();
-    stableRounds = current == previous ? stableRounds + 1 : 0;
-    previous = current;
+  try {
+    var previous = snapshot();
+    var stableRounds = 0;
+    var restartedOnHook = false;
+    while (stableRounds < 3 && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final current = snapshot();
+      stableRounds = current == previous ? stableRounds + 1 : 0;
+      previous = current;
+      if (hookFired && !restartedOnHook) {
+        // All five awaited writes have now landed. Anything the sampler
+        // called "stable" before this instant was an unstarted write, not a
+        // finished one. Restart the count ONCE so the trailing fire-and-forget
+        // `:458` marker is still covered by real quiescence.
+        restartedOnHook = true;
+        stableRounds = 0;
+      }
+    }
+  } finally {
+    SubscriptionService.onStateChanged = previousHook;
   }
 }
 

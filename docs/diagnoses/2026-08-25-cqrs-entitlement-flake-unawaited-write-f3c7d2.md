@@ -2,7 +2,7 @@
 bug_id: f3c7d2
 date: 2026-08-25
 batch: launch-blockers-1
-status: fixed
+status: partial
 blast_radius: feature
 symptom: >
   `test/contracts/subscription_cqrs_behavioral_test.dart` fails intermittently with
@@ -160,3 +160,32 @@ null for 3 consecutive rounds; throw loudly with the key names if 5 s passes wit
 | Mutation (restore single-pass delete) | — | **1 failure / 3 runs** — reproduces |
 
 Production code is unmodified; `git diff --stat` shows one changed file, the test.
+
+---
+
+## SUPERSEDED IN PART — 2026-08-27, by a3e9b7
+
+`status:` was `fixed` and is now `partial`, because this file's assertion failed again on the
+pre-push full suite of 2026-08-27 — the THIRD instance of the class in this one test file.
+
+What this diagnose fixed is real and stands: the converging drain loop closes the
+setUp-contamination window, where a late `:458` marker write resurrected a key with the previous
+test's value.
+
+What it did not fix — while leaving the sampler as the synchronisation mechanism, which asserted
+it had — is that `isPro()` calls `_downgradeLocally()` **without awaiting it**
+(`subscription_service.dart:464`, a line this document never names). So `_settle()` could return
+between two of that method's five awaited writes. That is a different failure from the one
+diagnosed here: the 2026-08-27 failure was `expiresAt` holding the failing test's OWN `_pastIso()`
+seed, not a prior test's value.
+
+The honest reading is that this fix widened a heuristic, as the 2026-08-10 fix before it did.
+a3e9b7 replaces the heuristic with the production completion signal — `onStateChanged`, fired
+only after all five writes land.
+
+Note also that this document's tier-2 evidence claims "6/6 pass under the same CPU load that
+produced the failure". A 2026-08-27 attempt to re-run that style of experiment passed in BOTH
+arms — with the fix and with it deliberately neutered — so a single-file load loop does not
+discriminate here, and that evidence should not be read as proof the class was closed.
+
+See `docs/diagnoses/2026-08-27-settle-returns-before-downgrade-writes-a3e9b7.md`.
