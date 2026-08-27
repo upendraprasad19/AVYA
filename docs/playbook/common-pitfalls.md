@@ -96,3 +96,37 @@ exists and currently configures only the `golden` tag — a repo-wide `timeout:`
 on the `flutter test` invocations in `scripts/pre-push.sh` and `.github/workflows/test.yml`, would
 close the class in one place. A `check_*.dart` gate asserting "spawns a subprocess ⇒ has
 `@Timeout`" is the other option. Neither is done; both are the real fix and are tracked as such.
+
+## The APK toolchain depends on an Android Studio install nothing in this repo records (2026-08-27)
+
+**Symptom.** `flutter build apk` dies in ~2 minutes with
+`ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH`, and
+`flutter doctor` reports the Android toolchain broken (`cmdline-tools component is missing`).
+
+**Cause.** Every APK from +35 to +38 was built with **Android Studio's bundled JetBrains
+Runtime**. The Gradle daemon logs record it verbatim — `~/.gradle/daemon/8.14/daemon-*.out.log`:
+
+    javaHome=C:\Program Files\Android\Android Studio\jbr,javaVersion=21,javaVendor=JetBrains s.r.o.
+
+Android Studio was uninstalled after 2026-08-06, which removed the only JDK on the machine. The
+Android **SDK** survives at `%LOCALAPPDATA%\Android\Sdk`; only the JVM went. Nothing in the repo
+ever referenced `JAVA_HOME`, so the build silently depended on an external install no gate,
+script or doc mentioned.
+
+**Fix.** Install JDK 21 and point `JAVA_HOME` at it:
+
+    winget install --id Microsoft.OpenJDK.21 --silent
+
+**Use 21, not 17.** `android/app/build.gradle.kts` sets `sourceCompatibility`/`targetCompatibility`/
+`jvmTarget` to `VERSION_17`, and reading those as the required JDK is the trap — they are the
+BYTECODE TARGET, not the JVM Gradle runs on. The daemon logs prove the proven configuration is 21.
+Verified 2026-08-27: Microsoft OpenJDK 21.0.12.1 built `+39` clean, Gate 48 and Gate 13 both PASS.
+
+**Diagnosing this again in five minutes rather than an hour:** the JVM that ran any past build is
+in `~/.gradle/daemon/<gradle-version>/daemon-*.out.log` — grep for `javaHome=`. Each log's mtime
+matches its build date, so you can identify exactly which toolchain produced which shipped APK.
+
+⚠ A Windows env-var change does NOT reach an already-running shell. After installing, `JAVA_HOME`
+reads unset in this session even though `[Environment]::GetEnvironmentVariable('JAVA_HOME','Machine')`
+returns the right path — export it explicitly for the build rather than concluding the install failed.
+
