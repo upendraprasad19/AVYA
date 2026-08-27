@@ -328,6 +328,59 @@ Per CLAUDE.md rules 21 + 22:
   finding against `git show HEAD:` is improvising a guarantee the worktree should have given it.
 - **Tracked as:** OI-134.
 
+### 2.53 The Nth fix to one file, each a WIDER GUESS at the same heuristic (NEW 2026-08-27)
+
+- **Trigger:** a test file fails intermittently, you find the previous fix, and your instinct is to
+  make that fix's tolerance bigger — more retry rounds, a longer interval, one more key in the tuple.
+- **The hole:** the heuristic itself is the bug. `subscription_cqrs_behavioral_test.dart` was fixed
+  three times: 20 ms sleep → quiescence sampler (2026-08-10) → converging drain loop in `setUp`
+  (`f3c7d2`, 2026-08-25) → and failed again on 2026-08-27. `f3c7d2` **stated the defect correctly**
+  in its own docstring — *"a sampler cannot observe a write that has not started"* — and then kept
+  the sampler as the synchronisation mechanism for the five writes that followed it. Naming a
+  mechanism does not stop you relying on it one line later.
+- **What was actually missing:** `isPro()` calls `_downgradeLocally()` **without `await`**
+  (`subscription_service.dart:464`), so at `_settle()` entry the five writes need not have started.
+  Both earlier fixes reasoned about the ONE fire-and-forget write they already knew about (`:458`)
+  and never asked whether the method they trusted was awaited at its call site.
+- **Fix:** stop inferring, and wait for a signal the production code already emits.
+  `_downgradeLocally` fires `onStateChanged` only AFTER awaiting all five writes — a real
+  synchronisation primitive that existed the whole time. Chain the hook (never replace it, or you
+  break whoever else installed one) and restore it in a `finally`.
+- **Ask, on the second fix and every one after:** *what does this code already emit that means what
+  I am trying to infer?* Same shape as "reach for the behavioural test FIRST" (§2.40 family).
+- **Tracked as:** diagnose `a3e9b7`; supersedes `f3c7d2` (flipped `fixed` → `partial`).
+
+### 2.54 A mutation test that passes in BOTH arms proved nothing (NEW 2026-08-27)
+
+- **Trigger:** proving a fix for a RACE by running it N times under synthetic load, then N times
+  with the fix neutered.
+- **The hole:** on 2026-08-27 that gave **PASS 5/5 with the fix and PASS 6/6 with it deliberately
+  neutered**. The instinct is to read arm A as confirmation. It is not — two green arms mean the
+  EXPERIMENT does not discriminate. The original failure needed a 690-file suite at ~4-way isolate
+  parallelism plus SDK-lock contention; 8 CPU busy-loops against one file is a different input set.
+  This is `feedback_green_check_input_set_width` wearing a mutation-testing costume: the control
+  proved the method blind, and without the control the "5/5" would have shipped as proof.
+- **Fix — for a race, prove the code path EXECUTES; do not try to lose the race on demand.**
+  Instrument the new branch, run once, count activations. Here the restart branch fired **7 times**
+  across the file's 12 `_settle()` call sites (the downgrade paths) and stayed silent for the 5
+  healthy-row calls — deterministic, 30 seconds, and it proves both that the fix is live and that
+  the fallback is intact. **Always run the neutered arm.** An uncontrolled green is unreadable.
+- **Tracked as:** diagnose `a3e9b7`.
+
+### 2.55 Your own "quick checks" are load, and can cause the failure you then debug (NEW 2026-08-27)
+
+- **Trigger:** a full suite is running (pre-push, CI-locally, a long background job) and you run
+  `dart run scripts/...` to check a tier, a gate, or a dry-run while you wait.
+- **The hole:** CLAUDE.md §0 documents that `flutter/bin/dart` is a WRAPPER that takes the SDK
+  update lock and **SERIALIZES** concurrent callers — measured 182149 ms → 98447 ms on the hook
+  alone. On 2026-08-27 six such calls were issued during a running full suite; the suite then failed
+  a load-sensitive test, costing an hour of diagnosis for a defect that was real but would not have
+  surfaced then. Sibling of the OI-86 trap (two concurrent `flutter test` runs corrupt Hive state),
+  but broader: it is not only `flutter test`, it is ANY dart invocation.
+- **Fix:** once you know a suite is running, run nothing against Dart. Reading files is free; use
+  the background-task notification rather than polling. If you must know the blast-radius tier,
+  compute it BEFORE starting the push.
+
 ---
 
 ## 3. Red flags — if you're thinking X, STOP
@@ -354,6 +407,9 @@ Borrowing from `superpowers:using-superpowers`, `superpowers:systematic-debuggin
 - **"I deleted the check and tests stayed green, so the mutation must be wrong."** Usually the TEST is: something else absorbed the damage before it reached the assertion. See §2.41.
 - **"`CREATE OR REPLACE` keeps the grants, so I can add a return column."** You cannot — 42P13 forces a DROP, and the DROP resets the ACL. See §2.36.
 - **"I'll run the mutations here while the reviewers read."** They will see a tree that matches no commit. See §2.40.
+- **"The last fix to this file was nearly right — I'll just widen it."** If this is the second or later fix to one file for one class, the heuristic IS the bug. Ask what signal the code already emits. See §2.53.
+- **"It passed 5/5 under load, the fix works."** Did you run the NEUTERED arm? If that also passes, your experiment is blind and the 5/5 means nothing. See §2.54.
+- **"The suite is running, I'll just check one thing with `dart run`."** That is load — the dart wrapper serializes on the SDK lock. See §2.55.
 - **"This bug class is novel — I don't need to update the catalog."** Wrong. §5 self-evolution rule below applies.
 
 ---
