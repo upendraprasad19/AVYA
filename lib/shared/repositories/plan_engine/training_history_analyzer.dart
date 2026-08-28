@@ -232,8 +232,13 @@ class TrainingHistoryAnalyzer {
   static List<String>? effectiveEquipmentForSnapshot(Map<dynamic, dynamic> profile) {
     if (!PlanEngineFlags.equipmentCapabilityFloorEnabled) return null;
     try {
+      // ⑧ OI-144: the SAME unknown-tier policy as resolveCapability. Before
+      // that change the two producers differed by design (this one answered at
+      // every tier, that one only at bodyweight); now they differ only in return
+      // shape, so any policy divergence between them is a bug, not a design.
+      final tier = equipmentAccessOf(profile);
       final items = EquipmentVocab.effectiveItems(
-        equipmentAccessOf(profile),
+        EquipmentVocab.tierItems.containsKey(tier) ? tier : 'bodyweight',
         EquipmentVocab.fromProfile(profile['equipment_owned']),
         EquipmentVocab.floorSanitizedExclusions(
                 EquipmentVocab.fromProfile(profile['equipment_exclusions']))
@@ -270,13 +275,23 @@ class TrainingHistoryAnalyzer {
     required bool flagEnabled,
   }) {
     if (!flagEnabled) return null;
-    if (tier != 'bodyweight') return null;
     try {
       final profile = HiveService.instance.userBox.get('profile');
       final owned = profile is Map
           ? EquipmentVocab.fromProfile(profile['equipment_owned'])
           : const <String>[];
-      return EquipmentVocab.effectiveItems(tier, owned, exclusions.toList());
+      // ⑧ OI-144 R1-B/R2-B: an UNRECOGNISED tier resolves to `bodyweight`, not
+      // to EquipmentVocab.effectiveItems' fail-OPEN (which returns every canonical
+      // token). That branch was unreachable from production while this method
+      // gated on `tier == 'bodyweight'` — removing the gate is exactly what makes
+      // it reachable, so a corrupt `equipment_access` would otherwise hand the
+      // user barbell work at attempt 1. Mirrors equipmentAccessOf's fail-safe
+      // default. The policy lives HERE, in the producer, so the vocabulary
+      // primitive keeps its contract for the AI-coach snapshot path.
+      final resolvedTier =
+          EquipmentVocab.tierItems.containsKey(tier) ? tier : 'bodyweight';
+      return EquipmentVocab.effectiveItems(
+          resolvedTier, owned, exclusions.toList());
     } catch (e, st) {
       debugPrint('[TrainingHistoryAnalyzer.resolveCapability] $e');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,

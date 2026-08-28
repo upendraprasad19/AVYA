@@ -310,8 +310,28 @@ class ExerciseRepository {
         return false;
       }
 
-      // 3. Equipment tier (exercise must include user's tier in its equipment_tier list)
-      if (tierLower != null) {
+      // 3. Equipment tier — the LEGACY path, and it now runs only when capability
+      // is absent.
+      //
+      // ⑧ OI-144: capability SUBSUMES this filter rather than running alongside
+      // it. Running both would keep the tier block as the binding constraint and
+      // the widening could never happen: Chin Up is `[basic_gym, full_gym]`, so a
+      // home_dumbbells user who OWNS a pull-up bar would still never see it.
+      //
+      // Safe only because OI-89 flipped the tier invariant to EQUALITY
+      // (`equipment_tier == derive(equipment_needed)`, asserted both ways by
+      // equipment_tier_consistency_test). The field used to be an ADD-only
+      // curation hint with "over-tags tolerated" — discarding THAT would have
+      // thrown away real information. It is now a pure function of
+      // `equipment_needed`, so the two filters compute the same thing from the
+      // same data and capability is strictly the more precise of the two.
+      // ⚠ If the equality invariant is ever relaxed, revisit this.
+      //
+      // Filter 2c (exclusions) is deliberately NOT folded in even though
+      // effectiveItems already subtracts exclusions: it is separately flagged
+      // (`disable_equipment_exclusions`) and collapsing two independently-
+      // killable filters into one would remove a kill switch.
+      if (capability == null && tierLower != null) {
         final tiers = e['equipment_tier'];
         // ⑦ OI-89 seam 5: this was `return true` — an early return from the
         // WHOLE fused predicate, so a row with a missing/empty equipment_tier

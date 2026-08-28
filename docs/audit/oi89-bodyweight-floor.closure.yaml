@@ -12,8 +12,8 @@ batch: oi89-bodyweight-floor
 diagnose: docs/diagnoses/2026-08-28-equipment-library-restore-f7b2c4.md
 plan_review_record: docs/plan-reviews/oi89-bodyweight-floor.md
 bpass_review: docs/reviews/oi89-bodyweight-floor-bpass.md
-total_findings: 16
-closed_count: 16
+total_findings: 17
+closed_count: 17
 
 _seams: &seams test/contracts/bodyweight_capability_leak_test.dart
 _library: &library test/contracts/equipment_tier_consistency_test.dart
@@ -194,3 +194,21 @@ findings:
       independent source of truth does not exist short of human review, which is
       what Gate B automates. Recorded so no future reader mistakes the oracle for
       independent verification.
+
+  - id: B4
+    title: "OI-144 — the ADD half collected equipment the generator ignored above bodyweight"
+    terminal_state: closed_in_commit
+    commit: "this commit"
+    verification: test/contracts/equipment_owned_widens_test.dart
+    notes: >
+      Surfaced while explaining T8's home_dumbbells residual, and introduced by
+      T11 rather than pre-existing. The picker offered 13 chips at
+      home_dumbbells and ticking one produced a byte-identical plan. TWO
+      independent causes, either alone a no-op fix: resolveCapability returned
+      null above bodyweight, and queryV4's tier block dropped rows regardless of
+      capability. Both removed; capability now SUBSUMES the tier block. A
+      fail-OPEN path (effectiveItems on an unknown tier) became reachable in the
+      process and was closed in the same change. Mutation-proven on both legs
+      (consumer revert 1 red, producer revert 3 red); scorecard UNCHANGED, which
+      is the evidence the no-owned path is byte-identical. Diagnose a9e3c7,
+      spec + plan under docs/superpowers/.

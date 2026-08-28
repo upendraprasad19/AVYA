@@ -8498,11 +8498,20 @@ concepts:
       `equipment_needed`, NEVER on `equipment_tier`.
 
       Two producers, deliberately NOT merged:
-        resolveCapability / resolveCapabilityFromProfile  — the HARD FLOOR, scoped
-          to the bodyweight tier (decision 1); null above it, and null means DO NOT
-          ENFORCE, not "an empty set".
-        effectiveEquipmentForSnapshot                     — the AI coach's view, at
-          EVERY tier. Merging the two reintroduces the bug for the three gym tiers.
+        resolveCapability / resolveCapabilityFromProfile  — the HARD FLOOR.
+        effectiveEquipmentForSnapshot                     — the AI coach's view.
+
+      ⚠ SUPERSEDED 2026-08-28 by OI-144. This entry read: the floor is "scoped to
+      the bodyweight tier (decision 1); null above it", and the two producers
+      "deliberately disagree — merging them reintroduces the bug for the three gym
+      tiers". That scoping is what made the Profile picker collect-but-ignore: a
+      home_dumbbells user could tick "pull-up bar", be prompted to reschedule, and
+      receive a byte-identical plan. The floor now answers at EVERY tier and
+      capability SUBSUMES queryV4's tier block (`exercise_repository.dart:334`),
+      which is what makes owning something actually widen the pool. The two
+      producers now differ only in return shape, and
+      ui_seam_capability_test pins their AGREEMENT rather than their split.
+      Both override effectiveItems' unknown-tier fail-OPEN to `bodyweight`.
 
       canPerform fails CLOSED on an unreadable requirement, which is why warm-up
       and finisher moves had to have `equipmentNeeded` POPULATED before any filter

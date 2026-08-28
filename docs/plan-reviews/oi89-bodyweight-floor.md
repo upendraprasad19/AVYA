@@ -133,11 +133,22 @@ the defect class it existed to catch.
 | equipment violations, all tiers | 528 | **0** |
 | missing / `(none)` picks | 0 | **0** |
 | unsafe plans | 0 | **0** |
-| total fallback picks | 1184 | 2719 |
-| mean overall score | 87.00 | 86.35 |
+| total fallback picks | 1184 | **2862** |
+| mean overall score | 87.00 | **86.24** |
 
 The last two were **re-baselined**, which §4.2 discipline treats with suspicion,
-so the reasoning is on the record in the gate test and diagnose `f7b2c4`: the old
+so the reasoning is on the record in the gate test and diagnose `f7b2c4`.
+
+⚠ These two moved TWICE on 2026-08-28 and this table cites the FINAL values,
+read from `baseline_scorecard.json` rather than recalled. The second movement
+(2719 → 2862, 86.35 → 86.24) is attributed exactly: the per-tier split went
+`{bodyweight 1630, home_dumbbells 956, …}` → `{bodyweight 1630,
+home_dumbbells 1099, …}`, three tiers unchanged to the unit, so all +143 is the
+B-pass's E260 correction removing one horizontal_push option from a tier that
+grants no bench. The OI-144 change moved neither number — the scorecard needed
+no re-baseline, which is precisely the evidence its no-owned path is unchanged.
+
+The old
 numbers were frozen against a library that lied, so the generator was scoring
 high target fidelity using exercises users cannot perform. What makes it a
 re-baseline rather than shipping the symptom is that the same commit **promotes
@@ -150,6 +161,41 @@ re-deriving `equipment_tier` removed 38 rows from `home_dumbbells` (10 needed a
 pull-up bar) and 16 from `basic_gym`. Every removal was verified correct against
 `equipment_needed`. Those tiers' plans become more generic — a product
 consequence surfaced to the founder, not a defect.
+
+## Scope added after convergence — OI-144 (⑧)
+
+The branch grew past its originally-converged scope, so this record covers the
+addition or it describes a diff that no longer exists.
+
+**What happened:** explaining T8's `home_dumbbells` residual surfaced that T11's
+"I also have" picker offers 13 chips at that tier and ticking one produces a
+byte-identical plan. A defect this batch INTRODUCED, so §4.2 requires it fixed
+here rather than carried. Filed as OI-144 while the fix was undecided, closed once
+the founder chose.
+
+**Its own ×2 review ran before implementation** (spec + plan under
+`docs/superpowers/`, both dated 2026-08-28):
+
+- **Round 1** found two material issues. (a) The 606-persona harness carries no
+  `equipment_owned` on any persona, so it could not observe the fix at all — the
+  *green in every world* class this batch had already hit once. (b)
+  `effectiveItems` fails OPEN to every canonical token on an unrecognised tier, a
+  branch unreachable only *because* of the bodyweight gate the fix removes.
+- **Round 2, on the hardened plan, corrected BOTH of round 1's fixes.** Adding
+  owned personas would have forced a third re-baseline in one day — the scorecard
+  is a no-regression harness, not an instrument for proving new capability; the
+  widening belongs in a dedicated contract test, and the scorecard's *unchanged*
+  numbers become the evidence that the no-owned path is byte-identical. And making
+  `effectiveItems` fail closed would change a vocabulary primitive for every
+  caller; the policy belongs in the producers.
+
+Round 2 corrected round 1 rather than surfacing new classes — converged, not split.
+
+**Verified after implementation:** full suite **5054 passed, 0 failed**, scorecard
+unchanged (no re-baseline), mutation-proven on both legs of the fix (reverting the
+consumer reddens 1 test, the producer 3). Diagnose `a9e3c7`.
+
+⚠ Same method deviation as the B-pass: both rounds inline, not context-blind.
 
 ## Live prod applies
 

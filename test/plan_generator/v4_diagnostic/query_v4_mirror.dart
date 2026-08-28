@@ -93,8 +93,12 @@ class QueryV4Mirror {
           .toList();
     }
 
-    // 3. Equipment tier
-    if (equipmentTier != null && equipmentTier.isNotEmpty) {
+    // 3. Equipment tier — LEGACY path only.
+    // ⑧ OI-144: capability SUBSUMES this, exactly as production does. A mirror
+    // that keeps running both filters measures the pre-fix world and reports the
+    // same numbers with the change in or out — the §2.53 class this harness
+    // already fell to once.
+    if (capability == null && equipmentTier != null && equipmentTier.isNotEmpty) {
       final tier = equipmentTier.toLowerCase();
       results = results.where((e) {
         final tiers = e['equipment_tier'];

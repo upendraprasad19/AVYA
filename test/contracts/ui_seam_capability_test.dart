@@ -124,11 +124,17 @@ void main() {
               'because canPerform fails closed on unreadable requirements');
     });
 
-    test('a GYM tier returns null — decision 1 scopes the hard floor',
-        () async {
+    test('a GYM tier now ANSWERS — ⑧ OI-144 supersedes decision 1', () async {
+      // This asserted `isNull` under OI-89: the hard floor was scoped to the
+      // bodyweight tier and the other three kept queryV4's soft tier curation.
+      // That scoping is exactly what made the Profile picker collect-but-ignore
+      // — a home_dumbbells user could tick "pull-up bar" and nothing changed.
       await seedProfile({'equipment_access': 'full_gym'});
-      expect(TrainingHistoryAnalyzer.resolveCapabilityFromProfile(), isNull,
-          reason: 'the other three tiers keep queryV4 soft tier curation');
+      final cap = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
+      expect(cap, isNotNull);
+      expect(cap, contains('barbell'),
+          reason: 'full_gym grants it, so capability must too — the widening '
+              'must never NARROW a tier that already had the item');
     });
 
     test('a MISSING equipment_access defaults to bodyweight, not a gym tier',
@@ -168,19 +174,39 @@ void main() {
           isNull);
     });
 
-    test('a GYM tier is NOT null — this is why it is not resolveCapability*',
-        () async {
-      // resolveCapabilityFromProfile returns null above bodyweight, because
-      // decision 1 scopes the HARD FLOOR to that tier. The coach needs truth at
-      // every tier. Collapsing these two into one function reintroduces the bug
-      // for the three gym tiers, and this test is what catches that.
-      await seedProfile({'equipment_access': 'full_gym'});
-      final snap = TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot(
-          {'equipment_access': 'full_gym'});
-      expect(snap, isNotNull);
-      expect(snap, contains('barbell'));
-      expect(TrainingHistoryAnalyzer.resolveCapabilityFromProfile(), isNull,
-          reason: 'the two producers deliberately disagree at a gym tier');
+    test('the two producers AGREE at every tier (⑧ OI-144)', () async {
+      // Under OI-89 this test asserted the OPPOSITE and was right to: the two
+      // producers deliberately disagreed, because the hard floor was scoped to
+      // bodyweight while the coach needed truth everywhere. OI-144 removed that
+      // scoping, so they now differ only in RETURN SHAPE (Set vs sorted List)
+      // and any policy divergence between them is a bug rather than a design.
+      // Pinning the agreement is strictly stronger than pinning the old split:
+      // it catches drift in either direction.
+      await seedProfile({
+        'equipment_access': 'full_gym',
+        'equipment_owned': ['suspension trainer'],
+      });
+      final viaProfile = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
+      final viaSnapshot = TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot({
+        'equipment_access': 'full_gym',
+        'equipment_owned': ['suspension trainer'],
+      });
+      expect(viaSnapshot, isNotNull);
+      expect(viaSnapshot!.toSet(), equals(viaProfile),
+          reason: 'same profile, same effective set');
+    });
+
+    test('both producers fail SAFE on an unrecognised tier', () async {
+      // effectiveItems fails OPEN (every canonical token) for an unknown tier.
+      // Both producers must override that, or a corrupt equipment_access hands
+      // the user barbell work.
+      await seedProfile({'equipment_access': 'mars_colony'});
+      final viaProfile = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
+      final viaSnapshot = TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot(
+          {'equipment_access': 'mars_colony'});
+      expect(viaProfile, isNot(contains('barbell')));
+      expect(viaSnapshot, isNot(contains('barbell')));
+      expect(viaSnapshot!.toSet(), equals(viaProfile));
     });
 
     test('a home_dumbbells user is described honestly', () async {

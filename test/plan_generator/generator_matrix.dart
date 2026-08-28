@@ -27,6 +27,11 @@ class Persona {
   final int phase; // 1, 2, 6
   final List<String> injuries; // library tokens, e.g. ['lower_back']
   final List<String> equipmentExclusions; // ⑥ B1 — canonical tokens excluded
+  /// ⑧ OI-144. A FIELD, not new personas: adding personas would change the
+  /// matrix size and force yet another re-baseline. The 606 all own nothing, so
+  /// the scorecard's job stays "prove the no-owned case is unchanged"; the
+  /// WIDENING is proven by test/contracts/equipment_owned_widens_test.dart.
+  final List<String> equipmentOwned;
 
   const Persona({
     required this.goal,
@@ -36,6 +41,7 @@ class Persona {
     required this.phase,
     this.injuries = const [],
     this.equipmentExclusions = const [],
+    this.equipmentOwned = const [],
   });
 
   String get injuryLabel => injuries.isEmpty ? 'none' : injuries.join('+');
@@ -177,9 +183,14 @@ GeneratedPlan generatePlan(
   // The flag is deliberately NOT read here: PlanEngineFlags reads Hive and this
   // harness runs without it. The scorecard therefore measures the flag-ON world,
   // which as of 2026-08-28 is the DEFAULT world.
-  final capability = persona.equipment == 'bodyweight'
-      ? EquipmentVocab.effectiveItems(persona.equipment, null, exclusions.toList())
-      : null;
+  // ⑧ OI-144: derived at EVERY tier now, mirroring production's
+  // resolveCapability. With owned empty this is extensionally equal to the tier
+  // filter it replaces (effectiveItems(tier, [], []) == tierItems[tier], and
+  // equipment_tier == derive(equipment_needed) since OI-89), so every number in
+  // the frozen baseline must stay put — that invariance IS the evidence for the
+  // spec's "unchanged for everyone else" claim.
+  final capability = EquipmentVocab.effectiveItems(
+      persona.equipment, persona.equipmentOwned, exclusions.toList());
 
   for (final day in filteredDays) {
     final exercises = <PlanExercise>[];

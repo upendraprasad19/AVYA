@@ -4272,9 +4272,22 @@ OI-136, OI-132.
 
 ## OI-144 — "I also have" collects equipment that changes nothing above the bodyweight tier (P2)
 
-- **Status**: OPEN
-- **Blocked on**: a founder scope call between the two fixes below. Both are small; they differ in
-  what they promise, not in effort.
+- **Status**: CLOSED (2026-08-28, same branch that introduced it) — founder chose fix 1 (capability
+  authoritative at every tier). Diagnose `a9e3c7`.
+- **Blocked on**: nothing.
+- **How it was closed**: BOTH causes had to go, and either alone changes nothing.
+  `resolveCapability` lost its `if (tier != 'bodyweight') return null;` gate, and `queryV4`'s tier
+  block became `capability == null && tierLower != null` — capability SUBSUMES it rather than
+  running alongside, because running both keeps the tier block binding and the widening can never
+  happen. Safe only because OI-89 flipped the tier invariant to EQUALITY in the same batch, so
+  `equipment_tier` carries no information `equipment_needed` lacks; the code says so at the site.
+  A fail-OPEN path became reachable and was closed with it: `effectiveItems` returns every
+  canonical token for an unrecognised tier, unreachable while the bodyweight gate existed, so both
+  producers now resolve an unknown tier to `bodyweight`.
+  Proven by `test/contracts/equipment_owned_widens_test.dart` (8 tests), mutation-proven on BOTH
+  legs — reverting the consumer reddens 1, reverting the producer reddens 3. The 606-persona
+  scorecard is UNCHANGED, which is the evidence that the no-owned path stayed byte-identical.
+  Full suite 5054 passed, 0 failed.
 - **Verified**: 2026-08-28 (measured on branch `oi89-bodyweight-floor` before merge; the picker's
   offered list computed directly, and the exclusion traced through `queryV4`)
 - **Identified**: 2026-08-28 · while explaining the `home_dumbbells` quality residual from OI-89.
