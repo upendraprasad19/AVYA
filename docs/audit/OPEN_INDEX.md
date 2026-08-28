@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**65 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**66 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -73,3 +73,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-141 | retire the notification-preferences snapshot fallback once APK +39 is… | APK +39 adoption — a founder release decision, not a code state. Nothing | 2026-08-26 — filed as the tracked half of OI-98's fix, per §4.6's provision that | [:2385](open_issues.md#L2385) |
 | OI-142 | deploy-artifact commits are unenforced: prod runs Edge Function code whose… | none. | 2026-08-27 — the class was LIVE in the working tree at filing time, not inferred. | [:4230](open_issues.md#L4230) |
 | OI-143 | nothing checks whether a multi-task BATCH is finished; the Stop hook only… | nothing technical. Needs a design call on what "unfinished" means mechanically | 2026-08-28 — observed live, repeatedly, during the OI-89 equipment-capability batch. | [:4190](open_issues.md#L4190) |
+| OI-144 | "I also have" collects equipment that changes nothing above the bodyweight… | a founder scope call between the two fixes below. Both are small; they differ in | 2026-08-28 (measured on branch `oi89-bodyweight-floor` before merge; the picker's | [:4273](open_issues.md#L4273) |

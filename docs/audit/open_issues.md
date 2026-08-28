@@ -4269,3 +4269,49 @@ OI-136, OI-132.
 - **Related**: OI-140 (same shape — a real class with no detector, filed the same week), §6 tier 6,
   `/build-apk` Gate 1, `GO_LIVE_CHECKLIST.md` row 5.4 (the `+38` size-ledger entry that also sat
   uncommitted — the third instance of this family).
+
+## OI-144 — "I also have" collects equipment that changes nothing above the bodyweight tier (P2)
+
+- **Status**: OPEN
+- **Blocked on**: a founder scope call between the two fixes below. Both are small; they differ in
+  what they promise, not in effort.
+- **Verified**: 2026-08-28 (measured on branch `oi89-bodyweight-floor` before merge; the picker's
+  offered list computed directly, and the exclusion traced through `queryV4`)
+- **Identified**: 2026-08-28 · while explaining the `home_dumbbells` quality residual from OI-89.
+  Not found by the ×2 plan review or the B-pass — both read the bodyweight tier, which is where
+  the feature works.
+- **Risk class**: collect-but-ignore / broken promise. Same family as
+  `enable_equipment_exclusions`, whose flag comment calls that shape *"a live broken promise,
+  rather than an unshipped feature"* — it was flipped ON in 2026-08-05 for exactly this reason.
+- **What's wrong**: OI-89's Profile picker offers a `home_dumbbells` user **13 chips** —
+  `pull-up bar`, `kettlebell`, `bench`, `barbell`, … — and ticking any of them does not change
+  their generated plan. `equipment_owned` widens the pool only through
+  `TrainingHistoryAnalyzer.resolveCapability`, which returns `null` for every tier above
+  `bodyweight` (decision 1 deliberately scoped the hard floor there), and `queryV4` still filters
+  on the `equipment_tier` STRING. A pull-up-bar row is tagged `[basic_gym, full_gym]`, so it stays
+  excluded no matter what the user says they own.
+  The user experience is worse than a no-op: `computePlanChanged` DOES include the field, so
+  saving raises the "Reschedule Workouts?" prompt, the user accepts, and the regenerated plan is
+  byte-identical.
+  ⚠ It is not entirely inert — `effectiveEquipmentForSnapshot` answers at every tier, so the AI
+  coach does know. Only exercise SELECTION ignores it.
+- **Why it matters beyond the promise**: this is the built-in remedy for OI-89's own residual.
+  `home_dumbbells` `vertical_pull` slots fall to attempt-3 **100% of the time** (323/323), because
+  every compound vertical pull in the library needs `cables`, `pull-up bar`, `bench` or
+  `machines` — that is physics, not a content gap, and no amount of authoring fixes it. A doorway
+  pull-up bar is cheap and common, so "tell us you own one" is the right answer; it just does not
+  work yet.
+- **Two fixes, and they promise different things**:
+  1. **Make capability authoritative at EVERY tier** — `equipment_owned` widens the pool
+     regardless of `equipment_tier`. Fixes the promise AND the `vertical_pull` residual for users
+     who own a bar, with no new exercises. Extends decision 1 beyond what OI-89's ×2 review
+     scoped, so it needs its own review round.
+  2. **Show the picker only at the bodyweight tier** — honest and minimal, but discards the
+     feature's value at the tier that most needs it.
+- **Blast radius estimate**: `account` for fix 2 (one widget predicate);
+  **`platform`** for fix 1 (it changes what `queryV4` treats as authoritative for every user).
+- **NOT shipped**: the picker is on branch `oi89-bodyweight-floor`, 14 commits unpushed, no APK.
+  Fixing it before the merge costs nothing; after, it is a live broken promise.
+- **Related**: OI-89 (this is its residual), `enable_equipment_exclusions` in
+  `plan_engine_flags.dart` (the precedent for the class),
+  `docs/plan-reviews/oi89-bodyweight-floor.md`.
