@@ -39,6 +39,24 @@ class EquipmentVocab {
     'kettlebell',
     'ez-bar',
     'cardio machine',
+    // ⑦ OI-89: household baseline — granted by EVERY tier (a gym has walls and
+    // benches too), but only ASKED about at the bodyweight tier. See
+    // `tierAskableItems`: grants and questions are two different lists.
+    'wall',
+    'doorway',
+    'elevated surface',
+    'foot anchor',
+    'towel',
+    // ⑦ OI-89: accessories — never in the bodyweight baseline, addable from any
+    // tier via `equipment_owned`. Derived from the library's OWN pre-normalization
+    // vocabulary (recovered from 632a10b8^), not invented.
+    'ab wheel',
+    'jump rope',
+    'suspension trainer',
+    'parallel bars',
+    'plyo box',
+    'medicine ball',
+    'battle ropes',
   };
 
   /// Accessibility order, most → least accessible. An OR-compound ("X or Y")
@@ -47,18 +65,40 @@ class EquipmentVocab {
   /// exclusion filter never over-excludes).
   static const _precedence = <String>[
     'bodyweight',
+    'wall',
+    'towel',
+    'foot anchor',
+    'doorway',
+    'elevated surface',
     'resistance band',
+    'jump rope',
+    'ab wheel',
+    'medicine ball',
+    'plyo box',
     'dumbbells',
     'kettlebell',
+    'suspension trainer',
+    'parallel bars',
     'pull-up bar',
     'bench',
     'barbell',
     'ez-bar',
+    'battle ropes',
     'cables',
     'machines',
     'smith machine',
     'cardio machine',
   ];
+
+  /// The precedence order, exposed for `check_equipment_vocab_lockstep.dart`.
+  /// A canonical token ABSENT from `_precedence` is silently dropped by
+  /// `normalizeToken` (the `rank >= 0` guard), making an OR-compound resolve to
+  /// `[]` = "no equipment required" — the most permissive answer possible.
+  static List<String> get precedenceOrder => _precedence;
+
+  /// The alias KEYS, exposed for the same gate. A key that is also a canonical
+  /// token is unreachable: `_mapPart` checks `canonicalTokens` first.
+  static Set<String> get aliasKeys => _aliases.keys.toSet();
 
   /// Every raw library / free-text token (lowercased) → canonical. Canonical
   /// tokens themselves are NOT listed (handled by the [canonicalTokens] check in
@@ -96,7 +136,6 @@ class EquipmentVocab {
     'stationary bike': 'cardio machine',
     'rowing machine': 'cardio machine',
     'assault bike': 'cardio machine',
-    'battle ropes': 'cardio machine',
     // barbell-family loaded implements
     'landmine': 'barbell',
     'landmine attachment': 'barbell',
@@ -120,30 +159,23 @@ class EquipmentVocab {
     // resistance band
     'band': 'resistance band',
     // bodyweight: positional / household / accessory / suspension
-    'box': 'bodyweight',
-    'box (30-45cm)': 'bodyweight',
-    'box (30-60cm)': 'bodyweight',
-    'medicine ball': 'bodyweight',
-    'wall': 'bodyweight',
-    'doorway': 'bodyweight',
-    'chair': 'bodyweight',
+    'box': 'plyo box',
+    'box (30-45cm)': 'plyo box',
+    'box (30-60cm)': 'plyo box',
+    'chair': 'elevated surface',
     'lying': 'bodyweight',
-    'elevated surface': 'bodyweight',
     'bodyweight (bent over position)': 'bodyweight',
     'yoga mat': 'bodyweight',
     'foam roller': 'bodyweight',
-    'ab wheel': 'bodyweight',
-    'jump rope': 'bodyweight',
-    'parallel bars': 'bodyweight',
-    'trx suspension trainer': 'bodyweight',
-    'trx': 'bodyweight',
+    'trx suspension trainer': 'suspension trainer',
+    'trx': 'suspension trainer',
     'ankle strap': 'bodyweight',
     'floor': 'bodyweight',
     'freestanding': 'bodyweight',
-    'pole': 'bodyweight',
-    'broomstick': 'bodyweight',
-    'partner': 'bodyweight',
-    'nordic attachment': 'bodyweight',
+    'pole': 'elevated surface',
+    'broomstick': 'towel',
+    'partner': 'foot anchor',
+    'nordic attachment': 'foot anchor',
   };
 
   /// Map a single already-lowercased whole token (NOT an OR-compound) to a
@@ -283,6 +315,18 @@ class EquipmentVocab {
     'kettlebell': 'Kettlebell',
     'ez-bar': 'EZ-Bar',
     'cardio machine': 'Cardio Machine',
+    'wall': 'Wall',
+    'doorway': 'Doorway',
+    'elevated surface': 'Chair / Step / Bench',
+    'foot anchor': 'Foot Anchor',
+    'towel': 'Towel',
+    'ab wheel': 'Ab Wheel',
+    'jump rope': 'Jump Rope',
+    'suspension trainer': 'Suspension Trainer (TRX)',
+    'parallel bars': 'Parallel Bars',
+    'plyo box': 'Plyo Box',
+    'medicine ball': 'Medicine Ball',
+    'battle ropes': 'Battle Ropes',
   };
 
   /// Display label for an equipment chip token (e.g. `pull-up bar` → "Pull-up Bar").

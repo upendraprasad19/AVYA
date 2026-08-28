@@ -74,8 +74,9 @@ void main() {
       expect(EquipmentVocab.normalizeToken('Machine or Barbell'), 'barbell');
       expect(EquipmentVocab.normalizeToken('Pull-Up Bar or Rack'), 'pull-up bar');
       expect(EquipmentVocab.normalizeToken('Reverse Hyper Machine or Bench'), 'bench');
-      expect(EquipmentVocab.normalizeToken('Box or Bench'), 'bodyweight');
-      expect(EquipmentVocab.normalizeToken('Barbell on Rack or TRX'), 'bodyweight');
+      expect(EquipmentVocab.normalizeToken('Box or Bench'), 'plyo box');
+      expect(EquipmentVocab.normalizeToken('Barbell on Rack or TRX'),
+          'suspension trainer');
     });
     test('canonical tokens pass through unchanged', () {
       expect(EquipmentVocab.normalizeToken('Barbell'), 'barbell');
@@ -84,9 +85,9 @@ void main() {
     });
     test('cardio + niche tokens bucket correctly', () {
       expect(EquipmentVocab.normalizeToken('Treadmill'), 'cardio machine');
-      expect(EquipmentVocab.normalizeToken('Battle Ropes'), 'cardio machine');
-      expect(EquipmentVocab.normalizeToken('Box (30-45cm)'), 'bodyweight');
-      expect(EquipmentVocab.normalizeToken('Medicine Ball'), 'bodyweight');
+      expect(EquipmentVocab.normalizeToken('Battle Ropes'), 'battle ropes');
+      expect(EquipmentVocab.normalizeToken('Box (30-45cm)'), 'plyo box');
+      expect(EquipmentVocab.normalizeToken('Medicine Ball'), 'medicine ball');
       expect(EquipmentVocab.normalizeToken('Weight Plate'), 'dumbbells');
       expect(EquipmentVocab.normalizeToken('Landmine'), 'barbell');
       expect(EquipmentVocab.normalizeToken('Rope'), 'cables');
@@ -107,9 +108,10 @@ void main() {
       expect(EquipmentVocab.normalize(['Dumbbells or Barbell', 'Bench']),
           ['dumbbells', 'bench']); // E041
       expect(EquipmentVocab.normalize(['Dumbbell', 'Box or Bench']),
-          ['dumbbells', 'bodyweight']); // E044 (Box→bodyweight outranks bench)
+          ['dumbbells', 'plyo box']); // E044 (⑦ box→plyo box outranks bench)
       expect(EquipmentVocab.normalize(['Bodyweight', 'Partner or Nordic Attachment']),
-          ['bodyweight']); // E148 (dedup)
+          ['bodyweight', 'foot anchor']); // E148 (⑦ no longer dedups — partner/
+      // nordic attachment now map to `foot anchor`, not `bodyweight`)
     });
     test('de-duplicates preserving first-seen order', () {
       expect(EquipmentVocab.normalize(['Cable Machine', 'Rope']), ['cables']); // E014

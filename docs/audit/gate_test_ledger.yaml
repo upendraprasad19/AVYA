@@ -125,6 +125,23 @@ check_edge_function_rollback_script.dart:
 check_exlog_key_canonical.dart:
   grandfathered: 2026-08-10
 
+check_equipment_vocab_lockstep.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/equipment_vocab_lockstep_lib_test.dart
+  evidence: "Baseline 9/9 green. Mutation: removed 'plyo box' from `_precedence` in
+    equipment_vocab.dart (the exact shape of the regression this gate exists for --
+    a token added to `canonicalTokens` while one of the other three structures is
+    forgotten). Result: the live-lockstep test reddened (9 -> 8 pass, 1 fail) and the
+    gate CLI exited non-zero printing the offending token by name. Restored: 9/9 green,
+    gate PASS, real exit 0 (verified without a pipe -- a trailing `; echo $?` reports
+    the pipeline's code, not dart's). NOTE the silent-failure modes this covers, each
+    verified by reading the code rather than assumed: a canonical token absent from
+    `_precedence` is SKIPPED by normalizeToken's `rank >= 0` guard, so an OR-compound
+    resolves to [] = no-requirement (most permissive); a missing `_chipLabels` entry
+    ships the raw token as UI copy; an alias key that is also canonical is unreachable
+    because `_mapPart` checks canonicalTokens first."
+
 check_gate_index_fresh.dart:
   mutation_proven: true
   test_path:
