@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Step 04 · 05 of the stepped onboarding flow — training details capture.
 ///
@@ -114,7 +115,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
     _experience  = (widget.data['fitness_experience'] as String?) ?? 'intermediate';
     _pace        = (widget.data['pace_preference']    as String?) ?? 'balanced';
     _daysPerWeek = (widget.data['days_per_week']      as int?)    ?? 4;
-    _equipment   = (widget.data['equipment_access']   as String?) ?? 'basic_gym';
+    _equipment   = equipmentAccessOf(widget.data);
     // Seed injuries from the incoming extras (GROWABLE — the toggle mutates it in
     // place). MUST seed here or the plan→details "ADJUST PLAN" round-trip resets
     // a real selection to ['none'] before generation (×2 review P1-A). Type-check

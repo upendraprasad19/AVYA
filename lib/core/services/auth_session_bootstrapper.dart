@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import '../constants/equipment_defaults.dart';
 
 /// Sealed-class-ish destination resolution for the post-sign-in router.
 ///
@@ -567,8 +568,7 @@ class AuthSessionBootstrapper {
                 MigratedKey.read<bool>('onboarding_completed') == true) {
               final goal =
                   merged['primary_goal'] as String? ?? 'general_fitness';
-              final equipment =
-                  merged['equipment_access'] as String? ?? 'basic_gym';
+              final equipment =equipmentAccessOf(merged);
               final daysPerWeek =
                   (merged['days_per_week'] as num?)?.toInt() ?? 4;
               final experience =

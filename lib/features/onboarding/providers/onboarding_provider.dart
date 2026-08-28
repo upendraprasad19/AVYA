@@ -21,6 +21,7 @@ import 'dart:async';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/core/services/water_target_service.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 // ── Onboarding Step Definitions ──────────────────────────────────
 
@@ -377,8 +378,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       final fitnessExperience =
           a['fitness_experience'] as String? ?? 'beginner';
       final daysPerWeek = _parseInt(a['days_per_week'], fallback: 4);
-      final equipmentAccess =
-          a['equipment_access'] as String? ?? 'bodyweight';
+      final equipmentAccess =equipmentAccessOf(a);
 
       final dob = DateTime.tryParse(dobString);
       int age = 25;

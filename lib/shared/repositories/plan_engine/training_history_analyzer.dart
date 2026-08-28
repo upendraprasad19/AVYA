@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
 import 'plan_engine_flags.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Stage 0 (companion to [ProgressionResolver]) — reads Hive to produce
 /// PHASE 2+ personalization signals for the plan engine.
@@ -198,7 +199,7 @@ class TrainingHistoryAnalyzer {
     try {
       final profile = HiveService.instance.userBox.get('profile');
       if (profile is! Map) return null;
-      final tier = (profile['equipment_access'] as String?) ?? 'bodyweight';
+      final tier = equipmentAccessOf(profile);
       return resolveCapability(
         tier: tier,
         exclusions: EquipmentVocab.floorSanitizedExclusions(
@@ -210,6 +211,42 @@ class TrainingHistoryAnalyzer {
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'training_history_analyzer_capability_profile'));
       return null; // fail OPEN
+    }
+  }
+
+  /// ⑦ OI-89 decision 7 — the effective set for the AI COACH's snapshot.
+  ///
+  /// Deliberately NOT [resolveCapabilityFromProfile]. That one is scoped to the
+  /// bodyweight tier because decision 1 makes the hard floor bodyweight-only;
+  /// the coach needs the truth at EVERY tier. A `home_dumbbells` user's coach
+  /// should know they have dumbbells and no barbell — before this, it was handed
+  /// the tier LABEL and had to guess what the label contained, which is how it
+  /// could recommend a barbell row and be perfectly self-consistent doing it.
+  ///
+  /// Takes the profile map rather than reading Hive, because the only caller
+  /// ([AiSnapshotBuilder.buildAiContext]) already holds it and reading twice
+  /// could straddle a profile write.
+  ///
+  /// Returns null when the flag is OFF, so the caller OMITS the key and the
+  /// snapshot stays byte-identical to its pre-batch shape (§4.6 / §4.12.4).
+  static List<String>? effectiveEquipmentForSnapshot(Map<dynamic, dynamic> profile) {
+    if (!PlanEngineFlags.equipmentCapabilityFloorEnabled) return null;
+    try {
+      final items = EquipmentVocab.effectiveItems(
+        equipmentAccessOf(profile),
+        EquipmentVocab.fromProfile(profile['equipment_owned']),
+        EquipmentVocab.floorSanitizedExclusions(
+                EquipmentVocab.fromProfile(profile['equipment_exclusions']))
+            .toList(),
+      );
+      // Sorted so the snapshot is stable across runs — an unordered Set would
+      // make every request a different prompt and defeat upstream caching.
+      return items.toList()..sort();
+    } catch (e, st) {
+      debugPrint('[TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'training_history_analyzer_capability_snapshot'));
+      return null; // fail OPEN — omit the key rather than claim a wrong set
     }
   }
 

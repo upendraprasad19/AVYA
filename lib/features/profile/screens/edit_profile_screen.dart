@@ -29,6 +29,7 @@ import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart'
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../providers/profile_provider.dart';
 import '../providers/profile_completeness_provider.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -161,7 +162,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     _gender = (profile['gender'] as String?) ?? 'male';
     _goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
-    _equipment = (profile['equipment_access'] as String?) ?? 'full_gym';
+    _equipment = equipmentAccessOf(profile);
     // ⑥ C1 — crash-safe seed (fromProfile handles List / bare-String / null →
     // canonical List; never `as List`). The tier-change onChanged prunes stale.
     _equipmentExclusions =

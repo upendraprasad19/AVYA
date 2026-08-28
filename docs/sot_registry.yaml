@@ -8485,6 +8485,69 @@ concepts:
         notes: existing mechanism — +1 set per exercise whose primaryMuscles contains a focus token (unchanged; ⑤ just feeds it translated tokens)
     contract_test_path: test/contracts/physique_focus_bringup_test.dart
 
+  - concept: equipment_capability_floor
+    domain: workout
+    behavioral_test_path: test/contracts/bodyweight_capability_leak_test.dart
+    description: |
+      ⑦ OI-89. `equipment_tier` is a CURATION hint and is over-tagged in the
+      library — 117 rows carry the `bodyweight` tier, and some of them need a
+      barbell. So the tier can never be the safety check. The EFFECTIVE set is:
+      `EquipmentVocab.tierItems[tier] ∪ equipment_owned − equipment_exclusions`
+      (`EquipmentVocab.effectiveItems`), and the predicate is
+      `EquipmentCapability.canPerform(equipment_needed, effective)` — keyed on
+      `equipment_needed`, NEVER on `equipment_tier`.
+
+      Two producers, deliberately NOT merged:
+        resolveCapability / resolveCapabilityFromProfile  — the HARD FLOOR, scoped
+          to the bodyweight tier (decision 1); null above it, and null means DO NOT
+          ENFORCE, not "an empty set".
+        effectiveEquipmentForSnapshot                     — the AI coach's view, at
+          EVERY tier. Merging the two reintroduces the bug for the three gym tiers.
+
+      canPerform fails CLOSED on an unreadable requirement, which is why warm-up
+      and finisher moves had to have `equipmentNeeded` POPULATED before any filter
+      could be applied — they were null, and a naive filter would have deleted
+      every warm-up at every tier. The producers fail OPEN (Hive error, unknown
+      tier, flag off → null) so a storage fault never empties a plan.
+
+      Flag: `enable_equipment_capability_floor`.
+    writers:
+      - file: lib/core/utils/equipment_vocab.dart
+        method: effectiveItems / tierItems / floorSanitizedExclusions
+        notes: the 24-token canonical vocabulary; `wall` is floor-sanitized alongside none/bodyweight
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        method: _save (equipment_access / equipment_owned / equipment_exclusions)
+        notes: the only user-facing writer of all three profile fields
+      - file: lib/core/constants/equipment_defaults.dart
+        method: equipmentAccessOf / kDefaultEquipmentAccess
+        notes: the ONE fallback — 14 sites once disagreed across four values
+    readers:
+      - file: lib/shared/repositories/exercise_repository.dart
+        method: queryV4 (capability filter, placed BEFORE the tier block)
+        semantic: hard-filter
+        notes: null capability skips it entirely; the tier block is now a fall-through, not an early `return true`
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: pickV4 / _fillSlots / _cascadeFill / buildPinnedDays / _applyHistoryAdjustments
+        semantic: hard-filter
+        notes: `required Set<String>? capability` on all five — required-not-defaulted, so the compiler enumerates call sites
+      - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
+        method: attach (all three pools, under the existing injury floor)
+        semantic: hard-filter
+        notes: _moveEquipment declares per-move needs; equipmentForMove never returns []
+      - file: lib/shared/repositories/plan_engine/cardio_finisher.dart
+        method: attach / _buildFinisher
+        semantic: hard-filter
+        notes: jump_rope degrades to _miniHiitFinisher, matching its four siblings
+      - file: lib/core/services/swap_service.dart
+        method: swapExerciseInDay
+        semantic: refuse
+        notes: throws SwapExerciseException('equipment_unavailable') rather than substituting — the AI coach drives this without any sheet
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        method: buildAiContext ('equipment_effective', flag-gated, key omitted when OFF)
+        semantic: advisory
+        notes: decision 7 — the coach was given the tier LABEL and had to guess what it contained
+    contract_test_path: test/contracts/bodyweight_capability_leak_test.dart
+
   - concept: equipment_needed_shape
     domain: workout
     behavioral_test_path: test/contracts/equipment_needed_shape_test.dart
@@ -8499,8 +8562,11 @@ concepts:
       `ExerciseData.parseEquipmentNeeded` (List → stringified; non-empty String →
       [String]; else const []) so a bad shape (legacy/restored) never crashes. The
       free-text vocab normalization (~89 tokens) + item-level queryV4 exclusion
-      filtering are the later Batch-5 A/B slices (queryV4 today filters on
-      `equipment_tier`, not `equipment_needed`).
+      filtering are the later Batch-5 A/B slices. CORRECTED 2026-08-28 (OI-89):
+      this paragraph used to end "queryV4 today filters on `equipment_tier`, not
+      `equipment_needed`" — no longer true. queryV4 now takes a `capability` set
+      and filters on `equipment_needed` through EquipmentCapability.canPerform,
+      BEFORE the tier block. See concept `equipment_capability_floor`.
     writers:
       - file: assets/data/exercise_library.json
         method: equipment_needed field (List<String> per row)

@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Shared PRO next-phase advance — REG-1 fix (a4e2d9).
 ///
@@ -146,7 +147,7 @@ Future<bool> runProPhaseAdvance(WidgetRef ref) async {
   final progress = UserRepository.instance.getProgress() ?? {};
 
   final goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
-  final equipment = (profile['equipment_access'] as String?) ?? 'bodyweight';
+  final equipment = equipmentAccessOf(profile);
   final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
   final experience =
       (profile['fitness_experience'] as String?) ?? 'intermediate';
@@ -550,7 +551,7 @@ Future<GraduationAdvanceResult> runGraduationPhaseAdvance({
       // pin-build and the generate, or repeatPinsFrom's G5 gate validates a
       // different frame-shape than the one generated (writer/reader value drift).
       final goal = profile['primary_goal'] as String? ?? 'general_fitness';
-      final equipment = profile['equipment_access'] as String? ?? 'basic_gym';
+      final equipment =equipmentAccessOf(profile);
       final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
       final experienceLevel =
           profile['fitness_experience'] as String? ?? 'beginner';

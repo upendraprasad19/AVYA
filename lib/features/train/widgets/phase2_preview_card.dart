@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// The graduation screen's "what you're about to unlock" cards.
 ///
@@ -70,7 +71,7 @@ class Phase2PreviewCard extends StatelessWidget {
     final nextPhase = currentPhase + 1;
     final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
     final goal = profile['primary_goal'] as String? ?? 'general_fitness';
-    final equipment = profile['equipment_access'] as String? ?? 'basic_gym';
+    final equipment =equipmentAccessOf(profile);
     final experienceLevel =
         profile['fitness_experience'] as String? ?? 'intermediate';
     final injuries = (profile['injuries'] as List?)

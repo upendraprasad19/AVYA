@@ -30,6 +30,7 @@ import '../../shared/repositories/plan_engine/plan_engine_flags.dart';
 import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
 import '../../shared/repositories/plan_engine/warmup_cooldown.dart';
 import '../../shared/repositories/plan_generator.dart';
+import '../constants/equipment_defaults.dart';
 
 /// Result returned by [TemplateService.assignTemplateToDate].
 sealed class AssignTemplateResult {
@@ -146,7 +147,7 @@ class TemplateService {
       final experience =
           (profileMap['fitness_experience'] as String?) ?? 'intermediate';
       final equipmentStr =
-          (profileMap['equipment_access'] as String?) ?? 'full_gym';
+          equipmentAccessOf(profileMap);
 
       final equipmentList = [equipmentStr];
       // U3: the custom-template auto-warmup was UNFILTERED — thread the user's

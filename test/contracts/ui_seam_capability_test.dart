@@ -145,6 +145,75 @@ void main() {
     });
   });
 
+  group('effectiveEquipmentForSnapshot — the AI coach reader (decision 7)', () {
+    // The coach used to receive the tier LABEL and had to guess what it held,
+    // so it could recommend a barbell row to a bodyweight user and be entirely
+    // self-consistent. It now receives the effective set itself.
+
+    test('the flag OFF returns null — the key is OMITTED, not emitted empty',
+        () async {
+      // An empty list would read to Gemini as "this user owns nothing at all",
+      // which is a WORSE claim than the pre-batch silence.
+      await seedProfile({'equipment_access': 'bodyweight'}, flagOn: false);
+      expect(
+          TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot(
+              {'equipment_access': 'bodyweight'}),
+          isNull);
+    });
+
+    test('a GYM tier is NOT null — this is why it is not resolveCapability*',
+        () async {
+      // resolveCapabilityFromProfile returns null above bodyweight, because
+      // decision 1 scopes the HARD FLOOR to that tier. The coach needs truth at
+      // every tier. Collapsing these two into one function reintroduces the bug
+      // for the three gym tiers, and this test is what catches that.
+      await seedProfile({'equipment_access': 'full_gym'});
+      final snap = TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot(
+          {'equipment_access': 'full_gym'});
+      expect(snap, isNotNull);
+      expect(snap, contains('barbell'));
+      expect(TrainingHistoryAnalyzer.resolveCapabilityFromProfile(), isNull,
+          reason: 'the two producers deliberately disagree at a gym tier');
+    });
+
+    test('a home_dumbbells user is described honestly', () async {
+      await seedProfile({'equipment_access': 'home_dumbbells'});
+      final snap = TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot(
+          {'equipment_access': 'home_dumbbells'});
+      expect(snap, contains('dumbbells'));
+      expect(snap, isNot(contains('barbell')),
+          reason: 'the whole point — the coach can no longer guess');
+    });
+
+    test('a MISSING equipment_access is described as bodyweight, not empty',
+        () async {
+      await seedProfile({});
+      final snap = TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot({});
+      expect(snap, isNotNull);
+      expect(snap, contains('bodyweight'));
+      expect(snap, isNot(contains('barbell')));
+    });
+
+    test('owned widens and exclusions narrow the SAME snapshot', () async {
+      await seedProfile({'equipment_access': 'bodyweight'});
+      final snap = TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot({
+        'equipment_access': 'bodyweight',
+        'equipment_owned': ['pull-up bar'],
+        'equipment_exclusions': ['doorway'],
+      });
+      expect(snap, contains('pull-up bar'));
+      expect(snap, isNot(contains('doorway')));
+    });
+
+    test('the output is SORTED — an unstable prompt defeats caching', () async {
+      await seedProfile({'equipment_access': 'basic_gym'});
+      final snap = TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot(
+          {'equipment_access': 'basic_gym'})!;
+      expect(snap, equals([...snap]..sort()));
+      expect(snap.toSet().length, snap.length, reason: 'no duplicates');
+    });
+  });
+
   group('the capability set is consistent with effectiveItems', () {
     test('profile-read and parameter-passed derivations agree', () async {
       // The UI seams read the profile; the plan engine gets tier + exclusions

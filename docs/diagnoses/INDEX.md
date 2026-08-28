@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### equipment_capability_floor (1 bugs)
+- 2026-08-28 d3a8f5 — A user whose stored profile carries no `equipment_access` is treated as a DIFFERENT tier depending on which of 14 code paths reads it — `basic_gym` by six, `full_gym` by three, `home_dumbbells` by…
+
 ### exercise_equipment_tier (3 bugs)
 - 2026-08-28 b6f4d1 — A bodyweight-tier user tapping "swap" or "+ Add Exercise" mid-workout is offered all 259 library rows including Barbell Back Squat; the template builder shows the same unfiltered list; and the AI…
 - 2026-08-28 c9a7e2 — A bodyweight-tier user is prescribed Dead Hang (pull-up bar), Band Pull Apart (resistance band) and Chest Doorway Stretch (doorway) in the warm-up and cool-down of every generated day, and a…
@@ -1080,6 +1083,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-28 | d3a8f5 | A user whose stored profile carries no `equipment_access` is treated as a DIFFERENT tier depending on which of 14 code paths reads it — `basic_gym` by six, `full_gym` by three, `home_dumbbells` by… | equipment_capability_floor | test/contracts/equipment_access_default_test.dart |
 | 2026-08-28 | b6f4d1 | A bodyweight-tier user tapping "swap" or "+ Add Exercise" mid-workout is offered all 259 library rows including Barbell Back Squat; the template builder shows the same unfiltered list; and the AI… | exercise_equipment_tier | test/contracts/ui_seam_capability_test.dart |
 | 2026-08-28 | c9a7e2 | A bodyweight-tier user is prescribed Dead Hang (pull-up bar), Band Pull Apart (resistance band) and Chest Doorway Stretch (doorway) in the warm-up and cool-down of every generated day, and a… | exercise_equipment_tier | test/contracts/warmup_finisher_capability_test.dart |
 | 2026-08-27 | b4d7e9 | `dart run scripts/retire_worktree.dart` reports `KEEP <slug> [1 non-regenerable ignored file(s)]` for a worktree that is merged, has no tracked changes and nothing unpushed. Nothing names the file —… | A tool that WRITES INTO the worktree made the worktree permanently unretirable. §5's `Stop` hook drops `.claude/.batch_close_state` — its once-per-HEAD marker — into whichever worktree the batch closed in. `retire_worktree_lib.dart` classifies any gitignored file that is not on its exact-match `regenerableIgnoredPaths` list as PRECIOUS and refuses. The marker was not on that list, so the refusal was correct by the predicate and wrong in effect. | test/scripts/retire_worktree_lib_test.dart |
