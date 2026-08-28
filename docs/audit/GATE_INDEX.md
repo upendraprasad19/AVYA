@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **92** (49 numbered, 43 by filename only).
+Total gates: **93** (49 numbered, 44 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -41,6 +41,7 @@ Total gates: **92** (49 numbered, 43 by filename only).
 | — | `check_edge_function_auth_pattern.dart` | Edge Function auth-pattern validation (e8a1c3 class, 2026-06-12). | grandfathered |
 | 12 | `check_edge_function_payloads.dart` | Flutter caller body keys ⊆ Edge Function validator shape. | grandfathered |
 | 38 | `check_edge_function_rollback_script.dart` | assert that the Edge Function deploy script supports rollback + post-deploy smoke | grandfathered |
+| — | `check_equipment_audit.dart` | ⑦ OI-89 Gate B — flags library rows whose PROSE contradicts their | mutation_proven |
 | — | `check_equipment_vocab_lockstep.dart` | ⑦ OI-89 — pre-commit gate: EquipmentVocab's four token structures must agree. | mutation_proven |
 | 17 | `check_exlog_key_canonical.dart` | APK Test #16.1 / Agent A — source-grep gate. Pins the rule that | grandfathered |
 | — | `check_gate_index_fresh.dart` | confirms docs/audit/GATE_INDEX.md is up-to-date relative to its baked | mutation_proven |

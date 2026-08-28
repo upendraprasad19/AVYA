@@ -1,0 +1,156 @@
+// scripts/equipment_audit_lib.dart
+//
+// ⑦ OI-89 Gate B — does a row's prose contradict its `equipment_needed`?
+//
+// WHY THIS EXISTS. The capability predicate reads `equipment_needed`. So does
+// every oracle that checks it. An oracle sharing a field with its predicate can
+// prove the check is THREADED; it can never prove the field is TRUE. That is how
+// four rows survived every previous guard:
+//
+//   Negative Pull Up  ['bodyweight']  — needs a pull-up bar
+//   Bench Dips        ['bodyweight']  — needs a bench or chair
+//   Doorframe Curl    ['bodyweight']  — needs a doorway
+//   Towel Row         ['bodyweight']  — needs a towel and an anchor
+//
+// Each is the SOLE core-satisfying row for its movement pattern, so the floor
+// invariant would have gone green on false data. Note these were already wrong
+// BEFORE `scripts/normalize_equipment_library.dart` ran, so recovering the
+// pre-normalization values from git cannot reach them either — git answers
+// "what did the tool change", not "what is wrong".
+//
+// This gate takes its evidence from OUTSIDE the field: the exercise name and the
+// free-text coaching prose. False positives are expected and real (a `pro_tip`
+// may mention a barbell only to contrast with it), so this is TRIAGE INPUT, not
+// a verdict — it ships `--warn-only` first per §4.11.
+//
+// Pure (no dart:io) so the gate's own test can drive it with synthetic rows.
+
+/// Prose nouns → the canonical token they imply.
+///
+/// Deliberately narrow: every entry is equipment that decides whether a
+/// BODYWEIGHT user can perform the row. Adding a noun that is merely mentionable
+/// (e.g. "muscle") would drown the signal.
+const equipmentNouns = <String, String>{
+  'pull-up bar': 'pull-up bar',
+  'pull up bar': 'pull-up bar',
+  'pullup bar': 'pull-up bar',
+  'chin-up bar': 'pull-up bar',
+  'overhead bar': 'pull-up bar',
+  'ab wheel': 'ab wheel',
+  'ab roller': 'ab wheel',
+  'jump rope': 'jump rope',
+  'skipping rope': 'jump rope',
+  'medicine ball': 'medicine ball',
+  'med ball': 'medicine ball',
+  'parallel bars': 'parallel bars',
+  'parallettes': 'parallel bars',
+  'dip station': 'parallel bars',
+  'dip bars': 'parallel bars',
+  'suspension trainer': 'suspension trainer',
+  'trx': 'suspension trainer',
+  'plyo box': 'plyo box',
+  'plyometric box': 'plyo box',
+  'battle rope': 'battle ropes',
+  'resistance band': 'resistance band',
+  // Bare 'pull up' / 'bench' are deliberate: they catch Negative Pull Up and
+  // Bench Dips, two of the four rows that were already wrong BEFORE the
+  // normalizer ran and that each carry their pattern's only core-satisfying
+  // entry. They cost some false positives on prose that merely mentions a
+  // bench; that is the right trade for a triage gate.
+  'pull up': 'pull-up bar',
+  'pull-up': 'pull-up bar',
+  'pullup': 'pull-up bar',
+  'bench': 'bench',
+  'doorway': 'doorway',
+  'door frame': 'doorway',
+  'doorframe': 'doorway',
+  'towel': 'towel',
+  'barbell': 'barbell',
+  'dumbbell': 'dumbbells',
+  'kettlebell': 'kettlebell',
+  'cable': 'cables',
+  'smith machine': 'smith machine',
+};
+
+/// A finding: a row whose prose implies equipment its `equipment_needed` omits.
+class AuditFinding {
+  final String id;
+  final String name;
+  final String impliedToken;
+  final String evidenceField;
+  final String evidenceSnippet;
+  const AuditFinding({
+    required this.id,
+    required this.name,
+    required this.impliedToken,
+    required this.evidenceField,
+    required this.evidenceSnippet,
+  });
+
+  @override
+  String toString() =>
+      '$id $name: prose implies "$impliedToken" but equipment_needed omits it '
+      '($evidenceField: "...$evidenceSnippet...")';
+}
+
+/// Fields scanned for equipment nouns. There is no `description` field on this
+/// library; these five are the free-text carriers.
+const auditedFields = <String>[
+  'name',
+  'coaching_cues',
+  'common_mistakes',
+  'pro_tip',
+  'warmup_protocol',
+];
+
+String _flatten(Object? v) {
+  if (v == null) return '';
+  if (v is String) return v;
+  if (v is List) return v.map(_flatten).join(' ');
+  if (v is Map) return v.values.map(_flatten).join(' ');
+  return v.toString();
+}
+
+/// Rows whose prose names equipment their `equipment_needed` does not declare.
+///
+/// [normalizeNeeded] injects `EquipmentVocab.fromProfile` so this stays pure and
+/// the test can drive it without the Flutter package.
+List<AuditFinding> auditFindings({
+  required List<Map<String, dynamic>> rows,
+  required List<String> Function(Object?) normalizeNeeded,
+  bool bodyweightTierOnly = true,
+}) {
+  final findings = <AuditFinding>[];
+  for (final r in rows) {
+    if (bodyweightTierOnly) {
+      final tiers = (r['equipment_tier'] as List?)
+              ?.map((e) => e.toString().toLowerCase())
+              .toSet() ??
+          const <String>{};
+      if (!tiers.contains('bodyweight')) continue;
+    }
+    final declared = normalizeNeeded(r['equipment_needed']).toSet();
+    for (final field in auditedFields) {
+      final text = _flatten(r[field]).toLowerCase();
+      if (text.isEmpty) continue;
+      for (final entry in equipmentNouns.entries) {
+        if (!text.contains(entry.key)) continue;
+        if (declared.contains(entry.value)) continue;
+        final at = text.indexOf(entry.key);
+        final from = (at - 18) < 0 ? 0 : at - 18;
+        final to = (at + entry.key.length + 18) > text.length
+            ? text.length
+            : at + entry.key.length + 18;
+        findings.add(AuditFinding(
+          id: (r['id'] ?? '?').toString(),
+          name: (r['name'] ?? '?').toString(),
+          impliedToken: entry.value,
+          evidenceField: field,
+          evidenceSnippet: text.substring(from, to).trim(),
+        ));
+        break; // one finding per field per row keeps the report readable
+      }
+    }
+  }
+  return findings;
+}
