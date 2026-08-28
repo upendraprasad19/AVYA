@@ -104,7 +104,25 @@ void main() {
     });
 
     test('total fallback picks ≤ baseline ($bFallback)', () {
-      // ⚠ RE-BASELINED 2026-08-28 (OI-89), 1184 -> 2719, and the reason must
+      // ⚠ RE-BASELINED TWICE on 2026-08-28. Second movement first, because it is
+      // the smaller and more easily mistaken for drift:
+      //
+      //   2719 -> 2862, and mean overall 86.35 -> 86.24.
+      //
+      // Attributed exactly, not assumed: the per-tier split moved
+      // {bodyweight 1630, home_dumbbells 956, basic_gym 81, full_gym 52} ->
+      // {bodyweight 1630, home_dumbbells 1099, basic_gym 81, full_gym 52}.
+      // Three tiers unchanged to the unit; ALL +143 is home_dumbbells. Cause: the
+      // B-pass found E260 Incline Dumbbell Press claiming only ['dumbbells'] while
+      // its first coaching cue says "Set bench to 30-45 degree incline"
+      // unconditionally. Correcting it to ['dumbbells','bench'] removes one
+      // horizontal_push option from a tier that grants no bench — so that tier
+      // falls back 143 more times. That is the price of not prescribing an incline
+      // press to someone with nothing to incline on, and the four HARD invariants
+      // above (equipment violations 0 at EVERY tier, missing 0, unsafe 0) all held
+      // across the change.
+      //
+      // FIRST movement, 1184 -> 2719, and the reason must
       // travel with the number or the next reader sees only a loosened gate.
       //
       // The old 1184 was frozen against a library that LIED about what its

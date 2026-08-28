@@ -6,19 +6,19 @@
 ## Aggregate (606 personas)
 | Dimension | Mean |
 |---|---|
-| coverage | 94.5 |
+| coverage | 94.6 |
 | balance | 67.3 |
-| volume | 69.7 |
+| volume | 69.6 |
 | progression | 100.0 |
 | personalization | 100.0 |
 | safety | 100.0 |
-| realism | 86.7 |
-| overall | 86.4 |
+| realism | 86.0 |
+| overall | 86.2 |
 
 - **Unsafe plans (contraindicated exercise present): 0** (HARD invariant — must be 0)
 - **Equipment-violating plans: 0** (HARD invariant — must be 0)
-- Plans with ≥1 fallback pick: 368 / total fallback picks: 2719
-- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 1630, home_dumbbells: 956, basic_gym: 81, full_gym: 52}`
+- Plans with ≥1 fallback pick: 368 / total fallback picks: 2862
+- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 1630, home_dumbbells: 1099, basic_gym: 81, full_gym: 52}`
 
 ## Curated plans (human face-validity)
 ---
