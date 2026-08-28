@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import 'equipment_capability.dart';
 import 'models.dart';
 import 'plan_engine_flags.dart';
 import 'superset_pairer.dart';
@@ -147,6 +148,48 @@ class WarmupCooldownSelector {
     'shoulders_arms': ['Cross-body Shoulder Stretch', 'Overhead Stretch', 'Deep Breathing'],
   };
 
+
+  /// ⑦ OI-89: what each warm-up / cool-down move actually requires.
+  ///
+  /// Before this batch `equipmentNeeded` was set ZERO times in this file, so
+  /// every PlannedExercise it built left the field null. A capability oracle
+  /// reading that field was therefore BLIND to warm-ups, and a fail-closed
+  /// predicate applied naively would have deleted every warm-up on every tier.
+  /// Populating it is the precondition for filtering, not an afterthought.
+  ///
+  /// Anything absent is plain bodyweight — the overwhelming majority. Only the
+  /// four below need something, and three of them were reaching bodyweight users.
+  static const _moveEquipment = <String, List<String>>{
+    'Dead Hang': ['pull-up bar'],          // outside the baseline (decision 6)
+    'Band Pull Apart': ['resistance band'], // a purchase (decision 5)
+    'Chest Doorway Stretch': ['doorway'],   // baseline, but EXCLUDABLE (decision 8)
+    'Wall Push Up': ['wall'],               // baseline and un-excludable
+    'Jump Rope': ['jump rope'],
+    'Cycling (Stationary)': ['cardio machine'],
+    'Running (Treadmill)': ['cardio machine'],
+  };
+
+  /// Every move name this selector can emit — the input set for the coverage
+  /// test, so a move added to any map without an equipment decision is caught.
+  @visibleForTesting
+  static List<String> get allMoveNames => <String>{
+        ..._bodyweightCardio,
+        ..._gymCardio,
+        for (final byTier in _dynamicWarmup.values)
+          for (final names in byTier.values) ...names,
+        for (final names in _cooldownStretches.values) ...names,
+      }.toList();
+
+  /// The equipment [move] requires. Never empty: `canPerform` fails CLOSED on an
+  /// empty requirement, so an unlisted move must resolve to `bodyweight`, not `[]`.
+  static List<String> equipmentForMove(String move) =>
+      _moveEquipment[move] ?? const ['bodyweight'];
+
+  /// Whether [move] is performable with [capability]. Null capability = OFF.
+  static bool _canDo(String move, Set<String>? capability) =>
+      capability == null ||
+      EquipmentCapability.canPerform(equipmentForMove(move), capability);
+
   /// Attach warm-up and cool-down to every WorkoutDay in every WeekPlan.
   static List<WeekPlan> attach(
     List<WeekPlan> weeks,
@@ -154,6 +197,8 @@ class WarmupCooldownSelector {
     List<String> equipmentList, {
     List<String> injuries = const [],
     bool? hasGymEquipmentOverride, // ⑥ C2 (WU-2) — generateV4 passes the flag-gated signal; null → old predicate
+    // ⑦ OI-89: the user's capability set, or null for "do not enforce".
+    Set<String>? capability,
   }) {
     final isAdvanced = effectiveExp != 'beginner';
     // ⑥ C2 — on the GENERATED path `equipmentList` is item tokens (never 'gym'/'full')
@@ -177,9 +222,13 @@ class WarmupCooldownSelector {
     // FLOOR: keep a universally-safe cardio lead-in (Slow Walking) so the warmup
     // is never emptied even when every listed cardio option loads the injury
     // (e.g. a knee-injured bodyweight user — Spot Jogging + Jumping Jacks both drop).
-    final safeCardio = filterOn
-        ? cardioPool.where((c) => !_moveIsContra(c, injSet)).toList()
-        : cardioPool;
+    // ⑦ OI-89: drop what the user cannot perform, alongside the injury drop and
+    // under the SAME floor. `Jump Rope` lives in _gymCardio, but a cheap purchase
+    // is not gym equipment — hasGymEquipment was never the right signal for it.
+    final safeCardio = cardioPool
+        .where((c) => !(filterOn && _moveIsContra(c, injSet)))
+        .where((c) => _canDo(c, capability))
+        .toList();
     final cardioLead =
         safeCardio.isNotEmpty ? safeCardio : const ['Slow Walking'];
 
@@ -198,15 +247,18 @@ class WarmupCooldownSelector {
         final tier = isAdvanced ? 'advanced' : 'beginner';
         final dynamicMap = _dynamicWarmup[dayType] ?? _dynamicWarmup['upper']!;
         final dynamicList = dynamicMap[tier] ?? dynamicMap['beginner']!;
-        final safeDynamic = filterOn
-            ? dynamicList.where((n) => !_moveIsContra(n, injSet)).toList()
-            : dynamicList;
+        // ⑦ OI-89: Dead Hang (pull-up bar) and Band Pull Apart (resistance band)
+        // both live in the ADVANCED lists and both reached bodyweight users.
+        final safeDynamic = dynamicList
+            .where((n) => !(filterOn && _moveIsContra(n, injSet)))
+            .where((n) => _canDo(n, capability))
+            .toList();
         for (final name in safeDynamic) {
           warmup.add(_warmupExercise(name));
         }
         // FLOOR: if filtering emptied the dynamic warmup (multi-injury), keep a
         // universally-safe mobility anchor so it is never just cardio-then-nothing.
-        if (filterOn && safeDynamic.isEmpty) {
+        if (safeDynamic.isEmpty) {
           warmup.add(_timedExercise('Deep Breathing', '60', 'warmup'));
         }
 
@@ -218,9 +270,12 @@ class WarmupCooldownSelector {
         cooldown.add(_timedExercise('Slow Walking', '300', 'cooldown'));
 
         final stretches = _cooldownStretches[dayType] ?? _cooldownStretches['upper']!;
-        final safeStretches = filterOn
-            ? stretches.where((n) => !_moveIsContra(n, injSet)).toList()
-            : stretches;
+        // ⑦ OI-89: Chest Doorway Stretch needs a doorway, which is baseline but
+        // EXCLUDABLE — a user who ticked "no doorway" must not be given it.
+        final safeStretches = stretches
+            .where((n) => !(filterOn && _moveIsContra(n, injSet)))
+            .where((n) => _canDo(n, capability))
+            .toList();
         for (final name in safeStretches) {
           cooldown.add(_timedExercise(name, '30', 'cooldown'));
         }
@@ -255,6 +310,7 @@ class WarmupCooldownSelector {
       reps: '${duration}s',
       restSeconds: 0,
       category: category,
+      equipmentNeeded: equipmentForMove(name), // ⑦ OI-89: was null
     );
   }
 
@@ -271,6 +327,7 @@ class WarmupCooldownSelector {
         reps: '10',
         restSeconds: 0,
         category: 'warmup',
+        equipmentNeeded: equipmentForMove(name), // ⑦ OI-89: was null
       );
     }
 

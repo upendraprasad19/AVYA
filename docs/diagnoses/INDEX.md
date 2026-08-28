@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### exercise_equipment_tier (2 bugs)
+- 2026-08-28 c9a7e2 — A bodyweight-tier user is prescribed Dead Hang (pull-up bar), Band Pull Apart (resistance band) and Chest Doorway Stretch (doorway) in the warm-up and cool-down of every generated day, and a…
+- 2026-07-19 d4e8a1 — Exercises doable with little/no equipment were HIDDEN from the tiers they belong to because their `equipment_tier` array skipped the middle tiers: Glute Bridge tagged ["bodyweight","full_gym"]…
+
 ### A tool that WRITES INTO the worktree made the worktree permanently unretirable. §5's `Stop` hook drops `.claude/.batch_close_state` — its once-per-HEAD marker — into whichever worktree the batch closed in. `retire_worktree_lib.dart` classifies any gitignored file that is not on its exact-match `regenerableIgnoredPaths` list as PRECIOUS and refuses. The marker was not on that list, so the refusal was correct by the predicate and wrong in effect. (1 bugs)
 - 2026-08-27 b4d7e9 — `dart run scripts/retire_worktree.dart` reports `KEEP <slug> [1 non-regenerable ignored file(s)]` for a worktree that is merged, has no tracked changes and nothing unpushed. Nothing names the file —…
 
@@ -317,9 +321,6 @@ rather than a Hive box. (1 bugs)
 - 2026-05-10 d9b2c5 — Saturday's locally-completed workout was overwritten back to 'planned' on every cold-start restore, because cloud still held the older 'planned' row (Bug B.1's FK violation prevented push) and…
 - 2026-05-10 e3f7a8 — A subset of users (founder included) holds Hive `schedule_<date>` rows with `status='completed'` while the cloud `scheduled_workouts` row stays at `status='planned'` for those dates. Once Bugs B.1 +…
 - 2026-05-10 a7c1e2 — Calendar checkmarks for May 5/6/7 vanished on the founder's account after restore, despite cloud workout_logs and scheduled_workouts.status='completed' being correct for those dates.
-
-### exercise_equipment_tier (1 bugs)
-- 2026-07-19 d4e8a1 — Exercises doable with little/no equipment were HIDDEN from the tiers they belong to because their `equipment_tier` array skipped the middle tiers: Glute Bridge tagged ["bodyweight","full_gym"]…
 
 ### exercise_library_schema (1 bugs)
 - 2026-07-19 e1a7c4 — 9 exercises E252-E260 (Wall Sit, Bodyweight Good Morning, Doorframe Curl, Towel Row, Negative Pull Up, Glute Kickback, Dumbbell Calf Raise, Split Squat, Incline Dumbbell Press) used a DIFFERENT…
@@ -1078,6 +1079,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-28 | c9a7e2 | A bodyweight-tier user is prescribed Dead Hang (pull-up bar), Band Pull Apart (resistance band) and Chest Doorway Stretch (doorway) in the warm-up and cool-down of every generated day, and a… | exercise_equipment_tier | test/contracts/warmup_finisher_capability_test.dart |
 | 2026-08-27 | b4d7e9 | `dart run scripts/retire_worktree.dart` reports `KEEP <slug> [1 non-regenerable ignored file(s)]` for a worktree that is merged, has no tracked changes and nothing unpushed. Nothing names the file —… | A tool that WRITES INTO the worktree made the worktree permanently unretirable. §5's `Stop` hook drops `.claude/.batch_close_state` — its once-per-HEAD marker — into whichever worktree the batch closed in. `retire_worktree_lib.dart` classifies any gitignored file that is not on its exact-match `regenerableIgnoredPaths` list as PRECIOUS and refuses. The marker was not on that list, so the refusal was correct by the predicate and wrong in effect. | test/scripts/retire_worktree_lib_test.dart |
 | 2026-08-27 | a3e9b7 | The pre-push full suite failed one assertion in `test/contracts/subscription_cqrs_behavioral_test.dart:286` — `Expected: null, Actual: '2026-08-26T14:22:04.764643'`, reason "the decision path must… | A stability sampler cannot distinguish "this write has not been scheduled yet" from "this write has finished" — both look like no change. f3c7d2 stated exactly that about the one fire-and-forget write at subscription_service.dart:458, then fixed only the setUp contamination it caused, leaving the sampler itself as the synchronisation mechanism for the five writes that follow. But isPro() calls _downgradeLocally() WITHOUT awaiting it (:464), so at the instant _settle() begins, none of those five writes need have started. Three stable 10 ms rounds can elapse entirely inside the gap between two of them. The fix stops sampling for a proxy and waits for the signal the production code already emits — _downgradeLocally fires onStateChanged only AFTER awaiting all five writes. | test/contracts/subscription_cqrs_behavioral_test.dart |
 | 2026-08-26 | e4a1b7 | A notification the user switched OFF silently turns back ON. Two independent routes, both verified against live prod. (1) After a reinstall the phone has no local record, so `emissionMap()` emits all… | Authoritative data was placed in a derived-data channel. `snapshot_json` is a materialised read model: rebuilt wholesale from Hive on every write, trimmed to a byte budget, and replaced (not merged) on upsert. That is correct for disposable, regenerable data — which is every other key it carries. Notification preferences are the opposite: user intent, derivable from nothing, and the only copy in existence. A wholesale-replaced document also cannot represent "I know these three settings and nothing about the other seven", which is precisely a reinstalled device's state — so every attempt to patch the emission inside the blob leaked in a different place. | "must add: test/contracts/notification_prefs_round_trip_behavioral_test.dart" |

@@ -327,6 +327,7 @@ class PlanGenerator {
         cardioPreference: cardioPreference,
         equipmentList: equipmentList,
         hasGymEquipmentOverride: hasGymOverride,
+        capability: capabilitySet, // ⑦ OI-89 seam 10
       );
     }
 
@@ -337,6 +338,7 @@ class PlanGenerator {
       equipmentList,
       injuries: normalizedInjuries, // U3: injury-filter warmup/cooldown moves
       hasGymEquipmentOverride: hasGymOverride, // ⑥ C2 (WU-2)
+      capability: capabilitySet, // ⑦ OI-89 seam 11
     );
 
     // Build Phase output

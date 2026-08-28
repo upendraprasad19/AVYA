@@ -1,5 +1,6 @@
 import 'package:icanbefitter/core/constants/fitness_goals.dart';
 
+import 'equipment_capability.dart';
 import 'models.dart';
 import 'plan_engine_flags.dart';
 
@@ -19,6 +20,8 @@ class CardioFinisher {
     required String? cardioPreference,
     required List<String> equipmentList,
     bool? hasGymEquipmentOverride, // ⑥ C2 (WU-2) — null → old predicate
+    // ⑦ OI-89: the user's capability set, or null for "do not enforce".
+    Set<String>? capability,
   }) {
     if (!FitnessGoals.of(goal).cardio) return weeks;
 
@@ -44,7 +47,8 @@ class CardioFinisher {
         final day = entry.value;
         if (!finisherDays.contains(entry.key)) return day;
 
-        final finisher = _buildFinisher(preference, hasGymEquipment);
+        final finisher =
+            _buildFinisher(preference, hasGymEquipment, capability: capability);
 
         return WorkoutDay(
           dayNumber: day.dayNumber,
@@ -97,9 +101,30 @@ class CardioFinisher {
   }
 
   /// Build finisher exercises based on user preference.
+
+  /// ⑦ OI-89: every finisher preference this class can build.
+  static const allFinisherTokens = <String>[
+    'running', 'cycling', 'hiit', 'jump_rope', 'hate_cardio',
+  ];
+
+  /// ⑦ OI-89: what a preference MINIMALLY requires.
+  ///
+  /// running / cycling / hiit / hate_cardio all carry a documented bodyweight
+  /// fallback (Spot Jogging, High Knees, burpee circuits), so at worst they need
+  /// nothing. `jump_rope` was the ONLY case of the five with no fallback at all
+  /// — `_buildFinisher` called `_jumpRopeFinisher()` without `hasGymEquipment`
+  /// while every sibling took it. Since `_defaultForGoal` maps `recompose` to it
+  /// and the goal-default flag is ON by default, a bodyweight recompose user got
+  /// a jump rope twice a week in the shipped APK.
+  static List<String> equipmentForFinisher(String preference) =>
+      preference == 'jump_rope' ? const ['jump rope'] : const ['bodyweight'];
+
   static List<PlannedExercise> _buildFinisher(
-    String preference, bool hasGymEquipment,
-  ) {
+    String preference,
+    bool hasGymEquipment, {
+    // ⑦ OI-89: null = do not enforce (see TrainingHistoryAnalyzer.resolveCapability).
+    required Set<String>? capability,
+  }) {
     switch (preference) {
       case 'running':
         return _runningFinisher(hasGymEquipment);
@@ -108,6 +133,13 @@ class CardioFinisher {
       case 'hiit':
         return _hiitFinisher();
       case 'jump_rope':
+        // ⑦ OI-89: degrade like every sibling. Previously this was the only
+        // case that ignored the equipment signal entirely.
+        if (capability != null &&
+            !EquipmentCapability.canPerform(
+                equipmentForFinisher('jump_rope'), capability)) {
+          return _miniHiitFinisher();
+        }
         return _jumpRopeFinisher();
       case 'hate_cardio':
       default:
