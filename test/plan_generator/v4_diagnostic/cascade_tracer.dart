@@ -2,6 +2,7 @@ import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/injury_substitutes.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'query_v4_mirror.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 
 enum CascadePickSource {
   attempt1Exact,
@@ -53,14 +54,27 @@ class CascadeTrace {
 const universalPoolV4Mirror = <String, List<String>>{
   'horizontal_push':    ['Push Up', 'Incline Push Up', 'Wall Push Up', 'Decline Push Up', 'Diamond Push Up'],
   'vertical_push':      ['Pike Push Up', 'Handstand Hold', 'Dand (Hindu Pushup)'],
-  'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Towel Row'],
-  'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row'],
+  // The strong entries stay FIRST: a gym user who reaches att5 is not
+  // capability-filtered (the hard floor is bodyweight-scoped), so reordering
+  // would hand them a floor move over a real one. The pure-bodyweight tails
+  // below exist so the SKIP above can never empty a slot -- pinned by the att5
+  // FLOOR INVARIANT test, which reddened on exactly these three patterns when
+  // OI-89 retagged Pull Up / Chin Up / Inverted Row / TRX Row off the floor.
+  'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Table Row', 'Towel Row',
+                         'Prone Reverse Snow Angel'],
+  'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row',
+                         'Sliding Lat Pull', 'Doorway Isometric Lat Pull',
+                         'Prone Lat Pull'],
   'knee_dominant':      ['Baithak (Hindu Squat)', 'Reverse Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
   'hip_dominant':       ['Glute Bridge', 'Single Leg Romanian Deadlift', 'Good Morning'],
   'core':               ['Plank', 'Dead Bug', 'Hollow Body Hold', 'Bicycle Crunch', 'Mountain Climber'],
-  'elbow_flexion':      ['Chin Up', 'Inverted Row'],
-  'elbow_extension':    ['Diamond Push Up', 'Bench Dips', 'Dip (Parallel Bars)'],
-  'shoulder_isolation': ['Bodyweight Rear Delt Raise', 'Band Pull Apart', 'Arm Circles'],
+  'elbow_flexion':      ['Chin Up', 'Inverted Row', 'Doorframe Curl',
+                         'Towel Bicep Curl', 'Self-Resisted Bicep Curl'],
+  'elbow_extension':    ['Dip (Parallel Bars)', 'Bench Dips', 'Diamond Push Up',
+                         'Wall Triceps Extension',
+                         'Self-Resisted Triceps Extension'],
+  'shoulder_isolation': ['Band Pull Apart', 'Towel Lateral Raise', 'Prone Y Raise',
+                         'Bodyweight Rear Delt Raise', 'Arm Circles'],
   'hip_isolation':      ['Glute Bridge', 'Glute Kickback'],
 };
 
@@ -124,6 +138,7 @@ class CascadeTracer {
     bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C mirror)
     Set<String> avoidNames = const {}, // W3.4 (Batch 11-B mirror; default → no-op)
     Set<String> exclusions = const {}, // ⑥ B1 (mirror; default {} → no-op)
+    Set<String>? capability, // ⑦ OI-89 (mirror; null → no-op)
   }) {
     final attempts = <CascadeAttempt>[];
     CascadePick? pick;
@@ -156,6 +171,7 @@ class CascadeTracer {
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
+      capability: capability,
     );
     attempts.add(_attempt(1, a1Sig, a1Results));
     // pick is always null on attempt 1 (declared at top of method); the
@@ -188,6 +204,7 @@ class CascadeTracer {
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
+      capability: capability,
     );
     attempts.add(_attempt(2, a2Sig, a2Results));
     if (a2Results.isNotEmpty && pick == null) {
@@ -213,6 +230,7 @@ class CascadeTracer {
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
+      capability: capability,
     );
     attempts.add(_attempt(3, a3Sig, a3Results));
     if (a3Results.isNotEmpty && pick == null) {
@@ -236,6 +254,7 @@ class CascadeTracer {
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
+      capability: capability,
     );
     attempts.add(_attempt(4, a4Sig, a4Results));
     if (a4Results.isNotEmpty && pick == null) {
@@ -284,6 +303,15 @@ class CascadeTracer {
           // excluded equipment. Floor-sanitize guarantees a pure-bodyweight move
           // survives per pattern, so a valid pick always follows — NOT a safety
           // omission, so do not set poolHadContra.
+          // ⑦ OI-89: the att5 pool bypasses the query entirely and picks by
+          // NAME, so it must apply the capability drop itself — exactly as it
+          // already does for exclusions. The pool's pure-bodyweight tails
+          // guarantee a survivor, so this can never empty the slot.
+          if (capability != null &&
+              !EquipmentCapability.canPerform(
+                  resolved['equipment_needed'], capability)) {
+            continue;
+          }
           if (exclusions.isNotEmpty &&
               EquipmentVocab.fromProfile(resolved['equipment_needed'])
                   .any(exclusions.contains)) {

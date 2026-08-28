@@ -150,6 +150,37 @@ pending:
     flip_reviewed: false
     flip_commit: null
 
+  - flag: enable_equipment_capability_floor
+    branch: oi89-bodyweight-floor
+    build_commit: null            # built and flipped in the SAME batch
+    build_date: 2026-08-28
+    merge_commit: null
+    flip_reviewed: true
+    flip_commit: pending          # this batch's commit; the ×2 record is
+                                  # docs/plan-reviews/oi89-bodyweight-floor.md
+    note: >
+      Built AND flipped in one batch, so it never sat dark. §4.12.4's lighter
+      ship-dark build review does NOT apply and was not claimed: this batch
+      carries the full ×2 plan review plus a B-pass, which is what §4.12.4 itself
+      requires of the flip-on commit.
+      WHY IT WAS NOT SHIPPED DARK: the same batch corrects the exercise library so
+      that Chin Up truthfully declares a pull-up bar. Leaving the floor dark would
+      have shipped a library that knows what its exercises need alongside a
+      generator that is not reading the field. Measured with the flag OFF against
+      the CORRECTED library, the bodyweight tier still carried 468 equipment
+      violations, because the attempt-5 universal pool bypasses queryV4 and picks
+      by NAME. The tier data and the capability check each close a hole the other
+      cannot reach; shipping one without the other closes neither.
+      Kill switch is now `disable_equipment_capability_floor` (default ON),
+      matching the five sibling default-ON flags in plan_engine_flags.dart.
+      ⚠ The flip's blast radius is NOT limited to bodyweight users, and the
+      measurement is what showed it: re-deriving equipment_tier from
+      equipment_needed removed 38 rows from `home_dumbbells` and 16 from
+      `basic_gym` as well. Those tiers' pools were being propped up by the same
+      over-tags. Result across all 606 personas: equipment-violating plans
+      201 → 0, missing picks 0, unsafe 0; total fallback picks 1184 → 2719, which
+      is the honest price of refusing exercises the user cannot do.
+
   - flag: enable_equipment_exclusions
     branch: workout-equipment-filter
     build_commit: a8583f01

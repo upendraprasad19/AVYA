@@ -497,14 +497,27 @@ class ExerciseSelector {
   static const universalPoolV4 = <String, List<String>>{
     'horizontal_push':    ['Push Up', 'Incline Push Up', 'Wall Push Up', 'Decline Push Up', 'Diamond Push Up'],
     'vertical_push':      ['Pike Push Up', 'Handstand Hold', 'Dand (Hindu Pushup)'],
-    'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Towel Row'],
-    'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row'],
+    // The strong entries stay FIRST: a gym user who reaches att5 is not
+    // capability-filtered (the hard floor is bodyweight-scoped), so reordering
+    // would hand them a floor move over a real one. The pure-bodyweight tails
+    // below exist so the SKIP above can never empty a slot -- pinned by the att5
+    // FLOOR INVARIANT test, which reddened on exactly these three patterns when
+    // OI-89 retagged Pull Up / Chin Up / Inverted Row / TRX Row off the floor.
+    'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Table Row', 'Towel Row',
+                           'Prone Reverse Snow Angel'],
+    'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row',
+                           'Sliding Lat Pull', 'Doorway Isometric Lat Pull',
+                           'Prone Lat Pull'],
     'knee_dominant':      ['Baithak (Hindu Squat)', 'Reverse Lunge', 'Bulgarian Split Squat', 'Jump Squat'],
     'hip_dominant':       ['Glute Bridge', 'Single Leg Romanian Deadlift', 'Good Morning'],
     'core':               ['Plank', 'Dead Bug', 'Hollow Body Hold', 'Bicycle Crunch', 'Mountain Climber'],
-    'elbow_flexion':      ['Chin Up', 'Inverted Row'],
-    'elbow_extension':    ['Diamond Push Up', 'Bench Dips', 'Dip (Parallel Bars)'],
-    'shoulder_isolation': ['Bodyweight Rear Delt Raise', 'Band Pull Apart', 'Arm Circles'],
+    'elbow_flexion':      ['Chin Up', 'Inverted Row', 'Doorframe Curl',
+                           'Towel Bicep Curl', 'Self-Resisted Bicep Curl'],
+    'elbow_extension':    ['Dip (Parallel Bars)', 'Bench Dips', 'Diamond Push Up',
+                           'Wall Triceps Extension',
+                           'Self-Resisted Triceps Extension'],
+    'shoulder_isolation': ['Band Pull Apart', 'Towel Lateral Raise', 'Prone Y Raise',
+                           'Bodyweight Rear Delt Raise', 'Arm Circles'],
     'hip_isolation':      ['Glute Bridge', 'Glute Kickback'],
   };
 

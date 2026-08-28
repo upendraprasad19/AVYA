@@ -76,6 +76,17 @@ void main() {
       expect(fullGymEquipViolations, 0,
           reason: 'The top equipment tier can never be handed an exercise above it.');
     });
+
+    test('EVERY tier has 0 equipment violations (⑦ OI-89)', () {
+      // PROMOTED from a <=201 no-regression ceiling to a hard 0 on 2026-08-28.
+      // The baseline froze 201 violating plans with the standing note "Batch 5
+      // must drive this down"; OI-89 is that work and the measured result is 0
+      // at all four tiers. A soft ceiling that has been met is no longer a
+      // ceiling -- it is a licence to give 200 of them back.
+      expect(equipViolators, 0,
+          reason: 'A user must never be prescribed an exercise they cannot '
+              'perform. This is the whole of OI-89 and it is not a budget.');
+    });
   });
 
   group('Batch 0 · NO-REGRESSION vs frozen baseline', () {
@@ -85,18 +96,40 @@ void main() {
               'Baseline=$bUnsafe (universal-pool bypasses the injury filter — Batch 1 fixes).');
     });
 
-    test('equipment over-tier plans ≤ baseline ($bEquip) [Batch 5 must drive this down]', () {
+    test('equipment over-tier plans ≤ baseline ($bEquip)', () {
+      // Kept as a no-regression floor beneath the hard 0 above: if a later batch
+      // relaxes the hard gate, this still catches a slide back toward 201.
       expect(equipViolators, lessThanOrEqualTo(bEquip),
-          reason: 'More over-tier picks is a regression. '
-              'Baseline=$bEquip (attempt-4 drops equipment — Batch 5 fixes).');
+          reason: 'More over-tier picks is a regression. Baseline=$bEquip.');
     });
 
-    test('total fallback picks ≤ baseline ($bFallback) [Batch 5/W3.4 must drive this down]', () {
+    test('total fallback picks ≤ baseline ($bFallback)', () {
+      // ⚠ RE-BASELINED 2026-08-28 (OI-89), 1184 -> 2719, and the reason must
+      // travel with the number or the next reader sees only a loosened gate.
+      //
+      // The old 1184 was frozen against a library that LIED about what its
+      // exercises need: the generator satisfied attempt 1/2 with exercises the
+      // user could not physically do, which scores as high target fidelity and
+      // is worthless. With the equipment data corrected and the capability floor
+      // ON, those picks are refused and the cascade relaxes instead -- so
+      // fidelity drops and the fallback count rises. That is the trade, stated
+      // plainly: 201 equipment-violating plans -> 0, at the cost of more generic
+      // but PERFORMABLE picks.
+      //
+      // This is not "re-freezing a risen number and calling it the floor". The
+      // evidence that it is a real improvement is the hard 0 gate above, which
+      // did not exist before and which no amount of fallback tolerance can
+      // satisfy. If this number rises again with equipment violations still at
+      // 0, THAT is a genuine quality regression and this gate is what catches it.
       expect(totalFallback, lessThanOrEqualTo(bFallback),
           reason: 'More target-fidelity fallbacks is a regression. '
-              'Baseline=$bFallback (shallow bodyweight pool).');
+              'Baseline=$bFallback.');
     });
 
+    // ⚠ meanOverall was ALSO re-baselined 2026-08-28, 87.00 -> 86.35, for the
+    // same reason and with the same justification as total_fallback_picks above:
+    // the composite includes a target-fidelity term, and fidelity measured
+    // against undoable exercises was never real.
     test('mean overall score does not regress (baseline ${bOverall.toStringAsFixed(1)})', () {
       expect(meanOverall, greaterThanOrEqualTo(bOverall - 0.05),
           reason: 'Overall plan quality must not drop. '

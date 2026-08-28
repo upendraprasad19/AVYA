@@ -169,6 +169,18 @@ GeneratedPlan generatePlan(
   final exclusions =
       EquipmentVocab.floorSanitizedExclusions(persona.equipmentExclusions);
 
+  // ⑦ OI-89: the capability set the production generator now derives via
+  // TrainingHistoryAnalyzer.resolveCapability. Scoped to the bodyweight tier for
+  // the same reason production is (decision 1) — null above it means DO NOT
+  // ENFORCE, and the three gym tiers keep queryV4's softer tier curation.
+  //
+  // The flag is deliberately NOT read here: PlanEngineFlags reads Hive and this
+  // harness runs without it. The scorecard therefore measures the flag-ON world,
+  // which as of 2026-08-28 is the DEFAULT world.
+  final capability = persona.equipment == 'bodyweight'
+      ? EquipmentVocab.effectiveItems(persona.equipment, null, exclusions.toList())
+      : null;
+
   for (final day in filteredDays) {
     final exercises = <PlanExercise>[];
     for (final slot in day.slotsA) {
@@ -181,6 +193,7 @@ GeneratedPlan generatePlan(
         injuries: persona.injuries,
         pickedNames: pickedNames,
         exclusions: exclusions,
+        capability: capability,
       );
       final pick = trace.finalPick;
       final name = pick?.name ?? '(none)';

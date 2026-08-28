@@ -1,4 +1,5 @@
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 
 /// Pure-Dart mirror of `ExerciseRepository.queryV4`.
 ///
@@ -38,6 +39,7 @@ class QueryV4Mirror {
     Set<String>? excludeNames,
     List<String>? injuryExclusions,
     Set<String> exclusions = const {}, // ⑥ B1 (mirror; default {} → no-op)
+    Set<String>? capability, // ⑦ OI-89 (mirror; null → no-op)
     int? limit,
   }) {
     var results = List<Map<String, dynamic>>.from(source);
@@ -73,6 +75,22 @@ class QueryV4Mirror {
         final needed = EquipmentVocab.fromProfile(e['equipment_needed']);
         return !needed.any(exclusions.contains);
       }).toList();
+    }
+
+    // 2d. Capability HARD floor (⑦ OI-89 — mirror of the prod pre-tier drop).
+    // Also BEFORE the tier filter, for the same reason exclusions are: a row
+    // whose equipment_tier is absent must still be subject to it. null means DO
+    // NOT ENFORCE (flag off / non-bodyweight tier), never "an empty set" —
+    // canPerform fails CLOSED, so an empty set would delete everything.
+    //
+    // Without this the scorecard was measuring a generator PRODUCTION NO LONGER
+    // IS: it reported the same numbers with the capability flag on and off, so
+    // it was green in every world.
+    if (capability != null) {
+      results = results
+          .where((e) =>
+              EquipmentCapability.canPerform(e['equipment_needed'], capability))
+          .toList();
     }
 
     // 3. Equipment tier

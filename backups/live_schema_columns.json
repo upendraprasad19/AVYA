@@ -3,7 +3,9 @@
     "description": "Snapshot of public-schema table columns from live information_schema. Source of truth for scripts/check_schema_column_refs.dart (Gate: schema column-ref validation). Regenerate with the SQL in that script's header after any applied migration that adds/drops/renames a column, in the SAME commit as the migration.",
     "project_id": "dedsavbjuwgarrhphgnl",
     "captured_at": "2026-08-26",
-    "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name"
+    "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
+    "regenerated_at": "2026-08-28",
+    "regenerated_for": "migration 124 (user_profile.equipment_owned, OI-89). Verified against live information_schema on project dedsavbjuwgarrhphgnl AFTER the apply. Migration 125 (exercise_library re-seed) added ROWS, not columns, so it moves nothing here."
   },
   "storage_buckets": [
     "chat-media",
@@ -512,7 +514,8 @@
       "current_rank_code",
       "current_rank_achieved_at",
       "preferred_workout_time",
-      "equipment_exclusions"
+      "equipment_exclusions",
+      "equipment_owned"
     ],
     "user_progress": [
       "id",

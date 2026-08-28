@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 // Generates SQL to seed the exercise_library table from bundled JSON.
-// Output: supabase/migrations/074_seed_exercise_library.sql
+//
+// Output: supabase/migrations/<argv[2] or the CURRENT_SEED below>.
+//
+// An APPLIED seed migration is IMMUTABLE, so a library change does NOT rewrite the
+// last one -- it mints the next number and CURRENT_SEED moves to it. 074 seeded the
+// original 259 rows; 125 re-seeds the 271 that OI-89 produced. Rewriting 074 in
+// place would have made the applied ledger describe a file that no longer matches
+// what ran.
 // Idempotent: uses ON CONFLICT (id) DO UPDATE so re-runs are safe.
 //
 // Mirrors scripts/seed_food_database.js (the 030_seed_food_database.sql template).
@@ -13,7 +20,9 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const JSON_PATH = path.join(ROOT, 'assets', 'data', 'exercise_library.json');
-const OUTPUT_SQL = path.join(ROOT, 'supabase', 'migrations', '074_seed_exercise_library.sql');
+const CURRENT_SEED = '125_reseed_exercise_library.sql';
+const OUTPUT_SQL = path.join(
+  ROOT, 'supabase', 'migrations', process.argv[2] || CURRENT_SEED);
 
 // UUID v5 namespace shared with custom_exercises + food_database seeds
 const NAMESPACE = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';

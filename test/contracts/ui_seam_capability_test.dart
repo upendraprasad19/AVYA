@@ -63,10 +63,17 @@ void main() {
   Future<void> seedProfile(Map<String, dynamic> profile,
       {bool flagOn = true}) async {
     final cfg = HiveService.instance.configBox;
+    // ⚠ The flag FLIPPED ON 2026-08-28 and the key inverted with it:
+    // `enable_equipment_capability_floor` -> `disable_equipment_capability_floor`,
+    // default ON. Deleting the old `enable_` key no longer disables anything, so
+    // the OFF cases here must SET the kill-switch. Two tests in this file went
+    // red on the flip for exactly that reason, which is the behaviour we want:
+    // a key rename that silently left tests asserting the old world would be
+    // worse than the failure.
     if (flagOn) {
-      await cfg.put('enable_equipment_capability_floor', true);
+      await cfg.delete('disable_equipment_capability_floor');
     } else {
-      await cfg.delete('enable_equipment_capability_floor');
+      await cfg.put('disable_equipment_capability_floor', true);
     }
     await HiveService.instance.userBox.put('profile', profile);
   }
@@ -109,7 +116,7 @@ void main() {
       expect(EquipmentCapability.canPerform(['doorway'], cap!), isFalse);
     });
 
-    test('the flag OFF returns null — every seam then skips its filter',
+    test('the KILL SWITCH returns null — every seam then skips its filter',
         () async {
       await seedProfile({'equipment_access': 'bodyweight'}, flagOn: false);
       expect(TrainingHistoryAnalyzer.resolveCapabilityFromProfile(), isNull,
@@ -150,7 +157,7 @@ void main() {
     // so it could recommend a barbell row to a bodyweight user and be entirely
     // self-consistent. It now receives the effective set itself.
 
-    test('the flag OFF returns null — the key is OMITTED, not emitted empty',
+    test('the KILL SWITCH returns null — the key is OMITTED, not emitted empty',
         () async {
       // An empty list would read to Gemini as "this user owns nothing at all",
       // which is a WORSE claim than the pre-batch silence.

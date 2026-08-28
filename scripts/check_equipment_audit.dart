@@ -5,15 +5,21 @@
 // reads: an oracle sharing a field with its predicate proves threading, never
 // truth. See equipment_audit_lib.dart for the four rows that motivated it.
 //
-//   dart run scripts/check_equipment_audit.dart            # report, exit 0
-//   dart run scripts/check_equipment_audit.dart --strict    # fail on any finding
-//   dart run scripts/check_equipment_audit.dart --all-tiers # not just bodyweight
+//   dart run scripts/check_equipment_audit.dart              # STRICT, fails on a finding
+//   dart run scripts/check_equipment_audit.dart --warn-only   # report, exit 0
+//   dart run scripts/check_equipment_audit.dart --all-tiers   # not just bodyweight
 //
-// §4.11 (gate before refactor): the DEFAULT is warn-only, deliberately. The gate
-// lands BEFORE the library correction so each retag commit can see its own drift,
-// and `--strict` becomes the default in the commit that finishes the correction.
-// Shipping it hard today would block every commit on 33 pre-existing findings --
-// a ship-stop for a problem the gate exists to help fix.
+// §4.11 (gate before refactor): this shipped warn-only, deliberately, so each retag
+// commit could see its own drift without 33 pre-existing findings blocking every
+// commit. FLIPPED STRICT 2026-08-28 in the commit that finished the correction,
+// exactly as that plan said it would be.
+//
+// _accepted is the residue: a mention the audit correctly FOUND and a human
+// correctly JUDGED not to be a defect -- a pro_tip naming a barbell to contrast
+// with it, or offering kit as a progression. Each entry carries the reason, so the
+// next audit does not re-litigate it, and an entry is a claim about ONE (row,
+// token) pair -- never a blanket row exemption, or a genuinely new finding on an
+// accepted row would pass silently.
 import 'dart:convert';
 import 'dart:io';
 
@@ -24,7 +30,9 @@ import 'equipment_audit_lib.dart';
 const _libraryPath = 'assets/data/exercise_library.json';
 
 void main(List<String> args) {
-  final strict = args.contains('--strict');
+  // Strict is the DEFAULT since the 2026-08-28 correction landed. --warn-only is
+  // for in-branch debugging and must never reach main (rule 21's convention).
+  final strict = !args.contains('--warn-only');
   final allTiers = args.contains('--all-tiers');
 
   final file = File(_libraryPath);
@@ -42,17 +50,22 @@ void main(List<String> args) {
     bodyweightTierOnly: !allTiers,
   );
 
+  final split = partitionAccepted(findings);
+  final findings2 = split.unaccepted;
+  final accepted = split.accepted;
+
   final scope = allTiers ? 'all tiers' : 'bodyweight-tier rows only';
-  if (findings.isEmpty) {
+  if (findings2.isEmpty) {
     stdout.writeln('[equipment-audit] PASS — ${rows.length} rows scanned '
-        '($scope); no prose contradicts equipment_needed.');
+        '($scope); no prose contradicts equipment_needed '
+        '(${accepted.length} judged-accepted mention(s) held).');
     exit(0);
   }
 
   final sink = strict ? stderr : stdout;
-  sink.writeln('[equipment-audit] ${findings.length} finding(s) across '
+  sink.writeln('[equipment-audit] ${findings2.length} finding(s) across '
       '${rows.length} rows ($scope):');
-  for (final f in findings) {
+  for (final f in findings2) {
     sink.writeln('  - $f');
   }
   sink.writeln('');
@@ -60,9 +73,12 @@ void main(List<String> args) {
       'barbell only to contrast with it. Correct the row or accept the mention.');
 
   if (!strict) {
-    stdout.writeln('[equipment-audit] warn-only (§4.11) — not failing. '
-        'Pass --strict once the library is corrected.');
+    stdout.writeln('[equipment-audit] --warn-only — not failing. '
+        'Strict is the default; this flag is for in-branch debugging only.');
     exit(0);
   }
+  sink.writeln('');
+  sink.writeln('If a mention is genuinely not a defect, add "<id>|<token>" to '
+      '_accepted WITH the reason. Do not widen it to a bare row id.');
   exit(1);
 }

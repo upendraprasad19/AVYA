@@ -8596,8 +8596,15 @@ concepts:
       middle tiers; Reverse Fly/Shrug/RDL full_gym-only though dumbbell-only) → shallow
       pools + over-tier equipment-violation picks (recurrence of 40a426). Gains-only fix:
       equipment_tier ← current ∪ {T : EquipmentVocab.tierItems[T] ⊇ normalize(equipment_needed)}
-      on 90 rows (ADD-only). Invariant: derive ⊆ equipment_tier (no under-tag); over-tags
-      tolerated (a separate later drop-side pass).
+      on 90 rows (ADD-only). Invariant WAS: derive ⊆ equipment_tier (no under-tag);
+      over-tags tolerated (a separate later drop-side pass).
+
+      SUPERSEDED 2026-08-28 by OI-89 — that drop-side pass. equipment_tier is now
+      RE-DERIVED from equipment_needed for every row and the invariant is EQUALITY,
+      asserted on both sides by equipment_tier_consistency_test. 59 rows changed; 16
+      left the bodyweight tier, Chin Up among them — it needs a pull-up bar and was
+      being served to bodyweight users off precisely the over-tag this text called
+      tolerable. Seed version 9→10, or the retag is inert for every existing install.
     writers:
       - file: assets/data/exercise_library.json
         method: equipment_tier field (gains-only deepened on 90 rows)

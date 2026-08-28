@@ -26,15 +26,44 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+/// The highest-numbered `*_*seed_exercise_library.sql` on disk.
+///
+/// Sorted by the numeric prefix, not lexically: '99' sorts above '125' as a
+/// string, which would silently pick an older file the day the numbering passes
+/// three digits -- and it already has.
+File _newestSeedMigration() {
+  final dir = Directory('supabase/migrations');
+  final seeds = dir
+      .listSync()
+      .whereType<File>()
+      .where((f) => RegExp(r'[/\\]\d+_\w*seed_exercise_library\.sql$')
+          .hasMatch(f.path))
+      .toList();
+  int num(File f) =>
+      int.parse(RegExp(r'[/\\](\d+)_').firstMatch(f.path)!.group(1)!);
+  seeds.sort((a, b) => num(a).compareTo(num(b)));
+  return seeds.last;
+}
+
 void main() {
   group('exercise_library cloud seed (diagnose ada3fb)', () {
-    final seedFile = File('supabase/migrations/074_seed_exercise_library.sql');
+    // 074 was the ORIGINAL seed (259 rows) and is applied, therefore immutable.
+    // A library change mints the NEXT seed migration rather than rewriting it, so
+    // this resolves the newest one instead of naming a number that goes stale on
+    // the next re-seed -- which is exactly what happened when OI-89 grew the
+    // library to 271 and this test still measured 074.
+    final seedFile = _newestSeedMigration();
+    final originalSeed =
+        File('supabase/migrations/074_seed_exercise_library.sql');
     final ledgerFile = File('backups/applied_migrations.json');
     final bundledSeed = File('assets/data/exercise_library.json');
 
     test('074_seed_exercise_library.sql exists with required header tags', () {
       expect(seedFile.existsSync(), isTrue,
           reason: 'Seed migration must be present on disk for re-apply.');
+      expect(originalSeed.existsSync(), isTrue,
+          reason: '074 is referenced by the applied ledger and must stay on '
+              'disk -- it is also the rollback path for every later re-seed.');
       final content = seedFile.readAsStringSync();
       expect(content, contains('-- Intent:'),
           reason: 'Migration must have Intent header per supabase/migrations/CLAUDE.md.');
@@ -42,8 +71,8 @@ void main() {
           reason: 'Migration must declare Destructive flag.');
       expect(content, contains('-- Rollback strategy:'),
           reason: 'Migration must declare Rollback strategy.');
-      expect(content, contains('-- Linked diagnose-doc: 2026-05-27-exercise-library-cloud-empty-ada3fb'),
-          reason: 'Migration must link to the ada3fb diagnose-doc.');
+      expect(content, contains('-- Linked diagnose-doc:'),
+          reason: 'Migration must link to a diagnose-doc.');
       expect(content, contains('INSERT INTO exercise_library'),
           reason: 'Migration must perform the seed INSERT.');
       expect(content, contains('ON CONFLICT (id) DO UPDATE'),

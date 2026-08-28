@@ -86,7 +86,13 @@ class SeedService {
   //   gained tags + 2 existing rows deepened (GHD Sit Up, Good Morning). Closes the empty-[]
   //   safety holes (hinges/rows/overhead served to injured users). injury_contraindications
   //   is NOT a cloud column → no migration 074 re-apply.
-  static const int _exerciseLibraryVersion = 9;
+  // v10 (OI-89): the equipment restore. 31 rows recovered the distinctions the
+  //   2026-08 normalizer destroyed (87 tokens -> 11), 9 corrected by name evidence,
+  //   12 new rows added, and equipment_tier RE-DERIVED from equipment_needed for
+  //   every row -- the drop-side pass the 13-A entry said would come later. Without
+  //   this bump the retag is inert for every existing install, which is the whole
+  //   point: Chin Up keeps shipping to bodyweight users off the stale box.
+  static const int _exerciseLibraryVersion = 10;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

@@ -120,8 +120,13 @@ Adding a token to `canonicalTokens` alone is **not** enough. Three other structu
 
 3. **`_aliases` (`:67-147`)** — `_mapPart:151-154` checks `canonicalTokens` **first**, so 7 alias
    rows become unreachable dead code the moment their key is promoted: `medicine ball` (`:126`),
-   `wall` (`:127`), `doorway` (`:128`), `elevated surface` (`:131`), `yoga mat` (`:133`),
-   `ab wheel` (`:135`), `jump rope` (`:136`). Delete those 7. **Re-point** these to the new
+   `wall` (`:127`), `doorway` (`:128`), `elevated surface` (`:131`),
+   `ab wheel` (`:135`), `jump rope` (`:136`). Delete those 6, plus `battle ropes` and
+   `parallel bars`, for **8**. ⚠ Corrected 2026-08-28: this list said 7 and included
+   `yoga mat`, which is **never promoted** — decision 9 drops it from
+   `equipment_needed` rather than making it canonical, so its alias stays reachable
+   and load-bearing. Deleting it would open a fail-closed hole at the two LIVE seams
+   named below, where a community row or a user's free text still says "yoga mat". **Re-point** these to the new
    tokens rather than `bodyweight`: `trx` / `trx suspension trainer` (`:138-139`) →
    `suspension trainer`; `parallel bars` (`:137`) → itself; `box` / `box (30-45cm)` /
    `box (30-60cm)` (`:123-125`) → `plyo box`; `partner` (`:145`) / `nordic attachment` (`:146`) →
@@ -300,12 +305,12 @@ requires exactly that set, missing *and* extra both failing — and the row-coun
 | obligation | detail |
 |---|---|
 | **Hive re-seed** | `SeedService._exerciseLibraryVersion` **9 → 10** (`seed_service.dart:89`). The re-seed is gated on `storedExVersion < _exerciseLibraryVersion` (`:121-122`). Without the bump the retag is **inert for every existing install** and live only for fresh ones — the worst possible A/B. Precedent in the same comment block: `:82` (v8) and `:85-88` (v9). |
-| **Cloud column** | migration **122** adding `user_profile.equipment_owned text[]`, paired with `backups/applied_migrations.json` in the same commit (§4.5), 4-tag header per `supabase/migrations/CLAUDE.md:16-24`. Verified: `user_profile` has 38 columns, `equipment_access` and `equipment_exclusions` present, `equipment_owned` absent. |
+| **Cloud column** | migration **124** adding `user_profile.equipment_owned text[]`, (⚠ corrected 2026-08-28 from **122**, which was minted by OI-98's `notification_preferences_column` and applied 2026-08-26 — two days after this design was drafted. There is no allocator; a number written down in a spec goes stale the moment another branch applies one, so re-read the tail of `backups/applied_migrations.json` at apply time rather than trusting this cell) paired with `backups/applied_migrations.json` in the same commit (§4.5), 4-tag header per `supabase/migrations/CLAUDE.md:16-24`. Verified: `user_profile` has 38 columns, `equipment_access` and `equipment_exclusions` present, `equipment_owned` absent. |
 | **Deploy ordering** | The migration must be applied to prod **before** the client that writes the field ships. `user_repository.dart:721-724` upserts a **spread** of the whole profile map and `_sanitize` (`:818-836`) does not whitelist columns, so a client carrying `equipment_owned` against a DB without it gets a PostgREST 400 and the **entire row is rejected** — the all-null `user_profile` failure documented at `:704-713`. |
 | **Cloud library re-seed** | `exercise_library.equipment_needed` **is** a cloud column (verified in `live_schema_columns.json`; `equipment_tier` is not, matching `074_seed_exercise_library.sql:15-19`). `beat-my-coach/index.ts:193-198` filters `equipment_needed.cs.{bodyweight}`. Re-apply 074 in this batch or cloud and client permanently disagree on what "bodyweight" means. Other readers: `promote-community-item/index.ts:191`, `_shared/tools/exercise/getFormCues.ts:65,92`. |
 | **Gate 19** | `scripts/check_hive_map_field_drift.dart` `_alwaysOk` (`:278`) needs `equipment_owned`, exactly as `equipment_exclusions` was added at `:324-329` (precedent recorded at `sot_registry.yaml:8766`). |
-| **Schema snapshot** | Regenerate `backups/live_schema_columns.json`. ⚠ `check_schema_column_refs.dart` would **not** catch a stale snapshot here — it skips spreads and bare `select()`, which is exactly what `sync_profile.dart:254`, `user_repository.dart:673,722` and `_restoreUserProfile:512` use. Regenerating is mandatory and unenforced. |
-| **Restore** | **Nothing owed.** `_restoreUserProfile` (`sync_profile.dart:505-585`) uses a bare `.select()` at `:512` and merges every non-null cloud key at `:558-570` — column-agnostic. `equipment_owned` restores with zero restore-side code. An earlier draft's L11 worry was unfounded. The **write** side does need the `sync_profile.dart:200-201` conditional-entry pattern. |
+| **Schema snapshot** | Regenerate `backups/live_schema_columns.json`. ⚠ `check_schema_column_refs.dart` would **not** catch a stale snapshot here — it skips spreads and bare `select()`, which is exactly what `sync_profile.dart:257`, `user_repository.dart:673,722` and `_restoreUserProfile:574` use. Regenerating is mandatory and unenforced. |
+| **Restore** | **Nothing owed.** `_restoreUserProfile` (`sync_profile.dart:567-647`) uses a bare `.select()` at `:574` and merges every non-null cloud key at `:622-623` — column-agnostic. ⚠ Corrected 2026-08-28: this row first cited `:505-585` / `:512` / `:558-570`, none of which are that function. The conclusion survives the correction; the citations did not, and a citation nobody re-derives is how a wrong line number outlives the session that wrote it. `equipment_owned` restores with zero restore-side code. An earlier draft's L11 worry was unfounded. The **write** side does need the `sync_profile.dart:200-201` conditional-entry pattern. |
 
 ---
 

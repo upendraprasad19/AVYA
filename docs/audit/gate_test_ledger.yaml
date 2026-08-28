@@ -172,7 +172,21 @@ check_equipment_audit.dart:
     instead. DEFAULT IS WARN-ONLY per 4.11 (gate before refactor): --strict exits 1
     and becomes the default in the commit that finishes the library correction.
     False positives are real and expected (a pro_tip may mention a barbell only to
-    contrast with it), so findings are triage input, not verdicts."
+    contrast with it), so findings are triage input, not verdicts.
+
+    FLIPPED STRICT 2026-08-28 in the commit that finished the library correction,
+    exactly as the line above said it would be; --warn-only is now the opt-out and
+    is for in-branch debugging only. That flip added an ACCEPT-LIST, which is a hole
+    in the gate, so it is pinned by 5 further tests (15/15 green) rather than trusted:
+    a pair is keyed on `id|token` and NEVER a bare row id, so a genuinely new finding
+    on an already-accepted row still fails; every key must parse as E### plus a token
+    the scan can actually emit, so a typo cannot silently exempt nothing; and every
+    entry must carry a real reason, because an accept-list whose entries say nothing
+    is an allowlist and an allowlist is how a gate goes quietly inert. The list lives
+    in the PURE lib, not the CLI, for exactly this reason -- policy in an untestable
+    wrapper is policy nothing proves. Two of the twelve NEW rows this batch added
+    tripped the gate on their own prose and were fixed by rewording the row, not by
+    adding an exemption.
 
 check_equipment_vocab_lockstep.dart:
   mutation_proven: true

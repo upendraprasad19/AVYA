@@ -163,4 +163,56 @@ void main() {
       expect(equipmentNouns.keys, contains('towel'));
     });
   });
+
+  group('the accept-list is a hole in the gate, so it is pinned', () {
+    AuditFinding f(String id, String token) => AuditFinding(
+          id: id,
+          name: 'X',
+          impliedToken: token,
+          evidenceField: 'name',
+          evidenceSnippet: 's',
+        );
+
+    test('an accepted (id, token) pair is held back', () {
+      final p = partitionAccepted([f('E238', 'bench')]);
+      expect(p.unaccepted, isEmpty);
+      expect(p.accepted.single, contains('E238'));
+      expect(p.accepted.single, contains('elevated surface'),
+          reason: 'the reason travels with the entry, so the next audit does '
+              'not have to re-derive the judgement');
+    });
+
+    test('a DIFFERENT token on an accepted row still FAILS', () {
+      // The whole point of keying on the pair. If E238 later grew a pro_tip
+      // naming a barbell, a bare-id exemption would swallow it in silence.
+      final p = partitionAccepted([f('E238', 'barbell')]);
+      expect(p.unaccepted, hasLength(1));
+      expect(p.accepted, isEmpty);
+    });
+
+    test('the same token on an unaccepted row still FAILS', () {
+      final p = partitionAccepted([f('E999', 'bench')]);
+      expect(p.unaccepted, hasLength(1));
+    });
+
+    test('every accepted key is a well-formed id|token pair', () {
+      for (final k in acceptedMentions.keys) {
+        final parts = k.split('|');
+        expect(parts, hasLength(2), reason: '"$k" is not id|token');
+        expect(parts[0], matches(RegExp(r'^E\d{3}$')), reason: 'bad id in "$k"');
+        expect(equipmentNouns.values, contains(parts[1]),
+            reason: '"${parts[1]}" is not a token the scan can ever emit, so '
+                'this entry exempts nothing and is dead weight');
+      }
+    });
+
+    test('every accepted entry carries a non-trivial reason', () {
+      // An accept-list whose entries say nothing is an allowlist, and an
+      // allowlist is how a gate goes quietly inert.
+      for (final e in acceptedMentions.entries) {
+        expect(e.value.length, greaterThan(25),
+            reason: '${e.key} has no real reason recorded');
+      }
+    });
+  });
 }
