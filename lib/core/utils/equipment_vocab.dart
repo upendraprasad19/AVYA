@@ -321,6 +321,36 @@ class EquipmentVocab {
     'wall', 'doorway', 'elevated surface', 'foot anchor', 'towel',
   ];
 
+  /// ⑦ OI-89: the user's REAL equipment set -- what their tier grants, plus
+  /// what they told us they also own, minus what they told us they lack.
+  ///
+  /// This is the ONE derivation. Everything downstream reads it; nothing
+  /// downstream reads `equipment_access` to make a capability decision.
+  ///
+  /// Reconciles at READ time rather than trusting a write-side prune.
+  /// [pruneToTier] has exactly ONE call site (a dropdown callback in
+  /// edit_profile_screen), while `equipment_access` is ALSO written by onboarding
+  /// and by cloud restore -- and a restore writes tier and owned independently,
+  /// landing the very both-lists state a write-side prune is supposed to prevent.
+  /// A read-side derivation cannot be bypassed by a writer nobody enumerated.
+  ///
+  /// An UNKNOWN [tier] fails OPEN to every canonical token. `equipment_access` is
+  /// read at 14 sites with 4 different defaults and can hold legacy free text; a
+  /// tier miss is a DATA problem, not a capability claim, and failing closed
+  /// would drop every exercise for that user.
+  static Set<String> effectiveItems(
+    String tier,
+    List<String>? owned,
+    List<String>? exclusions,
+  ) {
+    final granted = tierItems[tier];
+    if (granted == null) return {...canonicalTokens};
+    final result = <String>{...granted, ...normalize(owned)};
+    result.removeAll(floorSanitizedExclusions(exclusions));
+    result.remove('none'); // sentinel, never a canonical token
+    return result;
+  }
+
   /// ⑦ OI-89: the items we ASK a [tier] user about in the Customize UI --
   /// which is NOT the same as what the tier grants.
   ///
