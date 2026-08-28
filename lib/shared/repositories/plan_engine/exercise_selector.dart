@@ -530,6 +530,11 @@ class ExerciseSelector {
     // `const {}` (unset caller / flag OFF) → every downstream drop inert →
     // byte-identical. A HARD constraint threaded to every pick path.
     Set<String> exclusions = const {},
+    // ⑦ OI-89: the user's real capability set, or NULL for "do not enforce".
+    // REQUIRED (not defaulted) so a missed call site fails to COMPILE — a
+    // defaulted parameter is exactly how buildPinnedDays stayed unfloored
+    // through three earlier drafts of this work.
+    required Set<String>? capability,
     // W3.4 (Batch 11-B): per-day previous-phase picks (LOWERCASED names) → the
     // cascade avoids repeating them when a same-pattern sibling exists. null →
     // avoidNames empty everywhere → inert. Only the fresh-advance caller passes it.
@@ -579,6 +584,7 @@ class ExerciseSelector {
         applyInjurySubstitutePreference: applyInjurySubstitutePreference,
         avoidNames: avoidA,
         exclusions: exclusions,
+        capability: capability,
       );
 
       // Fill variant B: use slotsB if defined, exclude A names for variety
@@ -592,6 +598,7 @@ class ExerciseSelector {
           applyInjurySubstitutePreference: applyInjurySubstitutePreference,
           avoidNames: avoidB,
           exclusions: exclusions,
+          capability: capability,
         );
       } else {
         exercisesB = exercisesA;
@@ -603,12 +610,14 @@ class ExerciseSelector {
           exercisesA, day.slotsA, exerciseRepo, equipmentTier, effectiveExp,
           phase, injuries, demoted, customs,
           exclusions: exclusions,
+          capability: capability,
         );
         if (!identical(exercisesB, exercisesA) && day.slotsB != null) {
           exercisesB = _applyHistoryAdjustments(
             exercisesB, day.slotsB!, exerciseRepo, equipmentTier, effectiveExp,
             phase, injuries, demoted, customs,
             exclusions: exclusions,
+            capability: capability,
           );
         } else {
           exercisesB = exercisesA;
@@ -693,6 +702,10 @@ class ExerciseSelector {
     bool applyInjuryUniversalFilter = true,
     bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C) — fresh-fill only
     Set<String> exclusions = const {},
+    // ⑦ OI-89: capability set, or NULL for 'do not enforce'. REQUIRED so a
+    // missed call site fails to COMPILE — a defaulted parameter is exactly
+    // how buildPinnedDays stayed unfloored through three earlier drafts.
+    required Set<String>? capability,
   }) {
     final result = <PopulatedDay>[];
     // Custom exercises are scanned at most ONCE (lazily, on the first library miss).
@@ -756,6 +769,7 @@ class ExerciseSelector {
             applyInjuryUniversalFilter: applyInjuryUniversalFilter,
             applyInjurySubstitutePreference: applyInjurySubstitutePreference,
             exclusions: exclusions,
+            capability: capability,
           ).first;
 
       // Variant A (weeks 1 & 3). Empty (all pins dropped) → fresh-fill (MF-1).
@@ -823,6 +837,10 @@ class ExerciseSelector {
     Set<String> demoted,
     List<Map<String, dynamic>> customs, {
     required Set<String> exclusions, // ⑥ B1 (compile-enforced thread)
+    // ⑦ OI-89: capability set, or NULL for 'do not enforce'. REQUIRED so a
+    // missed call site fails to COMPILE — a defaulted parameter is exactly
+    // how buildPinnedDays stayed unfloored through three earlier drafts.
+    required Set<String>? capability,
   }) {
     final result = List<PlannedExercise>.from(picked);
     final pickedNames = result.map((e) => e.exerciseName).toSet();
@@ -845,6 +863,7 @@ class ExerciseSelector {
           excludeNames: pickedNames,
           injuryExclusions: injuries.isEmpty ? null : injuries,
           exclusions: exclusions,
+          capability: capability,
         );
         for (final c in alternatives) {
           final name = c['name'] as String? ?? '';
@@ -976,6 +995,11 @@ class ExerciseSelector {
     bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C)
     Set<String> avoidNames = const {}, // W3.4 (Batch 11-B) — SOFT variety bias
     required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
+    // ⑦ OI-89: the user's real capability set, or NULL for "do not enforce".
+    // REQUIRED (not defaulted) so a missed call site fails to COMPILE — a
+    // defaulted parameter is exactly how buildPinnedDays stayed unfloored
+    // through three earlier drafts of this work.
+    required Set<String>? capability,
   }) {
     final exercises = <PlannedExercise>[];
     final pickedNames = Set<String>.from(excludeNames);
@@ -989,6 +1013,7 @@ class ExerciseSelector {
           applyInjurySubstitutePreference: applyInjurySubstitutePreference,
           avoidNames: avoidNames,
           exclusions: exclusions,
+          capability: capability,
         );
         if (exercise != null) {
           exercises.add(exercise);
@@ -1065,6 +1090,10 @@ class ExerciseSelector {
     bool applyInjurySubstitutePreference = false, // ①.1d (Batch 11-C)
     Set<String> avoidNames = const {}, // W3.4 (Batch 11-B) — SOFT variety bias ONLY
     required Set<String> exclusions, // ⑥ B1 (required — compile-enforced thread)
+    // ⑦ OI-89: capability set, or NULL for 'do not enforce'. REQUIRED so a
+    // missed call site fails to COMPILE — a defaulted parameter is exactly
+    // how buildPinnedDays stayed unfloored through three earlier drafts.
+    required Set<String>? capability,
   }) {
     // Attempt 1: Exact target + subFocus + equipment + type + experience
     var candidates = repo.queryV4(
@@ -1080,6 +1109,7 @@ class ExerciseSelector {
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
+      capability: capability,
     );
     if (candidates.isNotEmpty) {
       return _buildExercise(_selectCandidate(candidates,
@@ -1098,6 +1128,7 @@ class ExerciseSelector {
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
+      capability: capability,
     );
     if (candidates.isNotEmpty) {
       return _buildExercise(_selectCandidate(candidates,
@@ -1114,6 +1145,7 @@ class ExerciseSelector {
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
+      capability: capability,
     );
     if (candidates.isNotEmpty) {
       return _buildExercise(_selectCandidate(candidates,
@@ -1132,6 +1164,7 @@ class ExerciseSelector {
       excludeNames: pickedNames,
       injuryExclusions: injuries.isEmpty ? null : injuries,
       exclusions: exclusions,
+      capability: capability,
     );
     if (candidates.isNotEmpty) {
       return _buildExercise(_selectCandidate(candidates,

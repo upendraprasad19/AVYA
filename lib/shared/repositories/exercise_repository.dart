@@ -1,5 +1,6 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 
 /// Queries the exerciseBox (seeded from bundled JSON).
 ///
@@ -245,6 +246,10 @@ class ExerciseRepository {
     // rather than silently skip the drop — equipment exclusion is a HARD
     // constraint that must reach every pick path. Empty set → inert.
     required Set<String> exclusions,
+    // ⑦ OI-89: the user's real capability set, or NULL for "do not enforce".
+    // REQUIRED (not defaulted) so a missed call site fails to COMPILE rather
+    // than silently skip the drop — same contract as `exclusions` above.
+    required Set<String>? capability,
     int? limit,
   }) {
     // Precompute normalized values for filter predicates
@@ -295,15 +300,30 @@ class ExerciseRepository {
         if (needed.any(exclusions.contains)) return false;
       }
 
+      // 2d. ⑦ OI-89 capability floor. NULL = enforcement OFF (a genuine SKIP).
+      // A "universal set" would NOT be inert: canPerform fails CLOSED on an
+      // unreadable requirement regardless of what the set contains. Placed here
+      // for the same reason as 2c — before the tier block, so a no-tier
+      // community row is subject to it too.
+      if (capability != null &&
+          !EquipmentCapability.canPerform(e['equipment_needed'], capability)) {
+        return false;
+      }
+
       // 3. Equipment tier (exercise must include user's tier in its equipment_tier list)
       if (tierLower != null) {
         final tiers = e['equipment_tier'];
-        if (tiers is! List || tiers.isEmpty) {
-          return true; // No tier specified on exercise, pass
+        // ⑦ OI-89 seam 5: this was `return true` — an early return from the
+        // WHOLE fused predicate, so a row with a missing/empty equipment_tier
+        // also skipped filters 4-8 below, INCLUDING the injury exclusion. The
+        // tier is genuinely unknown for such a row (community sync writes them),
+        // but that is no reason to hand an injured user a contraindicated
+        // exercise. Fall through instead of returning.
+        if (tiers is List && tiers.isNotEmpty) {
+          final hasTier =
+              tiers.any((t) => t.toString().toLowerCase() == tierLower);
+          if (!hasTier) return false;
         }
-        final hasTier =
-            tiers.any((t) => t.toString().toLowerCase() == tierLower);
-        if (!hasTier) return false;
       }
 
       // 4. Exercise type (compound / isolation)

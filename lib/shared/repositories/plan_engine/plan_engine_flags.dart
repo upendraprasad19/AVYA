@@ -288,6 +288,25 @@ class PlanEngineFlags {
     }
   }
 
+  /// ⑦ OI-89: HARD equipment capability floor, scoped to the `bodyweight` tier.
+  /// When ON, every seam that can emit an exercise drops candidates the user
+  /// cannot physically perform, keyed on `equipment_needed` (NOT
+  /// `equipment_tier`, which the SoT registry documents as ADD-only with
+  /// "over-tags tolerated" — imprecise in exactly the unsafe direction).
+  ///
+  /// Ship-dark DEFAULT OFF → `resolveCapability` returns null → every drop site
+  /// is skipped → byte-identical. Set
+  /// `configBox['enable_equipment_capability_floor'] = true` to enable.
+  static bool get equipmentCapabilityFloorEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('enable_equipment_capability_floor') ==
+          true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → safe default: OFF
+    }
+  }
+
   /// ①.1d (Batch 11-C): curated per-injury safe-substitute PREFERENCE. When ON,
   /// `_cascadeFill` re-ranks the already-safe (post-injury-filter), same-pattern
   /// candidate list to PREFER a curated `InjurySubstitutes` sub over queryV4's

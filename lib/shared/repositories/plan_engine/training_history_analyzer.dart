@@ -188,6 +188,41 @@ class TrainingHistoryAnalyzer {
     }
   }
 
+  /// ⑦ OI-89: the user's real equipment capability, or NULL for "do not
+  /// enforce". Mirrors [resolveEquipmentExclusions].
+  ///
+  /// Returns null in three cases, each deliberate:
+  ///   - flag OFF — a genuine SKIP. A "universal set" would NOT be inert:
+  ///     `canPerform` fails CLOSED on an unreadable requirement regardless of
+  ///     what the set contains, so it would still drop community/custom rows.
+  ///   - tier is not `bodyweight` — founder decision 1 scopes the HARD floor to
+  ///     that tier only; the other three keep queryV4's soft tier curation.
+  ///     Scoping HERE rather than inside the cascade keeps tier logic in one
+  ///     place; every drop site downstream is just `capability != null`.
+  ///   - Hive is unreachable — fail OPEN. We cannot know the user's kit, and
+  ///     enforcing an unknown set would drop every exercise. Availability wins
+  ///     over a guess.
+  static Set<String>? resolveCapability({
+    required String tier,
+    required Set<String> exclusions,
+    required bool flagEnabled,
+  }) {
+    if (!flagEnabled) return null;
+    if (tier != 'bodyweight') return null;
+    try {
+      final profile = HiveService.instance.userBox.get('profile');
+      final owned = profile is Map
+          ? EquipmentVocab.fromProfile(profile['equipment_owned'])
+          : const <String>[];
+      return EquipmentVocab.effectiveItems(tier, owned, exclusions.toList());
+    } catch (e, st) {
+      debugPrint('[TrainingHistoryAnalyzer.resolveCapability] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'training_history_analyzer_capability'));
+      return null; // fail OPEN — see doc above
+    }
+  }
+
   /// LEVER 6 (demote swapped-out exercises): the set of ORIGINAL exercise names
   /// the user swapped AWAY from. Selection deprioritizes these (treats them as
   /// disliked) when an equivalent alternative exists.

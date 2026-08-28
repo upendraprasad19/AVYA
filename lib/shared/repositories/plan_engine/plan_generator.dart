@@ -141,6 +141,14 @@ class PlanGenerator {
         equipmentExclusions,
         flagEnabled: PlanEngineFlags.equipmentExclusionsEnabled);
 
+    // ⑦ OI-89: the user's real capability set, or null for "do not enforce".
+    // Null whenever the flag is off OR the tier is not bodyweight (decision 1),
+    // so every drop site downstream is simply `capability != null`.
+    final capabilitySet = TrainingHistoryAnalyzer.resolveCapability(
+        tier: equipment,
+        exclusions: equipmentExclusionSet,
+        flagEnabled: PlanEngineFlags.equipmentCapabilityFloorEnabled);
+
     // F19 / recompose: the plan engine (split + exercise selection) only knows
     // build_muscle / lose_fat / strength / general_fitness. Map the goal to its
     // plan archetype (FitnessGoals.planGoal) so a token like 'recompose'
@@ -187,6 +195,7 @@ class PlanGenerator {
             applyInjurySubstitutePreference:
                 PlanEngineFlags.injurySubstitutePreferenceEnabled,
             exclusions: equipmentExclusionSet,
+            capability: capabilitySet,
           )
         : ExerciseSelector.pickV4(
             slotDays: filteredDays,
@@ -201,6 +210,7 @@ class PlanGenerator {
             applyInjurySubstitutePreference:
                 PlanEngineFlags.injurySubstitutePreferenceEnabled,
             exclusions: equipmentExclusionSet,
+            capability: capabilitySet,
             previousPhaseByDay: previousPhaseByDay, // W3.4 (Batch 11-B)
             plateauAvoidNames: plateauAvoid, // W3.5 (Batch 12-B rotation)
           );

@@ -102,6 +102,7 @@ void main() {
       effectiveExp: 'advanced',
       phase: 1,
       goal: 'build_muscle',
+      capability: null, // ⑦ OI-89 inert: this suite tests injury omission
       injuries: const ['shoulder'],
     );
     expect(days, hasLength(1));
@@ -118,6 +119,7 @@ void main() {
       effectiveExp: 'advanced',
       phase: 1,
       goal: 'build_muscle',
+      capability: null, // ⑦ OI-89 inert: this suite tests injury omission
       injuries: const [],
     );
     expect(days.first.exercisesA, isNotEmpty,
@@ -132,6 +134,7 @@ void main() {
       effectiveExp: 'advanced',
       phase: 1,
       goal: 'build_muscle',
+      capability: null, // ⑦ OI-89 inert: this suite tests injury omission
       injuries: const ['shoulder'],
       applyInjuryUniversalFilter: false,
     );
