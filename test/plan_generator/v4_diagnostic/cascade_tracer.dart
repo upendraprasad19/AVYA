@@ -54,12 +54,24 @@ class CascadeTrace {
 const universalPoolV4Mirror = <String, List<String>>{
   'horizontal_push':    ['Push Up', 'Incline Push Up', 'Wall Push Up', 'Decline Push Up', 'Diamond Push Up'],
   'vertical_push':      ['Pike Push Up', 'Handstand Hold', 'Dand (Hindu Pushup)'],
-  // The strong entries stay FIRST: a gym user who reaches att5 is not
-  // capability-filtered (the hard floor is bodyweight-scoped), so reordering
-  // would hand them a floor move over a real one. The pure-bodyweight tails
-  // below exist so the SKIP above can never empty a slot -- pinned by the att5
-  // FLOOR INVARIANT test, which reddened on exactly these three patterns when
-  // OI-89 retagged Pull Up / Chin Up / Inverted Row / TRX Row off the floor.
+  // ⑦ OI-89: APPEND ONLY. Every pre-existing entry keeps its exact position
+  // and the new rows go on the END.
+  //
+  // This is not stylistic. att5 does NOT check equipment_tier -- it resolves a
+  // pool name through repo.search and applies only exclusions, injuries and
+  // (since OI-89) capability. Capability is null ABOVE the bodyweight tier by
+  // decision 1, so for a gym-tier user NOTHING here filters on equipment: the
+  // first pool entry that is not already picked simply wins. Reordering
+  // therefore silently changes what those users are prescribed.
+  //
+  // The B-pass caught this batch doing exactly that: an earlier draft promoted
+  // `Dip (Parallel Bars)` to the head of elbow_extension, and `parallel bars`
+  // is NOT granted by home_dumbbells -- so a home user reaching att5 would have
+  // been handed a dip station where the previous order gave them a Diamond
+  // Push Up. The tails below are what keep the SKIP from emptying a slot;
+  // pinned by the att5 FLOOR INVARIANT test, which reddened on exactly three
+  // patterns when the retag moved Pull Up / Chin Up / Inverted Row / TRX Row
+  // off the floor.
   'horizontal_pull':    ['Inverted Row', 'TRX Row', 'Table Row', 'Towel Row',
                          'Prone Reverse Snow Angel'],
   'vertical_pull':      ['Pull Up', 'Chin Up', 'Inverted Row',
@@ -70,11 +82,11 @@ const universalPoolV4Mirror = <String, List<String>>{
   'core':               ['Plank', 'Dead Bug', 'Hollow Body Hold', 'Bicycle Crunch', 'Mountain Climber'],
   'elbow_flexion':      ['Chin Up', 'Inverted Row', 'Doorframe Curl',
                          'Towel Bicep Curl', 'Self-Resisted Bicep Curl'],
-  'elbow_extension':    ['Dip (Parallel Bars)', 'Bench Dips', 'Diamond Push Up',
+  'elbow_extension':    ['Diamond Push Up', 'Bench Dips', 'Dip (Parallel Bars)',
                          'Wall Triceps Extension',
                          'Self-Resisted Triceps Extension'],
-  'shoulder_isolation': ['Band Pull Apart', 'Towel Lateral Raise', 'Prone Y Raise',
-                         'Bodyweight Rear Delt Raise', 'Arm Circles'],
+  'shoulder_isolation': ['Bodyweight Rear Delt Raise', 'Band Pull Apart', 'Arm Circles',
+                         'Prone Y Raise', 'Towel Lateral Raise'],
   'hip_isolation':      ['Glute Bridge', 'Glute Kickback'],
 };
 

@@ -17237,7 +17237,8 @@
       "Triceps"
     ],
     "equipment_needed": [
-      "dumbbells"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -17284,7 +17285,6 @@
       "Front Delts"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],

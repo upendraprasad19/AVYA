@@ -126,6 +126,40 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-08-28** — blast-radius **platform** — branch `oi89-bodyweight-floor` @ `1f817e2f` (11 commits, OI-89 equipment capability floor). **3 findings (0 P0, 2 P1, 1 P2); 0 false_alarm.** 2 fixed in-batch, 1 recorded as residual. Review: `docs/reviews/oi89-bodyweight-floor-bpass.md`.
+  ⚠ **Method deviation, and it must be read alongside the findings:** the pass was run
+  INLINE BY THE AUTHOR, not by a fresh context-blind subagent, because this session
+  carried a standing instruction not to call the Agent tool unasked. That is weaker
+  by construction and the record says so — `verdict: accepted` feeds the merge gate,
+  and the gate cannot tell the two apart.
+  **Both P1s were lens-6-family and both were self-inflicted hours earlier**, which is
+  the useful part: an author CAN catch their own guard-mirror defects if the lens is
+  run as a checklist against the diff rather than as a memory of intent.
+  **P1-1 is the sharpest instance of "the comment claims the opposite of the code" yet
+  recorded.** The commit message asserted *"the strong entries stay FIRST … reordering
+  would hand them a floor move over a real one"*, and the diff reordered two pools the
+  other way — promoting `Dip (Parallel Bars)` to the head of `elbow_extension`. Because
+  attempt-5 does not check `equipment_tier` and capability is null ABOVE bodyweight,
+  position in that pool IS the prescription for gym-tier users, so a `home_dumbbells`
+  user would have been handed a dip station where the old order gave a Diamond Push Up.
+  **Generalisable: when a diff's own comment states an invariant, CHECK THE DIFF AGAINST
+  IT rather than reading the comment as evidence.** A comment asserting "I did not
+  reorder" is the cheapest possible place for a reorder to hide.
+  **P1-2 extends the seventh lens (`same_class_in_the_fix`) with a scope question.** The
+  batch's independent evidence that `equipment_needed` is trustworthy is a prose-scanning
+  gate — which scanned BODYWEIGHT-TIER ROWS ONLY. That is exactly the wrong scope for the
+  defect it must catch: a row over-tagged in `equipment_needed` rather than in
+  `equipment_tier` is not bodyweight-tier to begin with, so the narrow scan could never
+  reach one. Widening to all tiers surfaced 18 findings, 17 comparison prose and one real
+  (E260 Incline Dumbbell Press: first cue *"Set bench to 30-45 degree incline"*, row
+  claimed dumbbells only, tier `home_dumbbells` grants no bench). **Ask of any gate the
+  batch relies on: is its INPUT SET the set where the defect can live?** The batch had
+  already hit this hole once — two rows surfaced from a tier re-derive rather than from
+  the gate — and treated it as two rows instead of as a scope bug.
+  **Tuning made:** none to lenses 1-7. Add to lens 3's habit instead — when a batch adds
+  or leans on a gate, verify the gate's scope covers the defect class, not just the
+  instance that motivated it. False-alarm rate 0/3.
+
 - **2026-08-26** — blast-radius **platform** — branch `oi98-notification-prefs` @ `885ebd47f4c0`.
   **6 findings (1 P0, 2 P1, 2 P2, 1 P3); 0 false_alarm.** All fixed in-batch.
   Review: `docs/reviews/885ebd47f4c0-review.md`.

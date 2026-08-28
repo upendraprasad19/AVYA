@@ -5,9 +5,9 @@
 // reads: an oracle sharing a field with its predicate proves threading, never
 // truth. See equipment_audit_lib.dart for the four rows that motivated it.
 //
-//   dart run scripts/check_equipment_audit.dart              # STRICT, fails on a finding
-//   dart run scripts/check_equipment_audit.dart --warn-only   # report, exit 0
-//   dart run scripts/check_equipment_audit.dart --all-tiers   # not just bodyweight
+//   dart run scripts/check_equipment_audit.dart                    # STRICT, ALL tiers
+//   dart run scripts/check_equipment_audit.dart --warn-only         # report, exit 0
+//   dart run scripts/check_equipment_audit.dart --bodyweight-only   # narrow the scan
 //
 // §4.11 (gate before refactor): this shipped warn-only, deliberately, so each retag
 // commit could see its own drift without 33 pre-existing findings blocking every
@@ -33,7 +33,15 @@ void main(List<String> args) {
   // Strict is the DEFAULT since the 2026-08-28 correction landed. --warn-only is
   // for in-branch debugging and must never reach main (rule 21's convention).
   final strict = !args.contains('--warn-only');
-  final allTiers = args.contains('--all-tiers');
+  // ALL TIERS is the DEFAULT since 2026-08-28. It was bodyweight-only, and the
+  // OI-89 B-pass showed that scope WAS the blind spot: a row over-tagged in
+  // equipment_needed rather than in equipment_tier is not bodyweight-tier to
+  // begin with, so the narrow scan could never see it. Widening found E260
+  // Incline Dumbbell Press, whose first cue says "Set bench to 30-45 degree
+  // incline" while the row claimed only dumbbells -- served to home_dumbbells
+  // users, who have no bench. Fixing only that row would have left the next one
+  // just as invisible.
+  final allTiers = !args.contains('--bodyweight-only');
 
   final file = File(_libraryPath);
   if (!file.existsSync()) {

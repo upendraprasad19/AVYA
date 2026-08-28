@@ -1877,10 +1877,11 @@ call.
 
 ## OI-89 — the equipment tier is a SOFT preference: a "bodyweight" user is served gym lifts (P2)
 
-- **Status**: OPEN
-- **Blocked on**: nothing technical — it needs a PRODUCT decision first (see "Product question"
-  below). The mechanism is understood and verified in code.
-- **Verified**: 2026-08-04 (root cause re-read directly in `exercise_selector.dart` +
+- **Status**: CLOSED (2026-08-28, branch `oi89-bodyweight-floor`) — see "How it was closed" below.
+- **Blocked on**: nothing. The product question was answered by founder 2026-08-28: the bodyweight
+  tier is a HARD floor, and "no equipment needed" means nothing you have to buy.
+- **Verified**: 2026-08-28 (measured across all 606 scorecard personas: equipment-violating plans
+  201 → 0, violations 528 → 0, missing 0, unsafe 0). Earlier entry: 2026-08-04 (root cause re-read directly in `exercise_selector.dart` +
   `plan_engine/CLAUDE.md`; the flag default re-read in `plan_engine_flags.dart` — the source
   commentary's claim about it did NOT match the code, see below)
 - **Identified**: 2026-07-19 · the workout-generator persona sweep (`PlanGenerator.generateV4`,
@@ -1934,9 +1935,44 @@ call.
   providing the substitute so a slot is never empty. Needs a behavioral test asserting a
   bodyweight persona's full plan contains zero picks whose `equipment_needed` falls outside the
   tier.
-- **Blast radius estimate**: `account` (plan engine, `lib/shared/repositories/plan_engine/**`);
-  no migration, no schema. Rule 14 applies — `plan_generator.dart` is not to be modified without
-  explicit instruction.
+- **Blast radius estimate**: ⚠ **WRONG, and corrected here rather than deleted so the estimate's
+  failure mode stays visible.** This read `account` … `no migration, no schema`. The actual batch
+  was **platform** and applied **three** migrations (124 `user_profile.equipment_owned`, 125 the
+  cloud `exercise_library` re-seed 259 → 292 rows, 126 a single-row correction) plus changes to
+  root `CLAUDE.md`, which is path-pinned platform in `docs/blast_radius.yaml`. The estimate was
+  made from the SYMPTOM (a few wrong picks in one persona's plan) rather than from the fix, and the
+  fix needed a vocabulary, a data restore and a schema column. Rule 14 did apply and founder gave
+  explicit authorization for the three `plan_generator.dart` edits.
+
+### How it was closed (2026-08-28)
+
+The tier could never be the safety check: `equipment_tier` is a CURATION hint that
+`docs/sot_registry.yaml` itself documented as *"over-tags tolerated"*. The fix keys on
+`equipment_needed` instead, via
+`effective = tierItems[tier] ∪ equipment_owned − equipment_exclusions` and
+`EquipmentCapability.canPerform`.
+
+Three of the five exercises this entry names above were NOT reachable by a tier floor at all —
+Standing Calf Raise and Chin Up were tagged `bodyweight` **in the data**, so no tier-level fix
+could have seen them. That is why the batch is a data restore as much as a code change: a
+normalizer (`632a10b8`) had collapsed 87 authored equipment tokens into 11, and
+`equipment_tier` was then derived from the collapsed values.
+
+- Vocabulary 12 → 24 canonical tokens; `equipment_tier` re-derived for all 292 rows and its
+  invariant flipped SUBSET → **EQUALITY** (the tolerated over-tag side is exactly what shipped
+  Chin Up to bodyweight users); 16 rows left the bodyweight tier.
+- 33 new exercises, because the corrections empty pools: `vertical_pull` reached **zero** baseline
+  rows, and a first wave that took six patterns to exactly 3 rows still left **331 empty slots**
+  under the live floor.
+- Records: diagnose `f7b2c4` (+ `c9a7e2`, `b6f4d1`, `d3a8f5`), plan-review record
+  `docs/plan-reviews/oi89-bodyweight-floor.md`, closure ledger
+  `docs/audit/oi89-bodyweight-floor.closure.yaml`, B-pass
+  `docs/reviews/oi89-bodyweight-floor-bpass.md`.
+- ⚠ **Residual, NOT a defect and not tracked as one:** the re-derive also removed 38 rows from
+  `home_dumbbells` and 16 from `basic_gym` — those tiers were propped up by the same over-tags.
+  Every removal was verified correct, but their plans become more generic, and total fallback
+  picks rose 1184 → 2719 as the honest price of refusing exercises users cannot do. Surfaced to
+  founder; a content investment in more `home_dumbbells`-performable rows would reverse it.
 
 ## OI-90 — `GuardedBox.empty`'s "reads serve empty" is bypassed by the seven plain `Box` getters (P2)
 
