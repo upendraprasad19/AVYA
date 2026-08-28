@@ -704,6 +704,16 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 
 ## Changelog
 
+- **2026-08-28 (OI-144, same branch)** — Self-evolution. §2.55 NEW — a deliberately SCOPED
+  capability wired to an UNSCOPED surface (collect-but-ignore). The Profile picker offered
+  13 chips at a tier the capability model never reached; ticking one raised the reschedule
+  prompt and returned a byte-identical plan. Carries three sub-lessons: check the COMPLEMENT
+  of a deliberate scope (both review passes read the scoped tier, where it works); COUNT the
+  gates between input and effect (two independent causes, either fix alone a no-op); and ask
+  what a guard was STANDING IN FRONT OF before deleting it (removing the tier gate made
+  effectiveItems' fail-open branch reachable). Closes-diagnose: `a9e3c7`. Regression test:
+  `test/contracts/equipment_owned_widens_test.dart`, mutation-proven on both legs.
+
 - **2026-08-28 (OI-89 equipment capability batch)** — Self-evolution. §2.53 NEW — a MIRROR harness stops modelling production and is green in every world (the 606-persona scorecard reported byte-identical numbers with the capability flag ON and OFF; `CascadeTracer`/`QueryV4Mirror` never modelled capability, and only the pool DATA was pinned, never the BEHAVIOUR). §2.54 NEW — an invariant green while the thing it protects is broken, because it describes ingredients not output ("≥3 baseline rows per pattern" passed while the generator left 331 empty slots; `pickedNames` dedup exhausts a 3-row pool inside one week). Both were found by MEASUREMENT after the ×2 plan review had converged, which is the transferable point: a converged review does not substitute for running the thing. Closes-diagnose: `f7b2c4`. Regression tests: `test/contracts/equipment_tier_consistency_test.dart` (per-pattern floor), `test/plan_generator/scorecard_gate_test.dart` (equipment violations promoted from ≤201 to a hard ==0).
 
 - **2026-05-15** — Skill created. Seeded with 10 bug classes from Tests #6 through #15.4 + audit 2026-05-12. Diagnose-doc `2026-05-15-debugging-skill-creation-4e9515.md`.
@@ -788,3 +798,30 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
   succeeds" are different claims. Whenever you write a test of the first shape, ask
   what the second one would assert and whether anything asserts it. Ref: OI-89,
   diagnose `f7b2c4`, `feedback_green_check_input_set_width.md` #26/#27.
+
+### 2.55 A deliberately SCOPED capability, wired to an UNSCOPED surface (NEW 2026-08-28)
+
+- **Telltale:** a user changes a setting, the app confirms it ("Reschedule Workouts?"),
+  and nothing observable changes. No error, no warning — the write succeeded, the sync
+  succeeded, the regeneration ran.
+- **Root-cause shape:** the FEATURE was deliberately scoped (OI-89 confined the equipment
+  capability floor to the bodyweight tier — a reviewed, correct decision), and then the
+  UI that collects its input was shipped **unscoped**. `tierOwnableItems` returned 13
+  chips for a `home_dumbbells` user whose tier the model never reached. Collect-but-ignore.
+- **Why BOTH review passes missed it, and this is the transferable half:** the ×2 plan
+  review and the B-pass both examined the bodyweight tier — *which is exactly where the
+  feature works*. Reviewing the scoped case confirms the scoping; it can never reveal
+  that the SURFACE is unscoped. **When a change is deliberately scoped, enumerate where
+  its entry points appear and check the COMPLEMENT of the scope.** One line of arithmetic
+  (`tierOwnableItems('home_dumbbells')` is non-empty) would have shown it.
+- **The second trap, which is why a one-line fix would have failed:** there were TWO
+  independent causes and either alone is a no-op. The producer returned `null` above the
+  tier, AND the consumer's own tier filter dropped the rows regardless. A fix for one,
+  tested against the other still in place, looks correct and does nothing. **Count the
+  gates between the input and the effect before believing one edit closes the path.**
+- **Third, generalisable beyond this feature:** removing a scope guard can make a
+  previously-unreachable branch reachable. `EquipmentVocab.effectiveItems` fails OPEN
+  (every canonical token) on an unknown tier — harmless while the bodyweight gate stood
+  in front of it, and a barbell-to-a-beginner hazard the moment the gate went. **When
+  deleting a guard, ask what the guard was standing in front of.**
+- Ref: OI-144, diagnose `a9e3c7`, `feedback_mistake_guard_without_its_mirror` #17.
