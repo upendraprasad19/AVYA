@@ -22,7 +22,11 @@ void main() {
         () {
       expect(EquipmentVocab.tierItems.keys.toSet(),
           {'bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'});
-      expect(EquipmentVocab.tierItems['bodyweight'], ['none', 'bodyweight']);
+      // ⑦ OI-89 decision 7: every tier now GRANTS the household baseline. The
+      // take(2) floor below is what stays pinned -- the baseline is APPENDED.
+      expect(EquipmentVocab.tierItems['bodyweight'],
+          ['none', 'bodyweight', 'wall', 'doorway', 'elevated surface',
+           'foot anchor', 'towel']);
       for (final list in EquipmentVocab.tierItems.values) {
         expect(list.take(2).toList(), ['none', 'bodyweight']);
       }
@@ -38,14 +42,27 @@ void main() {
               reason: 'excludable "$t" must be canonical');
         }
       }
-      // bodyweight tier → nothing to customize (the UI hides the section)
-      expect(EquipmentVocab.tierExcludableItems('bodyweight'), isEmpty);
+      // ⑦ OI-89 decisions 7+8: the bodyweight tier now HAS something to
+      // customize -- the contingent household items. `wall` is excluded: it is
+      // the un-excludable core alongside `bodyweight`, because the per-pattern
+      // floor invariant is defined over `{bodyweight, wall}`. (This assertion
+      // previously read `isEmpty`, with the comment "the UI hides the section" --
+      // which was the whole of OI-89's residual complaint: the users who most
+      // needed to declare their kit were the only ones who could not.)
+      expect(EquipmentVocab.tierExcludableItems('bodyweight'),
+          ['doorway', 'elevated surface', 'foot anchor', 'towel']);
       // an unknown tier → the safe default (['none','bodyweight']) → empty excludable
       expect(EquipmentVocab.tierExcludableItems('nonsense'), isEmpty);
-      // full_gym → 11 excludable (13 items minus none+bodyweight; ⑥ C2 added `cardio machine`)
-      expect(EquipmentVocab.tierExcludableItems('full_gym').length, 11);
-      // basic_gym → 7 excludable (9 items minus none+bodyweight; ⑥ C2 added `cardio machine`)
-      expect(EquipmentVocab.tierExcludableItems('basic_gym').length, 7);
+      // ⑦ OI-89: +7 accessories at full_gym, +6 at basic_gym. A tier-2 Indian
+      // gym may genuinely lack a plyo box or battle ropes -- the same reason
+      // `smith machine` has always been askable. The household baseline is NOT
+      // counted: a gym has walls and benches, so we never ask.
+      expect(EquipmentVocab.tierExcludableItems('full_gym').length, 18);
+      expect(EquipmentVocab.tierExcludableItems('basic_gym').length, 13);
+      for (final b in const ['wall', 'doorway', 'elevated surface',
+                             'foot anchor', 'towel']) {
+        expect(EquipmentVocab.tierExcludableItems('full_gym'), isNot(contains(b)));
+      }
     });
 
     test('chipLabel is a proper (non-fallback) label for every EXCLUDABLE canonical token',

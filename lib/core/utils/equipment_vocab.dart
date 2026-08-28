@@ -245,7 +245,11 @@ class EquipmentVocab {
   /// plan engine flag-gates the CALL); unit-pinned so the flag-read seam has a
   /// cheap direct test.
   static Set<String> floorSanitizedExclusions(Iterable<String>? raw) {
-    return normalize(raw).toSet()..removeAll(const {'none', 'bodyweight'});
+    // ⑦ OI-89 decision 8: `wall` joins the un-excludable core. The per-pattern
+    // floor invariant is defined over `{bodyweight, wall}`, so a user must not be
+    // able to exclude a wall and empty `vertical_push` / `knee_dominant`.
+    return normalize(raw).toSet()
+      ..removeAll(const {'none', 'bodyweight', 'wall'});
   }
 
   /// Normalizes [map]'s `equipment_needed` to canonical vocab at the
@@ -279,29 +283,82 @@ class EquipmentVocab {
   /// items. Invariant (pinned by equipment_chip_vocab_contract_test):
   /// `tierItems[t] ⊆ canonicalTokens ∪ {'none'}`.
   static const Map<String, List<String>> tierItems = <String, List<String>>{
-    'bodyweight': ['none', 'bodyweight'],
-    'home_dumbbells': ['none', 'bodyweight', 'dumbbells', 'resistance band'],
+    // ⑦ OI-89 (decision 7): the household baseline is APPENDED to every tier --
+    // a gym has walls and benches too, and `effectiveItems` feeds the AI coach at
+    // every tier, so `canPerform(Wall Sit)` must be true for a gym user. It is
+    // appended, never prepended: equipment_chip_vocab_contract_test asserts
+    // `list.take(2) == ['none','bodyweight']` for every tier.
+    'bodyweight': [
+      'none', 'bodyweight',
+      ..._householdBaseline,
+    ],
+    'home_dumbbells': [
+      'none', 'bodyweight', 'dumbbells', 'resistance band',
+      ..._householdBaseline,
+    ],
     'basic_gym': [
       'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
       'pull-up bar', 'cables', 'resistance band', 'cardio machine',
+      'ab wheel', 'jump rope', 'parallel bars', 'plyo box', 'medicine ball',
+      'battle ropes',
+      ..._householdBaseline,
     ],
     'full_gym': [
       'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
       'pull-up bar', 'cables', 'machines', 'smith machine',
       'resistance band', 'kettlebell', 'ez-bar', 'cardio machine',
+      'ab wheel', 'jump rope', 'parallel bars', 'plyo box', 'medicine ball',
+      'battle ropes', 'suspension trainer',
+      ..._householdBaseline,
     ],
   };
+
+  /// ⑦ OI-89: furniture and household improvisation. Granted by every tier
+  /// (decision 7); ASKED about only at `bodyweight` (see [tierAskableItems]).
+  /// `wall` leads deliberately -- decision 8 makes it un-excludable, so
+  /// [floorSanitizedExclusions] strips it alongside `none`/`bodyweight`.
+  static const _householdBaseline = <String>[
+    'wall', 'doorway', 'elevated surface', 'foot anchor', 'towel',
+  ];
+
+  /// ⑦ OI-89: the items we ASK a [tier] user about in the Customize UI --
+  /// which is NOT the same as what the tier grants.
+  ///
+  /// A gym has walls and benches, so asking a gym user "do you have a chair?" is
+  /// noise; the household baseline is contingent only at `bodyweight`, where a
+  /// hostel room genuinely might lack one. Accessories ARE asked at gym tiers --
+  /// a tier-2 Indian gym may well have no plyo box or battle ropes, which is the
+  /// same reason `smith machine` has always been askable.
+  ///
+  /// `wall` is askable at NO tier (decision 8): the per-pattern floor invariant
+  /// is defined over `{bodyweight, wall}`, so letting a user exclude it would let
+  /// them empty a movement pattern.
+  ///
+  /// An unknown tier returns `[]` rather than throwing -- `equipment_access` is
+  /// read at 14 sites with 4 different defaults and can hold legacy free text.
+  static List<String> tierAskableItems(String tier) {
+    const askableHousehold = ['doorway', 'elevated surface', 'foot anchor', 'towel'];
+    if (tier == 'bodyweight') return askableHousehold;
+    final granted = tierItems[tier];
+    if (granted == null) return const [];
+    return granted
+        .where((t) =>
+            t != 'none' && t != 'bodyweight' && !_householdBaseline.contains(t))
+        .toList();
+  }
 
   /// The items a user of [tier] can EXCLUDE in the Customize UI — the tier's items
   /// minus the bodyweight floor (`none`/`bodyweight` are never excludable, so the
   /// floor always survives — mirrors [floorSanitizedExclusions]). A `bodyweight`
   /// tier → `[]` (nothing to customize → the UI hides the section). Invariant
   /// (pinned): the result ⊆ [canonicalTokens].
-  static List<String> tierExcludableItems(String tier) {
-    return (tierItems[tier] ?? const ['none', 'bodyweight'])
-        .where((t) => t != 'none' && t != 'bodyweight')
-        .toList();
-  }
+  /// ⑦ OI-89: now a thin alias for [tierAskableItems]. Before this batch the
+  /// two were the same idea; they are not. A tier GRANTS the household baseline
+  /// but we never ASK a gym user about it, and `wall` is askable at no tier at
+  /// all (decision 8). Kept as a name because `pruneToTier` and the Customize
+  /// widget both read it -- one semantic, one implementation.
+  static List<String> tierExcludableItems(String tier) =>
+      tierAskableItems(tier);
 
   static const Map<String, String> _chipLabels = <String, String>{
     'dumbbells': 'Dumbbells',
