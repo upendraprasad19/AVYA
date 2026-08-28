@@ -4151,6 +4151,46 @@ OI-136, OI-132.
 - **Related**: OI-112 (the OI-number version, whose mint-time half is closed), rule 22, the
   `id_collision_note:` in `docs/diagnoses/2026-08-25-hold-days-dilute-phase-completion-b9d4c2.md`.
 
+## OI-143 — nothing checks whether a multi-task BATCH is finished; the Stop hook only asks the §5 rows (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Needs a design call on what "unfinished" means mechanically
+  (see "The hard part" below) before a script is worth writing.
+- **Verified**: 2026-08-28 — observed live, repeatedly, during the OI-89 equipment-capability batch.
+- **Identified**: 2026-08-28 · founder, after the agent ended four consecutive turns mid-batch with
+  "continuing with Task N" and then stopping. Founder: *"again you stopped? dont we have a hook or
+  something which keeps on checking if work is complete or not?"*
+- **Risk class**: process / agent-discipline enforcement
+- **What's wrong**: the four wired hook events are `UserPromptSubmit`, `PreToolUse:Skill`,
+  `SessionStart` and `Stop`. Three fire BEFORE work. `Stop` fires at turn-end — but
+  `scripts/batch_close_hook.dart` only asks the §5 close-out rows (retrospective, skill
+  self-evolution, CLAUDE.md, worktree retirement, full-suite scope). **None of them asks the
+  question that actually matters mid-batch: "is the work the founder asked for finished?"**
+  So the agent can answer all five §5 rows honestly, correctly, and still stop with 6 of 13
+  planned tasks unstarted. The hook's own design note says it fires "only when commits have
+  landed and are unpushed" — which is exactly the state a HALF-DONE batch is in, and it reads
+  that state as an end-of-batch signal rather than a mid-batch one.
+- **Why the existing guards do not cover it**: `feedback_autonomous_auto_mode.md` and
+  `feedback_no_stop_until_done.md` both cover it in PROSE, and §4.4 rule 23 ("No stopping
+  mid-batch") is a stated invariant. This file's own §4.13 point 6 records the governing lesson:
+  *"everything with a gate holds, everything on intention decays."* Rule 23 has no gate.
+- **The hard part (why this is not a 20-minute script)**: a script would have to know what "the
+  work" is. Candidate signals, none free of false positives:
+    - an implementation plan under `docs/superpowers/plans/` with unticked `- [ ]` boxes — but
+      plans legitimately outlive a single session, and a plan is not always present;
+    - a `docs/audit/<batch>.closure.yaml` with non-terminal entries — but Gate 40 already
+      hard-fails on those, and the file is written at batch END, not start;
+    - TodoWrite state — ephemeral, not readable from a hook.
+  A false "you are not done" on a genuinely finished batch is worse than the current silence: it
+  would train the agent to dismiss the hook, which is how the §5 rows decayed in the first place.
+- **Fix shape (not yet attempted)**: most promising is the plan-file signal, scoped narrowly — if
+  a plan file was modified or added in the unpushed range AND still has unticked steps AND the
+  session has landed commits against it, emit an advisory (NOT blocking) line naming the next
+  unticked step. Advisory because a blocking Stop hook re-triggers Stop, which
+  `batch_close_hook.dart` already guards against with `stop_hook_active`.
+- **Blast radius estimate**: `platform` (`scripts/**` hook machinery is pinned platform in
+  `docs/blast_radius.yaml`); no migration, no schema.
+
 ## OI-142 — deploy-artifact commits are unenforced: prod runs Edge Function code whose deploy record exists only in one machine's working tree (P2)
 
 - **Status**: OPEN

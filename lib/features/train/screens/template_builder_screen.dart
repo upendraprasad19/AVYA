@@ -1,3 +1,5 @@
+import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -515,17 +517,30 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
   /// additions quickly. When no query, caps at 30 bundled + all custom.
   void _refresh(String query) {
     final repo = ExerciseRepository.instance;
-    final custom = repo.getCustomExercises();
+    // ⑦ OI-89 seam 7: filter BEFORE .take(30). Filtering the first 30 rows
+    // instead would leave a bodyweight user staring at a near-empty list — the
+    // cap is applied to the wrong set. All three reads are covered: the custom
+    // list, the empty-query default view, and the search results.
+    final cap = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
+    List<Map<String, dynamic>> doable(List<Map<String, dynamic>> rows) =>
+        cap == null
+            ? rows
+            : rows
+                .where((e) =>
+                    EquipmentCapability.canPerform(e['equipment_needed'], cap))
+                .toList();
+
+    final custom = doable(repo.getCustomExercises());
 
     List<Map<String, dynamic>> bundled;
     List<Map<String, dynamic>> matchedCustom;
 
     if (query.isEmpty) {
-      bundled = repo.getAll().take(30).toList();
+      bundled = doable(repo.getAll()).take(30).toList();
       matchedCustom = custom;
     } else {
       final q = query.toLowerCase();
-      bundled = repo.search(query).take(30).toList();
+      bundled = doable(repo.search(query)).take(30).toList();
       matchedCustom = custom.where((e) {
         final name = (e['name'] as String?)?.toLowerCase() ?? '';
         return name.contains(q);

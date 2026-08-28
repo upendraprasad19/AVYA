@@ -20,6 +20,8 @@ import 'workout_schedule_read_service.dart';
 import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
+import '../../shared/repositories/plan_engine/equipment_capability.dart';
+import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
 
 /// Result returned by [SwapService.swapExerciseInDay].
 class SwapExerciseResult {
@@ -237,6 +239,26 @@ class SwapService {
       throw SwapExerciseException(
         'exercise_not_found',
         'Exercise "$toExerciseId" not found in library or custom exercises',
+      );
+    }
+
+    // ⑦ OI-89 seam 9: this service had NO equipment check, and the AI coach's
+    // `swap_exercise` tool drives it (tool_dispatcher.dart:275, :588) without
+    // ever opening the swap sheet — so filtering that sheet does not cover this
+    // path. WorkoutScheduleService.swapExerciseInDay delegates here too, so one
+    // check covers both entry points.
+    //
+    // Refuses rather than silently substituting: the caller ASKED for a specific
+    // exercise, and quietly giving them a different one is worse than saying no.
+    // The AI coach surfaces the message to the user.
+    final capability = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
+    if (capability != null &&
+        !EquipmentCapability.canPerform(newLib['equipment_needed'], capability)) {
+      throw SwapExerciseException(
+        'equipment_unavailable',
+        '"${(newLib['name'] as String?) ?? toExerciseId}" needs equipment you '
+            'have not told us you have. Add it under Profile > Equipment, or '
+            'pick another exercise.',
       );
     }
 

@@ -6,7 +6,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
-### exercise_equipment_tier (2 bugs)
+### exercise_equipment_tier (3 bugs)
+- 2026-08-28 b6f4d1 — A bodyweight-tier user tapping "swap" or "+ Add Exercise" mid-workout is offered all 259 library rows including Barbell Back Squat; the template builder shows the same unfiltered list; and the AI…
 - 2026-08-28 c9a7e2 — A bodyweight-tier user is prescribed Dead Hang (pull-up bar), Band Pull Apart (resistance band) and Chest Doorway Stretch (doorway) in the warm-up and cool-down of every generated day, and a…
 - 2026-07-19 d4e8a1 — Exercises doable with little/no equipment were HIDDEN from the tiers they belong to because their `equipment_tier` array skipped the middle tiers: Glute Bridge tagged ["bodyweight","full_gym"]…
 
@@ -1079,6 +1080,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-28 | b6f4d1 | A bodyweight-tier user tapping "swap" or "+ Add Exercise" mid-workout is offered all 259 library rows including Barbell Back Squat; the template builder shows the same unfiltered list; and the AI… | exercise_equipment_tier | test/contracts/ui_seam_capability_test.dart |
 | 2026-08-28 | c9a7e2 | A bodyweight-tier user is prescribed Dead Hang (pull-up bar), Band Pull Apart (resistance band) and Chest Doorway Stretch (doorway) in the warm-up and cool-down of every generated day, and a… | exercise_equipment_tier | test/contracts/warmup_finisher_capability_test.dart |
 | 2026-08-27 | b4d7e9 | `dart run scripts/retire_worktree.dart` reports `KEEP <slug> [1 non-regenerable ignored file(s)]` for a worktree that is merged, has no tracked changes and nothing unpushed. Nothing names the file —… | A tool that WRITES INTO the worktree made the worktree permanently unretirable. §5's `Stop` hook drops `.claude/.batch_close_state` — its once-per-HEAD marker — into whichever worktree the batch closed in. `retire_worktree_lib.dart` classifies any gitignored file that is not on its exact-match `regenerableIgnoredPaths` list as PRECIOUS and refuses. The marker was not on that list, so the refusal was correct by the predicate and wrong in effect. | test/scripts/retire_worktree_lib_test.dart |
 | 2026-08-27 | a3e9b7 | The pre-push full suite failed one assertion in `test/contracts/subscription_cqrs_behavioral_test.dart:286` — `Expected: null, Actual: '2026-08-26T14:22:04.764643'`, reason "the decision path must… | A stability sampler cannot distinguish "this write has not been scheduled yet" from "this write has finished" — both look like no change. f3c7d2 stated exactly that about the one fire-and-forget write at subscription_service.dart:458, then fixed only the setUp contamination it caused, leaving the sampler itself as the synchronisation mechanism for the five writes that follow. But isPro() calls _downgradeLocally() WITHOUT awaiting it (:464), so at the instant _settle() begins, none of those five writes need have started. Three stable 10 ms rounds can elapse entirely inside the gap between two of them. The fix stops sampling for a proxy and waits for the signal the production code already emits — _downgradeLocally fires onStateChanged only AFTER awaiting all five writes. | test/contracts/subscription_cqrs_behavioral_test.dart |

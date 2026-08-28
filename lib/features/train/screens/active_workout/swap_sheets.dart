@@ -50,6 +50,9 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex) {
       currentExerciseName: currentExercise.name,
       category: currentExercise.category,
       equipment: currentExercise.equipmentNeeded,
+      // ⑦ OI-89 seam 6: the user's capability — NOT `equipment` above, which
+      // is the OUTGOING exercise's requirement and would invert the filter.
+      capability: TrainingHistoryAnalyzer.resolveCapabilityFromProfile(),
       onSelect: (swapEx) {
         ref.read(activeWorkoutProvider.notifier).swapExercise(
               exerciseIndex,

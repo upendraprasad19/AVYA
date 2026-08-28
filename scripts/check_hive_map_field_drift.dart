@@ -334,6 +334,12 @@ const _alwaysOk = <String>{
   // also reads exlog_* rows (weakMuscles). Exactly the equipment_exclusions
   // shape directly above.
   'equipment_owned',
+  // ⑦ OI-89 — a canonical userBox['profile'] field read by
+  // TrainingHistoryAnalyzer.resolveCapabilityFromProfile(), which the four UI
+  // seams (swap sheet, exercise picker, template builder, SwapService) call
+  // because they have no generateV4 caller to pass tier down from. NOT an
+  // exlog_*/schedule_* field; same heuristic mis-attribution as the two above.
+  'equipment_access',
   // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +
   // PlanIntegrityReconciler from `user_progress.plan_json`, NOT from a
   // `schedule_*` entry. The prefix heuristic mis-attributes them because both

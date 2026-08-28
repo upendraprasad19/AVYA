@@ -188,6 +188,31 @@ class TrainingHistoryAnalyzer {
     }
   }
 
+  /// ⑦ OI-89: the capability set read entirely from the stored profile.
+  ///
+  /// The plan engine gets its tier and exclusions passed down from generateV4;
+  /// the UI seams (swap sheet, exercise picker, template builder) have no such
+  /// caller, so they read all three here. Same null semantics as
+  /// [resolveCapability] — null means "do not enforce".
+  static Set<String>? resolveCapabilityFromProfile() {
+    try {
+      final profile = HiveService.instance.userBox.get('profile');
+      if (profile is! Map) return null;
+      final tier = (profile['equipment_access'] as String?) ?? 'bodyweight';
+      return resolveCapability(
+        tier: tier,
+        exclusions: EquipmentVocab.floorSanitizedExclusions(
+            EquipmentVocab.fromProfile(profile['equipment_exclusions'])),
+        flagEnabled: PlanEngineFlags.equipmentCapabilityFloorEnabled,
+      );
+    } catch (e, st) {
+      debugPrint('[TrainingHistoryAnalyzer.resolveCapabilityFromProfile] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'training_history_analyzer_capability_profile'));
+      return null; // fail OPEN
+    }
+  }
+
   /// ⑦ OI-89: the user's real equipment capability, or NULL for "do not
   /// enforce". Mirrors [resolveEquipmentExclusions].
   ///
