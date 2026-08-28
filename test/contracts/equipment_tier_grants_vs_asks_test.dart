@@ -115,5 +115,91 @@ void main() {
       expect(EquipmentVocab.floorSanitizedExclusions(['towel', 'elevated surface']),
           {'towel', 'elevated surface'});
     });
+
+  group('tierOwnableItems — the ADD half the picker offers (⑦ OI-89)', () {
+    const tiers = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
+
+    test('every offered item is canonical', () {
+      for (final t in tiers) {
+        for (final item in EquipmentVocab.tierOwnableItems(t)) {
+          expect(EquipmentVocab.canonicalTokens, contains(item),
+              reason: '"$item" offered at $t is not a canonical token, so '
+                  'selecting it would widen nothing');
+        }
+      }
+    });
+
+    test('never offers what the tier already GRANTS', () {
+      // Asking a full_gym user whether they own a barbell is a question whose
+      // answer we already have, and a chip that changes nothing when tapped.
+      for (final t in tiers) {
+        final granted = EquipmentVocab.tierItems[t]!.toSet();
+        for (final item in EquipmentVocab.tierOwnableItems(t)) {
+          expect(granted, isNot(contains(item)),
+              reason: '$t already grants "$item"');
+        }
+      }
+    });
+
+    test('never offers a gym FIXTURE', () {
+      // `canonicalTokens - tierItems[tier]` would hand a bodyweight user
+      // `cables`, `machines` and `smith machine`. Nobody owns those at home, so
+      // the honest answer is always no and the chip is pure noise in a picker
+      // whose job is to be short enough that a real person finishes it.
+      for (final t in tiers) {
+        final offered = EquipmentVocab.tierOwnableItems(t);
+        for (final fixture in const ['cables', 'machines', 'smith machine']) {
+          expect(offered, isNot(contains(fixture)),
+              reason: '$t is offered the gym fixture "$fixture"');
+        }
+      }
+    });
+
+    test('a bodyweight user IS offered the things they plausibly own', () {
+      final offered = EquipmentVocab.tierOwnableItems('bodyweight');
+      for (final item in const [
+        'pull-up bar', 'dumbbells', 'resistance band', 'kettlebell'
+      ]) {
+        expect(offered, contains(item));
+      }
+      expect(offered, isNotEmpty);
+    });
+
+    test('a full_gym user is offered little or nothing', () {
+      // The tier already grants nearly everything, so the picker should all but
+      // disappear rather than ask redundant questions.
+      expect(EquipmentVocab.tierOwnableItems('full_gym').length,
+          lessThanOrEqualTo(2));
+    });
+
+    test('an unknown tier offers the full home list rather than crashing', () {
+      expect(EquipmentVocab.tierOwnableItems('mars_colony'), isNotEmpty);
+    });
+  });
+
+  group('sanitizedOwned — what a saved owned list may contain', () {
+    test('drops the floor items every tier already grants', () {
+      expect(EquipmentVocab.sanitizedOwned(['bodyweight', 'none', 'dumbbells']),
+          ['dumbbells'],
+          reason: '"owning" bodyweight could never widen anything');
+    });
+
+    test('drops an unmappable token', () {
+      expect(EquipmentVocab.sanitizedOwned(['moon rocks']), isEmpty);
+    });
+
+    test('is SORTED and de-duplicated — a stable save', () {
+      // An order-only difference would make listEquals report a change that is
+      // not one, firing the reschedule prompt on a no-op profile edit.
+      expect(EquipmentVocab.sanitizedOwned(['pull-up bar', 'dumbbells', 'dumbbells']),
+          ['dumbbells', 'pull-up bar']);
+    });
+
+    test('null and garbage are crash-safe', () {
+      expect(EquipmentVocab.sanitizedOwned(null), isEmpty);
+      expect(EquipmentVocab.sanitizedOwned(42), isEmpty);
+      expect(EquipmentVocab.sanitizedOwned('dumbbells'), ['dumbbells']);
+    });
+  });
   });
 }

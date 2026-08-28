@@ -366,6 +366,42 @@ class EquipmentVocab {
   ///
   /// An unknown tier returns `[]` rather than throwing -- `equipment_access` is
   /// read at 14 sites with 4 different defaults and can hold legacy free text.
+  /// ⑦ OI-89 — the items to OFFER in Profile's "I also have" picker, for a user
+  /// of [tier]: things they might own that their tier does not already grant.
+  ///
+  /// Deliberately NOT `canonicalTokens - tierItems[tier]`. That arithmetic hands a
+  /// bodyweight user 18 chips including `cables`, `machines` and `smith machine` —
+  /// gym FIXTURES nobody owns at home. Offering them would be asking a question
+  /// whose honest answer is always no, and the picker's job is to be short enough
+  /// that a real person finishes it.
+  ///
+  /// `_homeOwnable` is therefore a curated list, ordered most→least likely, and
+  /// subtracted from what the tier already grants so a gym user is never asked
+  /// about their own gym's barbell. A `full_gym` user sees only the accessories a
+  /// gym may genuinely lack.
+  ///
+  /// Invariant (pinned by equipment_vocab_lockstep_lib_test): the result ⊆
+  /// [canonicalTokens], and is disjoint from `tierItems[tier]`.
+  static const _homeOwnable = <String>[
+    'resistance band', 'dumbbells', 'pull-up bar', 'kettlebell', 'jump rope',
+    'ab wheel', 'bench', 'suspension trainer', 'medicine ball', 'plyo box',
+    'barbell', 'parallel bars', 'cardio machine', 'ez-bar', 'battle ropes',
+  ];
+
+  static List<String> tierOwnableItems(String tier) {
+    final granted = tierItems[tier]?.toSet() ?? const <String>{};
+    return _homeOwnable.where((t) => !granted.contains(t)).toList();
+  }
+
+  /// Canonical tokens from a user-selected owned list, floor-sanitized the same
+  /// way exclusions are: a token that is not canonical widens nothing, and the
+  /// floor items are never "owned" because every tier already grants them.
+  static List<String> sanitizedOwned(Object? raw) {
+    final owned = fromProfile(raw).toSet();
+    owned.removeWhere((t) => t == 'none' || t == 'bodyweight');
+    return owned.toList()..sort();
+  }
+
   static List<String> tierAskableItems(String tier) {
     const askableHousehold = ['doorway', 'elevated surface', 'foot anchor', 'towel'];
     if (tier == 'bodyweight') return askableHousehold;

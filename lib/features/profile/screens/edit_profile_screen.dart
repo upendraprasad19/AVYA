@@ -51,6 +51,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   String _goal = 'general_fitness';
   String _equipment = 'full_gym';
   List<String> _equipmentExclusions = <String>[]; // ⑥ C1 — items excluded from the tier
+  List<String> _equipmentOwned = <String>[]; // ⑦ OI-89 — items owned BEYOND the tier
+  List<String> _originalEquipmentOwned = <String>[];
   int _daysPerWeek = 4;
   String _lifestyleActivity = 'desk_job';
   String _dietPreference = 'non_veg';
@@ -167,6 +169,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // canonical List; never `as List`). The tier-change onChanged prunes stale.
     _equipmentExclusions =
         EquipmentVocab.fromProfile(profile['equipment_exclusions']);
+    // ⑦ OI-89 — the ADD half. sanitizedOwned drops `none`/`bodyweight`, which
+    // every tier already grants, so "owning" them could never widen anything.
+    _equipmentOwned = EquipmentVocab.sanitizedOwned(profile['equipment_owned']);
     _daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
     _lifestyleActivity =
         (profile['lifestyle_activity'] as String?) ?? 'desk_job';
@@ -237,6 +242,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _originalGoal = _goal;
     _originalEquipment = _equipment;
     _originalEquipmentExclusions = List<String>.of(_equipmentExclusions); // ⑥ C1
+    _originalEquipmentOwned = List<String>.of(_equipmentOwned); // ⑦ OI-89
     _originalFitnessExperience = _fitnessExperience;
     _originalSessionDuration = _sessionDuration;
     _originalPhysiqueFocus = _physiqueFocus;
@@ -417,9 +423,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   // ⑥ C1 — a tier downgrade must drop now-invalid exclusions.
                   _equipmentExclusions =
                       EquipmentVocab.pruneToTier(_equipmentExclusions, v);
+                  // ⑦ OI-89: a tier change re-grants items, so anything the
+                  // new tier already gives is no longer something you "also
+                  // have". Dropping it keeps owned disjoint from the tier,
+                  // which is what tierOwnableItems offers and what the chip
+                  // state reads back.
+                  _equipmentOwned = EquipmentVocab.tierOwnableItems(v)
+                      .where(_equipmentOwned.contains)
+                      .toList();
                 }),
               ),
               _buildEquipmentCustomizeChips(),
+              _buildEquipmentOwnedChips(),
               const SizedBox(height: AppSpacing.gridGap),
               _buildDaysSelector(),
               const SizedBox(height: AppSpacing.gridGap),
@@ -1363,6 +1378,87 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
+  // ── I also have (⑦ OI-89) ────────────────────────────────
+
+  /// Multi-select to ADD items the user owns beyond their tier (the mirror of
+  /// [_buildEquipmentCustomizeChips], which subtracts).
+  ///
+  /// Why this exists: the bodyweight tier is a hard floor as of OI-89, so
+  /// without an ADD half a user who owns exactly one pull-up bar has no way to
+  /// say so and the floor keeps refusing them every pull-up variation. The tier
+  /// answers "what can we assume?"; this answers "what else do you actually
+  /// have?".
+  ///
+  /// The offered list is [EquipmentVocab.tierOwnableItems], NOT
+  /// `canonicalTokens - tierItems[tier]` — see that method for why gym fixtures
+  /// are excluded. Selected items are GREEN (additive) against the Customize
+  /// section's RED (subtractive), so the two read as opposites at a glance.
+  Widget _buildEquipmentOwnedChips() {
+    final options = EquipmentVocab.tierOwnableItems(_equipment);
+    if (options.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.gridGap),
+        Text(
+          'I also have — tap anything you own',
+          style: AppTypography.body
+              .copyWith(fontSize: 13, color: AppColors.textDim),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((option) {
+            final isOwned = _equipmentOwned.contains(option);
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  final next = List<String>.of(_equipmentOwned);
+                  if (isOwned) {
+                    next.remove(option);
+                  } else {
+                    next.add(option);
+                  }
+                  // Sorted so a save is byte-stable regardless of tap order —
+                  // otherwise listEquals sees a change that is not one and the
+                  // reschedule prompt fires on a no-op edit.
+                  next.sort();
+                  _equipmentOwned = next;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isOwned
+                      ? AppColors.green.withValues(alpha: 0.12)
+                      : AppColors.input,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: isOwned
+                        ? AppColors.green.withValues(alpha: 0.4)
+                        : AppColors.border,
+                    width: isOwned ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  EquipmentVocab.chipLabel(option),
+                  style: AppTypography.body.copyWith(
+                    fontSize: 13,
+                    fontWeight: isOwned ? FontWeight.w700 : FontWeight.w400,
+                    color: isOwned ? AppColors.green : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   // ── Body Fat % ───────────────────────────────────────────────────
 
   Widget _buildBodyFatField() {
@@ -1685,6 +1781,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'primary_goal': _goal,
         'equipment_access': _equipment,
         'equipment_exclusions': _equipmentExclusions, // ⑥ C1
+        'equipment_owned': _equipmentOwned, // ⑦ OI-89 (cloud col: migration 124)
         'lifestyle_activity': _lifestyleActivity,
         'pace_preference': _pacePreference, // Bug #24
         'activity_level': derivedActivityLevel,
@@ -1765,6 +1862,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         originalInjuries: _originalInjuries,
         equipmentExclusions: _equipmentExclusions,
         originalEquipmentExclusions: _originalEquipmentExclusions,
+        equipmentOwned: _equipmentOwned,
+        originalEquipmentOwned: _originalEquipmentOwned,
       );
 
       if (planChanged && WorkoutScheduleService.instance.hasPlan() && mounted) {
@@ -1780,6 +1879,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         }
         if (!listEquals(_equipmentExclusions, _originalEquipmentExclusions)) {
           changes.add('Equipment customized: ${_originalEquipmentExclusions.length} → ${_equipmentExclusions.length} excluded');
+        }
+        if (!listEquals(_equipmentOwned, _originalEquipmentOwned)) {
+          changes.add('Equipment owned: ${_originalEquipmentOwned.length} → ${_equipmentOwned.length} item(s)');
         }
         if (_fitnessExperience != _originalFitnessExperience) {
           String label(String e) => e[0].toUpperCase() + e.substring(1);
@@ -1982,6 +2084,8 @@ bool computePlanChanged({
   required List<String> originalInjuries,
   required List<String> equipmentExclusions,
   required List<String> originalEquipmentExclusions,
+  required List<String> equipmentOwned,
+  required List<String> originalEquipmentOwned,
 }) {
   return daysPerWeek != originalDaysPerWeek ||
       goal != originalGoal ||
@@ -1990,5 +2094,10 @@ bool computePlanChanged({
       sessionDuration != originalSessionDuration ||
       physiqueFocus != originalPhysiqueFocus ||
       !listEquals(injuries, originalInjuries) ||
-      !listEquals(equipmentExclusions, originalEquipmentExclusions);
+      !listEquals(equipmentExclusions, originalEquipmentExclusions) ||
+      // ⑦ OI-89: owning a new item WIDENS the pool, so the plan can improve.
+      // It joins the existing eight fields on the "Reschedule Workouts?" prompt
+      // rather than regenerating silently — no new regeneration behaviour, and
+      // the user stays in control of when their plan changes under them.
+      !listEquals(equipmentOwned, originalEquipmentOwned);
 }
