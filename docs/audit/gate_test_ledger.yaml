@@ -125,6 +125,32 @@ check_edge_function_rollback_script.dart:
 check_exlog_key_canonical.dart:
   grandfathered: 2026-08-10
 
+check_exercise_seams.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/exercise_seam_lib_test.dart
+  evidence: "Baseline 11/11 green. TWO mutations, each on a separate protective leg
+    and each verified to COMPILE first -- a mutation that breaks the build reddens
+    everything and proves nothing (the first attempt did exactly that and was
+    discarded). (1) neutering the NEW-FILE check, by defaulting an unknown path to a
+    synthetic allowlist entry, reddens 1. (2) neutering the COUNT check, by ANDing
+    its condition with false, reddens 1. Restored: 11/11 green. WHY THIS GATE EXISTS:
+    across four review rounds the count of exercise-emitting seams went 5 -> 7 -> 10
+    -> 11, each round finding one the previous had missed -- a swap sheet that
+    declared an `equipment` field and read it nowhere, an active-workout picker
+    filtered on category and name only, a cardio finisher whose jump_rope case was
+    the only one of five ignoring hasGymEquipment, and warmup_cooldown prescribing
+    Dead Hang and Band Pull Apart into every generated day. That is a METHOD failure,
+    not a counting one. On its FIRST live run the gate corrected the author's own
+    hand survey twice, catching two sites that were `//` comments a plain grep had
+    counted. Pinned by FILE with an expected COUNT: line numbers rot, so keying on
+    them fails on every unrelated edit, while a count moves exactly when a seam is
+    added or removed. KNOWN LIMITS, documented in the lib header rather than implied
+    away: the community-download write seam uses an API matching none of the
+    patterns, a call through a variable is invisible to any source scan, and block
+    comments are not stripped. It bounds the class it can see; it does not prove the
+    class is empty."
+
 check_equipment_audit.dart:
   mutation_proven: true
   test_path:
