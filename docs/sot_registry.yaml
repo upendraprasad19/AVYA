@@ -3704,7 +3704,7 @@ concepts:
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1592-1620
+        line_range: 1696-2063
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
@@ -5570,7 +5570,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 387-410
+        line_range: 427-450
         method: getCustomExercises
         semantic: filter
         fields_read: [name, category, logging_type, type]
@@ -9150,7 +9150,7 @@ concepts:
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 655-720
+        line_range: 723-793
         method: _restoreUserPreferences
         semantic: latest
         fields_read: [enabled]

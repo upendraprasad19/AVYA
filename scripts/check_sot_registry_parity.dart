@@ -110,7 +110,19 @@ void main(List<String> args) async {
     exit(1);
   }
 
-  final registryContent = registryFile.readAsStringSync();
+  // ⚠ NORMALISE CRLF FIRST. Every regex below anchors on a newline and
+  // captures with a negated-newline class, so on a CRLF working copy each
+  // captured path keeps a trailing carriage return, no File() resolves, and
+  // the gate reports "PASS -- 0 errors" HAVING CHECKED NOTHING. A vacuous
+  // pass, in the same colour as a real one.
+  //
+  // Not hypothetical: on 2026-08-28 this gate sat green through 18 local
+  // commits while three line_ranges drifted, and CI -- which checks out LF --
+  // failed on the push. Git stores this file with LF and Windows checks it out
+  // as CRLF, so EVERY worktree on the dev machine sat in the vacuous state and
+  // the gate's only real coverage was post-push.
+  final registryContent =
+      registryFile.readAsStringSync().replaceAll('\r\n', '\n');
   final errors = <String>[];
 
   // ── Track matched ranges so inline parsers don't double-count ──
