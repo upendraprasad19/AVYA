@@ -704,6 +704,18 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 
 ## Changelog
 
+- **2026-08-28 (OI-144, same branch)** — Self-evolution. §2.55 NEW — a deliberately SCOPED
+  capability wired to an UNSCOPED surface (collect-but-ignore). The Profile picker offered
+  13 chips at a tier the capability model never reached; ticking one raised the reschedule
+  prompt and returned a byte-identical plan. Carries three sub-lessons: check the COMPLEMENT
+  of a deliberate scope (both review passes read the scoped tier, where it works); COUNT the
+  gates between input and effect (two independent causes, either fix alone a no-op); and ask
+  what a guard was STANDING IN FRONT OF before deleting it (removing the tier gate made
+  effectiveItems' fail-open branch reachable). Closes-diagnose: `a9e3c7`. Regression test:
+  `test/contracts/equipment_owned_widens_test.dart`, mutation-proven on both legs.
+
+- **2026-08-28 (OI-89 equipment capability batch)** — Self-evolution. §2.53 NEW — a MIRROR harness stops modelling production and is green in every world (the 606-persona scorecard reported byte-identical numbers with the capability flag ON and OFF; `CascadeTracer`/`QueryV4Mirror` never modelled capability, and only the pool DATA was pinned, never the BEHAVIOUR). §2.54 NEW — an invariant green while the thing it protects is broken, because it describes ingredients not output ("≥3 baseline rows per pattern" passed while the generator left 331 empty slots; `pickedNames` dedup exhausts a 3-row pool inside one week). Both were found by MEASUREMENT after the ×2 plan review had converged, which is the transferable point: a converged review does not substitute for running the thing. Closes-diagnose: `f7b2c4`. Regression tests: `test/contracts/equipment_tier_consistency_test.dart` (per-pattern floor), `test/plan_generator/scorecard_gate_test.dart` (equipment violations promoted from ≤201 to a hard ==0).
+
 - **2026-05-15** — Skill created. Seeded with 10 bug classes from Tests #6 through #15.4 + audit 2026-05-12. Diagnose-doc `2026-05-15-debugging-skill-creation-4e9515.md`.
 - **2026-05-15 (evening, post-APK-Test-#16)** — Self-evolution. (a) §2.4 expanded with mode-B 42P10 trap (5th writer/reader drift instance), live-arbiter scaffold reference, NOT-NULL-arbiter class rule. (b) §2.5 retry budget bumped to `[2000, 6000, 12000]` + 504 trigger + direct-HTTP wrapping. (c) §2.11 added — Repository `box.get(key) → Map` id-injection class (Gate 16). (d) Two new red flags in §3: onConflict-change verification + "Gate FAIL output but exit 0" trap. Closes-diagnose: `76c8f4`, `9f4ab2`, `25e91d`, `c01d57`, `a5d29c`.
 - **2026-05-16 (post-APK-Test-#16.1)** — Self-evolution. (e) §2.12 NEW — "Rogue Hive key formula bypasses canonical writer" (7th writer/reader drift instance, 3 rogue exlog formulas, Gate 17 new). (f) §2.13 NEW — "Telemetry sink silently drops past rate limit" (log-client-error 100/24h silent drop, found this batch). Closes-diagnose: `a16c1a`, `a17bc3`, `913261`, `9d12af`.
@@ -740,3 +752,76 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 - **The check, and it is one grep:** before deleting a binding, grep the file for the **binding name**, not the feature name. `grep -nE "(^|[^.\w])<var>\b" <file>` — every hit is a consumer you own. Do it for every variable the removed block introduced (`snapshot`, `snapErr`, the destructured names), not just the one you were thinking about.
 - **Why review misses it:** the diff reads as a clean substitution — a per-user query replaced by a batched helper, strictly better. Nothing in the removed hunk hints that something 60 lines away depended on it, and a reviewer reading the hunk sees only the hunk.
 - **⚠ Environment caveat that makes this class expensive here:** there is **no Deno on the dev machine**, so nothing type-checks `supabase/functions/` locally — not `flutter analyze`, not the pre-commit gates (Dart source-greps), not pre-push. The `deno-edge-functions` CI job (`test.yml:120`) is the ONLY type-check, so an EF orphan is invisible until after the push lands. For any Edge Function edit, treat the by-name grep above as mandatory rather than as a nicety, and expect CI to be the authority. Diagnose `e4a1b7`.
+
+### 2.53 A MIRROR harness stops modelling production, so it is green in every world (NEW 2026-08-28)
+
+- **Telltale, and it is unmistakable once you look for it:** you toggle the input the
+  batch exists to ship, re-run the measurement harness, and the numbers come back
+  **byte-identical**. Not close — identical. On OI-89 the 606-persona scorecard
+  reported the same equipment figures with `enable_equipment_capability_floor` ON and
+  OFF, because `CascadeTracer` + `QueryV4Mirror` (mirrors of the production selector)
+  had never modelled capability at all.
+- **Root-cause shape:** a mirror drifts from its original **silently**, because nothing
+  fails when it does. The repo had already learned half the lesson —
+  `universal_pool_mirror_test.dart` pins the pool DATA equal between the two — but
+  nothing pinned the mirrors' BEHAVIOUR. The data pin caught a pool edit instantly;
+  the behaviour gap survived four review rounds and a full ×2-reviewed plan.
+- **The check, one line:** run the harness with the new dependency REMOVED or toggled
+  and diff. Identical output ⇒ it cannot see that dependency. Same test as
+  `feedback_bad_news_vs_no_news.md` names for its class, which is a hint they share a
+  root: *a signal that cannot vary cannot inform.* Cheaper still: **write down the
+  number you expect to move BEFORE running.**
+- **The fix shape:** when you add a filter to production, add it to every mirror in the
+  SAME commit, and thread the same parameter type (`Set<String>?` with null = do not
+  enforce) so the two cannot disagree about the off state.
+- **Why review misses it:** reviewers read the production diff. The mirror is test
+  infrastructure, it was correct when written, and its staleness is invisible in any
+  diff that does not touch it. Ref: OI-89, diagnose `f7b2c4`.
+
+### 2.54 An invariant is GREEN while the thing it protects is broken, because it describes the ingredients and not the output (NEW 2026-08-28)
+
+- **Telltale:** a freshly-written invariant test passes, and the user-visible failure it
+  was written to prevent happens anyway. On OI-89, "every movement pattern holds ≥3
+  rows performable at the bodyweight baseline and ≥1 at the un-excludable floor" went
+  green — and the generator left **331 empty slots**, all bodyweight-tier, in exactly
+  the six patterns that had been taken to exactly 3.
+- **Root-cause shape:** the invariant is a statement about the **data**; the failure is
+  a property of the **consumer running over that data**. Here the generator dedups on
+  `pickedNames` across a whole plan, so a 3-row pool is exhausted inside one week, and
+  `suitableFor` narrows it further for advanced users (147 of the 331). Both statements
+  were true simultaneously — the rows existed and the slots were empty.
+- **The check:** assert on the CONSUMER'S OUTPUT, not on the ingredient count. And
+  calibrate the threshold against something that already works rather than picking a
+  round number: the patterns with no empty slots had 5–6 rows, so 3 was never going to
+  be enough, and no amount of re-reading the invariant would have said so.
+- **The generalisation worth carrying:** "enough X exist" and "the thing that consumes X
+  succeeds" are different claims. Whenever you write a test of the first shape, ask
+  what the second one would assert and whether anything asserts it. Ref: OI-89,
+  diagnose `f7b2c4`, `feedback_green_check_input_set_width.md` #26/#27.
+
+### 2.55 A deliberately SCOPED capability, wired to an UNSCOPED surface (NEW 2026-08-28)
+
+- **Telltale:** a user changes a setting, the app confirms it ("Reschedule Workouts?"),
+  and nothing observable changes. No error, no warning — the write succeeded, the sync
+  succeeded, the regeneration ran.
+- **Root-cause shape:** the FEATURE was deliberately scoped (OI-89 confined the equipment
+  capability floor to the bodyweight tier — a reviewed, correct decision), and then the
+  UI that collects its input was shipped **unscoped**. `tierOwnableItems` returned 13
+  chips for a `home_dumbbells` user whose tier the model never reached. Collect-but-ignore.
+- **Why BOTH review passes missed it, and this is the transferable half:** the ×2 plan
+  review and the B-pass both examined the bodyweight tier — *which is exactly where the
+  feature works*. Reviewing the scoped case confirms the scoping; it can never reveal
+  that the SURFACE is unscoped. **When a change is deliberately scoped, enumerate where
+  its entry points appear and check the COMPLEMENT of the scope.** One line of arithmetic
+  (`tierOwnableItems('home_dumbbells')` is non-empty) would have shown it.
+- **The second trap, which is why a one-line fix would have failed:** there were TWO
+  independent causes and either alone is a no-op. The producer returned `null` above the
+  tier, AND the consumer's own tier filter dropped the rows regardless. A fix for one,
+  tested against the other still in place, looks correct and does nothing. **Count the
+  gates between the input and the effect before believing one edit closes the path.**
+- **Third, generalisable beyond this feature:** removing a scope guard can make a
+  previously-unreachable branch reachable. `EquipmentVocab.effectiveItems` fails OPEN
+  (every canonical token) on an unknown tier — harmless while the bodyweight gate stood
+  in front of it, and a barbell-to-a-beginner hazard the moment the gate went. **When
+  deleting a guard, ask what the guard was standing in front of.**
+- Ref: OI-144, diagnose `a9e3c7`, `feedback_mistake_guard_without_its_mirror` #17.

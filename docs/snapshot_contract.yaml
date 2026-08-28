@@ -69,7 +69,11 @@ keys:
       - target_weight_kg: num
       - primary_goal: string
       - fitness_experience: string
-      - equipment_access: string
+      - equipment_access: string (tier; defaults to `bodyweight` when absent —
+        never `''`, which used to reach Gemini as a claim of no tier at all)
+      - equipment_effective: list<string> (the canonical tokens the user can
+        actually use = tier baseline ∪ equipment_owned − equipment_exclusions;
+        OI-89 decision 7 — the coach must constrain on THIS, not the tier label)
       - activity_level: string
       - diet_preference: string
       - injuries: string|list

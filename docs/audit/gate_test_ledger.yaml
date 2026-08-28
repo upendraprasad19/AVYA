@@ -125,6 +125,86 @@ check_edge_function_rollback_script.dart:
 check_exlog_key_canonical.dart:
   grandfathered: 2026-08-10
 
+check_exercise_seams.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/exercise_seam_lib_test.dart
+  evidence: "Baseline 11/11 green. TWO mutations, each on a separate protective leg
+    and each verified to COMPILE first -- a mutation that breaks the build reddens
+    everything and proves nothing (the first attempt did exactly that and was
+    discarded). (1) neutering the NEW-FILE check, by defaulting an unknown path to a
+    synthetic allowlist entry, reddens 1. (2) neutering the COUNT check, by ANDing
+    its condition with false, reddens 1. Restored: 11/11 green. WHY THIS GATE EXISTS:
+    across four review rounds the count of exercise-emitting seams went 5 -> 7 -> 10
+    -> 11, each round finding one the previous had missed -- a swap sheet that
+    declared an `equipment` field and read it nowhere, an active-workout picker
+    filtered on category and name only, a cardio finisher whose jump_rope case was
+    the only one of five ignoring hasGymEquipment, and warmup_cooldown prescribing
+    Dead Hang and Band Pull Apart into every generated day. That is a METHOD failure,
+    not a counting one. On its FIRST live run the gate corrected the author's own
+    hand survey twice, catching two sites that were `//` comments a plain grep had
+    counted. Pinned by FILE with an expected COUNT: line numbers rot, so keying on
+    them fails on every unrelated edit, while a count moves exactly when a seam is
+    added or removed. KNOWN LIMITS, documented in the lib header rather than implied
+    away: the community-download write seam uses an API matching none of the
+    patterns, a call through a variable is invisible to any source scan, and block
+    comments are not stripped. It bounds the class it can see; it does not prove the
+    class is empty."
+
+check_equipment_audit.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/equipment_audit_lib_test.dart
+  evidence: "Baseline 10/10 green. Mutation: disabled the prose scan itself
+    (`if (!text.contains(entry.key)) continue;` -> `if (true) continue;`), which is
+    the whole of the gate's protection -- with it neutered the gate can never report
+    anything. Result: 4 tests reddened (10 -> 6 pass), the three red-path cases plus
+    the --all-tiers scope case. Restored: 10/10 green. Live run over the real library
+    reports 33 findings across 259 rows scoped to the 117 bodyweight-tier rows, and
+    catches all FOUR rows that motivated it -- E238 Bench Dips, E254 Doorframe Curl,
+    E255 Towel Row, E256 Negative Pull Up. WHY THOSE FOUR MATTER: each was already
+    wrong BEFORE scripts/normalize_equipment_library.dart ran, so recovering the
+    pre-normalization values from git cannot reach them, and each is the SOLE
+    core-satisfying row for its movement pattern -- so the floor invariant would have
+    gone green on false data. The capability predicate reads equipment_needed and so
+    did every previous oracle; an oracle sharing a field with its predicate proves
+    THREADING, never TRUTH. This gate reads the exercise NAME and coaching prose
+    instead. DEFAULT IS WARN-ONLY per 4.11 (gate before refactor): --strict exits 1
+    and becomes the default in the commit that finishes the library correction.
+    False positives are real and expected (a pro_tip may mention a barbell only to
+    contrast with it), so findings are triage input, not verdicts.
+
+    FLIPPED STRICT 2026-08-28 in the commit that finished the library correction,
+    exactly as the line above said it would be; --warn-only is now the opt-out and
+    is for in-branch debugging only. That flip added an ACCEPT-LIST, which is a hole
+    in the gate, so it is pinned by 5 further tests (15/15 green) rather than trusted:
+    a pair is keyed on `id|token` and NEVER a bare row id, so a genuinely new finding
+    on an already-accepted row still fails; every key must parse as E### plus a token
+    the scan can actually emit, so a typo cannot silently exempt nothing; and every
+    entry must carry a real reason, because an accept-list whose entries say nothing
+    is an allowlist and an allowlist is how a gate goes quietly inert. The list lives
+    in the PURE lib, not the CLI, for exactly this reason -- policy in an untestable
+    wrapper is policy nothing proves. Two of the twelve NEW rows this batch added
+    tripped the gate on their own prose and were fixed by rewording the row, not by
+    adding an exemption.
+
+check_equipment_vocab_lockstep.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/equipment_vocab_lockstep_lib_test.dart
+  evidence: "Baseline 9/9 green. Mutation: removed 'plyo box' from `_precedence` in
+    equipment_vocab.dart (the exact shape of the regression this gate exists for --
+    a token added to `canonicalTokens` while one of the other three structures is
+    forgotten). Result: the live-lockstep test reddened (9 -> 8 pass, 1 fail) and the
+    gate CLI exited non-zero printing the offending token by name. Restored: 9/9 green,
+    gate PASS, real exit 0 (verified without a pipe -- a trailing `; echo $?` reports
+    the pipeline's code, not dart's). NOTE the silent-failure modes this covers, each
+    verified by reading the code rather than assumed: a canonical token absent from
+    `_precedence` is SKIPPED by normalizeToken's `rank >= 0` guard, so an OR-compound
+    resolves to [] = no-requirement (most permissive); a missing `_chipLabels` entry
+    ships the raw token as UI copy; an alias key that is also canonical is unreachable
+    because `_mapPart` checks canonicalTokens first."
+
 check_gate_index_fresh.dart:
   mutation_proven: true
   test_path:

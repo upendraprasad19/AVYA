@@ -1877,10 +1877,11 @@ call.
 
 ## OI-89 — the equipment tier is a SOFT preference: a "bodyweight" user is served gym lifts (P2)
 
-- **Status**: OPEN
-- **Blocked on**: nothing technical — it needs a PRODUCT decision first (see "Product question"
-  below). The mechanism is understood and verified in code.
-- **Verified**: 2026-08-04 (root cause re-read directly in `exercise_selector.dart` +
+- **Status**: CLOSED (2026-08-28, branch `oi89-bodyweight-floor`) — see "How it was closed" below.
+- **Blocked on**: nothing. The product question was answered by founder 2026-08-28: the bodyweight
+  tier is a HARD floor, and "no equipment needed" means nothing you have to buy.
+- **Verified**: 2026-08-28 (measured across all 606 scorecard personas: equipment-violating plans
+  201 → 0, violations 528 → 0, missing 0, unsafe 0). Earlier entry: 2026-08-04 (root cause re-read directly in `exercise_selector.dart` +
   `plan_engine/CLAUDE.md`; the flag default re-read in `plan_engine_flags.dart` — the source
   commentary's claim about it did NOT match the code, see below)
 - **Identified**: 2026-07-19 · the workout-generator persona sweep (`PlanGenerator.generateV4`,
@@ -1934,9 +1935,44 @@ call.
   providing the substitute so a slot is never empty. Needs a behavioral test asserting a
   bodyweight persona's full plan contains zero picks whose `equipment_needed` falls outside the
   tier.
-- **Blast radius estimate**: `account` (plan engine, `lib/shared/repositories/plan_engine/**`);
-  no migration, no schema. Rule 14 applies — `plan_generator.dart` is not to be modified without
-  explicit instruction.
+- **Blast radius estimate**: ⚠ **WRONG, and corrected here rather than deleted so the estimate's
+  failure mode stays visible.** This read `account` … `no migration, no schema`. The actual batch
+  was **platform** and applied **three** migrations (124 `user_profile.equipment_owned`, 125 the
+  cloud `exercise_library` re-seed 259 → 292 rows, 126 a single-row correction) plus changes to
+  root `CLAUDE.md`, which is path-pinned platform in `docs/blast_radius.yaml`. The estimate was
+  made from the SYMPTOM (a few wrong picks in one persona's plan) rather than from the fix, and the
+  fix needed a vocabulary, a data restore and a schema column. Rule 14 did apply and founder gave
+  explicit authorization for the three `plan_generator.dart` edits.
+
+### How it was closed (2026-08-28)
+
+The tier could never be the safety check: `equipment_tier` is a CURATION hint that
+`docs/sot_registry.yaml` itself documented as *"over-tags tolerated"*. The fix keys on
+`equipment_needed` instead, via
+`effective = tierItems[tier] ∪ equipment_owned − equipment_exclusions` and
+`EquipmentCapability.canPerform`.
+
+Three of the five exercises this entry names above were NOT reachable by a tier floor at all —
+Standing Calf Raise and Chin Up were tagged `bodyweight` **in the data**, so no tier-level fix
+could have seen them. That is why the batch is a data restore as much as a code change: a
+normalizer (`632a10b8`) had collapsed 87 authored equipment tokens into 11, and
+`equipment_tier` was then derived from the collapsed values.
+
+- Vocabulary 12 → 24 canonical tokens; `equipment_tier` re-derived for all 292 rows and its
+  invariant flipped SUBSET → **EQUALITY** (the tolerated over-tag side is exactly what shipped
+  Chin Up to bodyweight users); 16 rows left the bodyweight tier.
+- 33 new exercises, because the corrections empty pools: `vertical_pull` reached **zero** baseline
+  rows, and a first wave that took six patterns to exactly 3 rows still left **331 empty slots**
+  under the live floor.
+- Records: diagnose `f7b2c4` (+ `c9a7e2`, `b6f4d1`, `d3a8f5`), plan-review record
+  `docs/plan-reviews/oi89-bodyweight-floor.md`, closure ledger
+  `docs/audit/oi89-bodyweight-floor.closure.yaml`, B-pass
+  `docs/reviews/oi89-bodyweight-floor-bpass.md`.
+- ⚠ **Residual, NOT a defect and not tracked as one:** the re-derive also removed 38 rows from
+  `home_dumbbells` and 16 from `basic_gym` — those tiers were propped up by the same over-tags.
+  Every removal was verified correct, but their plans become more generic, and total fallback
+  picks rose 1184 → 2719 as the honest price of refusing exercises users cannot do. Surfaced to
+  founder; a content investment in more `home_dumbbells`-performable rows would reverse it.
 
 ## OI-90 — `GuardedBox.empty`'s "reads serve empty" is bypassed by the seven plain `Box` getters (P2)
 
@@ -4151,6 +4187,46 @@ OI-136, OI-132.
 - **Related**: OI-112 (the OI-number version, whose mint-time half is closed), rule 22, the
   `id_collision_note:` in `docs/diagnoses/2026-08-25-hold-days-dilute-phase-completion-b9d4c2.md`.
 
+## OI-143 — nothing checks whether a multi-task BATCH is finished; the Stop hook only asks the §5 rows (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Needs a design call on what "unfinished" means mechanically
+  (see "The hard part" below) before a script is worth writing.
+- **Verified**: 2026-08-28 — observed live, repeatedly, during the OI-89 equipment-capability batch.
+- **Identified**: 2026-08-28 · founder, after the agent ended four consecutive turns mid-batch with
+  "continuing with Task N" and then stopping. Founder: *"again you stopped? dont we have a hook or
+  something which keeps on checking if work is complete or not?"*
+- **Risk class**: process / agent-discipline enforcement
+- **What's wrong**: the four wired hook events are `UserPromptSubmit`, `PreToolUse:Skill`,
+  `SessionStart` and `Stop`. Three fire BEFORE work. `Stop` fires at turn-end — but
+  `scripts/batch_close_hook.dart` only asks the §5 close-out rows (retrospective, skill
+  self-evolution, CLAUDE.md, worktree retirement, full-suite scope). **None of them asks the
+  question that actually matters mid-batch: "is the work the founder asked for finished?"**
+  So the agent can answer all five §5 rows honestly, correctly, and still stop with 6 of 13
+  planned tasks unstarted. The hook's own design note says it fires "only when commits have
+  landed and are unpushed" — which is exactly the state a HALF-DONE batch is in, and it reads
+  that state as an end-of-batch signal rather than a mid-batch one.
+- **Why the existing guards do not cover it**: `feedback_autonomous_auto_mode.md` and
+  `feedback_no_stop_until_done.md` both cover it in PROSE, and §4.4 rule 23 ("No stopping
+  mid-batch") is a stated invariant. This file's own §4.13 point 6 records the governing lesson:
+  *"everything with a gate holds, everything on intention decays."* Rule 23 has no gate.
+- **The hard part (why this is not a 20-minute script)**: a script would have to know what "the
+  work" is. Candidate signals, none free of false positives:
+    - an implementation plan under `docs/superpowers/plans/` with unticked `- [ ]` boxes — but
+      plans legitimately outlive a single session, and a plan is not always present;
+    - a `docs/audit/<batch>.closure.yaml` with non-terminal entries — but Gate 40 already
+      hard-fails on those, and the file is written at batch END, not start;
+    - TodoWrite state — ephemeral, not readable from a hook.
+  A false "you are not done" on a genuinely finished batch is worse than the current silence: it
+  would train the agent to dismiss the hook, which is how the §5 rows decayed in the first place.
+- **Fix shape (not yet attempted)**: most promising is the plan-file signal, scoped narrowly — if
+  a plan file was modified or added in the unpushed range AND still has unticked steps AND the
+  session has landed commits against it, emit an advisory (NOT blocking) line naming the next
+  unticked step. Advisory because a blocking Stop hook re-triggers Stop, which
+  `batch_close_hook.dart` already guards against with `stop_hook_active`.
+- **Blast radius estimate**: `platform` (`scripts/**` hook machinery is pinned platform in
+  `docs/blast_radius.yaml`); no migration, no schema.
+
 ## OI-142 — deploy-artifact commits are unenforced: prod runs Edge Function code whose deploy record exists only in one machine's working tree (P2)
 
 - **Status**: OPEN
@@ -4193,3 +4269,62 @@ OI-136, OI-132.
 - **Related**: OI-140 (same shape — a real class with no detector, filed the same week), §6 tier 6,
   `/build-apk` Gate 1, `GO_LIVE_CHECKLIST.md` row 5.4 (the `+38` size-ledger entry that also sat
   uncommitted — the third instance of this family).
+
+## OI-144 — "I also have" collects equipment that changes nothing above the bodyweight tier (P2)
+
+- **Status**: CLOSED (2026-08-28, same branch that introduced it) — founder chose fix 1 (capability
+  authoritative at every tier). Diagnose `a9e3c7`.
+- **Blocked on**: nothing.
+- **How it was closed**: BOTH causes had to go, and either alone changes nothing.
+  `resolveCapability` lost its `if (tier != 'bodyweight') return null;` gate, and `queryV4`'s tier
+  block became `capability == null && tierLower != null` — capability SUBSUMES it rather than
+  running alongside, because running both keeps the tier block binding and the widening can never
+  happen. Safe only because OI-89 flipped the tier invariant to EQUALITY in the same batch, so
+  `equipment_tier` carries no information `equipment_needed` lacks; the code says so at the site.
+  A fail-OPEN path became reachable and was closed with it: `effectiveItems` returns every
+  canonical token for an unrecognised tier, unreachable while the bodyweight gate existed, so both
+  producers now resolve an unknown tier to `bodyweight`.
+  Proven by `test/contracts/equipment_owned_widens_test.dart` (8 tests), mutation-proven on BOTH
+  legs — reverting the consumer reddens 1, reverting the producer reddens 3. The 606-persona
+  scorecard is UNCHANGED, which is the evidence that the no-owned path stayed byte-identical.
+  Full suite 5054 passed, 0 failed.
+- **Verified**: 2026-08-28 (measured on branch `oi89-bodyweight-floor` before merge; the picker's
+  offered list computed directly, and the exclusion traced through `queryV4`)
+- **Identified**: 2026-08-28 · while explaining the `home_dumbbells` quality residual from OI-89.
+  Not found by the ×2 plan review or the B-pass — both read the bodyweight tier, which is where
+  the feature works.
+- **Risk class**: collect-but-ignore / broken promise. Same family as
+  `enable_equipment_exclusions`, whose flag comment calls that shape *"a live broken promise,
+  rather than an unshipped feature"* — it was flipped ON in 2026-08-05 for exactly this reason.
+- **What's wrong**: OI-89's Profile picker offers a `home_dumbbells` user **13 chips** —
+  `pull-up bar`, `kettlebell`, `bench`, `barbell`, … — and ticking any of them does not change
+  their generated plan. `equipment_owned` widens the pool only through
+  `TrainingHistoryAnalyzer.resolveCapability`, which returns `null` for every tier above
+  `bodyweight` (decision 1 deliberately scoped the hard floor there), and `queryV4` still filters
+  on the `equipment_tier` STRING. A pull-up-bar row is tagged `[basic_gym, full_gym]`, so it stays
+  excluded no matter what the user says they own.
+  The user experience is worse than a no-op: `computePlanChanged` DOES include the field, so
+  saving raises the "Reschedule Workouts?" prompt, the user accepts, and the regenerated plan is
+  byte-identical.
+  ⚠ It is not entirely inert — `effectiveEquipmentForSnapshot` answers at every tier, so the AI
+  coach does know. Only exercise SELECTION ignores it.
+- **Why it matters beyond the promise**: this is the built-in remedy for OI-89's own residual.
+  `home_dumbbells` `vertical_pull` slots fall to attempt-3 **100% of the time** (323/323), because
+  every compound vertical pull in the library needs `cables`, `pull-up bar`, `bench` or
+  `machines` — that is physics, not a content gap, and no amount of authoring fixes it. A doorway
+  pull-up bar is cheap and common, so "tell us you own one" is the right answer; it just does not
+  work yet.
+- **Two fixes, and they promise different things**:
+  1. **Make capability authoritative at EVERY tier** — `equipment_owned` widens the pool
+     regardless of `equipment_tier`. Fixes the promise AND the `vertical_pull` residual for users
+     who own a bar, with no new exercises. Extends decision 1 beyond what OI-89's ×2 review
+     scoped, so it needs its own review round.
+  2. **Show the picker only at the bodyweight tier** — honest and minimal, but discards the
+     feature's value at the tier that most needs it.
+- **Blast radius estimate**: `account` for fix 2 (one widget predicate);
+  **`platform`** for fix 1 (it changes what `queryV4` treats as authoritative for every user).
+- **NOT shipped**: the picker is on branch `oi89-bodyweight-floor`, 14 commits unpushed, no APK.
+  Fixing it before the merge costs nothing; after, it is a live broken promise.
+- **Related**: OI-89 (this is its residual), `enable_equipment_exclusions` in
+  `plan_engine_flags.dart` (the precedent for the class),
+  `docs/plan-reviews/oi89-bodyweight-floor.md`.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
 
@@ -10,7 +11,18 @@ import '../providers/train_provider.dart';
 class ExerciseSwapSheet extends StatefulWidget {
   final String currentExerciseName;
   final String? category;
+
+  /// The OUTGOING exercise's requirement — NOT the user's capability.
+  /// ⑦ OI-89: this field was declared, accepted, and read NOWHERE. Filtering
+  /// by it would invert the check: swapping away from Chin Up would offer only
+  /// pull-up-bar exercises. Use [capability] for the user; this stays for the
+  /// caller's context.
   final List<String>? equipment;
+
+  /// ⑦ OI-89 seam 6: what the user can actually perform, or null for
+  /// "do not enforce". Without this a bodyweight user tapping swap was offered
+  /// all 259 library rows including Barbell Back Squat.
+  final Set<String>? capability;
   final ValueChanged<SwapExerciseData> onSelect;
   final VoidCallback? onDelete;
 
@@ -23,6 +35,7 @@ class ExerciseSwapSheet extends StatefulWidget {
     required this.onSelect,
     this.category,
     this.equipment,
+    this.capability,
     this.onDelete,
     this.onAdd,
   });
@@ -71,6 +84,18 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
         (e['name'] as String?)?.toLowerCase() ==
         widget.currentExerciseName.toLowerCase());
     _customExercises = ExerciseRepository.instance.getCustomExercises();
+    // ⑦ OI-89 seam 6: drop what the user cannot perform. BOTH lists — a
+    // user's own custom exercise is just as unusable if it needs a barbell they
+    // do not have.
+    final cap = widget.capability;
+    if (cap != null) {
+      _allLibraryExercises = _allLibraryExercises
+          .where((e) => EquipmentCapability.canPerform(e['equipment_needed'], cap))
+          .toList();
+      _customExercises = _customExercises
+          .where((e) => EquipmentCapability.canPerform(e['equipment_needed'], cap))
+          .toList();
+    }
   }
 
   List<Map<String, dynamic>> get _filteredLibrary {

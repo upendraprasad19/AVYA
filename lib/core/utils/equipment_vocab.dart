@@ -39,6 +39,24 @@ class EquipmentVocab {
     'kettlebell',
     'ez-bar',
     'cardio machine',
+    // ⑦ OI-89: household baseline — granted by EVERY tier (a gym has walls and
+    // benches too), but only ASKED about at the bodyweight tier. See
+    // `tierAskableItems`: grants and questions are two different lists.
+    'wall',
+    'doorway',
+    'elevated surface',
+    'foot anchor',
+    'towel',
+    // ⑦ OI-89: accessories — never in the bodyweight baseline, addable from any
+    // tier via `equipment_owned`. Derived from the library's OWN pre-normalization
+    // vocabulary (recovered from 632a10b8^), not invented.
+    'ab wheel',
+    'jump rope',
+    'suspension trainer',
+    'parallel bars',
+    'plyo box',
+    'medicine ball',
+    'battle ropes',
   };
 
   /// Accessibility order, most → least accessible. An OR-compound ("X or Y")
@@ -47,18 +65,40 @@ class EquipmentVocab {
   /// exclusion filter never over-excludes).
   static const _precedence = <String>[
     'bodyweight',
+    'wall',
+    'towel',
+    'foot anchor',
+    'doorway',
+    'elevated surface',
     'resistance band',
+    'jump rope',
+    'ab wheel',
+    'medicine ball',
+    'plyo box',
     'dumbbells',
     'kettlebell',
+    'suspension trainer',
+    'parallel bars',
     'pull-up bar',
     'bench',
     'barbell',
     'ez-bar',
+    'battle ropes',
     'cables',
     'machines',
     'smith machine',
     'cardio machine',
   ];
+
+  /// The precedence order, exposed for `check_equipment_vocab_lockstep.dart`.
+  /// A canonical token ABSENT from `_precedence` is silently dropped by
+  /// `normalizeToken` (the `rank >= 0` guard), making an OR-compound resolve to
+  /// `[]` = "no equipment required" — the most permissive answer possible.
+  static List<String> get precedenceOrder => _precedence;
+
+  /// The alias KEYS, exposed for the same gate. A key that is also a canonical
+  /// token is unreachable: `_mapPart` checks `canonicalTokens` first.
+  static Set<String> get aliasKeys => _aliases.keys.toSet();
 
   /// Every raw library / free-text token (lowercased) → canonical. Canonical
   /// tokens themselves are NOT listed (handled by the [canonicalTokens] check in
@@ -96,7 +136,6 @@ class EquipmentVocab {
     'stationary bike': 'cardio machine',
     'rowing machine': 'cardio machine',
     'assault bike': 'cardio machine',
-    'battle ropes': 'cardio machine',
     // barbell-family loaded implements
     'landmine': 'barbell',
     'landmine attachment': 'barbell',
@@ -120,30 +159,23 @@ class EquipmentVocab {
     // resistance band
     'band': 'resistance band',
     // bodyweight: positional / household / accessory / suspension
-    'box': 'bodyweight',
-    'box (30-45cm)': 'bodyweight',
-    'box (30-60cm)': 'bodyweight',
-    'medicine ball': 'bodyweight',
-    'wall': 'bodyweight',
-    'doorway': 'bodyweight',
-    'chair': 'bodyweight',
+    'box': 'plyo box',
+    'box (30-45cm)': 'plyo box',
+    'box (30-60cm)': 'plyo box',
+    'chair': 'elevated surface',
     'lying': 'bodyweight',
-    'elevated surface': 'bodyweight',
     'bodyweight (bent over position)': 'bodyweight',
     'yoga mat': 'bodyweight',
     'foam roller': 'bodyweight',
-    'ab wheel': 'bodyweight',
-    'jump rope': 'bodyweight',
-    'parallel bars': 'bodyweight',
-    'trx suspension trainer': 'bodyweight',
-    'trx': 'bodyweight',
+    'trx suspension trainer': 'suspension trainer',
+    'trx': 'suspension trainer',
     'ankle strap': 'bodyweight',
     'floor': 'bodyweight',
     'freestanding': 'bodyweight',
-    'pole': 'bodyweight',
-    'broomstick': 'bodyweight',
-    'partner': 'bodyweight',
-    'nordic attachment': 'bodyweight',
+    'pole': 'elevated surface',
+    'broomstick': 'towel',
+    'partner': 'foot anchor',
+    'nordic attachment': 'foot anchor',
   };
 
   /// Map a single already-lowercased whole token (NOT an OR-compound) to a
@@ -213,7 +245,11 @@ class EquipmentVocab {
   /// plan engine flag-gates the CALL); unit-pinned so the flag-read seam has a
   /// cheap direct test.
   static Set<String> floorSanitizedExclusions(Iterable<String>? raw) {
-    return normalize(raw).toSet()..removeAll(const {'none', 'bodyweight'});
+    // ⑦ OI-89 decision 8: `wall` joins the un-excludable core. The per-pattern
+    // floor invariant is defined over `{bodyweight, wall}`, so a user must not be
+    // able to exclude a wall and empty `vertical_push` / `knee_dominant`.
+    return normalize(raw).toSet()
+      ..removeAll(const {'none', 'bodyweight', 'wall'});
   }
 
   /// Normalizes [map]'s `equipment_needed` to canonical vocab at the
@@ -247,29 +283,148 @@ class EquipmentVocab {
   /// items. Invariant (pinned by equipment_chip_vocab_contract_test):
   /// `tierItems[t] ⊆ canonicalTokens ∪ {'none'}`.
   static const Map<String, List<String>> tierItems = <String, List<String>>{
-    'bodyweight': ['none', 'bodyweight'],
-    'home_dumbbells': ['none', 'bodyweight', 'dumbbells', 'resistance band'],
+    // ⑦ OI-89 (decision 7): the household baseline is APPENDED to every tier --
+    // a gym has walls and benches too, and `effectiveItems` feeds the AI coach at
+    // every tier, so `canPerform(Wall Sit)` must be true for a gym user. It is
+    // appended, never prepended: equipment_chip_vocab_contract_test asserts
+    // `list.take(2) == ['none','bodyweight']` for every tier.
+    'bodyweight': [
+      'none', 'bodyweight',
+      ..._householdBaseline,
+    ],
+    'home_dumbbells': [
+      'none', 'bodyweight', 'dumbbells', 'resistance band',
+      ..._householdBaseline,
+    ],
     'basic_gym': [
       'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
       'pull-up bar', 'cables', 'resistance band', 'cardio machine',
+      'ab wheel', 'jump rope', 'parallel bars', 'plyo box', 'medicine ball',
+      'battle ropes',
+      ..._householdBaseline,
     ],
     'full_gym': [
       'none', 'bodyweight', 'dumbbells', 'barbell', 'bench',
       'pull-up bar', 'cables', 'machines', 'smith machine',
       'resistance band', 'kettlebell', 'ez-bar', 'cardio machine',
+      'ab wheel', 'jump rope', 'parallel bars', 'plyo box', 'medicine ball',
+      'battle ropes', 'suspension trainer',
+      ..._householdBaseline,
     ],
   };
+
+  /// ⑦ OI-89: furniture and household improvisation. Granted by every tier
+  /// (decision 7); ASKED about only at `bodyweight` (see [tierAskableItems]).
+  /// `wall` leads deliberately -- decision 8 makes it un-excludable, so
+  /// [floorSanitizedExclusions] strips it alongside `none`/`bodyweight`.
+  static const _householdBaseline = <String>[
+    'wall', 'doorway', 'elevated surface', 'foot anchor', 'towel',
+  ];
+
+  /// ⑦ OI-89: the user's REAL equipment set -- what their tier grants, plus
+  /// what they told us they also own, minus what they told us they lack.
+  ///
+  /// This is the ONE derivation. Everything downstream reads it; nothing
+  /// downstream reads `equipment_access` to make a capability decision.
+  ///
+  /// Reconciles at READ time rather than trusting a write-side prune.
+  /// [pruneToTier] has exactly ONE call site (a dropdown callback in
+  /// edit_profile_screen), while `equipment_access` is ALSO written by onboarding
+  /// and by cloud restore -- and a restore writes tier and owned independently,
+  /// landing the very both-lists state a write-side prune is supposed to prevent.
+  /// A read-side derivation cannot be bypassed by a writer nobody enumerated.
+  ///
+  /// An UNKNOWN [tier] fails OPEN to every canonical token. `equipment_access` is
+  /// read at 14 sites with 4 different defaults and can hold legacy free text; a
+  /// tier miss is a DATA problem, not a capability claim, and failing closed
+  /// would drop every exercise for that user.
+  static Set<String> effectiveItems(
+    String tier,
+    List<String>? owned,
+    List<String>? exclusions,
+  ) {
+    final granted = tierItems[tier];
+    if (granted == null) return {...canonicalTokens};
+    final result = <String>{...granted, ...normalize(owned)};
+    result.removeAll(floorSanitizedExclusions(exclusions));
+    result.remove('none'); // sentinel, never a canonical token
+    return result;
+  }
+
+  /// ⑦ OI-89: the items we ASK a [tier] user about in the Customize UI --
+  /// which is NOT the same as what the tier grants.
+  ///
+  /// A gym has walls and benches, so asking a gym user "do you have a chair?" is
+  /// noise; the household baseline is contingent only at `bodyweight`, where a
+  /// hostel room genuinely might lack one. Accessories ARE asked at gym tiers --
+  /// a tier-2 Indian gym may well have no plyo box or battle ropes, which is the
+  /// same reason `smith machine` has always been askable.
+  ///
+  /// `wall` is askable at NO tier (decision 8): the per-pattern floor invariant
+  /// is defined over `{bodyweight, wall}`, so letting a user exclude it would let
+  /// them empty a movement pattern.
+  ///
+  /// An unknown tier returns `[]` rather than throwing -- `equipment_access` is
+  /// read at 14 sites with 4 different defaults and can hold legacy free text.
+  /// ⑦ OI-89 — the items to OFFER in Profile's "I also have" picker, for a user
+  /// of [tier]: things they might own that their tier does not already grant.
+  ///
+  /// Deliberately NOT `canonicalTokens - tierItems[tier]`. That arithmetic hands a
+  /// bodyweight user 18 chips including `cables`, `machines` and `smith machine` —
+  /// gym FIXTURES nobody owns at home. Offering them would be asking a question
+  /// whose honest answer is always no, and the picker's job is to be short enough
+  /// that a real person finishes it.
+  ///
+  /// `_homeOwnable` is therefore a curated list, ordered most→least likely, and
+  /// subtracted from what the tier already grants so a gym user is never asked
+  /// about their own gym's barbell. A `full_gym` user sees only the accessories a
+  /// gym may genuinely lack.
+  ///
+  /// Invariant (pinned by equipment_vocab_lockstep_lib_test): the result ⊆
+  /// [canonicalTokens], and is disjoint from `tierItems[tier]`.
+  static const _homeOwnable = <String>[
+    'resistance band', 'dumbbells', 'pull-up bar', 'kettlebell', 'jump rope',
+    'ab wheel', 'bench', 'suspension trainer', 'medicine ball', 'plyo box',
+    'barbell', 'parallel bars', 'cardio machine', 'ez-bar', 'battle ropes',
+  ];
+
+  static List<String> tierOwnableItems(String tier) {
+    final granted = tierItems[tier]?.toSet() ?? const <String>{};
+    return _homeOwnable.where((t) => !granted.contains(t)).toList();
+  }
+
+  /// Canonical tokens from a user-selected owned list, floor-sanitized the same
+  /// way exclusions are: a token that is not canonical widens nothing, and the
+  /// floor items are never "owned" because every tier already grants them.
+  static List<String> sanitizedOwned(Object? raw) {
+    final owned = fromProfile(raw).toSet();
+    owned.removeWhere((t) => t == 'none' || t == 'bodyweight');
+    return owned.toList()..sort();
+  }
+
+  static List<String> tierAskableItems(String tier) {
+    const askableHousehold = ['doorway', 'elevated surface', 'foot anchor', 'towel'];
+    if (tier == 'bodyweight') return askableHousehold;
+    final granted = tierItems[tier];
+    if (granted == null) return const [];
+    return granted
+        .where((t) =>
+            t != 'none' && t != 'bodyweight' && !_householdBaseline.contains(t))
+        .toList();
+  }
 
   /// The items a user of [tier] can EXCLUDE in the Customize UI — the tier's items
   /// minus the bodyweight floor (`none`/`bodyweight` are never excludable, so the
   /// floor always survives — mirrors [floorSanitizedExclusions]). A `bodyweight`
   /// tier → `[]` (nothing to customize → the UI hides the section). Invariant
   /// (pinned): the result ⊆ [canonicalTokens].
-  static List<String> tierExcludableItems(String tier) {
-    return (tierItems[tier] ?? const ['none', 'bodyweight'])
-        .where((t) => t != 'none' && t != 'bodyweight')
-        .toList();
-  }
+  /// ⑦ OI-89: now a thin alias for [tierAskableItems]. Before this batch the
+  /// two were the same idea; they are not. A tier GRANTS the household baseline
+  /// but we never ASK a gym user about it, and `wall` is askable at no tier at
+  /// all (decision 8). Kept as a name because `pruneToTier` and the Customize
+  /// widget both read it -- one semantic, one implementation.
+  static List<String> tierExcludableItems(String tier) =>
+      tierAskableItems(tier);
 
   static const Map<String, String> _chipLabels = <String, String>{
     'dumbbells': 'Dumbbells',
@@ -283,6 +438,18 @@ class EquipmentVocab {
     'kettlebell': 'Kettlebell',
     'ez-bar': 'EZ-Bar',
     'cardio machine': 'Cardio Machine',
+    'wall': 'Wall',
+    'doorway': 'Doorway',
+    'elevated surface': 'Chair / Step / Bench',
+    'foot anchor': 'Foot Anchor',
+    'towel': 'Towel',
+    'ab wheel': 'Ab Wheel',
+    'jump rope': 'Jump Rope',
+    'suspension trainer': 'Suspension Trainer (TRX)',
+    'parallel bars': 'Parallel Bars',
+    'plyo box': 'Plyo Box',
+    'medicine ball': 'Medicine Ball',
+    'battle ropes': 'Battle Ropes',
   };
 
   /// Display label for an equipment chip token (e.g. `pull-up bar` → "Pull-up Bar").

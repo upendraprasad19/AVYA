@@ -26,8 +26,11 @@ import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
 import '../utils/injury_vocab.dart';
+import '../../shared/repositories/plan_engine/plan_engine_flags.dart';
+import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
 import '../../shared/repositories/plan_engine/warmup_cooldown.dart';
 import '../../shared/repositories/plan_generator.dart';
+import '../constants/equipment_defaults.dart';
 
 /// Result returned by [TemplateService.assignTemplateToDate].
 sealed class AssignTemplateResult {
@@ -144,7 +147,7 @@ class TemplateService {
       final experience =
           (profileMap['fitness_experience'] as String?) ?? 'intermediate';
       final equipmentStr =
-          (profileMap['equipment_access'] as String?) ?? 'full_gym';
+          equipmentAccessOf(profileMap);
 
       final equipmentList = [equipmentStr];
       // U3: the custom-template auto-warmup was UNFILTERED — thread the user's
@@ -171,6 +174,14 @@ class TemplateService {
         experience,
         equipmentList,
         injuries: injuries,
+        // ⑦ OI-89 seam 11: the template path attaches the SAME warm-up/cool-down
+        // as the generated path, so it needs the same capability set — otherwise
+        // a bodyweight user's template day still carries Dead Hang.
+        capability: TrainingHistoryAnalyzer.resolveCapability(
+          tier: equipmentStr,
+          exclusions: const {},
+          flagEnabled: PlanEngineFlags.equipmentCapabilityFloorEnabled,
+        ),
       );
 
       final enrichedDay = withWarmup.first.workoutDays.first;

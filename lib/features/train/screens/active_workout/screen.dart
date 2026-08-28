@@ -18,6 +18,11 @@ import '../../widgets/set_input_row.dart';
 import '../../widgets/workout_receipt_card.dart';
 import '../../widgets/workout_receipt_sheet.dart';
 
+// ⑦ OI-89 seams 6 + 8: the swap sheet and the exercise picker are `part of`
+// this library, so their capability imports must live here.
+import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+
 part 'coaching_content_panel.dart';
 part 'completion_sheet.dart';
 part 'exercise_card.dart';

@@ -35,6 +35,8 @@ import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
 import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
 import '../models/coach_memory.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
 /// Builder for the AI Coach user_daily_snapshot context map.
 ///
@@ -68,6 +70,11 @@ class AiSnapshotBuilder {
     // straddle IST midnight on the last request of a hold's final day.
     final holdBlock = WorkoutScheduleService.instance.holdSnapshotBlock();
 
+    // ⑦ OI-89 decision 7. null when the capability flag is OFF — the key is
+    // then OMITTED, keeping the snapshot byte-identical to its old shape.
+    final effectiveEquipment =
+        TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot(profile);
+
     final snapshot = <String, dynamic>{
       'is_first_ever_message': isFirstEverMessage,
       'profile': {
@@ -79,7 +86,13 @@ class AiSnapshotBuilder {
         'target_weight_kg': profile['target_weight_kg'] ?? 0,
         'primary_goal': profile['primary_goal'] ?? '',
         'fitness_experience': profile['fitness_experience'] ?? '',
-        'equipment_access': profile['equipment_access'] ?? '',
+        // ⑦ OI-89: was `?? ''` — an empty tier claim reaching Gemini.
+        'equipment_access': equipmentAccessOf(profile),
+        // The EFFECTIVE set (tier baseline + owned − exclusions), not the
+        // tier label. Decision 7 was justified by this reader: the coach was
+        // told a tier name and had to guess what it contained, so it could
+        // recommend a barbell row to a bodyweight user and be self-consistent.
+        'equipment_effective': ?effectiveEquipment,
         'activity_level': profile['activity_level'] ?? '',
         'diet_preference': profile['diet_preference'] ?? '',
         'injuries': profile['injuries'] ?? '',

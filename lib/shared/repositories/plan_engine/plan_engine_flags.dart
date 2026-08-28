@@ -288,6 +288,50 @@ class PlanEngineFlags {
     }
   }
 
+  /// ⑦ OI-89: HARD equipment capability floor, scoped to the `bodyweight` tier.
+  /// When ON, every seam that can emit an exercise drops candidates the user
+  /// cannot physically perform, keyed on `equipment_needed` (NOT
+  /// `equipment_tier`, which the SoT registry documents as ADD-only with
+  /// "over-tags tolerated" — imprecise in exactly the unsafe direction).
+  ///
+  /// **FLIPPED ON 2026-08-28** (`oi89-bodyweight-floor`). Was ship-dark DEFAULT
+  /// OFF behind `enable_equipment_capability_floor`; the kill-switch is now
+  /// `disable_equipment_capability_floor` and the default is ON, matching the
+  /// five sibling default-ON flags in this file (`disable_equipment_exclusions`,
+  /// `disable_injury_universal_filter`, `disable_warmup_injury_filter`,
+  /// `disable_detraining_decay`, `disable_cardio_goal_default`).
+  ///
+  /// **Why it is flipped in the same batch that built it:** the collection half
+  /// was already lit and the library correction lands here too, so leaving this
+  /// dark would ship a library that correctly says Chin Up needs a pull-up bar
+  /// alongside a generator that is not reading the field. `equipment_tier` alone
+  /// still leaks — measured with this flag OFF against the CORRECTED library,
+  /// the bodyweight tier carried 468 equipment violations, because the attempt-5
+  /// universal pool bypasses queryV4 entirely and picks by NAME. The tier fix and
+  /// the capability fix each close a hole the other cannot reach.
+  ///
+  /// **Fail-OPEN on the way in, fail-CLOSED on the way through:**
+  /// `resolveCapability` returns null (do not enforce) on a Hive error, an
+  /// unknown tier, or any tier above `bodyweight` — so a storage fault can never
+  /// empty a plan. `EquipmentCapability.canPerform` then fails CLOSED on an
+  /// unreadable requirement, which is why warm-up and finisher moves had to have
+  /// `equipmentNeeded` POPULATED before this could be switched on at all.
+  ///
+  /// Kill switch: `configBox['disable_equipment_capability_floor'] = true`.
+  static bool get equipmentCapabilityFloorEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_equipment_capability_floor') !=
+          true;
+    } catch (_) {
+      // No Hive (pure unit test). The safe default is now ON: the floor only
+      // ever REMOVES an exercise the user cannot perform, and every removal site
+      // has a documented substitute path, so defaulting it off would be the
+      // riskier direction once the library depends on it.
+      return true;
+    }
+  }
+
   /// ①.1d (Batch 11-C): curated per-injury safe-substitute PREFERENCE. When ON,
   /// `_cascadeFill` re-ranks the already-safe (post-injury-filter), same-pattern
   /// candidate list to PREFER a curated `InjurySubstitutes` sub over queryV4's

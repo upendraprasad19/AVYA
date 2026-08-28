@@ -29,6 +29,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.d
 import '../repositories/workout_repository.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 // ── Last Performance Data ────────────────────────────────────────
 
@@ -638,7 +639,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
   void _autoGeneratePlan(
       Map<String, dynamic> profile, Map<String, dynamic>? progress) {
     final goal = profile['primary_goal'] as String? ?? 'general_fitness';
-    final equipment = profile['equipment_access'] as String? ?? 'basic_gym';
+    final equipment =equipmentAccessOf(profile);
     final daysPerWeek = (profile['days_per_week'] as num?)?.toInt() ?? 4;
     final experience = profile['fitness_experience'] as String? ?? 'beginner';
     final phase = (progress?['current_phase'] as int?) ?? 1;

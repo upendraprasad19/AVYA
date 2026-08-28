@@ -31,7 +31,19 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   void _loadAllExercises() {
     final library = ExerciseRepository.instance.getAll();
     final custom = ExerciseRepository.instance.getCustomExercises();
-    _allExercises = [...library, ...custom];
+    // ⑦ OI-89 seam 8: this sheet filtered on category and NAME only, so a
+    // bodyweight user tapping "+ Add Exercise" mid-workout was offered all 259
+    // library rows including Barbell Back Squat. Same defect as the swap sheet
+    // on a different screen — found a review round later, which is why
+    // check_exercise_seams.dart now pins the inventory.
+    final cap = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
+    final all = [...library, ...custom];
+    _allExercises = cap == null
+        ? all
+        : all
+            .where((e) =>
+                EquipmentCapability.canPerform(e['equipment_needed'], cap))
+            .toList();
     _filtered = _allExercises;
   }
 

@@ -3,6 +3,7 @@ import '../../../core/utils/injury_vocab.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../core/services/seed_service.dart';
 import '../../../shared/repositories/plan_generator.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// One day in a regenerated plan block (display-only).
 class RegeneratePlanDay {
@@ -153,7 +154,7 @@ class RegeneratePlanPlanner {
     final resolvedGoal =
         goal ?? (profile['primary_goal'] as String?) ?? 'general_fitness';
     final resolvedEquipment = equipment ??
-        (profile['equipment_access'] as String?) ?? 'home_dumbbells';
+        equipmentAccessOf(profile);
     final resolvedDays = daysPerWeek ??
         ((profile['days_per_week'] as num?)?.toInt() ?? 4);
     final experience =

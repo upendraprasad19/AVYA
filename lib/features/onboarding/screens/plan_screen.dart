@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/onboarding_provider.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Final step (3/3) of the handoff onboarding flow — plan preview +
 /// commit (`design_handoff_wardroom/src/screens/onboarding.jsx`
@@ -478,7 +479,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                 _ => 'balanced',
               };
       final equipmentAccess =
-          (widget.data['equipment_access'] as String?) ?? 'basic_gym';
+          equipmentAccessOf(widget.data);
 
       // lifestyle_activity — stats-screen collects activity_level with 4
       // pills (sedentary/light/moderate/heavy); plan_engine expects 3

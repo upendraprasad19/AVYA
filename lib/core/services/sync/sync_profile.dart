@@ -199,6 +199,18 @@ extension SyncServiceProfile on SyncService {
       // add_equipment_exclusions_to_user_profile, applied before this line landed).
       if (SyncService._hasValue(p['equipment_exclusions']))
         'equipment_exclusions': p['equipment_exclusions'] is List ? p['equipment_exclusions'] : <String>[],
+      // ⑦ OI-89 — the ADD half of the same preference. Column
+      // `user_profile.equipment_owned text[]` (migration 124, applied
+      // 2026-08-28 BEFORE this line shipped: user_repository.dart:721 upserts a
+      // SPREAD and _sanitize does not whitelist columns, so a client carrying a
+      // key the DB lacks gets a PostgREST 400 that rejects the ENTIRE row).
+      //
+      // Conditional-entry, not an unconditional key: a profile that never
+      // answered the question must not overwrite a cloud value with [] on every
+      // sync. RESTORE needs no counterpart — _restoreUserProfile uses a bare
+      // .select() and merges every non-null cloud key, so it is column-agnostic.
+      if (SyncService._hasValue(p['equipment_owned']))
+        'equipment_owned': p['equipment_owned'] is List ? p['equipment_owned'] : <String>[],
       if (SyncService._hasValue(p['activity_level'])) 'activity_level': p['activity_level'],
       if (SyncService._hasValue(p['lifestyle_activity'])) 'lifestyle_activity': p['lifestyle_activity'],
       if (SyncService._hasValue(p['pace_preference'])) 'pace_preference': p['pace_preference'],

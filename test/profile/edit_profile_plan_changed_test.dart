@@ -21,6 +21,8 @@ void main() {
       List<String> originalInjuries = const ['none'],
       List<String> equipmentExclusions = const [],
       List<String> originalEquipmentExclusions = const [],
+      List<String> equipmentOwned = const [],
+      List<String> originalEquipmentOwned = const [],
     }) {
       return computePlanChanged(
         daysPerWeek: daysPerWeek,
@@ -39,6 +41,8 @@ void main() {
         originalInjuries: originalInjuries,
         equipmentExclusions: equipmentExclusions,
         originalEquipmentExclusions: originalEquipmentExclusions,
+        equipmentOwned: equipmentOwned,
+        originalEquipmentOwned: originalEquipmentOwned,
       );
     }
 
@@ -103,6 +107,36 @@ void main() {
       expect(callWith(daysPerWeek: 6), isTrue);
       expect(callWith(goal: 'lose_fat'), isTrue);
       expect(callWith(equipment: 'home_dumbbells'), isTrue);
+    });
+
+    test('⑦ OI-89: acquiring equipment changes the plan — true', () {
+      // Owning a new item WIDENS the pool, so the plan can genuinely improve.
+      // It joins the existing eight fields on the "Reschedule Workouts?" prompt
+      // rather than regenerating silently.
+      expect(callWith(equipmentOwned: const ['pull-up bar']), isTrue);
+    });
+
+    test('⑦ OI-89: LOSING equipment changes the plan — true', () {
+      expect(
+        callWith(
+          equipmentOwned: const [],
+          originalEquipmentOwned: const ['pull-up bar'],
+        ),
+        isTrue,
+      );
+    });
+
+    test('⑦ OI-89: an unchanged owned list does NOT trigger — false', () {
+      // The chip handler sorts on every tap for exactly this reason: an
+      // order-only difference would make listEquals report a change that is not
+      // one, and fire the reschedule prompt on a no-op edit.
+      expect(
+        callWith(
+          equipmentOwned: const ['dumbbells', 'pull-up bar'],
+          originalEquipmentOwned: const ['dumbbells', 'pull-up bar'],
+        ),
+        isFalse,
+      );
     });
   });
 }

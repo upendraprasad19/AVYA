@@ -7,6 +7,7 @@ import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
 import 'plan_engine_flags.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Stage 0 (companion to [ProgressionResolver]) — reads Hive to produce
 /// PHASE 2+ personalization signals for the plan engine.
@@ -185,6 +186,117 @@ class TrainingHistoryAnalyzer {
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'training_history_analyzer_equipment_exclusions'));
       return const <String>{};
+    }
+  }
+
+  /// ⑦ OI-89: the capability set read entirely from the stored profile.
+  ///
+  /// The plan engine gets its tier and exclusions passed down from generateV4;
+  /// the UI seams (swap sheet, exercise picker, template builder) have no such
+  /// caller, so they read all three here. Same null semantics as
+  /// [resolveCapability] — null means "do not enforce".
+  static Set<String>? resolveCapabilityFromProfile() {
+    try {
+      final profile = HiveService.instance.userBox.get('profile');
+      if (profile is! Map) return null;
+      final tier = equipmentAccessOf(profile);
+      return resolveCapability(
+        tier: tier,
+        exclusions: EquipmentVocab.floorSanitizedExclusions(
+            EquipmentVocab.fromProfile(profile['equipment_exclusions'])),
+        flagEnabled: PlanEngineFlags.equipmentCapabilityFloorEnabled,
+      );
+    } catch (e, st) {
+      debugPrint('[TrainingHistoryAnalyzer.resolveCapabilityFromProfile] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'training_history_analyzer_capability_profile'));
+      return null; // fail OPEN
+    }
+  }
+
+  /// ⑦ OI-89 decision 7 — the effective set for the AI COACH's snapshot.
+  ///
+  /// Deliberately NOT [resolveCapabilityFromProfile]. That one is scoped to the
+  /// bodyweight tier because decision 1 makes the hard floor bodyweight-only;
+  /// the coach needs the truth at EVERY tier. A `home_dumbbells` user's coach
+  /// should know they have dumbbells and no barbell — before this, it was handed
+  /// the tier LABEL and had to guess what the label contained, which is how it
+  /// could recommend a barbell row and be perfectly self-consistent doing it.
+  ///
+  /// Takes the profile map rather than reading Hive, because the only caller
+  /// ([AiSnapshotBuilder.buildAiContext]) already holds it and reading twice
+  /// could straddle a profile write.
+  ///
+  /// Returns null when the flag is OFF, so the caller OMITS the key and the
+  /// snapshot stays byte-identical to its pre-batch shape (§4.6 / §4.12.4).
+  static List<String>? effectiveEquipmentForSnapshot(Map<dynamic, dynamic> profile) {
+    if (!PlanEngineFlags.equipmentCapabilityFloorEnabled) return null;
+    try {
+      // ⑧ OI-144: the SAME unknown-tier policy as resolveCapability. Before
+      // that change the two producers differed by design (this one answered at
+      // every tier, that one only at bodyweight); now they differ only in return
+      // shape, so any policy divergence between them is a bug, not a design.
+      final tier = equipmentAccessOf(profile);
+      final items = EquipmentVocab.effectiveItems(
+        EquipmentVocab.tierItems.containsKey(tier) ? tier : 'bodyweight',
+        EquipmentVocab.fromProfile(profile['equipment_owned']),
+        EquipmentVocab.floorSanitizedExclusions(
+                EquipmentVocab.fromProfile(profile['equipment_exclusions']))
+            .toList(),
+      );
+      // Sorted so the snapshot is stable across runs — an unordered Set would
+      // make every request a different prompt and defeat upstream caching.
+      return items.toList()..sort();
+    } catch (e, st) {
+      debugPrint('[TrainingHistoryAnalyzer.effectiveEquipmentForSnapshot] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'training_history_analyzer_capability_snapshot'));
+      return null; // fail OPEN — omit the key rather than claim a wrong set
+    }
+  }
+
+  /// ⑦ OI-89: the user's real equipment capability, or NULL for "do not
+  /// enforce". Mirrors [resolveEquipmentExclusions].
+  ///
+  /// Returns null in three cases, each deliberate:
+  ///   - flag OFF — a genuine SKIP. A "universal set" would NOT be inert:
+  ///     `canPerform` fails CLOSED on an unreadable requirement regardless of
+  ///     what the set contains, so it would still drop community/custom rows.
+  ///   - tier is not `bodyweight` — founder decision 1 scopes the HARD floor to
+  ///     that tier only; the other three keep queryV4's soft tier curation.
+  ///     Scoping HERE rather than inside the cascade keeps tier logic in one
+  ///     place; every drop site downstream is just `capability != null`.
+  ///   - Hive is unreachable — fail OPEN. We cannot know the user's kit, and
+  ///     enforcing an unknown set would drop every exercise. Availability wins
+  ///     over a guess.
+  static Set<String>? resolveCapability({
+    required String tier,
+    required Set<String> exclusions,
+    required bool flagEnabled,
+  }) {
+    if (!flagEnabled) return null;
+    try {
+      final profile = HiveService.instance.userBox.get('profile');
+      final owned = profile is Map
+          ? EquipmentVocab.fromProfile(profile['equipment_owned'])
+          : const <String>[];
+      // ⑧ OI-144 R1-B/R2-B: an UNRECOGNISED tier resolves to `bodyweight`, not
+      // to EquipmentVocab.effectiveItems' fail-OPEN (which returns every canonical
+      // token). That branch was unreachable from production while this method
+      // gated on `tier == 'bodyweight'` — removing the gate is exactly what makes
+      // it reachable, so a corrupt `equipment_access` would otherwise hand the
+      // user barbell work at attempt 1. Mirrors equipmentAccessOf's fail-safe
+      // default. The policy lives HERE, in the producer, so the vocabulary
+      // primitive keeps its contract for the AI-coach snapshot path.
+      final resolvedTier =
+          EquipmentVocab.tierItems.containsKey(tier) ? tier : 'bodyweight';
+      return EquipmentVocab.effectiveItems(
+          resolvedTier, owned, exclusions.toList());
+    } catch (e, st) {
+      debugPrint('[TrainingHistoryAnalyzer.resolveCapability] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'training_history_analyzer_capability'));
+      return null; // fail OPEN — see doc above
     }
   }
 

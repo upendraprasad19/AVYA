@@ -19,6 +19,7 @@
 import 'package:icanbefitter/shared/repositories/plan_engine/muscle_groups.dart';
 
 import 'generator_matrix.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 /// The major groups a well-rounded weekly plan is expected to train.
 const _expectedGroups = <String>[
@@ -246,15 +247,35 @@ Scorecard scorePlan(GeneratedPlan plan, {required double familyProgression}) {
 /// data-quality pass. Attempts 1-4 are tier-guaranteed; only universal-pool
 /// fallback picks (which bypass queryV4) can breach this.
 List<String> _equipmentViolations(GeneratedPlan plan) {
-  final tier = plan.persona.equipment.toLowerCase();
+  // ⑧ OI-144: keyed on what the user can PERFORM, not on `equipment_tier`.
+  //
+  // The old form asked "does this row's equipment_tier list contain the persona's
+  // tier?" — which is the very field the generator stopped treating as
+  // authoritative. It would report a legitimately-unlocked exercise as a
+  // violation: a home_dumbbells user who OWNS a pull-up bar is correctly given
+  // Chin Up, whose equipment_tier is [basic_gym, full_gym]. OI-89 promoted this
+  // check to a hard `== 0`, so a tier-keyed oracle would fail the gate on correct
+  // behaviour.
+  //
+  // The oracle reads `equipment_needed` against the persona's EFFECTIVE set. That
+  // is the same field the production predicate reads — one step apart, not
+  // independent — and the independent evidence remains check_equipment_audit,
+  // which reads the exercise NAME and coaching prose instead.
+  final effective = EquipmentVocab.effectiveItems(
+    plan.persona.equipment,
+    plan.persona.equipmentOwned,
+    plan.persona.equipmentExclusions,
+  );
   final out = <String>[];
   for (final ex in plan.allExercises) {
     final rec = ex.record;
     if (rec == null) continue; // placeholder — realism already penalizes it
-    final tiers = _asStrings(rec['equipment_tier']).map((e) => e.toLowerCase()).toSet();
-    if (tiers.isEmpty) continue; // no tier specified → queryV4 passes it
-    if (!tiers.contains(tier)) {
-      out.add('${ex.name} equipment_tier=$tiers excludes ${plan.persona.equipment}');
+    final needed = EquipmentVocab.fromProfile(rec['equipment_needed']);
+    if (needed.isEmpty) continue; // unreadable requirement — not a tier claim
+    final off = needed.where((t) => !effective.contains(t)).toList();
+    if (off.isNotEmpty) {
+      out.add('${ex.name} needs $off, outside ${plan.persona.equipment}'
+          '${plan.persona.equipmentOwned.isEmpty ? '' : ' +owned'}');
     }
   }
   return out;

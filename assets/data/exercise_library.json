@@ -124,7 +124,6 @@
       "Mid Chest"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -395,7 +394,6 @@
       "Mid Chest"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -484,7 +482,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "parallel bars"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -524,8 +522,6 @@
       "Lower Chest"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -1188,7 +1184,6 @@
       "Triceps"
     ],
     "equipment_tier": [
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -1461,7 +1456,6 @@
       "Lats (Width)"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -1598,7 +1592,6 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -2819,7 +2812,7 @@
     ],
     "equipment_needed": [
       "dumbbells",
-      "bodyweight"
+      "elevated surface"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -2953,7 +2946,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "foot anchor"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -3188,7 +3181,6 @@
       "Hamstrings"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "full_gym"
     ],
     "standard_swap": "E050",
@@ -3323,8 +3315,6 @@
     ],
     "equipment_tier": [
       "basic_gym",
-      "home_dumbbells",
-      "bodyweight",
       "full_gym"
     ],
     "standard_swap": "Bodyweight Calf Raise",
@@ -3387,7 +3377,6 @@
       "Calves"
     ],
     "equipment_tier": [
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -3716,7 +3705,6 @@
       "Core"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -3746,7 +3734,7 @@
       "core"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "ab wheel"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -3786,8 +3774,6 @@
       "Core"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -3875,8 +3861,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight",
-      "bench"
+      "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -3916,6 +3901,7 @@
     ],
     "equipment_tier": [
       "bodyweight",
+      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -4076,7 +4062,7 @@
       "Calves"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "jump rope"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -4118,8 +4104,6 @@
       "full body"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -4288,7 +4272,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "plyo box"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -4331,8 +4315,6 @@
       "Quads"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -4532,7 +4514,6 @@
       "Triceps"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -4602,7 +4583,6 @@
       "Core"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -4698,7 +4678,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "wall"
     ],
     "logging_type": "timed",
     "difficulty_level": "advanced",
@@ -4840,7 +4820,7 @@
       "Obliques"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "elevated surface"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -4908,7 +4888,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "parallel bars"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -4950,8 +4930,6 @@
       "Triceps"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -6611,7 +6589,6 @@
       "Lats (Width)"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -6638,7 +6615,8 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "bodyweight",
+      "elevated surface"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -6708,7 +6686,7 @@
     ],
     "equipment_needed": [
       "bodyweight",
-      "bench"
+      "elevated surface"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -7011,8 +6989,7 @@
       "Hip"
     ],
     "equipment_tier": [
-      "full_gym",
-      "basic_gym"
+      "full_gym"
     ],
     "standard_swap": "",
     "priority_tier": 3,
@@ -7096,8 +7073,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "cables",
-      "bodyweight"
+      "cables"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -7290,7 +7266,7 @@
     ],
     "equipment_needed": [
       "barbell",
-      "bodyweight"
+      "plyo box"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -7400,7 +7376,6 @@
       "Mid Chest"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -7791,7 +7766,6 @@
       "Triceps"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -7815,7 +7789,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "dumbbells"
+      "barbell"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -7852,7 +7826,6 @@
       "Mid Chest"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -8052,8 +8025,6 @@
       "Lats"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -8081,7 +8052,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "suspension trainer"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -8120,9 +8091,6 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -8148,7 +8116,7 @@
       "Biceps"
     ],
     "equipment_needed": [
-      "bench",
+      "elevated surface",
       "barbell"
     ],
     "logging_type": "weight_reps",
@@ -8742,7 +8710,7 @@
       "obliques"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "elevated surface"
     ],
     "logging_type": "timed",
     "difficulty_level": "advanced",
@@ -9089,7 +9057,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "cardio machine"
+      "battle ropes"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -9200,8 +9168,6 @@
       "Lower Back"
     ],
     "equipment_tier": [
-      "home_dumbbells",
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9266,8 +9232,6 @@
       "full body"
     ],
     "equipment_tier": [
-      "home_dumbbells",
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -9292,7 +9256,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "medicine ball"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -9334,8 +9298,6 @@
       "Shoulders"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -9719,7 +9681,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "bodyweight",
+      "foot anchor"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -10051,7 +10014,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "bodyweight",
+      "wall"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -10246,7 +10210,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "towel"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -10574,7 +10538,8 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "bodyweight",
+      "wall"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -11023,7 +10988,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "doorway"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -11090,7 +11055,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "elevated surface"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -11156,6 +11121,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
+      "wall",
       "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
@@ -11265,7 +11231,6 @@
       "Triceps"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -11782,7 +11747,6 @@
       "Core/Obliques"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -11850,7 +11814,6 @@
       "Core"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -11877,7 +11840,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "dumbbells"
+      "barbell"
     ],
     "logging_type": "distance",
     "difficulty_level": "advanced",
@@ -11914,7 +11877,6 @@
       "Core"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -12173,8 +12135,6 @@
       "Triceps"
     ],
     "equipment_tier": [
-      "home_dumbbells",
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12238,8 +12198,6 @@
       "Triceps"
     ],
     "equipment_tier": [
-      "home_dumbbells",
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12307,8 +12265,6 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
-      "home_dumbbells",
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12444,7 +12400,6 @@
       "Glutes"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -12472,7 +12427,7 @@
       "Core"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "suspension trainer"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -12511,9 +12466,6 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12540,7 +12492,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "suspension trainer"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -12579,9 +12531,6 @@
       "Triceps"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -12607,7 +12556,7 @@
       "Full Body"
     ],
     "equipment_needed": [
-      "cardio machine"
+      "battle ropes"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -12743,7 +12692,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "bodyweight"
+      "plyo box"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "advanced",
@@ -12782,8 +12731,6 @@
       "full body"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -12953,6 +12900,7 @@
       "Core"
     ],
     "equipment_needed": [
+      "plyo box",
       "bodyweight"
     ],
     "logging_type": "bodyweight_reps",
@@ -12993,8 +12941,6 @@
       "Quads"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -14047,7 +13993,6 @@
       "Lats"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -14474,7 +14419,7 @@
       "Chest"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "doorway"
     ],
     "logging_type": "timed",
     "difficulty_level": "beginner",
@@ -14865,7 +14810,6 @@
       "Hip"
     ],
     "equipment_tier": [
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "Banded Lateral Walk",
@@ -14959,7 +14903,7 @@
       "Hamstrings"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "elevated surface"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -15355,7 +15299,6 @@
       "Upper Chest"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -15381,7 +15324,7 @@
       "Front Deltoid"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "elevated surface"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -15564,7 +15507,6 @@
       "Lateral Delts"
     ],
     "equipment_tier": [
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "Dumbbell Lateral Raise",
@@ -15726,7 +15668,7 @@
       "Chest"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "elevated surface"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -16255,7 +16197,6 @@
       "Lats (Width)"
     ],
     "equipment_tier": [
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "Lat Pulldown",
@@ -16324,7 +16265,6 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "Cable Seated Row",
@@ -16464,7 +16404,6 @@
       "Core"
     ],
     "equipment_tier": [
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "Hanging Leg Raise",
@@ -16854,7 +16793,7 @@
       "Brachialis"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "doorway"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -16929,7 +16868,7 @@
       "Rear Deltoid"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "towel"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "intermediate",
@@ -17004,7 +16943,7 @@
       "Rear Deltoid"
     ],
     "equipment_needed": [
-      "bodyweight"
+      "pull-up bar"
     ],
     "logging_type": "bodyweight_reps",
     "difficulty_level": "beginner",
@@ -17052,8 +16991,6 @@
       "Lats (Width)"
     ],
     "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -17300,7 +17237,8 @@
       "Triceps"
     ],
     "equipment_needed": [
-      "dumbbells"
+      "dumbbells",
+      "bench"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -17347,7 +17285,6 @@
       "Front Delts"
     ],
     "equipment_tier": [
-      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -17425,5 +17362,2456 @@
     "standard_swap": "Reverse Fly",
     "priority_tier": 2,
     "rep_range": "12-15"
+  },
+  {
+    "id": "E262",
+    "name": "Elevated Pike Push Up",
+    "category": "push",
+    "movement_pattern": [
+      "vertical_push"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "compound"
+    ],
+    "primary_muscles": [
+      "Front Deltoid"
+    ],
+    "secondary_muscles": [
+      "Triceps",
+      "Upper Chest"
+    ],
+    "equipment_needed": [
+      "elevated surface"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "8-12",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 4.0,
+    "cal_per_set_est": 4.5,
+    "breathing_cue": "Inhale on the way down, exhale as you press away",
+    "coaching_cues": [
+      "Feet on a chair, sofa or low step; hips stacked high over the shoulders",
+      "Head travels toward the floor between the hands, not forward",
+      "Elbows track back at roughly 45 degrees, not flared wide",
+      "Press until the elbows lock, keeping the hips high throughout"
+    ],
+    "common_mistakes": [
+      "Letting the hips drop into a plank, which turns it into a push-up",
+      "Looking forward and craning the neck",
+      "Using a surface so high the wrists cannot stay flat"
+    ],
+    "warmup_protocol": "Arm circles and wrist rotations",
+    "pro_tip": "The higher the feet, the closer this gets to a handstand push-up. Raise the surface before you add reps.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder",
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Shoulders"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Pike Push Up",
+    "priority_tier": 1,
+    "rep_range": "8-12"
+  },
+  {
+    "id": "E263",
+    "name": "Prone Reverse Snow Angel",
+    "category": "pull",
+    "movement_pattern": [
+      "horizontal_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Rhomboids"
+    ],
+    "secondary_muscles": [
+      "Rear Deltoid",
+      "Traps"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Breathe steadily; do not hold your breath at the top",
+    "coaching_cues": [
+      "Lie face-down, forehead resting on the floor",
+      "Arms start by the hips, palms facing down",
+      "Sweep the arms out and overhead just above the floor, then back",
+      "Keep the arms straight and the ribs down the whole way"
+    ],
+    "common_mistakes": [
+      "Lifting the chest and arching the lower back to help the arms",
+      "Bending the elbows as the arms pass shoulder height",
+      "Rushing. The whole point is the slow sweep."
+    ],
+    "warmup_protocol": "Shoulder rolls and cat-cow",
+    "pro_tip": "If the arms will not pass the shoulders, stop there. The range comes back as the mid-back wakes up.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Upper Back"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Bodyweight Rear Delt Raise",
+    "priority_tier": 1,
+    "rep_range": "12-15"
+  },
+  {
+    "id": "E264",
+    "name": "Table Row",
+    "category": "pull",
+    "movement_pattern": [
+      "horizontal_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "compound"
+    ],
+    "primary_muscles": [
+      "Lats"
+    ],
+    "secondary_muscles": [
+      "Biceps",
+      "Rhomboids"
+    ],
+    "equipment_needed": [
+      "elevated surface"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "8-12",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 4.0,
+    "cal_per_set_est": 4.5,
+    "breathing_cue": "Exhale as you pull, inhale as you lower",
+    "coaching_cues": [
+      "Lie under a sturdy table and grip the edge at chest width",
+      "Body straight from heel to head, heels on the floor",
+      "Pull the chest to the underside of the table",
+      "Lower under control until the arms are straight"
+    ],
+    "common_mistakes": [
+      "Letting the hips sag so the pull becomes a shrug",
+      "Using a light folding table that tips. Check it takes your weight first.",
+      "Pulling with the arms and never squeezing the shoulder blades"
+    ],
+    "warmup_protocol": "Band pull-aparts or scapular shrugs",
+    "pro_tip": "Bend the knees to make it easier, or put the heels on a chair to make it harder.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder",
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Back"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Inverted Row",
+    "priority_tier": 1,
+    "rep_range": "8-12"
+  },
+  {
+    "id": "E265",
+    "name": "Prone Lat Pull",
+    "category": "pull",
+    "movement_pattern": [
+      "vertical_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Lats"
+    ],
+    "secondary_muscles": [
+      "Rhomboids",
+      "Rear Deltoid"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you pull the elbows down, inhale as you reach",
+    "coaching_cues": [
+      "Lie face-down with the arms straight overhead in a Y",
+      "Lift the hands slightly off the floor and hold them there",
+      "Pull the elbows down and back toward the ribs, squeezing the lats",
+      "Reach the arms overhead again without letting the hands touch down"
+    ],
+    "common_mistakes": [
+      "Resting the hands on the floor between reps, which kills the tension",
+      "Shrugging the shoulders up toward the ears",
+      "Arching the lower back instead of moving at the shoulder"
+    ],
+    "warmup_protocol": "Cat-cow and shoulder rolls",
+    "pro_tip": "This is the vertical pull you can do on a hotel floor. Squeeze for a full second at the bottom.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Lats"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone Reverse Snow Angel",
+    "priority_tier": 1,
+    "rep_range": "12-15"
+  },
+  {
+    "id": "E266",
+    "name": "Sliding Lat Pull",
+    "category": "pull",
+    "movement_pattern": [
+      "vertical_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Lats"
+    ],
+    "secondary_muscles": [
+      "Rhomboids",
+      "Core"
+    ],
+    "equipment_needed": [
+      "towel"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 3.5,
+    "breathing_cue": "Exhale as you pull yourself forward",
+    "coaching_cues": [
+      "Kneel on a smooth floor with both hands on a folded towel in front of you",
+      "Slide the towel forward until the arms are overhead and the chest is low",
+      "Pull the towel back toward the knees using the lats, not the hips",
+      "Keep the ribs down so the lower back does not take over"
+    ],
+    "common_mistakes": [
+      "Letting the hips drop and the back arch at full reach",
+      "Pushing back with the legs instead of pulling with the lats",
+      "Trying it on carpet, where the towel will not slide"
+    ],
+    "warmup_protocol": "Dead bugs and shoulder rolls",
+    "pro_tip": "Reach only as far as you can keep the ribs down. The range grows with the mid-section, not the shoulder.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder",
+      "lower_back"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Lats"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone Lat Pull",
+    "priority_tier": 2,
+    "rep_range": "10-12"
+  },
+  {
+    "id": "E267",
+    "name": "Doorway Isometric Lat Pull",
+    "category": "pull",
+    "movement_pattern": [
+      "vertical_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Lats"
+    ],
+    "secondary_muscles": [
+      "Biceps",
+      "Rhomboids"
+    ],
+    "equipment_needed": [
+      "doorway"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "20-30s",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Breathe normally through the hold. Never hold your breath.",
+    "coaching_cues": [
+      "Stand in a doorway and reach both hands high onto the frame",
+      "Pull down and in against the frame as if driving the elbows to the ribs",
+      "Build to full effort over two seconds, then hold",
+      "Keep the shoulders down and away from the ears"
+    ],
+    "common_mistakes": [
+      "Jerking into full force instead of building into it",
+      "Holding the breath, which spikes blood pressure",
+      "Hanging off the frame rather than pulling against it"
+    ],
+    "warmup_protocol": "Shoulder rolls and band pull-aparts",
+    "pro_tip": "An isometric builds the mind-muscle link a beginner is missing. It is how you start owning your own bodyweight overhead.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder",
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Lats"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone Lat Pull",
+    "priority_tier": 2,
+    "rep_range": "20-30s"
+  },
+  {
+    "id": "E268",
+    "name": "Self-Resisted Bicep Curl",
+    "category": "pull",
+    "movement_pattern": [
+      "elbow_flexion"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Biceps"
+    ],
+    "secondary_muscles": [
+      "Forearms"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you curl, inhale as you lower",
+    "coaching_cues": [
+      "Place the free hand on top of the working wrist",
+      "Curl the working arm up while the free hand pushes back against it",
+      "Resist hard on the way down. The lowering is where the work is.",
+      "Keep the working elbow pinned to the ribs"
+    ],
+    "common_mistakes": [
+      "Pushing so hard nothing moves. It should still travel.",
+      "Letting the working elbow drift forward",
+      "Giving up the resistance on the lowering half"
+    ],
+    "warmup_protocol": "Wrist rotations and arm circles",
+    "pro_tip": "Go easy on the way up and fight hard on the way down. The negative is what a bodyweight curl has to offer.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 1,
+    "target_focus": [
+      "Biceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Doorframe Curl",
+    "priority_tier": 1,
+    "rep_range": "10-12"
+  },
+  {
+    "id": "E269",
+    "name": "Towel Bicep Curl",
+    "category": "pull",
+    "movement_pattern": [
+      "elbow_flexion"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Biceps"
+    ],
+    "secondary_muscles": [
+      "Forearms",
+      "Core"
+    ],
+    "equipment_needed": [
+      "towel"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you curl, inhale as you lower",
+    "coaching_cues": [
+      "Stand on one end of a towel and hold the other in one hand",
+      "Curl upward while pressing down through the standing foot",
+      "Keep the elbow tight to the ribs and the wrist neutral",
+      "Lower slowly against the same tension"
+    ],
+    "common_mistakes": [
+      "Leaning back to help the arm up",
+      "Letting the towel go slack at the bottom",
+      "Gripping so hard the forearm fails before the bicep"
+    ],
+    "warmup_protocol": "Wrist rotations and arm circles",
+    "pro_tip": "Shorten your grip on the towel to increase the tension. It is your load selector.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 1,
+    "target_focus": [
+      "Biceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Self-Resisted Bicep Curl",
+    "priority_tier": 2,
+    "rep_range": "10-12"
+  },
+  {
+    "id": "E270",
+    "name": "Self-Resisted Triceps Extension",
+    "category": "push",
+    "movement_pattern": [
+      "elbow_extension"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Triceps"
+    ],
+    "secondary_muscles": [
+      "Front Deltoid"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you extend, inhale as you return",
+    "coaching_cues": [
+      "Working arm overhead, hand behind the head",
+      "Free hand grips the working wrist and resists as you straighten the arm",
+      "Keep the working elbow pointing at the ceiling, close to the head",
+      "Resist on the way back down as well"
+    ],
+    "common_mistakes": [
+      "Letting the working elbow flare out to the side",
+      "Only resisting on the way up",
+      "Shrugging the shoulder to get the arm overhead"
+    ],
+    "warmup_protocol": "Arm circles and shoulder rolls",
+    "pro_tip": "If the shoulder will not let the arm sit overhead, do it with the arm across the chest instead.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow",
+      "shoulder"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 1,
+    "target_focus": [
+      "Triceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Bench Dips",
+    "priority_tier": 1,
+    "rep_range": "10-12"
+  },
+  {
+    "id": "E271",
+    "name": "Wall Triceps Extension",
+    "category": "push",
+    "movement_pattern": [
+      "elbow_extension"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Triceps"
+    ],
+    "secondary_muscles": [
+      "Front Deltoid",
+      "Core"
+    ],
+    "equipment_needed": [
+      "wall"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you press away from the wall",
+    "coaching_cues": [
+      "Stand an arm-length from a wall, forearms flat against it, elbows at shoulder height",
+      "Body straight from heel to head; lean in until the forehead nears the wall",
+      "Press back to straight arms using the triceps only",
+      "Keep the elbows pointing forward, never flaring out"
+    ],
+    "common_mistakes": [
+      "Letting the elbows drift wide, which hands the work to the chest",
+      "Bending at the hips instead of holding a straight line",
+      "Standing too close, which removes most of the range"
+    ],
+    "warmup_protocol": "Wrist rotations and arm circles",
+    "pro_tip": "Step the feet further back to make it harder. This is the wall version of a skull crusher.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow",
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Triceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Self-Resisted Triceps Extension",
+    "priority_tier": 2,
+    "rep_range": "12-15"
+  },
+  {
+    "id": "E272",
+    "name": "Prone Y Raise",
+    "category": "pull",
+    "movement_pattern": [
+      "shoulder_isolation"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Rear Deltoid"
+    ],
+    "secondary_muscles": [
+      "Traps",
+      "Rhomboids"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you raise, inhale as you lower",
+    "coaching_cues": [
+      "Lie face-down, arms overhead in a Y, thumbs pointing up",
+      "Raise the arms as high as the shoulder blades allow",
+      "Keep the forehead down and the neck long",
+      "Lower slowly rather than dropping"
+    ],
+    "common_mistakes": [
+      "Lifting the head and compressing the neck",
+      "Shrugging the traps to get the arms higher",
+      "Arching the lower back to fake the range"
+    ],
+    "warmup_protocol": "Shoulder rolls and cat-cow",
+    "pro_tip": "Height is not the goal. A low, controlled raise with the traps quiet beats a high one with them loud.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder",
+      "neck"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Shoulders"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Bodyweight Rear Delt Raise",
+    "priority_tier": 2,
+    "rep_range": "12-15"
+  },
+  {
+    "id": "E273",
+    "name": "Towel Lateral Raise",
+    "category": "push",
+    "movement_pattern": [
+      "shoulder_isolation"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Side Deltoid"
+    ],
+    "secondary_muscles": [
+      "Traps"
+    ],
+    "equipment_needed": [
+      "towel"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "20-30s",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Breathe normally through the hold. Never hold your breath.",
+    "coaching_cues": [
+      "Hold a towel taut in front of you at hip height, one end in each hand",
+      "Pull outward against the towel and raise the arms to shoulder height",
+      "Hold the outward tension for the whole set",
+      "Keep the shoulders down and the elbows soft"
+    ],
+    "common_mistakes": [
+      "Letting the towel go slack at the top",
+      "Raising above shoulder height, which brings the traps in",
+      "Holding the breath during the isometric"
+    ],
+    "warmup_protocol": "Arm circles and shoulder rolls",
+    "pro_tip": "Widen your grip on the towel for less tension, narrow it for more.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Shoulders"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone Y Raise",
+    "priority_tier": 2,
+    "rep_range": "20-30s"
+  },
+  {
+    "id": "E274",
+    "name": "Prone T Raise",
+    "category": "pull",
+    "movement_pattern": [
+      "horizontal_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Rhomboids"
+    ],
+    "secondary_muscles": [
+      "Rear Deltoid",
+      "Traps"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you lift, inhale as you lower",
+    "coaching_cues": [
+      "Lie face-down, arms straight out to the sides in a T",
+      "Thumbs up; lift the arms by squeezing the shoulder blades together",
+      "Hold the top for a full second before lowering",
+      "Keep the forehead down and the ribs on the floor"
+    ],
+    "common_mistakes": [
+      "Lifting the chest to make the arms travel further",
+      "Shrugging the traps up toward the ears",
+      "Bending the elbows once it gets hard"
+    ],
+    "warmup_protocol": "Shoulder rolls and cat-cow",
+    "pro_tip": "If you can hold the top for a second, the mid-back is doing it. If you cannot, the momentum was.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Upper Back"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone Reverse Snow Angel",
+    "priority_tier": 2,
+    "rep_range": "12-15"
+  },
+  {
+    "id": "E275",
+    "name": "Doorway Isometric Row",
+    "category": "pull",
+    "movement_pattern": [
+      "horizontal_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "compound"
+    ],
+    "primary_muscles": [
+      "Lats"
+    ],
+    "secondary_muscles": [
+      "Rhomboids",
+      "Biceps"
+    ],
+    "equipment_needed": [
+      "doorway"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "20-30s",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Breathe normally through the hold. Never hold your breath.",
+    "coaching_cues": [
+      "Stand facing a doorway and grip both sides of the frame at chest height",
+      "Lean the hips back until the arms are straight and the body is angled",
+      "Pull the chest toward the frame and hold at the top",
+      "Squeeze the shoulder blades together for the whole hold"
+    ],
+    "common_mistakes": [
+      "Standing too upright, which removes the load",
+      "Pulling with the arms while the shoulder blades stay still",
+      "Letting the hips sag forward out of the straight line"
+    ],
+    "warmup_protocol": "Band pull-aparts or scapular shrugs",
+    "pro_tip": "Walk the feet forward to increase the lean and the difficulty.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder",
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Back"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Table Row",
+    "priority_tier": 2,
+    "rep_range": "20-30s"
+  },
+  {
+    "id": "E276",
+    "name": "Standing Towel Pull Apart",
+    "category": "pull",
+    "movement_pattern": [
+      "horizontal_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Rear Deltoid"
+    ],
+    "secondary_muscles": [
+      "Rhomboids",
+      "Traps"
+    ],
+    "equipment_needed": [
+      "towel"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "15-20",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you pull the towel apart",
+    "coaching_cues": [
+      "Hold a towel taut at shoulder height, hands wider than the shoulders",
+      "Pull outward against the towel and draw the hands apart and back",
+      "Squeeze the shoulder blades together at the end of the pull",
+      "Return slowly, keeping the towel under tension throughout"
+    ],
+    "common_mistakes": [
+      "Letting the towel go slack between reps",
+      "Arching the lower back to get more range",
+      "Leading with the hands instead of the shoulder blades"
+    ],
+    "warmup_protocol": "Arm circles and shoulder rolls",
+    "pro_tip": "This is the band pull-apart for people who own no band. Narrow the grip for more tension.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Upper Back"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone T Raise",
+    "priority_tier": 2,
+    "rep_range": "15-20"
+  },
+  {
+    "id": "E277",
+    "name": "Prone W Raise",
+    "category": "pull",
+    "movement_pattern": [
+      "horizontal_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Rhomboids"
+    ],
+    "secondary_muscles": [
+      "Rear Deltoid",
+      "Traps"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you lift, inhale as you lower",
+    "coaching_cues": [
+      "Lie face-down with the elbows bent, arms forming a W beside the ribs",
+      "Drive the elbows back and up, squeezing the shoulder blades down",
+      "Keep the wrists in line with the forearms",
+      "Lower slowly without resting the arms on the floor"
+    ],
+    "common_mistakes": [
+      "Letting the elbows drift up toward the head, which recruits the traps",
+      "Lifting the chin and compressing the neck",
+      "Resting between reps, which kills the tension"
+    ],
+    "warmup_protocol": "Shoulder rolls and cat-cow",
+    "pro_tip": "The W hits the lower traps harder than the T. Alternate them week to week.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Upper Back"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone T Raise",
+    "priority_tier": 2,
+    "rep_range": "12-15"
+  },
+  {
+    "id": "E278",
+    "name": "Towel Lat Pulldown",
+    "category": "pull",
+    "movement_pattern": [
+      "vertical_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Lats"
+    ],
+    "secondary_muscles": [
+      "Rear Deltoid",
+      "Biceps"
+    ],
+    "equipment_needed": [
+      "towel"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you pull down, inhale as you reach up",
+    "coaching_cues": [
+      "Hold a towel taut overhead, hands wider than the shoulders",
+      "Pull outward against the towel and bring it down behind the head",
+      "Drive the elbows toward the ribs, not just the hands down",
+      "Press back overhead against the same tension"
+    ],
+    "common_mistakes": [
+      "Letting the towel slacken, which removes all resistance",
+      "Bringing it down in front instead of behind, which becomes a shrug",
+      "Leaning back to fake the range"
+    ],
+    "warmup_protocol": "Shoulder rolls and arm circles",
+    "pro_tip": "Keep pulling out on the towel the whole set. The tension is the load.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Lats"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone Lat Pull",
+    "priority_tier": 2,
+    "rep_range": "12-15"
+  },
+  {
+    "id": "E279",
+    "name": "Wall Lat Press",
+    "category": "pull",
+    "movement_pattern": [
+      "vertical_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Lats"
+    ],
+    "secondary_muscles": [
+      "Core",
+      "Rear Deltoid"
+    ],
+    "equipment_needed": [
+      "wall"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "20-30s",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Breathe normally through the hold. Never hold your breath.",
+    "coaching_cues": [
+      "Stand side-on to a wall with the near arm straight and the palm flat on it",
+      "Press the palm DOWN the wall as if pulling yourself up past it",
+      "Feel the lat under the armpit engage and hold",
+      "Keep the shoulder pulled away from the ear"
+    ],
+    "common_mistakes": [
+      "Pressing into the wall rather than down it",
+      "Shrugging the shoulder up as effort rises",
+      "Holding the breath through the contraction"
+    ],
+    "warmup_protocol": "Shoulder rolls and cat-cow",
+    "pro_tip": "A wall is always there. This teaches the lat what to do before there is a bar to do it on.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Lats"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone Lat Pull",
+    "priority_tier": 2,
+    "rep_range": "20-30s"
+  },
+  {
+    "id": "E280",
+    "name": "Prone Lat Pull Hold",
+    "category": "pull",
+    "movement_pattern": [
+      "vertical_pull"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Lats"
+    ],
+    "secondary_muscles": [
+      "Rhomboids"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "20-30s",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Breathe normally through the hold. Never hold your breath.",
+    "coaching_cues": [
+      "Lie face-down with the arms overhead and the hands off the floor",
+      "Pull the elbows down to the ribs and HOLD there",
+      "Keep the chest lightly off the floor and the neck long",
+      "Squeeze as if trying to bend a bar down through the whole hold"
+    ],
+    "common_mistakes": [
+      "Letting the hands drop to the floor mid-hold",
+      "Arching hard through the lower back instead of the upper",
+      "Shrugging the shoulders toward the ears"
+    ],
+    "warmup_protocol": "Cat-cow and shoulder rolls",
+    "pro_tip": "The hold builds what the rep cannot: time under tension with nothing to hang from.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Lats"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone Lat Pull",
+    "priority_tier": 2,
+    "rep_range": "20-30s"
+  },
+  {
+    "id": "E281",
+    "name": "Towel Hammer Curl",
+    "category": "pull",
+    "movement_pattern": [
+      "elbow_flexion"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Biceps"
+    ],
+    "secondary_muscles": [
+      "Forearms"
+    ],
+    "equipment_needed": [
+      "towel"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you curl, inhale as you lower",
+    "coaching_cues": [
+      "Stand on one end of a towel, holding the other with a neutral (thumb-up) grip",
+      "Curl upward while pressing down through the standing foot",
+      "Keep the elbow pinned to the ribs and the thumb up throughout",
+      "Lower slowly against the same tension"
+    ],
+    "common_mistakes": [
+      "Rotating the palm up, which turns it back into a standard curl",
+      "Leaning back to help the arm",
+      "Letting the towel go slack at the bottom"
+    ],
+    "warmup_protocol": "Wrist rotations and arm circles",
+    "pro_tip": "The neutral grip shifts the work to the brachialis, which is what adds width to the arm.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 1,
+    "target_focus": [
+      "Biceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Towel Bicep Curl",
+    "priority_tier": 2,
+    "rep_range": "10-12"
+  },
+  {
+    "id": "E282",
+    "name": "Doorway Isometric Curl",
+    "category": "pull",
+    "movement_pattern": [
+      "elbow_flexion"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Biceps"
+    ],
+    "secondary_muscles": [
+      "Forearms"
+    ],
+    "equipment_needed": [
+      "doorway"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "20-30s",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Breathe normally through the hold. Never hold your breath.",
+    "coaching_cues": [
+      "Stand in a doorway with the elbow bent to 90 degrees and the palm under the frame",
+      "Press up into the frame as if curling it, building over two seconds",
+      "Keep the elbow tight to the ribs and the wrist neutral",
+      "Hold at full effort, then release slowly"
+    ],
+    "common_mistakes": [
+      "Jerking into full force instead of building into it",
+      "Letting the shoulder rise to help the arm press",
+      "Holding the breath, which spikes blood pressure"
+    ],
+    "warmup_protocol": "Wrist rotations and arm circles",
+    "pro_tip": "Do one hold at 90 degrees and one just below it. An isometric only trains the angle you hold.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Biceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Self-Resisted Bicep Curl",
+    "priority_tier": 2,
+    "rep_range": "20-30s"
+  },
+  {
+    "id": "E283",
+    "name": "Table Curl",
+    "category": "pull",
+    "movement_pattern": [
+      "elbow_flexion"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "compound"
+    ],
+    "primary_muscles": [
+      "Biceps"
+    ],
+    "secondary_muscles": [
+      "Lats",
+      "Forearms"
+    ],
+    "equipment_needed": [
+      "elevated surface"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "8-12",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 4.0,
+    "breathing_cue": "Exhale as you pull, inhale as you lower",
+    "coaching_cues": [
+      "Sit under a sturdy table and grip its edge with palms facing you",
+      "Keep the elbows tight to the ribs and pull the chest up toward your hands",
+      "Drive with the biceps rather than the shoulder blades",
+      "Lower under control until the arms are straight"
+    ],
+    "common_mistakes": [
+      "Rowing with the back instead of curling with the arms",
+      "Using a table that tips. Check it takes your weight first.",
+      "Letting the elbows travel forward as you pull"
+    ],
+    "warmup_protocol": "Wrist rotations and arm circles",
+    "pro_tip": "Walk the feet out to make it harder, tuck them in to make it easier.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow",
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Biceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Doorframe Curl",
+    "priority_tier": 2,
+    "rep_range": "8-12"
+  },
+  {
+    "id": "E284",
+    "name": "Towel Triceps Extension",
+    "category": "push",
+    "movement_pattern": [
+      "elbow_extension"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Triceps"
+    ],
+    "secondary_muscles": [
+      "Front Deltoid"
+    ],
+    "equipment_needed": [
+      "towel"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you extend, inhale as you return",
+    "coaching_cues": [
+      "Hold one end of a towel overhead, the other behind the back in the opposite hand",
+      "Straighten the top arm against the resistance of the bottom hand",
+      "Keep the top elbow pointing at the ceiling, close to the head",
+      "Let the bottom hand resist on the way back down as well"
+    ],
+    "common_mistakes": [
+      "Letting the top elbow flare out to the side",
+      "Only resisting in one direction",
+      "Pulling so hard with the bottom hand that nothing moves"
+    ],
+    "warmup_protocol": "Arm circles and shoulder rolls",
+    "pro_tip": "The bottom hand is your weight stack. Ease off it to add reps, pull harder to add load.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow",
+      "shoulder"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 1,
+    "target_focus": [
+      "Triceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Self-Resisted Triceps Extension",
+    "priority_tier": 2,
+    "rep_range": "10-12"
+  },
+  {
+    "id": "E285",
+    "name": "Elevated Diamond Push Up",
+    "category": "push",
+    "movement_pattern": [
+      "elbow_extension"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "compound"
+    ],
+    "primary_muscles": [
+      "Triceps"
+    ],
+    "secondary_muscles": [
+      "Chest",
+      "Front Deltoid"
+    ],
+    "equipment_needed": [
+      "elevated surface"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-15",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 4.0,
+    "cal_per_set_est": 4.0,
+    "breathing_cue": "Inhale on the way down, exhale as you press",
+    "coaching_cues": [
+      "Hands in a diamond on a chair, step or low table; feet on the floor",
+      "Elbows stay close to the ribs, not flared out",
+      "Lower until the chest touches the hands",
+      "Press to a full lockout and squeeze the triceps"
+    ],
+    "common_mistakes": [
+      "Flaring the elbows, which hands the work to the chest",
+      "Letting the hips sag out of the straight line",
+      "Using a surface that slides. Brace it against a wall."
+    ],
+    "warmup_protocol": "Wrist rotations and arm circles",
+    "pro_tip": "The higher the hands, the easier it is. This is how you work toward a floor diamond push-up.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow",
+      "wrist",
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 2,
+    "target_focus": [
+      "Triceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Bench Dips",
+    "priority_tier": 1,
+    "rep_range": "10-15"
+  },
+  {
+    "id": "E286",
+    "name": "Wall Triceps Press",
+    "category": "push",
+    "movement_pattern": [
+      "elbow_extension"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Triceps"
+    ],
+    "secondary_muscles": [
+      "Front Deltoid"
+    ],
+    "equipment_needed": [
+      "wall"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "20-30s",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Breathe normally through the hold. Never hold your breath.",
+    "coaching_cues": [
+      "Face a wall with the palms flat at chest height and the elbows bent",
+      "Press into the wall as if straightening the arms, without moving",
+      "Keep the elbows tucked toward the ribs, never flared",
+      "Build to full effort over two seconds and hold"
+    ],
+    "common_mistakes": [
+      "Flaring the elbows, which turns it into a chest press",
+      "Leaning the body weight in instead of pressing with the arms",
+      "Holding the breath through the effort"
+    ],
+    "warmup_protocol": "Wrist rotations and arm circles",
+    "pro_tip": "Set the elbow angle before you press. The angle you hold is the angle you train.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "elbow",
+      "wrist"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Triceps"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Wall Triceps Extension",
+    "priority_tier": 2,
+    "rep_range": "20-30s"
+  },
+  {
+    "id": "E287",
+    "name": "Towel Front Raise",
+    "category": "push",
+    "movement_pattern": [
+      "shoulder_isolation"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Front Deltoid"
+    ],
+    "secondary_muscles": [
+      "Traps"
+    ],
+    "equipment_needed": [
+      "towel"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you raise, inhale as you lower",
+    "coaching_cues": [
+      "Hold a towel taut in front of the thighs, one end in each hand",
+      "Pull outward against it and raise the arms to shoulder height",
+      "Keep the elbows soft and the shoulders down",
+      "Lower slowly, holding the outward tension the whole way"
+    ],
+    "common_mistakes": [
+      "Swinging the towel up with the hips",
+      "Raising above shoulder height, which brings the traps in",
+      "Letting the towel slacken at the bottom"
+    ],
+    "warmup_protocol": "Arm circles and shoulder rolls",
+    "pro_tip": "Narrow the grip for more tension. That is your only load selector here.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Shoulders"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Towel Lateral Raise",
+    "priority_tier": 2,
+    "rep_range": "12-15"
+  },
+  {
+    "id": "E288",
+    "name": "Wall Shoulder Slide",
+    "category": "push",
+    "movement_pattern": [
+      "shoulder_isolation"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Side Deltoid"
+    ],
+    "secondary_muscles": [
+      "Traps",
+      "Rhomboids"
+    ],
+    "equipment_needed": [
+      "wall"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you slide up, inhale as you come down",
+    "coaching_cues": [
+      "Stand with the back, head and both forearms flat against a wall",
+      "Slide the forearms up the wall without letting them lift off it",
+      "Keep the lower back close to the wall; do not let the ribs flare",
+      "Come down slowly to just below shoulder height"
+    ],
+    "common_mistakes": [
+      "Letting the wrists or elbows peel off the wall to get more range",
+      "Arching the lower back away from the wall",
+      "Shrugging the shoulders up at the top"
+    ],
+    "warmup_protocol": "Shoulder rolls and cat-cow",
+    "pro_tip": "Go only as high as the forearms stay on the wall. The lost range is the point, not the failure.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder",
+      "neck"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Shoulders"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Prone Y Raise",
+    "priority_tier": 2,
+    "rep_range": "10-12"
+  },
+  {
+    "id": "E289",
+    "name": "Isometric Lateral Raise",
+    "category": "push",
+    "movement_pattern": [
+      "shoulder_isolation"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Side Deltoid"
+    ],
+    "secondary_muscles": [
+      "Traps"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "timed",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "20-30s",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Breathe normally through the hold. Never hold your breath.",
+    "coaching_cues": [
+      "Raise both arms straight out to the sides at shoulder height",
+      "Hold there with the palms down and the elbows soft",
+      "Keep the shoulders pulled down away from the ears",
+      "Hold until the shoulders burn, then lower slowly"
+    ],
+    "common_mistakes": [
+      "Letting the arms drift forward out of the side plane",
+      "Shrugging as fatigue builds",
+      "Dropping the arms rather than lowering them"
+    ],
+    "warmup_protocol": "Arm circles and shoulder rolls",
+    "pro_tip": "No load needed. The side delt is small enough that gravity and time are plenty.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Shoulders"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Towel Lateral Raise",
+    "priority_tier": 2,
+    "rep_range": "20-30s"
+  },
+  {
+    "id": "E290",
+    "name": "Prone Shoulder Extension",
+    "category": "pull",
+    "movement_pattern": [
+      "shoulder_isolation"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Rear Deltoid"
+    ],
+    "secondary_muscles": [
+      "Lats",
+      "Traps"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "12-15",
+    "default_rest_secs": 45,
+    "tempo": "2-1-2-0",
+    "met_value": 3.0,
+    "cal_per_set_est": 3.0,
+    "breathing_cue": "Exhale as you lift, inhale as you lower",
+    "coaching_cues": [
+      "Lie face-down with the arms straight beside the hips, palms facing in",
+      "Lift the hands toward the ceiling, keeping the arms straight",
+      "Squeeze at the top with the shoulders pulled down",
+      "Lower slowly without letting the hands rest on the floor"
+    ],
+    "common_mistakes": [
+      "Bending the elbows to get the hands higher",
+      "Lifting the chest to add range",
+      "Shrugging the shoulders toward the ears"
+    ],
+    "warmup_protocol": "Shoulder rolls and cat-cow",
+    "pro_tip": "Small range, big squeeze. Two inches done properly beats six done with the back.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "shoulder"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Shoulders"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Bodyweight Rear Delt Raise",
+    "priority_tier": 2,
+    "rep_range": "12-15"
+  },
+  {
+    "id": "E291",
+    "name": "Single Leg Glute Bridge",
+    "category": "legs",
+    "movement_pattern": [
+      "hip_dominant"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "compound"
+    ],
+    "primary_muscles": [
+      "Glutes"
+    ],
+    "secondary_muscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-15",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 3.5,
+    "breathing_cue": "Exhale as you drive up, inhale as you lower",
+    "coaching_cues": [
+      "Lie on your back, one foot planted, the other leg extended",
+      "Drive through the planted heel until the hips are level with the knee and shoulder",
+      "Squeeze the glute hard at the top for a full second",
+      "Keep the hips square. Do not let the free side drop."
+    ],
+    "common_mistakes": [
+      "Letting the free hip sag, which hides the weak side",
+      "Pushing through the toes instead of the heel",
+      "Arching the lower back at the top instead of squeezing the glute"
+    ],
+    "warmup_protocol": "Glute bridges and dead bugs",
+    "pro_tip": "If the hamstring cramps, walk the heel closer to the hips. That is a leverage problem, not a weakness.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "lower_back",
+      "hip"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 2,
+    "target_focus": [
+      "Glutes"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Bodyweight Good Morning",
+    "priority_tier": 1,
+    "rep_range": "10-15"
+  },
+  {
+    "id": "E292",
+    "name": "Sliding Leg Curl",
+    "category": "legs",
+    "movement_pattern": [
+      "hip_dominant"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Hamstrings"
+    ],
+    "secondary_muscles": [
+      "Glutes",
+      "Core"
+    ],
+    "equipment_needed": [
+      "towel"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "8-12",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 4.0,
+    "breathing_cue": "Exhale as you pull the heels in",
+    "coaching_cues": [
+      "Lie on your back on a smooth floor with both heels on a folded towel",
+      "Bridge the hips up and hold them there for the whole set",
+      "Slide the heels out until the legs are almost straight",
+      "Pull the heels back in using the hamstrings, hips staying high"
+    ],
+    "common_mistakes": [
+      "Letting the hips drop as the legs extend",
+      "Sliding out further than you can pull back",
+      "Trying it on carpet, where the towel will not slide"
+    ],
+    "warmup_protocol": "Glute bridges and leg swings",
+    "pro_tip": "Cramping hamstrings mean the range was too long, not that you are done. Shorten it.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "hamstring",
+      "lower_back",
+      "knee"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 3,
+    "target_focus": [
+      "Hamstrings"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Nordic Curl",
+    "priority_tier": 1,
+    "rep_range": "8-12"
+  },
+  {
+    "id": "E293",
+    "name": "Elevated Single Leg Hip Thrust",
+    "category": "legs",
+    "movement_pattern": [
+      "hip_dominant"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "compound"
+    ],
+    "primary_muscles": [
+      "Glutes"
+    ],
+    "secondary_muscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "equipment_needed": [
+      "elevated surface"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 4.0,
+    "cal_per_set_est": 4.0,
+    "breathing_cue": "Exhale as you drive up, inhale as you lower",
+    "coaching_cues": [
+      "Upper back resting on a chair or sofa edge, one foot planted",
+      "Other leg tucked or extended; drive through the planted heel",
+      "Finish with the hips level and the ribs down, not flared",
+      "Lower under control until the hips are just off the floor"
+    ],
+    "common_mistakes": [
+      "Hyperextending the lower back at the top instead of squeezing the glute",
+      "Letting the planted foot drift too far forward, which recruits the hamstring",
+      "Using a surface that slides out from under you"
+    ],
+    "warmup_protocol": "Glute bridges and hip circles",
+    "pro_tip": "The chair adds range the floor cannot. That range is where the glute actually grows.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "lower_back",
+      "hip"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 3,
+    "target_focus": [
+      "Glutes"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Single Leg Glute Bridge",
+    "priority_tier": 1,
+    "rep_range": "10-12"
+  },
+  {
+    "id": "E294",
+    "name": "Standing Single Leg Hinge",
+    "category": "legs",
+    "movement_pattern": [
+      "hip_dominant"
+    ],
+    "exercise_type": [
+      "calisthenics",
+      "compound"
+    ],
+    "primary_muscles": [
+      "Hamstrings"
+    ],
+    "secondary_muscles": [
+      "Glutes",
+      "Core"
+    ],
+    "equipment_needed": [
+      "bodyweight"
+    ],
+    "logging_type": "bodyweight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 3.5,
+    "breathing_cue": "Inhale as you hinge, exhale as you stand",
+    "coaching_cues": [
+      "Stand on one leg with a soft knee, arms reaching forward",
+      "Hinge at the hip, sending the free leg straight back as a counterweight",
+      "Keep the back flat and the hips square to the floor",
+      "Stand by driving the hip forward, not by pulling with the back"
+    ],
+    "common_mistakes": [
+      "Rotating the free hip open, which turns it into a twist",
+      "Rounding the back to reach lower",
+      "Locking the standing knee"
+    ],
+    "warmup_protocol": "Leg swings and glute bridges",
+    "pro_tip": "Touch a wall with your fingertips for balance. Balance failing first hides how much hamstring you have.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "",
+    "image_start_url": "",
+    "image_end_url": "",
+    "gif_url": "PENDING",
+    "is_active": true,
+    "is_foundational": true,
+    "injury_contraindications": [
+      "lower_back",
+      "hamstring"
+    ],
+    "is_bilateral": false,
+    "cns_demand": 2,
+    "target_focus": [
+      "Hamstrings"
+    ],
+    "equipment_tier": [
+      "bodyweight",
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "Bodyweight Good Morning",
+    "priority_tier": 1,
+    "rep_range": "10-12"
   }
 ]

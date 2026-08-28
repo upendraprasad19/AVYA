@@ -65,10 +65,26 @@ void main() {
       expect(offenders, isEmpty, reason: 'Rows with empty/absent primary_muscles: $offenders');
     });
 
-    test('259 rows, ids unique (E261 added, 9 stubs kept)', () {
-      expect(rows.length, 259);
-      expect(rows.map((r) => r['id']).toSet().length, 259);
+    test('292 rows, ids unique (E262-E294 added by OI-89)', () {
+      // 259 -> 292, in two waves with different jobs.
+      //
+      // Wave 1 (E262-E273, 12 rows) closed a CORRECTNESS deficit the OI-89
+      // restore + audit left: vertical_pull had ZERO baseline rows, and
+      // horizontal_pull / elbow_flexion / elbow_extension had none performable
+      // with the un-excludable floor alone.
+      //
+      // Wave 2 (E274-E294, 21 rows) closed a DEPTH deficit wave 1 exposed. Three
+      // rows satisfies the floor invariant and cannot build a plan: the generator
+      // dedups on pickedNames across the whole plan, so a 3-row pool is exhausted
+      // inside one week. Measured with the capability floor ON, wave 1 alone left
+      // 331 EMPTY SLOTS, all bodyweight-tier, in exactly the six patterns it had
+      // taken to 3. Calibrated against the two patterns that already worked:
+      // horizontal_push had 6 baseline rows and zero missing, hip_isolation 5 and
+      // zero. Six to seven is the working number; three is not.
+      expect(rows.length, 292);
+      expect(rows.map((r) => r['id']).toSet().length, 292);
       expect(rows.any((r) => r['id'] == 'E261'), isTrue);
+      expect(rows.any((r) => r['id'] == 'E294'), isTrue);
     });
   });
 }

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
+import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 
 /// Identifies a specific phase/week/day combination to preview.
 class PreviewKey {
@@ -57,7 +58,7 @@ final previewPlanProvider =
   final safeDay = key.day.clamp(1, 7);
 
   final goal = (profile['primary_goal'] as String?) ?? 'general_fitness';
-  final equipment = (profile['equipment_access'] as String?) ?? 'full_gym';
+  final equipment = equipmentAccessOf(profile);
   final daysPerWeek = (profile['days_per_week'] as int?) ?? 4;
   // APK Test #3 / Phase exercise count fix: fallback must match
   // onboarding's pre-selected default. APK Test #2 / F6 lesson: a
