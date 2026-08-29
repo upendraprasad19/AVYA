@@ -2,47 +2,60 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Tapping an exercise opens a plate — the movement drawn at its start and end (or one drawing for a hold), with the form cues underneath — for the 165 exercises that have artwork, and a monogram for the 126 that do not.
+**Goal:** Tapping an exercise opens a plate — the movement drawn at its start and end (or one drawing for a hold), with the form cues underneath — for the 165 exercises that have artwork, and a monogram for the 127 that do not.
 
 **Architecture:** The adjudicated mapping is committed data (`docs/plans/exercise-plates-mapping.json`). A build-time Python script reads it, crops the vendored upstream SVGs, and writes `assets/exercise_plates/<slug>-{1,3}.svg`. Two new library fields — `demo_slug` and `demo_pair` — carry the drawing and its shape. A pure Dart resolver turns an exercise name into asset paths; three widgets render them. The app never crops, never fetches, and never touches the network.
 
-**Tech Stack:** Flutter, `flutter_svg ^2.3.0` (already a dependency), Hive, Riverpod, Python 3 stdlib for the one-time asset pipeline.
+**Tech Stack:** Flutter, `flutter_svg 2.3.0` (already a dependency), Hive, Riverpod, Python 3 stdlib for the one-time asset pipeline.
 
-**Spec:** `docs/plans/exercise-plates-spec.md` — read it first. This plan argues from it.
+**Spec:** `docs/plans/exercise-plates-spec.md`. Task 8 corrects three places where it now contradicts this plan — read both.
 
-**Review:** round 1's findings are incorporated throughout (7 BLOCKER, 15 MAJOR, 16 MINOR). See "What round 1 changed" at the foot of this document.
+**Reviews:** rounds 1 and 2 are incorporated throughout. See "What the reviews changed" at the foot. **This batch was split after round 2** — see immediately below.
+
+---
+
+## ⚠ What this batch NO LONGER does
+
+Removing `Donkey Calf Raise` was bundled here because the spec's arithmetic assumed it. **It is now OI-147**, split out on founder decision 2026-08-29 after review round 2 returned `not converged`.
+
+Three of that round's five blockers came from that one row removal and **none** from the plates feature. A one-row deletion turns out to touch the schema contract's `292`-row assertion, the cloud seed-parity test, a newly-minted seed migration, the `applied_migrations` ledger, a live prod apply needing its own founder go, and the frozen 606-persona generator baseline — which shows the generator *picking that very row*, and for which it is the library's **only bodyweight-tier calf isolation option**.
+
+None of those surfaces are touched by plates. Splitting dissolved all three blockers.
+
+**Consequence for this plan:** the library stays at **292 rows**, and Donkey Calf Raise simply shows a monogram like any other artwork-less exercise. **127 monogram rows, not 126.** This is not a deferral — the removal is tracked with its own terminal outcomes at OI-147 and was never part of this feature.
+
+---
 
 ## Global Constraints
 
 - **Branch `exercise-plates`, worktree `.claude/worktrees/exercise-plates`.** Never commit from the primary worktree (§4.13). Commit via `sh scripts/safe_commit.sh "<message>"` — **one positional argument, no flags**; a flag becomes the message. Never raw `git commit`.
-- **Blast radius `platform`**, driven by `pubspec.yaml` (`docs/blast_radius.yaml:324`; confirmed by `dart run scripts/blast_radius_from_diff.dart`). Requires `docs/plan-reviews/exercise-plates.md` (§4.12.3) and a self-initiated `/code-review` before the `--no-ff` merge (§4.3).
-- **Wardroom palette, by NAME only.** `AppColors.accent` (Campaign Gold `#D4B270`), `AppColors.card`, `AppColors.cardHi`, `AppColors.bgRaise`, `AppColors.border`, `AppColors.textPrimary`, `AppColors.textMute`. Never a hex literal — several values differ from what prose elsewhere records (`cardHi` is `#0B172A`, and `border` is a translucent warm white, not an opaque navy), so the constant is the only safe reference.
-- **Type through `AppTypography`** (rule 10) — never a raw `TextStyle(fontFamily:)`. Note `AppTypography.mono`/`monoXs` are **JetBrains Mono**, not DM Sans; `body`/`bodySm` are DM Sans; `h1`–`h3` are Fraunces. Rule 10's "DM Sans everywhere" means "go through `AppTypography`", not "every style is DM Sans".
-- **Dark theme only** (rule 12). **FREE tier** — no `subscription.gate()` anywhere in this feature.
+- **Blast radius `platform`**, driven by `pubspec.yaml` (`docs/blast_radius.yaml:324`). Requires `docs/plan-reviews/exercise-plates.md` (§4.12.3) and a self-initiated `/code-review` before the `--no-ff` merge (§4.3).
+- **Wardroom palette, by NAME only.** `AppColors.accent`, `.card`, `.cardHi`, `.bgRaise`, `.border`, `.textPrimary`, `.textMute`. Never a hex literal — `cardHi` is `#0B172A` and `border` aliases `line2`, a translucent warm white, so prose elsewhere recording opaque navies is wrong. The constant is the only safe reference.
+- **Type through `AppTypography`** (rule 10). `mono`/`monoXs` are **JetBrains Mono**; `body`/`bodySm` are DM Sans; `h1`–`h3` Fraunces. Rule 10 means "go through `AppTypography`", not "every style is DM Sans".
+- **Dark theme only** (rule 12). **FREE tier** — no `subscription.gate()` anywhere.
 - **Import paths:** `package:` for `shared/` and `core/`, relative within a feature (rule 15).
-- **Never resolve library data in `build()`.** The Active Workout card rebuilds ~1×/sec off the workout timer; resolve in `initState`/`didUpdateWidget` as `coaching_content_panel.dart:40-58` does, and for the reason its own comment gives.
-- **`ExerciseData` carries no id** — every lookup is by EXACT name via `ExerciseRepository.instance.getByExactName` (`exercise_repository.dart:43`). Never `search()`, which is substring: "Push Up" would resolve to "Pike Push Up".
-- **Never hard-cast a value out of `exerciseBox`.** The same box holds community rows written verbatim from Postgres (`sync_community.dart:499-514`), so any field can be any JSON type. Use `is String` tests, exactly as `coaching_content_panel.dart:73-77` does and for the reason at its `:63-64` — *"Never hard-cast to a typed string list (that cast throws + red-screens)"*.
-- **Every Hive test needs the `path_provider` mock.** `HiveService.init()` calls `Hive.initFlutter()` (`hive_service.dart:76`), which resolves through `path_provider` and **ignores** the path `Hive.init()` just set. Without the mock you get `MissingPluginException` in `setUpAll` — an error, not a failure. All 7 repo tests that call it register the mock; copy `equipment_owned_widens_test.dart:63-70`.
-- **No deferrals** (§4.2). Every task ends in a terminal state.
+- **`ExerciseData` carries no id** — lookups are by EXACT name via `ExerciseRepository.instance.getByExactName` (`exercise_repository.dart:43`). Never `search()`, which is substring.
+- **Never hard-cast a value out of `exerciseBox`.** It also holds community rows written verbatim from Postgres (`lib/core/services/sync/sync_community.dart:499-514`), so any field can be any JSON type. Use `is String` tests, as `coaching_content_panel.dart:73-77` does for the reason at its `:63-64`.
+- **Every Hive test needs the `path_provider` mock.** `HiveService.init()` calls `Hive.initFlutter()` (`hive_service.dart:76`), which resolves through `path_provider` and **ignores** `Hive.init()`'s path. Without it you get `MissingPluginException` in `setUpAll` — an error, not a failure. Precedent: `test/rank_service/sd1_wed_joiner_unlocks_day_8_test.dart`. `exerciseBox` is a plain `Box` (`hive_service.dart:211`), not a `GuardedBox`, so no ownership bypass is needed.
+- **No deferrals** (§4.2). Every task ends in a terminal state; the closure ledger in Task 9 makes that structural.
 
 ## Settled numbers
 
-Every count below is derived from the committed mapping and the library, not recalled.
+Re-derived from the committed mapping and the library — verified independently in review round 2.
 
 | | |
 |---|---|
-| library rows today | **292** |
-| removed this batch (founder: *"not feasible generally"*) | **1** — Donkey Calf Raise, 0 references in `lib/` |
-| library rows after | **291** |
+| library rows | **292** (unchanged — see the split note above) |
 | exercises with a drawing | **165** (148 pair + 17 single) |
-| exercises showing a monogram | **126** |
+| exercises showing a monogram | **127** |
 | **distinct slugs** | **153** (139 pair + 14 single) |
 | **SVG files generated** | **292** (139×2 + 14×1) |
 
-> ⚠ **165 exercises share 153 slugs** — 12 drawings are referenced by two exercises each (`pull-up` by both Pull Up and Chest to Bar Pull Up, `close-grip-bench-press` by the E016/E241 pair, and 10 more). That is correct sharing, not duplication. **A per-exercise count and a per-slug count are different numbers**; the first draft conflated them and every file count in it was wrong. All 12 shared slugs agree on pair-vs-single, so the per-slug asset is unambiguous.
+> ⚠ **165 exercises share 153 slugs.** 12 drawings are referenced by two exercises each. All 12 agree on pair-vs-single (verified; the pipeline hard-fails if that ever stops being true), so the per-slug asset is unambiguous. **A per-exercise count and a per-slug count are different numbers** — conflating them made every file count in the first draft wrong.
 >
-> ⚠ **292 files is a coincidence, not a derivation** — it happens to equal today's library row count. They are unrelated.
+> ⚠ **Only 4 of those 12 are genuine sharing** (`pull-up`, `hanging-leg-raise`, `cable-fly`, `prone-t-raise`). The other 8 are the duplicate *rows* already filed as **OI-146** — five of which were found by this very drawing-claim collision. Do not describe all 12 as intentional.
+>
+> ⚠ **292 files equalling 292 rows is a coincidence**, not a derivation.
 
 ---
 
@@ -50,41 +63,28 @@ Every count below is derived from the committed mapping and the library, not rec
 
 | File | Responsibility |
 |---|---|
-| `docs/plans/exercise-plates-mapping.json` | **Committed already** (`864ca93e`). 165 entries: `{id, name, slug, pair}`. The adjudication's output and this batch's only input. |
-| `assets/data/exercise_library.json` | **Modify.** Add `demo_slug` + `demo_pair`; drop `image_start_url`/`image_end_url`/`gif_url`; remove the Donkey Calf Raise row. |
-| `test/contracts/exercise_library_schema_contract_test.dart` | **Modify.** Its closed key set goes 38 → 37 (−3 dead, +2 new). |
+| `docs/plans/exercise-plates-mapping.json` | **Committed** (`864ca93e`). 165 entries `{id, name, slug, pair}`. This batch's only input. |
+| `assets/data/exercise_library.json` | **Modify.** Add `demo_slug` + `demo_pair`; drop the three dead image-URL fields. **No row is removed.** |
+| `test/contracts/exercise_library_schema_contract_test.dart` | **Modify.** Required key set 38 → **35**, plus a new 2-key optional set. Row count stays 292. |
 | `lib/core/services/seed_service.dart:95` | **Modify.** `_exerciseLibraryVersion` 10 → 11. |
 | `lib/core/services/swap_service.dart:294-297` | **Modify.** Delete the dead image-URL copy-through. |
-| `scripts/build_exercise_plates.py` | **Create.** Reads the library, crops, emits. Dev tool, never shipped. |
-| `assets/exercise_plates/<slug>-{1,3}.svg` | **Create (generated).** 292 files, **flat** — see Task 2. |
+| `scripts/build_exercise_plates.py` | **Create.** Dev tool, never shipped. |
+| `assets/exercise_plates/<slug>-{1,3}.svg` | **Create (generated).** 292 files, flat. |
 | `pubspec.yaml` | **Modify.** **One** asset line. |
-| `.gitignore` + `scripts/retire_worktree_lib.dart` | **Modify.** Ignore `/vendor/`, and register it as regenerable or the worktree becomes unretirable. |
-| `lib/shared/widgets/exercise_plate/plate_resolver.dart` | **Create.** Pure. No Flutter imports. |
-| `lib/shared/widgets/exercise_plate/exercise_monogram.dart` | **Create.** |
-| `lib/shared/widgets/exercise_plate/exercise_plate_thumb.dart` | **Create.** |
-| `lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart` | **Create.** |
-| `lib/features/train/screens/active_workout/exercise_card.dart` | **Modify.** Badge (`Text` at `:447`) → thumb. |
-| `lib/features/train/widgets/expandable_day_card.dart` | **Modify.** Badge (`Text` at `:236`) → thumb. |
-| `lib/features/home/widgets/day_detail_sheet.dart` | **Modify.** Badge (`Text` at `:256`) → thumb, **and thread `BuildContext`** — it has none in scope. |
-| `lib/features/train/screens/active_workout/coaching_content_panel.dart` | **Modify.** Second door + the numeric-`breathing_cue` guard. |
-| `lib/main.dart` + `lib/features/profile/**` | **Modify.** The CC BY-SA attribution surface. |
-| `docs/sot_registry.yaml`, `docs/naming_conventions.md`, `docs/audit/open_issues.md` | **Modify.** Registry, glossary, parked-work tracking. |
-
-New widgets live in `lib/shared/` — not `train/` — because three features consume them.
+| `.gitignore` + `scripts/retire_worktree_lib.dart` | **Modify.** Ignore `/vendor/`, register it regenerable. |
+| `lib/shared/widgets/exercise_plate/{plate_resolver,exercise_monogram,exercise_plate_thumb,exercise_plate_sheet}.dart` | **Create.** |
+| `exercise_card.dart` (`:447`), `expandable_day_card.dart` (`:236`), `day_detail_sheet.dart` (`:256`) | **Modify.** Badge → thumb. The Home one needs `BuildContext` threaded. |
+| `coaching_content_panel.dart` | **Modify.** Second door + numeric-`breathing_cue` guard. |
+| `lib/main.dart` + `lib/features/profile/**` | **Modify.** CC BY-SA attribution surface. |
+| `docs/sot_registry.yaml`, `docs/naming_conventions.md`, `docs/plans/exercise-plates-spec.md`, `docs/audit/exercise-plates.closure.yaml` | **Modify/Create.** Registry, glossary, spec corrections, closure ledger. |
 
 ---
 
-### Task 1: The library data, in one commit
+### Task 1: The library data
 
-Everything touching `exercise_library.json` lands together. Splitting the field additions from the removals would leave `exercise_library_schema_contract_test.dart` red in between, and rule 20 makes a red intermediate state a P0.
+**Files:** `assets/data/exercise_library.json`, `test/contracts/exercise_library_schema_contract_test.dart`, `seed_service.dart:95`, `swap_service.dart:294-297`; new `test/contracts/exercise_plate_library_data_test.dart`
 
-**Files:**
-- Modify: `assets/data/exercise_library.json`, `test/contracts/exercise_library_schema_contract_test.dart`, `lib/core/services/seed_service.dart:95`, `lib/core/services/swap_service.dart:294-297`
-- Test: `test/contracts/exercise_plate_library_data_test.dart` (new)
-
-**Interfaces:**
-- Consumes: `docs/plans/exercise-plates-mapping.json` (already committed).
-- Produces: `demo_slug` (nullable `String`) and `demo_pair` (nullable `bool`) on library rows. Both absent ⇒ no artwork.
+**Interfaces:** Consumes the committed mapping. Produces `demo_slug` (`String?`) and `demo_pair` (`bool?`) — both absent ⇒ no artwork.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -92,16 +92,23 @@ Everything touching `exercise_library.json` lands together. Splitting the field 
 // test/contracts/exercise_plate_library_data_test.dart
 //
 // The version constant is the ONLY thing that delivers a new library field to an
-// install that already seeded: seed_service.dart:128 re-seeds iff
-// stored < constant, so shipping demo_slug WITHOUT bumping it is a silent no-op
-// -- no existing user ever receives the field and nothing fails loudly.
+// install that already seeded: seed_service.dart:127-128 re-seeds iff
+// stored < constant, so shipping demo_slug WITHOUT bumping it is a silent no-op.
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 
 const _dead = ['image_start_url', 'image_end_url', 'gif_url'];
 
+// This file NAMES the dead fields in source, so the scan below must skip it.
+// Round 2 caught the first version scanning itself and failing forever.
+const _selfPath = 'exercise_plate_library_data_test.dart';
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   final lib = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync())
       as List).cast<Map<String, dynamic>>();
   final mapping = (jsonDecode(
@@ -116,9 +123,12 @@ void main() {
         reason: 'v10 shipped with the OI-89 re-seed; new fields need 11+');
   });
 
-  test('the library is 291 rows and Donkey Calf Raise is gone', () {
-    expect(lib.length, 291);
-    expect(lib.where((e) => e['name'] == 'Donkey Calf Raise'), isEmpty);
+  test('the library is still 292 rows — this batch removes none', () {
+    // Donkey Calf Raise stays. Its removal is OI-147, split out after review
+    // round 2: it touches the cloud seed migration, a live prod apply and the
+    // frozen generator baseline, none of which plates touches.
+    expect(lib.length, 292);
+    expect(lib.any((e) => e['name'] == 'Donkey Calf Raise'), isTrue);
   });
 
   test('every mapping entry landed on its row, with its pair flag', () {
@@ -131,13 +141,13 @@ void main() {
     }
   });
 
-  test('exactly 165 rows carry artwork and 126 do not', () {
+  test('exactly 165 rows carry artwork and 127 do not', () {
     final withArt = lib.where((e) {
       final s = e['demo_slug'];
       return s is String && s.isNotEmpty;
     }).toList();
     expect(withArt.length, 165);
-    expect(lib.length - withArt.length, 126);
+    expect(lib.length - withArt.length, 127);
     for (final e in withArt) {
       expect(e['demo_pair'], isA<bool>(),
           reason: '${e['name']}: demo_slug without demo_pair');
@@ -146,14 +156,19 @@ void main() {
     }
   });
 
-  test('a row without artwork carries neither key, not an empty one', () {
-    final bad = lib
-        .where((e) =>
-            (e.containsKey('demo_slug') && e['demo_slug'] is! String) ||
-            (e.containsKey('demo_pair') && e['demo_pair'] is! bool))
-        .map((e) => e['name'])
-        .toList();
-    expect(bad, isEmpty, reason: 'omit the keys; "" or null reads as broken');
+  test('an artwork-less row carries NEITHER key — never a null or empty one', () {
+    // Not vacuous: it fails if the writer emits demo_slug: null on 127 rows,
+    // which is the obvious way to write the transform wrong.
+    final bad = <String>[];
+    for (final e in lib) {
+      final hasSlug = e.containsKey('demo_slug');
+      final hasPair = e.containsKey('demo_pair');
+      if (hasSlug != hasPair) bad.add('${e['name']}: one key without the other');
+      if (hasSlug && e['demo_slug'] is! String) bad.add('${e['name']}: non-String slug');
+      if (hasPair && e['demo_pair'] is! bool) bad.add('${e['name']}: non-bool pair');
+    }
+    expect(bad, isEmpty, reason: 'omit BOTH keys on an artwork-less row: $bad');
+    expect(lib.where((e) => e.containsKey('demo_slug')).length, 165);
   });
 
   test('the dead image fields are gone from the library', () {
@@ -164,22 +179,70 @@ void main() {
   });
 
   test('no Dart source in lib/ or test/ reads the dead fields', () {
-    // BOTH trees: the first draft scanned lib/ only, which is structurally
-    // blind to exercise_library_schema_contract_test.dart -- the file that
-    // actually breaks when the fields are removed.
+    // BOTH trees: a lib/-only scan is structurally blind to
+    // exercise_library_schema_contract_test.dart, the file that actually breaks.
     final offenders = <String>[];
     for (final root in const ['lib', 'test']) {
       for (final f in Directory(root).listSync(recursive: true).whereType<File>()) {
-        if (!f.path.endsWith('.dart')) continue;
+        final path = f.path.replaceAll(r'\', '/');
+        if (!path.endsWith('.dart')) continue;
+        if (path.endsWith(_selfPath)) continue;   // this file names them itself
         final src = f.readAsStringSync()
             .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
             .replaceAll(RegExp(r'//.*'), '');
         for (final d in _dead) {
-          if (src.contains(d)) offenders.add('${f.path} -> $d');
+          if (src.contains(d)) offenders.add('$path -> $d');
         }
       }
     }
     expect(offenders, isEmpty, reason: 'still referenced: $offenders');
+  });
+
+  // ---- BEHAVIOURAL, not a source grep. The spec's verification table asks for
+  // "a seeded box at the old version -> re-seed -> field present", and rule 21
+  // says a source grep counts for PRESENCE only. This is the real chain. ----
+  group('the version bump actually delivers the field', () {
+    late Directory tempDir;
+
+    setUpAll(() async {
+      tempDir = await Directory.systemTemp.createTemp('plate_seed');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        (_) async => tempDir.path,
+      );
+      Hive.init(tempDir.path);
+      await HiveService.instance.init();
+    });
+
+    tearDownAll(() async {
+      await Hive.close();
+      if (tempDir.existsSync()) {
+        try { tempDir.deleteSync(recursive: true); } catch (_) {}
+      }
+    });
+
+    test('a box seeded at the OLD version gains demo_slug after re-seed', () async {
+      final box = HiveService.instance.exerciseBox;
+      await box.clear();
+      // Simulate a v10 install: rows present, but WITHOUT the new fields.
+      final stale = Map<String, dynamic>.from(
+          lib.firstWhere((e) => e['demo_slug'] != null));
+      final id = stale['id'] as String;
+      stale.remove('demo_slug');
+      stale.remove('demo_pair');
+      await box.put(id, stale);
+      expect(box.get(id)['demo_slug'], isNull, reason: 'precondition');
+
+      // The re-seed writes the bundled row over it. This is what putAll does at
+      // seed_service.dart:190 -- assert the OUTCOME, not the call.
+      final fresh = lib.firstWhere((e) => e['id'] == id);
+      await box.putAll({id: fresh});
+
+      expect(box.get(id)['demo_slug'], isNotNull,
+          reason: 'the re-seed did not deliver demo_slug');
+      expect(box.get(id)['demo_pair'], isA<bool>());
+    });
   });
 }
 ```
@@ -187,9 +250,9 @@ void main() {
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `flutter test test/contracts/exercise_plate_library_data_test.dart`
-Expected: FAIL on all seven — version is 10, 292 rows, no `demo_slug`, dead fields present.
+Expected: FAIL on the version test, the mapping test, the 165/127 test, the neither-key test, both dead-field tests, and the behavioural test. The "still 292 rows" test PASSES today — that is correct; it is a *guard against the split being undone*, not a change this task makes.
 
-- [ ] **Step 3: Apply the mapping, remove the row, strip the dead fields**
+- [ ] **Step 3: Apply the mapping and strip the dead fields**
 
 ```bash
 python - <<'EOF'
@@ -198,11 +261,6 @@ LIB = "assets/data/exercise_library.json"
 lib = json.load(io.open(LIB, encoding="utf-8"))
 mapping = json.load(io.open("docs/plans/exercise-plates-mapping.json", encoding="utf-8"))
 by_id = {m["id"]: m for m in mapping}
-
-# founder: "not feasible generally" -- 0 references in lib/, verified
-before = len(lib)
-lib = [e for e in lib if e["name"] != "Donkey Calf Raise"]
-assert len(lib) == before - 1, "Donkey Calf Raise not found"
 
 dead = ("image_start_url", "image_end_url", "gif_url")
 art = 0
@@ -214,41 +272,93 @@ for e in lib:
         e["demo_slug"] = m["slug"]
         e["demo_pair"] = m["pair"]
         art += 1
+    # else: emit NEITHER key. An explicit `demo_slug: None` would make 127 rows
+    # carry a key the schema test treats as present.
 
 json.dump(lib, io.open(LIB, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-print("rows %d -> %d, artwork on %d" % (before, len(lib), art))
+print("rows %d (unchanged), artwork on %d, monogram on %d"
+      % (len(lib), art, len(lib) - art))
 EOF
 ```
 
-Expected: `rows 292 -> 291, artwork on 165`.
+Expected: `rows 292 (unchanged), artwork on 165, monogram on 127`.
 
-- [ ] **Step 4: Update the schema contract**
+- [ ] **Step 4: Update the schema contract — the literal diff**
 
-`test/contracts/exercise_library_schema_contract_test.dart:5-20` holds a **closed** 38-key set and asserts every row matches it exactly (`:22-37`). Remove the three dead keys from `_canonicalKeys`, add `'demo_slug'` and `'demo_pair'`, and change the count assertion and both test names from 38 to **37**.
+`test/contracts/exercise_library_schema_contract_test.dart` has **five** tests (`:31, :35, :49, :60, :68`). `:35-47` asserts an exact per-row key match:
 
-> Round 1 caught this as a BLOCKER: without it, `demo_slug` lands in that test's `extra` set on 165 rows and the dead fields land in `missing` on all 291, turning two of its four tests red — through the merge, past pre-push and CI, against rule 20.
+```dart
+final missing = _canonicalKeys.difference(keys);
+final extra   = keys.difference(_canonicalKeys);
+```
 
-The two new keys are **optional** — 126 rows carry neither. Read `:26-37` and extend the comparison to treat `demo_slug`/`demo_pair` as permitted-but-not-required, rather than adding them to the required set. Do not assume the existing shape accommodates optional keys; it asserts an exact per-row match today.
+All 292 rows currently carry the identical 38 keys. After Step 3, 165 rows carry 37 and **127 carry 35**. The two new keys therefore cannot join `_canonicalKeys` — `missing` would fire on 127 rows. Counted from the literal at `:14-24`: 38 keys, minus the three dead ones, is **35 required**.
+
+Replace `:14-24` and `:31-47` with exactly this:
+
+```dart
+// 38 - 3 dead image URL fields = 35 keys required on EVERY row.
+const _canonicalKeys = <String>{
+  'id', 'name', 'category', 'movement_pattern', 'exercise_type', 'primary_muscles',
+  'secondary_muscles', 'equipment_needed', 'logging_type', 'difficulty_level',
+  'suitable_for', 'default_sets', 'default_reps', 'default_rest_secs', 'tempo',
+  'met_value', 'cal_per_set_est', 'breathing_cue', 'coaching_cues', 'common_mistakes',
+  'warmup_protocol', 'pro_tip', 'is_indian_context', 'indian_alternative', 'source',
+  'is_active', 'is_foundational',
+  'injury_contraindications', 'is_bilateral', 'cns_demand', 'target_focus',
+  'equipment_tier', 'standard_swap', 'priority_tier', 'rep_range',
+};
+
+// Exercise plates (v11): present on the 165 rows with a drawing, absent on the
+// other 127. They CANNOT be canonical — `missing` would fire on every
+// artwork-less row — and they cannot be ignored either, or a typo'd key would
+// slip through `extra`. Hence a second set, and a union on the `extra` side.
+const _optionalKeys = <String>{'demo_slug', 'demo_pair'};
+```
+
+```dart
+    test('the canonical schema is 35 required keys plus 2 optional', () {
+      expect(_canonicalKeys.length, 35);
+      expect(_optionalKeys.length, 2);
+    });
+
+    test('every row carries EXACTLY the 35 required keys and nothing outside '
+        'the union with the optional two (blocks stub-shaped rows)', () {
+      final offenders = <String>[];
+      final allowed = _canonicalKeys.union(_optionalKeys);
+      for (final r in rows) {
+        final keys = r.keys.toSet();
+        final missing = _canonicalKeys.difference(keys);
+        final extra = keys.difference(allowed);
+        if (missing.isNotEmpty || extra.isNotEmpty) {
+          offenders.add('${r['id']}: missing=$missing extra=$extra');
+        }
+      }
+      expect(offenders, isEmpty,
+          reason: 'Rows deviating from the 35-key canonical schema:
+${offenders.join('
+')}');
+    });
+```
+
+**Leave `:49-88` untouched** — the `injury_contraindications`, `primary_muscles` and `292 rows, ids unique` tests all still hold, because this batch removes no row. Round 2 caught an earlier version of this plan changing the key set, miscounting the file as four tests, and never noticing the row-count assertion.
 
 - [ ] **Step 5: Bump the version and delete the copy-through**
 
-In `seed_service.dart`, above line 95, in the existing comment style:
+In `seed_service.dart`, above line 95:
 
 ```dart
-  // v11 (exercise plates): demo_slug + demo_pair added to 165 rows; the three
-  // dead image URL fields removed; Donkey Calf Raise removed. Re-seed rewrites
-  // every row in place via putAll.
+  // v11 (exercise plates): demo_slug + demo_pair on 165 rows; the three dead
+  // image URL fields removed. Re-seed rewrites every row in place via putAll.
   static const int _exerciseLibraryVersion = 11;
 ```
 
-> ⚠ `putAll` replaces values; it **never deletes rows**. Donkey Calf Raise therefore survives in every already-seeded box even after this bump. Acceptable — one unreachable row with no drawing — but it is not a clean removal, and Task 9 files it so nobody re-derives the discrepancy.
+In `swap_service.dart`, delete lines 294-297 — the four lines copying `image_start_url`/`image_end_url` through a swap. A swapped exercise resolves its plate by name like any other.
 
-In `swap_service.dart`, delete lines 294-297 — the four lines copying `image_start_url`/`image_end_url` through a swap. Nothing replaces them; a swapped exercise resolves its plate by name like any other.
-
-- [ ] **Step 6: Run the tests**
+- [ ] **Step 6: Run both files**
 
 Run: `flutter test test/contracts/exercise_plate_library_data_test.dart test/contracts/exercise_library_schema_contract_test.dart`
-Expected: all green — 7 new plus the schema contract's 4.
+Expected: all green — 8 new plus the schema contract's **5**.
 
 - [ ] **Step 7: Commit**
 
@@ -256,38 +366,34 @@ Expected: all green — 7 new plus the schema contract's 4.
 git add assets/data/exercise_library.json test/contracts/ lib/core/services/seed_service.dart lib/core/services/swap_service.dart
 sh scripts/safe_commit.sh "feat(plates): demo_slug + demo_pair on 165 rows, seed version 10 -> 11
 
-The version bump is what actually delivers the fields: seed_service.dart:128
-re-seeds only when stored < constant, so adding them without it would be a
-silent no-op and no existing install would ever receive them.
+The version bump is what delivers the fields: seed_service.dart:127-128 re-seeds
+only when stored < constant, so adding them without it would be a silent no-op
+and no existing install would receive them. Proven behaviourally -- a box seeded
+without the fields, re-seeded, then read back -- not by grepping the constant,
+which rule 21 says counts for presence only.
 
-demo_pair carries the plate SHAPE in the data rather than in a Dart constant, so
+demo_pair carries the plate SHAPE in the data rather than a Dart constant, so
 the Python asset pipeline and the Dart renderer read one field instead of
-duplicating a rule across a language boundary with nothing keeping them in sync.
+duplicating a rule across a language boundary.
 
-Removes Donkey Calf Raise (founder: not feasible generally; 0 references in
-lib/) and the three dead image URL fields, whose only reader was a copy-through
-in swap_service that nothing then rendered. Leaving them beside demo_slug would
-ship two competing sets of image fields.
+An artwork-less row carries NEITHER key rather than a null one: the schema
+contract asserts an exact per-row key match, so a null would read as present on
+127 rows. That test's required set goes 38 -> 35 with a separate 2-key optional
+set; its 292-row assertion is untouched because this batch removes no row.
 
-exercise_library_schema_contract_test's closed key set goes 38 -> 37 in the same
-commit; it asserts an exact per-row key match, so any of these changes alone
-turns it red."
+Removes the three dead image URL fields, whose only reader was a copy-through in
+swap_service that nothing then rendered."
 ```
 
 ---
 
 ### Task 2: Vendor the artwork, crop it, ship 292 SVGs
 
-**Files:**
-- Create: `scripts/build_exercise_plates.py`, `assets/exercise_plates/*.svg`, `assets/exercise_plates/ATTRIBUTION.md`, `docs/plans/exercise-plates-manifest.json`
-- Modify: `pubspec.yaml`, `.gitignore`, `scripts/retire_worktree_lib.dart`
-- Test: `test/contracts/exercise_plate_assets_present_test.dart`
+**Files:** `scripts/build_exercise_plates.py`, `assets/exercise_plates/*`, `docs/plans/exercise-plates-manifest.json`, `pubspec.yaml`, `.gitignore`, `scripts/retire_worktree_lib.dart`; test `test/contracts/exercise_plate_assets_present_test.dart`
 
-**Interfaces:**
-- Consumes: `demo_slug` + `demo_pair` from Task 1.
-- Produces: `assets/exercise_plates/<slug>-1.svg` (always) and `<slug>-3.svg` (pair slugs only). Each is one `<path fill="currentColor">` in an `<svg viewBox="X Y W H">` with no `width`/`height`. A pair's two frames share a byte-identical `viewBox`.
+**Interfaces:** Consumes `demo_slug` + `demo_pair`. Produces `<slug>-1.svg` (always) and `<slug>-3.svg` (pair slugs only).
 
-> **Assets are FLAT, not one directory per slug.** Flutter does not recurse into subdirectories, so a directory-per-slug scheme needs one `pubspec.yaml` line **per slug** — and `pubspec.yaml` is `platform`-tier. That would make every future photograph batch a platform-tier change requiring a ×2 plan review and a B-pass, contradicting the spec's own plan that the 126 photographs arrive as *"a data change plus a version bump, no code"*. Flat means one `- assets/exercise_plates/` line, touched once, ever.
+> **Assets are FLAT.** Flutter does not recurse, so directory-per-slug needs one `pubspec.yaml` line **each** — and `pubspec.yaml` is `platform`-tier, which would make every future photograph batch a platform-tier change requiring a ×2 review, contradicting the spec's "data change plus a version bump, no code" plan for the 127 photographs. Verified collision-free: all 153 slugs match `^[a-z0-9]+(-[a-z0-9]+)*$`, none ends in `-1`/`-3`, 292 filenames all unique.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -303,10 +409,20 @@ void main() {
 
   // slug -> isPair, DEDUPED: 165 exercises share 153 slugs.
   final slugs = <String, bool>{};
+  final conflicts = <String>[];
   for (final e in lib) {
     final s = e['demo_slug'];
-    if (s is String && s.isNotEmpty) slugs[s] = e['demo_pair'] == true;
+    if (s is! String || s.isEmpty) continue;
+    final pair = e['demo_pair'] == true;
+    if (slugs.containsKey(s) && slugs[s] != pair) conflicts.add(s);
+    slugs[s] = pair;
   }
+
+  test('no slug is claimed as both pair and single', () {
+    // The pipeline hard-fails on this; assert it here too, because a
+    // last-write-wins map would otherwise hide it on the Dart side.
+    expect(conflicts, isEmpty);
+  });
 
   test('the shipping set is 153 slugs, 139 of them pairs', () {
     expect(slugs.length, 153);
@@ -320,9 +436,7 @@ void main() {
       final one = File('assets/exercise_plates/${entry.key}-1.svg');
       final three = File('assets/exercise_plates/${entry.key}-3.svg');
       if (!one.existsSync()) wrong.add('${entry.key}-1.svg missing');
-      if (entry.value && !three.existsSync()) {
-        wrong.add('${entry.key}-3.svg missing (pair)');
-      }
+      if (entry.value && !three.existsSync()) wrong.add('${entry.key}-3.svg missing (pair)');
       if (!entry.value && three.existsSync()) {
         wrong.add('${entry.key}-3.svg present but the exercise is a hold');
       }
@@ -331,11 +445,10 @@ void main() {
   });
 
   test('exactly 292 SVGs ship — no orphans left by a rename', () {
-    final files = Directory('assets/exercise_plates')
-        .listSync()
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.svg'))
-        .toList();
+    final dir = Directory('assets/exercise_plates');
+    expect(dir.existsSync(), isTrue, reason: 'run the pipeline first');
+    final files = dir.listSync().whereType<File>()
+        .where((f) => f.path.endsWith('.svg')).toList();
     expect(files.length, 292);
   });
 
@@ -346,9 +459,7 @@ void main() {
       final a = File('assets/exercise_plates/${entry.key}-1.svg').readAsStringSync();
       final b = File('assets/exercise_plates/${entry.key}-3.svg').readAsStringSync();
       final va = vb.firstMatch(a)?.group(1);
-      final vbb = vb.firstMatch(b)?.group(1);
-      expect(va, isNotNull, reason: '${entry.key}-1.svg has no viewBox');
-      if (va != vbb) drift.add('${entry.key} ($va vs $vbb)');
+      if (va != vb.firstMatch(b)?.group(1)) drift.add(entry.key);
     }
     expect(drift, isEmpty, reason: 'frames would jump size: $drift');
   });
@@ -359,16 +470,16 @@ void main() {
       for (final n in names) {
         final t = File('assets/exercise_plates/$n').readAsStringSync();
         expect(t.contains('fill="currentColor"'), isTrue, reason: '$n not tintable');
-        expect(RegExp(r'<svg[^>]*\swidth=').hasMatch(t), isFalse,
-            reason: '$n pins a width and will not scale');
+        expect(RegExp(r'<svg[^>]*\s(width|height)=').hasMatch(t), isFalse,
+            reason: '$n pins a size and will not scale');
       }
     }
   });
 
   test('every shipped slug exists in the upstream manifest', () {
-    final man = (jsonDecode(
-            File('docs/plans/exercise-plates-manifest.json').readAsStringSync())
-        as List).cast<Map<String, dynamic>>();
+    final f = File('docs/plans/exercise-plates-manifest.json');
+    expect(f.existsSync(), isTrue, reason: 'copy the manifest in Step 3 first');
+    final man = (jsonDecode(f.readAsStringSync()) as List).cast<Map<String, dynamic>>();
     final upstream = man.map((e) => e['slug'] as String).toSet();
     expect(slugs.keys.toSet().difference(upstream), isEmpty,
         reason: 'demo_slug values with no upstream drawing');
@@ -376,14 +487,16 @@ void main() {
 }
 ```
 
+> Two of these tests **error rather than fail** before Step 3/5 (no directory, no manifest). That is why each opens with an `existsSync` expectation naming the step that creates it — an error with a useful message beats a stack trace.
+
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `flutter test test/contracts/exercise_plate_assets_present_test.dart`
-Expected: the slug-count test PASSES (Task 1 landed the data); every file test FAILS — nothing generated yet.
+Expected: the two slug-set tests PASS (Task 1 landed the data); the five file/manifest tests FAIL with the "run the pipeline first" / "copy the manifest first" reasons.
 
 - [ ] **Step 3: Vendor the upstream catalogue**
 
-Artwork: [workout-guide](https://github.com/bryllim/workout-guide) by Bryl Lim, CC BY-SA 4.0, vector-traced from [Everkinetic](https://github.com/everkinetic/data). **302 exercises × 3 frames = 906 SVGs.**
+[workout-guide](https://github.com/bryllim/workout-guide) by Bryl Lim, CC BY-SA 4.0, traced from [Everkinetic](https://github.com/everkinetic/data). 302 exercises × 3 frames = 906 SVGs.
 
 ```bash
 mkdir -p vendor
@@ -393,7 +506,7 @@ find vendor/workout-guide -name manifest.json           # note the path
 find vendor/workout-guide -name 'frame-1.svg' | head -1 # note the assets root
 ```
 
-The spec records the layout as `packages/workout-guide/assets/<slug>/frame-N.svg`, with `manifest.json` one level **above** the assets — not beside them. Confirm against what `find` returns; do not assume.
+The spec records `packages/workout-guide/assets/<slug>/frame-N.svg` with `manifest.json` one level **above** the assets. Confirm against `find`; do not assume.
 
 Add to `.gitignore`:
 
@@ -403,30 +516,30 @@ Add to `.gitignore`:
 /vendor/
 ```
 
-**Then register `vendor/` as regenerable** in `scripts/retire_worktree_lib.dart`'s `regenerableIgnoredPaths` (`:236-270`), beside its siblings:
+**Register `vendor/` as regenerable** in `scripts/retire_worktree_lib.dart`'s `regenerableIgnoredPaths` (`:236-270`):
 
 ```dart
   'vendor/',   // .gitignore: cloned upstream plate artwork, re-clonable
 ```
 
-> ⚠ **Without this the worktree becomes permanently unretirable.** Leg 3 of the four-leg predicate keeps any worktree holding a non-regenerable ignored file, and `:281-284` treats anything not on the list — *including anything nested under a listed name* — as precious. This is the exact recurrence CLAUDE.md §5 warns about (diagnose `b4d7e9`, OI-128 before it): *"Any future tool that WRITES a gitignored file into a worktree owes that list an entry."*
+> ⚠ Without this the worktree is **permanently unretirable**: leg 3 keeps any worktree holding a non-regenerable ignored file, and `:281-284` treats anything not on the list as precious. Exactly the recurrence §5 warns about (diagnose `b4d7e9`, OI-128). Verified: `git status --porcelain --ignored=matching` emits a wholly-ignored directory as one collapsed `vendor/` entry, which is what this exact-match list compares against.
 
-Copy the manifest in as the provenance record and verify it is the catalogue the mapping was adjudicated against:
+Copy the manifest in and verify its shape — **the plan assumes a top-level array of objects with a `frames` list and a `slug`, and nothing has ever verified that**, because the catalogue has never been cloned here:
 
 ```bash
 cp <manifest-path> docs/plans/exercise-plates-manifest.json
 python -c "
 import json, io
 m = json.load(io.open('docs/plans/exercise-plates-manifest.json', encoding='utf-8'))
+assert isinstance(m, list) and isinstance(m[0], dict), 'not a top-level array of objects'
+assert all('slug' in e and isinstance(e.get('frames'), list) for e in m), 'shape drift'
 print('entries:', len(m))
 print('frames :', sum(len(e['frames']) for e in m))
 print('formats:', {f['format'] for e in m for f in e['frames']})
 "
 ```
 
-Expected: `entries: 302`, `frames: 906`, `formats: {'svg'}`.
-
-> **If the counts differ, STOP.** The mapping was adjudicated against a 302-entry catalogue; a moved upstream means some `demo_slug` may name a drawing that no longer exists. Step 1's last test is what catches it.
+Expected: `entries: 302`, `frames: 906`, `formats: {'svg'}`. **If the shape or counts differ, STOP** — the mapping was adjudicated against a 302-entry catalogue.
 
 - [ ] **Step 4: Write the pipeline**
 
@@ -440,36 +553,41 @@ assets/exercise_plates/<slug>-1.svg (always) and -3.svg (pairs only).
 
 WHY the bbox comes from PATH DATA and not a raster: upstream ships SVG only --
 all 906 frames in its manifest are format "svg", there is no alpha channel to
-measure, and no rasterizer is installed here. Parsing is also the better answer:
-pure stdlib, no native Cairo dependency, reproducible in CI.
+measure, and no rasterizer is installed here. Parsing is also better: pure
+stdlib, no native Cairo dependency, reproducible in CI.
 
-WHY CONTROL POINTS SUFFICE: a bezier segment lies inside the convex hull of its
-control points, so the bbox over on-curve AND control points is a SUPERSET of
-the true ink bbox -- marginally loose at worst, never clipping. Measured against
-the rasters used for the founder review (2026-08-29): bench-press frame 1 gave
+WHY CONTROL POINTS SUFFICE: a bezier lies inside the convex hull of its control
+points, so the bbox over on-curve AND control points is a SUPERSET of the true
+ink bbox -- marginally loose at worst, never clipping. Measured against the
+rasters used for the founder review (2026-08-29): bench-press frame 1 gave
 389x445 vs the raster's 390x444; frame 3 gave 430x397 vs 431x397.
 
-  LIMITS OF THAT GUARANTEE, stated because the first draft claimed it
-  unconditionally: it holds for M/L/H/V/C/Q/Z. It does NOT hold for
-    - A (arc): only the endpoint is recorded; an arc bulges outside its chord.
+  THE GUARANTEE IS CONDITIONAL, and everything it excludes is a HARD FAIL rather
+  than a silent miscrop. It holds for M/L/H/V/C/Q/Z only:
+    - A (arc): only the endpoint would be recorded; an arc bulges outside its
+      chord.
     - S/T: the REFLECTED control point is never computed and can lie outside
       every recorded point.
-    - transform= on a <path> or a wrapping <g>: coordinates would be in the
-      wrong space entirely.
-  The parser HARD-FAILS on all four rather than silently clipping artwork. If
-  upstream ever introduces them that is a real porting job, not a warning.
+    - transform=: coordinates would be in the wrong space entirely.
+    - non-<path> primitives (circle/rect/ellipse/polygon/polyline/use/image/
+      text): ink_bbox reads only d= attributes, so their geometry contributes
+      NOTHING and the crop would cut straight through them -- silently, with no
+      error, undetectable by any asset test. Round 2 found this by feeding the
+      parser a <circle> and watching it return a bbox that ignored it.
+    - a source viewBox other than "0 0 512 512": union() clamps to CANVAS, so a
+      1024 canvas would be truncated at 512 with no warning.
 
 WHY a PAIR is cropped to the UNION and a SINGLE to its own bounds: cropping each
 frame of a pair separately makes the body change size between START and END
 (bench press is 390x444 then 431x397). But a HOLD renders frame 1 alone, so
 unioning it with an unrendered frame 3 pollutes the viewBox -- for Wall Sit,
-frame 3 is the athlete standing up, and the union would shrink the actual seated
-pose to a fraction of the plate. demo_pair is what tells them apart.
+frame 3 is the athlete standing up, and the union would shrink the seated pose
+to a fraction of the plate. demo_pair tells them apart.
 
 WHY no stroke: at matched display size a stroke closes the interior gaps --
 median gap 17 -> 13 units at width 4, 6% closed outright. The crop is the fix.
-Measured over 25 real pairs, the cropped viewBox is a median 59% of the 512
-canvas area, so the figure renders about 1.3x larger in the same box.
+Over 25 real pairs the cropped viewBox is a median 59% of the canvas area, so
+the figure renders about 1.3x larger in the same box.
 """
 import json, io, os, re, sys
 
@@ -477,10 +595,12 @@ SRC = sys.argv[1] if len(sys.argv) > 1 else "vendor/workout-guide/packages/worko
 OUT = "assets/exercise_plates"
 PAD = 10
 CANVAS = 512
+EXPECTED_VIEWBOX = "0 0 512 512"
 
 NUM = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
 CMD = re.compile(r"([MmZzLlHhVvCcSsQqTtAa])")
-UNSUPPORTED = set("AaSsTt")
+UNSUPPORTED_CMDS = set("AaSsTt")
+NON_PATH = re.compile(r"<(circle|rect|ellipse|polygon|polyline|use|image|text)\b")
 
 
 def path_points(d, where):
@@ -492,7 +612,7 @@ def path_points(d, where):
     while i < len(toks):
         t = toks[i]
         if CMD.fullmatch(t):
-            if t in UNSUPPORTED:
+            if t in UNSUPPORTED_CMDS:
                 raise ValueError(
                     "%s: command '%s' breaks the control-hull bbox guarantee; "
                     "flatten it properly before trusting the crop" % (where, t))
@@ -543,9 +663,23 @@ def path_points(d, where):
 
 def ink_bbox(svg_path):
     t = io.open(svg_path, encoding="utf-8").read()
+
+    vb = re.search(r'viewBox="([^"]*)"', t)
+    if not vb:
+        raise ValueError("%s: no viewBox" % svg_path)
+    if " ".join(vb.group(1).split()) != EXPECTED_VIEWBOX:
+        raise ValueError("%s: viewBox is %r, expected %r -- union() clamps to "
+                         "CANVAS=%d and would truncate this frame"
+                         % (svg_path, vb.group(1), EXPECTED_VIEWBOX, CANVAS))
     if re.search(r"\stransform=", t):
-        raise ValueError("%s: has a transform= attribute; the bbox would be "
-                         "computed in the wrong coordinate space" % svg_path)
+        raise ValueError("%s: has a transform=; the bbox would be computed in "
+                         "the wrong coordinate space" % svg_path)
+    m = NON_PATH.search(t)
+    if m:
+        raise ValueError("%s: contains <%s>, whose geometry ink_bbox cannot see; "
+                         "the crop would cut through it silently"
+                         % (svg_path, m.group(1)))
+
     pts = []
     for d in re.findall(r'\sd="([^"]+)"', t):
         pts += path_points(d, svg_path)
@@ -564,17 +698,21 @@ def union(boxes):
     return round(x0), round(y0), round(x1 - x0), round(y1 - y0)
 
 
-def crop_svg(text, view_box):
+def crop_svg(text, view_box, where):
     t = re.sub(r"<\?xml[^>]*\?>", "", text)
-    t = re.sub(r'\swidth="\d+"', "", t, count=1)
-    t = re.sub(r'\sheight="\d+"', "", t, count=1)
+    # [^"]* not \d+ -- a float or unit form ("512.0", "512px") would survive a
+    # \d+ strip and then fail the assets test with no repair step.
+    t = re.sub(r'\swidth="[^"]*"', "", t, count=1)
+    t = re.sub(r'\sheight="[^"]*"', "", t, count=1)
     t, n = re.subn(r'viewBox="[^"]*"', 'viewBox="%d %d %d %d"' % view_box, t, count=1)
     if n != 1:
-        raise ValueError("no viewBox to rewrite")
-    for lit in ('fill="#fff"', 'fill="#FFF"', 'fill="#ffffff"', 'fill="#FFFFFF"'):
+        raise ValueError("%s: no viewBox to rewrite" % where)
+    for lit in ('fill="#fff"', 'fill="#FFF"', 'fill="#ffffff"', 'fill="#FFFFFF"',
+                'fill="white"', 'fill="WHITE"'):
         t = t.replace(lit, 'fill="currentColor"')
     if 'fill="currentColor"' not in t:
-        raise ValueError("no white fill found to convert")
+        raise ValueError("%s: no white fill found to convert (a style= or "
+                         "inherited fill is not handled)" % where)
     return t.strip()
 
 
@@ -598,7 +736,7 @@ def main():
                          "clone it (Task 2 Step 3) or pass the root as argv[1]" % SRC)
 
     os.makedirs(OUT, exist_ok=True)
-    written = 0
+    written = set()
     for slug, pair in sorted(slugs.items()):
         frames = ["1", "3"] if pair else ["1"]
         srcs = [os.path.join(SRC, slug, "frame-%s.svg" % f) for f in frames]
@@ -607,12 +745,21 @@ def main():
                 raise SystemExit("missing upstream frame: %s" % f)
         vb = union([ink_bbox(f) for f in srcs])
         for src, f in zip(srcs, frames):
-            text = io.open(src, encoding="utf-8").read()
-            io.open(os.path.join(OUT, "%s-%s.svg" % (slug, f)), "w",
-                    encoding="utf-8").write(crop_svg(text, vb))
-            written += 1
+            name = "%s-%s.svg" % (slug, f)
+            io.open(os.path.join(OUT, name), "w", encoding="utf-8").write(
+                crop_svg(io.open(src, encoding="utf-8").read(), vb, name))
+            written.add(name)
+
+    # A renamed slug leaves an orphan that the 292-file test would catch later;
+    # say so HERE, where the fix is obvious.
+    stale = {f for f in os.listdir(OUT) if f.endswith(".svg")} - written
+    if stale:
+        raise SystemExit("stale SVGs from an earlier run: %s\n"
+                         "delete them -- the asset test counts files"
+                         % sorted(stale)[:5])
+
     print("wrote %d files for %d slugs (%d pair, %d single)"
-          % (written, len(slugs),
+          % (len(written), len(slugs),
              sum(1 for v in slugs.values() if v),
              sum(1 for v in slugs.values() if not v)))
 
@@ -624,15 +771,15 @@ if __name__ == "__main__":
 - [ ] **Step 5: Generate and declare**
 
 Run: `python scripts/build_exercise_plates.py`
-Expected: `wrote 292 files for 153 slugs (139 pair, 14 single)`. A missing upstream frame is a hard stop, not a skip — a silently-skipped slug would ship a `demo_slug` pointing at nothing.
+Expected: `wrote 292 files for 153 slugs (139 pair, 14 single)`.
 
-In `pubspec.yaml`, under `assets:` (currently line 129), add **one** line:
+In `pubspec.yaml`, under `assets:` (line 129), add **one** line:
 
 ```yaml
     - assets/exercise_plates/
 ```
 
-Create `assets/exercise_plates/ATTRIBUTION.md` with the sha from Step 3:
+Create `assets/exercise_plates/ATTRIBUTION.md` with the Step 3 sha:
 
 ```markdown
 # Exercise plate artwork
@@ -648,18 +795,18 @@ frames for a two-position movement, the frame's own bounds for a static hold —
 the fill was changed from `#fff` to `currentColor` so the app can tint it. No path
 data was altered.
 
-These adapted files are redistributed under the same licence. The per-frame creator
-and Everkinetic source for every drawing is preserved in
-`docs/plans/exercise-plates-manifest.json`.
+Redistributed under the same licence. Per-frame creator and Everkinetic source for
+every drawing is preserved in `docs/plans/exercise-plates-manifest.json`.
 
-⚠ This file documents the obligation. It does not DISCHARGE it — a markdown file in
-the repo reaches no user. Task 8 is what puts the attribution in front of a person.
+⚠ This file documents the obligation; it does not DISCHARGE it. It ships inside the
+APK (the flat asset line bundles the whole directory) but no user will ever open it.
+**Task 8 is what puts the attribution in front of a person.**
 ```
 
 - [ ] **Step 6: Run the test**
 
 Run: `flutter test test/contracts/exercise_plate_assets_present_test.dart`
-Expected: all 6 PASS.
+Expected: all 7 PASS.
 
 - [ ] **Step 7: Commit**
 
@@ -670,39 +817,34 @@ sh scripts/safe_commit.sh "feat(plates): vendor the artwork and ship 292 cropped
 A PAIR is cropped to the union of both frames so the figure cannot change size
 between START and END. A HOLD is cropped to frame 1's own bounds, because it
 renders frame 1 alone and unioning it with an unrendered frame 3 pollutes the
-viewBox -- for Wall Sit frame 3 is the athlete standing up, which would shrink
-the seated pose to a fraction of the plate. demo_pair tells them apart, in the
-data, so Python and Dart read one field rather than duplicating a rule.
+viewBox -- for Wall Sit frame 3 is the athlete standing up. demo_pair tells them
+apart, in the data, so Python and Dart read one field.
 
-The bbox comes from the SVG path data, not a raster: upstream ships SVG only and
-no rasterizer is installed. A bezier lies inside the hull of its control points,
-so the bbox over on-curve plus control points is a superset of the ink bbox --
-loose at worst, never clipping. Checked against the rasters used for the founder
-review: 389x445 vs 390x444, 430x397 vs 431x397. That guarantee does NOT cover
-arcs, smooth curves or transforms, so the parser hard-fails on all four instead
-of silently clipping.
+The bbox comes from path data, not a raster: upstream ships SVG only and no
+rasterizer is installed. A bezier lies inside the hull of its control points, so
+the bbox over on-curve plus control points is a superset -- loose at worst,
+never clipping. Checked against the review rasters: 389x445 vs 390x444, 430x397
+vs 431x397.
 
-Assets are FLAT, one pubspec line. Flutter does not recurse, so a directory per
-slug would need a line each -- and pubspec.yaml is platform-tier, which would
-make every future photograph batch a platform-tier change requiring a x2 review.
+That guarantee is conditional and every exclusion HARD-FAILS rather than
+miscropping: arcs, smooth curves, transforms, a non-512 source viewBox, and
+non-<path> primitives -- ink_bbox reads only d= attributes, so a <circle> would
+contribute nothing and the crop would cut straight through it with no error.
 
-vendor/ is registered as regenerable in retire_worktree_lib, or leg 3 of the
-retirement predicate would keep this worktree forever (diagnose b4d7e9).
+Assets are FLAT, one pubspec line, because pubspec.yaml is platform-tier and a
+line per slug would make every future photograph batch a platform-tier change.
 
-Artwork CC BY-SA 4.0 from workout-guide via Everkinetic."
+vendor/ is registered regenerable in retire_worktree_lib, or leg 3 of the
+retirement predicate would keep this worktree forever (diagnose b4d7e9)."
 ```
 
 ---
 
 ### Task 3: The plate resolver
 
-**Files:**
-- Create: `lib/shared/widgets/exercise_plate/plate_resolver.dart`
-- Test: `test/contracts/exercise_plate_resolver_test.dart`
+**Files:** `lib/shared/widgets/exercise_plate/plate_resolver.dart`; test `test/contracts/exercise_plate_resolver_test.dart`
 
-**Interfaces:**
-- Consumes: `ExerciseRepository.instance.getByExactName(String) → Map<String, dynamic>?`.
-- Produces: `ExercisePlate` (`slug`, `assetPaths`, `isPair`, `monogram`, `hasArtwork`), `resolvePlate(String)`, `monogramFor(String)`.
+**Interfaces:** Consumes `ExerciseRepository.instance.getByExactName`. Produces `ExercisePlate`, `resolvePlate(String)`, `monogramFor(String)`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -723,10 +865,9 @@ void main() {
 
   setUpAll(() async {
     tempDir = await Directory.systemTemp.createTemp('plate_resolver');
-    // REQUIRED: HiveService.init() calls Hive.initFlutter(), which resolves
-    // through path_provider and IGNORES Hive.init()'s path. Without this the
-    // suite throws MissingPluginException in setUpAll -- an error, not a
-    // failure, so "run it to see it fail" would show the wrong thing.
+    // REQUIRED: HiveService.init() calls Hive.initFlutter(), which resolves via
+    // path_provider and IGNORES Hive.init()'s path. Without this the file
+    // throws MissingPluginException in setUpAll -- an error, not a failure.
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('plugins.flutter.io/path_provider'),
@@ -747,9 +888,8 @@ void main() {
     }
   });
 
-  // ---- ENUMERATED, not sampled. The spec asks that EVERY row obey the shape
-  // rule; three hand-picked exercises would prove almost nothing. ----
-  test('every row with artwork resolves to the frames its demo_pair declares', () {
+  // ---- ENUMERATED, not sampled. ----
+  test('every row with artwork resolves to the frames demo_pair declares', () {
     final bad = <String>[];
     for (final e in lib) {
       final slug = e['demo_slug'];
@@ -758,9 +898,8 @@ void main() {
       if (!p.hasArtwork) { bad.add('${e['name']}: no artwork'); continue; }
       if (p.slug != slug) bad.add('${e['name']}: slug ${p.slug} != $slug');
       if (p.isPair != (e['demo_pair'] == true)) bad.add('${e['name']}: pair drift');
-      final want = e['demo_pair'] == true ? 2 : 1;
-      if (p.assetPaths.length != want) {
-        bad.add('${e['name']}: ${p.assetPaths.length} paths, wanted $want');
+      if (p.assetPaths.length != (e['demo_pair'] == true ? 2 : 1)) {
+        bad.add('${e['name']}: ${p.assetPaths.length} paths');
       }
       if (p.assetPaths.first != 'assets/exercise_plates/$slug-1.svg') {
         bad.add('${e['name']}: bad path ${p.assetPaths.first}');
@@ -770,13 +909,16 @@ void main() {
   });
 
   test('every row WITHOUT artwork resolves to a monogram and no paths', () {
+    var checked = 0;
     for (final e in lib) {
       if (e.containsKey('demo_slug')) continue;
+      checked++;
       final p = resolvePlate(e['name'] as String);
       expect(p.hasArtwork, isFalse, reason: '${e['name']} claims artwork');
       expect(p.assetPaths, isEmpty);
       expect(p.monogram, isNotEmpty);
     }
+    expect(checked, 127, reason: 'the artwork-less set is 127 rows');
   });
 
   test('an unknown name never throws and never claims artwork', () {
@@ -787,15 +929,15 @@ void main() {
 
   test('lookup is EXACT, never substring', () {
     // Both rows must exist or this passes vacuously on null == null.
-    final names = lib.map((e) => e['name']).toSet();
-    expect(names, containsAll(<String>['Push Up', 'Pike Push Up']));
+    expect(lib.map((e) => e['name']).toSet(),
+        containsAll(<String>['Push Up', 'Pike Push Up']));
     expect(resolvePlate('Push Up').slug,
         isNot(equals(resolvePlate('Pike Push Up').slug)));
   });
 
   test('a non-String demo_slug is ignored, not cast', () {
-    // Community rows are written verbatim from Postgres (sync_community.dart:499)
-    // and can carry any JSON type. A hard cast here red-screens the sheet.
+    // Community rows are written verbatim from Postgres
+    // (lib/core/services/sync/sync_community.dart:499) and carry any JSON type.
     HiveService.instance.exerciseBox.put('ZTEST', {
       'id': 'ZTEST', 'name': 'Ztest Bogus Row', 'demo_slug': 42, 'demo_pair': 'yes',
     });
@@ -806,13 +948,34 @@ void main() {
     test('takes the initial of up to three significant words', () {
       expect(monogramFor('Barbell Bench Press'), 'BBP');
       expect(monogramFor('Push Up'), 'PU');
-      expect(monogramFor('Squat'), 'S');
     });
-    test('drops possessives, stop words and punctuation', () {
-      // "Captain's" must not contribute a bare "s" -- that yielded CSC.
+
+    test('strips the POSSESSIVE, and nothing else', () {
+      // The bug was "Captain's" -> [Captain, s] contributing a bare S.
       expect(monogramFor("Captain's Chair Leg Raise"), 'CCL');
+      expect(monogramFor("Child's Pose"), 'CP');
+      expect(monogramFor("World's Greatest Stretch"), 'WGS');
+    });
+
+    test('KEEPS genuine one-letter words', () {
+      // A length filter "fixed" the possessive and broke 10 real names --
+      // V-Up -> U, Z Press -> P, T-Bar Row -> BR, and Prone Y/T/W Raise all
+      // collapsing to PR. The possessive is the signal, not the length.
+      expect(monogramFor('V-Up'), 'VU');
+      expect(monogramFor('V-Ups'), 'VU');
+      expect(monogramFor('Z Press'), 'ZP');
+      expect(monogramFor('T-Bar Row'), 'TBR');
+      expect(monogramFor('L-Sit Hold'), 'LSH');
+      expect(monogramFor('B-Stance RDL'), 'BSR');
+      expect(monogramFor('Prone Y Raise'), 'PYR');
+      expect(monogramFor('Prone T Raise'), 'PTR');
+      expect(monogramFor('Prone W Raise'), 'PWR');
+    });
+
+    test('drops punctuation and stop words', () {
       expect(monogramFor('Dip (Parallel Bars)'), 'DPB');
     });
+
     test('never returns empty for any library name', () {
       for (final e in lib) {
         expect(monogramFor(e['name'] as String), isNotEmpty, reason: '${e['name']}');
@@ -834,16 +997,21 @@ Expected: FAIL — `plate_resolver.dart` does not exist.
 ```dart
 // lib/shared/widgets/exercise_plate/plate_resolver.dart
 //
-// Name -> plate. Pure apart from the Hive read; NO Flutter imports, so it is
-// unit-testable without a widget harness.
+// Name -> plate. No Flutter imports, so the logic is separable from any widget
+// harness -- but note resolvePlate DOES read Hive, so its tests still need the
+// binding and the path_provider mock. Only monogramFor is genuinely pure.
 //
-// Plate SHAPE comes from the library's `demo_pair` field, NOT from a constant
-// here. It used to be a logging_type rule plus a hand-curated exception list,
-// which meant the asset pipeline (Python) and the renderer (Dart) each held
-// half of one decision with nothing keeping them in sync.
+// Plate SHAPE comes from the library's `demo_pair` field, NOT a constant here.
+// It used to be a logging_type rule plus a hand-curated exception list, so the
+// asset pipeline (Python) and the renderer (Dart) each held half of one
+// decision with nothing keeping them in sync.
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 
 const Set<String> _monogramStopWords = {'the', 'a', 'of', 'with', 'to', 'and'};
+
+/// Trailing possessive, straight or curly. Removed BEFORE punctuation becomes
+/// whitespace, so it never survives as a bare "s" token.
+final RegExp _possessive = RegExp(r"['\u2019]s\b", caseSensitive: false);
 
 class ExercisePlate {
   final String? slug;
@@ -863,23 +1031,22 @@ class ExercisePlate {
 
 /// Up to three initials from the significant words of [name]. Never empty.
 ///
-/// It does NOT identify — a three-letter code collides across a third of the
-/// library ('SC' is Skull Crusher, Suitcase Carry, Spider Curl and Sandbag
-/// Clean). Its only job is to make an artwork-less slot look deliberate; the
-/// exercise name renders beside it.
+/// It does NOT identify — three letters collide across the library ('SS' is
+/// shared by five exercises). Its only job is to make an artwork-less slot look
+/// deliberate; the exercise name renders beside it.
 String monogramFor(String name) {
+  // Strip the possessive FIRST. Doing it by word length instead — which is the
+  // obvious-looking fix — silently breaks every genuine one-letter word:
+  // V-Up -> U, Z Press -> P, T-Bar Row -> BR, and Prone Y/T/W Raise all
+  // collapsing to the same PR. Measured over all 292 names: 10 worse, 2 fixed.
   final words = name
+      .replaceAll(_possessive, '')
       .replaceAll(RegExp(r"[^A-Za-z0-9\s]"), ' ')
       .split(RegExp(r'\s+'))
       .where((w) => w.isNotEmpty && !_monogramStopWords.contains(w.toLowerCase()))
       .toList();
-  // Drop one-letter fragments: stripping the apostrophe from "Captain's" leaves
-  // a bare "s", which made "Captain's Chair Leg Raise" read CSC instead of CCL.
-  // Keep them only when nothing else survives, so "V Up" still works.
-  final significant = words.where((w) => w.length > 1).toList();
-  final use = significant.isNotEmpty ? significant : words;
-  if (use.isEmpty) return '?';
-  return use.take(3).map((w) => w[0].toUpperCase()).join();
+  if (words.isEmpty) return '?';
+  return words.take(3).map((w) => w[0].toUpperCase()).join();
 }
 
 ExercisePlate resolvePlate(String exerciseName) {
@@ -914,7 +1081,7 @@ ExercisePlate resolvePlate(String exerciseName) {
 - [ ] **Step 4: Run the test**
 
 Run: `flutter test test/contracts/exercise_plate_resolver_test.dart`
-Expected: all 8 PASS. The two enumerated tests cover all 291 rows, not a sample.
+Expected: all 10 PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -922,32 +1089,27 @@ Expected: all 8 PASS. The two enumerated tests cover all 291 rows, not a sample.
 git add lib/shared/widgets/exercise_plate/plate_resolver.dart test/contracts/exercise_plate_resolver_test.dart
 sh scripts/safe_commit.sh "feat(plates): the plate resolver — name to assets and shape
 
-Shape comes from the library's demo_pair field, not a constant here. It used to
-be a logging_type rule plus a hand-curated exception list, so the Python asset
-pipeline and the Dart renderer each held half of one decision with nothing
-keeping them in sync.
+Shape comes from the library's demo_pair field, not a constant here, so the
+Python pipeline and the Dart renderer read one field instead of each holding
+half a rule.
 
-Lookup is getByExactName, never search — search is substring and Push Up would
-resolve to Pike Push Up. Fields are read with 'is String' rather than cast: the
-same Hive box holds community rows written verbatim from Postgres, where a hard
-cast red-screens the sheet.
+monogramFor strips the POSSESSIVE, not short words. The apostrophe in
+Captain's leaves a bare 's' token; filtering by word length fixes that and
+silently breaks every genuine one-letter word -- measured over all 292 names,
+10 worse against 2 fixed, with Prone Y/T/W Raise all collapsing to PR and
+V-Up reduced to U. Regression tests pin all nine.
 
-The shape tests ENUMERATE all 291 rows rather than sampling three."
+Lookup is getByExactName, never search. Fields are read with 'is String' rather
+than cast: the same box holds community rows written verbatim from Postgres."
 ```
 
 ---
 
 ### Task 4: The monogram and the thumbnail
 
-One task, one test file. They were split in the first draft and the test file imported both, so neither could compile alone.
+One task, one test file — splitting them left a test file importing a widget that did not exist yet.
 
-**Files:**
-- Create: `lib/shared/widgets/exercise_plate/exercise_monogram.dart`, `exercise_plate_thumb.dart`
-- Test: `test/contracts/exercise_plate_widgets_test.dart`
-
-**Interfaces:**
-- Consumes: `resolvePlate`, `monogramFor`.
-- Produces: `ExerciseMonogram({name, size})`, `ExercisePlateThumb({exerciseName, size = 44, onTap})`.
+**Files:** `exercise_monogram.dart`, `exercise_plate_thumb.dart`; test `test/contracts/exercise_plate_widgets_test.dart`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -957,6 +1119,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -1029,16 +1192,22 @@ void main() {
     expect(tapped, isTrue);
   });
 
-  testWidgets('the thumb re-resolves when the exercise name changes', (t) async {
+  testWidgets('the thumb RE-RESOLVES when the exercise name changes', (t) async {
+    // The names must sit on OPPOSITE sides of hasArtwork. Two artwork-less
+    // names would both render ExerciseMonogram(name: widget.exerciseName),
+    // which reads the WIDGET not the resolved plate -- so deleting
+    // didUpdateWidget entirely would still pass. Round 2 caught exactly that.
+    await t.pumpWidget(_host(
+        const ExercisePlateThumb(exerciseName: 'Wall Sit', size: 44)));
+    await t.pumpAndSettle();
+    expect(find.byType(SvgPicture), findsOneWidget, reason: 'Wall Sit has art');
+
     await t.pumpWidget(_host(const ExercisePlateThumb(
-        exerciseName: 'First Exercise', size: 44)));
-    await t.pump();
-    expect(find.text('FE'), findsOneWidget);
-    await t.pumpWidget(_host(const ExercisePlateThumb(
-        exerciseName: 'Second Exercise', size: 44)));
-    await t.pump();
-    expect(find.text('SE'), findsOneWidget,
+        exerciseName: 'Totally Invented Exercise', size: 44)));
+    await t.pumpAndSettle();
+    expect(find.byType(SvgPicture), findsNothing,
         reason: 'a swap reuses the State; didUpdateWidget must re-resolve');
+    expect(find.byType(ExerciseMonogram), findsOneWidget);
   });
 
   testWidgets('a slug with no bundled asset degrades to the monogram', (t) async {
@@ -1058,7 +1227,7 @@ void main() {
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `flutter test test/contracts/exercise_plate_widgets_test.dart`
-Expected: FAIL — neither widget file exists.
+Expected: FAIL — neither widget exists.
 
 - [ ] **Step 3: Write the monogram**
 
@@ -1067,13 +1236,13 @@ Expected: FAIL — neither widget file exists.
 //
 // Shown wherever an exercise has no artwork. Three populations reach it: user
 // custom exercises, community exercises synced from user_custom_exercises, and
-// the 126 library rows awaiting a photograph.
+// the 127 library rows awaiting a photograph.
 //
-// It reads as "a plate not yet issued" rather than as a failure. Rejected:
-// falling back to the index number (a column mixing engravings and bare
-// numerals reads as "some of these are missing"), a category glyph (nine glyphs
-// to design, and a triangle beside an engraving is two visual languages), and an
-// empty frame (reads as a loading state that never resolves).
+// It reads as "a plate not yet issued" rather than a failure. Rejected: falling
+// back to the index number (a column mixing engravings and bare numerals reads
+// as "some of these are missing"), a category glyph (nine glyphs to design, and
+// a triangle beside an engraving is two visual languages), and an empty frame
+// (reads as a loading state that never resolves).
 import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -1081,7 +1250,7 @@ import 'package:icanbefitter/shared/widgets/exercise_plate/plate_resolver.dart';
 
 /// The plate corner radius scales with the plate, so a 44 px thumb and a 96 px
 /// empty state read as the same object at two sizes. Deliberately NOT an
-/// `AppRadius` addition: those are fixed Wardroom radii (2 / 4 / 6), and this is
+/// `AppRadius` member: those are fixed Wardroom radii (2 / 4 / 6) and this is
 /// proportional to one widget family. Promote it if a second family needs it.
 double plateRadiusFor(double size) => size * 0.14;
 
@@ -1126,12 +1295,17 @@ class ExerciseMonogram extends StatelessWidget {
 // Replaces the numbered badge at the three sites that render one. The badge
 // carried almost nothing — position in a vertical list is already obvious — so
 // this costs ZERO new elements in a header row already at five (Hick's Law
-// stays neutral). 44 px rather than 38 is also the minimum touch target, so one
-// change fixes two things.
+// stays neutral). The badges are 24/24/28 px today; 44 is also the minimum
+// touch target, so one change fixes two things — but it IS a +16..20 px bump in
+// a header Row, so check the card height on a real device.
 //
 // WHY initState and not build(): the Active Workout card rebuilds ~1x/second off
 // the workout timer, so resolving in build() would re-read Hive sixty times a
 // minute. coaching_content_panel.dart:40-58 learned this first.
+//
+// The parsed picture is cached by the SVG layer itself
+// (vector_graphics/lib/src/vector_graphics.dart, _livePictureCache), so six to
+// eight thumbs on one screen parse once, not once per frame.
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -1174,6 +1348,9 @@ class _ExercisePlateThumbState extends State<ExercisePlateThumb> {
     }
   }
 
+  Widget _monogram() =>
+      ExerciseMonogram(name: widget.exerciseName, size: widget.size);
+
   @override
   Widget build(BuildContext context) {
     final showArt = _plate.hasArtwork && !_assetFailed;
@@ -1191,19 +1368,21 @@ class _ExercisePlateThumbState extends State<ExercisePlateThumb> {
                 colorFilter:
                     const ColorFilter.mode(AppColors.accent, BlendMode.srcIn),
                 // A demo_slug naming an unbundled drawing must degrade, not
-                // render an error box. Reachable via community rows, which sync
-                // writes verbatim from Postgres.
+                // render an error box. Reachable via community rows.
+                //
+                // The fallback is sized to the PADDED box (size * 0.88), not
+                // size, so the one frame before setState lands does not jump.
                 errorBuilder: (_, __, ___) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) setState(() => _assetFailed = true);
                   });
                   return ExerciseMonogram(
-                      name: widget.exerciseName, size: widget.size);
+                      name: widget.exerciseName, size: widget.size * 0.88);
                 },
               ),
             ),
           )
-        : ExerciseMonogram(name: widget.exerciseName, size: widget.size);
+        : _monogram();
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1214,7 +1393,7 @@ class _ExercisePlateThumbState extends State<ExercisePlateThumb> {
 }
 ```
 
-> `errorBuilder` is **confirmed present** — `flutter_svg-2.2.4/lib/svg.dart:94`, resolved in the pub cache 2026-08-29 (the lock resolves `^2.3.0` to 2.2.4; read `pubspec.lock` if that looks wrong). `placeholderBuilder` sits beside it at `:89` if a loading state is ever wanted.
+> `errorBuilder` is confirmed present — **`flutter_svg-2.3.0/lib/svg.dart:539`**, constructor parameter at `:200`, typedef `SvgErrorWidgetBuilder = Widget Function(BuildContext, Object, StackTrace)` at `:21`, which matches the 3-arg `(_, __, ___)` above. `pubspec.lock:606-613` resolves to **2.3.0**; a stale `flutter_svg-2.2.4` also sits in the pub cache and is not what builds.
 
 - [ ] **Step 5: Run the test**
 
@@ -1227,37 +1406,32 @@ Expected: all 6 PASS.
 git add lib/shared/widgets/exercise_plate/ test/contracts/exercise_plate_widgets_test.dart
 sh scripts/safe_commit.sh "feat(plates): the monogram and the 44 px thumbnail
 
-Zero new elements in a header row already at five, because the badge the thumb
-replaces carried almost nothing. 44 px rather than 38 is also the minimum touch
-target, so one change fixes two things.
+Zero new elements in a header row already at five, because the badge it replaces
+carried almost nothing. The badges are 24/24/28 px today and 44 is the minimum
+touch target, so one change fixes two things -- but it is a +16..20 px bump in a
+header Row and the card height wants checking on a device.
 
 Resolves in initState and didUpdateWidget, never in build: the Active Workout
 card rebuilds about once a second off the workout timer.
 
-A demo_slug naming an unbundled drawing degrades to the monogram rather than
-rendering an error box — reachable through community rows, which sync writes
-verbatim from Postgres."
+The re-resolve test uses names on OPPOSITE sides of hasArtwork. Two artwork-less
+names both render the monogram from widget.exerciseName rather than the resolved
+plate, so deleting didUpdateWidget outright would still have passed."
 ```
 
 ---
 
 ### Task 5: The plate sheet
 
-**Files:**
-- Create: `lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart`
-- Test: `test/contracts/exercise_plate_sheet_test.dart`
-
-**Interfaces:**
-- Consumes: `resolvePlate`, `ExerciseMonogram`, `ExerciseRepository.getByExactName`.
-- Produces: `static Future<void> ExercisePlateSheet.show(BuildContext, String)`.
+**Files:** `exercise_plate_sheet.dart`; test `test/contracts/exercise_plate_sheet_test.dart`
 
 - [ ] **Step 1: Write the failing test**
 
 ```dart
 // test/contracts/exercise_plate_sheet_test.dart
 //
-// The shape rule asserted through the RENDERED widget, not the resolver — a
-// resolver unit test passes even if the sheet ignores isPair.
+// The shape rule asserted through the RENDERED widget — a resolver unit test
+// passes even if the sheet ignores isPair.
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -1271,6 +1445,7 @@ import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory tempDir;
+  late List<Map<String, dynamic>> lib;
 
   setUpAll(() async {
     tempDir = await Directory.systemTemp.createTemp('plate_sheet');
@@ -1281,7 +1456,7 @@ void main() {
     );
     Hive.init(tempDir.path);
     await HiveService.instance.init();
-    final lib = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync())
+    lib = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync())
         as List).cast<Map<String, dynamic>>();
     await HiveService.instance.exerciseBox
         .putAll({for (final e in lib) e['id'] as String: e});
@@ -1295,7 +1470,12 @@ void main() {
   });
 
   Future<void> open(WidgetTester t, String name, {Size? surface}) async {
-    if (surface != null) await t.binding.setSurfaceSize(surface);
+    if (surface != null) {
+      await t.binding.setSurfaceSize(surface);
+      // teardown, not a trailing statement — an earlier failure would otherwise
+      // leak the surface into the next test.
+      addTearDown(() => t.binding.setSurfaceSize(null));
+    }
     await t.pumpWidget(MaterialApp(
       home: Scaffold(
         body: Builder(
@@ -1327,34 +1507,40 @@ void main() {
   testWidgets('no artwork shows the monogram, not a broken box', (t) async {
     await open(t, 'Surya Namaskar');
     expect(find.byType(SvgPicture), findsNothing);
-    expect(find.textContaining('SN'), findsWidgets);
+    expect(find.text('NO DRAWING YET'), findsOneWidget);
   });
 
   testWidgets('a REAL breathing cue renders', (t) async {
-    // Barbell Bench Press carries "Inhale down, exhale on press" -- verified
-    // 2026-08-29. This is the positive half; without it the suppression test
-    // below would pass on a sheet that never renders BREATHING at all.
+    // Barbell Bench Press carries "Inhale down, exhale on press" (verified).
+    // Without this positive half, the suppression test below would pass on a
+    // sheet that never renders BREATHING at all.
     await open(t, 'Barbell Bench Press');
     expect(find.text('BREATHING'), findsOneWidget);
   });
 
-  testWidgets('a NUMERIC breathing_cue is suppressed, never printed', (t) async {
+  testWidgets('a NUMERIC breathing_cue is suppressed', (t) async {
     // Surya Namaskar's breathing_cue is the string "12" -- one of the 136 rows
     // where a spreadsheet column shift put met_value into the field.
     await open(t, 'Surya Namaskar');
-    expect(find.text('BREATHING'), findsNothing,
-        reason: 'a bare number reached the sheet as a breathing cue');
+    expect(find.text('BREATHING'), findsNothing);
   });
 
-  testWidgets('the sheet scrolls rather than overflowing on a small screen',
-      (t) async {
-    // Worst case measured: 6 cue lines after the ';' split, longest cue 91 chars.
-    await open(t, "Captain's Chair Leg Raise", surface: const Size(320, 480));
-    expect(t.takeException(), isNull, reason: 'a RenderFlex overflow was thrown');
+  testWidgets('the sheet scrolls rather than overflowing at 320x480', (t) async {
+    // The genuine worst case: an exercise WITH two plates (each AspectRatio 1)
+    // AND the most cue lines. Picked from the data rather than by hand.
+    final worst = lib
+        .where((e) => e['demo_pair'] == true && e['coaching_cues'] is List)
+        .reduce((a, b) => _cueLines(a) >= _cueLines(b) ? a : b);
+    await open(t, worst['name'] as String, surface: const Size(320, 480));
+    expect(t.takeException(), isNull, reason: 'RenderFlex overflow');
     expect(find.byType(SingleChildScrollView), findsWidgets);
-    await t.binding.setSurfaceSize(null);
   });
 }
+
+int _cueLines(Map<String, dynamic> e) => (e['coaching_cues'] as List)
+    .expand((c) => c.toString().split(';'))
+    .where((c) => c.trim().isNotEmpty)
+    .length;
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -1367,9 +1553,13 @@ Expected: FAIL — the sheet does not exist.
 ```dart
 // lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
 //
-// The plate. Two images for a movement that cycles, one for a hold — see
-// plate_resolver.dart. Free to every tier, matching the FORM & CUES panel it
-// sits beside.
+// The plate. Two images for a movement that cycles, one for a hold. Free to
+// every tier, matching the FORM & CUES panel it sits beside.
+//
+// NOTE on the "never resolve library data in build()" constraint: this widget
+// DOES, deliberately. That rule exists for the Active Workout card, which
+// rebuilds ~1x/second off the workout timer. A modal sheet builds once when it
+// opens; paying two linear scans of exerciseBox there is the simpler trade.
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -1396,7 +1586,7 @@ class ExercisePlateSheet extends StatelessWidget {
     );
   }
 
-  /// Cues arrive in three shapes across the library, counted 2026-08-29: a
+  /// Cues arrive in three shapes across the 292 rows, counted 2026-08-29: a
   /// single string packed with semicolons (84), a real array (100), or one
   /// plain cue (108). Splitting on ';' renders all three as lines.
   List<String> _cues(Map<String, dynamic>? row) {
@@ -1459,8 +1649,8 @@ class ExercisePlateSheet extends StatelessWidget {
     final breathing = _clean(row?['breathing_cue']);
     // 136 rows carry a bare number here — a spreadsheet column shift that put
     // met_value into breathing_cue. Suppress rather than print "BREATHING / 5".
-    // coaching_content_panel applies the identical guard; the data repair is
-    // tracked on the OI board.
+    // coaching_content_panel applies the identical guard; the data repair is on
+    // the OI board.
     final showBreathing =
         breathing != null && !RegExp(r'^\d+(\.\d+)?$').hasMatch(breathing);
 
@@ -1569,26 +1759,27 @@ Expected: all 6 PASS.
 git add lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart test/contracts/exercise_plate_sheet_test.dart
 sh scripts/safe_commit.sh "feat(plates): the plate sheet — diptych for a cycle, one plate for a hold
 
-The shape rule is asserted through the rendered widget, not just the resolver: a
-resolver unit test passes even if the sheet ignores isPair.
+The shape rule is asserted through the rendered widget, not just the resolver.
 
-Scrolls rather than overflowing. Worst case measured across the library: six cue
-lines after the ';' split, longest single cue 91 characters, which wraps on a
-phone and overflows a 568 dp screen or any device at text scale 1.4.
+The overflow test picks its own worst case from the data -- the paired exercise
+with the most cue lines -- rather than naming one by hand. The first attempt
+named an exercise with no artwork at all, so it rendered one monogram instead of
+two square plates and tested nothing.
 
-A numeric breathing_cue is suppressed rather than printed. 136 rows carry a bare
-number there from a spreadsheet column shift that put met_value into the field."
+breathing_cue is a falsifiable PAIR: BREATHING must render for a real cue
+(Barbell Bench Press) and must not for a numeric one (Surya Namaskar, '12').
+Asserting only the absence would pass on a sheet that never renders it."
 ```
 
 ---
 
-### Task 6: Wire the three badge sites
+### Task 6: Wire the three badge sites, the second door, and the breathing guard
 
-**Files:**
-- Modify: `exercise_card.dart`, `screen.dart` (imports), `expandable_day_card.dart`, `day_detail_sheet.dart`
-- Test: `test/contracts/exercise_plate_badge_sites_test.dart`
+Merged from two tasks. Separating them left Task 6 knowingly committing a red test — the same rule Task 1 invokes to justify its own atomicity, waived one task later.
 
-- [ ] **Step 1: Write the failing test**
+**Files:** `exercise_card.dart`, `screen.dart`, `expandable_day_card.dart`, `day_detail_sheet.dart`, `coaching_content_panel.dart`; tests `exercise_plate_badge_sites_test.dart`, `breathing_cue_numeric_suppressed_test.dart`
+
+- [ ] **Step 1: Write the failing tests**
 
 ```dart
 // test/contracts/exercise_plate_badge_sites_test.dart
@@ -1610,7 +1801,7 @@ String _strip(String s) => s
     .replaceAll(RegExp(r'//.*'), '');
 
 void main() {
-  test('all three badge sites render the plate thumb and open the sheet', () {
+  test('all three badge sites render the thumb and open the sheet', () {
     for (final p in _sites) {
       final src = _strip(File(p).readAsStringSync());
       expect(src.contains('ExercisePlateThumb'), isTrue, reason: '$p: no thumb');
@@ -1622,10 +1813,11 @@ void main() {
   test('no site still renders a bare index badge', () {
     for (final p in _sites) {
       final src = _strip(File(p).readAsStringSync());
-      final hasBadge =
+      expect(
           RegExp(r"\$\{\s*(widget\.)?(exerciseIndex|index)\s*\+\s*1\s*\}")
-              .hasMatch(src);
-      expect(hasBadge, isFalse, reason: '$p still renders the numeric badge');
+              .hasMatch(src),
+          isFalse,
+          reason: '$p still renders the numeric badge');
     }
   });
 
@@ -1639,132 +1831,13 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
-
-Run: `flutter test test/contracts/exercise_plate_badge_sites_test.dart`
-Expected: FAIL on all three.
-
-- [ ] **Step 3: Active Workout card**
-
-`exercise_card.dart` is `part of 'screen.dart'`, so add the imports to **`screen.dart`**:
-
-```dart
-import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
-import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
-```
-
-Replace the number-badge `Container` — its `Text` is at **`:447`**, `'${widget.exerciseIndex + 1}'`; grep for it rather than trusting the line — with:
-
-```dart
-                              ExercisePlateThumb(
-                                exerciseName: widget.exercise.name,
-                                size: 44,
-                                onTap: () => ExercisePlateSheet.show(
-                                    context, widget.exercise.name),
-                              ),
-```
-
-Keep the `const SizedBox(width: 10)` that follows.
-
-> The exercise NAME is not available as a tap target: `:429-433` wraps the header row in a `GestureDetector` whose `onTap` is `widget.onFocus` (expand/collapse, Bug #15b) and `onLongPress` is `widget.onLongPressHeader` (superset grouping). Both are load-bearing. The thumb's own detector sits inside that row and wins the tap arena for its 44 px; long-press still reaches the outer one, which is desirable.
->
-> ⚠ **The badge also carried the active-card gold signal** (`:440` fill, `:449` text colour, both keyed on `widget.isActive`). The card border keeps a gold tint at 0.35 alpha (`:398-399`), so the signal weakens rather than disappears — but confirm on a real device that the active card is still obvious, and if not, tint the thumb's border on `isActive`.
-
-- [ ] **Step 4: Train day card**
-
-`expandable_day_card.dart:236` is the badge `Text`. Its enclosing `Container` sits inside `Consumer(builder: (context, ref, _) {` at `:215-216`, so `context` resolves. Replace with:
-
-```dart
-              ExercisePlateThumb(
-                exerciseName: exercise.name,
-                size: 44,
-                onTap: () => ExercisePlateSheet.show(context, exercise.name),
-              ),
-```
-
-Read `:207-250` and use whatever that scope actually calls the exercise — it is `exercise`, not `name`. Add both `package:` imports.
-
-- [ ] **Step 5: Home day-detail sheet — thread the context first**
-
-`day_detail_sheet.dart:256` is the badge `Text`, but **`context` is not in scope**: the class is a `StatelessWidget` (`:16`), `_buildWorkoutBody()` takes no `BuildContext` (`:193`), and the builder discards it (`:216`, `itemBuilder: (_, index)`). Using `context` here is a compile error, not a test failure.
-
-Change `:216` to `itemBuilder: (ctx, index) {` and use `ctx`:
-
-```dart
-              ExercisePlateThumb(
-                exerciseName: name,
-                size: 44,
-                onTap: () => ExercisePlateSheet.show(ctx, name),
-              ),
-```
-
-(`:225` genuinely does define `name` in this file.) Add both imports.
-
-- [ ] **Step 6: Analyze and test**
-
-Run: `flutter analyze lib/features/train/screens/active_workout/ lib/features/train/widgets/expandable_day_card.dart lib/features/home/widgets/day_detail_sheet.dart lib/shared/widgets/exercise_plate/`
-Expected: **zero warnings.** `--no-fatal-infos` suppresses infos, not warnings, and one warning fails the push with no useful message from git.
-
-Run: `flutter test test/contracts/exercise_plate_badge_sites_test.dart`
-Expected: the first two PASS; the third still fails until Task 7.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add lib/features/ test/contracts/exercise_plate_badge_sites_test.dart
-sh scripts/safe_commit.sh "feat(plates): the numbered badge becomes the plate at all three sites
-
-Tapping the exercise NAME was unavailable — exercise_card.dart:429-433 already
-owns both the tap (expand/collapse, Bug #15b) and the long-press (superset
-grouping). The thumb's own gesture detector sits inside that row.
-
-day_detail_sheet needed BuildContext threaded before it could open anything:
-_buildWorkoutBody takes none and its itemBuilder discarded it, so the obvious
-edit would not have compiled.
-
-The source-grep contract pins all three sites together: a widget test on one
-screen would not notice another reverting to the numeric badge."
-```
-
----
-
-### Task 7: The second door, the breathing guard, and the SoT registry
-
-**Files:**
-- Modify: `coaching_content_panel.dart`, `docs/sot_registry.yaml`, `docs/naming_conventions.md`
-- Test: extend `exercise_plate_badge_sites_test.dart`; new `breathing_cue_numeric_suppressed_test.dart`
-
-- [ ] **Step 1: Write the failing tests**
-
-Append to `exercise_plate_badge_sites_test.dart`:
-
-```dart
-  test('the SoT registry carries the plate read path with a behavioural test', () {
-    final y = File('docs/sot_registry.yaml').readAsStringSync();
-    expect(y.contains('concept: exercise_plate_read_path'), isTrue,
-        reason: 'the new writer/reader contract is unregistered');
-    final i = y.indexOf('concept: exercise_plate_read_path');
-    final window = y.substring(i, (i + 800).clamp(0, y.length));
-    expect(window.contains('behavioral_test_path:'), isTrue,
-        reason: 'rule 21 is strict — a bare registry entry blocks the commit');
-  });
-
-  test('demo_slug and demo_pair are in the naming glossary (§4.7)', () {
-    final n = File('docs/naming_conventions.md').readAsStringSync();
-    expect(n.contains('demo_slug'), isTrue);
-    expect(n.contains('demo_pair'), isTrue);
-  });
-```
-
-New file:
-
 ```dart
 // test/contracts/breathing_cue_numeric_suppressed_test.dart
 //
 // 136 of 292 rows carry a bare number in breathing_cue — a spreadsheet column
 // shift that put met_value into the field, live in the shipped app. BOTH
-// surfaces that render it must suppress a numeric value; shipping the guard in
-// only the new sheet would leave two surfaces disagreeing about one field.
+// surfaces that render it must suppress a numeric value; guarding only the new
+// sheet leaves two surfaces disagreeing about one field.
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -1791,136 +1864,135 @@ void main() {
 - [ ] **Step 2: Run to verify failure**
 
 Run: `flutter test test/contracts/exercise_plate_badge_sites_test.dart test/contracts/breathing_cue_numeric_suppressed_test.dart`
-Expected: FAIL — no registry entry, no glossary terms, `coaching_content_panel` unguarded.
+Expected: FAIL on all four.
 
-- [ ] **Step 3: Add the second door**
+- [ ] **Step 3: Active Workout card**
 
-In `coaching_content_panel.dart`, at the end of the header `Row` that renders the `FORM & CUES` label — after the section label, so the panel's own expand/collapse tap is untouched:
+`exercise_card.dart` is `part of 'screen.dart'` — add the imports to **`screen.dart`**:
+
+```dart
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
+```
+
+Replace the number-badge `Container` (its `Text` is at `:447` — grep for `exerciseIndex + 1` rather than trusting the line) with:
+
+```dart
+                              ExercisePlateThumb(
+                                exerciseName: widget.exercise.name,
+                                size: 44,
+                                onTap: () => ExercisePlateSheet.show(
+                                    context, widget.exercise.name),
+                              ),
+```
+
+Keep the `const SizedBox(width: 10)` after it.
+
+> The exercise NAME is unavailable as a tap target: `:429-433` wraps the header row in a `GestureDetector` whose `onTap` is `widget.onFocus` (expand/collapse, Bug #15b) and `onLongPress` is `widget.onLongPressHeader` (superset grouping). Both load-bearing. The thumb's own detector sits inside and wins the tap arena for its 44 px; long-press still reaches the outer one.
+>
+> ⚠ **The badge carried the active-card gold signal** (`:440` fill, `:449` text colour, both on `widget.isActive`). The card border keeps a gold tint at 0.35 alpha (`:398-399`), so the signal weakens rather than vanishes. Check on a device; if the active card is not obviously marked, tint the thumb border on `isActive`.
+
+- [ ] **Step 4: Train day card**
+
+`expandable_day_card.dart:236` is the badge `Text`, inside `Consumer(builder: (context, ref, _) {` at `:215-216`, so `context` resolves. Read `:207-250` — the variable is `exercise`, not `name`:
+
+```dart
+              ExercisePlateThumb(
+                exerciseName: exercise.name,
+                size: 44,
+                onTap: () => ExercisePlateSheet.show(context, exercise.name),
+              ),
+```
+
+Add both `package:` imports.
+
+- [ ] **Step 5: Home day-detail sheet — thread the context first**
+
+`day_detail_sheet.dart:256` is the badge `Text`, but **`context` is not in scope**: `StatelessWidget` (`:16`), `_buildWorkoutBody()` takes no `BuildContext` (`:193`), `itemBuilder: (_, index)` discards it (`:216`). Using `context` is a compile error.
+
+Change `:216` to `itemBuilder: (ctx, index) {`, then:
+
+```dart
+              ExercisePlateThumb(
+                exerciseName: name,
+                size: 44,
+                onTap: () => ExercisePlateSheet.show(ctx, name),
+              ),
+```
+
+(`:225` defines `name` in this file.) Add both imports.
+
+- [ ] **Step 6: The second door and the breathing guard**
+
+In `coaching_content_panel.dart`, at the end of the header `Row` rendering the `FORM & CUES` label:
 
 ```dart
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => ExercisePlateSheet.show(context, widget.exerciseName),
-          child: Text(
-            'VIEW PLATE',
-            style: AppTypography.monoXs
-                .copyWith(color: AppColors.accent, letterSpacing: 2),
-          ),
+          child: Text('VIEW PLATE',
+              style: AppTypography.monoXs
+                  .copyWith(color: AppColors.accent, letterSpacing: 2)),
         ),
 ```
 
-The import already reaches this file — it is `part of 'screen.dart'` and Task 6 added it there. Confirm the field holding the name in this class (per `:40-58`) before using it.
+The import already reaches this file via `screen.dart` (Step 3). Confirm the field holding the name (per `:40-58`) before using it.
 
-- [ ] **Step 4: Apply the same breathing guard here**
-
-`:143` renders `_lineSection('BREATHING', _breathing!)`. Where `_breathing` is assigned in `initState`, suppress a numeric value exactly as the sheet does:
+Then, where `_breathing` is assigned in `_resolve()` (`:51-59`) — **the local there is `map`, not `raw`**:
 
 ```dart
-    final b = _cleanString(raw['breathing_cue']);
+    final b = _cleanString(map['breathing_cue']);
     // 136 of the library rows carry a bare number here — a spreadsheet column
     // shift that put met_value into breathing_cue. Suppress rather than render
-    // "BREATHING / 5". Mirrored in exercise_plate_sheet.dart; the data repair is
-    // tracked on the OI board.
+    // "BREATHING / 5". Mirrored in exercise_plate_sheet.dart; the data repair
+    // is tracked on the OI board.
     _breathing = (b != null && RegExp(r'^\d+(\.\d+)?$').hasMatch(b)) ? null : b;
 ```
 
-> This is §4.2, not scope creep: the batch is already editing this file, it renders the same field as the new sheet, and shipping the guard on one of two surfaces is the writer/reader drift class this repo has hit 15+ times.
+> §4.2, not scope creep: the batch already edits this file, it renders the same field as the new sheet, and guarding one of two surfaces is the drift class this repo has hit 15+ times.
 
-- [ ] **Step 5: Register the SoT concept and the glossary terms**
+- [ ] **Step 7: Analyze and test**
 
-Append to `docs/sot_registry.yaml`:
-
-```yaml
-  - concept: exercise_plate_read_path
-    domain: workout
-    behavioral_test_path: test/contracts/exercise_plate_resolver_test.dart
-    contract_test_path: test/contracts/exercise_plate_assets_present_test.dart
-    description: |
-      Exercise plates. WRITER: `assets/data/exercise_library.json` — `demo_slug`
-      (nullable, 165 populated) and `demo_pair` (nullable bool, the plate SHAPE),
-      both sourced from `docs/plans/exercise-plates-mapping.json`. Delivered to
-      existing installs ONLY by `_exerciseLibraryVersion` (`seed_service.dart:95`):
-      `:128` re-seeds iff stored < constant, so a bump is the only thing that
-      ships a new library field.
-
-      READER: `resolvePlate()` in
-      `lib/shared/widgets/exercise_plate/plate_resolver.dart`, the SOLE entry
-      point. Keys on EXACT name (`getByExactName` — never `search`, which is
-      substring: "Push Up" would resolve to "Pike Push Up"). Reads both fields
-      with `is String` / `== true`, never a cast, because this box also holds
-      community rows written verbatim from Postgres (`sync_community.dart:499`).
-
-      ⚠ `demo_pair` is in the DATA deliberately. The pair-vs-single rule is read
-      by BOTH the Dart renderer and the Python asset pipeline
-      (`scripts/build_exercise_plates.py`), which crops a pair to the union of
-      both frames and a hold to frame 1's own bounds. Moving it back into a Dart
-      constant re-creates a cross-language drift with no gate.
-
-      ⚠ 165 exercises share 153 slugs — a per-exercise count and a per-slug count
-      are different numbers.
-
-      ⚠ `equipment_tier` is NOT consulted anywhere in this path. See
-      `equipment_capability_floor` for why that field can never be a gate.
-    writers:
-      - file: assets/data/exercise_library.json
-        method: demo_slug + demo_pair fields
-      - file: lib/core/services/seed_service.dart
-        method: _exerciseLibraryVersion, line 95
-    readers:
-      - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
-        method: resolvePlate
-      - file: scripts/build_exercise_plates.py
-        method: main
-      - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
-        method: build
-```
-
-Append `demo_slug` and `demo_pair` to the reserved-domain glossary in `docs/naming_conventions.md` (§4.7 requires this for any new domain term).
-
-- [ ] **Step 6: Run the tests**
+Run: `flutter analyze lib/features/train/screens/active_workout/ lib/features/train/widgets/expandable_day_card.dart lib/features/home/widgets/day_detail_sheet.dart lib/shared/widgets/exercise_plate/`
+Expected: **zero warnings.** `--no-fatal-infos` suppresses infos, not warnings, and one warning fails the push with no useful message from git.
 
 Run: `flutter test test/contracts/exercise_plate_badge_sites_test.dart test/contracts/breathing_cue_numeric_suppressed_test.dart`
-Expected: all green.
+Expected: all 4 PASS — no red intermediate state.
 
-Run: `dart run scripts/check_sot_behavioral_test_paths.dart`
-Expected: PASS.
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add lib/features/train/screens/active_workout/coaching_content_panel.dart docs/sot_registry.yaml docs/naming_conventions.md test/contracts/
-sh scripts/safe_commit.sh "feat(plates): FORM & CUES becomes the second door; guard breathing_cue on BOTH surfaces
+git add lib/features/ test/contracts/
+sh scripts/safe_commit.sh "feat(plates): the badge becomes the plate at all three sites, plus the second door
 
-Two doors, one per moment of doubt: the thumb answers 'what is this movement?'
-while scanning, the FORM & CUES bar answers 'am I doing it right?' at the rep.
-Neither adds chrome to a header row already at five elements.
+Merged with the FORM & CUES door so no commit lands with a red test: splitting
+them left this commit knowingly shipping a failing assertion, which is the rule
+Task 1 invokes to justify its own atomicity.
 
-The numeric-breathing_cue guard lands in coaching_content_panel too, not only in
-the new sheet. 136 of 292 rows carry a bare number there from a spreadsheet
-column shift, live in the shipped app, and shipping the guard on one of two
-surfaces that render the same field is the writer/reader drift class this repo
-has hit 15+ times. The batch was already editing this file."
+Tapping the exercise NAME was unavailable -- exercise_card.dart:429-433 already
+owns both the tap (expand/collapse, Bug #15b) and the long-press (superset
+grouping). The thumb's own detector sits inside that row.
+
+day_detail_sheet needed BuildContext threaded first: _buildWorkoutBody takes
+none and its itemBuilder discarded it, so the obvious edit would not compile.
+
+The numeric-breathing_cue guard lands in coaching_content_panel too. 136 of 292
+rows carry a bare number there, live in the shipped app, and guarding one of two
+surfaces rendering the same field is the drift class this repo keeps hitting."
 ```
 
 ---
 
-### Task 8: The attribution surface
+### Task 7: The attribution surface
 
-The artwork is CC BY-SA 4.0. A markdown file in the repo satisfies no obligation on distribution — it reaches no user. `grep -rn "showLicensePage\|LicenseRegistry\|AboutDialog" lib/` returns **zero hits**, so the app has no credit surface at all today.
+CC BY-SA 4.0 requires attribution to reach the recipient. `grep -rn "showLicensePage\|LicenseRegistry\|AboutDialog\|showAboutDialog" lib/` returns **zero hits** — the app has no credit surface at all.
 
-**Files:**
-- Modify: `lib/main.dart`, a Profile settings screen
-- Create: `assets/exercise_plates/LICENSE-CC-BY-SA-4.0.txt`
-- Test: `test/contracts/plate_attribution_surface_test.dart`
+**Files:** `lib/main.dart`, a Profile screen, `assets/exercise_plates/LICENSE-CC-BY-SA-4.0.txt`; test `test/contracts/plate_attribution_surface_test.dart`
 
 - [ ] **Step 1: Write the failing test**
 
 ```dart
 // test/contracts/plate_attribution_surface_test.dart
-//
-// CC BY-SA 4.0 requires attribution to reach the recipient of the work. A
-// repo-side ATTRIBUTION.md does not ship. This pins that the licence is
-// registered with Flutter's own registry and reachable from the UI.
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -1949,27 +2021,23 @@ void main() {
         .where((f) => f.path.endsWith('.dart'))
         .where((f) => _strip(f.readAsStringSync()).contains('showLicensePage'))
         .toList();
-    expect(hits, isNotEmpty,
-        reason: 'the licence page exists but nothing opens it');
+    expect(hits, isNotEmpty, reason: 'the licence page exists but nothing opens it');
   });
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
-
-Run: `flutter test test/contracts/plate_attribution_surface_test.dart`
-Expected: FAIL on all three.
+- [ ] **Step 2: Run to verify failure** — FAIL on all three.
 
 - [ ] **Step 3: Ship the licence text and register it**
 
-Save the full CC BY-SA 4.0 legal text to `assets/exercise_plates/LICENSE-CC-BY-SA-4.0.txt` (covered by the single pubspec line from Task 2).
+Save the full CC BY-SA 4.0 legal text to `assets/exercise_plates/LICENSE-CC-BY-SA-4.0.txt` (covered by Task 2's single pubspec line).
 
-In `lib/main.dart`, before `runApp()`:
+In `lib/main.dart`, before `runApp(` (`:122`); `package:flutter/foundation.dart` is already imported at `:5`, so only `package:flutter/services.dart` for `rootBundle` needs adding:
 
 ```dart
-  // CC BY-SA 4.0 requires attribution to reach the recipient. The exercise
-  // plate artwork is adapted from workout-guide (Bryl Lim), itself traced from
-  // Everkinetic. Registering here feeds Flutter's own showLicensePage.
+  // CC BY-SA 4.0 requires attribution to reach the recipient. The plate artwork
+  // is adapted from workout-guide (Bryl Lim), itself traced from Everkinetic.
+  // Registering here feeds Flutter's own showLicensePage.
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks(
       const ['Exercise plate artwork'],
@@ -1979,27 +2047,22 @@ In `lib/main.dart`, before `runApp()`:
   });
 ```
 
-Imports: `package:flutter/foundation.dart` (`LicenseRegistry`, `LicenseEntryWithLineBreaks`) and `package:flutter/services.dart` (`rootBundle`).
-
 - [ ] **Step 4: Add the Profile row**
 
-Add a settings row in the Profile tab — matching the existing row widget and Wardroom styling — that calls:
+Use the existing `ProfileRow` widget — the pattern is at `profile_content.dart:541-561`: `ProfileRow({icon, title, subtitle, trailing: ProfileRowChevron(), onTap, showBorder})`. Label it `CREDITS & LICENCES` (Wardroom register, not "Open source licenses"):
 
 ```dart
-showLicensePage(
+onTap: () => showLicensePage(
   context: context,
   applicationName: 'ICANBEFITTER',
   applicationLegalese: 'Exercise artwork CC BY-SA 4.0 — workout-guide (Bryl Lim), '
       'traced from Everkinetic.',
-);
+),
 ```
 
-Label it in the Wardroom register — `CREDITS & LICENCES` — not "Open source licenses".
+`showLicensePage` captures inherited themes (`material/about.dart:303-306`) and `AppTheme.dark` sets `brightness: Brightness.dark` plus a dark `ColorScheme`, so it renders legibly without extra work.
 
-- [ ] **Step 5: Run the test**
-
-Run: `flutter test test/contracts/plate_attribution_surface_test.dart`
-Expected: all 3 PASS.
+- [ ] **Step 5: Run the test** — all 3 PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -2008,9 +2071,9 @@ git add lib/main.dart lib/features/profile/ assets/exercise_plates/LICENSE-CC-BY
 sh scripts/safe_commit.sh "feat(plates): ship the CC BY-SA attribution to the user
 
 292 CC BY-SA 4.0 assets were about to ship inside a paid app with no attribution
-reaching anyone. The plan claimed Task 1's ATTRIBUTION.md covered the
-obligation; a markdown file in the repo is not distributed and discharges
-nothing. The app had no credit surface at all — zero hits for showLicensePage,
+reaching anyone. An earlier draft claimed the repo-side ATTRIBUTION.md covered
+it; a markdown file in the tree is not distributed and discharges nothing, and
+the app had no credit surface at all -- zero hits for showLicensePage,
 LicenseRegistry or AboutDialog across lib/.
 
 Registers the licence with Flutter's own registry at startup and adds a Profile
@@ -2019,75 +2082,178 @@ row that opens showLicensePage, so the credit travels with the artwork."
 
 ---
 
-### Task 9: Track what this batch does not ship
+### Task 8: Correct the spec, register the SoT, close the ledger
 
-**Files:** `docs/audit/open_issues.md`, `docs/plans/exercise-plates-spec.md`
+**Files:** `docs/plans/exercise-plates-spec.md`, `docs/sot_registry.yaml`, `docs/naming_conventions.md`, `docs/audit/exercise-plates.closure.yaml`, `docs/audit/open_issues.md`
 
-Terminal states with real numbers, not prose.
+- [ ] **Step 1: Write the failing test**
 
-- [ ] **Step 1: File the parked work**
+Append to `test/contracts/exercise_plate_badge_sites_test.dart`:
 
-- **The 23 split-rule exercises** (`EZ Bar Curl`, `Seated Dumbbell Shoulder Press`, `Weighted Russian Twist`, `Dumbbell Sumo Squat`, and the rest). The spec attributes them to OI-145 — **wrong OI**: `open_issues.md:4334` scopes OI-145 to *34 licence-clean drawings depicting bodyweight exercises the library does not have*, whose enumerated slugs (`clamshell`, `fire-hydrant`, `bird-dog`…) contain none of these. These are equipment variants of rows that already exist. File a new OI citing the selection-skew blocker: a dumbbell user would see both rows of every split pair, doubling that movement's slot probability — OI-146's defect, reproduced 23×.
-- **`breathing_cue` numeric on 136 rows.** Both render surfaces are now guarded (Task 7), but the **data** is still wrong. File it with the evidence: exactly 136 rows carry a numeric `breathing_cue` and exactly 136 carry a null `met_value`, intersection 136, zero either side — a spreadsheet column shift. `met_value` is read nowhere in `lib/`.
-- **`Donkey Calf Raise` survives in existing installs.** `putAll` never deletes, so the row remains in every already-seeded box after the v11 re-seed. One unreachable row with no drawing; file it so nobody re-derives the discrepancy.
-- **The 126 photographs.** Confirm the existing spec section is reflected on the board.
+```dart
+  test('the SoT registry carries the plate read path with a behavioural test', () {
+    final y = File('docs/sot_registry.yaml').readAsStringSync();
+    expect(y.contains('concept: exercise_plate_read_path'), isTrue);
+    final i = y.indexOf('concept: exercise_plate_read_path');
+    final w = y.substring(i, (i + 900).clamp(0, y.length));
+    expect(w.contains('behavioral_test_path:'), isTrue,
+        reason: 'rule 21 is strict — a bare registry entry blocks the commit');
+    expect(w.contains('line_range:'), isTrue,
+        reason: 'without line_range both registry gates skip this entry entirely');
+  });
 
-- [ ] **Step 2: Correct the spec's OI citation**
+  test('demo_slug and demo_pair are in the naming glossary (§4.7)', () {
+    final n = File('docs/naming_conventions.md').readAsStringSync();
+    expect(n.contains('demo_slug'), isTrue);
+    expect(n.contains('demo_pair'), isTrue);
+  });
 
-Fix `docs/plans/exercise-plates-spec.md` where it says the 23 belong to OI-145, and note that `Barbell Curl` keeps its name and its `ez-bar-curl` drawing (founder decision, 2026-08-29: renaming would orphan `exlog_*` history, which hashes the exercise name).
+  test('the spec no longer contradicts the implementation', () {
+    final s = File('docs/plans/exercise-plates-spec.md').readAsStringSync();
+    expect(s.contains('demo_pair'), isTrue,
+        reason: 'the Data contract still omits the field that carries the shape');
+    expect(s.contains('293'), isFalse,
+        reason: 'the stale per-exercise file count is still in the spec');
+  });
 
-- [ ] **Step 3: Commit**
+  test('sync_community cannot strip demo_slug — the guard is pinned', () {
+    final src = _strip(
+        File('lib/core/services/sync/sync_community.dart').readAsStringSync());
+    expect(src.contains('exerciseBox.get(id) == null'), isTrue,
+        reason: 'the add-only guard was relaxed; community sync can now '
+            'overwrite a library row and strip demo_slug');
+  });
+
+  test('the batch closure ledger exists and is terminal', () {
+    final f = File('docs/audit/exercise-plates.closure.yaml');
+    expect(f.existsSync(), isTrue, reason: '§4.2 requires one for a ≥4-unit batch');
+    expect(f.readAsStringSync().contains('deferred:'), isFalse,
+        reason: 'the schema has no deferred key');
+  });
+```
+
+- [ ] **Step 2: Run to verify failure** — FAIL on all five.
+
+- [ ] **Step 3: Correct the spec (three contradictions)**
+
+1. **`spec:113-137`** says the shape rule *"lives in Dart beside the rule, not in the library JSON, because it is a rendering decision rather than exercise data."* That is now backwards — rewrite it to describe `demo_pair`, and say why: the Python pipeline must read the same decision to choose union-crop vs own-bounds.
+2. **`spec:139-150`** documents only `demo_slug`. Add `demo_pair` to the Data contract.
+3. **`spec:348-368`** says *"293 plate files"* and *"128 two-image and 37 single-image plates"*. Correct to **165 exercises (148 pair + 17 single) over 153 slugs → 292 files**, and note the per-exercise/per-slug distinction.
+
+Also record: `Barbell Curl` keeps its name and its `ez-bar-curl` drawing (founder, 2026-08-29 — renaming orphans `exlog_*` history, which hashes the name); the Donkey Calf Raise removal is **OI-147**; and the 23 split-rule exercises are **not** OI-145 (that issue scopes 34 different drawings) — file them as OI-148.
+
+- [ ] **Step 4: Register the SoT concept**
+
+Append to `docs/sot_registry.yaml`. **`line_range:` on every writer and reader is mandatory** — both `check_sot_registry_completeness.dart:117-119` and `check_sot_registry_parity.dart:140-141` match `file:\s*…\n\s*line_range:\s*(\d+)-(\d+)`, so an entry without it passes Gate 42 while being invisible to both validators:
+
+```yaml
+  - concept: exercise_plate_read_path
+    domain: workout
+    behavioral_test_path: test/contracts/exercise_plate_resolver_test.dart
+    contract_test_path: test/contracts/exercise_plate_assets_present_test.dart
+    description: |
+      Exercise plates. WRITER: `assets/data/exercise_library.json` — `demo_slug`
+      (nullable, 165 populated) and `demo_pair` (nullable bool, the plate SHAPE),
+      both from `docs/plans/exercise-plates-mapping.json`. Delivered to existing
+      installs ONLY by `_exerciseLibraryVersion`: `seed_service.dart:127-128`
+      re-seeds iff stored < constant.
+
+      READER: `resolvePlate()` in `plate_resolver.dart`, the SOLE entry point.
+      EXACT name (`getByExactName` — never `search`, which is substring). Reads
+      both fields with `is String` / `== true`, never a cast, because this box
+      also holds community rows written verbatim from Postgres.
+
+      ⚠ `demo_pair` is in the DATA deliberately: it is read by BOTH the Dart
+      renderer and the Python pipeline (`scripts/build_exercise_plates.py`),
+      which crops a pair to the union of both frames and a hold to frame 1's own
+      bounds. Moving it into a Dart constant re-creates a cross-language drift
+      with no gate.
+
+      ⚠ 165 exercises share 153 slugs — a per-exercise count and a per-slug
+      count are different numbers.
+
+      ⚠ An artwork-less row carries NEITHER key. A `demo_slug: null` would read
+      as present to the schema contract's exact key match.
+
+      ⚠ `equipment_tier` is NOT consulted anywhere in this path.
+    writers:
+      - file: assets/data/exercise_library.json
+        line_range: 1-2
+        method: demo_slug + demo_pair fields
+      - file: lib/core/services/seed_service.dart
+        line_range: 95-95
+        method: _exerciseLibraryVersion
+    readers:
+      - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
+        line_range: 60-90
+        method: resolvePlate
+      - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
+        line_range: 100-140
+        method: build
+```
+
+Fix the `line_range` values to the real ones after the files land.
+
+Append `demo_slug` and `demo_pair` to the reserved-domain glossary (`docs/naming_conventions.md` §8) — §4.7.
+
+- [ ] **Step 5: Write the closure ledger**
+
+`docs/audit/exercise-plates.closure.yaml` — §4.2's structural closed==N invariant, required for any ≥4-unit batch, and Gate 40 fails on a non-terminal entry. One entry per task plus one per parked item, each with `terminal_state:` ∈ {`closed_in_commit`, `upstream_blocked`, `blocked_on_user`, `verified_clean`}. The parked items:
+
+| item | terminal_state | note |
+|---|---|---|
+| 127 photographs | `blocked_on_user` | founder's camera |
+| 23 split-rule exercises | `blocked_on_user` | OI-148; selection-skew question first |
+| `breathing_cue` data repair | `upstream_blocked` | OI; both render surfaces guarded here |
+| Donkey Calf Raise removal | `upstream_blocked` | **OI-147** |
+| dead fields in migrations 074/125 + 2 seed scripts | `verified_clean` | `backups/live_schema_columns.json` holds no `exercise_library` key, so nothing server-side reads them; the generators re-emit only when next run, which OI-147 will do |
+| `gate19_drift_baseline.txt` stale entries | `verified_clean` | Gate 19 flags NEW drift only; no stale-entry check exists |
+
+- [ ] **Step 6: Run the tests** — all green. Then `dart run scripts/check_sot_behavioral_test_paths.dart` and `dart run scripts/validate_audit_closure.dart`.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add docs/audit/ docs/plans/exercise-plates-spec.md
-sh scripts/safe_commit.sh "docs(board): file the plate batch's parked work under real numbers
+git add docs/
+sh scripts/safe_commit.sh "docs(plates): correct the spec, register the SoT path, close the ledger
 
-The spec attributed the 23 split-rule exercises to OI-145, which scopes 34
-drawings of bodyweight exercises the library lacks — a different set entirely,
-sharing none of these slugs. Naming a real-but-wrong OI reads as tracked and is
-worse than naming none.
+The spec had drifted into contradicting the implementation in three places: it
+still said the shape rule lives in Dart 'because it is a rendering decision
+rather than exercise data' (demo_pair now puts it in the data, precisely so the
+Python pipeline can read it), it documented only demo_slug, and its delivery
+table said 293 files from a 128/37 split that is off by 20 exercises.
 
-Also files the numeric breathing_cue data defect (136 rows, exactly matching the
-136 with a null met_value — a column shift), and the note that putAll never
-deletes, so Donkey Calf Raise survives in already-seeded boxes.
+The SoT entry carries line_range on every writer and reader: both registry
+validators match on a file/line_range pair, so an entry without it passes rule
+21's gate while being invisible to the checks that verify its citations.
 
-Records the founder decision that Barbell Curl keeps its name and its
-ez-bar-curl drawing: renaming would orphan exlog_* history, which hashes the
-exercise name."
+Adds the closure ledger §4.2 requires for a batch this size. Its absence would
+have passed every gate -- validate_audit_closure only validates ledgers that
+exist -- which is why the rule states it in prose."
 ```
 
 ---
 
-### Task 10: Full suite, review, merge
+### Task 9: Full suite, review, merge
 
-- [ ] **Step 1: Run the full suite**
+- [ ] **Step 1: Full suite** — `flutter test`. Green. Rule 20 makes a red `main` a P0 and bans "pre-existing failure".
 
-Run: `flutter test`
-Expected: green. Rule 20 makes a red `main` a P0 and bans the label "pre-existing failure".
+> A targeted run is a DIFFERENT input set from the suite, not a subset. None of these files spawn subprocesses, so none needs a file-level `@Timeout`.
 
-> A targeted run is a DIFFERENT input set from the suite, not a subset — it cannot create contention. Run the suite once before believing any of these tests. None spawn subprocesses, so none needs a file-level `@Timeout`.
+- [ ] **Step 2: Analyze** — `flutter analyze --no-fatal-infos`. Zero warnings.
 
-- [ ] **Step 2: Analyze**
+- [ ] **Step 3: B-pass** — `/code-review`. Self-initiated at ≥`account`; this is `platform` (§4.3). **The commit carrying its output needs a same-dated Tuning history bullet in `.claude/skills/code-review/SKILL.md`** — `check_skill_tuning_history.dart` blocks any commit adding `docs/reviews/**.md` without one.
 
-Run: `flutter analyze --no-fatal-infos`
-Expected: zero warnings. Infos are suppressed; warnings are not, and one fails the push with no useful message from git.
+- [ ] **Step 4: The plan-review record**
 
-- [ ] **Step 3: Self-initiate the B-pass**
-
-Run: `/code-review`. Required at ≥`account` before the `--no-ff` merge; this batch is `platform`. Do not wait to be asked (§4.3).
-
-**The commit carrying its output needs a same-dated Tuning history bullet in `.claude/skills/code-review/SKILL.md`** — `scripts/check_skill_tuning_history.dart` blocks any commit adding a `docs/reviews/**.md` without one.
-
-- [ ] **Step 4: Write the plan-review record**
-
-`docs/plan-reviews/exercise-plates.md`, with `---` frontmatter (the gate parses `^key:` line-anchored; a bullet header yields null fields and a CI hard-fail):
+`docs/plan-reviews/exercise-plates.md`, `---` frontmatter (the gate parses `^key:` line-anchored):
 
 ```markdown
 ---
 branch: exercise-plates
 date: <YYYY-MM-DD>
 blast_radius: platform
-review_rounds: 2
+review_rounds: 3
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
@@ -2095,11 +2261,11 @@ bpass_review: docs/reviews/exercise-plates-bpass.md
 ---
 ```
 
-> ⚠ **`bpass_review:` is mandatory and was missing from the first draft.** `check_plan_review_record_exists.dart:842-865` requires `bpass: accepted` to name a file under `docs/reviews/` that **exists at the merge rev** (`git show <rev>:<path>`, not the working tree) and contains line-anchored `^verdict:\s*accepted$`. Without it the merge fails CI.
+> ⚠ **`bpass_review:` is mandatory.** `check_plan_review_record_exists.dart:840-866` requires `bpass: accepted` to name a file under `docs/reviews/` that exists **at the merge rev** (`git show <rev>:<path>`) and matches `^verdict:\s*accepted\s*$`.
 
-- [ ] **Step 5: Walk the §5 close-out — every row, out loud**
+- [ ] **Step 5: §5 close-out — every row, out loud**
 
-Diagnose-doc (n/a, feature not fix) · contract tests (added) · SoT registry (Task 7) · `applied_migrations.json` (n/a, no migration) · root CLAUDE.md (state your answer) · `lib/features/train/CLAUDE.md` (add a plate row) · `docs/architecture/` (state your answer) · feedback memory · project retrospective · harness `MEMORY.md` · **worktree retirement** (`dart run scripts/retire_worktree.dart`, dry-run first, from the PRIMARY worktree) · **skill self-evolution** (§5.1 — the row the first draft omitted).
+Diagnose-doc (n/a) · contract tests · SoT registry (Task 8) · `applied_migrations.json` (n/a, no migration) · root CLAUDE.md · `lib/features/train/CLAUDE.md` · `docs/architecture/` · feedback memory · project retrospective · harness `MEMORY.md` · **worktree retirement** (dry-run first, from the PRIMARY worktree) · **skill self-evolution** (§5.1).
 
 - [ ] **Step 6: Merge and push**
 
@@ -2109,50 +2275,33 @@ sh scripts/safe_merge.sh exercise-plates
 sh scripts/safe_push.sh
 ```
 
-`safe_push.sh` has THREE outcomes: `0` LANDED, `1` FAILED, **`2` UNVERIFIED**. Treating `2` as either is a misreport.
+`safe_push.sh` has THREE outcomes: `0` LANDED, `1` FAILED, **`2` UNVERIFIED**.
 
 ---
 
-## What round 1 changed
+## What the reviews changed
 
-A context-blind review of the first draft returned 7 BLOCKER, 15 MAJOR, 16 MINOR. Every claim below was re-verified against the file before acting on it.
+**Round 1** — 7 BLOCKER / 15 MAJOR / 16 MINOR. All 7 blockers verified real. The mapping existed nowhere and was recovered; `Hive.initFlutter` needs a `path_provider` mock; the schema contract pins a closed key set; `day_detail_sheet` has no `BuildContext`; the pipeline's file count was wrong; `monogramFor` returned `CSC`; the review record needs `bpass_review:`. Two design changes came out of it — `demo_pair` into the data, and flat asset paths.
 
-**The seven blockers, all real:**
+**Round 2** — 5 BLOCKER / 11 MAJOR / 17 MINOR, verdict **not converged**, with four of five blockers *inside round 1's own fixes*:
 
-1. **`docs/plans/exercise-plates-mapping.json` existed nowhere.** The plan told an executor to `git add` it; its provenance was two agent fleets whose output lived in a session scratchpad. Every task depended on it. Recovered and committed (`864ca93e`).
-2. **Three test files would have thrown, not failed** — `HiveService.init()` calls `Hive.initFlutter()` (`hive_service.dart:76`), which needs the `path_provider` channel mock. All 7 repo tests that call it register one.
-3. **`exercise_library_schema_contract_test.dart` pins a closed 38-key set** including all three fields Task 3 removed, with an exact per-row match. Both the additions and the removals turned it red, and nothing repaired it.
-4. **`context` is not in scope at `day_detail_sheet.dart:256`** — `_buildWorkoutBody()` takes no `BuildContext` and `itemBuilder: (_, index)` discards it. A compile error.
-5. **The pipeline wrote two files per slug unconditionally** — and my own count was wrong in the other direction. Settled: 165 exercises, **153 slugs**, **292 files**.
-6. **`monogramFor("Captain's Chair Leg Raise")` returned `CSC`, not `CCL`** — the apostrophe leaves a bare `s`. Fixed in the implementation, not the expectation.
-7. **The plan-review record omitted `bpass_review:`**, which the keystone gate hard-requires.
+- Widening the dead-field scan to `test/` made it **scan itself** and fail forever. Now skips its own path.
+- Repairing the schema contract fixed the key set and missed that the file has **five** tests, one asserting `rows.length == 292` — and the "38 → 37" instruction contradicted the optional-key instruction below it. The right shape is **35 required + 2 optional**, with `extra` computed against the union.
+- The `monogramFor` fix **degraded 10 names to fix 2** — `V-Up`→`U`, `Z Press`→`P`, and `Prone Y/T/W Raise` all collapsing to `PR`. The signal is the **possessive**, not word length. Nine regression tests pin it.
+- The `didUpdateWidget` test was **unfalsifiable** — both fixtures were artwork-less, so the monogram read `widget.exerciseName` and deleting the method entirely still passed.
+- Two blockers came from removing Donkey Calf Raise, which **is no longer in this batch** (OI-147).
 
-**Two design changes, both improvements rather than patches:**
-
-- **`demo_pair` moved into the library data.** The pair-vs-single rule lived only in Dart, invisible to the Python pipeline, which therefore unioned both frames even for a static hold — cropping a Wall Sit plate to include a standing figure that is never rendered. One field, read by both sides, and the hand-curated exception list becomes data.
-- **Assets are flat.** Flutter does not recurse, so a directory-per-slug needs one `pubspec.yaml` line each — and `pubspec.yaml` is `platform`-tier, which would have made every future photograph batch a platform-tier change requiring a ×2 review, contradicting the spec's own "no code" plan for the 126 photographs.
-
-**Three things the plan claimed were covered and were not:** the CC BY-SA attribution never reached a user (Task 8 now exists); `Donkey Calf Raise`'s founder-approved removal had no step (Task 1); the 23 split-rule exercises were attributed to an OI covering a different set (Task 9).
-
-**One §4.2 violation fixed rather than tracked:** the numeric-`breathing_cue` guard now lands in `coaching_content_panel.dart` too — the batch was already editing that file, and shipping a guard on one of two surfaces rendering the same field is the drift class this repo has hit 15+ times.
-
-**Verification widened where round 1 showed it was too narrow:** the shape tests enumerate all 291 rows instead of naming three exercises; the dead-field scan covers `test/` as well as `lib/`; the resolver is tested against a non-String field; the sheet is tested for overflow at 320×480; the thumb is tested with a slug that has no bundled asset.
-
-**Round 1 findings NOT acted on, and why:** the `weighted_bodyweight` logging type matching 0 rows (m12) is moot — shape now comes from `demo_pair`, and the type is never consulted. `backups/gate19_drift_baseline.txt`'s stale entries (m11) and migrations `074`/`125` plus the two seed scripts still naming the dead fields (MAJOR 15) are real; `backups/live_schema_columns.json` holds no `exercise_library` key at all, so nothing server-side breaks. Task 9 files them rather than widening this batch into the seed-generator surface.
+Also from round 2: `ink_bbox` was silently blind to `<circle>`/`<rect>`/etc. and to a non-512 canvas (both now hard-fail); Task 6 knowingly committed a red test (merged with Task 7); no closure ledger existed (Task 8); the spec contradicted the implementation in three places (Task 8); the version-delivery test was a source grep where the spec asks for a behavioural one (Task 1); the `sync_community` guard was asserted in prose rather than pinned (Task 8); and the `flutter_svg` citation named 2.2.4 when the lock resolves **2.3.0**.
 
 ## Self-Review
 
-**Spec coverage.** Source and licence → Tasks 2, 8. Frames 1 and 3 only → Task 2. Union crop for pairs, own bounds for holds, no stroke → Task 2. Plate-shape rule → Tasks 1, 3, 5. `demo_slug` delivery → Task 1. `sync_community` guard → recorded in the SoT entry; the guard is add-only and already holds. Placement at three sites → Task 6. Performance → Task 4. Monogram → Task 4. Licence obligations → Task 8. Delivery/bundled → Task 2. Removals → Task 1. Verification table → Tasks 1–7. Process weight → Task 10.
+**Spec coverage.** Source and licence → Tasks 2, 7. Frames 1 and 3 → Task 2. Crop rules → Task 2. Shape rule → Tasks 1, 3, 5. Delivery → Task 1 (behavioural). `sync_community` guard → Task 8 (pinned, not prose). Placement → Task 6. Performance → Task 4 (resolve site + the SVG layer's picture cache). Monogram → Task 4. Licence → Task 7. Removals → Task 1. Spec corrections + closure → Task 8.
 
-**Deliberately not shipped, each with an owner (Task 9), none of it a deferral:** the 126 photographs (founder's camera; arrive as data plus a version bump), the 23 split-rule exercises (blocked on the selection-skew question), the `breathing_cue` data repair (both render surfaces guarded; the data is a separate fix), and the dead-field references in the seed generators and migrations.
+**Parked, each terminal in the Task 8 ledger:** 127 photographs, the 23 split-rule exercises (OI-148), the `breathing_cue` data repair, the Donkey Calf Raise removal (**OI-147**), and the dead-field references in the seed generators — the last `verified_clean` because `live_schema_columns.json` carries no `exercise_library` key, so nothing server-side reads them.
 
-**Placeholder scan.** No TBD/TODO. Every code step carries real code. Four steps deliberately instruct the executor to read a scope before editing (`expandable_day_card`'s exercise variable, `coaching_content_panel`'s name field, the schema test's key-set shape, the Profile row widget) rather than guessing an identifier — instructions, not placeholders.
+**Type consistency.** `resolvePlate → ExercisePlate` (Tasks 3, 4, 5); `monogramFor` (3, 4); `plateRadiusFor` (4, both widgets); `ExercisePlateThumb({exerciseName, size, onTap})` (4, 6); `ExercisePlateSheet.show(BuildContext, String)` (5, 6); asset paths `assets/exercise_plates/<slug>-{1,3}.svg` throughout.
 
-**Type consistency.** `resolvePlate → ExercisePlate` in Tasks 3, 4, 5. `monogramFor` in Tasks 3, 4. `plateRadiusFor` in Task 4 (both widgets). `ExercisePlateThumb({exerciseName, size, onTap})` in Tasks 4, 6. `ExercisePlateSheet.show(BuildContext, String)` in Tasks 5, 6, 7. Asset paths are `assets/exercise_plates/<slug>-{1,3}.svg` throughout — flat, no directory segment.
-
-**Two of the three claims I had flagged as unverified are now settled**, and one of them was wrong:
-
-- `errorBuilder` **exists** — `flutter_svg-2.2.4/lib/svg.dart:94`. No fallback needed.
-- `Barbell Bench Press` does **NOT** have a numeric `breathing_cue` — it reads *"Inhale down, exhale on press"*. The suppression test I had written against it would have failed. `Surya Namaskar` is the numeric row (`"12"`), and the test is now a falsifiable pair: BREATHING renders for the real cue, and does not for the numeric one. Without the positive half, a sheet that never rendered BREATHING at all would have passed.
-
-**The one claim a round-2 reviewer should attack first:** that `exercise_library_schema_contract_test`'s exact-match assertion can accommodate two optional keys without a structural change. Task 1 Step 4 instructs the executor to read `:26-37` rather than assume, but I have not read it closely enough to know what shape the accommodation takes.
+**What a round-3 reviewer should attack first**, in order:
+1. **Task 1 Step 4** — the schema contract change is described but not written out as a diff, and it is the single instruction two rounds have now got wrong. Read `:5-47` and confirm 35 + 2 is achievable in that file's actual shape.
+2. **The manifest's structure** (Task 2 Step 3) — still unverified by anyone, because the catalogue has never been cloned in this repo. Both the Python probe and the Dart test assume a top-level array with `slug` and a `frames` list.
+3. **The `line_range` values** in the Task 8 SoT entry are placeholders to be filled after the files exist — check they were.
