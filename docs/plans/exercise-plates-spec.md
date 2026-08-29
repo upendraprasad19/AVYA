@@ -172,6 +172,45 @@ paragraph is the record of that decision.
 
 ---
 
+## Matching: use the upstream manifest, not exercise names
+
+`packages/workout-guide/manifest.json` (302 entries, 567 KB) carries per-exercise
+`equipment`, `exerciseType`, `primaryMuscle`, `secondaryMuscles`, `isStretch`, and **per-frame
+attribution including the exact Everkinetic source URL and licence**. Matching on names alone
+ignores all of it.
+
+**The gate that matters: reject any drawing that adds load-bearing kit the exercise does not
+use.** Load-bearing means `Barbell`, `Dumbbell`, `Kettlebell`, `Plate`, `Cable`, `Machine`,
+`Resistance Band`. It is deliberately one-directional — *ours having more* never rejects, and
+**their `Bodyweight` never rejects**, because their `Bodyweight` is a superset of ours: it
+covers Pull Up, Chin Up, Chest Dip, Hanging Leg Raise and Ab Wheel Rollout, which our data
+files under `pull-up bar`, `parallel bars` and `ab wheel`. A symmetric class-equality gate
+wrongly rejected all six; this one does not.
+
+**What it caught: 18 of 145 automatic matches carried the wrong equipment**, in the tier no
+human was going to review:
+
+| our exercise | `equipment_needed` | auto-matched drawing | drawing's equipment |
+|---|---|---|---|
+| Walking Lunge | `bodyweight` | `walking-lunge` | Dumbbell |
+| Split Squat | `bodyweight` | `split-squat` | Dumbbell |
+| Reverse Lunge | `bodyweight` | `reverse-lunge` | Dumbbell |
+| Deficit Reverse Lunge | `bodyweight` | `deficit-reverse-lunge` | Dumbbell |
+| Reverse Nordic Curl | `bodyweight` | `reverse-curl` | Barbell — **a different exercise** |
+| Egyptian Lateral Raise | `cables` | `lateral-raise` | Dumbbell |
+| Overhead Tricep Extension | `dumbbells` | `overhead-tricep-extension` | Cable |
+
+Muscle and type agreement are **tie-breakers only**, never promoters: weighting them at 0.20
+let `bodyweight-squat` outrank everything for *Bodyweight Good Morning* on shared-muscle alone,
+and pushed the review queue from 62 rows to 111. At 0.05 behind a name floor of 0.34 they
+order equals without inventing matches.
+
+**Consequence for the licence:** the manifest's per-frame `attribution` block gives the exact
+creator, licence URL and Everkinetic source for every asset, so the credit surface can be
+generated rather than hand-written.
+
+---
+
 ## Placement
 
 **The number badge becomes the plate.** The badge carries almost nothing — position in a
@@ -264,8 +303,8 @@ deflate ratio **0.41**.
 
 | set | exercises | plate files | raw | in-APK |
 |---|---|---|---|---|
-| mapped today | 145 | 260 | 6.8 MB | **2.8 MB** |
-| plus the review set | 207 | 371 | 9.7 MB | **4.0 MB** |
+| mapped today | 124 | 219 | 5.8 MB | **2.4 MB** |
+| plus the review set | 181 | 323 | 8.5 MB | **3.5 MB** |
 | full 292 coverage | 292 | 509 | 13.4 MB | **5.5 MB** |
 
 ⚠ `pubspec.yaml:129` declares assets **per directory**, so `assets/exercise_plates/` needs a new
@@ -334,10 +373,10 @@ the lighter single-round build tier does not apply.
 
 ## Inputs still open
 
-1. **The 62-row name→slug review** — live at the review artifact. 145 map automatically, 62
-   need a human eye, 85 have no equivalent. This is the only genuinely manual step, and the
-   spec does not depend on its *answers*, only on its existence.
-2. **The 85 self-shot pairs.** The monogram covers them from day one and the pipeline takes
+1. **The 57-row name→slug review** — live at the review artifact. 124 map automatically, 57
+   need a human eye, 111 have no usable drawing. This is the only genuinely manual step, and
+   the spec does not depend on its *answers*, only on its existence.
+2. **The 111 self-shot pairs.** The monogram covers them from day one and the pipeline takes
    them as a data change plus a `_exerciseLibraryVersion` bump — no code change. Shooting
    guidance: plain evenly-lit wall, stand a metre off it, high contrast, fitted clothing,
    side-on to match the drawings' convention, and **the phone must not move between the start
