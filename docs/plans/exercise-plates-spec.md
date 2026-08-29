@@ -126,9 +126,15 @@ Active Workout screen shows (`lib/features/train/CLAUDE.md`, logging-types table
 every time.
 
 A hand-curated exception list covers dynamic-`timed` movements that genuinely do have two
-positions — Cat-Cow, Flutter Kick, Bear Crawl, Crab Walk, Jump Rope, Mountain Climber. It lives
-in Dart beside the rule, not in the library JSON, because it is a rendering decision rather
-than exercise data.
+positions — Cat-Cow, Flutter Kick, Bear Crawl, Crab Walk, Jump Rope, Mountain Climber. **Superseded 2026-08-29 — it lives in the library JSON, as `demo_pair`.**
+The rule is read by BOTH the Dart renderer and the Python asset pipeline, which crops a pair to
+the union of both frames and a hold to frame 1's own bounds. A Dart-only constant left the
+pipeline unable to see the decision it had to act on, so it unioned every slug — which for a
+hold means cropping around a figure that is never rendered. One field in the data, read by both
+sides, with nothing to keep in sync.
+
+`Barbell Curl` also keeps its name and its `ez-bar-curl` drawing (founder, 2026-08-29):
+renaming would orphan `exlog_*` history, which hashes the exercise name.
 
 The failure modes are asymmetric and that is why `timed` defaults to one image: showing a pair
 when only one pose is meaningful looks broken; showing one when two would help is merely less
@@ -259,7 +265,13 @@ tiered into `home_dumbbells` / `basic_gym` / `full_gym`, so a dumbbell user woul
 rows of every split pair - the same movement twice in the selection pool, drawing double the
 slot probability of its neighbours. That is exactly OI-146's defect, reproduced deliberately 23
 times. **The 23 new rows must not ship until that is answered**, which is one more reason they
-belong to OI-145 rather than here.
+belong to **OI-148** rather than here.
+
+⚠ **Corrected 2026-08-29: these are NOT OI-145.** That issue scopes *34 licence-clean
+drawings depicting bodyweight exercises the library does not have* — `clamshell`,
+`fire-hydrant`, `bird-dog` and so on. These 23 are equipment VARIANTS of rows that already
+exist, sharing none of those slugs. Naming a real-but-wrong OI reads as tracked and is worse
+than naming none.
 
 ---
 
@@ -355,10 +367,18 @@ deflate ratio **0.41**.
 
 | set | exercises | plate files | raw | in-APK |
 |---|---|---|---|---|
-| **this batch ships** | **165** | **293** | 7.7 MB | **3.2 MB** |
-| at full coverage, all 291 | 291 | 507 | 13.3 MB | **5.5 MB** |
+| **this batch ships** | **165** | **292** | 6.64 MB | **2.83 MB** |
+| at full coverage, all 292 | 292 | 508 | 13.3 MB | **5.5 MB** |
 
-The shipping set is 128 two-image and 37 single-image plates.
+The shipping set is **148 pair + 17 single exercises** over **153 distinct slugs**
+(139 pair + 14 single) = **292 files**. Measured, not estimated: generated against upstream
+`aac599224bb9780305239607ef98540b7e0ce389` on 2026-08-29.
+
+⚠ **A per-exercise count and a per-slug count are different numbers.** 12 drawings are
+referenced by two exercises each, so 165 exercises share 153 slugs. Conflating the two made
+every file count in the first implementation plan wrong. Of those 12, only four (`pull-up`,
+`hanging-leg-raise`, `cable-fly`, `prone-t-raise`) are genuine sharing; the other eight are the
+duplicate ROWS filed as OI-146.
 
 ⚠ `pubspec.yaml:129` declares assets **per directory**, so `assets/exercise_plates/` needs a new
 entry — and `pubspec.yaml` is pinned `platform` in `docs/blast_radius.yaml:324`. **That single
@@ -431,9 +451,9 @@ the lighter single-round build tier does not apply.
 | | |
 |---|---|
 | exercises shipping with a drawing | **165** |
-| exercises awaiting a founder photograph | **126** |
+| exercises awaiting a founder photograph | **127** |
 | exercises still needing a human decision | **0** |
-| removed at founder request | 1 - Donkey Calf Raise, *"not feasible generally"*, 0 references in `lib/` |
+| removed at founder request | **0 — split out to OI-147.** Donkey Calf Raise stays for now: removing one row turns out to touch the schema contract's 292-row assertion, the cloud seed-parity test, a newly-minted seed migration, the applied_migrations ledger, a live prod apply, and the frozen 606-persona generator baseline — which shows the generator picking that very row, and for which it is the library's ONLY bodyweight-tier calf isolation option. |
 
 **Founder decisions, in effect:**
 
@@ -449,12 +469,12 @@ the lighter single-round build tier does not apply.
 
 **Parked, each with an owner - none of it blocks this batch:**
 
-- **126 photographs** - the founder's camera. The monogram covers them from day one and they
+- **127 photographs** - the founder's camera. The monogram covers them from day one and they
   arrive later as a data change plus an `_exerciseLibraryVersion` bump, no code. Shooting
   guidance: plain evenly-lit wall, a metre off it, high contrast, fitted clothing, side-on, and
   **the phone must not move between the start and end shots** - the union crop depends on a
   shared frame.
-- **23 new exercises**, each with its drawing already identified - **OI-145**. They need the
+- **23 new exercises**, each with its drawing already identified - **OI-148**. They need the
   full metadata row, and the selection-skew question above must be answered first.
 - **Eight duplicate exercise pairs** - **OI-146**, widened 2026-08-29 from three.
 
