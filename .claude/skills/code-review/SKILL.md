@@ -190,6 +190,41 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-08-29** — blast-radius **platform** — branch `exercise-plates` (25 commits, the
+  exercise plate feature). **3 findings (0 P0, 1 P1, 1 P2, 1 P3); 0 false_alarm, but ONE
+  finding was half-wrong in a way that mattered.** All fixed in-batch. Review:
+  `docs/reviews/exercise-plates-bpass.md`. Dispatched as a fresh context-blind subagent,
+  unlike the 2026-08-28 inline pass.
+  **The lesson is about a REJECTED causal claim, and it is new to this history.** Finding 1
+  was right that platform tier's `requires: feature_flag` was unmet — and wrong about why
+  the branch is platform, asserting it was *"solely because it edits `CLAUDE.md`"* and
+  recommending the doc rows be split out to drop the tier. Classifying each path ALONE
+  refuted it in one command: `pubspec.yaml` → platform (`blast_radius.yaml:324`) and
+  `CLAUDE.md` → platform (`:68`) are independently sufficient, so the proposed split would
+  have produced a second commit and the same unmet requirement. **Generalisable: when a
+  finding explains WHY a classifier returned a value, re-run the classifier per-path
+  rather than reading the registry — a tier is a max over globs, and "which edit caused
+  it" is not a question the registry answers.** Had the recommendation been taken on
+  trust, the batch would have shipped with the real gap intact and a spurious commit split
+  on top.
+  **What the pass was worth, and it is the arc math.** Lens 6 was pointed at the SVG crop
+  with an explicit "is the bbox ever too SMALL?" — a defect no test in the batch could see,
+  since they check counts, viewBox equality and tintability, never ink coverage. The
+  reviewer re-implemented the arc geometry with an ANALYTIC extrema solver, ran it over all
+  292 shipped assets, found 7 whose ink pokes outside the canvas, then re-ran the
+  pipeline's own sampler at 24/240/2400/24000 samples and got byte-identical results —
+  proving the difference was not sampling error but ink the source `viewBox` had already
+  clipped. **Asking a lens for a specific falsifiable property ("too small", not "correct")
+  is what made an independent re-derivation possible.**
+  **Second, smaller: an evidence claim wider than the check behind it.** Finding 2 was not
+  really "a generator still emits dead fields" — it was that the closure ledger claimed the
+  fields were *"pinned absent across lib/ and test/"* when the pinning test scans `.dart`
+  files only and structurally could not see the `.py` generator. The overstatement is the
+  dangerous half; a claim wider than its check reads as coverage. Same family as this
+  repo's phantom-citation rule.
+  **Tuning made:** none to lenses 1-8. Add to lens 3's habit: a blast-radius finding must
+  classify per-path before asserting which edit drives the tier.
+
 - **2026-08-29 (d)** — branch `exercise-plates`, during round 3, from running the plan against
   real data for the first time. **Sharpened lens 7** rather than adding a ninth: a guard that
   hard-fails on an input class assumed rare is only correct if someone counted, and "shape" in

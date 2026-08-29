@@ -116,10 +116,20 @@ findings:
     terminal_state: verified_clean
     evidence: >
       backups/live_schema_columns.json holds no exercise_library key at all, so
-      nothing server-side reads them. The generators re-emit only when next run,
-      which OI-147's re-mint will do. Removed from the bundled JSON and from
-      swap_service in T1, and pinned absent across lib/ and test/ by
-      test/contracts/exercise_plate_library_data_test.dart.
+      nothing server-side reads them. Removed from the bundled JSON and from
+      swap_service in T1, and from all 30 template blocks in
+      scripts/add_new_exercises.py after the B-pass found it still emitting
+      them.
+      SCOPE, stated precisely because the first version of this entry overstated
+      it: test/contracts/exercise_plate_library_data_test.dart pins them absent
+      across lib/ and test/ .dart FILES ONLY -- its own scan skips anything not
+      ending in .dart, so it never saw the .py generator and could not have.
+      What actually catches a row created with a dead field is the closed-schema
+      contract (35 required + 2 optional, extra computed by set difference),
+      downstream at test time rather than at authoring time.
+      The two seed migrations 074/125 still name the columns; they are
+      historical records that are never rewritten, and OI-147's re-mint is what
+      next regenerates from the bundled JSON.
 
   - id: P6
     title: stale swap_service entries in backups/gate19_drift_baseline.txt

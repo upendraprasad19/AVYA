@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_monogram.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/plate_flags.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/plate_resolver.dart';
 
 class ExercisePlateThumb extends StatefulWidget {
@@ -56,7 +57,12 @@ class _ExercisePlateThumbState extends State<ExercisePlateThumb> {
 
   @override
   Widget build(BuildContext context) {
-    final Widget face = _plate.hasArtwork
+    // Guard the SINK, not each call site — three screens construct this widget
+    // and a per-site check is one forgotten site away from useless
+    // (feedback_pause_flag_guard_the_sink). When the kill switch is on, fall
+    // through to the monogram the 127 artwork-less exercises already show: no
+    // asset load, no SVG parse, layout unchanged.
+    final Widget face = (_plate.hasArtwork && PlateFlags.platesEnabled)
         ? DecoratedBox(
             decoration: BoxDecoration(
               color: AppColors.cardHi,

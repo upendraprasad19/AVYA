@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_monogram.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/plate_flags.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/plate_resolver.dart';
 
 class ExercisePlateSheet extends StatelessWidget {
@@ -22,6 +23,9 @@ class ExercisePlateSheet extends StatelessWidget {
   const ExercisePlateSheet({super.key, required this.exerciseName});
 
   static Future<void> show(BuildContext context, String exerciseName) {
+    // Every route into the sheet goes through here — the three badge sites and
+    // the FORM & CUES door — so one check covers them all.
+    if (!PlateFlags.platesEnabled) return Future<void>.value();
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.card,

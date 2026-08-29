@@ -36,6 +36,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_monogram.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/plate_flags.dart';
 
 Widget _host(Widget child) =>
     MaterialApp(home: Scaffold(body: Center(child: child)));
@@ -138,6 +139,44 @@ void main() {
     expect(find.byType(SvgPicture), findsNothing,
         reason: 'a swap reuses the State; didUpdateWidget must re-resolve');
     expect(find.byType(ExerciseMonogram), findsOneWidget);
+  });
+
+  // ---- the kill switch (platform tier's `feature_flag` requirement) ----
+  testWidgets('the kill switch stops the plate loading its asset', (t) async {
+    await t.runAsync(_ensureHive);
+    // Guarantee the flag is cleared even if an expect below throws. The manual
+    // delete at the end of the body only runs on the happy path, which would
+    // leak `disable_exercise_plates` into every later test in this file.
+    addTearDown(() async => HiveService.instance.configBox
+        .delete('disable_exercise_plates'));
+
+    // ON by default — establish the positive half, or the assertion below
+    // would pass on a thumb that never rendered a plate for any reason.
+    expect(PlateFlags.platesEnabled, isTrue);
+    await t.pumpWidget(
+        _host(const ExercisePlateThumb(exerciseName: 'Wall Sit', size: 44)));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.byType(SvgPicture), findsOneWidget,
+        reason: 'precondition: Wall Sit has artwork and plates are enabled');
+
+    await t.runAsync(() async => HiveService.instance.configBox
+        .put('disable_exercise_plates', true));
+    expect(PlateFlags.platesEnabled, isFalse);
+
+    await t.pumpWidget(
+        _host(const ExercisePlateThumb(exerciseName: 'Wall Sit', size: 44)));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.byType(SvgPicture), findsNothing,
+        reason: 'the kill switch must stop the asset load, not just hide it');
+    expect(find.byType(ExerciseMonogram), findsOneWidget,
+        reason: 'it falls back to the monogram, so layout is unchanged');
+
+    await t.runAsync(
+        () async => HiveService.instance.configBox.delete('disable_exercise_plates'));
+    expect(PlateFlags.platesEnabled, isTrue,
+        reason: 'restored for later tests (addTearDown is the belt-and-braces)');
   });
 
   // PRESENCE ONLY, and said out loud rather than dressed up as behavioural.
