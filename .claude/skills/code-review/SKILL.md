@@ -79,6 +79,15 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    review, because a plausible path reads as a checked one.
    **Method:** `find` / `ls` the literal path, then read one real file out of it and confirm the
    field, extension, or key the code indexes on is actually there. Never reason from the name.
+   ⚠ **"Shape" includes the DISTRIBUTION of values, not just the schema.** A guard that hard-fails
+   on an input class the author believes is rare is only correct if someone COUNTED. Instance
+   2026-08-29, same batch: an asset pipeline raised on SVG path commands `A`/`S`/`T` on the theory
+   they were exotic. Against the real catalogue **every one of the 292 files uses them** — `s`
+   alone appears 20,917 times — so the tool would have processed zero files and the guard read as
+   a safety feature right up until it refused everything. **One command settles it:** extract the
+   class from the real corpus and count, before deciding whether to handle it or refuse it. The
+   same measurement then tells you whether handling it is cheap; here `S`/`T` turned out to be
+   exact arithmetic and only arcs needed real geometry.
    **Source (2026-08-29, plate pipeline, caught in self-review before dispatch):** a build script
    read `<src>/<slug>/frame-N.png` to measure an image's bounds. The vendored catalogue was in the
    repo **nowhere** — a session-temp directory held 94 samples, not the 906-frame source — and
@@ -180,6 +189,15 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 ## 7. Tuning history
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
+
+- **2026-08-29 (d)** — branch `exercise-plates`, during round 3, from running the plan against
+  real data for the first time. **Sharpened lens 7** rather than adding a ninth: a guard that
+  hard-fails on an input class assumed rare is only correct if someone counted, and "shape" in
+  that lens has to mean the value DISTRIBUTION as well as the schema. The pipeline refused SVG
+  `A`/`S`/`T`; all 292 shipping files use them and `s` appears 20,917 times, so it would have
+  produced nothing while looking like a careful tool. Neither of the two context-blind rounds
+  could have caught it — the upstream catalogue had never been cloned, which is lens 7's own
+  territory and the reason it now says to fetch the corpus and measure.
 
 - **2026-08-29 (c)** — branch `exercise-plates`, after review round 2 (5 BLOCKER / 11 MAJOR /
   17 MINOR, verdict `not converged`; **four of five blockers sat inside round 1's own fixes**).
