@@ -28,7 +28,9 @@
 
 | File | Responsibility |
 |---|---|
-| `scripts/build_exercise_plates.py` | **Create.** One-time asset pipeline: read the mapping, compute the union bbox, rewrite `viewBox`, emit cropped SVGs. Dev tool, never shipped. |
+| `scripts/build_exercise_plates.py` | **Create.** One-time asset pipeline: read `demo_slug`, compute each pair's union ink bbox from the SVG path data, rewrite `viewBox`, emit cropped SVGs. Dev tool, never shipped. |
+| `docs/plans/exercise-plates-manifest.json` | **Create.** The upstream 302-entry manifest, committed as the provenance record and as the check that the vendored source still matches what the mapping was adjudicated against. |
+| `.gitignore` | **Modify.** Ignore `/vendor/` — the cloned upstream catalogue. Only the cropped output ships. |
 | `assets/exercise_plates/<slug>/{1,3}.svg` | **Create (generated).** 293 files. Committed. |
 | `pubspec.yaml` | **Modify.** One asset directory entry. This line is what makes the batch `platform`. |
 | `assets/data/exercise_library.json` | **Modify.** Add `demo_slug`; remove `image_start_url`, `image_end_url`, `gif_url`. |
@@ -48,28 +50,36 @@ New widgets live in `lib/shared/` — not in `train/` — because three differen
 
 ---
 
-### Task 1: The asset pipeline and the 293 SVGs
+### Task 1: Vendor the artwork, crop it, ship 293 SVGs
 
 **Files:**
 - Create: `scripts/build_exercise_plates.py`
+- Create: `docs/plans/exercise-plates-manifest.json` (the upstream 302-entry manifest, committed as the provenance record)
 - Create: `assets/exercise_plates/<slug>/{1,3}.svg` (generated, 293 files)
 - Create: `assets/exercise_plates/ATTRIBUTION.md`
-- Modify: `pubspec.yaml:129-134`
+- Modify: `pubspec.yaml` (asset entries), `.gitignore` (the vendored source)
 - Test: `test/contracts/exercise_plate_assets_present_test.dart`
 
 **Interfaces:**
-- Consumes: nothing.
-- Produces: `assets/exercise_plates/<slug>/1.svg` and `3.svg`. Every file is a single `<path fill="currentColor">` inside an `<svg viewBox="X Y W H">` with no `width`/`height`. A paired exercise's `1.svg` and `3.svg` share a byte-identical `viewBox`.
+- Consumes: `demo_slug` from Task 2 — **do Task 2 first**, then return here.
+- Produces: `assets/exercise_plates/<slug>/1.svg` and `3.svg`. Each is one `<path fill="currentColor">` inside `<svg viewBox="X Y W H">` with no `width`/`height`. A paired exercise's two frames share a byte-identical `viewBox`.
+
+> **Two things about this task were wrong in the first draft and are corrected here.** The upstream
+> catalogue is **not vendored anywhere in this repo** — a session-temp directory held 94 sample
+> SVGs and nothing else, so "run the pipeline" had no source to run against. And the upstream
+> ships **SVG only**: all 906 frames in the manifest are `"format": "svg"`, there is not one PNG,
+> so the original plan's Pillow alpha-bbox could never have executed. Both are fixed below.
 
 - [ ] **Step 1: Write the failing test**
 
 ```dart
 // test/contracts/exercise_plate_assets_present_test.dart
 //
-// Pins the two properties the runtime depends on and cannot check itself:
+// Pins the three properties the runtime depends on and cannot check itself:
 //   • every demo_slug in the library has both frames on disk;
 //   • a PAIRED exercise's two frames share an identical viewBox, or the figure
-//     visibly changes size between START and END (spec, "Asset treatment §3").
+//     visibly changes size between START and END (spec, "Asset treatment §3");
+//   • every frame is tintable and unsized.
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -122,6 +132,16 @@ void main() {
       }
     }
   });
+
+  test('every generated slug is one the committed manifest actually contains', () {
+    final man = (jsonDecode(
+            File('docs/plans/exercise-plates-manifest.json').readAsStringSync())
+        as List).cast<Map<String, dynamic>>();
+    final upstream = man.map((e) => e['slug'] as String).toSet();
+    final invented = slugs.difference(upstream);
+    expect(invented, isEmpty,
+        reason: 'demo_slug values with no upstream drawing: $invented');
+  });
 }
 ```
 
@@ -130,54 +150,185 @@ void main() {
 Run: `flutter test test/contracts/exercise_plate_assets_present_test.dart`
 Expected: FAIL — `library carries no demo_slug at all`.
 
-- [ ] **Step 3: Write the pipeline**
+- [ ] **Step 3: Vendor the upstream catalogue**
+
+The artwork is [workout-guide](https://github.com/bryllim/workout-guide) by Bryl Lim, CC BY-SA 4.0,
+vector-traced from [Everkinetic](https://github.com/everkinetic/data). **302 exercises × 3 frames =
+906 SVGs**, laid out as `assets/<slug>/frame-{1,2,3}.svg`, with `manifest.json` beside them.
+
+```bash
+mkdir -p vendor
+git clone --depth 1 https://github.com/bryllim/workout-guide vendor/workout-guide
+git -C vendor/workout-guide rev-parse HEAD    # RECORD this sha in ATTRIBUTION.md
+```
+
+Add to `.gitignore`:
+
+```
+# Upstream plate artwork — cloned by scripts/build_exercise_plates.py, not committed.
+# Only the CROPPED output under assets/exercise_plates/ ships.
+/vendor/
+```
+
+Then find the manifest and the assets root, and **verify the vendored copy is the one the mapping
+was adjudicated against** — this is the whole reason the manifest is committed:
+
+```bash
+find vendor/workout-guide -name manifest.json
+# copy it to the provenance path, then confirm nothing moved upstream:
+cp <found-path> docs/plans/exercise-plates-manifest.json
+python -c "
+import json,io
+m=json.load(io.open('docs/plans/exercise-plates-manifest.json',encoding='utf-8'))
+print('entries:', len(m))
+print('frames :', sum(len(e['frames']) for e in m))
+print('formats:', {f['format'] for e in m for f in e['frames']})
+"
+```
+
+Expected: `entries: 302`, `frames: 906`, `formats: {'svg'}`.
+
+> **If the counts differ, STOP.** The mapping in Task 2 was adjudicated against a 302-entry
+> catalogue; a different upstream means some `demo_slug` values may name drawings that no longer
+> exist, and Step 1's fourth test is what will catch it. Reconcile before generating anything.
+
+- [ ] **Step 4: Write the pipeline**
 
 ```python
 # scripts/build_exercise_plates.py
-"""Crop the upstream workout-guide SVGs into app plate assets.
+"""Crop the vendored workout-guide SVGs into app plate assets.
 
-Run once; the output is committed. Reads the agreed mapping and emits
+Run once after vendoring; the OUTPUT is committed, the vendored source is not.
+Reads demo_slug from the exercise library and emits
 assets/exercise_plates/<slug>/{1,3}.svg.
 
-WHY the bbox comes from the PNG: the package ships a PNG beside every SVG with
-identical geometry, so the ink bounds are a two-line Pillow call. Parsing the
-path data to compute them would be a bezier-flattening exercise for no gain.
+WHY the bbox is computed from the PATH DATA and not from a raster: the upstream
+ships SVG only -- all 906 frames in the manifest are format "svg", there is no
+PNG to read an alpha bbox from, and no rasterizer is installed here. Parsing the
+path is also the better answer: pure stdlib, no native Cairo dependency, and it
+reproduces in CI.
+
+WHY the CONTROL POINTS are enough: a bezier segment lies inside the convex hull
+of its control points, so the bbox over on-curve AND control points is a
+SUPERSET of the true ink bbox. It can be marginally loose; it can never crop
+into the drawing. Measured against the rasters used for the founder review
+(2026-08-29): bench-press frame 1 gave 389x445 against the raster's 390x444, and
+frame 3 gave 430x397 against 431x397 -- agreement within ~1 unit on a 512
+canvas, and the same figures the spec argues the union crop from.
 
 WHY the crop is the UNION of both frames: cropping each frame to its own bounds
 makes the body visibly change size between START and END. Bench Press start is
-390x444 and end is 431x397 (spec, "Asset treatment §3").
+390x444 and end is 431x397 (spec, "Asset treatment 3").
+
+WHAT THE CROP BUYS: run over 25 real pairs (2026-08-29), the cropped viewBox is
+a median 59% of the 512 canvas area (min 32%, max 92%), so the figure renders
+about 1.3x larger in the same display box -- which is the entire fix for the
+"looks blurry at plate size" complaint, achieved without touching a path.
 
 WHY no stroke is added: at matched display size a stroke closes the interior
-gaps — median gap 17 -> 13 units at width 4, 6% of gaps closed outright. The
+gaps -- median gap 17 -> 13 units at width 4, 6% of gaps closed outright. The
 crop is the whole fix.
 """
-import json, os, re, sys
-from PIL import Image
+import json, io, os, re, sys
 
-SRC = sys.argv[1] if len(sys.argv) > 1 else "vendor/workout-guide/packages/workout-guide/assets"
+SRC = sys.argv[1] if len(sys.argv) > 1 else "vendor/workout-guide/assets"
 OUT = "assets/exercise_plates"
 PAD = 10          # user units of breathing room around the ink
 CANVAS = 512      # the upstream artboard
 
-def ink_bbox(png_path):
-    a = Image.open(png_path).convert("RGBA").getchannel("A")
-    bb = a.getbbox()
-    if bb is None:
-        raise ValueError("empty alpha: %s" % png_path)
-    return bb
+NUM = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
+CMD = re.compile(r"([MmZzLlHhVvCcSsQqTtAa])")
+
+
+def path_points(d):
+    """Every on-curve point plus every control point of one `d` attribute."""
+    toks = [t for t in CMD.split(d) if t.strip()]
+    pts = []
+    cx = cy = sx = sy = 0.0
+    cmd = None
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if CMD.fullmatch(t):
+            cmd = t
+            i += 1
+            if cmd in "Zz":
+                cx, cy = sx, sy
+            continue
+        nums = [float(x) for x in NUM.findall(t)]
+        j = 0
+        c = cmd
+        while j < len(nums):
+            rel = c.islower()
+            C = c.upper()
+            if C == "M":
+                x, y = nums[j:j + 2]; j += 2
+                cx, cy = (cx + x, cy + y) if rel else (x, y)
+                sx, sy = cx, cy
+                pts.append((cx, cy))
+                c = "l" if rel else "L"          # implicit lineto after moveto
+            elif C == "L":
+                x, y = nums[j:j + 2]; j += 2
+                cx, cy = (cx + x, cy + y) if rel else (x, y)
+                pts.append((cx, cy))
+            elif C == "H":
+                x = nums[j]; j += 1
+                cx = cx + x if rel else x
+                pts.append((cx, cy))
+            elif C == "V":
+                y = nums[j]; j += 1
+                cy = cy + y if rel else y
+                pts.append((cx, cy))
+            elif C == "C":
+                a = nums[j:j + 6]; j += 6
+                p = [(cx + a[k], cy + a[k + 1]) if rel else (a[k], a[k + 1])
+                     for k in (0, 2, 4)]
+                pts.extend(p); cx, cy = p[-1]
+            elif C in ("S", "Q"):
+                a = nums[j:j + 4]; j += 4
+                p = [(cx + a[k], cy + a[k + 1]) if rel else (a[k], a[k + 1])
+                     for k in (0, 2)]
+                pts.extend(p); cx, cy = p[-1]
+            elif C == "T":
+                a = nums[j:j + 2]; j += 2
+                cx, cy = (cx + a[0], cy + a[1]) if rel else (a[0], a[1])
+                pts.append((cx, cy))
+            elif C == "A":
+                a = nums[j:j + 7]; j += 7
+                cx, cy = (cx + a[5], cy + a[6]) if rel else (a[5], a[6])
+                pts.append((cx, cy))
+            else:
+                j = len(nums)
+        i += 1
+    return pts
+
+
+def ink_bbox(svg_path):
+    t = io.open(svg_path, encoding="utf-8").read()
+    pts = []
+    for d in re.findall(r'\sd="([^"]+)"', t):
+        pts += path_points(d)
+    if not pts:
+        raise ValueError("no path data: %s" % svg_path)
+    xs = [q[0] for q in pts]
+    ys = [q[1] for q in pts]
+    return min(xs), min(ys), max(xs), max(ys)
+
 
 def union(boxes):
     x0 = max(0, min(b[0] for b in boxes) - PAD)
     y0 = max(0, min(b[1] for b in boxes) - PAD)
     x1 = min(CANVAS, max(b[2] for b in boxes) + PAD)
     y1 = min(CANVAS, max(b[3] for b in boxes) + PAD)
-    return x0, y0, x1 - x0, y1 - y0
+    return round(x0), round(y0), round(x1 - x0), round(y1 - y0)
+
 
 def crop_svg(text, view_box):
     t = re.sub(r"<\?xml[^>]*\?>", "", text)
     t = re.sub(r'\swidth="\d+"', "", t, count=1)
     t = re.sub(r'\sheight="\d+"', "", t, count=1)
-    t, n = re.subn(r'viewBox="[^"]*"', 'viewBox="%d %d %d %d"' % view_box, t, count=1)
+    t, n = re.subn(r'viewBox="[^"]*"', 'viewBox="%d %d %d %d"' % view_box,
+                   t, count=1)
     if n != 1:
         raise ValueError("no viewBox to rewrite")
     for lit in ('fill="#fff"', 'fill="#FFF"', 'fill="#ffffff"', 'fill="#FFFFFF"'):
@@ -186,53 +337,58 @@ def crop_svg(text, view_box):
         raise ValueError("no white fill found to convert")
     return t.strip()
 
+
 def main():
-    lib = json.load(open("assets/data/exercise_library.json", encoding="utf-8"))
+    lib = json.load(io.open("assets/data/exercise_library.json", encoding="utf-8"))
     slugs = sorted({e["demo_slug"] for e in lib if e.get("demo_slug")})
+    if not slugs:
+        raise SystemExit("no demo_slug in the library -- run Task 2 first")
     written = 0
     for slug in slugs:
-        boxes = [ink_bbox(os.path.join(SRC, slug, "frame-%s.png" % f)) for f in ("1", "3")]
-        vb = union(boxes)
+        srcs = [os.path.join(SRC, slug, "frame-%s.svg" % f) for f in ("1", "3")]
+        for f in srcs:
+            if not os.path.exists(f):
+                raise SystemExit("missing upstream frame: %s" % f)
+        vb = union([ink_bbox(f) for f in srcs])
         os.makedirs(os.path.join(OUT, slug), exist_ok=True)
-        for f, name in (("1", "1"), ("3", "3")):
-            src = open(os.path.join(SRC, slug, "frame-%s.svg" % f), encoding="utf-8").read()
-            open(os.path.join(OUT, slug, "%s.svg" % name), "w", encoding="utf-8").write(
-                crop_svg(src, vb))
+        for src, name in zip(srcs, ("1", "3")):
+            text = io.open(src, encoding="utf-8").read()
+            io.open(os.path.join(OUT, slug, "%s.svg" % name), "w",
+                    encoding="utf-8").write(crop_svg(text, vb))
             written += 1
     print("wrote %d files for %d slugs" % (written, len(slugs)))
+
 
 if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 4: Add the asset directory and the attribution file**
+- [ ] **Step 5: Generate, then declare the assets**
 
-In `pubspec.yaml`, under `assets:` (currently line 129), add one line after `- assets/data/`:
+Run: `python scripts/build_exercise_plates.py`
+Expected: `wrote 293 files for 165 slugs`. A missing upstream frame is a hard stop, not a skip —
+a silently-skipped slug would ship a `demo_slug` pointing at nothing.
 
-```yaml
-    - assets/exercise_plates/
-```
-
-Flutter does not recurse, so **every `<slug>/` subdirectory needs its own line**. Generate them:
+Flutter does **not** recurse into subdirectories, so each `<slug>/` needs its own `pubspec.yaml`
+line. Generate them and paste the block under the existing `assets:` key:
 
 ```bash
-python - <<'EOF'
+python -c "
 import json, io
-lib = json.load(open("assets/data/exercise_library.json", encoding="utf-8"))
-slugs = sorted({e["demo_slug"] for e in lib if e.get("demo_slug")})
-print("\n".join("    - assets/exercise_plates/%s/" % s for s in slugs))
-EOF
+lib = json.load(io.open('assets/data/exercise_library.json', encoding='utf-8'))
+slugs = sorted({e['demo_slug'] for e in lib if e.get('demo_slug')})
+print('\n'.join('    - assets/exercise_plates/%s/' % s for s in slugs))
+"
 ```
 
-Paste that block into `pubspec.yaml` beneath the `assets:` key.
-
-Create `assets/exercise_plates/ATTRIBUTION.md`:
+Create `assets/exercise_plates/ATTRIBUTION.md`, filling in the sha recorded in Step 3:
 
 ```markdown
 # Exercise plate artwork
 
-Derived from [workout-guide](https://github.com/bryllim/workout-guide) by Bryl Lim,
-itself vector-traced from [Everkinetic](https://github.com/everkinetic/data).
+Derived from [workout-guide](https://github.com/bryllim/workout-guide) by Bryl Lim
+(commit `<sha from Step 3>`), itself vector-traced from
+[Everkinetic](https://github.com/everkinetic/data).
 
 Both are licensed **CC BY-SA 4.0** — https://creativecommons.org/licenses/by-sa/4.0/
 
@@ -240,24 +396,21 @@ Both are licensed **CC BY-SA 4.0** — https://creativecommons.org/licenses/by-s
 bounds, and the fill was changed from `#fff` to `currentColor` so the app can tint
 it. No path data was altered.
 
-These adapted files are redistributed under the same licence.
+These adapted files are redistributed under the same licence. The per-frame
+creator and Everkinetic source for every drawing is preserved in
+`docs/plans/exercise-plates-manifest.json`.
 ```
 
-- [ ] **Step 5: Run the pipeline and the test**
+- [ ] **Step 6: Run the test**
 
-Run: `python scripts/build_exercise_plates.py <path-to-workout-guide-assets>`
-Expected: `wrote 293 files for 165 slugs` — after Task 2 has populated `demo_slug`.
+Run: `flutter test test/contracts/exercise_plate_assets_present_test.dart`
+Expected: all 4 PASS.
 
-Then: `flutter test test/contracts/exercise_plate_assets_present_test.dart`
-Expected: all 3 PASS.
-
-> **Ordering note:** this task's test cannot pass until Task 2 lands `demo_slug`. Do Task 2's data change first, then return here to run the pipeline. The pipeline and its test are one task because neither is meaningful alone.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add scripts/build_exercise_plates.py assets/exercise_plates pubspec.yaml test/contracts/exercise_plate_assets_present_test.dart
-sh scripts/safe_commit.sh "feat(plates): asset pipeline and the 293 cropped plate SVGs
+git add scripts/build_exercise_plates.py assets/exercise_plates pubspec.yaml .gitignore docs/plans/exercise-plates-manifest.json test/contracts/exercise_plate_assets_present_test.dart
+sh scripts/safe_commit.sh "feat(plates): vendor the artwork and ship 293 cropped plate SVGs
 
 Crops each frame to the UNION of frame 1 and frame 3 ink bounds so the figure
 cannot change size between START and END, and converts the white fill to
@@ -265,12 +418,22 @@ currentColor so the app tints at render time. No stroke is added: at matched
 display size a stroke closes the interior gaps (median 17 -> 13 units at width
 4, 6% closed outright) and the crop is the whole fix.
 
+The bbox comes from the SVG path data, not a raster. Upstream ships SVG only --
+all 906 frames are format 'svg' -- so there is no alpha channel to measure and
+no rasterizer installed. A bezier lies inside the hull of its control points, so
+the bbox over on-curve plus control points is a superset of the ink bbox: it can
+be marginally loose, never tight enough to clip. Checked against the rasters
+used for the founder review: 389x445 vs 390x444, and 430x397 vs 431x397.
+
+The upstream catalogue is cloned into gitignored vendor/ and only the cropped
+output ships. Its manifest is committed so the mapping's provenance stays
+checkable and a moved upstream fails a test instead of silently generating
+against different drawings.
+
 Artwork CC BY-SA 4.0 from workout-guide via Everkinetic; changes recorded in
 assets/exercise_plates/ATTRIBUTION.md and the adapted set redistributed under
 the same licence."
 ```
-
----
 
 ### Task 2: `demo_slug` on the library, and the version bump that delivers it
 
@@ -280,7 +443,7 @@ the same licence."
 - Test: `test/contracts/demo_slug_reaches_existing_users_test.dart`
 
 **Interfaces:**
-- Consumes: nothing.
+- Consumes: nothing. **This task runs BEFORE Task 1** — the pipeline reads `demo_slug` to know which drawings to crop.
 - Produces: `demo_slug` — a nullable `String` on every library row. Absent or `null` means no artwork.
 
 - [ ] **Step 1: Write the failing test**
@@ -1734,5 +1897,7 @@ sh scripts/safe_push.sh
 2. **Task 6's widget test would have thrown, not failed.** `resolvePlate` runs in `initState` and `getByExactName` reads `_hive.exerciseBox.values` (`exercise_repository.dart:46`), which needs an open box. The test file now opens Hive in `setUpAll`. Deliberately NOT fixed by wrapping the resolver in a `try`: a swallowed box error would render monograms everywhere and read as "no artwork yet" rather than "the box never opened" — bad news collapsing into no news.
 3. **`_plateBox` returned an `Expanded`**, so the single-hold branch nested `Expanded > Row > Expanded` and would have drawn a hold plate at a third of the width. It now returns a plain `Column`, and each branch sizes it — 1:1 for a pair, 1:2:1 for a hold.
 4. **The badge line numbers were ranges I had not re-read.** Replaced with the verified `Text` lines (447 / 236 / 256) plus an instruction to grep, since these files move.
+
+5. **Task 1 could not have run at all**, for two independent reasons. The upstream catalogue is vendored nowhere in this repo — a session-temp directory held 94 sample SVGs, not the 906-frame source — so "run the pipeline" had no input. And the pipeline read `frame-N.png` to get an alpha bbox, but upstream ships **SVG only**: all 906 manifest frames are `"format": "svg"` and there is no PNG anywhere, nor a rasterizer installed. Task 1 now clones the source at a recorded sha into gitignored `vendor/`, commits the manifest as the provenance record, and computes the bbox from the path data instead — pure stdlib, and verified against the rasters the founder review used (389×445 vs 390×444; 430×397 vs 431×397).
 
 **Verified rather than assumed:** every `AppColors` member used (`accent`, `card`, `cardHi`, `bgRaise`, `border`, `textPrimary`, `textMute`); every `AppTypography` member (`mono`, `monoXs`, `bodySm`); `HiveService.instance.exerciseBox` (`hive_service.dart:211`); `withValues(alpha:)` as the repo idiom (374 uses, zero `withOpacity`); and the cue-shape counts 84 / 100 / 108, which sum to 292.
