@@ -4489,3 +4489,64 @@ has not been run against a 291-row library. Run it first:
 **Until then** the row stays in the library and simply shows a monogram in the plates feature
 (127 monogram rows instead of 126). Nothing about plates depends on its removal.
 
+## OI-148 — 23 equipment-variant exercises the plate mapping surfaced, blocked on a selection-skew answer (P2)
+
+- **Status**: OPEN
+- **Blocked on**: the selection-skew question below. Not on artwork — every one of the 23 already has its drawing identified in `docs/plans/exercise-plates-mapping.json`'s source adjudication.
+- **Verified**: 2026-08-29 — each named row checked absent from all 292 rows of `assets/data/exercise_library.json`.
+
+**Split out of `exercise-plates`.** The plate adjudication found the catalogue depicts several
+movements we already carry, but **with different equipment** — a dumbbell sumo squat where ours is
+bodyweight, a seated dumbbell press where ours is standing. The spec's split rule says: keep our
+row exactly as it is (renaming orphans `exlog_*` history, which hashes the exercise NAME) and add a
+new row named for the equipment shown, which takes the drawing.
+
+⚠ **The spec attributes these to OI-145. That is the wrong issue.** `open_issues.md` scopes OI-145
+to *34 licence-clean drawings depicting bodyweight exercises the library does not have* —
+`clamshell`, `fire-hydrant`, `bird-dog` and so on. These 23 are equipment **variants of rows that
+already exist**, sharing none of those slugs. Naming a real-but-wrong OI reads as tracked and is
+worse than naming none.
+
+Confirmed absent from the library today: `EZ Bar Curl`, `Seated Dumbbell Shoulder Press`,
+`Weighted Russian Twist`, `Dumbbell Sumo Squat`.
+
+**⚠ The blocker, which is a product question and not a technical one:** the bodyweight rows are
+already tiered into `home_dumbbells` / `basic_gym` / `full_gym`, so a dumbbell user would see
+**both** rows of every split pair — the same movement twice in one selection pool, drawing double
+the slot probability of its neighbours. That is exactly OI-146's defect, reproduced deliberately 23
+times. Answer it before any of these ship.
+
+**Not blocking the plates feature.** `Barbell Curl` keeps its name and its `ez-bar-curl` drawing
+(founder, 2026-08-29), so nothing in the shipping 165 depends on this.
+
+## OI-149 — breathing_cue holds a bare number on 136 of 292 rows; the original text is unrecoverable (P2)
+
+- **Status**: OPEN
+- **Blocked on**: **the founder** — 136 replacement cues have to be authored, because the original
+  text exists nowhere. This is a copy-writing task, not an engineering one.
+- **Verified**: 2026-08-29 — counted, and the recovery paths exhausted (below).
+
+**The defect, measured:** exactly **136** of 292 rows match `^\d+(\.\d+)?$` in `breathing_cue`,
+and exactly **136** carry a null `met_value`. The intersection is 136 and neither side has a
+row the other lacks — a spreadsheet column shift dropped `met_value` into `breathing_cue` and left
+its own column empty. `met_value` is read nowhere in `lib/`, so only the breathing copy was lost.
+
+**Both recovery paths were checked and both are dead:**
+
+1. **The cloud seed migrations do not carry the field.** `074_seed_exercise_library.sql` and
+   `125_reseed_exercise_library.sql` insert **20 columns**, and `breathing_cue` is not among them —
+   `125`'s own header comment lists it under *"JSON-only fields"*.
+2. **Git history never had it.** All **19** revisions of `assets/data/exercise_library.json` back to
+   2026-04-14 carry `Lateral Raise` with `breathing_cue: "5"`. The shift predates the file's entry
+   into the repo, so `git show <rev>:` recovers nothing.
+
+**Shipped state after `exercise-plates`:** BOTH surfaces that render this field now suppress a
+numeric value rather than printing "BREATHING / 5" —
+`lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart` and
+`lib/features/train/screens/active_workout/coaching_content_panel.dart`, pinned together by
+`test/contracts/breathing_cue_numeric_suppressed_test.dart`. So the symptom is gone and 136
+exercises simply show no BREATHING section.
+
+⚠ **That makes this LESS likely to be noticed, not more** — which is exactly why it is filed rather
+than left to the guards. The fix is 136 lines of coaching copy.
+

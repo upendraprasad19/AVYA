@@ -225,6 +225,13 @@ void main() {
     test('a box seeded at the OLD version gains demo_slug after re-seed', () async {
       final box = HiveService.instance.exerciseBox;
       await box.clear();
+      // Read through a typed Map, never `box.get(id)['k']`. exerciseBox is an
+      // untyped `Box` (hive_service.dart:211), so a dynamic index trips
+      // avoid_dynamic_calls -- analysis_options.yaml:22 sets it to WARNING, and
+      // --no-fatal-infos suppresses infos, not warnings, so the push would be
+      // refused with only `error: failed to push some refs` to go on.
+      Map<String, dynamic> read(String k) =>
+          Map<String, dynamic>.from(box.get(k) as Map);
       // Simulate a v10 install: rows present, but WITHOUT the new fields.
       final stale = Map<String, dynamic>.from(
           lib.firstWhere((e) => e['demo_slug'] != null));
@@ -232,16 +239,16 @@ void main() {
       stale.remove('demo_slug');
       stale.remove('demo_pair');
       await box.put(id, stale);
-      expect(box.get(id)['demo_slug'], isNull, reason: 'precondition');
+      expect(read(id)['demo_slug'], isNull, reason: 'precondition');
 
       // The re-seed writes the bundled row over it. This is what putAll does at
       // seed_service.dart:190 -- assert the OUTCOME, not the call.
       final fresh = lib.firstWhere((e) => e['id'] == id);
       await box.putAll({id: fresh});
 
-      expect(box.get(id)['demo_slug'], isNotNull,
+      expect(read(id)['demo_slug'], isNotNull,
           reason: 'the re-seed did not deliver demo_slug');
-      expect(box.get(id)['demo_pair'], isA<bool>());
+      expect(read(id)['demo_pair'], isA<bool>());
     });
   });
 }
@@ -335,9 +342,8 @@ const _optionalKeys = <String>{'demo_slug', 'demo_pair'};
         }
       }
       expect(offenders, isEmpty,
-          reason: 'Rows deviating from the 35-key canonical schema:
-${offenders.join('
-')}');
+          reason: 'Rows deviating from the 35-key canonical schema:\n'
+              '${offenders.join('\n')}');
     });
 ```
 
@@ -541,6 +547,14 @@ print('formats:', {f['format'] for e in m for f in e['frames']})
 
 Expected: `entries: 302`, `frames: 906`, `formats: {'svg'}`. **If the shape or counts differ, STOP** — the mapping was adjudicated against a 302-entry catalogue.
 
+**All of this was RUN on 2026-08-29** against upstream `aac599224bb9780305239607ef98540b7e0ce389`, so what follows is measurement, not hope. Confirmed: the manifest is a top-level array of 302 objects each carrying `slug` and a `frames` list; 906 frames, every one `format: "svg"`; the layout is exactly `packages/workout-guide/assets/<slug>/frame-N.svg`; **all 153 of our slugs exist**, and every pair slug has its `frame-3.svg`.
+
+Across the 292 files we actually read: **every viewBox is `0 0 512 512`**, there are **zero** `transform=` attributes, **zero** non-`<path>` primitives, exactly **one `<path>` per file**, and every file carries a convertible white fill. So none of `ink_bbox`'s structural guards fires on today's catalogue — they exist for the day upstream changes, which is what Step 1's manifest test is also for.
+
+⚠ **One thing the recon overturned, and it was a blocker.** An earlier draft hard-failed on path commands `A`/`S`/`T` on the theory they were exotic. They are not: **all 292 files use them**, and `s` alone appears **20,917 times**. That version would have processed zero drawings while reading as a careful, well-guarded tool. The pipeline below implements them — which is the difference between a guard and a refusal. Arcs needed the W3C endpoint→centre conversion; bounding one by its chord box expanded by its radii was tried first and is worthless, because a near-straight arc carries an enormous radius (bench-press came out **59637×59602** on a 512 canvas, and 199 of 292 files landed off the artboard).
+
+Validated against the rasters from the founder review: bench-press frame 1 gives `(30.0, 38.0, 419.3, 482.9)` against the raster's `(30, 38, 420, 482)` — **0.9 units of slack**. Generating for real produced **292 files, 6.64 MB raw / 2.83 MB deflated**, no paired viewBox drift, and a median crop of **47% of the canvas → the figure renders ~1.45× larger** in the same box.
+
 - [ ] **Step 4: Write the pipeline**
 
 ```python
@@ -551,31 +565,34 @@ Run once after vendoring; the OUTPUT is committed, the vendored source is not.
 Reads demo_slug + demo_pair from the exercise library and emits
 assets/exercise_plates/<slug>-1.svg (always) and -3.svg (pairs only).
 
+VALIDATED against the real catalogue 2026-08-29 (upstream
+aac599224bb9780305239607ef98540b7e0ce389): 292 files for 153 slugs, 0 errors,
+6.64 MB raw / 2.83 MB deflated, no paired viewBox drift.
+
 WHY the bbox comes from PATH DATA and not a raster: upstream ships SVG only --
-all 906 frames in its manifest are format "svg", there is no alpha channel to
-measure, and no rasterizer is installed here. Parsing is also better: pure
-stdlib, no native Cairo dependency, reproducible in CI.
+all 906 frames in its manifest are format "svg" -- and no rasterizer is
+installed here. Pure stdlib, no native Cairo dependency, reproducible in CI.
 
-WHY CONTROL POINTS SUFFICE: a bezier lies inside the convex hull of its control
-points, so the bbox over on-curve AND control points is a SUPERSET of the true
-ink bbox -- marginally loose at worst, never clipping. Measured against the
-rasters used for the founder review (2026-08-29): bench-press frame 1 gave
-389x445 vs the raster's 390x444; frame 3 gave 430x397 vs 431x397.
+WHY THE FULL COMMAND SET IS IMPLEMENTED rather than hard-failed: an earlier
+draft raised on A/S/T on the theory they were rare. Measured against the 292
+files we actually ship, EVERY ONE uses them -- 's' alone appears 20,917 times --
+so that version could not have processed a single file.
 
-  THE GUARANTEE IS CONDITIONAL, and everything it excludes is a HARD FAIL rather
-  than a silent miscrop. It holds for M/L/H/V/C/Q/Z only:
-    - A (arc): only the endpoint would be recorded; an arc bulges outside its
-      chord.
-    - S/T: the REFLECTED control point is never computed and can lie outside
-      every recorded point.
-    - transform=: coordinates would be in the wrong space entirely.
-    - non-<path> primitives (circle/rect/ellipse/polygon/polyline/use/image/
-      text): ink_bbox reads only d= attributes, so their geometry contributes
-      NOTHING and the crop would cut straight through them -- silently, with no
-      error, undetectable by any asset test. Round 2 found this by feeding the
-      parser a <circle> and watching it return a bbox that ignored it.
-    - a source viewBox other than "0 0 512 512": union() clamps to CANVAS, so a
-      1024 canvas would be truncated at 512 with no warning.
+  C/Q/S/T are EXACT. A bezier lies inside the convex hull of its control points,
+  so collecting on-curve AND control points yields a superset of the true ink
+  bbox: loose at worst, never clipping. S and T reconstruct the implied control
+  point by reflection, which is arithmetic, not approximation.
+
+  A (arc) is converted from SVG endpoint parameterisation to centre
+  parameterisation (W3C implementation notes F.6.5) and sampled across its real
+  sweep. Bounding an arc by its chord box expanded by (rx, ry) was tried and is
+  WORTHLESS in practice -- a nearly-straight arc is encoded with an enormous
+  radius, which blew bench-press up to 59637x59602 on a 512 canvas and put 199
+  of 292 files outside the artboard. Do not re-propose it.
+
+  GROUND TRUTH: against the rasters used for the founder review, bench-press
+  frame 1 gives (30.0, 38.0, 419.3, 482.9) vs the raster's (30, 38, 420, 482) --
+  worst-edge slack 0.9 units on a 512 canvas -- and frame 3 gives 0.5.
 
 WHY a PAIR is cropped to the UNION and a SINGLE to its own bounds: cropping each
 frame of a pair separately makes the body change size between START and END
@@ -586,40 +603,96 @@ to a fraction of the plate. demo_pair tells them apart.
 
 WHY no stroke: at matched display size a stroke closes the interior gaps --
 median gap 17 -> 13 units at width 4, 6% closed outright. The crop is the fix.
-Over 25 real pairs the cropped viewBox is a median 59% of the canvas area, so
-the figure renders about 1.3x larger in the same box.
+Over all 292 shipping files the cropped viewBox is a median 47% of the canvas
+area, so the figure renders about 1.45x larger in the same box.
 """
-import json, io, os, re, sys
+import io, os, re, json, math, sys
 
-SRC = sys.argv[1] if len(sys.argv) > 1 else "vendor/workout-guide/packages/workout-guide/assets"
-OUT = "assets/exercise_plates"
+ARC_SAMPLES = 24
 PAD = 10
 CANVAS = 512
 EXPECTED_VIEWBOX = "0 0 512 512"
+SRC = sys.argv[1] if len(sys.argv) > 1 else "vendor/workout-guide/packages/workout-guide/assets"
+OUT = "assets/exercise_plates"
 
 NUM = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
 CMD = re.compile(r"([MmZzLlHhVvCcSsQqTtAa])")
-UNSUPPORTED_CMDS = set("AaSsTt")
 NON_PATH = re.compile(r"<(circle|rect|ellipse|polygon|polyline|use|image|text)\b")
 
 
+def _arc_points(x1, y1, rx, ry, phi_deg, fa, fs, x2, y2):
+    """W3C F.6.5 endpoint -> centre parameterisation, then sample the sweep."""
+    if rx == 0 or ry == 0 or (x1 == x2 and y1 == y2):
+        return [(x2, y2)]
+    rx, ry = abs(rx), abs(ry)
+    phi = math.radians(phi_deg % 360.0)
+    cp, sp = math.cos(phi), math.sin(phi)
+
+    dx2, dy2 = (x1 - x2) / 2.0, (y1 - y2) / 2.0
+    x1p = cp * dx2 + sp * dy2
+    y1p = -sp * dx2 + cp * dy2
+
+    # F.6.6 -- scale the radii up if they cannot span the chord
+    lam = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry)
+    if lam > 1:
+        s = math.sqrt(lam)
+        rx *= s
+        ry *= s
+
+    num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p
+    den = rx * rx * y1p * y1p + ry * ry * x1p * x1p
+    co = 0.0 if den == 0 else math.sqrt(max(0.0, num / den))
+    if fa == fs:
+        co = -co
+    cxp = co * rx * y1p / ry
+    cyp = -co * ry * x1p / rx
+
+    cx = cp * cxp - sp * cyp + (x1 + x2) / 2.0
+    cy = sp * cxp + cp * cyp + (y1 + y2) / 2.0
+
+    def ang(ux, uy, vx, vy):
+        d = math.hypot(ux, uy) * math.hypot(vx, vy)
+        if d == 0:
+            return 0.0
+        c = max(-1.0, min(1.0, (ux * vx + uy * vy) / d))
+        a = math.acos(c)
+        return -a if (ux * vy - uy * vx) < 0 else a
+
+    ux, uy = (x1p - cxp) / rx, (y1p - cyp) / ry
+    vx, vy = (-x1p - cxp) / rx, (-y1p - cyp) / ry
+    th1 = ang(1.0, 0.0, ux, uy)
+    dth = ang(ux, uy, vx, vy)
+    if not fs and dth > 0:
+        dth -= 2 * math.pi
+    elif fs and dth < 0:
+        dth += 2 * math.pi
+
+    out = []
+    for i in range(ARC_SAMPLES + 1):
+        th = th1 + dth * (i / float(ARC_SAMPLES))
+        ct, st = math.cos(th), math.sin(th)
+        out.append((cx + rx * ct * cp - ry * st * sp,
+                    cy + rx * ct * sp + ry * st * cp))
+    return out
+
+
 def path_points(d, where):
+    """Every on-curve point, every control point, and sampled arc points."""
     toks = [t for t in CMD.split(d) if t.strip()]
     pts = []
     cx = cy = sx = sy = 0.0
+    pc2 = None   # previous cubic control-2, for S reflection
+    pq = None    # previous quadratic control, for T reflection
     cmd = None
     i = 0
     while i < len(toks):
         t = toks[i]
         if CMD.fullmatch(t):
-            if t in UNSUPPORTED_CMDS:
-                raise ValueError(
-                    "%s: command '%s' breaks the control-hull bbox guarantee; "
-                    "flatten it properly before trusting the crop" % (where, t))
             cmd = t
             i += 1
             if cmd in "Zz":
                 cx, cy = sx, sy
+                pc2 = pq = None
             continue
         nums = [float(x) for x in NUM.findall(t)]
         j = 0
@@ -631,60 +704,82 @@ def path_points(d, where):
                 x, y = nums[j:j + 2]; j += 2
                 cx, cy = (cx + x, cy + y) if rel else (x, y)
                 sx, sy = cx, cy
-                pts.append((cx, cy))
+                pts.append((cx, cy)); pc2 = pq = None
                 c = "l" if rel else "L"          # implicit lineto after moveto
             elif C == "L":
                 x, y = nums[j:j + 2]; j += 2
                 cx, cy = (cx + x, cy + y) if rel else (x, y)
-                pts.append((cx, cy))
+                pts.append((cx, cy)); pc2 = pq = None
             elif C == "H":
                 x = nums[j]; j += 1
                 cx = cx + x if rel else x
-                pts.append((cx, cy))
+                pts.append((cx, cy)); pc2 = pq = None
             elif C == "V":
                 y = nums[j]; j += 1
                 cy = cy + y if rel else y
-                pts.append((cx, cy))
+                pts.append((cx, cy)); pc2 = pq = None
             elif C == "C":
                 a = nums[j:j + 6]; j += 6
                 p = [(cx + a[k], cy + a[k + 1]) if rel else (a[k], a[k + 1])
                      for k in (0, 2, 4)]
-                pts.extend(p); cx, cy = p[-1]
+                pts.extend(p); pc2 = p[1]; cx, cy = p[2]; pq = None
+            elif C == "S":
+                a = nums[j:j + 4]; j += 4
+                # implied control 1 = reflection of the previous cubic's control
+                # 2 about the current point; the current point itself when the
+                # previous command was not C/S.
+                r = (2 * cx - pc2[0], 2 * cy - pc2[1]) if pc2 else (cx, cy)
+                p2 = (cx + a[0], cy + a[1]) if rel else (a[0], a[1])
+                e = (cx + a[2], cy + a[3]) if rel else (a[2], a[3])
+                pts.extend([r, p2, e]); pc2 = p2; cx, cy = e; pq = None
             elif C == "Q":
                 a = nums[j:j + 4]; j += 4
                 p = [(cx + a[k], cy + a[k + 1]) if rel else (a[k], a[k + 1])
                      for k in (0, 2)]
-                pts.extend(p); cx, cy = p[-1]
+                pts.extend(p); pq = p[0]; cx, cy = p[1]; pc2 = None
+            elif C == "T":
+                a = nums[j:j + 2]; j += 2
+                r = (2 * cx - pq[0], 2 * cy - pq[1]) if pq else (cx, cy)
+                e = (cx + a[0], cy + a[1]) if rel else (a[0], a[1])
+                pts.extend([r, e]); pq = r; cx, cy = e; pc2 = None
+            elif C == "A":
+                a = nums[j:j + 7]; j += 7
+                ex, ey = (cx + a[5], cy + a[6]) if rel else (a[5], a[6])
+                pts.extend(_arc_points(cx, cy, a[0], a[1], a[2],
+                                       a[3] != 0, a[4] != 0, ex, ey))
+                cx, cy = ex, ey; pc2 = pq = None
             else:
-                raise ValueError("%s: unhandled command '%s'" % (where, c))
+                raise ValueError("%s: unhandled command %r" % (where, c))
         i += 1
     return pts
 
 
-def ink_bbox(svg_path):
-    t = io.open(svg_path, encoding="utf-8").read()
+def ink_bbox(p):
+    """Ink bounds, with the structural guards. Anything the parser cannot see
+    HARD-FAILS rather than silently cropping through the drawing."""
+    t = io.open(p, encoding="utf-8").read()
 
     vb = re.search(r'viewBox="([^"]*)"', t)
     if not vb:
-        raise ValueError("%s: no viewBox" % svg_path)
+        raise ValueError("%s: no viewBox" % p)
     if " ".join(vb.group(1).split()) != EXPECTED_VIEWBOX:
         raise ValueError("%s: viewBox is %r, expected %r -- union() clamps to "
                          "CANVAS=%d and would truncate this frame"
-                         % (svg_path, vb.group(1), EXPECTED_VIEWBOX, CANVAS))
+                         % (p, vb.group(1), EXPECTED_VIEWBOX, CANVAS))
     if re.search(r"\stransform=", t):
         raise ValueError("%s: has a transform=; the bbox would be computed in "
-                         "the wrong coordinate space" % svg_path)
+                         "the wrong coordinate space" % p)
     m = NON_PATH.search(t)
     if m:
-        raise ValueError("%s: contains <%s>, whose geometry ink_bbox cannot see; "
-                         "the crop would cut through it silently"
-                         % (svg_path, m.group(1)))
+        raise ValueError("%s: contains <%s>, whose geometry the path parser "
+                         "cannot see; the crop would cut through it silently"
+                         % (p, m.group(1)))
 
     pts = []
     for d in re.findall(r'\sd="([^"]+)"', t):
-        pts += path_points(d, svg_path)
+        pts += path_points(d, p)
     if not pts:
-        raise ValueError("no path data: %s" % svg_path)
+        raise ValueError("no path data: %s" % p)
     xs = [q[0] for q in pts]
     ys = [q[1] for q in pts]
     return min(xs), min(ys), max(xs), max(ys)
@@ -700,8 +795,8 @@ def union(boxes):
 
 def crop_svg(text, view_box, where):
     t = re.sub(r"<\?xml[^>]*\?>", "", text)
-    # [^"]* not \d+ -- a float or unit form ("512.0", "512px") would survive a
-    # \d+ strip and then fail the assets test with no repair step.
+    # [^"]* not \d+ -- "512.0" or "512px" would survive a digits-only strip and
+    # then fail the assets test with no repair step.
     t = re.sub(r'\swidth="[^"]*"', "", t, count=1)
     t = re.sub(r'\sheight="[^"]*"', "", t, count=1)
     t, n = re.subn(r'viewBox="[^"]*"', 'viewBox="%d %d %d %d"' % view_box, t, count=1)
@@ -711,7 +806,7 @@ def crop_svg(text, view_box, where):
                 'fill="white"', 'fill="WHITE"'):
         t = t.replace(lit, 'fill="currentColor"')
     if 'fill="currentColor"' not in t:
-        raise ValueError("%s: no white fill found to convert (a style= or "
+        raise ValueError("%s: no white fill found to convert (a style= or an "
                          "inherited fill is not handled)" % where)
     return t.strip()
 
@@ -730,7 +825,6 @@ def main():
         slugs[s] = pair
     if not slugs:
         raise SystemExit("no demo_slug in the library -- run Task 1 first")
-
     if not os.path.isdir(SRC):
         raise SystemExit("upstream assets not found at %s\n"
                          "clone it (Task 2 Step 3) or pass the root as argv[1]" % SRC)
@@ -750,8 +844,8 @@ def main():
                 crop_svg(io.open(src, encoding="utf-8").read(), vb, name))
             written.add(name)
 
-    # A renamed slug leaves an orphan that the 292-file test would catch later;
-    # say so HERE, where the fix is obvious.
+    # A renamed slug leaves an orphan the 292-file test would catch later; say
+    # so HERE, where the fix is obvious.
     stale = {f for f in os.listdir(OUT) if f.endswith(".svg")} - written
     if stale:
         raise SystemExit("stale SVGs from an earlier run: %s\n"
@@ -958,7 +1052,7 @@ void main() {
     });
 
     test('KEEPS genuine one-letter words', () {
-      // A length filter "fixed" the possessive and broke 10 real names --
+      // A length filter "fixed" the 3 possessives and broke 9 real names --
       // V-Up -> U, Z Press -> P, T-Bar Row -> BR, and Prone Y/T/W Raise all
       // collapsing to PR. The possessive is the signal, not the length.
       expect(monogramFor('V-Up'), 'VU');
@@ -1038,7 +1132,9 @@ String monogramFor(String name) {
   // Strip the possessive FIRST. Doing it by word length instead — which is the
   // obvious-looking fix — silently breaks every genuine one-letter word:
   // V-Up -> U, Z Press -> P, T-Bar Row -> BR, and Prone Y/T/W Raise all
-  // collapsing to the same PR. Measured over all 292 names: 10 worse, 2 fixed.
+  // collapsing to the same PR. Measured over all 292 names: the length filter
+  // changes 12 -- the 3 possessives it gets right, and 9 one-letter words it
+  // gets wrong. The possessive regex changes exactly those 3.
   final words = name
       .replaceAll(_possessive, '')
       .replaceAll(RegExp(r"[^A-Za-z0-9\s]"), ' ')
@@ -1096,7 +1192,7 @@ half a rule.
 monogramFor strips the POSSESSIVE, not short words. The apostrophe in
 Captain's leaves a bare 's' token; filtering by word length fixes that and
 silently breaks every genuine one-letter word -- measured over all 292 names,
-10 worse against 2 fixed, with Prone Y/T/W Raise all collapsing to PR and
+9 worse against 3 fixed, with Prone Y/T/W Raise all collapsing to PR and
 V-Up reduced to U. Regression tests pin all nine.
 
 Lookup is getByExactName, never search. Fields are read with 'is String' rather
@@ -1211,7 +1307,11 @@ void main() {
   });
 
   testWidgets('a slug with no bundled asset degrades to the monogram', (t) async {
-    HiveService.instance.exerciseBox.put('ZGHOST', {
+    // await: Box.put returns a Future and this body is async, so an
+    // un-awaited call trips unawaited_futures (analysis_options.yaml:21,
+    // WARNING). Task 3's identical put sits in a SYNC test body where the lint
+    // does not fire -- same statement, two different verdicts.
+    await HiveService.instance.exerciseBox.put('ZGHOST', {
       'id': 'ZGHOST', 'name': 'Zghost Exercise',
       'demo_slug': 'no-such-drawing', 'demo_pair': true,
     });
@@ -2084,6 +2184,8 @@ row that opens showLicensePage, so the credit travels with the artwork."
 
 ### Task 8: Correct the spec, register the SoT, close the ledger
 
+> **OI-147, OI-148 and OI-149 are already filed on this branch** (2026-08-29): the Donkey Calf Raise removal split out after round 2, the 23 equipment-variant exercises the spec had misrouted to OI-145, and the `breathing_cue` data defect. The ledger below cites all three; nothing here mints a number.
+
 **Files:** `docs/plans/exercise-plates-spec.md`, `docs/sot_registry.yaml`, `docs/naming_conventions.md`, `docs/audit/exercise-plates.closure.yaml`, `docs/audit/open_issues.md`
 
 - [ ] **Step 1: Write the failing test**
@@ -2132,13 +2234,27 @@ Append to `test/contracts/exercise_plate_badge_sites_test.dart`:
   });
 ```
 
-- [ ] **Step 2: Run to verify failure** — FAIL on all five.
+- [ ] **Step 2: Run to verify failure** — **four of the five fail.**
+
+> The `sync_community` test passes TODAY: `lib/core/services/sync/sync_community.dart:502` already reads `if (id != null && id.isNotEmpty && exerciseBox.get(id) == null)`. It is a **pin against future relaxation**, not a red-first test, and an implementer seeing 4/5 should not go hunting for a break. Said out loud because asserting a red state without running it is the class that produced round 2's unfalsifiable `didUpdateWidget` test.
 
 - [ ] **Step 3: Correct the spec (three contradictions)**
 
 1. **`spec:113-137`** says the shape rule *"lives in Dart beside the rule, not in the library JSON, because it is a rendering decision rather than exercise data."* That is now backwards — rewrite it to describe `demo_pair`, and say why: the Python pipeline must read the same decision to choose union-crop vs own-bounds.
 2. **`spec:139-150`** documents only `demo_slug`. Add `demo_pair` to the Data contract.
 3. **`spec:348-368`** says *"293 plate files"* and *"128 two-image and 37 single-image plates"*. Correct to **165 exercises (148 pair + 17 single) over 153 slugs → 292 files**, and note the per-exercise/per-slug distinction.
+
+**Four more lines carry SPLIT residue** — the batch no longer removes a row, so anything assuming 291 rows or 126 monogram exercises is now false:
+
+| line | text | correction |
+|---|---|---|
+| `:359` | `at full coverage, all 291 / 291 / 507` | 292 rows, not 291 |
+| `:428` | `removed at founder request / 1 - Donkey Calf Raise` | nothing is removed — point at **OI-147** |
+| `:434` | `exercises awaiting a founder photograph / 126` | **127** |
+| `:452` | `- **126 photographs** - the founder's camera.` | **127** |
+| `:453` | `- **23 new exercises** ... **OI-145**` | **OI-148** — OI-145 scopes 34 *different* drawings |
+
+Also record: `Barbell Curl` keeps its name and its `ez-bar-curl` drawing (founder, 2026-08-29 — renaming orphans `exlog_*` history, which hashes the name).
 
 Also record: `Barbell Curl` keeps its name and its `ez-bar-curl` drawing (founder, 2026-08-29 — renaming orphans `exlog_*` history, which hashes the name); the Donkey Calf Raise removal is **OI-147**; and the 23 split-rule exercises are **not** OI-145 (that issue scopes 34 different drawings) — file them as OI-148.
 
@@ -2198,16 +2314,120 @@ Append `demo_slug` and `demo_pair` to the reserved-domain glossary (`docs/naming
 
 - [ ] **Step 5: Write the closure ledger**
 
-`docs/audit/exercise-plates.closure.yaml` — §4.2's structural closed==N invariant, required for any ≥4-unit batch, and Gate 40 fails on a non-terminal entry. One entry per task plus one per parked item, each with `terminal_state:` ∈ {`closed_in_commit`, `upstream_blocked`, `blocked_on_user`, `verified_clean`}. The parked items:
+`docs/audit/exercise-plates.closure.yaml` — §4.2's structural closed==N invariant, required for any ≥4-unit batch.
 
-| item | terminal_state | note |
-|---|---|---|
-| 127 photographs | `blocked_on_user` | founder's camera |
-| 23 split-rule exercises | `blocked_on_user` | OI-148; selection-skew question first |
-| `breathing_cue` data repair | `upstream_blocked` | OI; both render surfaces guarded here |
-| Donkey Calf Raise removal | `upstream_blocked` | **OI-147** |
-| dead fields in migrations 074/125 + 2 seed scripts | `verified_clean` | `backups/live_schema_columns.json` holds no `exercise_library` key, so nothing server-side reads them; the generators re-emit only when next run, which OI-147 will do |
-| `gate19_drift_baseline.txt` stale entries | `verified_clean` | Gate 19 flags NEW drift only; no stale-entry check exists |
+⚠ **Gate 40 requires per-STATE fields a plain table cannot carry** (`scripts/validate_audit_closure.dart:18-40`): `upstream_blocked` needs **both** `blocker:` and `reopen_when:`; `blocked_on_user` needs `reason:`; `verified_clean` needs `evidence:` or `notes:`; `closed_in_commit` needs a real SHA or a labelled branch state **and** a verification path. `total_findings` must equal the `findings:` length, and `closed_count` the terminal count. Model it on `docs/audit/ci-speedup.closure.yaml`. Write the YAML, not a summary of it:
+
+```yaml
+# Closure ledger — exercise plates. Gate 40 (validate_audit_closure.dart).
+# One terminal_state per item; no `deferred:` key. 15 items, over the §4.2 >=4
+# threshold. Branch: exercise-plates.
+#
+# No diagnose-doc: this is a feature, not a bug fix. No commit subject matches
+# rule 22's ^(fix|bug|regression) pattern.
+
+batch: exercise-plates
+total_findings: 15
+closed_count: 15
+
+findings:
+  # --- the nine build tasks; fill each SHA in as it lands ---
+  - id: T1
+    title: demo_slug + demo_pair on 165 rows, seed version 10 -> 11
+    terminal_state: closed_in_commit
+    commit: "<sha>"
+    verification: flutter test test/contracts/exercise_plate_library_data_test.dart
+  - id: T2
+    title: vendor the artwork, crop it, ship 292 SVGs
+    terminal_state: closed_in_commit
+    commit: "<sha>"
+    verification: flutter test test/contracts/exercise_plate_assets_present_test.dart
+  - id: T3
+    title: the plate resolver
+    terminal_state: closed_in_commit
+    commit: "<sha>"
+    verification: flutter test test/contracts/exercise_plate_resolver_test.dart
+  - id: T4
+    title: monogram and 44 px thumbnail
+    terminal_state: closed_in_commit
+    commit: "<sha>"
+    verification: flutter test test/contracts/exercise_plate_widgets_test.dart
+  - id: T5
+    title: the plate sheet
+    terminal_state: closed_in_commit
+    commit: "<sha>"
+    verification: flutter test test/contracts/exercise_plate_sheet_test.dart
+  - id: T6
+    title: wire three badge sites, second door, breathing guard
+    terminal_state: closed_in_commit
+    commit: "<sha>"
+    verification: flutter test test/contracts/exercise_plate_badge_sites_test.dart
+  - id: T7
+    title: CC BY-SA attribution surface
+    terminal_state: closed_in_commit
+    commit: "<sha>"
+    verification: flutter test test/contracts/plate_attribution_surface_test.dart
+  - id: T8
+    title: spec corrections, SoT registry, closure ledger
+    terminal_state: closed_in_commit
+    commit: "<sha>"
+    verification: dart run scripts/check_sot_behavioral_test_paths.dart
+  - id: T9
+    title: full suite, B-pass, review record, merge
+    terminal_state: closed_in_commit
+    commit: "<sha>"
+    verification: flutter test && flutter analyze --no-fatal-infos
+
+  # --- parked, each terminal, each pointing at something that EXISTS ---
+  - id: P1
+    title: 127 photographs for the exercises with no drawing
+    terminal_state: blocked_on_user
+    reason: >
+      Requires the founder's camera. The monogram covers these rows from day
+      one; the photographs arrive later as a data change plus an
+      _exerciseLibraryVersion bump, no code. Shooting guidance is in the spec.
+  - id: P2
+    title: 23 equipment-variant exercises from the split rule
+    terminal_state: blocked_on_user
+    reason: >
+      OI-148. Blocked on a product decision, not on artwork - a dumbbell user
+      would see both rows of every split pair, doubling that movement's slot
+      probability. Every drawing is already identified.
+  - id: P3
+    title: breathing_cue holds a bare number on 136 of 292 rows
+    terminal_state: blocked_on_user
+    reason: >
+      OI-149. 136 replacement cues must be AUTHORED; the original text is
+      unrecoverable. Verified dead - the field is absent from all 20 columns of
+      both seed migrations, and all 19 git revisions of the library carry the
+      numeric value. Both render surfaces in this batch suppress it, pinned by
+      test/contracts/breathing_cue_numeric_suppressed_test.dart.
+  - id: P4
+    title: remove Donkey Calf Raise
+    terminal_state: blocked_on_user
+    reason: >
+      OI-147. Split out of this batch after review round 2. Needs the
+      606-persona generator matrix run first - it is the library's only
+      bodyweight-tier calf isolation row - then a seed-migration re-mint, a
+      ledger pair, and a live prod apply needing its own founder authorization.
+  - id: P5
+    title: the three dead image URL fields in migrations 074/125 and two seed scripts
+    terminal_state: verified_clean
+    evidence: >
+      backups/live_schema_columns.json holds no exercise_library key at all, so
+      nothing server-side reads them. The generators re-emit only when next run,
+      which OI-147's re-mint will do. Removed from the bundled JSON and from
+      swap_service in T1.
+  - id: P6
+    title: stale swap_service entries in backups/gate19_drift_baseline.txt
+    terminal_state: verified_clean
+    notes: >
+      Gate 19 flags NEW drift only and has no stale-entry check, so the two
+      entries for the deleted swap_service lines cannot fail anything. Its
+      header asks for a refresh after closing a true drift; this is a deletion,
+      not a drift closure.
+```
+
 
 - [ ] **Step 6: Run the tests** — all green. Then `dart run scripts/check_sot_behavioral_test_paths.dart` and `dart run scripts/validate_audit_closure.dart`.
 
@@ -2287,7 +2507,7 @@ sh scripts/safe_push.sh
 
 - Widening the dead-field scan to `test/` made it **scan itself** and fail forever. Now skips its own path.
 - Repairing the schema contract fixed the key set and missed that the file has **five** tests, one asserting `rows.length == 292` — and the "38 → 37" instruction contradicted the optional-key instruction below it. The right shape is **35 required + 2 optional**, with `extra` computed against the union.
-- The `monogramFor` fix **degraded 10 names to fix 2** — `V-Up`→`U`, `Z Press`→`P`, and `Prone Y/T/W Raise` all collapsing to `PR`. The signal is the **possessive**, not word length. Nine regression tests pin it.
+- The `monogramFor` fix **degraded 9 names to fix 3** — `V-Up`→`U`, `Z Press`→`P`, and `Prone Y/T/W Raise` all collapsing to `PR`. The signal is the **possessive**, not word length. Nine regression tests pin it.
 - The `didUpdateWidget` test was **unfalsifiable** — both fixtures were artwork-less, so the monogram read `widget.exerciseName` and deleting the method entirely still passed.
 - Two blockers came from removing Donkey Calf Raise, which **is no longer in this batch** (OI-147).
 
