@@ -4426,3 +4426,66 @@ exercise — before that, these five were invisible to any check in the repo.
 - **Related**: `docs/plans/exercise-plates-spec.md`, OI-145, and
   `memory/feedback_green_check_input_set_width.md` (the check whose input set was too narrow —
   it compared contested-vs-proposed and never looked at the confirmed tier).
+
+## OI-147 — remove Donkey Calf Raise: a one-row deletion that touches the cloud seed, a live apply, and the frozen generator baseline (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Needs the plan-generator question answered (below) before the row is removed, and a founder go for the live prod apply.
+- **Verified**: 2026-08-29 — every claim below re-derived from the named file in this worktree.
+
+**Founder decision (brainstorm, exercise-plates):** Donkey Calf Raise is *"not feasible generally"*
+and should leave the library. It carries no drawing, so it was originally bundled into the
+exercise-plates batch, which is where its real cost surfaced.
+
+**Split out of `exercise-plates` on 2026-08-29** after review round 2 returned `not converged`:
+three of that round's five blockers came from this one row removal and none of them from the
+plates feature. Removing it from that batch dissolved all three. This is a separable unit with its
+own blast radius, not a deferral — the plates work never touched any of these surfaces.
+
+**What a one-row deletion actually requires:**
+
+| # | Surface | Why it fires | Evidence |
+|---|---|---|---|
+| 1 | `test/contracts/exercise_library_schema_contract_test.dart:84-85` | asserts `rows.length == 292` and `ids.toSet().length == 292` | read 2026-08-29; the file has **five** tests, not four |
+| 2 | `test/contracts/exercise_library_cloud_seeded_test.dart` | asserts the newest seed migration's tuple count equals the bundled JSON row count | `125_reseed_exercise_library.sql` = **292** tuples, JSON = **292** rows. 291 turns it red |
+| 3 | `supabase/migrations/` | that test's own guidance is that a library change **mints the NEXT seed migration** rather than rewriting one | re-mint via `scripts/seed_exercise_library.js` |
+| 4 | `backups/applied_migrations.json` | §4.5 — a migration apply pairs with a ledger update in the same commit | |
+| 5 | **live prod apply** | §4.3 — needs its own explicit founder go, separate from plan approval | |
+| 6 | `test/plan_generator/baseline/baseline_plans.md:235` | the frozen baseline shows the generator **picking this row**: `\| Calves/knee_dominant \| Donkey Calf Raise \| attempt2DropSubFocus \| Calves \| bodyweight \|` | |
+| 7 | `test/plan_generator/scorecard_gate_test.dart` | 606-persona matrix with a hard fallback ceiling | |
+
+**⚠ The generator question, which must be answered BEFORE the row goes:**
+
+Donkey Calf Raise is the **only bodyweight-tier calf isolation row in the library**. Verified by
+scanning all 292 rows for a calf `primary_muscles` entry:
+
+| row | tiers |
+|---|---|
+| **Donkey Calf Raise** | `bodyweight`, `home_dumbbells`, `basic_gym`, `full_gym` |
+| Standing Calf Raise | `basic_gym`, `full_gym` — **not bodyweight** |
+| Seated Calf Raise | `full_gym` only |
+| Dumbbell Calf Raise | `home_dumbbells`+ — **not bodyweight** |
+
+The remaining bodyweight `knee_dominant` rows (Baithak, Jump Squat, Broad Jump) are `calisthenics`,
+not `isolation`. So removing this row leaves a bodyweight user with **no calf isolation option at
+all**, and the `Calves/knee_dominant` slot — already resolving at `attempt2DropSubFocus` — falls
+through to `attempt3DropTypeAndTarget`, which the baseline itself flags `⚠`.
+
+`fallback_by_tier.bodyweight` is already 1630 of a 2862 ceiling. One extra fallback pick makes
+2863 > 2862 and the suite goes red on `main`.
+
+**This is a prediction from mechanism and citation, NOT a measurement** — the 606-persona matrix
+has not been run against a 291-row library. Run it first:
+`flutter test test/plan_generator/scorecard_gate_test.dart` against the post-removal JSON.
+
+**Three ways it can end, all terminal:**
+1. The matrix does not move → remove the row, fix surfaces 1–5, done.
+2. The matrix moves → **add a replacement bodyweight calf isolation row in the same batch**
+   (the honest fix — the founder's objection is to this exercise, not to training calves), then
+   remove.
+3. Re-baseline with the attribution written into the comment, following the precedent at
+   `scorecard_gate_test.dart:114-141`. Weakest option; only if 1 and 2 both fail.
+
+**Until then** the row stays in the library and simply shows a monogram in the plates feature
+(127 monogram rows instead of 126). Nothing about plates depends on its removal.
+
