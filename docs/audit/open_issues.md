@@ -4328,3 +4328,78 @@ OI-136, OI-132.
 - **Related**: OI-89 (this is its residual), `enable_equipment_exclusions` in
   `plan_engine_flags.dart` (the precedent for the class),
   `docs/plan-reviews/oi89-bodyweight-floor.md`.
+
+---
+
+## OI-145 — 34 licence-clean drawings depict bodyweight exercises the library does not have (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. It needs the per-exercise authoring that OI-89 did for its 33
+  rows, and its own spec + review — it must not ride along inside another batch.
+- **Verified**: 2026-08-29 — the 302-entry manifest of `github.com/bryllim/workout-guide` was
+  matched against all 292 library rows; 68 drawings have no library equivalent, 34 of them in the
+  bodyweight family. 30 of the 34 were then probed by name against `exercise_library.json`
+  individually and none exists.
+
+- **What it is**: the exercise-plates work (branch `exercise-plates`,
+  `docs/plans/exercise-plates-spec.md`) adopts that drawing catalogue under CC BY-SA 4.0. The
+  catalogue is larger than our library in exactly the place ours is thinnest. These 34 arrive with
+  artwork already licensed and already downloaded — the only cost is authoring the row.
+- **Why it matters**: OI-89 established the bodyweight tier as a HARD floor, and its own residual
+  records that some bodyweight patterns have a single candidate. Glute isolation at the bodyweight
+  tier is the sharpest gap and the catalogue has six for it.
+- **The 34, grouped**:
+  - glutes, bodyweight: `clamshell`, `fire-hydrant`, `donkey-kick`, `side-lying-hip-abduction`,
+    `side-lying-leg-raise`, `hip-airplane`
+  - posterior chain: `bird-dog`, `superman`, `superman-hold`, `back-extension`,
+    `glute-focused-back-extension`, `lying-hamstring-walkout`
+  - knee-dominant: `bodyweight-squat`, `cossack-squat`, `shrimp-squat`, `forward-lunge`,
+    `step-down`, `single-leg-calf-raise`
+  - core: `hollow-rock`, `heel-tap`, `plank-shoulder-tap`, `seated-knee-tuck`, `squat-thrust`
+  - household kit: `chair-dip`, `wall-walk`, `stability-ball-hamstring-curl`
+  - conditioning: `skater-hop`, `lateral-shuffle`, `fast-feet`, `sprawl`, `seal-jack`
+  - flexibility: `seated-forward-fold-stretch`, `butterfly-stretch`
+  - triceps: `weighted-dip`
+- **Why it is NOT part of the plates batch**: a new row is not a name and a picture. Each needs
+  `coaching_cues`, `common_mistakes`, `breathing_cue`, `movement_pattern`, `equipment_tier`,
+  `rep_range`, `priority_tier` and injury tags, or it degrades the generator rather than helping
+  it. 34 such rows would make the plates batch un-reviewable. Founder agreed 2026-08-29.
+- **Cheap when it happens**: each lands with its `demo_slug` already known, so it gets a plate for
+  free on the same `_exerciseLibraryVersion` bump.
+- **Related**: OI-89 (the bodyweight floor and its single-candidate residual),
+  `docs/plans/exercise-plates-spec.md`.
+
+---
+
+## OI-146 — three duplicate exercise rows, two of them dead, one skewing selection (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing. Needs a decision on whether the flexibility twins are intentional.
+- **Verified**: 2026-08-29 — name-normalised (case, punctuation, word order) across all 292 rows of
+  `assets/data/exercise_library.json`, then each name grepped against `lib/` for live references.
+
+- **The three pairs**:
+
+  | dead row | live twin | reference count in `lib/` |
+  |---|---|---|
+  | E167 `Cross Body Shoulder Stretch` (flexibility) | E219 `Cross-body Shoulder Stretch` (cooldown) | 0 vs **5** |
+  | E168 `Doorway Chest Stretch` (flexibility) | E220 `Chest Doorway Stretch` (cooldown) | 0 vs **6** |
+  | E016 `Close Grip Bench Press` | E241 `Close-Grip Bench Press` | 0 vs 0 — see below |
+
+- **Why the first two are not symmetric**: `warmup_cooldown.dart` selects cool-downs from
+  HARDCODED name lists (`_cooldownStretches`, `warmup_cooldown.dart:142-146`), not from the
+  library `category`. Only the `cooldown`-category spelling is named there, so the
+  `flexibility`-category twin is unreachable through that path and duplicates a row that is live.
+- **Why E016/E241 is the worse one**: both are byte-identical in `category`, `logging_type`,
+  `equipment_needed` and `primary_muscles`, and neither is hardcoded anywhere — so BOTH sit in the
+  generator's selectable pool. That gives one exercise **double the selection probability** of
+  every neighbour in its slot, silently skewing variety. This is a selection-fairness bug, not
+  cosmetic.
+- **What to check before deleting anything**: whether a plan already generated for a live user
+  pins the dead spelling (`schedule_*` rows store the NAME), and whether
+  `exlog_*` history keyed on the dead name would orphan. The exlog key is
+  `exercise_name.hashCode`, so a rename is NOT free — see `lib/features/train/CLAUDE.md`
+  `exercise_logs_read_path`.
+- **Found by**: the founder, eyeballing the plate-assignment review — his note on
+  Captain's Chair Leg Raise read "this is same as knee raise. duplicate", which prompted the audit.
+- **Related**: `docs/plans/exercise-plates-spec.md`, OI-145.
