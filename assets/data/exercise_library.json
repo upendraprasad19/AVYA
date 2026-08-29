@@ -45,9 +45,6 @@
     "is_indian_context": false,
     "indian_alternative": "No barbell? Use a loaded backpack for pushup resistance",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bench-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bench-Press_1.jpg",
-    "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=192",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -64,7 +61,9 @@
     ],
     "standard_swap": "E002",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "bench-press",
+    "demo_pair": true
   },
   {
     "id": "E002",
@@ -112,9 +111,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bench-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bench-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -129,7 +125,9 @@
     ],
     "standard_swap": "E001",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "dumbbell-bench-press",
+    "demo_pair": true
   },
   {
     "id": "E003",
@@ -177,9 +175,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Incline-Bench-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Incline-Bench-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -197,7 +192,9 @@
     ],
     "standard_swap": "E004",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "incline-bench-press",
+    "demo_pair": true
   },
   {
     "id": "E004",
@@ -244,9 +241,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Decline-Bench-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Decline-Bench-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -263,7 +257,9 @@
     "standard_swap": "E003",
     "priority_tier": 1,
     "rep_range": "5-8",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "decline-bench-press",
+    "demo_pair": true
   },
   {
     "id": "E005",
@@ -313,9 +309,6 @@
     "is_indian_context": false,
     "indian_alternative": "Dand (Hindu Pushup) — starts in downward dog, flows through",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Push-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Push-Up_1.jpg",
-    "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=10",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -334,7 +327,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "push-up",
+    "demo_pair": true
   },
   {
     "id": "E006",
@@ -381,9 +376,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Flyes_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Flyes_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -399,7 +391,9 @@
     ],
     "standard_swap": "E007",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "dumbbell-fly",
+    "demo_pair": true
   },
   {
     "id": "E007",
@@ -444,9 +438,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crossover_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crossover_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -462,7 +453,9 @@
     "standard_swap": "E006",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "cable-fly",
+    "demo_pair": true
   },
   {
     "id": "E008",
@@ -508,9 +501,6 @@
     "is_indian_context": false,
     "indian_alternative": "Can use two chairs if no parallel bars",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Dip_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Dip_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -527,7 +517,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "chest-dip",
+    "demo_pair": true
   },
   {
     "id": "E009",
@@ -574,9 +566,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -590,7 +579,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "machine-chest-press",
+    "demo_pair": true
   },
   {
     "id": "E010",
@@ -638,9 +629,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pike-Push-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pike-Push-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -662,7 +650,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "pike-push-up",
+    "demo_pair": true
   },
   {
     "id": "E011",
@@ -711,9 +701,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Standing-Military-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Standing-Military-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -731,7 +718,9 @@
     ],
     "standard_swap": "E012",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "overhead-press",
+    "demo_pair": true
   },
   {
     "id": "E012",
@@ -778,9 +767,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shoulder-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shoulder-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -799,7 +785,9 @@
     ],
     "standard_swap": "E011",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "standing-dumbbell-press",
+    "demo_pair": true
   },
   {
     "id": "E013",
@@ -846,9 +834,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Raise_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Raise_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -866,7 +851,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "lateral-raise",
+    "demo_pair": true
   },
   {
     "id": "E014",
@@ -914,9 +901,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Face-Pull_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Face-Pull_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -932,7 +916,9 @@
     ],
     "standard_swap": "Band Pull Apart",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "face-pull",
+    "demo_pair": true
   },
   {
     "id": "E015",
@@ -978,9 +964,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Front-Raise_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Front-Raise_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -998,7 +981,9 @@
     ],
     "standard_swap": "E017",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "front-raise",
+    "demo_pair": true
   },
   {
     "id": "E016",
@@ -1045,9 +1030,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Close-Grip-Barbell-Bench-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Close-Grip-Barbell-Bench-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -1065,7 +1047,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "close-grip-bench-press",
+    "demo_pair": true
   },
   {
     "id": "E017",
@@ -1109,9 +1093,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Triceps-Pushdown_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Triceps-Pushdown_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -1126,7 +1107,9 @@
     ],
     "standard_swap": "E015",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "tricep-pushdown",
+    "demo_pair": true
   },
   {
     "id": "E018",
@@ -1170,9 +1153,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Skull-Crusher_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Skull-Crusher_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -1188,7 +1168,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "skull-crusher",
+    "demo_pair": true
   },
   {
     "id": "E019",
@@ -1232,9 +1214,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lying-Triceps-Extension_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lying-Triceps-Extension_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -1252,7 +1231,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "dumbbell-overhead-tricep-extension",
+    "demo_pair": true
   },
   {
     "id": "E020",
@@ -1299,9 +1280,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Diamond-Push-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Diamond-Push-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -1321,7 +1299,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "diamond-push-up",
+    "demo_pair": true
   },
   {
     "id": "E021",
@@ -1371,9 +1351,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Deadlift_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Deadlift_1.jpg",
-    "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=262",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -1392,7 +1369,9 @@
     ],
     "standard_swap": "Trap Bar Deadlift",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "deadlift",
+    "demo_pair": true
   },
   {
     "id": "E022",
@@ -1441,9 +1420,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pull-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pull-Up_1.jpg",
-    "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=31",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -1461,7 +1437,9 @@
     ],
     "standard_swap": "Inverted Row",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "pull-up",
+    "demo_pair": true
   },
   {
     "id": "E023",
@@ -1509,9 +1487,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bent-Over-Row_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Bent-Over-Row_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -1529,7 +1504,9 @@
     ],
     "standard_swap": "E024",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "barbell-row",
+    "demo_pair": true
   },
   {
     "id": "E024",
@@ -1578,9 +1555,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-One-Arm-Row_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-One-Arm-Row_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -1597,7 +1571,9 @@
     ],
     "standard_swap": "E023",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "one-arm-dumbbell-row",
+    "demo_pair": true
   },
   {
     "id": "E025",
@@ -1644,9 +1620,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lat-Pulldown_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lat-Pulldown_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -1662,7 +1635,9 @@
     ],
     "standard_swap": "Pull Up",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "lat-pulldown",
+    "demo_pair": true
   },
   {
     "id": "E026",
@@ -1711,9 +1686,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Cable-Row_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Cable-Row_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -1729,7 +1701,9 @@
     ],
     "standard_swap": "E030",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "seated-row",
+    "demo_pair": true
   },
   {
     "id": "E027",
@@ -1777,9 +1751,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/T-Bar-Row_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/T-Bar-Row_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -1798,7 +1769,9 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "5-8",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "t-bar-row",
+    "demo_pair": true
   },
   {
     "id": "E029",
@@ -1845,9 +1818,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Back-Extension_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Back-Extension_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -1864,7 +1834,9 @@
     "standard_swap": "Good Morning",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "back-extension",
+    "demo_pair": true
   },
   {
     "id": "E030",
@@ -1913,9 +1885,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Dumbbell-Row_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Dumbbell-Row_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -1978,9 +1947,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -1998,7 +1964,9 @@
     ],
     "standard_swap": "Dumbbell Curl",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "ez-bar-curl",
+    "demo_pair": true
   },
   {
     "id": "E032",
@@ -2044,9 +2012,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -2062,7 +2027,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "bicep-curl",
+    "demo_pair": true
   },
   {
     "id": "E033",
@@ -2107,9 +2074,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Hammer-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Hammer-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -2126,7 +2090,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "hammer-curl",
+    "demo_pair": true
   },
   {
     "id": "E034",
@@ -2170,9 +2136,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Concentration-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Concentration-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -2188,7 +2151,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "concentration-curl",
+    "demo_pair": true
   },
   {
     "id": "E035",
@@ -2234,9 +2199,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -2251,7 +2213,9 @@
     ],
     "standard_swap": "Dumbbell Curl",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "cable-curl",
+    "demo_pair": true
   },
   {
     "id": "E036",
@@ -2299,9 +2263,6 @@
     "is_indian_context": false,
     "indian_alternative": "Baithak (Hindu Squat) — continuous breathing squats, 20+ reps, traditional",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Full-Squat_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Full-Squat_1.jpg",
-    "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=99",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -2321,7 +2282,9 @@
     ],
     "standard_swap": "Goblet Squat",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "squat",
+    "demo_pair": true
   },
   {
     "id": "E037",
@@ -2368,9 +2331,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Front-Squat_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Front-Squat_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -2390,7 +2350,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "front-squat",
+    "demo_pair": true
   },
   {
     "id": "E038",
@@ -2438,9 +2400,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Goblet-Squat_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Goblet-Squat_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -2460,7 +2419,9 @@
     ],
     "standard_swap": "E039",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "goblet-squat",
+    "demo_pair": true
   },
   {
     "id": "E039",
@@ -2507,9 +2468,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -2524,7 +2482,9 @@
     ],
     "standard_swap": "E038",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "leg-press",
+    "demo_pair": true
   },
   {
     "id": "E040",
@@ -2570,9 +2530,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Hack-Squat_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Hack-Squat_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -2589,7 +2546,9 @@
     "standard_swap": "Leg Press",
     "priority_tier": 1,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "hack-squat",
+    "demo_pair": true
   },
   {
     "id": "E041",
@@ -2637,9 +2596,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bulgarian-Split-Squat_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Bulgarian-Split-Squat_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -2658,7 +2614,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "bulgarian-split-squat",
+    "demo_pair": true
   },
   {
     "id": "E042",
@@ -2706,9 +2664,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Walking-Lunge_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Walking-Lunge_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -2773,9 +2728,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Extension_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Leg-Extension_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -2791,7 +2743,9 @@
     ],
     "standard_swap": "E111",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "leg-extension",
+    "demo_pair": true
   },
   {
     "id": "E044",
@@ -2839,9 +2793,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Step-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Step-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -2861,7 +2812,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "step-up",
+    "demo_pair": true
   },
   {
     "id": "E045",
@@ -2907,9 +2860,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Romanian-Deadlift_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Romanian-Deadlift_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -2929,7 +2879,9 @@
     ],
     "standard_swap": "Dumbbell Romanian Deadlift",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "dumbbell-romanian-deadlift",
+    "demo_pair": true
   },
   {
     "id": "E046",
@@ -2971,9 +2923,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Nordic-Hamstring-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Nordic-Hamstring-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hamstring",
@@ -2993,7 +2942,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "nordic-hamstring-curl",
+    "demo_pair": true
   },
   {
     "id": "E047",
@@ -3039,9 +2990,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Hip-Thrust_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Hip-Thrust_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -3058,7 +3006,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "hip-thrust",
+    "demo_pair": true
   },
   {
     "id": "E048",
@@ -3104,9 +3054,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Glute-Bridge_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Glute-Bridge_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -3123,7 +3070,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "glute-bridge",
+    "demo_pair": true
   },
   {
     "id": "E049",
@@ -3167,9 +3116,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lying-Leg-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Lying-Leg-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -3185,7 +3131,9 @@
     ],
     "standard_swap": "E050",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "lying-leg-curl",
+    "demo_pair": true
   },
   {
     "id": "E050",
@@ -3233,9 +3181,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Sumo-Deadlift_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Sumo-Deadlift_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -3254,7 +3199,9 @@
     ],
     "standard_swap": "E049",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "sumo-deadlift",
+    "demo_pair": true
   },
   {
     "id": "E051",
@@ -3300,9 +3247,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Standing-Calf-Raise_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Standing-Calf-Raise_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -3363,9 +3307,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Calf-Raise_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Seated-Calf-Raise_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -3381,7 +3322,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "seated-calf-raise",
+    "demo_pair": true
   },
   {
     "id": "E053",
@@ -3425,9 +3368,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Donkey-Calf-Raise_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Donkey-Calf-Raise_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "ankle"
@@ -3496,9 +3436,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "Used in military training — try the RKC variation for rapid core strength",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Plank_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Plank_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -3515,7 +3452,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "30-60"
+    "rep_range": "30-60",
+    "demo_slug": "plank",
+    "demo_pair": false
   },
   {
     "id": "E055",
@@ -3562,9 +3501,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dead-Bug_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dead-Bug_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -3581,7 +3517,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "30-60"
+    "rep_range": "30-60",
+    "demo_slug": "dead-bug",
+    "demo_pair": true
   },
   {
     "id": "E056",
@@ -3625,9 +3563,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crunch_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crunch_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -3642,7 +3577,9 @@
     ],
     "standard_swap": "Plank",
     "priority_tier": 2,
-    "rep_range": "12-20"
+    "rep_range": "12-20",
+    "demo_slug": "cable-crunch",
+    "demo_pair": true
   },
   {
     "id": "E057",
@@ -3690,9 +3627,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Hanging-Leg-Raise_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Hanging-Leg-Raise_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -3710,7 +3644,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "12-20"
+    "rep_range": "12-20",
+    "demo_slug": "hanging-leg-raise",
+    "demo_pair": true
   },
   {
     "id": "E058",
@@ -3760,9 +3696,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Ab-Wheel-Rollout_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Ab-Wheel-Rollout_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -3779,7 +3712,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "12-20"
+    "rep_range": "12-20",
+    "demo_slug": "ab-wheel",
+    "demo_pair": true
   },
   {
     "id": "E059",
@@ -3825,9 +3760,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Russian-Twist_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Russian-Twist_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -3844,7 +3776,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-20"
+    "rep_range": "12-20",
+    "demo_slug": "russian-twist",
+    "demo_pair": true
   },
   {
     "id": "E060",
@@ -3888,9 +3822,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Reverse-Crunch_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Reverse-Crunch_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -3907,7 +3838,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-20"
+    "rep_range": "12-20",
+    "demo_slug": "reverse-crunch",
+    "demo_pair": true
   },
   {
     "id": "E061",
@@ -3955,9 +3888,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "Can do on road — early mornings are ideal in Indian summers",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=8",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -3974,7 +3904,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "20-30"
+    "rep_range": "20-30",
+    "demo_slug": "running",
+    "demo_pair": true
   },
   {
     "id": "E062",
@@ -4023,9 +3955,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "Can use regular cycle outdoors — good morning activity",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -4040,7 +3969,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "20-30"
+    "rep_range": "20-30",
+    "demo_slug": "cycling",
+    "demo_pair": true
   },
   {
     "id": "E063",
@@ -4089,9 +4020,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "One of the cheapest and best cardio tools — available for ₹200 anywhere",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -4109,7 +4037,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "30-60"
+    "rep_range": "30-60",
+    "demo_slug": "jump-rope",
+    "demo_pair": true
   },
   {
     "id": "E064",
@@ -4160,9 +4090,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -4180,7 +4107,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "20-30"
+    "rep_range": "20-30",
+    "demo_slug": "rowing",
+    "demo_pair": true
   },
   {
     "id": "E065",
@@ -4229,9 +4158,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Burpee_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Burpee_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -4250,7 +4176,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "20-30"
+    "rep_range": "20-30",
+    "demo_slug": "burpee",
+    "demo_pair": true
   },
   {
     "id": "E066",
@@ -4298,9 +4226,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Jump_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Jump_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -4370,9 +4295,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Mountain-Climber_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Mountain-Climber_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -4389,7 +4311,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "20-30"
+    "rep_range": "20-30",
+    "demo_slug": "mountain-climber",
+    "demo_pair": true
   },
   {
     "id": "E068",
@@ -4435,9 +4359,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -4452,7 +4373,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "20-30",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "assault-bike",
+    "demo_pair": true
   },
   {
     "id": "E069",
@@ -4499,9 +4422,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Muscle-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Muscle-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -4569,9 +4489,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "wrist"
@@ -4636,9 +4553,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder",
@@ -4659,7 +4573,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "l-sit-hold",
+    "demo_pair": false
   },
   {
     "id": "E072",
@@ -4703,9 +4619,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder",
@@ -4774,9 +4687,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pistol-Squat_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pistol-Squat_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -4797,7 +4707,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "pistol-squat",
+    "demo_pair": true
   },
   {
     "id": "E074",
@@ -4846,9 +4758,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dragon-Flag_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dragon-Flag_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -4868,7 +4777,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "dragon-flag",
+    "demo_pair": true
   },
   {
     "id": "E075",
@@ -4915,9 +4826,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dip_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dip_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -4936,7 +4844,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "dip",
+    "demo_pair": true
   },
   {
     "id": "E076",
@@ -4988,9 +4898,6 @@
     "is_indian_context": false,
     "indian_alternative": "Yes",
     "source": "Core Indian exercise — practiced by wrestlers (pehlwans) for centuries",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "wrist"
@@ -5012,7 +4919,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "hindu-push-up",
+    "demo_pair": true
   },
   {
     "id": "E077",
@@ -5063,9 +4972,6 @@
     "is_indian_context": false,
     "indian_alternative": "Yes",
     "source": "Traditional Indian wrestler conditioning — try 100 reps straight",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -5133,9 +5039,6 @@
     "is_indian_context": false,
     "indian_alternative": "Yes",
     "source": "Ancient Indian morning practice — complete workout in itself",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -5198,9 +5101,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -5262,9 +5162,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -5326,9 +5223,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -5394,9 +5288,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -5414,7 +5305,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "30-60"
+    "rep_range": "30-60",
+    "demo_slug": "worlds-greatest-stretch",
+    "demo_pair": true
   },
   {
     "id": "E084",
@@ -5459,9 +5352,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -5525,9 +5415,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -5544,7 +5431,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "30-60"
+    "rep_range": "30-60",
+    "demo_slug": "cat-cow-stretch",
+    "demo_pair": true
   },
   {
     "id": "E086",
@@ -5587,9 +5476,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Power-Clean_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Power-Clean_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -5657,9 +5543,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Trap-Bar-Deadlift_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Trap-Bar-Deadlift_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -5679,7 +5562,9 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "5-8",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "trap-bar-deadlift",
+    "demo_pair": true
   },
   {
     "id": "E088",
@@ -5727,9 +5612,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -5799,9 +5681,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Farmers-Walk_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Farmers-Walk_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -5818,7 +5697,9 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "farmer-carry",
+    "demo_pair": true
   },
   {
     "id": "E090",
@@ -5867,9 +5748,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": false,
@@ -5932,9 +5810,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Single-Leg-Romanian-Deadlift_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Single-Leg-Romanian-Deadlift_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hamstring",
@@ -5954,7 +5829,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "5-8",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "single-leg-romanian-deadlift",
+    "demo_pair": true
   },
   {
     "id": "E092",
@@ -5999,9 +5876,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Good-Morning_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Good-Morning_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hamstring",
@@ -6021,7 +5895,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "good-morning",
+    "demo_pair": true
   },
   {
     "id": "E093",
@@ -6068,9 +5944,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Band-Pull-Apart_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Band-Pull-Apart_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -6088,7 +5961,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "band-pull-apart",
+    "demo_pair": true
   },
   {
     "id": "E094",
@@ -6132,9 +6007,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Dumbbell-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Dumbbell-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -6149,7 +6021,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "incline-dumbbell-curl",
+    "demo_pair": true
   },
   {
     "id": "E095",
@@ -6193,9 +6067,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Preacher-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/EZ-Bar-Preacher-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -6211,7 +6082,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "preacher-curl",
+    "demo_pair": true
   },
   {
     "id": "E096",
@@ -6255,9 +6128,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Tricep-Kickback_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Tricep-Kickback_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -6316,9 +6186,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Overhead-Tricep-Extension_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Overhead-Tricep-Extension_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "elbow"
@@ -6335,7 +6202,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "overhead-tricep-extension",
+    "demo_pair": true
   },
   {
     "id": "E098",
@@ -6382,9 +6251,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Reverse-Fly_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Reverse-Fly_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -6401,7 +6267,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "rear-delt-fly",
+    "demo_pair": true
   },
   {
     "id": "E099",
@@ -6445,9 +6313,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Wrist-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Wrist-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "wrist"
@@ -6509,9 +6374,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "free-exercise-db",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Reverse-Wrist-Curl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Reverse-Wrist-Curl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "wrist"
@@ -6529,7 +6391,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "wrist-extension",
+    "demo_pair": true
   },
   {
     "id": "E101",
@@ -6575,9 +6439,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-To-Bar-Pull-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chest-To-Bar-Pull-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -6595,7 +6456,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "pull-up",
+    "demo_pair": true
   },
   {
     "id": "E102",
@@ -6642,9 +6505,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Push-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Incline-Push-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "wrist"
@@ -6665,7 +6525,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "incline-push-up",
+    "demo_pair": true
   },
   {
     "id": "E103",
@@ -6713,9 +6575,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Decline-Push-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Decline-Push-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "wrist"
@@ -6735,7 +6594,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "decline-push-up",
+    "demo_pair": true
   },
   {
     "id": "E104",
@@ -6782,9 +6643,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Arnold-Dumbbell-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Arnold-Dumbbell-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -6803,7 +6661,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "arnold-press",
+    "demo_pair": true
   },
   {
     "id": "E105",
@@ -6850,9 +6710,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Upright-Row_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Barbell-Upright-Row_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -6914,9 +6771,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shrug_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Shrug_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -6933,7 +6787,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "dumbbell-shrug",
+    "demo_pair": true
   },
   {
     "id": "E107",
@@ -6978,9 +6834,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -6994,7 +6847,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "hip-abduction-machine",
+    "demo_pair": true
   },
   {
     "id": "E108",
@@ -7038,9 +6893,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -7054,7 +6906,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "hip-adduction-machine",
+    "demo_pair": true
   },
   {
     "id": "E109",
@@ -7100,9 +6954,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Glute-Kickback_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Glute-Kickback_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -7117,7 +6968,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "cable-kickback",
+    "demo_pair": true
   },
   {
     "id": "E110",
@@ -7162,9 +7015,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -7180,7 +7030,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "banded-lateral-walk",
+    "demo_pair": true
   },
   {
     "id": "E111",
@@ -7223,9 +7075,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "knee"
@@ -7244,7 +7093,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "sissy-squat",
+    "demo_pair": true
   },
   {
     "id": "E112",
@@ -7293,9 +7144,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Squat_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Box-Squat_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -7363,9 +7211,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Single-Arm-Dumbbell-Bench-Press_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Single-Arm-Dumbbell-Bench-Press_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -7428,9 +7273,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -7448,7 +7290,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "landmine-press",
+    "demo_pair": true
   },
   {
     "id": "E115",
@@ -7494,9 +7338,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -7562,9 +7403,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -7583,7 +7421,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "meadows-row",
+    "demo_pair": true
   },
   {
     "id": "E117",
@@ -7628,9 +7468,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crossover_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Cable-Crossover_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -7646,7 +7483,9 @@
     "standard_swap": "E118",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "cable-fly",
+    "demo_pair": true
   },
   {
     "id": "E118",
@@ -7692,9 +7531,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pec-Deck-Flyes_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Pec-Deck-Flyes_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -7709,7 +7545,9 @@
     "standard_swap": "E117",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "pec-deck",
+    "demo_pair": true
   },
   {
     "id": "E119",
@@ -7754,9 +7592,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -7815,9 +7650,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -7880,9 +7712,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Renegade-Row_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Renegade-Row_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -7946,9 +7775,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -7963,7 +7789,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "spider-curl",
+    "demo_pair": true
   },
   {
     "id": "E123",
@@ -8012,9 +7840,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chin-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Chin-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -8030,7 +7855,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "chin-up",
+    "demo_pair": true
   },
   {
     "id": "E124",
@@ -8078,9 +7905,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inverted-Row_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inverted-Row_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -8143,9 +7967,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -8208,9 +8029,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "elbow",
@@ -8274,9 +8092,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -8341,9 +8156,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Snatch-Grip-Deadlift_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Snatch-Grip-Deadlift_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -8411,9 +8223,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Rack-Pull_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Rack-Pull_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -8432,7 +8241,9 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "rack-pull",
+    "demo_pair": true
   },
   {
     "id": "E130",
@@ -8476,9 +8287,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -8540,9 +8348,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -8603,9 +8408,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -8620,7 +8422,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-20"
+    "rep_range": "12-20",
+    "demo_slug": "pallof-press",
+    "demo_pair": true
   },
   {
     "id": "E133",
@@ -8668,9 +8472,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -8735,9 +8536,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip"
@@ -8756,7 +8554,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "copenhagen-plank",
+    "demo_pair": false
   },
   {
     "id": "E135",
@@ -8806,9 +8606,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bear-Crawl_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bear-Crawl_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "wrist"
@@ -8829,7 +8626,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "bear-crawl",
+    "demo_pair": true
   },
   {
     "id": "E136",
@@ -8882,9 +8681,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder",
@@ -8906,7 +8702,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "crab-walk",
+    "demo_pair": true
   },
   {
     "id": "E137",
@@ -8948,9 +8746,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -9015,9 +8810,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -9084,9 +8876,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -9105,7 +8894,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "battle-ropes",
+    "demo_pair": true
   },
   {
     "id": "E140",
@@ -9153,9 +8944,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Kettlebell-Swing_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Kettlebell-Swing_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -9173,7 +8961,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "kettlebell-swing",
+    "demo_pair": true
   },
   {
     "id": "E141",
@@ -9219,9 +9009,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Kettlebell-Turkish-Get-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Kettlebell-Turkish-Get-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -9283,9 +9070,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Medicine-Ball-Slam_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Medicine-Ball-Slam_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back",
@@ -9351,9 +9135,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -9375,7 +9156,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "skater-squat",
+    "demo_pair": true
   },
   {
     "id": "E144",
@@ -9424,9 +9207,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Reverse-Lunge_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Reverse-Lunge_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -9496,9 +9276,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Lunge_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lateral-Lunge_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -9520,7 +9297,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "lateral-lunge",
+    "demo_pair": true
   },
   {
     "id": "E146",
@@ -9568,9 +9347,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -9591,7 +9367,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "curtsy-lunge",
+    "demo_pair": true
   },
   {
     "id": "E147",
@@ -9640,9 +9418,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Sumo-Squat_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Sumo-Squat_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -9708,9 +9483,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "knee"
@@ -9777,9 +9549,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -9843,9 +9612,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -9910,9 +9676,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inchworm_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Inchworm_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -9931,7 +9694,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "10-15"
+    "rep_range": "10-15",
+    "demo_slug": "inchworm",
+    "demo_pair": true
   },
   {
     "id": "E152",
@@ -9977,9 +9742,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -10042,9 +9804,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10106,9 +9865,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10170,9 +9926,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10237,9 +9990,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -10306,9 +10056,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10368,9 +10115,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10434,9 +10178,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -10454,7 +10195,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "30-60"
+    "rep_range": "30-60",
+    "demo_slug": "childs-pose",
+    "demo_pair": false
   },
   {
     "id": "E160",
@@ -10500,9 +10243,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -10566,9 +10306,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10585,7 +10322,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "wall-calf-stretch",
+    "demo_pair": false
   },
   {
     "id": "E162",
@@ -10630,9 +10369,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10693,9 +10429,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10757,9 +10490,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10822,9 +10552,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10841,7 +10568,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "standing-quad-stretch",
+    "demo_pair": false
   },
   {
     "id": "E166",
@@ -10885,9 +10614,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10904,7 +10630,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "hamstring-stretch",
+    "demo_pair": false
   },
   {
     "id": "E167",
@@ -10949,9 +10677,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -10969,7 +10694,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "cross-body-shoulder-stretch",
+    "demo_pair": false
   },
   {
     "id": "E168",
@@ -11016,9 +10743,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -11037,7 +10761,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "doorway-chest-stretch",
+    "demo_pair": false
   },
   {
     "id": "E169",
@@ -11082,9 +10808,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -11149,9 +10872,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -11216,9 +10936,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Pullover_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Pullover_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -11281,9 +10998,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Side-Bend_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Side-Bend_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -11301,7 +11015,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "dumbbell-side-bend",
+    "demo_pair": true
   },
   {
     "id": "E173",
@@ -11347,9 +11063,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Decline-Crunch_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Decline-Crunch_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -11364,7 +11077,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "decline-sit-up",
+    "demo_pair": true
   },
   {
     "id": "E174",
@@ -11408,9 +11123,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Crunch_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Crunch_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -11427,7 +11139,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-20"
+    "rep_range": "12-20",
+    "demo_slug": "crunch",
+    "demo_pair": true
   },
   {
     "id": "E175",
@@ -11472,9 +11186,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bicycle-Crunch_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Bicycle-Crunch_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -11491,7 +11202,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "12-20"
+    "rep_range": "12-20",
+    "demo_slug": "bicycle-crunch",
+    "demo_pair": true
   },
   {
     "id": "E176",
@@ -11536,9 +11249,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/V-Up_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/V-Up_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -11555,7 +11265,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "v-up",
+    "demo_pair": true
   },
   {
     "id": "E177",
@@ -11600,9 +11312,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -11619,7 +11328,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "30-60"
+    "rep_range": "30-60",
+    "demo_slug": "hollow-body-hold",
+    "demo_pair": false
   },
   {
     "id": "E178",
@@ -11667,9 +11378,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -11733,9 +11441,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Toes-To-Bar_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Toes-To-Bar_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back",
@@ -11753,7 +11458,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "hanging-leg-raise",
+    "demo_pair": true
   },
   {
     "id": "E180",
@@ -11800,9 +11507,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back",
@@ -11865,9 +11569,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -11926,9 +11627,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -11993,9 +11691,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -12055,9 +11750,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -12120,9 +11812,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -12185,9 +11874,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -12250,9 +11936,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "lower_back"
@@ -12318,9 +12001,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -12340,7 +12020,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "banded-squat",
+    "demo_pair": true
   },
   {
     "id": "E189",
@@ -12387,9 +12069,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip"
@@ -12406,7 +12085,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "banded-hip-thrust",
+    "demo_pair": true
   },
   {
     "id": "E190",
@@ -12454,9 +12135,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -12519,9 +12197,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -12583,9 +12258,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -12603,7 +12275,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "battle-ropes",
+    "demo_pair": true
   },
   {
     "id": "E193",
@@ -12650,9 +12324,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Jump-Squat_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Jump-Squat_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "ankle",
@@ -12674,7 +12345,9 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "jump-squat",
+    "demo_pair": true
   },
   {
     "id": "E194",
@@ -12717,9 +12390,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "ankle",
@@ -12784,9 +12454,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "ankle",
@@ -12855,9 +12522,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "ankle",
@@ -12926,9 +12590,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "ankle",
@@ -12994,9 +12655,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lunge_0.jpg",
-    "image_end_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/images/Dumbbell-Lunge_1.jpg",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "hip",
@@ -13063,9 +12721,6 @@
     "is_indian_context": false,
     "indian_alternative": "No",
     "source": "",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "shoulder"
@@ -13128,9 +12783,6 @@
     "is_indian_context": false,
     "indian_alternative": "Yes",
     "source": "Designed as a complete movement practice — blends Surya Namaskar with warrior poses",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13191,9 +12843,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "ankle"
@@ -13259,9 +12908,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13278,7 +12924,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "jumping-jack",
+    "demo_pair": true
   },
   {
     "id": "E203",
@@ -13326,9 +12974,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13346,7 +12991,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "high-knees",
+    "demo_pair": true
   },
   {
     "id": "E204",
@@ -13393,9 +13040,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13458,9 +13102,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13477,7 +13118,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "arm-circles",
+    "demo_pair": true
   },
   {
     "id": "E206",
@@ -13523,9 +13166,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [
       "neck"
@@ -13591,9 +13231,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13610,7 +13247,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "torso-twist-stretch",
+    "demo_pair": true
   },
   {
     "id": "E208",
@@ -13657,9 +13296,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13724,9 +13360,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13744,7 +13377,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "leg-swings-stretch",
+    "demo_pair": true
   },
   {
     "id": "E210",
@@ -13788,9 +13423,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13851,9 +13483,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13915,9 +13544,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13934,7 +13560,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "10-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "wall-push-up",
+    "demo_pair": true
   },
   {
     "id": "E213",
@@ -13981,9 +13609,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -13999,7 +13624,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "dead-hang",
+    "demo_pair": false
   },
   {
     "id": "E214",
@@ -14045,9 +13672,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -14064,7 +13688,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "walking",
+    "demo_pair": true
   },
   {
     "id": "E215",
@@ -14112,9 +13738,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -14179,9 +13802,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -14199,7 +13819,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "standing-quad-stretch",
+    "demo_pair": false
   },
   {
     "id": "E217",
@@ -14246,9 +13868,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -14312,9 +13931,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -14378,9 +13994,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -14398,7 +14011,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "cross-body-shoulder-stretch",
+    "demo_pair": false
   },
   {
     "id": "E220",
@@ -14446,9 +14061,6 @@
     "is_indian_context": false,
     "indian_alternative": "No doorframe? Place hand flat on a wall and rotate body away",
     "source": "Standard cool-down exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -14466,7 +14078,9 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "demo_slug": "doorway-chest-stretch",
+    "demo_pair": false
   },
   {
     "id": "E221",
@@ -14513,9 +14127,6 @@
     "is_indian_context": false,
     "indian_alternative": "Similar to pranayama basics — the foundation of breath control",
     "source": "Standard cool-down exercise",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "injury_contraindications": [],
     "is_bilateral": true,
@@ -14582,9 +14193,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -14653,9 +14261,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -14725,9 +14330,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -14746,7 +14348,9 @@
     "standard_swap": "Romanian Deadlift",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E224"
+    "id": "E224",
+    "demo_slug": "cable-pull-through",
+    "demo_pair": true
   },
   {
     "name": "Hip Abductor Machine",
@@ -14795,9 +14399,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -14815,7 +14416,9 @@
     "standard_swap": "Banded Lateral Walk",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E225"
+    "id": "E225",
+    "demo_slug": "hip-abduction-machine",
+    "demo_pair": true
   },
   {
     "name": "Frog Pumps",
@@ -14862,9 +14465,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -14884,7 +14484,9 @@
     "standard_swap": "Kas Glute Bridge",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "id": "E226"
+    "id": "E226",
+    "demo_slug": "frog-pump",
+    "demo_pair": true
   },
   {
     "name": "High Box Step-Up",
@@ -14933,9 +14535,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15006,9 +14605,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15078,9 +14674,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15099,7 +14692,9 @@
     "standard_swap": "Romanian Deadlift",
     "priority_tier": 2,
     "rep_range": "5-8",
-    "id": "E229"
+    "id": "E229",
+    "demo_slug": "romanian-deadlift",
+    "demo_pair": true
   },
   {
     "name": "Standing Single Leg Curl",
@@ -15146,9 +14741,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15216,9 +14808,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15236,7 +14825,9 @@
     "standard_swap": "Dumbbell Bench Press",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E231"
+    "id": "E231",
+    "demo_slug": "decline-dumbbell-press",
+    "demo_pair": true
   },
   {
     "name": "Incline Dumbbell Fly",
@@ -15285,9 +14876,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15354,9 +14942,6 @@
     "is_indian_context": false,
     "indian_alternative": "Use two thick books or stacked water bottles as handles",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15427,9 +15012,6 @@
     "is_indian_context": true,
     "indian_alternative": "No bench required — the floor is the bench",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [],
@@ -15493,9 +15075,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15512,7 +15091,9 @@
     "standard_swap": "Dumbbell Lateral Raise",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E235"
+    "id": "E235",
+    "demo_slug": "machine-lateral-raise",
+    "demo_pair": true
   },
   {
     "name": "Cable Front Raise",
@@ -15561,9 +15142,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15581,7 +15159,9 @@
     "standard_swap": "Dumbbell Front Raise",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "id": "E236"
+    "id": "E236",
+    "demo_slug": "cable-front-raise",
+    "demo_pair": true
   },
   {
     "name": "Egyptian Lateral Raise",
@@ -15627,9 +15207,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15698,9 +15275,6 @@
     "is_indian_context": true,
     "indian_alternative": "Use a sturdy chair or low wall",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -15720,7 +15294,9 @@
     "standard_swap": "Tricep Dips",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E238"
+    "id": "E238",
+    "demo_slug": "bench-dip",
+    "demo_pair": true
   },
   {
     "name": "Dumbbell Kickback",
@@ -15767,9 +15343,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15788,7 +15361,9 @@
     "standard_swap": "Tricep Pushdown",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E239"
+    "id": "E239",
+    "demo_slug": "tricep-kickback",
+    "demo_pair": true
   },
   {
     "name": "Overhead Cable Extension",
@@ -15835,9 +15410,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15856,7 +15428,9 @@
     "standard_swap": "Overhead Dumbbell Extension",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E240"
+    "id": "E240",
+    "demo_slug": "overhead-tricep-extension",
+    "demo_pair": true
   },
   {
     "name": "Close-Grip Bench Press",
@@ -15906,9 +15480,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15927,7 +15498,9 @@
     "standard_swap": "Tricep Dips",
     "priority_tier": 2,
     "rep_range": "5-8",
-    "id": "E241"
+    "id": "E241",
+    "demo_slug": "close-grip-bench-press",
+    "demo_pair": true
   },
   {
     "name": "Rope Hammer Curl",
@@ -15977,9 +15550,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -15998,7 +15568,9 @@
     "standard_swap": "Hammer Curl",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E242"
+    "id": "E242",
+    "demo_slug": "rope-hammer-curl",
+    "demo_pair": true
   },
   {
     "name": "High Cable Curl",
@@ -16044,9 +15616,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -16115,9 +15684,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -16135,7 +15701,9 @@
     "standard_swap": "Barbell Row",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E244"
+    "id": "E244",
+    "demo_slug": "pendlay-row",
+    "demo_pair": true
   },
   {
     "name": "Machine High Row",
@@ -16185,9 +15753,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [],
@@ -16253,9 +15818,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [],
@@ -16270,7 +15832,9 @@
     "standard_swap": "Cable Seated Row",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E246"
+    "id": "E246",
+    "demo_slug": "machine-row",
+    "demo_pair": true
   },
   {
     "name": "Straight-Arm Pulldown",
@@ -16320,9 +15884,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -16340,7 +15901,9 @@
     "standard_swap": "Lat Pulldown",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E247"
+    "id": "E247",
+    "demo_slug": "straight-arm-pulldown",
+    "demo_pair": true
   },
   {
     "name": "Captain's Chair Leg Raise",
@@ -16389,9 +15952,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -16458,9 +16018,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -16480,7 +16037,9 @@
     "standard_swap": "Sit-Up",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "id": "E249"
+    "id": "E249",
+    "demo_slug": "v-up",
+    "demo_pair": true
   },
   {
     "name": "Flutter Kicks",
@@ -16529,9 +16088,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -16551,7 +16107,9 @@
     "standard_swap": "Plank",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "id": "E250"
+    "id": "E250",
+    "demo_slug": "flutter-kick",
+    "demo_pair": true
   },
   {
     "name": "Side Plank",
@@ -16603,9 +16161,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "Exercise science",
-    "image_start_url": "PENDING",
-    "image_end_url": "PENDING",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -16626,7 +16181,9 @@
     "standard_swap": "Plank",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "id": "E251"
+    "id": "E251",
+    "demo_slug": "side-plank",
+    "demo_pair": false
   },
   {
     "id": "E252",
@@ -16677,9 +16234,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -16698,7 +16252,9 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "30-60s"
+    "rep_range": "30-60s",
+    "demo_slug": "wall-sit",
+    "demo_pair": false
   },
   {
     "id": "E253",
@@ -16750,9 +16306,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -16825,9 +16378,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -16899,9 +16449,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
@@ -16922,7 +16469,9 @@
     ],
     "standard_swap": "Inverted Row",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "towel-row",
+    "demo_pair": true
   },
   {
     "id": "E256",
@@ -16975,9 +16524,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -16996,7 +16542,9 @@
     ],
     "standard_swap": "Pull Up",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "demo_slug": "negative-pull-up",
+    "demo_pair": true
   },
   {
     "id": "E257",
@@ -17048,9 +16596,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17070,7 +16615,9 @@
     ],
     "standard_swap": "Hip Thrust",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "donkey-kick",
+    "demo_pair": true
   },
   {
     "id": "E258",
@@ -17121,9 +16668,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17194,9 +16738,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17270,9 +16811,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17290,7 +16828,9 @@
     ],
     "standard_swap": "Incline Barbell Bench Press",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "incline-dumbbell-press",
+    "demo_pair": true
   },
   {
     "id": "E261",
@@ -17342,9 +16882,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [],
@@ -17361,7 +16898,9 @@
     ],
     "standard_swap": "Reverse Fly",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "prone-t-raise",
+    "demo_pair": true
   },
   {
     "id": "E262",
@@ -17414,9 +16953,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17436,7 +16972,9 @@
     ],
     "standard_swap": "Pike Push Up",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "feet-elevated-pike-push-up",
+    "demo_pair": true
   },
   {
     "id": "E263",
@@ -17489,9 +17027,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17510,7 +17045,9 @@
     ],
     "standard_swap": "Bodyweight Rear Delt Raise",
     "priority_tier": 1,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "reverse-snow-angel",
+    "demo_pair": true
   },
   {
     "id": "E264",
@@ -17563,9 +17100,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17638,9 +17172,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17712,9 +17243,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17787,9 +17315,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17861,9 +17386,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -17935,9 +17457,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18008,9 +17527,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18083,9 +17599,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18158,9 +17671,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18180,7 +17690,9 @@
     ],
     "standard_swap": "Bodyweight Rear Delt Raise",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "prone-y-raise",
+    "demo_pair": true
   },
   {
     "id": "E273",
@@ -18232,9 +17744,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18306,9 +17815,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18327,7 +17833,9 @@
     ],
     "standard_swap": "Prone Reverse Snow Angel",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "demo_slug": "prone-t-raise",
+    "demo_pair": true
   },
   {
     "id": "E275",
@@ -18380,9 +17888,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18402,7 +17907,9 @@
     ],
     "standard_swap": "Table Row",
     "priority_tier": 2,
-    "rep_range": "20-30s"
+    "rep_range": "20-30s",
+    "demo_slug": "doorway-row",
+    "demo_pair": false
   },
   {
     "id": "E276",
@@ -18455,9 +17962,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18529,9 +18033,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18603,9 +18104,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18677,9 +18175,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18750,9 +18245,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18823,9 +18315,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18896,9 +18385,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -18970,9 +18456,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19044,9 +18527,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19119,9 +18599,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19194,9 +18671,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19268,9 +18742,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19342,9 +18813,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19416,9 +18884,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19490,9 +18955,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19564,9 +19026,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19586,7 +19045,9 @@
     ],
     "standard_swap": "Bodyweight Good Morning",
     "priority_tier": 1,
-    "rep_range": "10-15"
+    "rep_range": "10-15",
+    "demo_slug": "single-leg-glute-bridge",
+    "demo_pair": true
   },
   {
     "id": "E292",
@@ -19639,9 +19100,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19662,7 +19120,9 @@
     ],
     "standard_swap": "Nordic Curl",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "demo_slug": "towel-hamstring-curl",
+    "demo_pair": true
   },
   {
     "id": "E293",
@@ -19715,9 +19175,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
@@ -19790,9 +19247,6 @@
     "is_indian_context": false,
     "indian_alternative": "",
     "source": "",
-    "image_start_url": "",
-    "image_end_url": "",
-    "gif_url": "PENDING",
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [

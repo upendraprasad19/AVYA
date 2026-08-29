@@ -11,16 +11,27 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+// 38 - 3 dead image URL fields (image_start_url / image_end_url / gif_url,
+// removed by the exercise-plates batch: every populated URL 404'd and the only
+// reader was a copy-through in swap_service that nothing rendered) = 35 keys
+// REQUIRED on every row.
 const _canonicalKeys = <String>{
   'id', 'name', 'category', 'movement_pattern', 'exercise_type', 'primary_muscles',
   'secondary_muscles', 'equipment_needed', 'logging_type', 'difficulty_level',
   'suitable_for', 'default_sets', 'default_reps', 'default_rest_secs', 'tempo',
   'met_value', 'cal_per_set_est', 'breathing_cue', 'coaching_cues', 'common_mistakes',
   'warmup_protocol', 'pro_tip', 'is_indian_context', 'indian_alternative', 'source',
-  'image_start_url', 'image_end_url', 'gif_url', 'is_active', 'is_foundational',
+  'is_active', 'is_foundational',
   'injury_contraindications', 'is_bilateral', 'cns_demand', 'target_focus',
   'equipment_tier', 'standard_swap', 'priority_tier', 'rep_range',
 };
+
+// Exercise plates (library v11): present on the 165 rows that have a drawing,
+// absent on the other 127. They CANNOT join _canonicalKeys -- `missing` would
+// then fire on every artwork-less row -- and they cannot simply be ignored
+// either, or a typo'd key would slip through `extra`. Hence a second set, and a
+// union on the `extra` side only.
+const _optionalKeys = <String>{'demo_slug', 'demo_pair'};
 
 void main() {
   final rows = (jsonDecode(
@@ -28,22 +39,37 @@ void main() {
   ) as List).cast<Map<String, dynamic>>();
 
   group('exercise_library schema contract (Batch 13-A D-1)', () {
-    test('the canonical schema is exactly 38 keys', () {
-      expect(_canonicalKeys.length, 38);
+    test('the canonical schema is 35 required keys plus 2 optional', () {
+      expect(_canonicalKeys.length, 35);
+      expect(_optionalKeys.length, 2);
+      expect(_canonicalKeys.intersection(_optionalKeys), isEmpty);
     });
 
-    test('every row carries EXACTLY the 38 canonical keys (blocks stub-shaped rows)', () {
+    test('every row carries EXACTLY the 35 required keys and nothing outside '
+        'the union with the optional two (blocks stub-shaped rows)', () {
       final offenders = <String>[];
+      final allowed = _canonicalKeys.union(_optionalKeys);
       for (final r in rows) {
         final keys = r.keys.toSet();
         final missing = _canonicalKeys.difference(keys);
-        final extra = keys.difference(_canonicalKeys);
+        final extra = keys.difference(allowed);
         if (missing.isNotEmpty || extra.isNotEmpty) {
           offenders.add('${r['id']}: missing=$missing extra=$extra');
         }
       }
       expect(offenders, isEmpty,
-          reason: 'Rows deviating from the 38-key canonical schema:\n${offenders.join('\n')}');
+          reason: 'Rows deviating from the 35-key canonical schema:\n${offenders.join('\n')}');
+    });
+
+    test('demo_slug and demo_pair travel together, on exactly 165 rows', () {
+      // The pair is what the asset pipeline and the resolver both key on; one
+      // without the other is a half-written row, not a valid state.
+      final lonely = rows
+          .where((r) => r.containsKey('demo_slug') != r.containsKey('demo_pair'))
+          .map((r) => r['id'])
+          .toList();
+      expect(lonely, isEmpty, reason: 'rows with one plate key but not the other: $lonely');
+      expect(rows.where((r) => r.containsKey('demo_slug')).length, 165);
     });
 
     test('no row is MISSING a List injury_contraindications (the E252 live hole)', () {
