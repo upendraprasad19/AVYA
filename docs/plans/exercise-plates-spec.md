@@ -209,6 +209,58 @@ order equals without inventing matches.
 creator, licence URL and Everkinetic source for every asset, so the credit surface can be
 generated rather than hand-written.
 
+### ...and then stop scoring altogether
+
+The manifest gate fixed equipment. It could not fix **movement**, and no threshold can.
+`Towel Hammer Curl` (biceps) kept matching `towel-hamstring-curl` (legs) on the shared words
+*towel* and *curl*. `Cable Tricep Kickback` (triceps) matched `cable-kickback`, a glute
+exercise. Four rounds of tuning failed, each costing founder review time.
+
+WARNING: **the `muscle differs` signal is NOISE, and this measurement settles it.** It fired on
+**54 of 124** automatic matches - every one a perfect 1.00 name hit (`Chest Dip -> chest-dip`,
+`Deadlift -> deadlift`, `Burpee -> burpee`). Our `primary_muscles` and the catalogue's
+`primaryMuscle` are different taxonomies, so a hard muscle gate would have rejected 54 correct
+drawings. **Do not re-propose one.**
+
+**What replaced it.** Each of the 292 exercises was judged against the whole 302-drawing
+catalogue *by movement*, with the manifest as evidence, then every accepted match was attacked
+by an independent adversarial reviewer instructed to default to rejection. Scripts:
+`gen_adjudicate.js` -> `adjudicate.js`, run `wf_73877b1f-0fd`; and `gen_pass2.js` -> `pass2.js`,
+run `wf_7d3962a5-6cd`. 22 + 8 agents, 0 errors.
+
+Against the string matcher over the same 292: **21 wrong drawings it would have shipped, 20
+matches it missed, 10 where it picked a worse slug** - 51 corrections. It found
+`Dand (Hindu Pushup) -> hindu-push-up`, one of the Indian-traditional set that name matching had
+consigned to the shoot list. It caught `Reverse Wrist Curl -> reverse-curl`, *a biceps
+exercise*, and replaced it with `wrist-extension`.
+
+WARNING: **two token-economy rules, both founder-directed and both load-bearing.** Refute only
+`confidence !== 'high'` - attacking `bench-press -> bench-press` re-confirms a tautology and
+costs nothing but tokens. And do not fan every batch out at once: a stopped run's completed
+agents replay **free** via `resumeFromRunId`.
+
+### The split rule - founder, 2026-08-29
+
+When the catalogue depicts **the same movement with different equipment**, do not reject the
+drawing and do not rename our exercise. **Keep ours exactly as it is** - same name, same
+`equipment_needed`, same `exlog_*` history, and it joins the photograph list - and **add a new
+exercise named for the equipment shown**, which takes the drawing.
+
+`Sumo Squat` stays bodyweight and unillustrated; `Dumbbell Sumo Squat` is new and takes
+`dumbbell-sumo-squat`. Both tiers end up served.
+
+WARNING: **renaming the existing row instead would orphan history.** `schedule_*` rows store the
+exercise NAME and the `exlog_*` key hashes it (`lib/features/train/CLAUDE.md`,
+`exercise_logs_read_path`). The rule's "keep ours" half is not a preference - it is what makes
+the pattern safe.
+
+WARNING: **the rule has a cost that must be designed for.** The bodyweight rows are already
+tiered into `home_dumbbells` / `basic_gym` / `full_gym`, so a dumbbell user would see **both**
+rows of every split pair - the same movement twice in the selection pool, drawing double the
+slot probability of its neighbours. That is exactly OI-146's defect, reproduced deliberately 23
+times. **The 23 new rows must not ship until that is answered**, which is one more reason they
+belong to OI-145 rather than here.
+
 ---
 
 ## Placement
@@ -303,9 +355,10 @@ deflate ratio **0.41**.
 
 | set | exercises | plate files | raw | in-APK |
 |---|---|---|---|---|
-| mapped today | 124 | 219 | 5.8 MB | **2.4 MB** |
-| plus the review set | 181 | 323 | 8.5 MB | **3.5 MB** |
-| full 292 coverage | 292 | 509 | 13.4 MB | **5.5 MB** |
+| **this batch ships** | **165** | **293** | 7.7 MB | **3.2 MB** |
+| at full coverage, all 291 | 291 | 507 | 13.3 MB | **5.5 MB** |
+
+The shipping set is 128 two-image and 37 single-image plates.
 
 ⚠ `pubspec.yaml:129` declares assets **per directory**, so `assets/exercise_plates/` needs a new
 entry — and `pubspec.yaml` is pinned `platform` in `docs/blast_radius.yaml:324`. **That single
@@ -371,13 +424,60 @@ the lighter single-round build tier does not apply.
 
 ---
 
-## Inputs still open
+## What is settled, and what is parked
 
-1. **The 57-row name→slug review** — live at the review artifact. 124 map automatically, 57
-   need a human eye, 111 have no usable drawing. This is the only genuinely manual step, and
-   the spec does not depend on its *answers*, only on its existence.
-2. **The 111 self-shot pairs.** The monogram covers them from day one and the pipeline takes
-   them as a data change plus a `_exerciseLibraryVersion` bump — no code change. Shooting
-   guidance: plain evenly-lit wall, stand a metre off it, high contrast, fitted clothing,
-   side-on to match the drawings' convention, and **the phone must not move between the start
-   and end shots** — the union crop depends on a shared frame.
+**Nothing is waiting on the founder.** The mapping is closed.
+
+| | |
+|---|---|
+| exercises shipping with a drawing | **165** |
+| exercises awaiting a founder photograph | **126** |
+| exercises still needing a human decision | **0** |
+| removed at founder request | 1 - Donkey Calf Raise, *"not feasible generally"*, 0 references in `lib/` |
+
+**Founder decisions, in effect:**
+
+- `Barbell Curl` -> renamed **EZ Bar Curl**, takes `ez-bar-curl`. Our `equipment_needed` was
+  already `ez-bar`, so the NAME was the error and the drawing was right.
+- `Dumbbell Shoulder Press` -> takes `standing-dumbbell-press`; **Seated Dumbbell Shoulder
+  Press** is added for `seated-dumbbell-press`. Two drawings exist, so two exercises.
+- `Sumo Squat`, `Captain's Chair Leg Raise`, `Thoracic Rotation`, `Standing Toe Touch` and
+  `Kas Glute Bridge` all keep their names and join the photograph list.
+- `Thoracic Rotation` also yields **Weighted Russian Twist**, taking `weighted-russian-twist` -
+  a drawing the name matcher never surfaced because the two names share no words, and which
+  `torso-twist-stretch` (`isStretch: true`, unloaded) could never have depicted.
+
+**Parked, each with an owner - none of it blocks this batch:**
+
+- **126 photographs** - the founder's camera. The monogram covers them from day one and they
+  arrive later as a data change plus an `_exerciseLibraryVersion` bump, no code. Shooting
+  guidance: plain evenly-lit wall, a metre off it, high contrast, fitted clothing, side-on, and
+  **the phone must not move between the start and end shots** - the union crop depends on a
+  shared frame.
+- **23 new exercises**, each with its drawing already identified - **OI-145**. They need the
+  full metadata row, and the selection-skew question above must be answered first.
+- **Eight duplicate exercise pairs** - **OI-146**, widened 2026-08-29 from three.
+
+### What photographs can and cannot become
+
+Tested on a real upload, four treatments, rendered against a catalogue drawing at both sizes.
+
+- **Automatic tracing does not work, and a better photograph would not fix it.** The
+  information in these drawings is *interior* - where the hands are planted, that the arms are
+  locked, that the limbs are separate. A silhouette discards it; a handstand becomes a tapering
+  spike. Edge detection finds clothing seams, not anatomy.
+- **A gold-duotone photograph reads well at plate size and collapses at 44 px**, which is
+  exactly where the badge-becomes-plate placement puts it. Keep the background rather than
+  cutting out - the cut-out depends on a segmentation mask being right, and it was not.
+- **A generated line drawing is the most promising route** and enters the pipeline cleanly: the
+  gold-on-navy separates on a warmth-plus-luma test, no segmentation needed. Caveats: it is
+  raster not vector, its line is lighter than the catalogue's, and anything generated *from* a
+  photograph inherits that photograph's copyright. Generate from a text description of the
+  movement instead.
+
+### One implementation detail the tooling already learned
+
+Uploaded photographs must be keyed on the **exercise id**, never on a position in a list. Keyed
+positionally, a rebuild of the shoot list silently reattaches a photograph to whatever exercise
+now sits at that index - observed live when one upload moved from `n004` to `n015` between two
+rebuilds of the same page.
