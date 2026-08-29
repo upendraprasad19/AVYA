@@ -55,7 +55,7 @@ verdict: pending  # → accepted | rejected (after founder triage)
 <filled in by founder during triage>
 ```
 
-## 2. Lens set (6 lenses, fast)
+## 2. Lens set (7 lenses, fast)
 
 Each lens has a focused prompt the dispatched agent runs against the staged diff:
 
@@ -70,6 +70,27 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    - **Mutate the way a real regression re-enters**, not the way that is convenient to write. The escapes that mattered were "someone restores the old line in place" and "someone types it slightly differently" — not "delete it" or "move it somewhere absurd", which is what the author had tested.
    - **FOLLOW THE RETURN VALUE TO ITS CALL SITE.** A guard can be perfectly correct and still be defeated by the code that consumes it. Added 2026-08-17 after two independent review rounds each fixed this file's escape-hatch predicate — correctly — and both stopped at the predicate; the B-pass then found that the CALLER reduced the per-statement result to one command-wide boolean, re-opening the exact hole both rounds had just closed. **A predicate that returns `bool` cannot carry a binding it just established** — that shape is the tell, and it is visible without running anything. Ask: what does the caller do with this, and does the answer still mean what the function meant?
    - **If the guard is a SOURCE GREP, assume it is defeatable and try indirection** — a helper function, a variable-built argument, an alias, `eval`. A grep is bounded by what its author could imagine writing, so tightening the pattern never converges. The finding is not "the regex is wrong", it is "this needs a runtime test that observes the behaviour". Check whether one is feasible before accepting a grep: hooks and scripts can usually be run with the expensive dependency stubbed on `PATH`, and an early-abort stub keeps it fast.
+
+7. **out_of_repo_dependency** — for every path, package, or asset the diff reads from OUTSIDE the
+   repo — a vendored directory, an npm/pub package's internals, a generated tree, a downloaded
+   catalogue — prove **two separate things**: that it EXISTS where the code looks, and that it has
+   the SHAPE the code assumes. They fail independently, and the second is the one that survives
+   review, because a plausible path reads as a checked one.
+   **Method:** `find` / `ls` the literal path, then read one real file out of it and confirm the
+   field, extension, or key the code indexes on is actually there. Never reason from the name.
+   **Source (2026-08-29, plate pipeline, caught in self-review before dispatch):** a build script
+   read `<src>/<slug>/frame-N.png` to measure an image's bounds. The vendored catalogue was in the
+   repo **nowhere** — a session-temp directory held 94 samples, not the 906-frame source — and
+   upstream ships **SVG only**: all 906 frames in its own manifest are `"format": "svg"`, so the
+   PNG could not have existed even had the tree been present. Two independent fatal assumptions in
+   one line, both invisible to any amount of re-reading, both answered by one `find`.
+   **The tell:** a path assembled from a variable and a literal (`os.path.join(SRC, slug, "frame-%s.png")`)
+   where nothing upstream of it ever listed the directory. Ask what would happen on the *first*
+   iteration, and whether anything in the diff would say so out loud.
+   **Also check the fallback:** a default like `SRC = sys.argv[1] if len(sys.argv) > 1 else "<some/path>"`
+   encodes a guess as a default. If the guess is wrong the tool runs against nothing, and a
+   zero-file result must be a hard stop rather than a quiet success — otherwise this lens's failure
+   mode is a green run that produced no output.
 
 ## 3. Dispatch protocol
 
@@ -125,6 +146,14 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 ## 7. Tuning history
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
+
+- **2026-08-29** — blast-radius **platform** — branch `exercise-plates` (plan-stage, no code yet).
+  **Tuning only; no invocation.** Added lens 7 `out_of_repo_dependency` after a plan self-review
+  found a build script reading `frame-N.png` from a vendored catalogue that (a) was not in the repo
+  at all and (b) ships SVG exclusively — 906 of 906 frames `"format": "svg"`. Neither failure is
+  visible by reading the code; both fall out of one `find`. Logged here rather than waiting for the
+  B-pass because the existing six lenses all look INSIDE the diff, and this class is the one that
+  lives outside it — no lens would have asked the question.
 
 - **2026-08-28** — blast-radius **platform** — branch `oi89-bodyweight-floor` @ `1f817e2f` (11 commits, OI-89 equipment capability floor). **3 findings (0 P0, 2 P1, 1 P2); 0 false_alarm.** 2 fixed in-batch, 1 recorded as residual. Review: `docs/reviews/oi89-bodyweight-floor-bpass.md`.
   ⚠ **Method deviation, and it must be read alongside the findings:** the pass was run
