@@ -4402,4 +4402,27 @@ OI-136, OI-132.
   `exercise_logs_read_path`.
 - **Found by**: the founder, eyeballing the plate-assignment review — his note on
   Captain's Chair Leg Raise read "this is same as knee raise. duplicate", which prompted the audit.
-- **Related**: `docs/plans/exercise-plates-spec.md`, OI-145.
+
+### WIDENED 2026-08-29 — it is EIGHT pairs, not three
+
+The original audit compared names to names. A second audit, run because the founder said
+"there were repetitions again" for the third time, compared them **by the drawing each one
+claims** — two library rows fighting over one catalogue drawing is the same duplicate, found
+by a different route. That surfaced five more:
+
+| pair | why the name audit missed it |
+|---|---|
+| E?? `V-Up` / `V-Ups` | plural only — normalised the same, but they are two rows |
+| `Hip Abduction Machine` / `Hip Abductor Machine` | one letter |
+| `Standing Quad Stretch` / `Quad Stretch` | one is a prefix of the other |
+| `Battle Ropes` / `Battle Rope Wave` | different word count |
+| `Overhead Tricep Cable Extension` / `Overhead Cable Extension` | one word dropped |
+
+⚠ **The lesson for the next audit is the method, not the count.** Name-normalisation and
+drawing-claim-collision find DIFFERENT duplicates, and neither is a superset of the other. Run
+both. The claim-collision audit is only possible because the plates work assigns a drawing per
+exercise — before that, these five were invisible to any check in the repo.
+
+- **Related**: `docs/plans/exercise-plates-spec.md`, OI-145, and
+  `memory/feedback_green_check_input_set_width.md` (the check whose input set was too narrow —
+  it compared contested-vs-proposed and never looked at the confirmed tier).
