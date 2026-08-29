@@ -557,8 +557,24 @@ extension _ProfileContent on _ProfileScreenState {
                   title: 'Export My Data',
                   subtitle: 'Download all your data as JSON',
                   trailing: const ProfileRowChevron(),
-                  showBorder: false,
                   onTap: () => _exportData(),
+                ),
+                // The exercise plate drawings are CC BY-SA 4.0. The licence
+                // requires attribution to reach the recipient, so it needs a
+                // surface in the app, not only a file in the repo.
+                ProfileRow(
+                  icon: Icons.workspace_premium_outlined,
+                  title: 'Credits & Licences',
+                  subtitle: 'Artwork and open-source attributions',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: () => showLicensePage(
+                    context: context,
+                    applicationName: 'ICANBEFITTER',
+                    applicationLegalese:
+                        'Exercise artwork CC BY-SA 4.0 — workout-guide '
+                        '(Bryl Lim), traced from Everkinetic.',
+                  ),
                 ),
               ]),
               const SizedBox(height: 12),
