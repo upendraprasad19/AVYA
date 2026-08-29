@@ -432,27 +432,17 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                           onLongPress: widget.onLongPressHeader,
                           child: Row(
                             children: [
-                              // Number badge circle
-                              Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: widget.isActive
-                                      ? AppColors.accentSoft
-                                      : AppColors.bgRaise,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '${widget.exerciseIndex + 1}',
-                                    style: AppTypography.monoXs.copyWith(
-                                      color: widget.isActive
-                                          ? AppColors.accent
-                                          : AppColors.textDim,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ),
+                              // The plate: what this movement LOOKS like. It
+                              // replaces a number badge that carried almost
+                              // nothing — position in a vertical list is
+                              // already obvious — so the header row gains no
+                              // element. 44 px is also the minimum touch
+                              // target, up from 24.
+                              ExercisePlateThumb(
+                                exerciseName: widget.exercise.name,
+                                size: 44,
+                                onTap: () => ExercisePlateSheet.show(
+                                    context, widget.exercise.name),
                               ),
                               const SizedBox(width: 10),
 

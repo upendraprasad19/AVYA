@@ -227,6 +227,10 @@ Two non-`Ward`-prefixed exports (legacy, scheduled for rename): `RankChip` and `
 
 ## 8. Reserved domain glossary
 
+| `demo_slug` | Library field. The upstream workout-guide slug whose drawing depicts this exercise, or absent when there is none. Names an ASSET, never a path — the resolver builds `assets/exercise_plates/<demo_slug>-{1,3}.svg`. 165 of 292 rows carry one, over 153 distinct slugs (12 drawings are shared by two exercises each). |
+| `demo_pair` | Library field, travels WITH `demo_slug`. `true` when the movement cycles between two positions and renders START + END; `false` for a static hold, which renders one plate. It lives in the data, not in Dart, because the Python asset pipeline reads the same decision to choose union-crop vs own-bounds. |
+
+
 Every term that has SPECIFIC meaning in this app. New features that use any of these terms must use them with the meaning below — never overload.
 
 | Term | Meaning | What it is NOT |

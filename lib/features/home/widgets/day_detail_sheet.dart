@@ -8,6 +8,8 @@ import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
 
 /// Bottom sheet showing workout details for a tapped calendar day.
 ///
@@ -213,7 +215,7 @@ class DayDetailSheet extends StatelessWidget {
       shrinkWrap: true,
       itemCount: exercises.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (_, index) {
+      itemBuilder: (ctx, index) {
         final exercise = exercises[index];
         final Map<String, dynamic> ex;
         if (exercise is Map) {
@@ -243,22 +245,11 @@ class DayDetailSheet extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              // Exercise index
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: AppColors.accentSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.sharp),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '${index + 1}',
-                  style: AppTypography.mono.copyWith(
-                    color: AppColors.accent,
-                    letterSpacing: 1,
-                  ),
-                ),
+              // The plate replaces the index badge — see exercise_card.dart.
+              ExercisePlateThumb(
+                exerciseName: name,
+                size: 44,
+                onTap: () => ExercisePlateSheet.show(ctx, name),
               ),
               const SizedBox(width: 10),
               // Name + details

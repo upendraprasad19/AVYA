@@ -71,7 +71,7 @@ class ExercisePlateSheet extends StatelessWidget {
                 semanticsLabel: '$name, $caption position',
                 colorFilter:
                     const ColorFilter.mode(AppColors.accent, BlendMode.srcIn),
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     ExerciseMonogram(name: name, size: 64),
               ),
             ),

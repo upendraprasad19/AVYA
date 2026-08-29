@@ -120,7 +120,7 @@ concepts:
         semantic: display-only
         fields_read: [receiptData.exercises, totalVolumeKg, totalSets, prs, sessionLabel, workoutName, tagline]
       - file: lib/features/home/widgets/day_detail_sheet.dart
-        line_range: 457-475
+        line_range: 452-470
         method: _hasExerciseLogsForDate (OI-05 cheap probe)
         semantic: flag-check
         fields_read: [exercise_log_index_<istDate>, date]
@@ -253,7 +253,7 @@ concepts:
         semantic: pass-through
         fields_read: [routes through EditWorkoutLogSheet.show(day.date!)]
       - file: lib/features/home/widgets/day_detail_sheet.dart
-        line_range: 457-475
+        line_range: 452-470
         method: _hasExerciseLogsForDate
         semantic: flag-check
         fields_read: [date, exercise_log_index_<istDate>]
@@ -341,7 +341,7 @@ concepts:
         semantic: pass-through
         fields_read: [via WorkoutRepository.getExerciseLogsForDate(day.date!)]
       - file: lib/features/home/widgets/day_detail_sheet.dart
-        line_range: 457-475
+        line_range: 452-470
         method: _hasExerciseLogsForDate
         semantic: flag-check
         fields_read: [exercise_log_index_<istDate>]
@@ -1356,7 +1356,7 @@ concepts:
         fields_read: [weight_kg, reps, duration_sec, duration_seconds, distance_km]
         notes: Dual-name reader added Test #15.3 Bug 4c.
       - file: lib/features/home/widgets/day_detail_sheet.dart
-        line_range: 457-475
+        line_range: 452-470
         method: _hasExerciseLogsForDate
         semantic: flag-check
         fields_read: [date]
@@ -2922,7 +2922,7 @@ concepts:
         fields_read: [is_pr, exercise_name]
         notes: Receipt scans exlog_* rows and includes PR-badged exercises in the receipt PNG.
       - file: lib/features/home/widgets/day_detail_sheet.dart
-        line_range: 457-475
+        line_range: 452-470
         method: _hasExerciseLogsForDate (probe)
         semantic: flag-check
         fields_read: [date]
@@ -9769,3 +9769,48 @@ concepts:
     class_constraints: |
       Re-verify BOTH the implicit-fragment and PKCE query shapes against a
       live link after any supabase_flutter upgrade.
+
+  - concept: exercise_plate_read_path
+    domain: workout
+    behavioral_test_path: test/contracts/exercise_plate_resolver_test.dart
+    contract_test_path: test/contracts/exercise_plate_assets_present_test.dart
+    description: |
+      Exercise plates. WRITER: `assets/data/exercise_library.json` - `demo_slug`
+      (nullable, 165 populated) and `demo_pair` (nullable bool, the plate SHAPE),
+      both sourced from `docs/plans/exercise-plates-mapping.json`. Delivered to
+      existing installs ONLY by `_exerciseLibraryVersion`: seed_service re-seeds
+      iff stored < constant, so a bump is the only thing that ships a new field.
+
+      READER: `resolvePlate()` in `plate_resolver.dart`, the SOLE entry point.
+      Keys on EXACT name (`getByExactName` - never `search`, which is substring:
+      "Push Up" would resolve to "Pike Push Up"). Reads both fields with
+      `is String` / `== true`, never a cast, because this box also holds
+      community rows written from Postgres (`sync_community.dart:502`).
+
+      WARNING: `demo_pair` is in the DATA deliberately. It is read by BOTH the
+      Dart renderer and the Python asset pipeline
+      (`scripts/build_exercise_plates.py`), which crops a pair to the union of
+      both frames and a hold to frame 1's own bounds. Moving it into a Dart
+      constant re-creates a cross-language drift with no gate.
+
+      WARNING: 165 exercises share 153 slugs - a per-exercise count and a
+      per-slug count are different numbers. 292 SVGs ship (139 pair x2 + 14).
+
+      WARNING: an artwork-less row carries NEITHER key. A `demo_slug: null`
+      would read as present to the schema contract's exact key match.
+
+      WARNING: `equipment_tier` is NOT consulted anywhere in this path.
+    writers:
+      - file: assets/data/exercise_library.json
+        line_range: 1-2
+        method: demo_slug + demo_pair fields
+      - file: lib/core/services/seed_service.dart
+        line_range: 97-97
+        method: _exerciseLibraryVersion
+    readers:
+      - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
+        line_range: 57-84
+        method: resolvePlate
+      - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
+        line_range: 93-100
+        method: build

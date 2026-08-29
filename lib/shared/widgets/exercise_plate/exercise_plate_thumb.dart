@@ -80,7 +80,7 @@ class _ExercisePlateThumbState extends State<ExercisePlateThumb> {
                 // frame permanently scheduled, which stalled the widget test
                 // for 6m35s and reported "did not complete" rather than a
                 // failure. Sized to the PADDED box so it fills the same square.
-                errorBuilder: (_, __, ___) => ExerciseMonogram(
+                errorBuilder: (_, _, _) => ExerciseMonogram(
                     name: widget.exerciseName, size: widget.size * 0.88),
               ),
             ),
