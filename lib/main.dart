@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
@@ -116,6 +117,19 @@ Future<void> main() async {
       // Non-web or Uri parsing failure — no recovery detection needed.
     }
   }
+
+  // CC BY-SA 4.0 requires attribution to reach the RECIPIENT of the work. The
+  // exercise plate artwork is adapted from workout-guide (Bryl Lim), itself
+  // traced from Everkinetic. A repo-side ATTRIBUTION.md ships nothing to a
+  // user; registering here feeds Flutter's own showLicensePage, which the
+  // Profile tab opens.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      const ['Exercise plate artwork'],
+      await rootBundle
+          .loadString('assets/exercise_plates/LICENSE-CC-BY-SA-4.0.txt'),
+    );
+  });
 
   await runZonedGuarded(
     () async {

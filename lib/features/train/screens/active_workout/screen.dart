@@ -8,6 +8,8 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../providers/train_provider.dart';
 import '../../services/active_workout_persistence.dart';

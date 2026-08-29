@@ -187,3 +187,7 @@ test/goldens/**/failures/
 # everyone else at that sha. Kill switch lives beside it.
 .claude/.batch_close_state
 .claude/.batch_close.disabled
+
+# Upstream plate artwork — cloned by scripts/build_exercise_plates.py.
+# Only the cropped output under assets/exercise_plates/ is committed.
+/vendor/

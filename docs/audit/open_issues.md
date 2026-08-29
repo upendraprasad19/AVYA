@@ -4328,3 +4328,225 @@ OI-136, OI-132.
 - **Related**: OI-89 (this is its residual), `enable_equipment_exclusions` in
   `plan_engine_flags.dart` (the precedent for the class),
   `docs/plan-reviews/oi89-bodyweight-floor.md`.
+
+---
+
+## OI-145 — 34 licence-clean drawings depict bodyweight exercises the library does not have (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. It needs the per-exercise authoring that OI-89 did for its 33
+  rows, and its own spec + review — it must not ride along inside another batch.
+- **Verified**: 2026-08-29 — the 302-entry manifest of `github.com/bryllim/workout-guide` was
+  matched against all 292 library rows; 68 drawings have no library equivalent, 34 of them in the
+  bodyweight family. 30 of the 34 were then probed by name against `exercise_library.json`
+  individually and none exists.
+
+- **What it is**: the exercise-plates work (branch `exercise-plates`,
+  `docs/plans/exercise-plates-spec.md`) adopts that drawing catalogue under CC BY-SA 4.0. The
+  catalogue is larger than our library in exactly the place ours is thinnest. These 34 arrive with
+  artwork already licensed and already downloaded — the only cost is authoring the row.
+- **Why it matters**: OI-89 established the bodyweight tier as a HARD floor, and its own residual
+  records that some bodyweight patterns have a single candidate. Glute isolation at the bodyweight
+  tier is the sharpest gap and the catalogue has six for it.
+- **The 34, grouped**:
+  - glutes, bodyweight: `clamshell`, `fire-hydrant`, `donkey-kick`, `side-lying-hip-abduction`,
+    `side-lying-leg-raise`, `hip-airplane`
+  - posterior chain: `bird-dog`, `superman`, `superman-hold`, `back-extension`,
+    `glute-focused-back-extension`, `lying-hamstring-walkout`
+  - knee-dominant: `bodyweight-squat`, `cossack-squat`, `shrimp-squat`, `forward-lunge`,
+    `step-down`, `single-leg-calf-raise`
+  - core: `hollow-rock`, `heel-tap`, `plank-shoulder-tap`, `seated-knee-tuck`, `squat-thrust`
+  - household kit: `chair-dip`, `wall-walk`, `stability-ball-hamstring-curl`
+  - conditioning: `skater-hop`, `lateral-shuffle`, `fast-feet`, `sprawl`, `seal-jack`
+  - flexibility: `seated-forward-fold-stretch`, `butterfly-stretch`
+  - triceps: `weighted-dip`
+- **Why it is NOT part of the plates batch**: a new row is not a name and a picture. Each needs
+  `coaching_cues`, `common_mistakes`, `breathing_cue`, `movement_pattern`, `equipment_tier`,
+  `rep_range`, `priority_tier` and injury tags, or it degrades the generator rather than helping
+  it. 34 such rows would make the plates batch un-reviewable. Founder agreed 2026-08-29.
+- **Cheap when it happens**: each lands with its `demo_slug` already known, so it gets a plate for
+  free on the same `_exerciseLibraryVersion` bump.
+- **Related**: OI-89 (the bodyweight floor and its single-candidate residual),
+  `docs/plans/exercise-plates-spec.md`.
+
+---
+
+## OI-146 — three duplicate exercise rows, two of them dead, one skewing selection (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing. Needs a decision on whether the flexibility twins are intentional.
+- **Verified**: 2026-08-29 — name-normalised (case, punctuation, word order) across all 292 rows of
+  `assets/data/exercise_library.json`, then each name grepped against `lib/` for live references.
+
+- **The three pairs**:
+
+  | dead row | live twin | reference count in `lib/` |
+  |---|---|---|
+  | E167 `Cross Body Shoulder Stretch` (flexibility) | E219 `Cross-body Shoulder Stretch` (cooldown) | 0 vs **5** |
+  | E168 `Doorway Chest Stretch` (flexibility) | E220 `Chest Doorway Stretch` (cooldown) | 0 vs **6** |
+  | E016 `Close Grip Bench Press` | E241 `Close-Grip Bench Press` | 0 vs 0 — see below |
+
+- **Why the first two are not symmetric**: `warmup_cooldown.dart` selects cool-downs from
+  HARDCODED name lists (`_cooldownStretches`, `warmup_cooldown.dart:142-146`), not from the
+  library `category`. Only the `cooldown`-category spelling is named there, so the
+  `flexibility`-category twin is unreachable through that path and duplicates a row that is live.
+- **Why E016/E241 is the worse one**: both are byte-identical in `category`, `logging_type`,
+  `equipment_needed` and `primary_muscles`, and neither is hardcoded anywhere — so BOTH sit in the
+  generator's selectable pool. That gives one exercise **double the selection probability** of
+  every neighbour in its slot, silently skewing variety. This is a selection-fairness bug, not
+  cosmetic.
+- **What to check before deleting anything**: whether a plan already generated for a live user
+  pins the dead spelling (`schedule_*` rows store the NAME), and whether
+  `exlog_*` history keyed on the dead name would orphan. The exlog key is
+  `exercise_name.hashCode`, so a rename is NOT free — see `lib/features/train/CLAUDE.md`
+  `exercise_logs_read_path`.
+- **Found by**: the founder, eyeballing the plate-assignment review — his note on
+  Captain's Chair Leg Raise read "this is same as knee raise. duplicate", which prompted the audit.
+
+### WIDENED 2026-08-29 — it is EIGHT pairs, not three
+
+The original audit compared names to names. A second audit, run because the founder said
+"there were repetitions again" for the third time, compared them **by the drawing each one
+claims** — two library rows fighting over one catalogue drawing is the same duplicate, found
+by a different route. That surfaced five more:
+
+| pair | why the name audit missed it |
+|---|---|
+| E?? `V-Up` / `V-Ups` | plural only — normalised the same, but they are two rows |
+| `Hip Abduction Machine` / `Hip Abductor Machine` | one letter |
+| `Standing Quad Stretch` / `Quad Stretch` | one is a prefix of the other |
+| `Battle Ropes` / `Battle Rope Wave` | different word count |
+| `Overhead Tricep Cable Extension` / `Overhead Cable Extension` | one word dropped |
+
+⚠ **The lesson for the next audit is the method, not the count.** Name-normalisation and
+drawing-claim-collision find DIFFERENT duplicates, and neither is a superset of the other. Run
+both. The claim-collision audit is only possible because the plates work assigns a drawing per
+exercise — before that, these five were invisible to any check in the repo.
+
+- **Related**: `docs/plans/exercise-plates-spec.md`, OI-145, and
+  `memory/feedback_green_check_input_set_width.md` (the check whose input set was too narrow —
+  it compared contested-vs-proposed and never looked at the confirmed tier).
+
+## OI-147 — remove Donkey Calf Raise: a one-row deletion that touches the cloud seed, a live apply, and the frozen generator baseline (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Needs the plan-generator question answered (below) before the row is removed, and a founder go for the live prod apply.
+- **Verified**: 2026-08-29 — every claim below re-derived from the named file in this worktree.
+
+**Founder decision (brainstorm, exercise-plates):** Donkey Calf Raise is *"not feasible generally"*
+and should leave the library. It carries no drawing, so it was originally bundled into the
+exercise-plates batch, which is where its real cost surfaced.
+
+**Split out of `exercise-plates` on 2026-08-29** after review round 2 returned `not converged`:
+three of that round's five blockers came from this one row removal and none of them from the
+plates feature. Removing it from that batch dissolved all three. This is a separable unit with its
+own blast radius, not a deferral — the plates work never touched any of these surfaces.
+
+**What a one-row deletion actually requires:**
+
+| # | Surface | Why it fires | Evidence |
+|---|---|---|---|
+| 1 | `test/contracts/exercise_library_schema_contract_test.dart:84-85` | asserts `rows.length == 292` and `ids.toSet().length == 292` | read 2026-08-29; the file has **five** tests, not four |
+| 2 | `test/contracts/exercise_library_cloud_seeded_test.dart` | asserts the newest seed migration's tuple count equals the bundled JSON row count | `125_reseed_exercise_library.sql` = **292** tuples, JSON = **292** rows. 291 turns it red |
+| 3 | `supabase/migrations/` | that test's own guidance is that a library change **mints the NEXT seed migration** rather than rewriting one | re-mint via `scripts/seed_exercise_library.js` |
+| 4 | `backups/applied_migrations.json` | §4.5 — a migration apply pairs with a ledger update in the same commit | |
+| 5 | **live prod apply** | §4.3 — needs its own explicit founder go, separate from plan approval | |
+| 6 | `test/plan_generator/baseline/baseline_plans.md:235` | the frozen baseline shows the generator **picking this row**: `\| Calves/knee_dominant \| Donkey Calf Raise \| attempt2DropSubFocus \| Calves \| bodyweight \|` | |
+| 7 | `test/plan_generator/scorecard_gate_test.dart` | 606-persona matrix with a hard fallback ceiling | |
+
+**⚠ The generator question, which must be answered BEFORE the row goes:**
+
+Donkey Calf Raise is the **only bodyweight-tier calf isolation row in the library**. Verified by
+scanning all 292 rows for a calf `primary_muscles` entry:
+
+| row | tiers |
+|---|---|
+| **Donkey Calf Raise** | `bodyweight`, `home_dumbbells`, `basic_gym`, `full_gym` |
+| Standing Calf Raise | `basic_gym`, `full_gym` — **not bodyweight** |
+| Seated Calf Raise | `full_gym` only |
+| Dumbbell Calf Raise | `home_dumbbells`+ — **not bodyweight** |
+
+The remaining bodyweight `knee_dominant` rows (Baithak, Jump Squat, Broad Jump) are `calisthenics`,
+not `isolation`. So removing this row leaves a bodyweight user with **no calf isolation option at
+all**, and the `Calves/knee_dominant` slot — already resolving at `attempt2DropSubFocus` — falls
+through to `attempt3DropTypeAndTarget`, which the baseline itself flags `⚠`.
+
+`fallback_by_tier.bodyweight` is already 1630 of a 2862 ceiling. One extra fallback pick makes
+2863 > 2862 and the suite goes red on `main`.
+
+**This is a prediction from mechanism and citation, NOT a measurement** — the 606-persona matrix
+has not been run against a 291-row library. Run it first:
+`flutter test test/plan_generator/scorecard_gate_test.dart` against the post-removal JSON.
+
+**Three ways it can end, all terminal:**
+1. The matrix does not move → remove the row, fix surfaces 1–5, done.
+2. The matrix moves → **add a replacement bodyweight calf isolation row in the same batch**
+   (the honest fix — the founder's objection is to this exercise, not to training calves), then
+   remove.
+3. Re-baseline with the attribution written into the comment, following the precedent at
+   `scorecard_gate_test.dart:114-141`. Weakest option; only if 1 and 2 both fail.
+
+**Until then** the row stays in the library and simply shows a monogram in the plates feature
+(127 monogram rows instead of 126). Nothing about plates depends on its removal.
+
+## OI-148 — 23 equipment-variant exercises the plate mapping surfaced, blocked on a selection-skew answer (P2)
+
+- **Status**: OPEN
+- **Blocked on**: the selection-skew question below. Not on artwork — every one of the 23 already has its drawing identified in `docs/plans/exercise-plates-mapping.json`'s source adjudication.
+- **Verified**: 2026-08-29 — each named row checked absent from all 292 rows of `assets/data/exercise_library.json`.
+
+**Split out of `exercise-plates`.** The plate adjudication found the catalogue depicts several
+movements we already carry, but **with different equipment** — a dumbbell sumo squat where ours is
+bodyweight, a seated dumbbell press where ours is standing. The spec's split rule says: keep our
+row exactly as it is (renaming orphans `exlog_*` history, which hashes the exercise NAME) and add a
+new row named for the equipment shown, which takes the drawing.
+
+⚠ **The spec attributes these to OI-145. That is the wrong issue.** `open_issues.md` scopes OI-145
+to *34 licence-clean drawings depicting bodyweight exercises the library does not have* —
+`clamshell`, `fire-hydrant`, `bird-dog` and so on. These 23 are equipment **variants of rows that
+already exist**, sharing none of those slugs. Naming a real-but-wrong OI reads as tracked and is
+worse than naming none.
+
+Confirmed absent from the library today: `EZ Bar Curl`, `Seated Dumbbell Shoulder Press`,
+`Weighted Russian Twist`, `Dumbbell Sumo Squat`.
+
+**⚠ The blocker, which is a product question and not a technical one:** the bodyweight rows are
+already tiered into `home_dumbbells` / `basic_gym` / `full_gym`, so a dumbbell user would see
+**both** rows of every split pair — the same movement twice in one selection pool, drawing double
+the slot probability of its neighbours. That is exactly OI-146's defect, reproduced deliberately 23
+times. Answer it before any of these ship.
+
+**Not blocking the plates feature.** `Barbell Curl` keeps its name and its `ez-bar-curl` drawing
+(founder, 2026-08-29), so nothing in the shipping 165 depends on this.
+
+## OI-149 — breathing_cue holds a bare number on 136 of 292 rows; the original text is unrecoverable (P2)
+
+- **Status**: OPEN
+- **Blocked on**: **the founder** — 136 replacement cues have to be authored, because the original
+  text exists nowhere. This is a copy-writing task, not an engineering one.
+- **Verified**: 2026-08-29 — counted, and the recovery paths exhausted (below).
+
+**The defect, measured:** exactly **136** of 292 rows match `^\d+(\.\d+)?$` in `breathing_cue`,
+and exactly **136** carry a null `met_value`. The intersection is 136 and neither side has a
+row the other lacks — a spreadsheet column shift dropped `met_value` into `breathing_cue` and left
+its own column empty. `met_value` is read nowhere in `lib/`, so only the breathing copy was lost.
+
+**Both recovery paths were checked and both are dead:**
+
+1. **The cloud seed migrations do not carry the field.** `074_seed_exercise_library.sql` and
+   `125_reseed_exercise_library.sql` insert **20 columns**, and `breathing_cue` is not among them —
+   `125`'s own header comment lists it under *"JSON-only fields"*.
+2. **Git history never had it.** All **19** revisions of `assets/data/exercise_library.json` back to
+   2026-04-14 carry `Lateral Raise` with `breathing_cue: "5"`. The shift predates the file's entry
+   into the repo, so `git show <rev>:` recovers nothing.
+
+**Shipped state after `exercise-plates`:** BOTH surfaces that render this field now suppress a
+numeric value rather than printing "BREATHING / 5" —
+`lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart` and
+`lib/features/train/screens/active_workout/coaching_content_panel.dart`, pinned together by
+`test/contracts/breathing_cue_numeric_suppressed_test.dart`. So the symptom is gone and 136
+exercises simply show no BREATHING section.
+
+⚠ **That makes this LESS likely to be noticed, not more** — which is exactly why it is filed rather
+than left to the guards. The fix is 136 lines of coaching copy.
+

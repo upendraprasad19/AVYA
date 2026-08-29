@@ -55,7 +55,7 @@ verdict: pending  # → accepted | rejected (after founder triage)
 <filled in by founder during triage>
 ```
 
-## 2. Lens set (6 lenses, fast)
+## 2. Lens set (8 lenses, fast)
 
 Each lens has a focused prompt the dispatched agent runs against the staged diff:
 
@@ -70,6 +70,70 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    - **Mutate the way a real regression re-enters**, not the way that is convenient to write. The escapes that mattered were "someone restores the old line in place" and "someone types it slightly differently" — not "delete it" or "move it somewhere absurd", which is what the author had tested.
    - **FOLLOW THE RETURN VALUE TO ITS CALL SITE.** A guard can be perfectly correct and still be defeated by the code that consumes it. Added 2026-08-17 after two independent review rounds each fixed this file's escape-hatch predicate — correctly — and both stopped at the predicate; the B-pass then found that the CALLER reduced the per-statement result to one command-wide boolean, re-opening the exact hole both rounds had just closed. **A predicate that returns `bool` cannot carry a binding it just established** — that shape is the tell, and it is visible without running anything. Ask: what does the caller do with this, and does the answer still mean what the function meant?
    - **If the guard is a SOURCE GREP, assume it is defeatable and try indirection** — a helper function, a variable-built argument, an alias, `eval`. A grep is bounded by what its author could imagine writing, so tightening the pattern never converges. The finding is not "the regex is wrong", it is "this needs a runtime test that observes the behaviour". Check whether one is feasible before accepting a grep: hooks and scripts can usually be run with the expensive dependency stubbed on `PATH`, and an early-abort stub keeps it fast.
+
+7. **missing_input** — for every path, package, or asset the work reads that **no step in this
+   same change creates** — a vendored directory, a package's internals, a generated tree, a
+   downloaded catalogue, *or a repo file the diff simply assumes is already there* — prove **two
+   separate things**: that it EXISTS where the code looks, and that it has the SHAPE the code
+   assumes. They fail independently, and the second is the one that survives
+   review, because a plausible path reads as a checked one.
+   **Method:** `find` / `ls` the literal path, then read one real file out of it and confirm the
+   field, extension, or key the code indexes on is actually there. Never reason from the name.
+   ⚠ **"Shape" includes the DISTRIBUTION of values, not just the schema.** A guard that hard-fails
+   on an input class the author believes is rare is only correct if someone COUNTED. Instance
+   2026-08-29, same batch: an asset pipeline raised on SVG path commands `A`/`S`/`T` on the theory
+   they were exotic. Against the real catalogue **every one of the 292 files uses them** — `s`
+   alone appears 20,917 times — so the tool would have processed zero files and the guard read as
+   a safety feature right up until it refused everything. **One command settles it:** extract the
+   class from the real corpus and count, before deciding whether to handle it or refuse it. The
+   same measurement then tells you whether handling it is cheap; here `S`/`T` turned out to be
+   exact arithmetic and only arcs needed real geometry.
+   **Source (2026-08-29, plate pipeline, caught in self-review before dispatch):** a build script
+   read `<src>/<slug>/frame-N.png` to measure an image's bounds. The vendored catalogue was in the
+   repo **nowhere** — a session-temp directory held 94 samples, not the 906-frame source — and
+   upstream ships **SVG only**: all 906 frames in its own manifest are `"format": "svg"`, so the
+   PNG could not have existed even had the tree been present. Two independent fatal assumptions in
+   one line, both invisible to any amount of re-reading, both answered by one `find`.
+   ⚠ **Widened 2026-08-29, same batch, third instance:** the lens was written as
+   *out_of_repo_dependency* and would have missed the worst case of the three — a plan instructing
+   `git add docs/plans/<x>.json` for a file that existed in **no branch, tracked or untracked**,
+   and on which six of its ten tasks depended. In-repo is not a proof of existence. The question is
+   not *where does this live* but **does anything in this change create it, and if not, did anyone
+   look?**
+
+   **The tell:** a path assembled from a variable and a literal (`os.path.join(SRC, slug, "frame-%s.png")`)
+   where nothing upstream of it ever listed the directory; or a `git add` of a path the diff never
+   writes. Ask what would happen on the *first*
+   iteration, and whether anything in the diff would say so out loud.
+   **Also check the fallback:** a default like `SRC = sys.argv[1] if len(sys.argv) > 1 else "<some/path>"`
+   encodes a guess as a default. If the guess is wrong the tool runs against nothing, and a
+   zero-file result must be a hard stop rather than a quiet success — otherwise this lens's failure
+   mode is a green run that produced no output.
+
+8. **asserted_fixture_value** — for every test whose expected value is a LITERAL about real data —
+   a name, a count, a derived string, a field's contents — compute it from the data and compare.
+   Do not read the implementation and reason forward to what it "should" return; that reproduces
+   the author's assumption instead of testing it.
+   **Method:** run the function over the real input, or query the data file, and diff against the
+   literal in the test. One command per assertion.
+   **Two instances, 2026-08-29, one batch:**
+   `expect(monogramFor("Captain's Chair Leg Raise"), 'CCL')` actually returned `CSC` — stripping
+   the apostrophe leaves a bare `s` token that the author never pictured. And a test asserting a
+   *numeric* `breathing_cue` was suppressed named an exercise whose cue reads "Inhale down, exhale
+   on press" — a real cue, so the assertion was about the wrong row entirely and would have failed.
+   **Distinct from lens 6:** that one asks whether the tests share the code's blind spot about
+   BEHAVIOUR. This asks whether a specific asserted VALUE is simply factually wrong. A test can be
+   perfectly designed and still assert `CCL` about a function that returns `CSC`.
+   **The sharper question:** for a suppression or absence test — *would this pass if the feature
+   did nothing at all?* Pair it with a positive case, or it asserts nothing.
+   **Sibling shape — the check that matches ITSELF.** A test or gate that NAMES the thing it
+   forbids, then scans a tree containing its own source, always finds itself and can never pass.
+   Found 2026-08-29 in a plan whose dead-field scan was widened from `lib/` to `lib/`+`test/` — a
+   correct widening that made the file scan its own `const _dead = [...]`. **This repo already has
+   an answer, so use it rather than inventing one:** `check_no_deferral_euphemism.dart:105-109`
+   exempts a line carrying a `deu-quote` marker, chosen so every exemption stays auditable by
+   `grep -rn deu-quote` (three live in CLAUDE.md). Prefer a visible marker to a silent path-skip;
+   a skip is invisible the day someone adds a second file that should have been covered.
 
 ## 3. Dispatch protocol
 
@@ -125,6 +189,77 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 ## 7. Tuning history
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
+
+- **2026-08-29** — blast-radius **platform** — branch `exercise-plates` (25 commits, the
+  exercise plate feature). **3 findings (0 P0, 1 P1, 1 P2, 1 P3); 0 false_alarm, but ONE
+  finding was half-wrong in a way that mattered.** All fixed in-batch. Review:
+  `docs/reviews/exercise-plates-bpass.md`. Dispatched as a fresh context-blind subagent,
+  unlike the 2026-08-28 inline pass.
+  **The lesson is about a REJECTED causal claim, and it is new to this history.** Finding 1
+  was right that platform tier's `requires: feature_flag` was unmet — and wrong about why
+  the branch is platform, asserting it was *"solely because it edits `CLAUDE.md`"* and
+  recommending the doc rows be split out to drop the tier. Classifying each path ALONE
+  refuted it in one command: `pubspec.yaml` → platform (`blast_radius.yaml:324`) and
+  `CLAUDE.md` → platform (`:68`) are independently sufficient, so the proposed split would
+  have produced a second commit and the same unmet requirement. **Generalisable: when a
+  finding explains WHY a classifier returned a value, re-run the classifier per-path
+  rather than reading the registry — a tier is a max over globs, and "which edit caused
+  it" is not a question the registry answers.** Had the recommendation been taken on
+  trust, the batch would have shipped with the real gap intact and a spurious commit split
+  on top.
+  **What the pass was worth, and it is the arc math.** Lens 6 was pointed at the SVG crop
+  with an explicit "is the bbox ever too SMALL?" — a defect no test in the batch could see,
+  since they check counts, viewBox equality and tintability, never ink coverage. The
+  reviewer re-implemented the arc geometry with an ANALYTIC extrema solver, ran it over all
+  292 shipped assets, found 7 whose ink pokes outside the canvas, then re-ran the
+  pipeline's own sampler at 24/240/2400/24000 samples and got byte-identical results —
+  proving the difference was not sampling error but ink the source `viewBox` had already
+  clipped. **Asking a lens for a specific falsifiable property ("too small", not "correct")
+  is what made an independent re-derivation possible.**
+  **Second, smaller: an evidence claim wider than the check behind it.** Finding 2 was not
+  really "a generator still emits dead fields" — it was that the closure ledger claimed the
+  fields were *"pinned absent across lib/ and test/"* when the pinning test scans `.dart`
+  files only and structurally could not see the `.py` generator. The overstatement is the
+  dangerous half; a claim wider than its check reads as coverage. Same family as this
+  repo's phantom-citation rule.
+  **Tuning made:** none to lenses 1-8. Add to lens 3's habit: a blast-radius finding must
+  classify per-path before asserting which edit drives the tier.
+
+- **2026-08-29 (d)** — branch `exercise-plates`, during round 3, from running the plan against
+  real data for the first time. **Sharpened lens 7** rather than adding a ninth: a guard that
+  hard-fails on an input class assumed rare is only correct if someone counted, and "shape" in
+  that lens has to mean the value DISTRIBUTION as well as the schema. The pipeline refused SVG
+  `A`/`S`/`T`; all 292 shipping files use them and `s` appears 20,917 times, so it would have
+  produced nothing while looking like a careful tool. Neither of the two context-blind rounds
+  could have caught it — the upstream catalogue had never been cloned, which is lens 7's own
+  territory and the reason it now says to fetch the corpus and measure.
+
+- **2026-08-29 (c)** — branch `exercise-plates`, after review round 2 (5 BLOCKER / 11 MAJOR /
+  17 MINOR, verdict `not converged`; **four of five blockers sat inside round 1's own fixes**).
+  **No new lens.** The one genuinely new shape — a check that names what it forbids and then scans
+  itself — is a class this repo had ALREADY solved, with the `deu-quote` exemption marker
+  (`check_no_deferral_euphemism.dart:105-109`, three live sites in CLAUDE.md). Recorded as a
+  sibling note under lens 8 pointing at that convention instead of minting a parallel one. Logged
+  here because "considered and declined, for this reason" is the answer §5.1 asks for, and a lens
+  set that only ever grows stops being run.
+
+- **2026-08-29 (b)** — branch `exercise-plates`, after review round 1 of the implementation plan
+  (7 BLOCKER / 15 MAJOR / 16 MINOR; all 7 blockers verified real against the files).
+  **Widened lens 7 `out_of_repo_dependency` -> `missing_input`** on its third instance in one
+  batch — the worst case was an IN-repo path (`docs/plans/<x>.json`) that existed in no branch and
+  that six of ten tasks consumed, which the out-of-repo framing would have missed entirely.
+  **Added lens 8 `asserted_fixture_value`** after two test expectations in the same plan asserted
+  literals that the real data contradicts (`CCL` where the function returns `CSC`; a numeric-cue
+  suppression test naming a row whose cue is prose). Both were written by reasoning forward from
+  the implementation rather than computing from the data.
+
+- **2026-08-29 (a)** — blast-radius **platform** — branch `exercise-plates` (plan-stage, no code yet).
+  **Tuning only; no invocation.** Added lens 7 `out_of_repo_dependency` after a plan self-review
+  found a build script reading `frame-N.png` from a vendored catalogue that (a) was not in the repo
+  at all and (b) ships SVG exclusively — 906 of 906 frames `"format": "svg"`. Neither failure is
+  visible by reading the code; both fall out of one `find`. Logged here rather than waiting for the
+  B-pass because the existing six lenses all look INSIDE the diff, and this class is the one that
+  lives outside it — no lens would have asked the question.
 
 - **2026-08-28** — blast-radius **platform** — branch `oi89-bodyweight-floor` @ `1f817e2f` (11 commits, OI-89 equipment capability floor). **3 findings (0 P0, 2 P1, 1 P2); 0 false_alarm.** 2 fixed in-batch, 1 recorded as residual. Review: `docs/reviews/oi89-bodyweight-floor-bpass.md`.
   ⚠ **Method deviation, and it must be read alongside the findings:** the pass was run

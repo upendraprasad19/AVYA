@@ -236,6 +236,12 @@ List<WorktreeRecord> parseWorktreePorcelain(String stdout) {
 const regenerableIgnoredPaths = <String>[
   // Copied in by scripts/new-worktree.sh — the ROOT file only.
   '.env',
+  // .gitignore: the cloned upstream plate artwork, re-clonable from
+  // github.com/bryllim/workout-guide. Only the CROPPED output under
+  // assets/exercise_plates/ is committed. Without this entry, leg 3 keeps any
+  // worktree that has ever run the plate pipeline — forever (diagnose b4d7e9,
+  // and OI-128 before it, for test outputs).
+  'vendor/',
   // Flutter/Dart build products, all reproduced by `flutter pub get` + a build.
   '.dart_tool/',
   'build/',

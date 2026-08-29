@@ -92,7 +92,9 @@ class SeedService {
   //   every row -- the drop-side pass the 13-A entry said would come later. Without
   //   this bump the retag is inert for every existing install, which is the whole
   //   point: Chin Up keeps shipping to bodyweight users off the stale box.
-  static const int _exerciseLibraryVersion = 10;
+  // v11 (exercise plates): demo_slug + demo_pair on 165 rows; the three dead
+  // image URL fields removed. Re-seed rewrites every row in place via putAll.
+  static const int _exerciseLibraryVersion = 11;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

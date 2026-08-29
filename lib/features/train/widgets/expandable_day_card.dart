@@ -4,6 +4,8 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
 
 /// Expandable day card matching the Wardroom mockup:
 /// - Collapsed: day tile, workout name, subtitle, chevron
@@ -224,23 +226,11 @@ class _ExerciseRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: AppColors.accentSoft,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                child: Center(
-                  child: Text(
-                    '${index + 1}',
-                    style: AppTypography.monoXs.copyWith(
-                      color: AppColors.accent,
-                      fontSize: 10,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ),
+              // The plate replaces the index badge — see exercise_card.dart.
+              ExercisePlateThumb(
+                exerciseName: exercise.name,
+                size: 44,
+                onTap: () => ExercisePlateSheet.show(context, exercise.name),
               ),
               const SizedBox(width: 10),
               Expanded(

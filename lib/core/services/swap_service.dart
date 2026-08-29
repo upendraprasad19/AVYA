@@ -291,10 +291,6 @@ class SwapService {
         'priority_tier': newLib['priority_tier'],
       if (newLib['coaching_cues'] != null)
         'coaching_cues': newLib['coaching_cues'],
-      if (newLib['image_start_url'] != null)
-        'image_start_url': newLib['image_start_url'],
-      if (newLib['image_end_url'] != null)
-        'image_end_url': newLib['image_end_url'],
       'swapped_via': 'ai_coach',
       // Persist the name we swapped AWAY from so LEVER 6
       // (TrainingHistoryAnalyzer.demotedExercises) can deprioritize it in

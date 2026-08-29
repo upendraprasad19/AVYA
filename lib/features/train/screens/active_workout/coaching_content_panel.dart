@@ -55,7 +55,17 @@ class _CoachingContentPanelState extends State<CoachingContentPanel> {
     final map = ExerciseRepository.instance.getByExactName(widget.exerciseName);
     _cues = _stringList(map?['coaching_cues']);
     _mistakes = _stringList(map?['common_mistakes']);
-    _breathing = _cleanString(map?['breathing_cue']);
+    final rawBreathing = _cleanString(map?['breathing_cue']);
+    // 136 of the 292 library rows carry a bare NUMBER here — a spreadsheet
+    // column shift dropped met_value into breathing_cue and left its own column
+    // null. Suppress rather than render "BREATHING / 5". The plate sheet applies
+    // the identical guard and test/contracts/breathing_cue_numeric_suppressed_test
+    // pins them together; the data repair is OI-149, blocked on 136 cues having
+    // to be re-authored because the original text exists nowhere.
+    _breathing = (rawBreathing != null &&
+            RegExp(r'^\d+(\.\d+)?$').hasMatch(rawBreathing))
+        ? null
+        : rawBreathing;
     _warmup = _cleanString(map?['warmup_protocol']);
   }
 
@@ -116,6 +126,26 @@ class _CoachingContentPanelState extends State<CoachingContentPanel> {
                       ),
                     ),
                     const Spacer(),
+                    // The SECOND door. The thumb answers "what is this
+                    // movement?" while scanning; this answers "am I doing it
+                    // right?" at the rep. Placed before the Spacer's chevron so
+                    // it reads as part of the label group, and with its own
+                    // detector so the panel's expand/collapse tap is untouched.
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () =>
+                          ExercisePlateSheet.show(context, widget.exerciseName),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Text(
+                          'VIEW PLATE',
+                          style: AppTypography.monoXs.copyWith(
+                            color: accent,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                    ),
                     Icon(
                       _expanded
                           ? Icons.keyboard_arrow_up

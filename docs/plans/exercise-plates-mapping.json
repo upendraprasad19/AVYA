@@ -1,0 +1,992 @@
+[
+  {
+    "id": "E001",
+    "name": "Barbell Bench Press",
+    "slug": "bench-press",
+    "pair": true
+  },
+  {
+    "id": "E002",
+    "name": "Dumbbell Bench Press",
+    "slug": "dumbbell-bench-press",
+    "pair": true
+  },
+  {
+    "id": "E003",
+    "name": "Incline Barbell Bench Press",
+    "slug": "incline-bench-press",
+    "pair": true
+  },
+  {
+    "id": "E004",
+    "name": "Decline Barbell Bench Press",
+    "slug": "decline-bench-press",
+    "pair": true
+  },
+  {
+    "id": "E005",
+    "name": "Push Up",
+    "slug": "push-up",
+    "pair": true
+  },
+  {
+    "id": "E006",
+    "name": "Dumbbell Fly",
+    "slug": "dumbbell-fly",
+    "pair": true
+  },
+  {
+    "id": "E007",
+    "name": "Cable Fly",
+    "slug": "cable-fly",
+    "pair": true
+  },
+  {
+    "id": "E008",
+    "name": "Chest Dip",
+    "slug": "chest-dip",
+    "pair": true
+  },
+  {
+    "id": "E009",
+    "name": "Machine Chest Press",
+    "slug": "machine-chest-press",
+    "pair": true
+  },
+  {
+    "id": "E010",
+    "name": "Pike Push Up",
+    "slug": "pike-push-up",
+    "pair": true
+  },
+  {
+    "id": "E011",
+    "name": "Barbell Overhead Press",
+    "slug": "overhead-press",
+    "pair": true
+  },
+  {
+    "id": "E012",
+    "name": "Dumbbell Shoulder Press",
+    "slug": "standing-dumbbell-press",
+    "pair": true
+  },
+  {
+    "id": "E013",
+    "name": "Lateral Raise",
+    "slug": "lateral-raise",
+    "pair": true
+  },
+  {
+    "id": "E014",
+    "name": "Face Pull",
+    "slug": "face-pull",
+    "pair": true
+  },
+  {
+    "id": "E015",
+    "name": "Front Raise",
+    "slug": "front-raise",
+    "pair": true
+  },
+  {
+    "id": "E016",
+    "name": "Close Grip Bench Press",
+    "slug": "close-grip-bench-press",
+    "pair": true
+  },
+  {
+    "id": "E017",
+    "name": "Tricep Pushdown (Cable)",
+    "slug": "tricep-pushdown",
+    "pair": true
+  },
+  {
+    "id": "E018",
+    "name": "Skull Crusher",
+    "slug": "skull-crusher",
+    "pair": true
+  },
+  {
+    "id": "E019",
+    "name": "Overhead Tricep Extension",
+    "slug": "dumbbell-overhead-tricep-extension",
+    "pair": true
+  },
+  {
+    "id": "E020",
+    "name": "Diamond Push Up",
+    "slug": "diamond-push-up",
+    "pair": true
+  },
+  {
+    "id": "E021",
+    "name": "Deadlift",
+    "slug": "deadlift",
+    "pair": true
+  },
+  {
+    "id": "E022",
+    "name": "Pull Up",
+    "slug": "pull-up",
+    "pair": true
+  },
+  {
+    "id": "E023",
+    "name": "Barbell Bent Over Row",
+    "slug": "barbell-row",
+    "pair": true
+  },
+  {
+    "id": "E024",
+    "name": "Dumbbell Row",
+    "slug": "one-arm-dumbbell-row",
+    "pair": true
+  },
+  {
+    "id": "E025",
+    "name": "Lat Pulldown",
+    "slug": "lat-pulldown",
+    "pair": true
+  },
+  {
+    "id": "E026",
+    "name": "Seated Cable Row",
+    "slug": "seated-row",
+    "pair": true
+  },
+  {
+    "id": "E027",
+    "name": "T-Bar Row",
+    "slug": "t-bar-row",
+    "pair": true
+  },
+  {
+    "id": "E029",
+    "name": "Hyperextension",
+    "slug": "back-extension",
+    "pair": true
+  },
+  {
+    "id": "E031",
+    "name": "Barbell Curl",
+    "slug": "ez-bar-curl",
+    "pair": true
+  },
+  {
+    "id": "E032",
+    "name": "Dumbbell Curl",
+    "slug": "bicep-curl",
+    "pair": true
+  },
+  {
+    "id": "E033",
+    "name": "Hammer Curl",
+    "slug": "hammer-curl",
+    "pair": true
+  },
+  {
+    "id": "E034",
+    "name": "Concentration Curl",
+    "slug": "concentration-curl",
+    "pair": true
+  },
+  {
+    "id": "E035",
+    "name": "Cable Curl",
+    "slug": "cable-curl",
+    "pair": true
+  },
+  {
+    "id": "E036",
+    "name": "Barbell Back Squat",
+    "slug": "squat",
+    "pair": true
+  },
+  {
+    "id": "E037",
+    "name": "Front Squat",
+    "slug": "front-squat",
+    "pair": true
+  },
+  {
+    "id": "E038",
+    "name": "Goblet Squat",
+    "slug": "goblet-squat",
+    "pair": true
+  },
+  {
+    "id": "E039",
+    "name": "Leg Press",
+    "slug": "leg-press",
+    "pair": true
+  },
+  {
+    "id": "E040",
+    "name": "Hack Squat",
+    "slug": "hack-squat",
+    "pair": true
+  },
+  {
+    "id": "E041",
+    "name": "Bulgarian Split Squat",
+    "slug": "bulgarian-split-squat",
+    "pair": true
+  },
+  {
+    "id": "E043",
+    "name": "Leg Extension",
+    "slug": "leg-extension",
+    "pair": true
+  },
+  {
+    "id": "E044",
+    "name": "Step Up",
+    "slug": "step-up",
+    "pair": true
+  },
+  {
+    "id": "E045",
+    "name": "Romanian Deadlift",
+    "slug": "dumbbell-romanian-deadlift",
+    "pair": true
+  },
+  {
+    "id": "E046",
+    "name": "Nordic Curl",
+    "slug": "nordic-hamstring-curl",
+    "pair": true
+  },
+  {
+    "id": "E047",
+    "name": "Hip Thrust",
+    "slug": "hip-thrust",
+    "pair": true
+  },
+  {
+    "id": "E048",
+    "name": "Glute Bridge",
+    "slug": "glute-bridge",
+    "pair": true
+  },
+  {
+    "id": "E049",
+    "name": "Leg Curl (Lying)",
+    "slug": "lying-leg-curl",
+    "pair": true
+  },
+  {
+    "id": "E050",
+    "name": "Sumo Deadlift",
+    "slug": "sumo-deadlift",
+    "pair": true
+  },
+  {
+    "id": "E052",
+    "name": "Seated Calf Raise",
+    "slug": "seated-calf-raise",
+    "pair": true
+  },
+  {
+    "id": "E054",
+    "name": "Plank",
+    "slug": "plank",
+    "pair": false
+  },
+  {
+    "id": "E055",
+    "name": "Dead Bug",
+    "slug": "dead-bug",
+    "pair": true
+  },
+  {
+    "id": "E056",
+    "name": "Cable Crunch",
+    "slug": "cable-crunch",
+    "pair": true
+  },
+  {
+    "id": "E057",
+    "name": "Hanging Leg Raise",
+    "slug": "hanging-leg-raise",
+    "pair": true
+  },
+  {
+    "id": "E058",
+    "name": "Ab Wheel Rollout",
+    "slug": "ab-wheel",
+    "pair": true
+  },
+  {
+    "id": "E059",
+    "name": "Russian Twist",
+    "slug": "russian-twist",
+    "pair": true
+  },
+  {
+    "id": "E060",
+    "name": "Reverse Crunch",
+    "slug": "reverse-crunch",
+    "pair": true
+  },
+  {
+    "id": "E061",
+    "name": "Running (Treadmill)",
+    "slug": "running",
+    "pair": true
+  },
+  {
+    "id": "E062",
+    "name": "Cycling (Stationary)",
+    "slug": "cycling",
+    "pair": true
+  },
+  {
+    "id": "E063",
+    "name": "Jump Rope",
+    "slug": "jump-rope",
+    "pair": true
+  },
+  {
+    "id": "E064",
+    "name": "Rowing Machine",
+    "slug": "rowing",
+    "pair": true
+  },
+  {
+    "id": "E065",
+    "name": "Burpee",
+    "slug": "burpee",
+    "pair": true
+  },
+  {
+    "id": "E067",
+    "name": "Mountain Climber",
+    "slug": "mountain-climber",
+    "pair": true
+  },
+  {
+    "id": "E068",
+    "name": "Assault Bike",
+    "slug": "assault-bike",
+    "pair": true
+  },
+  {
+    "id": "E071",
+    "name": "L-Sit Hold",
+    "slug": "l-sit-hold",
+    "pair": false
+  },
+  {
+    "id": "E073",
+    "name": "Pistol Squat",
+    "slug": "pistol-squat",
+    "pair": true
+  },
+  {
+    "id": "E074",
+    "name": "Dragon Flag",
+    "slug": "dragon-flag",
+    "pair": true
+  },
+  {
+    "id": "E075",
+    "name": "Dip (Parallel Bars)",
+    "slug": "dip",
+    "pair": true
+  },
+  {
+    "id": "E076",
+    "name": "Dand (Hindu Pushup)",
+    "slug": "hindu-push-up",
+    "pair": true
+  },
+  {
+    "id": "E083",
+    "name": "World's Greatest Stretch",
+    "slug": "worlds-greatest-stretch",
+    "pair": true
+  },
+  {
+    "id": "E085",
+    "name": "Cat-Cow Stretch",
+    "slug": "cat-cow-stretch",
+    "pair": true
+  },
+  {
+    "id": "E087",
+    "name": "Trap Bar Deadlift",
+    "slug": "trap-bar-deadlift",
+    "pair": true
+  },
+  {
+    "id": "E089",
+    "name": "Farmers Carry",
+    "slug": "farmer-carry",
+    "pair": true
+  },
+  {
+    "id": "E091",
+    "name": "Single Leg Romanian Deadlift",
+    "slug": "single-leg-romanian-deadlift",
+    "pair": true
+  },
+  {
+    "id": "E092",
+    "name": "Good Morning",
+    "slug": "good-morning",
+    "pair": true
+  },
+  {
+    "id": "E093",
+    "name": "Band Pull Apart",
+    "slug": "band-pull-apart",
+    "pair": true
+  },
+  {
+    "id": "E094",
+    "name": "Incline Dumbbell Curl",
+    "slug": "incline-dumbbell-curl",
+    "pair": true
+  },
+  {
+    "id": "E095",
+    "name": "Preacher Curl",
+    "slug": "preacher-curl",
+    "pair": true
+  },
+  {
+    "id": "E097",
+    "name": "Overhead Tricep Cable Extension",
+    "slug": "overhead-tricep-extension",
+    "pair": true
+  },
+  {
+    "id": "E098",
+    "name": "Reverse Fly",
+    "slug": "rear-delt-fly",
+    "pair": true
+  },
+  {
+    "id": "E100",
+    "name": "Reverse Wrist Curl",
+    "slug": "wrist-extension",
+    "pair": true
+  },
+  {
+    "id": "E101",
+    "name": "Chest to Bar Pull Up",
+    "slug": "pull-up",
+    "pair": true
+  },
+  {
+    "id": "E102",
+    "name": "Incline Push Up",
+    "slug": "incline-push-up",
+    "pair": true
+  },
+  {
+    "id": "E103",
+    "name": "Decline Push Up",
+    "slug": "decline-push-up",
+    "pair": true
+  },
+  {
+    "id": "E104",
+    "name": "Arnold Press",
+    "slug": "arnold-press",
+    "pair": true
+  },
+  {
+    "id": "E106",
+    "name": "Shrug",
+    "slug": "dumbbell-shrug",
+    "pair": true
+  },
+  {
+    "id": "E107",
+    "name": "Hip Abduction Machine",
+    "slug": "hip-abduction-machine",
+    "pair": true
+  },
+  {
+    "id": "E108",
+    "name": "Hip Adduction Machine",
+    "slug": "hip-adduction-machine",
+    "pair": true
+  },
+  {
+    "id": "E109",
+    "name": "Glute Kickback (Cable)",
+    "slug": "cable-kickback",
+    "pair": true
+  },
+  {
+    "id": "E110",
+    "name": "Lateral Band Walk",
+    "slug": "banded-lateral-walk",
+    "pair": true
+  },
+  {
+    "id": "E111",
+    "name": "Sissy Squat",
+    "slug": "sissy-squat",
+    "pair": true
+  },
+  {
+    "id": "E114",
+    "name": "Landmine Press",
+    "slug": "landmine-press",
+    "pair": true
+  },
+  {
+    "id": "E116",
+    "name": "Meadows Row",
+    "slug": "meadows-row",
+    "pair": true
+  },
+  {
+    "id": "E117",
+    "name": "Cable Crossover",
+    "slug": "cable-fly",
+    "pair": true
+  },
+  {
+    "id": "E118",
+    "name": "Pec Deck",
+    "slug": "pec-deck",
+    "pair": true
+  },
+  {
+    "id": "E122",
+    "name": "Spider Curl",
+    "slug": "spider-curl",
+    "pair": true
+  },
+  {
+    "id": "E123",
+    "name": "Chin Up",
+    "slug": "chin-up",
+    "pair": true
+  },
+  {
+    "id": "E129",
+    "name": "Rack Pull",
+    "slug": "rack-pull",
+    "pair": true
+  },
+  {
+    "id": "E132",
+    "name": "Pallof Press",
+    "slug": "pallof-press",
+    "pair": true
+  },
+  {
+    "id": "E134",
+    "name": "Copenhagen Plank",
+    "slug": "copenhagen-plank",
+    "pair": false
+  },
+  {
+    "id": "E135",
+    "name": "Bear Crawl",
+    "slug": "bear-crawl",
+    "pair": true
+  },
+  {
+    "id": "E136",
+    "name": "Crab Walk",
+    "slug": "crab-walk",
+    "pair": true
+  },
+  {
+    "id": "E139",
+    "name": "Battle Ropes",
+    "slug": "battle-ropes",
+    "pair": true
+  },
+  {
+    "id": "E140",
+    "name": "Kettlebell Swing",
+    "slug": "kettlebell-swing",
+    "pair": true
+  },
+  {
+    "id": "E143",
+    "name": "Skater Squat",
+    "slug": "skater-squat",
+    "pair": true
+  },
+  {
+    "id": "E145",
+    "name": "Lateral Lunge",
+    "slug": "lateral-lunge",
+    "pair": true
+  },
+  {
+    "id": "E146",
+    "name": "Curtsy Lunge",
+    "slug": "curtsy-lunge",
+    "pair": true
+  },
+  {
+    "id": "E151",
+    "name": "Inchworm",
+    "slug": "inchworm",
+    "pair": true
+  },
+  {
+    "id": "E159",
+    "name": "Child's Pose",
+    "slug": "childs-pose",
+    "pair": false
+  },
+  {
+    "id": "E161",
+    "name": "Calf Stretch (Wall)",
+    "slug": "wall-calf-stretch",
+    "pair": false
+  },
+  {
+    "id": "E165",
+    "name": "Quad Stretch",
+    "slug": "standing-quad-stretch",
+    "pair": false
+  },
+  {
+    "id": "E166",
+    "name": "Hamstring Stretch (Standing)",
+    "slug": "hamstring-stretch",
+    "pair": false
+  },
+  {
+    "id": "E167",
+    "name": "Cross Body Shoulder Stretch",
+    "slug": "cross-body-shoulder-stretch",
+    "pair": false
+  },
+  {
+    "id": "E168",
+    "name": "Doorway Chest Stretch",
+    "slug": "doorway-chest-stretch",
+    "pair": false
+  },
+  {
+    "id": "E172",
+    "name": "Dumbbell Side Bend",
+    "slug": "dumbbell-side-bend",
+    "pair": true
+  },
+  {
+    "id": "E173",
+    "name": "Decline Sit Up",
+    "slug": "decline-sit-up",
+    "pair": true
+  },
+  {
+    "id": "E174",
+    "name": "Crunches",
+    "slug": "crunch",
+    "pair": true
+  },
+  {
+    "id": "E175",
+    "name": "Bicycle Crunch",
+    "slug": "bicycle-crunch",
+    "pair": true
+  },
+  {
+    "id": "E176",
+    "name": "V-Up",
+    "slug": "v-up",
+    "pair": true
+  },
+  {
+    "id": "E177",
+    "name": "Hollow Body Hold",
+    "slug": "hollow-body-hold",
+    "pair": false
+  },
+  {
+    "id": "E179",
+    "name": "Toes to Bar",
+    "slug": "hanging-leg-raise",
+    "pair": true
+  },
+  {
+    "id": "E188",
+    "name": "Banded Squat",
+    "slug": "banded-squat",
+    "pair": true
+  },
+  {
+    "id": "E189",
+    "name": "Banded Hip Thrust",
+    "slug": "banded-hip-thrust",
+    "pair": true
+  },
+  {
+    "id": "E192",
+    "name": "Battle Rope Wave",
+    "slug": "battle-ropes",
+    "pair": true
+  },
+  {
+    "id": "E193",
+    "name": "Jump Squat",
+    "slug": "jump-squat",
+    "pair": true
+  },
+  {
+    "id": "E202",
+    "name": "Jumping Jacks",
+    "slug": "jumping-jack",
+    "pair": true
+  },
+  {
+    "id": "E203",
+    "name": "High Knees",
+    "slug": "high-knees",
+    "pair": true
+  },
+  {
+    "id": "E205",
+    "name": "Arm Circles",
+    "slug": "arm-circles",
+    "pair": true
+  },
+  {
+    "id": "E207",
+    "name": "Torso Twists",
+    "slug": "torso-twist-stretch",
+    "pair": true
+  },
+  {
+    "id": "E209",
+    "name": "Leg Swings",
+    "slug": "leg-swings-stretch",
+    "pair": true
+  },
+  {
+    "id": "E212",
+    "name": "Wall Push Up",
+    "slug": "wall-push-up",
+    "pair": true
+  },
+  {
+    "id": "E213",
+    "name": "Dead Hang",
+    "slug": "dead-hang",
+    "pair": false
+  },
+  {
+    "id": "E214",
+    "name": "Slow Walking",
+    "slug": "walking",
+    "pair": true
+  },
+  {
+    "id": "E216",
+    "name": "Standing Quad Stretch",
+    "slug": "standing-quad-stretch",
+    "pair": false
+  },
+  {
+    "id": "E219",
+    "name": "Cross-body Shoulder Stretch",
+    "slug": "cross-body-shoulder-stretch",
+    "pair": false
+  },
+  {
+    "id": "E220",
+    "name": "Chest Doorway Stretch",
+    "slug": "doorway-chest-stretch",
+    "pair": false
+  },
+  {
+    "id": "E224",
+    "name": "Cable Pull-Through",
+    "slug": "cable-pull-through",
+    "pair": true
+  },
+  {
+    "id": "E225",
+    "name": "Hip Abductor Machine",
+    "slug": "hip-abduction-machine",
+    "pair": true
+  },
+  {
+    "id": "E226",
+    "name": "Frog Pumps",
+    "slug": "frog-pump",
+    "pair": true
+  },
+  {
+    "id": "E229",
+    "name": "Stiff-Legged Deadlift",
+    "slug": "romanian-deadlift",
+    "pair": true
+  },
+  {
+    "id": "E231",
+    "name": "Decline Dumbbell Press",
+    "slug": "decline-dumbbell-press",
+    "pair": true
+  },
+  {
+    "id": "E235",
+    "name": "Machine Lateral Raise",
+    "slug": "machine-lateral-raise",
+    "pair": true
+  },
+  {
+    "id": "E236",
+    "name": "Cable Front Raise",
+    "slug": "cable-front-raise",
+    "pair": true
+  },
+  {
+    "id": "E238",
+    "name": "Bench Dips",
+    "slug": "bench-dip",
+    "pair": true
+  },
+  {
+    "id": "E239",
+    "name": "Dumbbell Kickback",
+    "slug": "tricep-kickback",
+    "pair": true
+  },
+  {
+    "id": "E240",
+    "name": "Overhead Cable Extension",
+    "slug": "overhead-tricep-extension",
+    "pair": true
+  },
+  {
+    "id": "E241",
+    "name": "Close-Grip Bench Press",
+    "slug": "close-grip-bench-press",
+    "pair": true
+  },
+  {
+    "id": "E242",
+    "name": "Rope Hammer Curl",
+    "slug": "rope-hammer-curl",
+    "pair": true
+  },
+  {
+    "id": "E244",
+    "name": "Pendlay Row",
+    "slug": "pendlay-row",
+    "pair": true
+  },
+  {
+    "id": "E246",
+    "name": "Machine Low Row",
+    "slug": "machine-row",
+    "pair": true
+  },
+  {
+    "id": "E247",
+    "name": "Straight-Arm Pulldown",
+    "slug": "straight-arm-pulldown",
+    "pair": true
+  },
+  {
+    "id": "E249",
+    "name": "V-Ups",
+    "slug": "v-up",
+    "pair": true
+  },
+  {
+    "id": "E250",
+    "name": "Flutter Kicks",
+    "slug": "flutter-kick",
+    "pair": true
+  },
+  {
+    "id": "E251",
+    "name": "Side Plank",
+    "slug": "side-plank",
+    "pair": false
+  },
+  {
+    "id": "E252",
+    "name": "Wall Sit",
+    "slug": "wall-sit",
+    "pair": false
+  },
+  {
+    "id": "E255",
+    "name": "Towel Row",
+    "slug": "towel-row",
+    "pair": true
+  },
+  {
+    "id": "E256",
+    "name": "Negative Pull Up",
+    "slug": "negative-pull-up",
+    "pair": true
+  },
+  {
+    "id": "E257",
+    "name": "Glute Kickback",
+    "slug": "donkey-kick",
+    "pair": true
+  },
+  {
+    "id": "E260",
+    "name": "Incline Dumbbell Press",
+    "slug": "incline-dumbbell-press",
+    "pair": true
+  },
+  {
+    "id": "E261",
+    "name": "Bodyweight Rear Delt Raise",
+    "slug": "prone-t-raise",
+    "pair": true
+  },
+  {
+    "id": "E262",
+    "name": "Elevated Pike Push Up",
+    "slug": "feet-elevated-pike-push-up",
+    "pair": true
+  },
+  {
+    "id": "E263",
+    "name": "Prone Reverse Snow Angel",
+    "slug": "reverse-snow-angel",
+    "pair": true
+  },
+  {
+    "id": "E272",
+    "name": "Prone Y Raise",
+    "slug": "prone-y-raise",
+    "pair": true
+  },
+  {
+    "id": "E274",
+    "name": "Prone T Raise",
+    "slug": "prone-t-raise",
+    "pair": true
+  },
+  {
+    "id": "E275",
+    "name": "Doorway Isometric Row",
+    "slug": "doorway-row",
+    "pair": false
+  },
+  {
+    "id": "E291",
+    "name": "Single Leg Glute Bridge",
+    "slug": "single-leg-glute-bridge",
+    "pair": true
+  },
+  {
+    "id": "E292",
+    "name": "Sliding Leg Curl",
+    "slug": "towel-hamstring-curl",
+    "pair": true
+  }
+]
