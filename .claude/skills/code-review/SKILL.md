@@ -117,6 +117,14 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    perfectly designed and still assert `CCL` about a function that returns `CSC`.
    **The sharper question:** for a suppression or absence test — *would this pass if the feature
    did nothing at all?* Pair it with a positive case, or it asserts nothing.
+   **Sibling shape — the check that matches ITSELF.** A test or gate that NAMES the thing it
+   forbids, then scans a tree containing its own source, always finds itself and can never pass.
+   Found 2026-08-29 in a plan whose dead-field scan was widened from `lib/` to `lib/`+`test/` — a
+   correct widening that made the file scan its own `const _dead = [...]`. **This repo already has
+   an answer, so use it rather than inventing one:** `check_no_deferral_euphemism.dart:105-109`
+   exempts a line carrying a `deu-quote` marker, chosen so every exemption stays auditable by
+   `grep -rn deu-quote` (three live in CLAUDE.md). Prefer a visible marker to a silent path-skip;
+   a skip is invisible the day someone adds a second file that should have been covered.
 
 ## 3. Dispatch protocol
 
@@ -172,6 +180,15 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 ## 7. Tuning history
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
+
+- **2026-08-29 (c)** — branch `exercise-plates`, after review round 2 (5 BLOCKER / 11 MAJOR /
+  17 MINOR, verdict `not converged`; **four of five blockers sat inside round 1's own fixes**).
+  **No new lens.** The one genuinely new shape — a check that names what it forbids and then scans
+  itself — is a class this repo had ALREADY solved, with the `deu-quote` exemption marker
+  (`check_no_deferral_euphemism.dart:105-109`, three live sites in CLAUDE.md). Recorded as a
+  sibling note under lens 8 pointing at that convention instead of minting a parallel one. Logged
+  here because "considered and declined, for this reason" is the answer §5.1 asks for, and a lens
+  set that only ever grows stops being run.
 
 - **2026-08-29 (b)** — branch `exercise-plates`, after review round 1 of the implementation plan
   (7 BLOCKER / 15 MAJOR / 16 MINOR; all 7 blockers verified real against the files).
