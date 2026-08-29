@@ -55,7 +55,7 @@ verdict: pending  # → accepted | rejected (after founder triage)
 <filled in by founder during triage>
 ```
 
-## 2. Lens set (7 lenses, fast)
+## 2. Lens set (8 lenses, fast)
 
 Each lens has a focused prompt the dispatched agent runs against the staged diff:
 
@@ -71,10 +71,11 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    - **FOLLOW THE RETURN VALUE TO ITS CALL SITE.** A guard can be perfectly correct and still be defeated by the code that consumes it. Added 2026-08-17 after two independent review rounds each fixed this file's escape-hatch predicate — correctly — and both stopped at the predicate; the B-pass then found that the CALLER reduced the per-statement result to one command-wide boolean, re-opening the exact hole both rounds had just closed. **A predicate that returns `bool` cannot carry a binding it just established** — that shape is the tell, and it is visible without running anything. Ask: what does the caller do with this, and does the answer still mean what the function meant?
    - **If the guard is a SOURCE GREP, assume it is defeatable and try indirection** — a helper function, a variable-built argument, an alias, `eval`. A grep is bounded by what its author could imagine writing, so tightening the pattern never converges. The finding is not "the regex is wrong", it is "this needs a runtime test that observes the behaviour". Check whether one is feasible before accepting a grep: hooks and scripts can usually be run with the expensive dependency stubbed on `PATH`, and an early-abort stub keeps it fast.
 
-7. **out_of_repo_dependency** — for every path, package, or asset the diff reads from OUTSIDE the
-   repo — a vendored directory, an npm/pub package's internals, a generated tree, a downloaded
-   catalogue — prove **two separate things**: that it EXISTS where the code looks, and that it has
-   the SHAPE the code assumes. They fail independently, and the second is the one that survives
+7. **missing_input** — for every path, package, or asset the work reads that **no step in this
+   same change creates** — a vendored directory, a package's internals, a generated tree, a
+   downloaded catalogue, *or a repo file the diff simply assumes is already there* — prove **two
+   separate things**: that it EXISTS where the code looks, and that it has the SHAPE the code
+   assumes. They fail independently, and the second is the one that survives
    review, because a plausible path reads as a checked one.
    **Method:** `find` / `ls` the literal path, then read one real file out of it and confirm the
    field, extension, or key the code indexes on is actually there. Never reason from the name.
@@ -84,13 +85,38 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    upstream ships **SVG only**: all 906 frames in its own manifest are `"format": "svg"`, so the
    PNG could not have existed even had the tree been present. Two independent fatal assumptions in
    one line, both invisible to any amount of re-reading, both answered by one `find`.
+   ⚠ **Widened 2026-08-29, same batch, third instance:** the lens was written as
+   *out_of_repo_dependency* and would have missed the worst case of the three — a plan instructing
+   `git add docs/plans/<x>.json` for a file that existed in **no branch, tracked or untracked**,
+   and on which six of its ten tasks depended. In-repo is not a proof of existence. The question is
+   not *where does this live* but **does anything in this change create it, and if not, did anyone
+   look?**
+
    **The tell:** a path assembled from a variable and a literal (`os.path.join(SRC, slug, "frame-%s.png")`)
-   where nothing upstream of it ever listed the directory. Ask what would happen on the *first*
+   where nothing upstream of it ever listed the directory; or a `git add` of a path the diff never
+   writes. Ask what would happen on the *first*
    iteration, and whether anything in the diff would say so out loud.
    **Also check the fallback:** a default like `SRC = sys.argv[1] if len(sys.argv) > 1 else "<some/path>"`
    encodes a guess as a default. If the guess is wrong the tool runs against nothing, and a
    zero-file result must be a hard stop rather than a quiet success — otherwise this lens's failure
    mode is a green run that produced no output.
+
+8. **asserted_fixture_value** — for every test whose expected value is a LITERAL about real data —
+   a name, a count, a derived string, a field's contents — compute it from the data and compare.
+   Do not read the implementation and reason forward to what it "should" return; that reproduces
+   the author's assumption instead of testing it.
+   **Method:** run the function over the real input, or query the data file, and diff against the
+   literal in the test. One command per assertion.
+   **Two instances, 2026-08-29, one batch:**
+   `expect(monogramFor("Captain's Chair Leg Raise"), 'CCL')` actually returned `CSC` — stripping
+   the apostrophe leaves a bare `s` token that the author never pictured. And a test asserting a
+   *numeric* `breathing_cue` was suppressed named an exercise whose cue reads "Inhale down, exhale
+   on press" — a real cue, so the assertion was about the wrong row entirely and would have failed.
+   **Distinct from lens 6:** that one asks whether the tests share the code's blind spot about
+   BEHAVIOUR. This asks whether a specific asserted VALUE is simply factually wrong. A test can be
+   perfectly designed and still assert `CCL` about a function that returns `CSC`.
+   **The sharper question:** for a suppression or absence test — *would this pass if the feature
+   did nothing at all?* Pair it with a positive case, or it asserts nothing.
 
 ## 3. Dispatch protocol
 
@@ -147,7 +173,17 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
-- **2026-08-29** — blast-radius **platform** — branch `exercise-plates` (plan-stage, no code yet).
+- **2026-08-29 (b)** — branch `exercise-plates`, after review round 1 of the implementation plan
+  (7 BLOCKER / 15 MAJOR / 16 MINOR; all 7 blockers verified real against the files).
+  **Widened lens 7 `out_of_repo_dependency` -> `missing_input`** on its third instance in one
+  batch — the worst case was an IN-repo path (`docs/plans/<x>.json`) that existed in no branch and
+  that six of ten tasks consumed, which the out-of-repo framing would have missed entirely.
+  **Added lens 8 `asserted_fixture_value`** after two test expectations in the same plan asserted
+  literals that the real data contradicts (`CCL` where the function returns `CSC`; a numeric-cue
+  suppression test naming a row whose cue is prose). Both were written by reasoning forward from
+  the implementation rather than computing from the data.
+
+- **2026-08-29 (a)** — blast-radius **platform** — branch `exercise-plates` (plan-stage, no code yet).
   **Tuning only; no invocation.** Added lens 7 `out_of_repo_dependency` after a plan self-review
   found a build script reading `frame-N.png` from a vendored catalogue that (a) was not in the repo
   at all and (b) ships SVG exclusively — 906 of 906 frames `"format": "svg"`. Neither failure is
