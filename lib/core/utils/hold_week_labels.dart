@@ -160,7 +160,7 @@ String? dayDetailWeekLabel(Map<dynamic, dynamic>? scheduleRow) {
 /// independent one.
 ///
 /// Was a hardcoded literal `'DEPLOYMENT 01'` regardless of `phase` — diagnose
-/// 2026-08-30-deployment-label-hardcoded.
+/// b7f1c8.
 String deploymentEyebrowLabel({
   required int phase,
   required String phaseName,

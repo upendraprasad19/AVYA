@@ -59,16 +59,39 @@ void main() {
               'reads full_name from \'users\' table on cross-device restore');
     });
 
-    test('reader _restoreUserProfile SELECTs from users table (not just user_profile)', () {
-      // APK Test #12.8 bug: restore only read user_profile which has no full_name
-      // Fix: _restoreUserProfile must also JOIN/SELECT from 'users' table
+    test('the restore path SELECTs from users table (not just user_profile)',
+        () {
+      // APK Test #12.8 bug: restore only read user_profile which has no
+      // full_name. Fix: the restore path must also SELECT from 'users'.
+      //
+      // UPDATED 2026-08-30 (diagnose d4e9a2): the SELECT no longer sits
+      // INLINE in _restoreUserProfile — it moved into the retrying helper
+      // _fetchUsersRowForRestore, which wraps it in ensureFreshToken() +
+      // one hard-refresh retry so an RLS-filtered empty result on a stale
+      // token can't silently drop full_name. This test therefore follows
+      // the delegation instead of grepping one method body: asserting BOTH
+      // that _restoreUserProfile still routes to the helper AND that the
+      // helper is what carries the 'users' SELECT is strictly stronger
+      // than the original single-body grep — it would now catch the
+      // delegation being severed, which the old form could not.
       final restoreBody = _methodBody(syncSvcSrc, '_restoreUserProfile');
       expect(
-          restoreBody.contains("'users'") || restoreBody.contains('"users"'),
-          isTrue,
-          reason:
-              "_restoreUserProfile must SELECT from 'users' table for full_name + email; "
-              "user_profile has no full_name column — this was the 'USER' greeting bug in APK #12.8");
+        restoreBody.contains('_fetchUsersRowForRestore'),
+        isTrue,
+        reason: '_restoreUserProfile must reach the users row through '
+            '_fetchUsersRowForRestore — a bare inline select here has no '
+            'retry and silently drops full_name (diagnose d4e9a2).',
+      );
+
+      final helperBody = _methodBody(syncSvcSrc, '_fetchUsersRowForRestore');
+      expect(
+        helperBody.contains("'users'") || helperBody.contains('"users"'),
+        isTrue,
+        reason:
+            "_fetchUsersRowForRestore must SELECT from 'users' for full_name + "
+            "email; user_profile has no full_name column — this was the 'USER' "
+            "greeting bug in APK #12.8",
+      );
     });
 
     test('reader userGreetingProvider exists in home_provider', () {
@@ -104,18 +127,46 @@ void main() {
   });
 }
 
+/// Brace-balanced body of `methodName`, anchored on its DECLARATION.
+///
+/// The return-type prefix is load-bearing and deliberately not dropped: the
+/// concatenated sync source contains CALL sites for these methods too (e.g.
+/// `_restoreUserProfile(userId)` at three places in sync_service.dart, which
+/// precede sync_profile.dart's declaration in the concatenation order), so
+/// matching a bare `name(` would extract the wrong region entirely.
+///
+/// Widened 2026-08-30 (diagnose d4e9a2) from a hardcoded `Future<void>` to any
+/// `Future<...>`, including one level of nested generics, so
+/// `Future<Map<String, dynamic>?> _fetchUsersRowForRestore(...)` is reachable.
+/// Also no longer requires `async` immediately before the brace.
 String _methodBody(String src, String methodName) {
-  final pattern = RegExp(
-      r'Future<void>\s+' + methodName + r'\s*\([^)]*\)\s*async\s*\{');
+  final pattern = RegExp(r'Future<(?:[^<>]|<[^<>]*>)*>\s+' +
+      RegExp.escape(methodName) +
+      r'\s*\(');
   final match = pattern.firstMatch(src);
   if (match == null) return '';
-  final start = match.end - 1;
-  var depth = 1;
-  var i = start + 1;
-  while (i < src.length && depth > 0) {
-    if (src[i] == '{') depth++;
-    if (src[i] == '}') depth--;
+  // Walk the parameter list paren-balanced (named/default params can nest).
+  var i = match.end - 1;
+  var parens = 0;
+  while (i < src.length) {
+    if (src[i] == '(') parens++;
+    if (src[i] == ')') {
+      parens--;
+      if (parens == 0) {
+        i++;
+        break;
+      }
+    }
     i++;
   }
-  return src.substring(start, i);
+  final start = src.indexOf('{', i);
+  if (start == -1) return '';
+  var depth = 1;
+  var j = start + 1;
+  while (j < src.length && depth > 0) {
+    if (src[j] == '{') depth++;
+    if (src[j] == '}') depth--;
+    j++;
+  }
+  return src.substring(start, j);
 }

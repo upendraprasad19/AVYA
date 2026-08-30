@@ -476,26 +476,52 @@ void main() {
   });
 
   group('D1 — the deployment banner drops the week counter while holding', () {
-    // Source-grep (comments stripped) — the banner is deep in a screen widget
-    // tree; this pins BOTH ternary arms exist. The behavioural half is covered
-    // by holdStatusProvider's own tests.
+    // UPDATED 2026-08-30 (diagnose b7f1c8). The banner's inline ternary was
+    // extracted into the pure formatter `deploymentEyebrowLabel`
+    // (lib/core/utils/hold_week_labels.dart) — the same extraction this repo
+    // already applied to the five sibling formatters in that file, after a
+    // B-pass inverted an inlined ternary and all 16 tests still passed.
+    //
+    // These two tests keep their ORIGINAL job (both arms exist, and holding
+    // drops the week counter) but now assert it where the logic lives. The
+    // exact rendered strings are additionally pinned behaviourally, per arm,
+    // in test/contracts/hold_week_labels_test.dart's `deploymentEyebrowLabel`
+    // group — which a source-grep cannot do, and which is why the extraction
+    // is a strengthening rather than a relocation.
     final banner = File('lib/features/train/screens/train/screen.dart')
         .readAsStringSync()
         .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
         .replaceAll(RegExp(r'//[^\n]*'), '');
+    final labels = File('lib/core/utils/hold_week_labels.dart')
+        .readAsStringSync()
+        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+        .replaceAll(RegExp(r'//[^\n]*'), '');
+
+    test('the banner delegates to the pure formatter, hold-state included', () {
+      expect(banner.contains('deploymentEyebrowLabel('), isTrue,
+          reason: 'the eyebrow must route through the extracted formatter, '
+              'not re-inline a ternary a source-grep cannot verify');
+      expect(banner.contains('isHolding: holdStatus.isHolding'), isTrue,
+          reason: 'the formatter can only drop the week counter while '
+              'holding if the screen actually passes the hold state in');
+    });
 
     test('holding arm renders the phase WITHOUT a week counter', () {
-      expect(banner.contains('holdStatus.isHolding'), isTrue);
-      final holdingArm = RegExp(
-          r"holdStatus\.isHolding\s*\?\s*'DEPLOYMENT 01[^']*\$\{plan\.phaseName\.toUpperCase\(\)\}'");
-      expect(holdingArm.hasMatch(banner), isTrue,
+      expect(labels.contains('deploymentEyebrowLabel('), isTrue,
+          reason: 'the formatter must exist in hold_week_labels.dart');
+      // The holding arm returns the deployment+phase segment ALONE; only the
+      // non-holding arm appends the week counter.
+      final holdingArm =
+          RegExp(r'isHolding\s*\?\s*deployment\s*:', multiLine: true);
+      expect(holdingArm.hasMatch(labels), isTrue,
           reason: 'a hold week sits OUTSIDE the phase 4 weeks — no honest '
               '"WK n OF 4" exists for it; the HOLDING pill owns the identity');
     });
 
     test('non-holding arm still carries the pinned WK n OF 4 literal', () {
-      // phase_relative_week_label_test.dart:62 greps for this exact string.
-      expect(banner.contains(r'WK ${plan.currentWeek} OF 4'), isTrue);
+      // phase_relative_week_label_test.dart greps for this same string, now
+      // at its post-extraction home.
+      expect(labels.contains(r'WK $currentWeek OF 4'), isTrue);
     });
   });
 
