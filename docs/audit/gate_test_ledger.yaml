@@ -73,22 +73,34 @@ check_context_artifact_budget.dart:
   evidence: >
     NEW gate 2026-08-30. Guards the size of the artifacts an AGENT loads, the
     way check_apk_size_within_bounds.dart guards the one USERS download.
-    Three protective legs, each mutated separately against the real gate, each
+    FOUR protective legs, each mutated separately against the real gate, each
     mutation VERIFIED APPLIED by a scripted exact-match replace that aborts
-    unless it matches exactly once (a regex that silently matches nothing makes
-    a green run read as proof of nothing — recorded twice in this repo):
-    (1) DELETE THE HARD BAND, so every breach degrades to warn and nothing can
-    ever block — 7 of 29 red (5 lib + 2 e2e, incl. the e2e asserting exitCode 1).
-    This is the leg that matters: the drift that motivated the gate was +427%
-    on OPEN_INDEX.md.
+    unless it matches exactly once. That guard earned its keep here: after leg 4
+    was added the leg-1 mutation stopped matching and ABORTED rather than
+    silently no-opping into a green run that would have read as proof.
+    Counts below are all against the SAME 35-test baseline, re-measured after
+    the suite grew — the earlier entry cited 29 and went stale within hours,
+    which is the defect this whole gate is about.
+    (1) DELETE THE HARD GROWTH BAND, so every breach degrades to warn and
+    nothing can ever block — 7 of 35 red (incl. the e2e asserting exitCode 1).
+    The drift that motivated the gate was +427% on open_issues.md and +404% on
+    OPEN_INDEX.md — two figures, corrected here after round 1 caught them cited
+    as one against the wrong file.
     (2) STOP FAILING OPEN — treat an unreadable artifact as a breach instead of
     SKIPPED — 4 red. Fail-open is load-bearing: a hygiene gate that can wedge
     every commit in the repo is worse than the drift it watches.
     (3) NARROW THE KEY UNION to baselines.keys, so an artifact tracked in the
     script but not yet baselined silently escapes the budget forever — 4 red.
-    Restored: 29/29 green. Bands are two-tier on purpose — soft 15% warns and
-    never blocks (open_issues.md legitimately grows when an issue is filed),
-    hard 50% blocks, because that is growth nobody reaches by accident.
+    (4) DELETE THE SHRINK FLOOR — 5 red. ADDED BY REVIEW ROUND 1, which found
+    the gate had no mirror at all: every negative drift was ok, so a CLAUDE.md
+    truncated to ZERO BYTES reported "PASS: 3 within band". The one shrink test
+    at the time exercised a proportionate 45% reclaim and stayed green under the
+    bug — the author-blind-spot shape §4.12 predicts. Floors are asymmetric on
+    purpose: -50% warns (this batch's own legitimate reclaim was -45.5%), -90%
+    blocks.
+    Restored: 35/35 green. Growth bands stay two-tier — soft 15% warns and never
+    blocks (open_issues.md legitimately grows when an issue is filed), hard 50%
+    blocks, because that is growth nobody reaches by accident.
 
 check_copy_centralization.dart:
   grandfathered: 2026-08-10

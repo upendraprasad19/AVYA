@@ -55,6 +55,16 @@ void main(List<String> args) {
           final bytes = v is Map ? v['bytes'] : null;
           if (bytes is int) baselines[e.key.toString()] = bytes;
         }
+      } else {
+        // VALID JSON, WRONG SHAPE — e.g. a top-level array. Round 1 found this
+        // silently no-opped, so every artifact then reported "no baseline
+        // recorded — run with --record" and the operator would go looking for a
+        // missing baseline rather than a malformed one. Failing open is right;
+        // failing open QUIETLY, with a message that names the wrong cause, is
+        // not. Same family as feedback_bad_news_vs_no_news.
+        stdout.writeln('[context-budget] SKIPPED — $kBaselinePath is valid JSON '
+            'but not an object (got ${raw.runtimeType}); treating every '
+            'artifact as unbaselined. Re-create it with --record.');
       }
     } catch (_) {
       stdout.writeln('[context-budget] SKIPPED — $kBaselinePath unreadable or '

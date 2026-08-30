@@ -8,7 +8,11 @@
 // ±10% band, `--record` to re-baseline). Nothing guarded the artifacts the
 // AGENT loads on every session, and they drifted badly before anyone measured:
 //
-//   docs/audit/open_issues.md   67,895 -> 357,664 B in 30 days (~+3,200 tok/day)
+//   docs/audit/open_issues.md   67,895 -> 357,664 B in 31 days. That is ~9,347
+//                                B/day = ~2,600 tok/day averaged over the window,
+//                                and ~3,200 tok/day over the last 7 days of it.
+//                                Both are stated because ONE number here would be
+//                                the exact defect this gate exists to catch.
 //   docs/audit/OPEN_INDEX.md     3,759 ->  18,958 B, while CLAUDE.md §7 still
 //                                advertised it as "~950 tokens" — a claim that
 //                                was TRUE when written (`e4bc9040`, 2026-07-29)
@@ -32,13 +36,15 @@
 
 /// What a single artifact's measurement came to.
 enum BudgetStatus {
-  /// Within the soft band, or smaller than baseline. Nothing to say.
+  /// Inside every band, in BOTH directions. Note this is no longer "or smaller
+  /// than baseline": unbounded shrinkage was the mirror case review round 1
+  /// caught, and a near-total truncation is now warn/fail, not ok.
   ok,
 
-  /// Past the soft band. Reported loudly; NEVER blocks a commit.
+  /// Past the soft band in either direction. Reported loudly; NEVER blocks.
   warn,
 
-  /// Past the hard band. Blocks.
+  /// Past a hard band in either direction. Blocks.
   fail,
 
   /// Could not be measured, or has no baseline yet. Reported as SKIPPED, never
@@ -91,9 +97,33 @@ class BudgetFinding {
 ///
 /// So: [softBand] is where a human should look, and it never blocks. [hardBand]
 /// is growth no one does by accident — the drift this gate was born from was
-/// **+427%**, an order of magnitude past it.
+/// **+427% on `open_issues.md`** (and +404% on `OPEN_INDEX.md`), an order of
+/// magnitude past it. ⚠ Round 1 caught these two being cited as one figure
+/// against the wrong filename — in the gate whose entire subject is stale
+/// numbers. Keep the number and the file it belongs to together.
 const double kSoftBand = 0.15;
 const double kHardBand = 0.50;
+
+/// Bands for the MIRROR case: catastrophic SHRINKAGE.
+///
+/// Added by review round 1, and the finding is the cleanest example of
+/// `guard_without_its_mirror` this gate could have shipped. The first version
+/// treated every negative drift as [BudgetStatus.ok] under the comment
+/// "shrinking is always fine, and is the point of the batch that added this" —
+/// true of the intentional case that motivated it (this batch cut the board 44%)
+/// and blind to the mirror: a CLAUDE.md truncated to **zero bytes** reported
+/// `PASS: 3 within band`, indistinguishable from no drift at all. The batch's own
+/// test only exercised a proportionate 45% shrink, so it shared the blind spot
+/// exactly as §4.12's "do not accept the diff's own tests as evidence" predicts.
+///
+/// Asymmetric ON PURPOSE, because the two directions are not equally suspicious:
+/// deliberate reclamation is a normal, large, *reported* event (−44% here), while
+/// losing nine tenths of a governing file in one commit is not something anyone
+/// does on the way to something else. So −50% only WARNS — it must never block
+/// the next person who archives a pile of closed entries — and −90% blocks, with
+/// `--record` as the documented escape hatch for a genuine split into modules.
+const double kSoftShrink = -0.50;
+const double kHardShrink = -0.90;
 
 /// Evaluate one artifact.
 ///
@@ -106,6 +136,8 @@ BudgetFinding evaluateOne(
   required int? actual,
   double softBand = kSoftBand,
   double hardBand = kHardBand,
+  double softShrink = kSoftShrink,
+  double hardShrink = kHardShrink,
 }) {
   if (actual == null) {
     return BudgetFinding(
@@ -134,10 +166,11 @@ BudgetFinding evaluateOne(
   }
 
   final drift = (actual - baseline) / baseline;
-  // Shrinking is always fine, and is the point of the batch that added this.
-  final status = drift > hardBand
+  // Both directions, not just growth. See kSoftShrink for why the shrink side
+  // is asymmetric rather than a mirror of the growth bands.
+  final status = drift > hardBand || drift < hardShrink
       ? BudgetStatus.fail
-      : drift > softBand
+      : drift > softBand || drift < softShrink
           ? BudgetStatus.warn
           : BudgetStatus.ok;
 
@@ -156,6 +189,8 @@ List<BudgetFinding> evaluateAll(
   Map<String, int?> actuals, {
   double softBand = kSoftBand,
   double hardBand = kHardBand,
+  double softShrink = kSoftShrink,
+  double hardShrink = kHardShrink,
 }) {
   // Union of both key sets: an artifact present in the tree but absent from the
   // baseline must still be REPORTED (as skipped), or adding a new always-loaded
@@ -169,6 +204,8 @@ List<BudgetFinding> evaluateAll(
         actual: actuals[p],
         softBand: softBand,
         hardBand: hardBand,
+        softShrink: softShrink,
+        hardShrink: hardShrink,
       )
   ];
 }

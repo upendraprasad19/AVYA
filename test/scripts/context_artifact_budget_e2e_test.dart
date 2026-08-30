@@ -167,6 +167,36 @@ void main() {
     expect(r.stdout.toString(), contains('SKIPPED'));
   });
 
+  test('valid JSON of the WRONG SHAPE says so, instead of "run --record"', () {
+    // Round 1: a top-level array silently no-opped, so every artifact reported
+    // "no baseline recorded" and the operator would chase a missing baseline
+    // rather than a malformed one. Fails open either way; the MESSAGE was the
+    // defect.
+    final dir = track(_fixture(
+      claudeMd: 1000,
+      index: 1000,
+      board: 1000,
+      baselineJson: '[1,2,3]',
+    ));
+    final r = _run(dir.path);
+    expect(r.exitCode, 0, reason: 'wrong shape must still fail open');
+    expect(r.stdout.toString(), contains('not an object'),
+        reason: 'remove the else-branch and this says "run with --record"');
+  });
+
+  test('an artifact TRUNCATED to zero bytes → exitCode, 1', () {
+    // The mirror case round 1 found: this reported PASS before the shrink floor.
+    final dir = track(_fixture(
+      claudeMd: 0,
+      index: 1000,
+      board: 1000,
+      baselineJson: _baselines(claudeMd: 95297, index: 1000, board: 1000),
+    ));
+    final r = _run(dir.path);
+    expect(r.exitCode, 1, reason: '${r.stdout}${r.stderr}');
+    expect(r.stderr.toString(), contains('CLAUDE.md'));
+  });
+
   test('--record writes baselines, and the next check passes', () {
     final dir = track(_fixture(claudeMd: 1234, index: 2345, board: 3456));
     final rec = _run(dir.path, args: ['--record']);

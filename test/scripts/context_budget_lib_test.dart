@@ -9,9 +9,17 @@
 //   2. fail-open on unknowns  — treat an unreadable file as a breach instead
 //   3. the key-set UNION      — iterate baselines only and a newly tracked
 //                               artifact escapes the budget silently
+//   4. the SHRINK floor       — drop it and a file truncated to zero bytes
+//                               reports a clean PASS
 //
-// Boundary cases are pinned with `>` semantics deliberately: exactly-at-band is
-// NOT a breach, so a `>=` typo reddens.
+// Leg 4 exists because review round 1 found it missing: the first version
+// treated every negative drift as ok, so a CLAUDE.md truncated to 0 B was
+// indistinguishable from no drift. The ONE shrink test at the time exercised a
+// proportionate 45% reclaim — green under the bug, which is exactly the
+// author-blind-spot shape §4.12 warns about.
+//
+// Boundary cases are pinned with `>` / `<` semantics deliberately: exactly-at-band
+// is NOT a breach, so a `>=` typo reddens.
 
 import 'package:test/test.dart';
 
@@ -25,13 +33,43 @@ void main() {
       expect(f.drift, closeTo(0.10, 1e-9));
     });
 
-    test('shrinking is ok, never a breach', () {
-      // The batch that added this gate cut open_issues.md by 44%. A gate that
-      // fired on its own reclaim would be worse than useless.
+    test('a DELIBERATE reclaim stays ok — the real -45.5% from this batch', () {
+      // open_issues.md 357,664 -> 194,850 B. A gate that fired on its own
+      // reclaim would be worse than useless, so the shrink floor sits BELOW
+      // this real value on purpose. If someone tightens kSoftShrink past
+      // -45.5%, this reddens and tells them why.
       final f = evaluateOne('a', baseline: 357664, actual: 194850);
       expect(f.status, BudgetStatus.ok);
-      expect(f.drift, lessThan(0));
+      expect(f.drift, closeTo(-0.4552, 1e-3));
       expect(f.driftLabel, startsWith('-'));
+    });
+
+    test('TRUNCATED TO ZERO fails — reddens if the shrink floor is removed', () {
+      // THE MIRROR CASE. Round 1's finding, verbatim: a CLAUDE.md truncated to
+      // 0 B reported "PASS: 3 within band". Delete the hardShrink branch and
+      // this returns ok again.
+      final f = evaluateOne('CLAUDE.md', baseline: 95297, actual: 0);
+      expect(f.status, BudgetStatus.fail,
+          reason: 'losing a governing file whole must never read as clean');
+      expect(f.drift, closeTo(-1.0, 1e-9));
+    });
+
+    test('losing most of a file warns before it fails', () {
+      // -60%: past the soft floor, inside the hard one. Warns, never blocks —
+      // the next person archiving a pile of closed entries must not be stopped.
+      expect(evaluateOne('a', baseline: 1000, actual: 400).status,
+          BudgetStatus.warn);
+    });
+
+    test('EXACTLY at each shrink floor is the gentler verdict', () {
+      expect(evaluateOne('a', baseline: 1000, actual: 500).status,
+          BudgetStatus.ok, reason: '-50.0% exactly is not yet a warn');
+      expect(evaluateOne('a', baseline: 1000, actual: 100).status,
+          BudgetStatus.warn, reason: '-90.0% exactly is not yet a fail');
+    });
+
+    test('a hard shrink BLOCKS, same as a hard growth', () {
+      expect(anyBlocking(evaluateAll({'a': 1000}, {'a': 5})), isTrue);
     });
 
     test('past the soft band warns', () {
@@ -150,7 +188,11 @@ void main() {
     });
 
     test('approxTokens tracks the measured ~3.6 chars/token', () {
-      expect(approxTokens(94291), 26191); // CLAUDE.md, matches the live report
+      // 94,291 was CLAUDE.md's size at cbd0267d, BEFORE this batch's own edits
+      // to it (95,297 as committed). Kept as a fixed input because this asserts
+      // a pure function, not a live file — but labelled honestly, since round 1
+      // caught the original comment claiming it "matches the live report".
+      expect(approxTokens(94291), 26191);
       expect(approxTokens(0), 0);
     });
   });
