@@ -251,7 +251,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     unawaited(_autoGenerateNextPhaseForPro());
 
     // Drain any persisted sync-queue ops left over from a previous session
-    // (app killed while offline, JWT expired mid-flight, etc.). No-op when
+    // (app killed while offline, JWT expired mid-flight, etc.). Cheap when
     // sync_reliability_v1 feature flag is off — the queue is empty then.
     unawaited(SyncQueue.instance.drain());
 

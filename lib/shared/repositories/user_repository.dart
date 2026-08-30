@@ -59,10 +59,20 @@ class ProgressMergeResult {
   /// are different facts and only the second indicates corrupt data.
   final List<String> malformedFields;
 
+  /// Phase-delta companions (`current_week`, `phase_started_at`,
+  /// `plan_generated_at`) kept from local because the merge kept local's
+  /// `current_phase` AND cloud's value differed (OI-150).
+  ///
+  /// A value-IDENTICAL refusal is deliberately not recorded: it changes
+  /// nothing, and it would otherwise fire on every counter-only advance made
+  /// by `PhaseProgressReconciler`, which is a correct and routine operation.
+  final List<String> refusedPhaseDeltaFields;
+
   const ProgressMergeResult({
     required this.merged,
     required this.declinedFields,
     this.malformedFields = const <String>[],
+    this.refusedPhaseDeltaFields = const <String>[],
   });
 
   bool get hasDeclined => declinedFields.isNotEmpty;
@@ -90,6 +100,15 @@ void reportProgressDemotionsDeclined(
   for (final f in result.malformedFields) {
     unawaited(ErrorTelemetry.logEvent(
       'progress_restore_field_malformed',
+      message: 'source=$source field=$f',
+    ));
+  }
+  // OI-150 / N2. Without this the coupling fires invisibly: nobody could tell
+  // from `client_errors` whether the fix ever engages, which is the silent
+  // half of the very bug it closes.
+  for (final f in result.refusedPhaseDeltaFields) {
+    unawaited(ErrorTelemetry.logEvent(
+      'progress_restore_phase_delta_refused',
       message: 'source=$source field=$f',
     ));
   }
@@ -254,6 +273,57 @@ class UserRepository {
     'total_workouts_done',
   ];
 
+  /// The three fields `commitPhaseAdvance` writes ATOMICALLY alongside
+  /// `current_phase` (`pro_phase_advance.dart:343-348`, fields at `:344-347`).
+  ///
+  /// NOT monotonic, and they must never be added to [monotonicProgressFields]:
+  /// two are ISO dates and one is a reset-to-1 counter, so max-wins on any of
+  /// them is a guard pointed the wrong way — the `longest_gap_days` mistake
+  /// documented at :257-266.
+  ///
+  /// Applied as a POST-PASS over the merged map rather than inside the loop,
+  /// which is what makes it order-independent: the cloud row's key order comes
+  /// from PostgREST's JSON and is not ours to control, so a decision made
+  /// mid-loop could see a companion before it has seen the phase. The loop
+  /// itself is untouched, so `current_phase`'s existing demotion and malformed
+  /// telemetry keep working exactly as OI-83 shipped them.
+  ///
+  /// NOT carried by `phase_progress_reconciler.dart:138`, which advances the
+  /// counter alone by design (`:20-22` — "WITHOUT touching the in-progress
+  /// plan"). Keeping local's companions after a counter-only advance is
+  /// correct BY THAT WRITER'S OWN CONTRACT — not because the values happen to
+  /// match cloud's. They need not: cloud's companions are last-writer-wins
+  /// from any device (`sync_profile.dart:344`), and
+  /// `sync_service.dart:1279-1282` can push a `?? DateTime.now()` this device
+  /// never held.
+  @visibleForTesting
+  static const List<String> phaseDeltaCompanionFields = <String>[
+    'current_week',
+    'phase_started_at',
+    'plan_generated_at',
+  ];
+
+  @visibleForTesting
+  static const String kDisableProgressPhaseDeltaCouplingKey =
+      'disable_progress_phase_delta_coupling';
+
+  /// §4.6 kill-switch for the companion coupling, deliberately INDEPENDENT of
+  /// [kDisableProgressRestoreMonotonicMergeKey]: rolling this back must not
+  /// also disable the shipped OI-83 monotonic guard.
+  ///
+  /// Reads through `HiveService.instance`, not the instance field `_hive`,
+  /// because this is a static member — matching [_monotonicMergeDisabled]
+  /// at :340. Fails CLOSED (coupling stays active) when the box is not open.
+  static bool get _phaseDeltaCouplingDisabled {
+    try {
+      return HiveService.instance.configBox
+              .get(kDisableProgressPhaseDeltaCouplingKey) ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// §4.6 / the `platform`-tier `feature_flag` requirement in
   /// `docs/blast_radius.yaml:25`. Set `true` in `configBox` to make
   /// [mergeCloudProgress] return the pre-OI-83 expression verbatim.
@@ -319,12 +389,40 @@ class UserRepository {
     final merged = <String, dynamic>{...local};
     final declined = <ProgressDemotion>[];
     final malformed = <String>[];
+    // OI-150: set by the loop at the two branches where local's `current_phase`
+    // survives. Read by the post-pass below, so the companion decision cannot
+    // depend on where `current_phase` sits in cloud's key order.
+    // N1 (review round 2): local's phase also survives on two paths the loop
+    // cannot signal — cloud omitting the key entirely (never visited), and
+    // cloud carrying an explicit null (an early `continue`). Both leave local's
+    // value standing, so both must couple the companions or the fix leaves the
+    // exact split it exists to prevent. Seeded here for the key-absent case.
     // §4.6 kill-switch: verbatim pre-OI-83 behaviour, cloud-non-null-wins for
     // EVERY key including the monotonic ones.
+    //
+    // ⚠ Computed BEFORE the seed below, and the seed is gated on it. B-pass
+    // finding 1: the seed and the cloud-null branch originally ran ahead of
+    // this read, so rolling the OI-83 switch left the OI-150 coupling still
+    // firing — the switch promises "verbatim pre-OI-83" and pre-OI-83 had no
+    // companion coupling at all. The two switches are independent in the sense
+    // that rolling the NEW one leaves OI-83 intact; the reverse is not true
+    // and must not be, because the older switch is the wider rollback.
     final guardOff = _monotonicMergeDisabled;
+    var phaseKeptLocal = !guardOff &&
+        local['current_phase'] != null &&
+        !cloud.containsKey('current_phase');
 
     for (final entry in cloud.entries) {
-      if (entry.value == null) continue; // unchanged: cloud null never wins
+      if (entry.value == null) {
+        // N1: cloud null never wins — so if this is the phase, local's value
+        // survived and the companions must move with it.
+        if (!guardOff &&
+            entry.key == 'current_phase' &&
+            local[entry.key] != null) {
+          phaseKeptLocal = true;
+        }
+        continue; // unchanged: cloud null never wins
+      }
       if (guardOff || !monotonicProgressFields.contains(entry.key)) {
         merged[entry.key] = entry.value;
         continue;
@@ -345,6 +443,13 @@ class UserRepository {
       // exact hop-the-crash-downstream case the malformed guard exists to stop.
       if (cloudRaw is! num) {
         malformed.add(entry.key);
+        // OI-150: local's phase survived — but only count it as "kept" when
+        // local ACTUALLY HAD one. "Kept whatever local had" when local had
+        // nothing is not a kept value, and treating it as one would refuse a
+        // reinstalling user's companions into absence too.
+        if (entry.key == 'current_phase' && localRaw != null) {
+          phaseKeptLocal = true;
+        }
         continue; // keep whatever local had (possibly nothing)
       }
 
@@ -388,12 +493,50 @@ class UserRepository {
           cloudValue: cloudValue,
         ));
         merged[entry.key] = localValue; // local-max-wins
+        // OI-150: the refused demotion IS the signal that local is ahead.
+        if (entry.key == 'current_phase') phaseKeptLocal = true;
       } else {
         merged[entry.key] = cloudValue;
       }
     }
+
+    // ── OI-150: the phase delta moves as one group ──────────────────────────
+    //
+    // `commitPhaseAdvance` writes current_phase + current_week +
+    // phase_started_at + plan_generated_at as ONE atomic delta and its own doc
+    // comment (:295-298) says a skip must skip the WHOLE delta. OI-83 guarded
+    // only the first, so a stale cloud row split the group and the merged
+    // result was written straight back to Hive — leaving local and cloud
+    // agreeing on a shape neither ever wrote.
+    //
+    // A POST-PASS, deliberately: `merged` already starts as `{...local}`, so
+    // anything a companion still holds from local needs no action and only a
+    // value cloud actually changed is restored. That makes this independent of
+    // cloud's key order, which PostgREST decides.
+    final refusedPhaseDelta = <String>[];
+    if (phaseKeptLocal && !_phaseDeltaCouplingDisabled) {
+      for (final key in phaseDeltaCompanionFields) {
+        final localValue = local[key];
+        // Carve-out: refuse only a companion local ACTUALLY HOLDS. The
+        // `updateProgress` seed (:584-590) writes current_phase with no dates,
+        // and `PhaseProgressReconciler:138` then advances the phase alone — so
+        // a phase-ahead map with no `phase_started_at` is reachable. Refusing
+        // an absent key would drop it from the merged map entirely and anchor
+        // the next plan regeneration at today.
+        if (localValue == null) continue;
+        // Cloud did not change it — nothing refused, nothing to report.
+        if (merged[key] == localValue) continue;
+        refusedPhaseDelta.add(key);
+        merged[key] = localValue;
+      }
+    }
+
     return ProgressMergeResult(
-        merged: merged, declinedFields: declined, malformedFields: malformed);
+      merged: merged,
+      declinedFields: declined,
+      malformedFields: malformed,
+      refusedPhaseDeltaFields: refusedPhaseDelta,
+    );
   }
 
   // ── Pending Promotion (Theme B, diagnose 2026-05-22 9aa2c1) ────

@@ -4603,3 +4603,95 @@ any change must keep honouring.
 
 **Related:** diagnose `b7f1c8` (which surfaced this, in plan-review round 2), diagnose `c9e4b7`
 (the original display symptom), OI-83 (the monotonic-merge guard this extends), diagnose `d1f6b3`.
+
+## OI-151 — telemetry outweighs user data 1.7:1; `restore_op_done` is 64% of it and scales to ~240k rows/day at 10k DAU (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. It is a PRE-LAUNCH tuning decision, not a defect — the
+  volume is bounded today and harmless at current scale. It wants a call on what breadcrumb
+  granularity is worth paying for once there are real users.
+- **Verified**: 2026-08-30 — measured live on `dedsavbjuwgarrhphgnl`, not estimated. Row counts
+  are whole-history across all 17 accounts.
+- **Identified**: 2026-08-30, during the OI-150 write-durability research (founder asked how many
+  cloud writes the app actually makes per day).
+- **Risk class**: cost / operational scaling. NOT a correctness issue.
+
+**The measurement.** Every row in the database, all users, ~4 months:
+
+| table | rows | per active day |
+|---|---|---|
+| `client_errors` | **1905** | **100.3** |
+| `scheduled_workouts` | 607 | 28.9 (bursty — 28 rows per plan generation, not a rate) |
+| `workout_log_exercises` | 153 | 7.3 |
+| `user_daily_snapshots` | 131 | 1.9 |
+| `ai_coach_interactions` | 121 | 3.8 |
+| `workout_logs` | 41 | 1.5 |
+| `weight_logs` | 35 | 1.1 |
+| `nutrition_logs` | 32 | 1.5 |
+| `water_logs` | 27 | 1.0 |
+
+**1905 telemetry rows vs ~1147 rows of ALL real user data combined.** Actual user-generated
+writes are ~5–10 per user per active day — genuinely trivial.
+
+`restore_op_done` alone is **1221 rows = 64% of all telemetry**, at ~24 per user per day
+(1221 events / 5 users / 10 active days).
+
+**Why it is bounded today, and where the ceiling actually is.** `restore_op_done` is NOT in
+`log-client-error`'s `HIGH_PRIORITY_OP_TYPES` bypass list, so it shares the
+`DAILY_RATE_LIMIT = 2000` events/user/24h budget (raised 100 → 2000 in APK Test #16.1 / Theme D).
+At 24/user/day we sit at ~1.2% of cap. So this is not a runaway.
+
+⚠ **The scaling arithmetic, which is the actual point:** 24/user/day × 10,000 DAU =
+**~240,000 rows/day ≈ 7.2M/month** of observability exhaust. The 2000/user/day cap would permit
+20M/day. Neither number is a crisis; both are worth choosing deliberately rather than inheriting.
+
+**Fix shape (not attempted, and deliberately not bundled into the OI-150 batch):** decide a
+breadcrumb granularity — e.g. `restore_op_done` becomes one summary row per restore rather than
+one per operation, or moves to a sampled lane. Any change must keep the ops that a real incident
+needs; `feedback_backend_collapse_blinds_telemetry` records that a telemetry GAP during an
+incident is itself a signal, so thinning this is not free.
+
+**Blast-radius estimate**: `account` (touches `log-client-error` + the client emitter).
+
+**Related:** §2.13 (telemetry sink silently drops past rate limit, `9d12af`), diagnose `c4f8d2`
+(the un-debounced fan-out that made this lane hot), OI-150 (the batch that surfaced it).
+
+## OI-152 — six-plus call sites fire `syncX()` and `pushSnapshot()` back to back, doubling round-trips per user action (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Bounded, mechanical work. Filed rather than bundled into the
+  OI-150 batch because that batch is a correctness fix to the sync/restore seam and this is a
+  round-trip optimisation — mixing them would widen a `platform`-tier diff for no correctness gain.
+- **Verified**: 2026-08-30 — every call site below read directly in the worktree, full grep, not
+  sampled.
+- **Identified**: 2026-08-30, during the OI-150 write-durability research.
+- **Risk class**: efficiency. NOT a correctness issue — both calls succeed today.
+
+**The pattern.** A user action writes to Hive, then fires TWO fire-and-forget cloud calls in
+succession, where the second is derived from the same data the first just pushed:
+
+| file:line | the pair |
+|---|---|
+| `lib/features/train/repositories/workout_repository.dart:1589-1590` | `syncWorkoutData()` + `pushSnapshot()` |
+| `lib/features/train/providers/train_provider.dart:2176-2177` | `syncWorkoutData()` + `pushSnapshot()` |
+| `lib/features/home/widgets/swap_sheet.dart:143-144` | `syncWorkoutData()` + `pushSnapshot()` |
+| `lib/features/train/screens/template_builder_screen.dart:448,460` | `pushSnapshot()` + `syncWorkoutData()` |
+| `lib/features/nutrition/providers/nutrition_provider.dart:1313-1314` | `syncCustomItemsNow()` + `pushSnapshot()` |
+| `lib/features/profile/screens/edit_profile_screen.dart:1816-1817` | `syncProfileNow()` + `pushSnapshot()` |
+| `lib/features/profile/screens/edit_profile_screen.dart:2006-2008` | `syncProfileNow()` + `pushSnapshot()` |
+| `lib/features/train/widgets/create_custom_exercise_sheet.dart:92-93` | `syncCustomItemsNow()` + `pushSnapshot()` |
+
+**Why the existing coalescer does not already cover it.** `SyncCoalescer` (Unit H, `c4f8d2`)
+de-duplicates repeated calls to the SAME fan-out entry point. These are two DIFFERENT entry
+points fired once each, so both pass through. The snapshot debounce (H1b Part B1, `e7c1a9`)
+delays the second but does not merge it.
+
+⚠ **Do NOT "fix" this by deleting the `pushSnapshot()` calls.** The snapshot is the AI coach's
+context payload and the source for reports/alerts; `sync_service.dart:830` calls the next-login
+snapshot push a durability backstop that "MUST be durable". The fix shape is to let the snapshot
+be derived from the sync that just ran (one round-trip), not to drop it.
+
+**Blast-radius estimate**: `account` — 8 call sites across train/nutrition/profile, no schema
+change.
+
+**Related:** diagnose `c4f8d2` (SyncCoalescer), `e7c1a9` (pushSnapshot debounce), OI-150.

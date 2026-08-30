@@ -24,6 +24,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
 
 /// Strip `/* … */` and `// …` so prose about the old merge cannot be mistaken
 /// for the old merge.
@@ -113,6 +114,72 @@ void main() {
         isTrue,
         reason: 'positive half — an absent-pattern test alone would also pass '
             'if the whole block were deleted',
+      );
+    });
+  });
+
+  // ── OI-150 Part A: the plan-regen anchor ───────────────────────────────────
+  //
+  // d1f6b3's B-pass finding F1 repointed the `phase` argument at the guarded
+  // Hive value and left the `startDate` argument on the raw pre-merge cloud
+  // row — eight lines below, in the same generateAndSchedule call.
+  group('plan regen anchors on the guarded value (OI-150)', () {
+    test('a present Hive ISO is used verbatim', () {
+      final now = DateTime.utc(2026, 8, 30);
+      expect(
+        AuthSessionBootstrapper.resolvePlanRegenStart(
+            hiveIso: '2026-05-25T00:00:00.000Z', now: now),
+        DateTime.parse('2026-05-25T00:00:00.000Z'),
+      );
+    });
+
+    test('a null Hive ISO falls back to now — never to the cloud row', () {
+      final now = DateTime.utc(2026, 8, 30);
+      expect(
+          AuthSessionBootstrapper.resolvePlanRegenStart(
+              hiveIso: null, now: now),
+          now);
+    });
+
+    test('an unparseable Hive ISO falls back to now', () {
+      final now = DateTime.utc(2026, 8, 30);
+      expect(
+          AuthSessionBootstrapper.resolvePlanRegenStart(
+              hiveIso: 'not-a-date', now: now),
+          now);
+    });
+
+    test('the bootstrapper resolves the anchor from the guarded accessor', () {
+      final src = _stripComments(
+          File('lib/core/services/auth_session_bootstrapper.dart')
+              .readAsStringSync());
+      // Positive half — the guarded accessor feeds the resolver.
+      expect(src.contains('resolvePlanRegenStart('), isTrue);
+      expect(
+        src.contains(RegExp(
+            r'hiveIso:\s*UserRepository\.instance\.getPhaseStartedAtIso\(\)')),
+        isTrue,
+        reason: 'the anchor must come from the post-merge Hive value, via the '
+            'typed accessor rather than a hand-rolled map read',
+      );
+      // The raw pre-merge cloud read survives ONLY inside the §4.6 kill-switch
+      // branch. Pinned by COUNT + the switch's presence rather than by slicing
+      // the source at a brace, which would break on a reformat and report it
+      // as a missing kill-switch.
+      expect(
+        AuthSessionBootstrapper.kDisableGuardedPlanRegenAnchorKey,
+        'disable_guarded_plan_regen_anchor',
+      );
+      expect(src, contains(AuthSessionBootstrapper.kDisableGuardedPlanRegenAnchorKey),
+          reason: 'the pre-fix path must stay reachable behind a kill-switch');
+      expect(
+        RegExp(r"progressRows\.first\[\s*'phase_started_at'\s*\]")
+            .allMatches(src)
+            .length,
+        1,
+        reason: 'exactly ONE raw-cloud read may remain — the one inside the '
+            'kill-switch branch. Two means the guarded path reads it too; '
+            'zero means the pre-fix path was deleted rather than gated',
       );
     });
   });

@@ -18,7 +18,7 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
-import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../utils/profile_image_url.dart';
@@ -51,59 +51,24 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
     state = profile;
   }
 
+  /// Recomputes the derived nutrition targets from the profile's inputs.
+  ///
+  /// OI-150: the derivation itself lives in `recomputeDerivedTargets` so the
+  /// restore path (`_restoreUserProfile`) and this edit path cannot drift.
+  /// A null overlay means the inputs are incomplete — the same early-return
+  /// this method used to spell out inline five times.
   Future<void> recalculateTargets() async {
-    final profile = state;
-    final weight = (profile['current_weight_kg'] as num?)?.toDouble();
-    final height = (profile['height_cm'] as num?)?.toDouble();
-    final dob = profile['date_of_birth'] as String?;
-    final gender = profile['gender'] as String?;
-    final goal = profile['primary_goal'] as String?;
-
-    if (weight == null ||
-        height == null ||
-        dob == null ||
-        gender == null ||
-        goal == null) {
-      return;
-    }
-
-    final birthDate = DateTime.tryParse(dob);
-    if (birthDate == null) return;
-
-    final age = DateTime.now().difference(birthDate).inDays ~/ 365;
-    if (age <= 0) return;
-
-    // Prefer resolving from lifestyle + days (new system) over the old
-    // stored activity_level string (which was user-selected directly).
-    final lifestyle = profile['lifestyle_activity'] as String?;
-    final days = (profile['days_per_week'] as num?)?.toInt() ?? 4;
-    final resolvedActivity = lifestyle != null
-        ? BmrCalculator.resolveActivityLevel(lifestyle, days)
-        : (profile['activity_level'] as String? ?? 'moderate');
-
-    final targetWeight = (profile['target_weight_kg'] as num?)?.toDouble();
-    final bodyFat = (profile['body_fat_percent'] as num?)?.toDouble();
-
-    final targets = BmrCalculator.calculateTargets(
-      weightKg: weight,
-      heightCm: height,
-      age: age,
-      gender: gender,
-      activityLevel: resolvedActivity,
-      goal: goal,
-      pacePreference: (profile['pace_preference'] as String?) ?? 'balanced',
-      targetWeightKg: targetWeight != null && targetWeight > 0
-          ? targetWeight
-          : null,
-      bodyFatPercent: bodyFat,
+    final overlay = recomputeDerivedTargets(
+      state,
+      now: DateTime.now(),
+      // Honour the same kill-switch onboarding honours, so the preview, the
+      // onboarding commit and this edit path cannot disagree about whether
+      // body fat feeds the calculation (B5a).
+      bodyFatCalcDisabled:
+          HiveService.instance.configBox.get('disable_bodyfat_calc') == true,
     );
-
-    // Persist computed targets AND the resolved activity level so downstream
-    // code that reads 'activity_level' directly stays consistent.
-    await updateProfile({
-      ...targets.toMap(),
-      'activity_level': resolvedActivity,
-    });
+    if (overlay == null) return;
+    await updateProfile(overlay);
   }
 
   /// Upload avatar image using ImagePicker and save to Supabase storage.

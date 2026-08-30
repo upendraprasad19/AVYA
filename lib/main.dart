@@ -87,7 +87,7 @@ Future<void> main() async {
   // 3. Initialize Razorpay checkout handler (no-op on web).
   RazorpayService.instance.initialize();
 
-  // 4. Register SyncQueue op executors. No-op unless
+  // 4. Register SyncQueue op executors. Registration is unconditional; the queue itself is gated by
   //    sync_reliability_v1 feature flag is on. Must run AFTER Hive init
   //    (queue persists to syncBox). Queue drain is deferred to the
   //    splash screen, which waits for Supabase auth before firing.

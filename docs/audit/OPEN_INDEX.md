@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**71 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**73 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -79,3 +79,5 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-148 | 23 equipment-variant exercises the plate mapping surfaced, blocked on a… | the selection-skew question below. Not on artwork — every one of the 23 already has its drawing identified in `docs/plans/exercise-plates-mapping.json`'s source adjudication. | 2026-08-29 — each named row checked absent from all 292 rows of `assets/data/exercise_library.json`. | [:4492](open_issues.md#L4492) |
 | OI-149 | breathing_cue holds a bare number on 136 of 292 rows; the original text is… | the founder** — 136 replacement cues have to be authored, because the original | 2026-08-29 — counted, and the recovery paths exhausted (below). | [:4522](open_issues.md#L4522) |
 | OI-150 | mergeCloudProgress resolves current_phase and… | nothing external** — a scoped change to `UserRepository.mergeCloudProgress` | 2026-08-30 — mechanism traced end-to-end in code (below). NOT reproduced on a live | [:4554](open_issues.md#L4554) |
+| OI-151 | telemetry outweighs user data 1.7:1; `restore_op_done` is 64% of it and… | nothing technical. It is a PRE-LAUNCH tuning decision, not a defect — the | 2026-08-30 — measured live on `dedsavbjuwgarrhphgnl`, not estimated. Row counts | [:4607](open_issues.md#L4607) |
+| OI-152 | six-plus call sites fire `syncX()` and `pushSnapshot()` back to back,… | nothing technical. Bounded, mechanical work. Filed rather than bundled into the | 2026-08-30 — every call site below read directly in the worktree, full grep, not | [:4659](open_issues.md#L4659) |
