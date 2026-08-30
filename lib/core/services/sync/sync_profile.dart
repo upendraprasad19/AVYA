@@ -596,14 +596,24 @@ extension SyncServiceProfile on SyncService {
       Map<String, dynamic> usersRow = const {};
       try {
         final Object? u = identical(preFetchedUsers, _kNoInject)
-            ? await _supabase.client
-                .from('users')
-                .select('full_name, email')
-                .eq('id', userId)
-                .maybeSingle()
+            ? await _fetchUsersRowForRestore(userId)
             : preFetchedUsers;
         if (u != null) {
           usersRow = Map<String, dynamic>.from(u as Map);
+        } else if (!identical(preFetchedUsers, _kNoInject)) {
+          // C3 single-call restore already queried `users` through the
+          // Edge Function's service-role client (RLS-immune — see
+          // restore-user-snapshot/index.ts) and got a real empty result,
+          // not the ambiguous stale-token race _fetchUsersRowForRestore
+          // exists to retry. Retrying here would just re-ask the same
+          // authoritative answer. But a genuinely-absent `users` row is
+          // not an expected state for an authenticated restore (see
+          // _fetchUsersRowForRestore's doc comment) — surface it distinctly
+          // rather than silently matching the retry-path's shape (diagnose
+          // d4e9a2 B-pass finding 1).
+          unawaited(ErrorTelemetry.logEvent(
+              'restore_users_row_null_via_singlecall',
+              message: 'userId=${_shortUserId(userId)}'));
         }
       } catch (e, st) {
         // Non-fatal — profile restore still proceeds with whatever the
@@ -657,6 +667,73 @@ extension SyncServiceProfile on SyncService {
       } catch (_) {}
     }
   }
+
+  /// Fetches the `users` row (`full_name`, `email`) for [userId] during
+  /// restore, with the same proactive-refresh + one-hard-refresh-retry
+  /// pattern `AuthSessionBootstrapper.resolveDestination` uses (diagnose
+  /// c2e9f4). A token that expires mid-restore comes back as either a 401
+  /// (thrown, caught by the caller) or an RLS-filtered EMPTY result — HTTP
+  /// 200, `null` — indistinguishable from "no such row" with no exception at
+  /// all. The un-retried version of this call silently dropped `full_name`
+  /// from the merge in [_restoreUserProfile] on that second shape: the rest
+  /// of the profile restore (from `user_profile`) succeeded, so the failure
+  /// was invisible — `hasProfile=true`, `rawName=<null>` at every reader.
+  /// See diagnose d4e9a2.
+  ///
+  /// A genuinely absent `users` row is not an expected state for an
+  /// authenticated restore — the row is upserted at first sign-in
+  /// (`auth_session_bootstrapper.dart` `_ensureLocalUser` /
+  /// `hydrateFromCloud`) — so retrying once on `null` before accepting it is
+  /// safe: it can only recover a row that is really there.
+  Future<Map<String, dynamic>?> _fetchUsersRowForRestore(String userId) async {
+    try {
+      await _supabase.ensureFreshToken();
+    } catch (e, st) {
+      // Non-fatal — the select below may still succeed on the existing
+      // token. Recorded so a refresh that fails EVERY restore is visible.
+      debugPrint('[SyncService._fetchUsersRowForRestore] token refresh: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'restore_users_row_token_refresh_failed',
+          extra: {'user_id': userId}));
+    }
+
+    Future<Map<String, dynamic>?> select() => _supabase.client
+        .from('users')
+        .select('full_name, email')
+        .eq('id', userId)
+        .maybeSingle();
+
+    final first = await select();
+    if (first != null) return first;
+
+    // Empty result is ambiguous (genuinely no row vs RLS-filtered stale
+    // token) — one retry behind a HARD refresh before accepting it, same
+    // escalation resolveDestination uses for the identical shape.
+    unawaited(ErrorTelemetry.logEvent('restore_users_row_empty_retrying',
+        message: 'userId=${_shortUserId(userId)}'));
+    try {
+      await _supabase.client.auth.refreshSession();
+      final retried = await select();
+      unawaited(ErrorTelemetry.logEvent(
+          retried != null
+              ? 'restore_users_row_retry_succeeded'
+              : 'restore_users_row_retry_still_empty',
+          message: 'userId=${_shortUserId(userId)}'));
+      return retried;
+    } catch (e, st) {
+      // The hard refresh itself can throw (e.g. a revoked/expired refresh
+      // token on a long-idle tab) — distinguish that from "retried and
+      // still empty" so it doesn't fall through to the generic outer
+      // catch's shared label (diagnose d4e9a2 B-pass finding 3).
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'restore_users_row_retry_threw',
+          extra: {'user_id': userId}));
+      return null;
+    }
+  }
+
+  static String _shortUserId(String userId) =>
+      userId.length >= 8 ? userId.substring(0, 8) : userId;
 
   /// [preFetched] (C3 single-call): injected `user_progress` limit-1 array;
   /// legacy callers omit it → network read. Plan §4.

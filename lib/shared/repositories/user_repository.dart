@@ -202,6 +202,22 @@ class UserRepository {
     await _hive.userBox.put('progress', progress);
   }
 
+  /// The ISO timestamp the CURRENT phase started, or null when absent.
+  ///
+  /// A typed accessor rather than callers hand-reading
+  /// `getProgress()?['phase_started_at']`, for two reasons. It is the
+  /// repository-pattern read rule 4 asks for; and a raw `['phase_started_at']`
+  /// literal inside a file that ALSO walks `schedule_*` Hive maps trips Gate 19
+  /// (`check_hive_map_field_drift.dart`), whose reader heuristic is file-wide —
+  /// it cannot tell which map a bracket access belongs to. Reaching for that
+  /// gate's `_alwaysOk` escape hatch would have silenced the field everywhere,
+  /// including a REAL future drift of it into a schedule row; keeping the read
+  /// in this file (which walks no `schedule_*` map) keeps the gate at full
+  /// strength. Introduced by diagnose b7f1c8's tripwire, which needs this value
+  /// purely as diagnostic context.
+  String? getPhaseStartedAtIso() =>
+      getProgress()?['phase_started_at'] as String?;
+
   /// The progress-map fields that are MONOTONIC — a lifetime/earned counter or
   /// the phase index — where a cloud→Hive restore must never lower the local
   /// value. Founder decision 2026-08-03: **local-max-wins**, with telemetry.

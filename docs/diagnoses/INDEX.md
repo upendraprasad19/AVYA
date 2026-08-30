@@ -6,6 +6,13 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### past_phase_display_recovery (2 bugs)
+- 2026-08-30 b7f1c8 — Founder observation on the Train screen: the deployment eyebrow above the week strip always read "DEPLOYMENT 01" regardless of which phase/deployment the account was actually on. Same screen, separate…
+- 2026-08-09 c9e4b7 — Founder, live web 2026-08-05, account upendraprasad19@gmail.com: the Train screen's week selector showed NO past-phase history despite the account being on Phase 2 with a completed Phase 1 on record.…
+
+### user_full_name (1 bugs)
+- 2026-08-30 d4e9a2 — Founder (upendraprasad19@gmail.com) signed in via a fresh private/incognito browser tab (web, so genuinely empty local Hive — the same shape as a fresh install). Edit Profile's "Full Name" field…
+
 ### equipment_capability_floor (2 bugs)
 - 2026-08-28 d3a8f5 — A user whose stored profile carries no `equipment_access` is treated as a DIFFERENT tier depending on which of 14 code paths reads it — `basic_gym` by six, `full_gym` by three, `home_dumbbells` by…
 - 2026-08-28 a9e3c7 — A home_dumbbells user is offered thirteen "I also have" chips in Profile — pull-up bar, kettlebell, bench, barbell and more — ticks one, is asked "Reschedule Workouts?", accepts, and receives a…
@@ -143,9 +150,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### notification_cron_eligibility_and_pro_gate (1 bugs)
 - 2026-08-09 e3b9d7 — TWO notification-cron defects reported by the founder from their own phone and account, 2026-08-05 / 2026-08-07. (1) STREAK-GUARDIAN SENT A SELF-CONTRADICTING PUSH. A single notification read "Don't…
-
-### past_phase_display_recovery (1 bugs)
-- 2026-08-09 c9e4b7 — Founder, live web 2026-08-05, account upendraprasad19@gmail.com: the Train screen's week selector showed NO past-phase history despite the account being on Phase 2 with a completed Phase 1 on record.…
 
 ### signout_teardown_window_and_restore_op_ceiling (1 bugs)
 - 2026-08-09 b7e4c1 — TWO defects on the auth/session path, both reported by the founder from live web on 2026-08-05, both fixed here because they share the same root class — an unbounded or ambiguous state read during a…
@@ -1088,6 +1092,8 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-30 | b7f1c8 | Founder observation on the Train screen: the deployment eyebrow above the week strip always read "DEPLOYMENT 01" regardless of which phase/deployment the account was actually on. Same screen, separate… | past_phase_display_recovery | test/contracts/hold_week_labels_test.dart |
+| 2026-08-30 | d4e9a2 | Founder (upendraprasad19@gmail.com) signed in via a fresh private/incognito browser tab (web, so genuinely empty local Hive — the same shape as a fresh install). Edit Profile's "Full Name" field… | user_full_name | test/contracts/restore_users_row_retry_test.dart |
 | 2026-08-28 | d3a8f5 | A user whose stored profile carries no `equipment_access` is treated as a DIFFERENT tier depending on which of 14 code paths reads it — `basic_gym` by six, `full_gym` by three, `home_dumbbells` by… | equipment_capability_floor | test/contracts/equipment_access_default_test.dart |
 | 2026-08-28 | f7b2c4 | A bodyweight-tier user is prescribed Chin Up, Ab Wheel Rollout, Jump Rope, Box Jump, Dip (Parallel Bars), Medicine Ball Slam, TRX Row and Negative Pull Up, because library rows had their equipment… | exercise_equipment_tier | test/contracts/equipment_tier_consistency_test.dart |
 | 2026-08-28 | a9e3c7 | A home_dumbbells user is offered thirteen "I also have" chips in Profile — pull-up bar, kettlebell, bench, barbell and more — ticks one, is asked "Reschedule Workouts?", accepts, and receives a… | equipment_capability_floor | test/contracts/equipment_owned_widens_test.dart |

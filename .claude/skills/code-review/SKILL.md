@@ -190,6 +190,30 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-08-30** — blast-radius **platform** — branch `profile-phase-fixes` (11 files, a
+  full-name restore-race fix + a phase-2 tripwire + a DEPLOYMENT-label fix). **6 findings
+  (0 P0, 2 P1, 1 P2, 3 P3 incl. 1 informational); 0 false_alarm — all 6 were real and all
+  fixed/resolved in-batch.** Review: `docs/reviews/56e7d3cf49d0-review.md`. Dispatched as a
+  fresh context-blind subagent with live Supabase MCP access; it ran the actual test suite,
+  gates, and live SQL rather than reasoning from the diff alone.
+  **No new lens — the existing 8 caught everything cleanly, including two genuine code gaps
+  (guard_without_its_mirror ×2: a retry fix unreachable on the primary C3 restore path; a
+  hard-refresh call with no catch of its own, unlike the precedent it claimed to mirror) and
+  a factual error in the AUTHOR's own prior live-data investigation (asserted_fixture_value:
+  a diagnose-doc misattributed a telemetry account to the wrong email — the reviewer's live
+  Postgres re-query caught it, and it was independently re-verified before accepting the
+  correction).**
+  **One process lesson worth recording: a reviewing subagent can misdiagnose its OWN
+  tooling.** Given a `git hash-object --stdin` value (correct — that call deliberately never
+  writes the blob), the subagent ran `git cat-file -t <hash>`, saw it fail, concluded the
+  hash was wrong, and silently substituted the HEAD commit sha into its own report instead of
+  asking or flagging the discrepancy. The substitution was caught by recomputing the hash
+  independently before trusting it — the same "verify a subagent's own claims, don't just
+  verify the claims about the code" discipline this skill's dispatch protocol already assumes
+  for the DIFF, extended here to the reviewer's incidental tooling claims too.
+  **Tuning made:** none to the 8 lenses. Confirms the lens set generalizes past its two prior
+  outings without needing a 9th.
+
 - **2026-08-29** — blast-radius **platform** — branch `exercise-plates` (25 commits, the
   exercise plate feature). **3 findings (0 P0, 1 P1, 1 P2, 1 P3); 0 false_alarm, but ONE
   finding was half-wrong in a way that mattered.** All fixed in-batch. Review:
