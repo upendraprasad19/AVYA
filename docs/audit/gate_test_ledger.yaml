@@ -56,6 +56,41 @@ check_client_errors_alert.dart:
 check_closes_oi_cited.dart:
   grandfathered: 2026-08-10
 
+check_closes_oi_performed.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/oi_closure_lib_test.dart
+    - test/scripts/closes_oi_performed_e2e_test.dart
+  evidence: >
+    NEW gate 2026-08-30. The MIRROR of check_closes_oi_cited.dart: that gate
+    enforces status-change => citation, this one enforces citation =>
+    status-change, closing the shipped hole where OI-150 was cited closed by
+    c2534257 and the board never moved. THREE protective legs, each mutated
+    separately against the REAL gate script (not the lib in isolation), each
+    applied-check confirmed by grep before running.
+    Leg 1 (the core predicate, oi_closure_lib.dart `status != 'CLOSED'` ->
+    `false`): reddened 7 tests — the unit test naming the OI-150 shape plus
+    every e2e exercising FAIL/WARN.
+    Leg 2 (merge-detection guard, check_closes_oi_performed.dart
+    `parents.length < 2` -> `false`): FIRST ATTEMPT WAS ABSORBED — all 6 e2e
+    tests stayed green, because HEAD^2 cannot resolve off ANY single-parent
+    HEAD regardless of the guard, so the fallen-through git call fails for an
+    unrelated reason and the pre-existing _skip() path catches it with the
+    same exit code. Confirmed absorbed by manually neutering the guard and
+    running the file before trusting the green. Fixed by asserting on OUTPUT,
+    not exit code: the real guard exits with nothing (silent-ish by design);
+    the absorbed path prints a SKIPPED line. The tightened assertion reddens
+    1 test once the guard is genuinely gone.
+    Leg 3 (read-at-HEAD, `git show HEAD:<path>` -> a plain working-tree
+    `File(...).readAsStringSync()`): reddens the test built specifically for
+    this class — a board edited on disk but never committed must not satisfy a
+    gate that judges a commit. Same defect shape the B-pass found in this
+    batch's own safe_merge.sh precheck (a working-tree read where a
+    HEAD-relative read was required); this gate's fixture asserts the fix
+    directly rather than trusting the pattern once.
+    All three restored and diffed byte-identical against a pre-mutation backup
+    before the real suite was re-run (20/20 green).
+
 check_code_review_pass_exists.dart:
   grandfathered: 2026-08-10
 

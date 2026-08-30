@@ -358,14 +358,38 @@ cloud sessions; **this file is the cross-session backlog.**
   plan-review record **by design** — a bot must not rewrite the CI that enforces every other gate.
   Documented in `.github/dependabot.yml`.
 
-## OI-58 — Keystone gate: single-parent + subject-spoof bypass
+## OI-58 — Keystone gate: subject-spoof bypass (single-parent half CLOSED as OI-58a)
 
 - **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
+- **Blocked on**: none — but see the correction below; the OPEN status now covers only the
+  subject-spoof residual, not both bypasses this title once bundled.
+- **Verified**: never (for the residual below; the single-parent half IS verified — see next)
+- **⚠ CORRECTED 2026-08-30 — this entry described BOTH bypasses as unaddressed for 33 days
+  after one of them was fixed.** The single-parent half shipped the DAY AFTER the split-out
+  below, as `bd91c6eb` (2026-07-28, diagnose `d9b4e7`, `status: fixed`) — exactly the
+  `reopen_when` condition the split-out names: direct-to-main commits judged per-commit,
+  exemption verifies every changed LINE is a version line. Live today in
+  `plan_review_record_lib.dart`; `check_plan_review_record_exists.dart:385` names it
+  explicitly as "OI-58a". Re-verified 2026-08-30 by RUNNING the tests, not re-reading docs:
+  the 8-test group `OI-58a — direct-to-main landings are judged` in
+  `test/scripts/gate_input_family_e2e_test.dart` passes 8/8 against the live gate as a real
+  subprocess, including the exact attempt-1 and attempt-2 bypasses described below.
+  `docs/audit/gate-input-family.closure.yaml`'s own `OI-58a` entry had the SAME staleness —
+  `terminal_state: upstream_blocked` for 34 days while its own file header said "closed in
+  code" two lines above it — corrected in the same batch.
+  **Why this was found:** `bd91c6eb` cited `closes-oi: OI-58` — this whole ticket — while its
+  own commit body correctly scoped itself to only the single-parent half ("OI-58b … remains
+  OPEN and is not claimed here"). That is real, verified, tested work, NOT a false citation
+  in the OI-150 sense (cited, zero work performed) — but it cites a two-part parent ticket for
+  a one-part fix, and this entry's prose never caught up. `scripts/check_closes_oi_performed.dart`
+  (new, same batch) would flag this shape going forward — it checks a citation against the
+  BOARD's status, and OI-58 (the union) correctly still read OPEN, so a citation against it
+  is only satisfied once the whole ticket is. The lesson generalises: cite the SPECIFIC entry
+  the fix closes, not a broader parent that bundles other still-open work.
 - **Attempted and SPLIT OUT 2026-07-27** (branch `gate-input-family`, founder-approved
   per §4.12.1). The enforcement was built twice and failed review twice, each time in
-  the same place. **Read this before re-attempting:**
+  the same place, BEFORE the fix above landed the next day. **Read this before touching the
+  residual below:**
   - **Attempt 1** judged all direct-to-main commits in a push as ONE union before testing
     the exemption, so a single `feature`-tier commit alongside the version bump killed
     it. That is the standard release flow (`2c4cbddd` bump 05:24 + `6a364656` docs 06:42,
@@ -395,11 +419,15 @@ cloud sessions; **this file is the cross-session backlog.**
     close it; the control is requiring PRs so GitHub writes the merge subject.
 - **Identified**: 2026-07-26 · diagnose `d3f8a2`, ci-governance batch
 - **Risk class**: enforcement bypass
-- **What's missing**: Branch identity derives from the merge SUBJECT (author-controlled free text)
-  and `HEAD^2`. Two faces: a local `git merge` that fast-forwards or `--squash` lands single-parent
-  commits the gate never inspects; and `git merge --no-ff -m "Merge branch 'other'"` resolves to
-  another branch's approved record. Disabling GitHub's squash/rebase buttons closed only the GitHub
-  path. The ACCIDENTAL half (slug + quote truncation) is closed.
+- **What's missing** (residual only — the single-parent half above is CLOSED, corrected
+  2026-08-30; this used to describe both and was wrong on the first for 33 days): Branch
+  identity derives from the merge SUBJECT (author-controlled free text), which
+  `git merge --no-ff -m "Merge branch 'other'"` can spoof to resolve to another branch's
+  approved record. Disabling GitHub's squash/rebase buttons closed the GitHub-originated path.
+  The ACCIDENTAL half (slug + quote truncation) is closed. Residual is the DELIBERATE,
+  first-time spoof — founder-only, no in-repo script can close it (a script's every input is
+  authored by the person being checked); the control is requiring PRs so GitHub, not the
+  committer, writes the merge subject.
 - **Fix shape**: stop keying on the subject/`HEAD^2`; evaluate the pushed range via
   `github.event.before..after` (used nowhere in the repo today). Materially different design — own
   reviewed unit.

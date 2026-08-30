@@ -143,15 +143,48 @@ findings:
   - id: OI-58a
     title: Single-parent commits pushed straight to main skip the gate
     severity: P0
-    terminal_state: upstream_blocked
+    terminal_state: closed_in_commit
+    commit: bd91c6eb8544c99d8318a92a624b01070499dfc6
+    verification: >-
+      2026-07-28, the day after this entry's own split-out. Diagnose
+      docs/diagnoses/2026-07-28-direct-to-main-commits-skip-the-keystone-gate-
+      d9b4e7.md (status: fixed, batch oi58-version-bump-lines). Ships exactly
+      the reopen_when condition below: direct-to-main commits judged
+      per-commit, exemption verifies every CHANGED LINE is a version line via
+      blob comparison with the version token normalised, byte equality
+      required. Live in scripts/plan_review_record_lib.dart today;
+      scripts/check_plan_review_record_exists.dart:385 names this fix
+      explicitly as "OI-58a". Re-verified 2026-08-30, not merely re-read: the
+      8-test group `OI-58a — direct-to-main landings are judged` in
+      test/scripts/gate_input_family_e2e_test.dart passes 8/8 against the
+      live gate as a real subprocess, including the exact attempt-1 (union of
+      paths) and attempt-2 (subset-of-allowlist) bypasses this entry's own
+      `reason:` below describes as having shipped broken.
+    corrected: >-
+      This entry read `terminal_state: upstream_blocked` for 34 days after its
+      own fix landed — contradicting this file's OWN header comment two lines
+      up ("The single-parent bypass is closed in code"), which was accurate
+      and never propagated to the per-entry field it sits beside. Found
+      2026-08-30 while investigating whether commit bd91c6eb's `closes-oi:
+      OI-58` citation (against the open_issues.md PARENT ticket, which bundles
+      both OI-58a and OI-58b under one heading) was itself a false claim —
+      it was not: real, verified, tested work shipped. The citation's actual
+      defect is GRANULARITY, not fabrication: it named the two-part parent
+      ticket while closing only one part. See docs/audit/open_issues.md's
+      OI-58 entry for that correction. Left as `corrected:` rather than
+      silently rewritten, per feedback_closure_yaml_per_finding_discipline.md
+      — the same discipline this stale field itself violated.
     blocker: >-
       Split out per CLAUDE.md §4.12.1 (founder-approved 2026-07-27). The
       enforcement needs a CONTENT-verified exemption designed from scratch, not
       another patch on the path-verified one; that is its own reviewed unit.
+      SUPERSEDED — see `closed:` above; kept for the historical record rather
+      than deleted, per this ledger's own no-rewrite convention.
     reopen_when: >-
       The split unit ships: direct-to-main >=account landings judged per-commit,
       with an exemption that verifies every CHANGED LINE is a version line, plus
       its own ×2 review. Tracked as OI-58 in docs/audit/open_issues.md.
+      SATISFIED — see `closed:` above.
     reason: >-
       SPLIT OUT of this batch on 2026-07-27, founder-approved, per CLAUDE.md
       §4.12.1 ("when successive rounds keep surfacing new material issues the

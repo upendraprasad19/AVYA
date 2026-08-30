@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### closes_oi_citation_unverified (1 bugs)
+- 2026-08-30 e2c481 — Two OIs a commit declared closed via `closes-oi:` were NOT closed on the board. OI-150 (commit `c2534257`): the fix shipped, merged, went 7/7 CI green; the board write was simply never done, and an…
+
 ### context_artifact_budget (1 bugs)
 - 2026-08-30 d7f3b1 — `check_context_artifact_budget.dart` — a gate whose entire job is to notice when a context artifact changes size — reported `PASS: 3 within band` for a `CLAUDE.md` truncated to ZERO BYTES. Every…
 
@@ -1097,6 +1100,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-30 | e2c481 | Two OIs a commit declared closed via `closes-oi:` were NOT closed on the board. OI-150 (commit `c2534257`): the fix shipped, merged, went 7/7 CI green; the board write was simply never done, and an… | closes_oi_citation_unverified | test/scripts/oi_closure_lib_test.dart, test/scripts/closes_oi_performed_e2e_test.dart |
 | 2026-08-30 | d7f3b1 | `check_context_artifact_budget.dart` — a gate whose entire job is to notice when a context artifact changes size — reported `PASS: 3 within band` for a `CLAUDE.md` truncated to ZERO BYTES. Every… | context_artifact_budget | test/scripts/context_budget_lib_test.dart |
 | 2026-08-30 | b7f1c8 | Founder observation on the Train screen: the deployment eyebrow above the week strip always read "DEPLOYMENT 01" regardless of which phase/deployment the account was actually on. Same screen, separate… | past_phase_display_recovery | test/contracts/hold_week_labels_test.dart |
 | 2026-08-30 | d81f3c | `test/contracts/git_safety_hook_integration_test.dart` fails 3 deny assertions ("raw git commit is denied", "raw git push is denied", "--no-verify is denied") whenever the operator has… | git_hook_env_leak | test/scripts/regression_catalog_lib_test.dart, test/contracts/git_safety_hook_integration_test.dart |
