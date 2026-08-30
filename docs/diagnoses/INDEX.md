@@ -13,6 +13,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-08-30 b7f1c8 — Founder observation on the Train screen: the deployment eyebrow above the week strip always read "DEPLOYMENT 01" regardless of which phase/deployment the account was actually on. Same screen, separate…
 - 2026-08-09 c9e4b7 — Founder, live web 2026-08-05, account upendraprasad19@gmail.com: the Train screen's week selector showed NO past-phase history despite the account being on Phase 2 with a completed Phase 1 on record.…
 
+### git_hook_env_leak (2 bugs)
+- 2026-08-30 d81f3c — `test/contracts/git_safety_hook_integration_test.dart` fails 3 deny assertions ("raw git commit is denied", "raw git push is denied", "--no-verify is denied") whenever the operator has…
+- 2026-08-13 4f2a9e — The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across…
+
 ### user_full_name (1 bugs)
 - 2026-08-30 d4e9a2 — Founder (upendraprasad19@gmail.com) signed in via a fresh private/incognito browser tab (web, so genuinely empty local Hive — the same shape as a fresh install). Edit Profile's "Full Name" field…
 
@@ -115,9 +119,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### oi_board_id_uniqueness (1 bugs)
 - 2026-08-13 b7e3d1 — Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw…
-
-### git_hook_env_leak (1 bugs)
-- 2026-08-13 4f2a9e — The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across…
 
 ### auth_signin_completion (1 bugs)
 - 2026-08-13 a9c4e2 — Founder signed in as test6@gmail.com on the prod web build (app.icanbefitter.com/#/sign-in) at 2026-08-13 23:03 IST. The SIGN IN WITH EMAIL button entered its spinner state and never left it — no…
@@ -1098,6 +1099,7 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-08-30 | d7f3b1 | `check_context_artifact_budget.dart` — a gate whose entire job is to notice when a context artifact changes size — reported `PASS: 3 within band` for a `CLAUDE.md` truncated to ZERO BYTES. Every… | context_artifact_budget | test/scripts/context_budget_lib_test.dart |
 | 2026-08-30 | b7f1c8 | Founder observation on the Train screen: the deployment eyebrow above the week strip always read "DEPLOYMENT 01" regardless of which phase/deployment the account was actually on. Same screen, separate… | past_phase_display_recovery | test/contracts/hold_week_labels_test.dart |
+| 2026-08-30 | d81f3c | `test/contracts/git_safety_hook_integration_test.dart` fails 3 deny assertions ("raw git commit is denied", "raw git push is denied", "--no-verify is denied") whenever the operator has… | git_hook_env_leak | test/scripts/regression_catalog_lib_test.dart, test/contracts/git_safety_hook_integration_test.dart |
 | 2026-08-30 | d4e9a2 | Founder (upendraprasad19@gmail.com) signed in via a fresh private/incognito browser tab (web, so genuinely empty local Hive — the same shape as a fresh install). Edit Profile's "Full Name" field… | user_full_name | test/contracts/restore_users_row_retry_test.dart |
 | 2026-08-30 | 321062 | A phase advance writes four fields to Hive as one atomic delta, then pushes fire-and-forget. If the push has not landed before the next launch — the app closed after a workout, a network blip,… | phase_progress_current_phase | test/contracts/progress_restore_monotonic_behavioral_test.dart |
 | 2026-08-28 | d3a8f5 | A user whose stored profile carries no `equipment_access` is treated as a DIFFERENT tier depending on which of 14 code paths reads it — `basic_gym` by six, `full_gym` by three, `home_dumbbells` by… | equipment_capability_floor | test/contracts/equipment_access_default_test.dart |
