@@ -221,6 +221,50 @@ void main() {
       expect(out, contains('open_issues.md#L'));
     });
 
+    test('a long Blocked on is CAPPED in the row — reddens if the cap is removed', () {
+      // THE REGRESSION TEST FOR THE RENDER CAP. Before 2026-08-30 `_shorten` was
+      // applied to the TITLE only, while `blockedOn` and `verified` rendered
+      // RAW — measured at 212 and 312 chars against a title capped at 74. That
+      // is where OPEN_INDEX.md's 5x bloat came from.
+      //
+      // ⚠ This test exists because review round 1 found the fix shipped with
+      // NOTHING that could detect its own removal: reverting both _shorten
+      // calls left all 26 tests in this file green. Rule 21 — mutate it and run
+      // it — applied to the fix, not just to the gate beside it.
+      final long = List.filled(30, 'blocker').join(' '); // 239 chars
+      final issues = parseOpenIssues(_entry('OI-44', 'short', 'OPEN',
+          blocked: long, verified: long));
+      final row = renderIndex(issues)
+          .split('\n')
+          .firstWhere((l) => l.startsWith('| OI-44 |'));
+      expect(row.length, lessThan(200),
+          reason: 'raw 239-char fields would push this well past 480');
+      expect('…'.allMatches(row).length, 2,
+          reason: 'BOTH Blocked on and Verified must be elided, not just one');
+    });
+
+    test('a SHORT Blocked on / Verified is left exactly alone', () {
+      // The mirror of the cap: truncation must not damage the common case, and
+      // `never` in particular is load-bearing for triage (OI-47 read as
+      // authoritative for a day while being wrong — that column is why).
+      final issues = parseOpenIssues(
+          _entry('OI-44', 'short', 'OPEN', blocked: 'FOUNDER', verified: 'never'));
+      final row = renderIndex(issues)
+          .split('\n')
+          .firstWhere((l) => l.startsWith('| OI-44 |'));
+      expect(row, contains('| FOUNDER |'));
+      expect(row, contains('| never |'));
+      expect(row, isNot(contains('…')));
+    });
+
+    test('a pipe in Blocked on cannot break the table either', () {
+      // The title had this covered; the two capped columns did not, and they
+      // now pass through the same helper. A real board field carries one today.
+      final issues = parseOpenIssues(
+          _entry('OI-44', 'short', 'OPEN', blocked: 'a | b'));
+      expect(renderIndex(issues), contains(r'a \| b'));
+    });
+
     test('a pipe in a title cannot break the table', () {
       final issues = parseOpenIssues(_entry('OI-44', 'a | b', 'OPEN'));
       expect(renderIndex(issues), contains(r'a \| b'));

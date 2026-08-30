@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **94** (49 numbered, 45 by filename only).
+Total gates: **95** (49 numbered, 46 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -31,6 +31,7 @@ Total gates: **94** (49 numbered, 45 by filename only).
 | — | `check_code_review_pass_exists.dart` | For staged commits whose max blast-radius is `catastrophic`, require a | grandfathered |
 | — | `check_commit_from_worktree.dart` | Worktree-per-session enforcement (codified 2026-07-07 after 2 cross-session | grandfathered |
 | — | `check_container_color_decoration.dart` | a Flutter `Container` must not pass BOTH `color:` and `decoration:`. | grandfathered |
+| — | `check_context_artifact_budget.dart` | Guards the size of the artifacts an AGENT loads, the way | mutation_proven |
 | — | `check_copy_centralization.dart` | WARN-ONLY diagnostic. User-facing copy should live in WardroomCopy (lib/core/copy/wardroom_copy.dart) | grandfathered |
 | — | `check_cqrs_query_naming.dart` | a method whose NAME promises a query must not MUTATE. | grandfathered |
 | 30 | `check_crashlytics_alert_routing.dart` | assert that Firebase Crashlytics alert routing is documented at | grandfathered |

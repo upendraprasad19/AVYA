@@ -153,7 +153,8 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   not installed, so a **CLEAN auto-merge ran no hook at all**. That is the exact shape of the
   OI-number collision class: two sessions' board additions sit in different regions of the file,
   git combines them silently, and one number ends up naming two issues. Two places in the repo
-  asserted the opposite — `open_issues.md:2426-2428` (OI-112) and diagnose `b7e3d1:56-58`, both
+  asserted the opposite — OI-112 (now in `closed_issues.md`; the line anchor this row used to
+  carry rotted, which is its own lesson) and diagnose `b7e3d1:56-58`, both
   claiming "corruption cannot LAND — the merge commit regenerates the index and the gate fires" —
   and both were false for want of this hook. It runs the two board gates only
   (`build_oi_index.dart` for within-file duplicates, `check_oi_numbering_unique.dart` for
@@ -487,7 +488,7 @@ Before introducing any new file / symbol / Hive key / cloud column / Edge Functi
 ### 4.8 Subagent brief preamble + audit lens registry
 
 - Every subagent investigation dispatch MUST prepend `docs/agent_brief_preamble.md` to the task-specific brief.
-- When invoking review / audit work, specify which lenses from `docs/audit/LENS_REGISTRY.md` (53 canonical lenses) are in scope. Prevents "we just look at code" audit blind spot.
+- When invoking review / audit work, specify which lenses from `docs/audit/LENS_REGISTRY.md` (54 canonical lenses, L1–L54) are in scope. Prevents "we just look at code" audit blind spot.
 
 ### 4.10 Tech-debt audit cadence (NEW — tech-debt audit 2026-05-20)
 
@@ -731,6 +732,16 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 [ ] Worktree retired if merged + clean (incl. ignored) + nothing unpushed (§4.13 point 6):
       dart run scripts/retire_worktree.dart          # dry-run first, ALWAYS
     This row IS the trigger — point 6 is deliberately ungated, so nothing else fires it.
+[ ] Context-artifact budget re-baselined if a tracked doc drifted (§7 row):
+      dart run scripts/check_context_artifact_budget.dart        # then --record if intended
+    THIS ROW IS THE TRIGGER, for the same reason the worktree row above is one.
+    The gate's SOFT band is invisible locally — pre-commit.sh:368 runs every gate
+    as `>/dev/null 2>&1`, so a PASS-with-WARN prints nothing; CI shows it, but only
+    on main/develop pushes and PRs, which most branches never get. Without this row
+    the first thing anyone sees is the HARD band blocking every commit in the repo.
+    ⚠ `--record` REFUSES over a hard breach unless you also pass `--force-record`
+    — deliberately, so a breach cannot be blessed by pasting the command the
+    failure message prints.
 [ ] Skill self-evolution: does any .claude/skills/<topic>/SKILL.md need a new bug-class entry, red flag, or trigger phrase?
 ```
 
@@ -817,9 +828,9 @@ Subagent investigation dispatches prepend the 12-tier checklist via `docs/agent_
 | SoT registry (machine-readable) | `docs/sot_registry.yaml` |
 | Live schema column snapshot (Gate: `check_schema_column_refs.dart` validates every `.from().select/eq/gte/order` + insert/update-key column ref in BOTH `lib/` (client) AND `supabase/functions/` (Edge Functions) — server-seam extension WI-1 2026-06-08, after the lib/-only gate stayed blind to 5 weeks of live cloud-contract bugs incl. the delete-account DPDP P0 b4e2a9) | `backups/live_schema_columns.json` — **regenerate in the SAME commit as any migration that adds/drops/renames a column** (regen SQL in the gate script header). Sibling gate `check_container_color_decoration.dart` blocks `Container(color:+decoration:)`. |
 | Naming conventions | `docs/naming_conventions.md` |
-| Audit lens registry (53 lenses) | `docs/audit/LENS_REGISTRY.md` |
+| Audit lens registry (54 lenses; L54 = context-artifact cost, added 2026-08-30) | `docs/audit/LENS_REGISTRY.md` |
 | Audit closure ledger (per-quarter) | `docs/audit/<YYYY_MM_DD>_audit_closures.yaml` (Gate 40 validator + `feedback_closure_yaml_per_finding_discipline.md`) |
-| **Open-issues backlog — READ THE INDEX FIRST** | `docs/audit/OPEN_INDEX.md` — auto-generated, one line per open OI (`Blocked on` / `Verified` / line anchor), ~950 tokens. Full detail: `docs/audit/open_issues.md` at the cited line (`Read(offset:, limit: 60)`); closed history archived in `docs/audit/closed_issues.md`. Generator `scripts/build_oi_index.dart` regenerates on any commit touching the board (`pre-commit.sh`) and **fails closed** on a missing `Blocked on`/`Verified`. `closes-oi: OI-NN` is enforced at commit-msg by `scripts/check_closes_oi_cited.dart` when a status moves OPEN→CLOSED. Tests: `test/contracts/oi_index_test.dart`, `test/contracts/closes_oi_cited_test.dart`. **Why generated:** the board went 70 days unread because nothing referenced it, and its own "fixed by `check_open_issues_reconciled.dart`" note described a script that was never written. |
+| **Open-issues backlog — READ THE INDEX FIRST** | `docs/audit/OPEN_INDEX.md` — auto-generated, one line per open OI (`Blocked on` / `Verified` / line anchor), **~3,800 tokens (13,619 B, measured 2026-08-30)**. ⚠ This row said **"~950 tokens" for a month while the real figure reached 5,266** — TRUE when written (`e4bc9040`, 2026-07-29: 3,759 B ≈ 1,044 tok) and never re-derived, on the very row that tells every session to read this file first. **Do not trust this number either — measure it**: `wc -c docs/audit/OPEN_INDEX.md`, ÷3.6 for tokens. It is now gated (`check_context_artifact_budget.dart`, soft 15% warn / hard 50% block) precisely because prose cannot hold a number. The 2026-08-30 batch also capped `Blocked on`/`Verified` at 40 chars in the RENDER (`build_oi_index.dart`, reusing `_shorten`) — they were emitted RAW at up to 212 and 312 chars against a title capped at 74, which is where the bloat came from. Full detail: `docs/audit/open_issues.md` at the cited line (`Read(offset:, limit: 60)`); closed history archived in `docs/audit/closed_issues.md` — **which is where 27 CLOSED entries went on 2026-08-30, 46% of a board named "open"** (357,664 → 194,850 B — the FINAL figure across both archive commits; 200,300 B was the intermediate state after the first 26, and pairing the final count with the intermediate size is exactly the error round 1 caught here). Generator `scripts/build_oi_index.dart` regenerates on any commit touching the board (`pre-commit.sh`) and **fails closed** on a missing `Blocked on`/`Verified`. `closes-oi: OI-NN` is enforced at commit-msg by `scripts/check_closes_oi_cited.dart` when a status moves OPEN→CLOSED. Tests: `test/contracts/oi_index_test.dart`, `test/contracts/closes_oi_cited_test.dart`. **Why generated:** the board went 70 days unread because nothing referenced it, and its own "fixed by `check_open_issues_reconciled.dart`" note described a script that was never written. |
 | Blast-radius registry (4 tiers: feature/account/platform/catastrophic) | `docs/blast_radius.yaml` + `scripts/blast_radius_from_diff.dart` + `scripts/check_blast_radius_coverage.dart` |
 | ADR registry (architectural decisions, MADR-lite) | `docs/adr/` (auto-generated `INDEX.md`; `/adr` scaffolds) |
 | Handbook (durable working rules, portable) | `docs/handbook/` (auto-generated `INDEX.md`; bug-classes / process / conventions / audit / testing) |

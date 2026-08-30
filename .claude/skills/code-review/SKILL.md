@@ -257,6 +257,39 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   **Tuning made:** none to the 8 lenses. Confirms the lens set generalizes past its two prior
   outings without needing a 9th.
 
+- **2026-08-30** — blast-radius **platform** — branch `board-budget` @ `6ad3920e`
+  (board token reclaim + a new context-artifact budget gate). **5 findings (1 P0, 2 P1,
+  2 P2); 0 false_alarm.** All fixed in-batch. Review: `docs/reviews/board-budget-bpass.md`.
+  **This pass ran THIRD, after two context-blind plan-review rounds, and its best finding is
+  one both of them read past.** Rounds 1 and 2 each opened
+  `check_context_artifact_budget.dart` and neither noticed `--record` executed BEFORE the
+  report — so re-baselining blessed whatever was on disk with no comparison and no trace,
+  and the FAIL path printed `--record` as its own escape hatch. The B-pass found it by
+  opening the gate whose name the docstring invokes (`check_apk_size_within_bounds.dart`)
+  and diffing the two: Gate 13's `exit(1)` sits ABOVE its record step, making that branch
+  unreachable on a breach, and this gate had inverted exactly that ordering.
+  **Tuning — a NINTH lens, `modelled_on_is_a_checkable_claim`:** when a diff says it
+  mirrors, follows, or is modelled on an existing component, OPEN THAT COMPONENT AND DIFF
+  THE TWO. "Same shape as X" is an assertion with a truth value; it is cheap to test and
+  easy to skip, because the phrase reads as provenance and reviewers grant it. Here the
+  docstring was sincere and the code contradicted it on the single ordering that mattered.
+  Generalises past code — it applies to any claim of the form "this follows the existing
+  pattern".
+  **Second tuning, for lens 6 — ask for the mirror MESSAGE, not only the mirror CASE.**
+  Round 1 made the bands two-sided; round 2 found the report still hardcoding the growth
+  thresholds and the verb "grew", so the very fixture round 1 built printed *"grew past the
+  50% hard band"* for a file that shrank 100%. A classifier fixed without its report is
+  still wrong where the operator reads it. Lens 6 asks whether the mirror case is guarded;
+  it should also ask whether everything that DESCRIBES the classification still describes
+  it correctly.
+  **Third — a number-hygiene rule the whole batch argues for.** 4 of the 10 findings across
+  the three rounds were stale numeric or line claims that SURVIVED a deliberate correction:
+  a citation fixed twice and still wrong (captured by grep, then invalidated by a later edit
+  to the same file in the same commit), and a retracted figure still live in a second
+  document nobody revisited. **After correcting any number, grep the repo for the OLD value;
+  and capture line citations LAST, or re-derive them immediately before commit.**
+  False-alarm rate 0/5.
+
 - **2026-08-29** — blast-radius **platform** — branch `exercise-plates` (25 commits, the
   exercise plate feature). **3 findings (0 P0, 1 P1, 1 P2, 1 P3); 0 false_alarm, but ONE
   finding was half-wrong in a way that mattered.** All fixed in-batch. Review:

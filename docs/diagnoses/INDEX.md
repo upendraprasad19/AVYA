@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### context_artifact_budget (1 bugs)
+- 2026-08-30 d7f3b1 — `check_context_artifact_budget.dart` — a gate whose entire job is to notice when a context artifact changes size — reported `PASS: 3 within band` for a `CLAUDE.md` truncated to ZERO BYTES. Every…
+
 ### past_phase_display_recovery (2 bugs)
 - 2026-08-30 b7f1c8 — Founder observation on the Train screen: the deployment eyebrow above the week strip always read "DEPLOYMENT 01" regardless of which phase/deployment the account was actually on. Same screen, separate…
 - 2026-08-09 c9e4b7 — Founder, live web 2026-08-05, account upendraprasad19@gmail.com: the Train screen's week selector showed NO past-phase history despite the account being on Phase 2 with a completed Phase 1 on record.…
@@ -1092,6 +1095,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-08-30 | d7f3b1 | `check_context_artifact_budget.dart` — a gate whose entire job is to notice when a context artifact changes size — reported `PASS: 3 within band` for a `CLAUDE.md` truncated to ZERO BYTES. Every… | context_artifact_budget | test/scripts/context_budget_lib_test.dart |
 | 2026-08-30 | b7f1c8 | Founder observation on the Train screen: the deployment eyebrow above the week strip always read "DEPLOYMENT 01" regardless of which phase/deployment the account was actually on. Same screen, separate… | past_phase_display_recovery | test/contracts/hold_week_labels_test.dart |
 | 2026-08-30 | d4e9a2 | Founder (upendraprasad19@gmail.com) signed in via a fresh private/incognito browser tab (web, so genuinely empty local Hive — the same shape as a fresh install). Edit Profile's "Full Name" field… | user_full_name | test/contracts/restore_users_row_retry_test.dart |
 | 2026-08-28 | d3a8f5 | A user whose stored profile carries no `equipment_access` is treated as a DIFFERENT tier depending on which of 14 code paths reads it — `basic_gym` by six, `full_gym` by three, `home_dumbbells` by… | equipment_capability_floor | test/contracts/equipment_access_default_test.dart |

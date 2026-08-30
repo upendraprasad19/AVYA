@@ -165,6 +165,21 @@ List<OpenIssue> parseOpenIssues(String content) {
 
 int _num(String id) => int.parse(id.split('-')[1]);
 
+/// How much of `Blocked on` / `Verified` a row renders.
+///
+/// These two were emitted RAW while the title was capped at 74, and the board's
+/// prose grew into them: measured 2026-08-30, `Blocked on` reached 212 chars and
+/// `Verified` 312, against a title max of 75. That made the index — the artifact
+/// whose entire purpose is to be the CHEAP read — 18,958 bytes (~5,266 tokens),
+/// 5.0x the "~950 tokens" CLAUDE.md §7 advertised. The claim was true when
+/// written (`e4bc9040`, 2026-07-29: 3,759 bytes); nothing measured the drift.
+///
+/// 40 is chosen so the load-bearing part of each field always survives: a
+/// `Verified` value leads with its date or the bare word `never`, and `never` is
+/// the signal the column exists for (OI-47 read as authoritative for a day while
+/// being wrong). Full text is always one anchored read away.
+const int _fieldMax = 40;
+
 /// Titles are prose and some run long; the index must stay one line per entry.
 String _shorten(String s, {int max = 74}) {
   final flat = s.replaceAll(RegExp(r'\s+'), ' ').replaceAll('|', '\\|').trim();
@@ -194,8 +209,14 @@ String renderIndex(List<OpenIssue> issues) {
     ..writeln('| OI | Title | Blocked on | Verified | ↦ |')
     ..writeln('|---|---|---|---|---|');
   for (final i in issues) {
-    b.writeln('| ${i.id} | ${i.title} | ${i.blockedOn} | ${i.verified} | '
-        '[:${i.line}](open_issues.md#L${i.line}) |');
+    // Shortened HERE, at render, and deliberately not in the parser: the parse
+    // contract is pinned by oi_index_test.dart (`captures Blocked on and
+    // Verified`, plus the no-bleed cases), and a consumer other than this
+    // renderer must still see the whole field.
+    b.writeln('| ${i.id} | ${i.title} '
+        '| ${_shorten(i.blockedOn, max: _fieldMax)} '
+        '| ${_shorten(i.verified, max: _fieldMax)} '
+        '| [:${i.line}](open_issues.md#L${i.line}) |');
   }
   return b.toString();
 }
