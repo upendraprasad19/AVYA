@@ -16,7 +16,7 @@ sot_registry_entry: null
 writers:
   - file: scripts/context_budget_lib.dart
     method: evaluateOne (status ternary)
-    line: 171
+    line: 183
 readers:
   - file: scripts/check_context_artifact_budget.dart
     method_or_widget: main (report loop; anyBlocking at :144)
@@ -70,7 +70,7 @@ regression_test_planned:
   - test/scripts/context_budget_lib_test.dart
   - test/scripts/context_artifact_budget_e2e_test.dart
 touched_layers_checked:
-  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "scripts/context_budget_lib.dart:171 now tests both directions, and check_context_artifact_budget.dart:119-142 names the band actually crossed (round 2 found the LOGIC fixed and the REPORT still hardcoding the growth thresholds, so the zero-byte fixture printed 'grew past the 50% hard band'). 37 tests green across the lib + e2e files. FIVE mutation legs, all re-measured against that same 37-test baseline: hard growth band 8 red, shrink floor 6, fail-open 4, key union 4, message direction 2; restored 37/37. Each mutation verified applied by an exact-match replace that aborts unless it matches exactly once." }
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "scripts/context_budget_lib.dart:183 now tests both directions, and check_context_artifact_budget.dart:119-142 names the band actually crossed (round 2 found the LOGIC fixed and the REPORT still hardcoding the growth thresholds, so the zero-byte fixture printed 'grew past the 50% hard band'). 37 tests green across the lib + e2e files. FIVE mutation legs, all re-measured against that same 37-test baseline: hard growth band 8 red, shrink floor 6, fail-open 4, key union 4, message direction 2; restored 37/37. Each mutation verified applied by an exact-match replace that aborts unless it matches exactly once." }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "The gate reads file lengths and a JSON baseline. No Hive box is opened; context_budget_lib.dart imports nothing from dart:io at all." }
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "No DDL." }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "No cloud row is read or written." }

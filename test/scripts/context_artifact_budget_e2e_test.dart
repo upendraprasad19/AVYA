@@ -257,6 +257,61 @@ void main() {
     expect(r.stdout.toString(), contains('3 within band'));
   });
 
+  test('--record REFUSES over a hard breach — reddens if the guard is removed', () {
+    // B-pass finding: --record ran BEFORE the report, so it blessed whatever was
+    // on disk with no comparison and no trace — and the FAIL path prints this
+    // very command as its escape hatch. Gate 13, which this gate claims to
+    // mirror, exits ABOVE its record step so the branch is unreachable on a
+    // breach; this one had inverted exactly that ordering.
+    final dir = track(_fixture(
+      claudeMd: 0, // -100% against the baseline below
+      index: 1000,
+      board: 1000,
+      baselineJson: _baselines(claudeMd: 95297, index: 1000, board: 1000),
+    ));
+    final before =
+        File('${dir.path}/backups/context_artifact_sizes.json').readAsStringSync();
+
+    final r = _run(dir.path, args: ['--record']);
+    expect(r.exitCode, 1, reason: '${r.stdout}${r.stderr}');
+    expect(r.stderr.toString(), contains('REFUSING to record'));
+
+    final after =
+        File('${dir.path}/backups/context_artifact_sizes.json').readAsStringSync();
+    expect(after, before,
+        reason: 'a refused record must not have written anything');
+  });
+
+  test('--force-record blesses a breach deliberately, and says what it blessed', () {
+    final dir = track(_fixture(
+      claudeMd: 0,
+      index: 1000,
+      board: 1000,
+      baselineJson: _baselines(claudeMd: 95297, index: 1000, board: 1000),
+    ));
+    final r = _run(dir.path, args: ['--record', '--force-record']);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    expect(r.stdout.toString(), contains('RECORDED'));
+    // The report still ran first, so the breach is on the record.
+    expect(r.stderr.toString(), contains('FAIL CLAUDE.md'));
+    // And the record line shows what changed, not just the new value.
+    expect(r.stdout.toString(), contains('95297 B ->'));
+    expect(r.stdout.toString(), contains('-100.0%'));
+  });
+
+  test('an ordinary --record still states old → new, not just new', () {
+    final dir = track(_fixture(
+      claudeMd: 1100, // +10%, inside every band
+      index: 1000,
+      board: 1000,
+      baselineJson: _baselines(claudeMd: 1000, index: 1000, board: 1000),
+    ));
+    final r = _run(dir.path, args: ['--record']);
+    expect(r.exitCode, 0);
+    expect(r.stdout.toString(), contains('1000 B -> 1100 B'));
+    expect(r.stdout.toString(), contains('+10.0%'));
+  });
+
   test('a tracked artifact missing from the tree is SKIPPED, not a breach', () {
     final dir = track(_fixture(
       claudeMd: 1000,

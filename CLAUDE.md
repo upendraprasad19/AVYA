@@ -732,6 +732,16 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
 [ ] Worktree retired if merged + clean (incl. ignored) + nothing unpushed (§4.13 point 6):
       dart run scripts/retire_worktree.dart          # dry-run first, ALWAYS
     This row IS the trigger — point 6 is deliberately ungated, so nothing else fires it.
+[ ] Context-artifact budget re-baselined if a tracked doc drifted (§7 row):
+      dart run scripts/check_context_artifact_budget.dart        # then --record if intended
+    THIS ROW IS THE TRIGGER, for the same reason the worktree row above is one.
+    The gate's SOFT band is invisible locally — pre-commit.sh:368 runs every gate
+    as `>/dev/null 2>&1`, so a PASS-with-WARN prints nothing; CI shows it, but only
+    on main/develop pushes and PRs, which most branches never get. Without this row
+    the first thing anyone sees is the HARD band blocking every commit in the repo.
+    ⚠ `--record` REFUSES over a hard breach unless you also pass `--force-record`
+    — deliberately, so a breach cannot be blessed by pasting the command the
+    failure message prints.
 [ ] Skill self-evolution: does any .claude/skills/<topic>/SKILL.md need a new bug-class entry, red flag, or trigger phrase?
 ```
 
