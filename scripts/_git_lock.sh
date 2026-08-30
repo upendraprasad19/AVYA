@@ -122,6 +122,24 @@
 #   ...git-mutating work...
 #   git_lock_release   # also runs automatically via the EXIT/INT/TERM trap
 
+# EXECUTION GUARD (2026-08-30) — same rationale as the twin in
+# `scripts/_dart_bin.sh`, added in the same batch. This file defines functions
+# and one empty variable; executing it acquires no lock, releases no lock, and
+# exits 0, so a caller that reaches for the wrong form gets a success code for
+# work that never happened. `$0` is this path only when EXECUTED — when sourced
+# (the three safe_* wrappers, or a test driver) it belongs to the caller, so
+# this cannot fire on the supported path.
+# `$0` is backslash-normalized first — see the twin's header for why (B-pass
+# finding 2: a Windows-form `scripts\_git_lock.sh` bypassed the raw pattern).
+case "$(printf '%s' "$0" | tr '\\' '/')" in
+  */_git_lock.sh|_git_lock.sh)
+    echo "ERROR: scripts/_git_lock.sh must be SOURCED, not executed." >&2
+    echo "  It only defines git_lock_acquire / git_lock_release." >&2
+    echo "  Use:  . \"\$(dirname \"\$0\")/_git_lock.sh\"" >&2
+    exit 64  # EX_USAGE
+    ;;
+esac
+
 _GIT_LOCK_DIR=""
 
 # Portable PID-liveness check. Verified empirically in this repo's actual

@@ -190,6 +190,49 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-08-30 (b)** — blast-radius **platform** — branch `process-hardening` (the
+  batch that closes defect classes found in `profile-phase-fixes`). **3 findings
+  (1 P0, 1 P1, 1 P2); 0 false_alarm — all three real, all fixed in-batch.**
+  Review: `docs/reviews/2ef6e60d897d-review.md`.
+  **The result worth recording: two of the three findings were the batch
+  committing the exact classes it was written to close.** A new `safe_merge.sh`
+  precheck — built because a silent no-op had cost a merge unwind — read the
+  WORKING TREE on `main` for a record that lives on the FEATURE BRANCH, so it
+  matched nothing on every real invocation: a no-op guard against no-op guards.
+  And a new `case "$0"` execution guard, built because `sh _dart_bin.sh` had
+  silently done nothing, was forward-slash-only, so `sh 'scripts\_dart_bin.sh'`
+  — the dominant path spelling in this Windows environment — sailed past it and
+  did silently nothing. Neither was visible from reading; both needed the
+  reviewer to RUN the thing against reality.
+  **Tuning made — lens 8 (`asserted_fixture_value`) gains its sharpest form
+  yet, and it is a level above "is this literal right".** The P0's three tests
+  were green, and green *because* their fixture committed the record onto
+  `main`, a shape the real workflow never produces. So the question to add is
+  not only *would this pass if the feature did nothing* but **does the fixture
+  reproduce a state the real workflow actually produces?** Check the fixture
+  against real history (`git cat-file -e <merge>^1:<path>` settled it here in
+  one command), not against the code under test. A mutation run on top of a
+  fictional fixture proves nothing — which is precisely why the P0 survived a
+  mutation-proof claim made in good faith hours earlier.
+  ⚠ Also: the reviewer accidentally landed a real commit on the worktree
+  mid-review (a silently-failed `cd`), caught and reset it, and **said so**.
+  That disclosure is the behaviour to keep; the review was verified against
+  HEAD + staged-hash afterward and was clean.
+  **Round-2 addendum (same batch, verdict `converged`).** Two more lessons,
+  both about the REVIEWER's own output rather than the code. First, the
+  cheapest real findings round 2 produced were **stale numeric claims in prose
+  written earlier in the same batch** — a §7 row said a test group had 4 tests
+  when it had 5, and "reddens exactly one test" when it reddens two, because a
+  test was added during remediation and the sentence was never re-derived. Add
+  to lens 8's habit: **re-run any count a diff ASSERTS, including counts the
+  same diff introduced hours earlier** — the batch's own prose is the highest-
+  yield place to look, not the lowest. Second, three "declared defense, zero
+  test" gaps were found only by reintroducing each bug and watching the suite
+  stay green; reading the code would never have surfaced them, because the code
+  was correct and the comment describing it was accurate. **A correct defense
+  with no test is invisible to review-by-reading, and that is the shape to hunt
+  once the obvious defects are gone.**
+
 - **2026-08-30** — blast-radius **platform** — branch `profile-phase-fixes` (11 files, a
   full-name restore-race fix + a phase-2 tripwire + a DEPLOYMENT-label fix). **6 findings
   (0 P0, 2 P1, 1 P2, 3 P3 incl. 1 informational); 0 false_alarm — all 6 were real and all

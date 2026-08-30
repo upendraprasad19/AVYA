@@ -325,4 +325,141 @@ export PATH
       });
     }
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // EXECUTION GUARD (2026-08-30).
+  //
+  // The resolver defines a function and nothing else, so `sh _dart_bin.sh run
+  // <script>` exits 0 having done NOTHING. A session did exactly that
+  // repeatedly on 2026-08-30 and reported gates as passing and diagnose-docs
+  // as validating on the strength of that exit code. These tests pin the
+  // guard AND — the half that actually matters — pin that it does not fire on
+  // any supported path, because a guard that breaks all five hooks is far
+  // worse than the silent no-op it replaces.
+  group('execution guard', () {
+    test('executing the resolver FAILS loudly instead of no-op-ing', () {
+      final r = Process.runSync(
+        'sh',
+        [resolver, 'run', 'scripts/whatever.dart'],
+        workingDirectory: Directory.current.path,
+        environment: _cleanEnv(),
+        includeParentEnvironment: false,
+      );
+      expect(r.exitCode, 64,
+          reason: 'must exit EX_USAGE(64), not 0 — an exit 0 here is the '
+              'exact false-confidence signal this guard exists to remove.');
+      expect('${r.stderr}', contains('must be SOURCED'),
+          reason: 'the message must say what went wrong');
+      expect('${r.stderr}', contains('resolve_dart_bin'),
+          reason: 'and must teach the correct form');
+    });
+
+    test('a BARE-FILENAME execution fails too (the pattern\'s second arm)', () {
+      // Round-1 review finding 2. The guard's pattern is
+      // `*/_dart_bin.sh|_dart_bin.sh`; the second alternative exists for an
+      // invocation with NO directory component (`cd scripts && sh
+      // _dart_bin.sh`). Every other test here passes an absolute path, so only
+      // the first arm was ever exercised — deleting `|_dart_bin.sh` left all
+      // 15 tests green while reopening the original silent-no-op bug for this
+      // shape. Same guard-without-its-mirror class the file header names, one
+      // dimension over from the backslash case the B-pass closed.
+      final scriptsDir = File(resolver).parent.path;
+      final r = Process.runSync(
+        'sh',
+        ['_dart_bin.sh', 'run', 'foo'],
+        workingDirectory: scriptsDir,
+        environment: _cleanEnv(),
+        includeParentEnvironment: false,
+      );
+      expect(r.exitCode, 64,
+          reason: 'invoked by bare filename from inside scripts/, the guard '
+              'must still fire — an exit 0 here is the original bug.');
+      expect('${r.stderr}', contains('must be SOURCED'));
+    });
+
+    // Round-2 review P2. The `tr '\' '/'` normalization was added for
+    // B-pass finding 2 (a Windows-form path bypassed the guard), and NOTHING
+    // tested it: removing the normalization reproduced the silent-exit-0 bug
+    // in full while all 16 tests stayed green. A defense the suite cannot see
+    // is a defense the next refactor deletes for free. Note this is NOT the
+    // bare-filename case above — that path contains no backslash to normalize,
+    // so it exercises a different arm.
+    for (final entry in const {
+      'scripts/_dart_bin.sh': r'scripts\_dart_bin.sh',
+      'scripts/_git_lock.sh': r'scripts\_git_lock.sh',
+    }.entries) {
+      test('a WINDOWS-BACKSLASH path still fails: ${entry.value}', () {
+        expect(File(entry.key).existsSync(), isTrue,
+            reason: 'setup: ${entry.key} must exist');
+        final r = Process.runSync(
+          'sh',
+          [entry.value],
+          workingDirectory: Directory.current.path,
+          environment: _cleanEnv(),
+          includeParentEnvironment: false,
+        );
+        expect(r.exitCode, 64,
+            reason: 'a backslash path is the DOMINANT spelling in this '
+                'environment; without `tr \\ /` the guard silently exits 0 '
+                'and the original no-op bug is back.');
+        expect('${r.stderr}', contains('must be SOURCED'));
+      });
+    }
+
+    test('SOURCING still resolves a real dart binary (guard does not fire)',
+        () {
+      // The supported path. If the guard ever widened to match a sourced
+      // invocation, this reddens — and so would all five hooks in production.
+      final out = _sh(_driver(tmp, resolver, ''), tmp.path);
+      expect(out.exitCode, 0, reason: 'stderr: ${out.stderr}');
+      expect('${out.stdout}'.trim(), isNotEmpty,
+          reason: 'sourcing must still yield a resolved path');
+    });
+
+    test('`sh -n` parse-check still passes — every hook runs it before sourcing',
+        () {
+      // All five hooks gate their `.` on `sh -n <resolver>`. If the guard made
+      // the file unparseable, every hook would silently fall back to bare
+      // `dart` and the measured 182s→98s win would evaporate with no error.
+      final r = Process.runSync(
+        'sh',
+        ['-n', resolver],
+        workingDirectory: Directory.current.path,
+        environment: _cleanEnv(),
+        includeParentEnvironment: false,
+      );
+      expect(r.exitCode, 0,
+          reason: 'the guard must not break the hooks\' own parse-check');
+    });
+
+    test('the twin guard on _git_lock.sh behaves identically', () {
+      // Same class, same batch: _git_lock.sh also only defines functions, so
+      // executing it acquires no lock and exits 0.
+      final lock =
+          File('scripts/_git_lock.sh').absolute.path.replaceAll(r'\', '/');
+      expect(File(lock).existsSync(), isTrue);
+
+      final executed = Process.runSync(
+        'sh',
+        [lock],
+        workingDirectory: Directory.current.path,
+        environment: _cleanEnv(),
+        includeParentEnvironment: false,
+      );
+      expect(executed.exitCode, 64,
+          reason: 'executing the lock helper must fail, not silently no-op');
+      expect('${executed.stderr}', contains('must be SOURCED'));
+
+      // And sourcing must still define both entry points.
+      final probe = '${tmp.path}/lockprobe.sh';
+      File(probe).writeAsStringSync(
+          'set -u\n. "$lock"\ntype git_lock_acquire >/dev/null 2>&1 || exit 3\n'
+          'type git_lock_release >/dev/null 2>&1 || exit 4\necho OK\n');
+      final sourced = _sh(probe, tmp.path);
+      expect(sourced.exitCode, 0,
+          reason: 'sourcing must still define git_lock_acquire/release; '
+              'stderr: ${sourced.stderr}');
+      expect('${sourced.stdout}', contains('OK'));
+    });
+  });
 }
