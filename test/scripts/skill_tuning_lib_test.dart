@@ -196,4 +196,103 @@ void main() {
       expect(cannotRead.verdict, isNot(TuningVerdict.satisfied));
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // The same-day `(x)` disambiguator (2026-08-30). SKILL.md's own convention
+  // for a second review on one date is `- **2026-08-29 (d)** — …`, and FIVE
+  // such headers already existed while the matcher required the date to be
+  // immediately closed by `**` — so it matched none of them. Found when the
+  // gate blocked this batch's own correctly-written `(b)` entry.
+  group('same-day (x) disambiguator', () {
+    const twoOnOneDate = '''
+# Code Review (B-pass)
+
+## 7. Tuning history
+
+- **2026-08-30 (b)** — blast-radius **platform** — 3 findings.
+  Review: docs/reviews/second-review.md
+- **2026-08-30** — blast-radius **platform** — 6 findings.
+  Review: docs/reviews/first-review.md
+- **2026-08-17** — blast-radius **platform** — 5 findings.
+  Review: docs/reviews/older-bpass.md
+''';
+
+    test('a suffixed header counts as a dated bullet', () {
+      expect(hasTuningEntryFor(twoOnOneDate, '2026-08-30'), isTrue);
+    });
+
+    test('a suffixed entry satisfies its OWN review', () {
+      expect(
+        hasTuningEntryForReview(
+            twoOnOneDate, '2026-08-30', 'docs/reviews/second-review.md'),
+        isTrue,
+        reason: 'the `(b)` entry names this review — rejecting it forces the '
+            'author to flatten the date and lose the disambiguation the '
+            'convention exists for',
+      );
+    });
+
+    // Round-2 review P3: with `[^)]*` the suffix group stopped at the FIRST
+    // `)`, so a nested-paren disambiguator matched nothing — and, worse,
+    // failed to terminate the block above it.
+    test('a NESTED-paren disambiguator is still a header, and still terminates',
+        () {
+      const nested = '''
+## 7. Tuning history
+
+- **2026-08-30** — 6 findings.
+  Review: docs/reviews/first-review.md
+- **2026-08-29 (see note (details))** — 3 findings.
+  Review: docs/reviews/nested-paren-review.md
+''';
+      expect(hasTuningEntryFor(nested, '2026-08-29'), isTrue,
+          reason: 'a nested-paren suffix is still a dated header');
+      expect(
+        hasTuningEntryForReview(
+            nested, '2026-08-29', 'docs/reviews/nested-paren-review.md'),
+        isTrue,
+        reason: 'and it satisfies its own review');
+      expect(
+        hasTuningEntryForReview(
+            nested, '2026-08-30', 'docs/reviews/nested-paren-review.md'),
+        isFalse,
+        reason: 'THE DANGEROUS HALF: if the nested header does not terminate '
+            'the 08-30 block, that block swallows it and the 08-30 entry is '
+            'credited with naming an 08-29 review — a false PASS of the exact '
+            'check this function exists to make.',
+      );
+    });
+
+    test(
+        'a suffixed header still TERMINATES the previous block — no false PASS',
+        () {
+      // The subtler half. If `anyDatedHeader` did not match `(b)` headers, the
+      // FIRST entry's block would swallow the `(b)` entry below it, and the
+      // first entry would be credited with naming `second-review` — an OLD
+      // entry satisfying a NEW review, the exact failure the block scan
+      // exists to prevent. Ordered so the plain header precedes nothing that
+      // should belong to it.
+      const plainFirst = '''
+## 7. Tuning history
+
+- **2026-08-30** — blast-radius **platform** — 6 findings.
+  Review: docs/reviews/first-review.md
+- **2026-08-30 (b)** — blast-radius **platform** — 3 findings.
+  Review: docs/reviews/second-review.md
+''';
+      expect(
+        hasTuningEntryForReview(
+            plainFirst, '2026-08-30', 'docs/reviews/first-review.md'),
+        isTrue,
+        reason: 'the plain entry names its own review');
+      // And the reverse direction: each entry is credited only with the
+      // review IT names, never its neighbour's.
+      expect(
+        hasTuningEntryForReview(
+            plainFirst, '2026-08-30', 'docs/reviews/unrelated-review.md'),
+        isFalse,
+        reason: 'neither block names this review, so neither may satisfy it',
+      );
+    });
+  });
 }

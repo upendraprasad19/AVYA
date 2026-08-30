@@ -130,6 +130,107 @@ if [ "$LOCAL_MAIN_SHA" != "$REMOTE_MAIN_SHA" ]; then
   echo "[safe_merge] NOTE: local main differs from origin/main (ahead=$AHEAD_COUNT, behind=0) -- not stale, proceeding."
 fi
 
+# ---------------------------------------------------------------------------
+# PRE-MERGE bpass-verdict PRECHECK (2026-08-30) -- ADVISORY, never blocking.
+#
+# `check_plan_review_record_exists.dart` reads the plan-review record's
+# `bpass_review:` file AT THE MERGE COMMIT and hard-fails CI when its verdict
+# is not `accepted`. That means a `verdict: pending` review is unfixable by any
+# LATER commit -- the merge commit's content is what CI reads -- so the repair
+# is a full merge unwind (`git reset --hard` to the pre-merge sha, fix on the
+# branch, re-merge). That happened on 2026-08-30 and cost exactly that.
+#
+# The existing precheck in git_safety_hook.dart is push-shaped, so it fires
+# only AFTER the merge, when the cheap fix has already become the expensive
+# one. This runs the same question one step earlier, where the fix is a
+# one-line edit on the branch.
+#
+# ADVISORY BY CONSTRUCTION, deliberately matching the hook's own reasoning
+# (round-2 N1 there): this must never wedge the one path that lands work on
+# main. Every failure mode below -- unreadable record, missing field, absent
+# file, no record at all -- falls through silently. CI remains the
+# authoritative gate. It only ever prints.
+#
+# ⚠ READS THE BRANCH'S TREE, NOT THE WORKING DIRECTORY (B-pass finding 1).
+# The first version used `[ -r "docs/plan-reviews/$BRANCH.md" ]`, a working-tree
+# read -- and this script runs ON MAIN, BEFORE the merge, where that file does
+# not exist yet: the record is authored and committed on the FEATURE BRANCH.
+# Confirmed against real history: `git cat-file -e a7a254b8^1:docs/plan-reviews/
+# profile-phase-fixes.md` -> absent from main's side, present only via the
+# branch parent. So the check silently matched nothing on every real
+# invocation -- a no-op shipped as a guard against no-ops. Its own three tests
+# passed only because their fixture committed the record onto MAIN, a shape the
+# real workflow never produces. `git show "$BRANCH:<path>"` is the same
+# read-from-a-rev pattern `check_plan_review_record_exists.dart:216` already
+# uses, and is the reason that gate does not have this bug.
+#
+# ⚠ SLUG, NOT RAW BRANCH NAME (B-pass finding 3). The record filename is
+# `plan_review_record_lib.dart`'s `recordSlug()`: strip a leading `origin/`,
+# then map every `/` -> `-`. A raw `$BRANCH` interpolation asks for
+# `docs/plan-reviews/claude/foo.md`, which exists under no workflow, so the
+# check would stay inert for every slash-containing branch -- and `claude/*` is
+# a live convention here. Shell port below, matching this file's own precedent
+# of porting `_norm()` from the Dart side.
+# The three shapes below MIRROR the CI gate's own three rejections
+# (`check_plan_review_record_exists.dart:846-858`), and that parity is the
+# point: a precheck that covers fewer shapes than the gate it previews is
+# silent exactly where a merge is about to fail. Round-1 review confirmed
+# empirically that the first version warned on ONLY the third shape --
+# the one requiring someone to have gotten the linkage RIGHT and merely left
+# the verdict unset -- while staying silent on the two likelier operator
+# errors (no `bpass_review:` field at all; a field naming a file that was
+# never committed). Both merged with zero output.
+#
+# `refs/heads/` is explicit (round-1 finding 4): a TAG sharing the branch's
+# name otherwise wins git's ref precedence silently. That ambiguity also
+# affects the pre-existing `git merge --no-ff "$BRANCH"` below, which is out
+# of this change's scope and left alone deliberately rather than widened into
+# an unreviewed behaviour change to the merge itself.
+_warn_bpass() {
+  echo "[safe_merge] WARNING: $_REC claims 'bpass: accepted' but $1" >&2
+  echo "  CI reads that record AT THE MERGE COMMIT, so merging now means the" >&2
+  echo "  only repair is unwinding this merge. Fix it on '$BRANCH' FIRST." >&2
+  echo "  (Advisory only -- proceeding. CI is the authoritative gate.)" >&2
+}
+
+# ⚠ The `bpass:` capture below is `\([a-z_]*\)`, while the CI gate's `field()`
+# captures `(.+)` and trims (round-2 review P3). Both agree on `accepted`, the
+# only value this repo uses. They could diverge on a hedge containing a
+# character outside `[a-z_]` (`accepted-ish`): the shell reads `accepted` and
+# proceeds, the gate reads the whole string and rejects. Left as-is rather than
+# widened, because the divergence is SAFE in the only direction it can go —
+# this precheck is advisory, so the worst case is a spuriously silent preview
+# of a record CI will reject anyway, never a merge that CI would have passed.
+# Recorded so the next reader does not have to re-derive that it is harmless.
+_REC_SLUG="$(printf '%s' "$BRANCH" | sed 's#^origin/##' | tr '/' '-')"
+_REC="docs/plan-reviews/${_REC_SLUG}.md"
+_REC_CONTENT="$(git show "refs/heads/${BRANCH}:${_REC}" 2>/dev/null || true)"
+if [ -n "${_REC_CONTENT:-}" ]; then
+  _BPASS_CLAIM="$(printf '%s\n' "$_REC_CONTENT" | sed -n 's/^bpass:[[:space:]]*\([a-z_]*\).*/\1/p' | head -1)"
+  if [ "${_BPASS_CLAIM:-}" = "accepted" ]; then
+    _BPASS_FILE="$(printf '%s\n' "$_REC_CONTENT" | sed -n 's/^bpass_review:[[:space:]]*\([^[:space:]]*\).*/\1/p' | head -1)"
+    if [ -z "${_BPASS_FILE:-}" ]; then
+      # Shape 1 (gate: "requires a bpass_review: field naming a file").
+      _warn_bpass "names no 'bpass_review:' file."
+    else
+      _BPASS_CONTENT="$(git show "refs/heads/${BRANCH}:${_BPASS_FILE}" 2>/dev/null || true)"
+      if [ -z "${_BPASS_CONTENT:-}" ]; then
+        # Shape 2 (gate: "<path> does not exist at <rev>"). Typo, or the
+        # review file was written but never committed on this branch.
+        _warn_bpass "its 'bpass_review: $_BPASS_FILE' does not exist on '$BRANCH'."
+      elif ! printf '%s\n' "$_BPASS_CONTENT" | grep -qE '^verdict:[[:space:]]*accepted[[:space:]]*$'; then
+        # Shape 3 (gate: "does not contain `verdict: accepted` (line-anchored)").
+        # The anchors are load-bearing and mirror the gate's own multiLine
+        # `^verdict:\s*accepted\s*$`: unanchored, a hedged value such as
+        # `accepted_pending_signoff` would read as clean acceptance -- the
+        # "fabricated acceptance" the gate exists to block.
+        _warn_bpass "$_BPASS_FILE does not carry a line-anchored 'verdict: accepted'."
+      fi
+    fi
+  fi
+fi
+# ---------------------------------------------------------------------------
+
 echo "[safe_merge] main is caught up with origin/main ($LOCAL_MAIN_SHA). Merging '$BRANCH'..."
 
 LOG="$(mktemp 2>/dev/null || echo "/tmp/safe_merge_$$.log")"

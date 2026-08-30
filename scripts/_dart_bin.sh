@@ -39,6 +39,44 @@
 # CONTRACT: this must never wedge a hook. Every failure path falls back to
 # whatever `dart` is on PATH, which is exactly the pre-existing behaviour.
 
+# ---------------------------------------------------------------------------
+# EXECUTION GUARD (2026-08-30). This file DEFINES A FUNCTION AND NOTHING ELSE,
+# so running it as a script is a silent no-op that exits 0 having done nothing.
+#
+# That is not hypothetical. On 2026-08-30 a session ran
+#   sh scripts/_dart_bin.sh run scripts/validate_diagnose_doc.dart <path>
+# repeatedly, read the exit 0, and reported gates as passing and diagnose-docs
+# as validating. NOTHING had run. The mistake is easy to make because the
+# CORRECT hook usage is `. scripts/_dart_bin.sh` + `"$DART_BIN" run <script>`,
+# and the wrong form looks like a plausible shorthand for it. It cost several
+# turns of false confidence, and the class -- an exit code that reports success
+# about work that never happened -- is the one this repo tracks hardest
+# (`feedback_green_check_input_set_width.md`, `feedback_bad_news_vs_no_news.md`).
+#
+# `$0` is this file's path ONLY when it is executed. When sourced -- by the five
+# hooks, or by a test driver -- `$0` belongs to the CALLER, so this cannot fire
+# on the supported path. `sh -n` (the parse-check every hook runs before
+# sourcing) never executes it either. Verified against all five hooks and both
+# tests that reference this file before landing.
+#
+# ⚠ `$0` is BACKSLASH-NORMALIZED first (B-pass finding 2, same batch). Without
+# it, `sh 'scripts\_dart_bin.sh'` -- a Windows-form path, the DOMINANT spelling
+# in this environment's own tooling -- slipped past a forward-slash-only pattern
+# and exited 0 silently, reproducing the exact bug this guard exists to close.
+# A guard that catches only the spelling its author happened to type is the
+# `feedback_mistake_guard_without_its_mirror` class. Same `tr '\\' '/'`
+# normalization `safe_merge.sh`'s `_norm()` already uses for git paths.
+case "$(printf '%s' "$0" | tr '\\' '/')" in
+  */_dart_bin.sh|_dart_bin.sh)
+    echo "ERROR: scripts/_dart_bin.sh must be SOURCED, not executed." >&2
+    echo "  It only defines resolve_dart_bin(); running it does nothing." >&2
+    echo "  In a hook:  . scripts/_dart_bin.sh && DART_BIN=\"\$(resolve_dart_bin)\"" >&2
+    echo "  One-shot:   DART_BIN=\$(sh -c '. scripts/_dart_bin.sh && resolve_dart_bin')" >&2
+    exit 64  # EX_USAGE
+    ;;
+esac
+# ---------------------------------------------------------------------------
+
 # Sets DART_BIN. Callers use "$DART_BIN" run <script.dart> in place of
 # `dart run <script.dart>`.
 resolve_dart_bin() {

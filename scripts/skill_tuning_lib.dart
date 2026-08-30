@@ -79,10 +79,39 @@ String? reviewedOnFrom(String markdown) {
   return null;
 }
 
+/// A dated tuning-history bullet header, with the OPTIONAL same-day
+/// disambiguator the file's own convention uses: `- **2026-08-29 (d)** — …`.
+///
+/// ⚠ The suffix arm is load-bearing and its absence was a live bug (found
+/// 2026-08-30 by plan-review round 1 of `process-hardening`, while the gate
+/// was blocking that batch's own honest entry). The original pattern required
+/// the date to be immediately closed by `**`, so it matched NONE of the **5**
+/// suffixed headers already in `code-review/SKILL.md` — the dominant shape for
+/// a second review on one date, which that file's history explicitly needs
+/// ("a batch commonly runs a B-pass on the day a sibling batch also does").
+/// The effect was not a false PASS but a false FAIL that pushes toward the
+/// wrong repair: a correctly-written `(b)` entry reads as missing, and the
+/// obvious way out is to flatten the date and lose the disambiguation the
+/// convention exists for. Same guard-without-its-mirror class as the rest of
+/// this batch — a matcher that only accepts the spelling its author pictured.
+/// ⚠ The suffix body is `.*` (greedy), NOT `[^)]*` (round-2 review P3). With
+/// `[^)]*` the group stops at the FIRST `)`, so a nested-paren disambiguator
+/// — `**2026-08-29 (see note (details))**` — matched neither this pattern nor
+/// `anyDatedHeader`. The false NEGATIVE is the visible half; the dangerous
+/// half is that failing to match `anyDatedHeader` means such a header no
+/// longer TERMINATES the preceding block, so the entry above it gets credited
+/// with naming a review belonging to a different date — a false PASS of
+/// exactly the check `hasTuningEntryForReview` exists to make. Greedy `.*`
+/// backtracks to the LAST `)` on the line and cannot cross a newline (Dart's
+/// `.` excludes `\n` without `dotAll`), so it stays line-scoped.
+String _datedHeaderSource(String isoDatePattern) =>
+    r'^\s*[-*]\s+\*\*' + isoDatePattern + r'(?:\s*\(.*\))?\*\*';
+
 /// True when [skillMarkdown] has a tuning-history bullet dated [isoDate].
 ///
 /// The accepted shape is the one every existing entry already uses:
-/// `- **YYYY-MM-DD** — blast-radius …`. Deliberately NOT a bare
+/// `- **YYYY-MM-DD** — blast-radius …` (optionally `**YYYY-MM-DD (b)**`).
+/// Deliberately NOT a bare
 /// `contains(isoDate)`: the date also appears in prose inside older entries
 /// (one entry cites "2026-08-17" while describing a different batch), so a
 /// substring test would let a NEW review be satisfied by an OLD entry's prose.
@@ -91,7 +120,7 @@ String? reviewedOnFrom(String markdown) {
 /// than the one being asked.
 bool hasTuningEntryFor(String skillMarkdown, String isoDate) {
   final pattern = RegExp(
-    r'^\s*[-*]\s+\*\*' + RegExp.escape(isoDate) + r'\*\*',
+    _datedHeaderSource(RegExp.escape(isoDate)),
     multiLine: true,
   );
   return pattern.hasMatch(skillMarkdown);
@@ -122,8 +151,15 @@ bool hasTuningEntryForReview(
   final stem =
       basename.endsWith('.md') ? basename.substring(0, basename.length - 3) : basename;
   final lines = skillMarkdown.split('\n');
-  final header = RegExp(r'^\s*[-*]\s+\*\*' + RegExp.escape(isoDate) + r'\*\*');
-  final anyDatedHeader = RegExp(r'^\s*[-*]\s+\*\*\d{4}-\d{2}-\d{2}\*\*');
+  // Both patterns accept the optional `(x)` same-day disambiguator — see
+  // _datedHeaderSource. `anyDatedHeader` must accept it too, and that half is
+  // the subtler one: it terminates a block. If it did not match `(b)` headers,
+  // a suffixed entry would be absorbed into the PRECEDING entry's block, and
+  // the previous batch's entry would then be credited with naming this
+  // review — a false PASS, the exact "an OLD entry satisfies a NEW review"
+  // failure this function was written to prevent.
+  final header = RegExp(_datedHeaderSource(RegExp.escape(isoDate)));
+  final anyDatedHeader = RegExp(_datedHeaderSource(r'\d{4}-\d{2}-\d{2}'));
 
   for (var i = 0; i < lines.length; i++) {
     if (!header.hasMatch(lines[i])) continue;

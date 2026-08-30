@@ -248,4 +248,189 @@ void main() {
     expect(r.exitCode, 1);
     expect('${r.stdout}${r.stderr}', contains('LINKED worktree'));
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PRE-MERGE bpass-verdict PRECHECK (2026-08-30).
+  //
+  // check_plan_review_record_exists.dart reads the record's bpass_review file
+  // AT THE MERGE COMMIT, so a `verdict: pending` there is unfixable by any
+  // later commit — the repair is a full merge unwind, which is what it cost on
+  // 2026-08-30. This precheck asks the same question one step earlier.
+  //
+  // It is ADVISORY: it must WARN and still merge. A blocking version would
+  // wedge the only path that lands work on main, which is exactly the hazard
+  // git_safety_hook.dart's own round-2 review closed for the push-side twin.
+  /// Commits a plan-review record for [branch] claiming `bpass: accepted`,
+  /// pointing at a review file carrying [verdict] — **onto [branch] itself**,
+  /// then returns to `main` leaving main's working tree WITHOUT either file.
+  ///
+  /// ⚠ The branch-side placement is the whole point, and the first version of
+  /// this helper got it wrong (B-pass finding 1). It committed both files onto
+  /// `main`, which made all three tests pass against a precheck that was a
+  /// no-op in production: the real workflow authors the record on the feature
+  /// branch (verified against real history — `docs/plan-reviews/
+  /// profile-phase-fixes.md` is absent from `a7a254b8^1`, reachable only via
+  /// the branch parent), so a working-tree read on main finds nothing.
+  /// A fixture that manufactures a state the workflow never produces asserts
+  /// nothing about the workflow. This one reproduces the real shape, which is
+  /// what makes the precheck's `git show "$BRANCH:..."` read load-bearing:
+  /// revert that read to a working-tree read and these tests go red.
+  void writeReviewPairOnBranch(String repo, String branch, String verdict) {
+    _run('git', ['checkout', '-q', branch], repo);
+    Directory('$repo/docs/plan-reviews').createSync(recursive: true);
+    Directory('$repo/docs/reviews').createSync(recursive: true);
+    final slug = branch.replaceFirst(RegExp(r'^origin/'), '').replaceAll('/', '-');
+    File('$repo/docs/reviews/$slug-review.md')
+        .writeAsStringSync('---\nverdict: $verdict\n---\n# review\n');
+    File('$repo/docs/plan-reviews/$slug.md').writeAsStringSync(
+        '---\nbranch: $branch\nblast_radius: platform\nreview_rounds: 2\n'
+        'ground_truth_verified: true\nverdict: converged\nbpass: accepted\n'
+        'bpass_review: docs/reviews/$slug-review.md\n---\n# record\n');
+    _run('git', ['add', '-A'], repo);
+    _run('git', ['commit', '-qm', 'review artifacts for $branch'], repo);
+    _run('git', ['checkout', '-q', 'main'], repo);
+
+    // The load-bearing precondition: main must NOT have these files, or the
+    // test cannot distinguish a branch-tree read from a working-tree read.
+    expect(File('$repo/docs/plan-reviews/$slug.md').existsSync(), isFalse,
+        reason: 'setup: the record must live ONLY on the branch — if it is on '
+            'main too, a working-tree read would pass and prove nothing');
+  }
+
+  test('WARNS before merging when the bpass_review verdict is still pending',
+      () {
+    final branch = makeFeatureBranch(primary, 'pending-verdict-feature');
+    writeReviewPairOnBranch(primary, branch, 'pending');
+
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+
+    expect(r.exitCode, 0,
+        reason: 'ADVISORY — it must warn, never block the merge.\n'
+            '${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', contains('verdict: accepted'),
+        reason: 'the warning must name what is missing');
+    expect('${r.stdout}${r.stderr}', contains('unwinding this merge'),
+        reason: 'and must say WHY it matters now rather than later — that is '
+            'the whole point of moving the check earlier');
+  });
+
+  test('stays SILENT when the bpass_review verdict is accepted', () {
+    // The mirror. A precheck that warns on the healthy path is noise, and
+    // noise is how a real warning gets skimmed past.
+    final branch = makeFeatureBranch(primary, 'accepted-verdict-feature');
+    writeReviewPairOnBranch(primary, branch, 'accepted');
+
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', isNot(contains('unwinding this merge')),
+        reason: 'an accepted verdict must produce no warning at all');
+  });
+
+  // Round-1 review finding 1: the precheck originally warned on ONE of the
+  // three shapes the CI gate rejects, and stayed silent on the two likelier
+  // operator errors. These two tests pin the missing shapes. Both were
+  // confirmed to merge with zero output before the fix.
+  test('WARNS when bpass: accepted names NO bpass_review file', () {
+    final branch = makeFeatureBranch(primary, 'no-bpass-field-feature');
+    _run('git', ['checkout', '-q', branch], primary);
+    Directory('$primary/docs/plan-reviews').createSync(recursive: true);
+    File('$primary/docs/plan-reviews/$branch.md').writeAsStringSync(
+        '---\nbranch: $branch\nblast_radius: platform\nreview_rounds: 2\n'
+        'ground_truth_verified: true\nverdict: converged\nbpass: accepted\n'
+        '---\n# record with no bpass_review: line\n');
+    _run('git', ['add', '-A'], primary);
+    _run('git', ['commit', '-qm', 'record without bpass_review'], primary);
+    _run('git', ['checkout', '-q', 'main'], primary);
+
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+    expect(r.exitCode, 0, reason: 'advisory: ${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', contains('names no'),
+        reason: 'the CI gate rejects this shape outright — the precheck that '
+            'previews it must not be silent here');
+  });
+
+  test('WARNS when bpass_review names a file absent from the branch', () {
+    final branch = makeFeatureBranch(primary, 'dangling-bpass-feature');
+    _run('git', ['checkout', '-q', branch], primary);
+    Directory('$primary/docs/plan-reviews').createSync(recursive: true);
+    File('$primary/docs/plan-reviews/$branch.md').writeAsStringSync(
+        '---\nbranch: $branch\nblast_radius: platform\nreview_rounds: 2\n'
+        'ground_truth_verified: true\nverdict: converged\nbpass: accepted\n'
+        'bpass_review: docs/reviews/never-committed-review.md\n---\n# record\n');
+    _run('git', ['add', '-A'], primary);
+    _run('git', ['commit', '-qm', 'record with dangling bpass_review'], primary);
+    _run('git', ['checkout', '-q', 'main'], primary);
+
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+    expect(r.exitCode, 0, reason: 'advisory: ${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', contains('does not exist on'),
+        reason: 'a typo or an uncommitted review file is the likeliest '
+            'operator error of the three, and was the most silent');
+  });
+
+  // Round-1 review finding 3: the verdict grep is correctly line-anchored, but
+  // the only non-accepted fixture was the literal `pending`, which contains no
+  // `accepted` substring — so removing BOTH anchors left all 8 tests green.
+  // This pins the anchoring itself, mirroring the CI gate's own
+  // `^verdict:\s*accepted\s*$` and its "fabricated acceptance" rationale.
+  test('WARNS on a HEDGED verdict that merely contains "accepted"', () {
+    final branch = makeFeatureBranch(primary, 'hedged-verdict-feature');
+    writeReviewPairOnBranch(primary, branch, 'accepted_pending_signoff');
+
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+    expect(r.exitCode, 0, reason: 'advisory: ${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', contains('line-anchored'),
+        reason: 'an unanchored match would read `accepted_pending_signoff` as '
+            'clean acceptance — exactly the fabricated-acceptance shape the '
+            'CI gate anchors against.');
+  });
+
+  // Round-2 review P2. `refs/heads/` was added for round-1 finding 4 (a TAG
+  // sharing a branch's name silently wins git's ref precedence), and nothing
+  // tested it: removing the prefix from both `git show` calls left all 11
+  // tests green. This fixture builds the collision.
+  test('reads the BRANCH, not a same-named TAG (refs/heads/ disambiguation)',
+      () {
+    final branch = makeFeatureBranch(primary, 'tag-collision-feature');
+    // The BRANCH carries a pending verdict — the precheck must warn about it.
+    writeReviewPairOnBranch(primary, branch, 'pending');
+    // A TAG of the same name points at a commit whose record says `accepted`.
+    // Bare `git show "$BRANCH:..."` resolves the TAG, so a precheck without
+    // `refs/heads/` reads the clean record and stays silent about a branch
+    // that is in fact about to fail CI.
+    _run('git', ['checkout', '-q', '-B', 'tag-src', 'main'], primary);
+    Directory('$primary/docs/plan-reviews').createSync(recursive: true);
+    Directory('$primary/docs/reviews').createSync(recursive: true);
+    File('$primary/docs/reviews/$branch-review.md')
+        .writeAsStringSync('---\nverdict: accepted\n---\n# clean\n');
+    File('$primary/docs/plan-reviews/$branch.md').writeAsStringSync(
+        '---\nbranch: $branch\nbpass: accepted\n'
+        'bpass_review: docs/reviews/$branch-review.md\n---\n# record\n');
+    _run('git', ['add', '-A'], primary);
+    _run('git', ['commit', '-qm', 'decoy accepted record'], primary);
+    final tagged = _run('git', ['tag', branch, 'HEAD'], primary);
+    expect(tagged.exitCode, 0, reason: 'setup: creating the colliding tag');
+    _run('git', ['checkout', '-q', 'main'], primary);
+    addTearDown(() => _run('git', ['tag', '-d', branch], primary));
+
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+
+    expect(r.exitCode, 0, reason: 'advisory: ${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', contains('line-anchored'),
+        reason: 'the precheck must read the BRANCH (verdict: pending) and warn '
+            '— resolving the same-named TAG instead finds `accepted` and goes '
+            'silent about a branch that will fail CI at the merge commit.');
+  });
+
+  test('stays SILENT when the branch has no plan-review record', () {
+    // Feature-tier branches legitimately have no record. The precheck must
+    // not invent a requirement the merge gate itself does not impose.
+    final branch = makeFeatureBranch(primary, 'no-record-feature');
+
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', isNot(contains('unwinding this merge')));
+  });
 }
