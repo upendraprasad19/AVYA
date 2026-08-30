@@ -111,6 +111,30 @@ class AuthSessionBootstrapper {
   AuthSessionBootstrapper._();
   static final AuthSessionBootstrapper instance = AuthSessionBootstrapper._();
 
+  /// §4.6 kill-switch for the OI-150 plan-regeneration anchor. Set `true` in
+  /// `configBox` to restore the verbatim pre-fix read of the raw cloud row.
+  @visibleForTesting
+  static const String kDisableGuardedPlanRegenAnchorKey =
+      'disable_guarded_plan_regen_anchor';
+
+  /// Resolves the plan-regeneration anchor for the login restore (OI-150).
+  ///
+  /// Takes the GUARDED post-merge Hive value, never the raw cloud row. Pure so
+  /// the decision has a behavioural test that fails when the runtime path is
+  /// mis-wired even if the source text still looks right (rule 21) — the same
+  /// reason `WorkoutScheduleReadService.currentWeekColumnProjection` exists.
+  ///
+  /// An absent or unparseable value falls back to [now], matching what the
+  /// pre-fix code did for a null cloud value.
+  @visibleForTesting
+  static DateTime resolvePlanRegenStart({
+    required String? hiveIso,
+    required DateTime now,
+  }) {
+    if (hiveIso == null) return now;
+    return DateTime.tryParse(hiveIso) ?? now;
+  }
+
   /// Per-user mutex. Concurrent calls for the same user (RestoringScreen
   /// + token-refresh listener + manual retry) queue rather than racing.
   /// Map key is the Supabase user id.
@@ -592,15 +616,37 @@ class AuthSessionBootstrapper {
               // contraindicated exercises (vocab canonicalized in generateV4).
               final injuries = InjuryVocab.fromProfile(merged['injuries']);
 
-              DateTime startDate;
-              if (progressRows.isNotEmpty) {
-                final genStr =
-                    progressRows.first['phase_started_at'] as String?;
-                startDate = genStr != null
-                    ? DateTime.tryParse(genStr) ?? DateTime.now()
-                    : DateTime.now();
+              // OI-150: anchor on the GUARDED post-merge Hive value — the same
+              // source `phase` above already uses, for the same reason the
+              // :576-586 comment gives. The pre-fix code read
+              // `progressRows.first['phase_started_at']`, the RAW PRE-MERGE
+              // cloud row, eight lines below a comment explaining why the raw
+              // row must not be trusted here. So a restore that had just
+              // refused a stale phase regenerated the ADVANCED phase's plan
+              // anchored at the STALE phase's start date.
+              //
+              // The cloud row is deliberately NOT a fallback on the guarded
+              // path: it fires exactly when the merge has just declined that
+              // value, i.e. only in the state where it is known wrong.
+              final DateTime startDate;
+              if (HiveService.instance.configBox
+                      .get(kDisableGuardedPlanRegenAnchorKey) ==
+                  true) {
+                // §4.6 kill-switch — verbatim pre-fix behaviour.
+                if (progressRows.isNotEmpty) {
+                  final genStr =
+                      progressRows.first['phase_started_at'] as String?;
+                  startDate = genStr != null
+                      ? DateTime.tryParse(genStr) ?? DateTime.now()
+                      : DateTime.now();
+                } else {
+                  startDate = DateTime.now();
+                }
               } else {
-                startDate = DateTime.now();
+                startDate = resolvePlanRegenStart(
+                  hiveIso: UserRepository.instance.getPhaseStartedAtIso(),
+                  now: DateTime.now(),
+                );
               }
 
               try {

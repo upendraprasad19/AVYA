@@ -312,6 +312,318 @@ void main() {
 
   // ──────────── B — the merge → Hive → read chain the writers run ───────────
 
+  // ── OI-150: the phase delta moves as one group ────────────────────────────
+  //
+  // commitPhaseAdvance (pro_phase_advance.dart:343-348) writes current_phase +
+  // current_week + phase_started_at + plan_generated_at atomically. OI-83
+  // guarded only the first, so a stale cloud row split the group.
+  group('phase-delta companion coupling (OI-150)', () {
+    Map<String, dynamic> localAdvanced() => <String, dynamic>{
+          'current_phase': 2,
+          'current_week': 1,
+          'phase_started_at': '2026-05-25T00:00:00.000Z',
+          'plan_generated_at': '2026-05-25T00:00:00.000Z',
+        };
+    Map<String, dynamic> cloudStale() => <String, dynamic>{
+          'current_phase': 1,
+          'current_week': 4,
+          'phase_started_at': '2026-04-27T00:00:00.000Z',
+          'plan_generated_at': '2026-04-27T00:00:00.000Z',
+        };
+
+    test('local advanced: all FOUR local values survive a stale cloud', () {
+      final r = UserRepository.mergeCloudProgress(
+          local: localAdvanced(), cloud: cloudStale());
+      expect(r.merged['current_phase'], 2);
+      expect(r.merged['current_week'], 1);
+      expect(r.merged['phase_started_at'], '2026-05-25T00:00:00.000Z');
+      expect(r.merged['plan_generated_at'], '2026-05-25T00:00:00.000Z');
+      expect(r.refusedPhaseDeltaFields,
+          containsAll(<String>['current_week', 'phase_started_at', 'plan_generated_at']));
+    });
+
+    test('reinstall: empty local adopts all four from cloud', () {
+      final r = UserRepository.mergeCloudProgress(
+          local: <String, dynamic>{}, cloud: cloudStale());
+      expect(r.merged['current_phase'], 1);
+      expect(r.merged['current_week'], 4);
+      expect(r.merged['phase_started_at'], '2026-04-27T00:00:00.000Z');
+      expect(r.merged['plan_generated_at'], '2026-04-27T00:00:00.000Z');
+      expect(r.refusedPhaseDeltaFields, isEmpty);
+    });
+
+    test('cloud ahead (second device): all four come from cloud', () {
+      final r = UserRepository.mergeCloudProgress(
+        local: <String, dynamic>{
+          'current_phase': 1,
+          'current_week': 2,
+          'phase_started_at': 'LOCAL',
+        },
+        cloud: <String, dynamic>{
+          'current_phase': 3,
+          'current_week': 9,
+          'phase_started_at': 'CLOUD',
+        },
+      );
+      expect(r.merged['current_phase'], 3);
+      expect(r.merged['current_week'], 9);
+      expect(r.merged['phase_started_at'], 'CLOUD');
+      expect(r.refusedPhaseDeltaFields, isEmpty);
+    });
+
+    test('carve-out: a companion ABSENT from local still takes cloud', () {
+      // Reachable: updateProgress' seed (user_repository.dart:452-457) writes
+      // current_phase with NO dates, and PhaseProgressReconciler:138 then
+      // advances the phase alone. Refusing an absent key would drop it from
+      // the merged map and anchor the next plan regen at today.
+      final r = UserRepository.mergeCloudProgress(
+        local: <String, dynamic>{'current_phase': 2, 'current_week': 1},
+        cloud: cloudStale(),
+      );
+      expect(r.merged['current_phase'], 2);
+      expect(r.merged['current_week'], 1);
+      expect(r.merged['phase_started_at'], '2026-04-27T00:00:00.000Z');
+      expect(r.merged['plan_generated_at'], '2026-04-27T00:00:00.000Z');
+      expect(r.refusedPhaseDeltaFields, <String>['current_week']);
+    });
+
+    test('identical values are not reported as a refusal', () {
+      final r = UserRepository.mergeCloudProgress(
+        local: <String, dynamic>{'current_phase': 2, 'phase_started_at': 'SAME'},
+        cloud: <String, dynamic>{'current_phase': 1, 'phase_started_at': 'SAME'},
+      );
+      expect(r.merged['phase_started_at'], 'SAME');
+      expect(r.refusedPhaseDeltaFields, isEmpty);
+    });
+
+    test('cloud non-numeric phase WITH local present couples the companions',
+        () {
+      final r = UserRepository.mergeCloudProgress(
+        local: localAdvanced(),
+        cloud: <String, dynamic>{
+          'current_phase': 'garbage',
+          'phase_started_at': '2026-04-27T00:00:00.000Z',
+        },
+      );
+      expect(r.merged['phase_started_at'], '2026-05-25T00:00:00.000Z');
+      expect(r.malformedFields, contains('current_phase'));
+    });
+
+    test('cloud non-numeric phase with local ABSENT does NOT couple', () {
+      // "Kept whatever local had" when local had nothing is not a kept value.
+      final r = UserRepository.mergeCloudProgress(
+        local: <String, dynamic>{},
+        cloud: <String, dynamic>{
+          'current_phase': 'garbage',
+          'phase_started_at': 'CLOUD',
+        },
+      );
+      expect(r.merged['phase_started_at'], 'CLOUD');
+      expect(r.refusedPhaseDeltaFields, isEmpty);
+    });
+
+    test(
+        'local has a companion but NO phase: a malformed cloud phase must not '
+        'make it "kept"', () {
+      // ⚠ This case exists because the mutation run caught the test above being
+      // ABSORBED (§2.41): with local EMPTY, the per-key `localValue == null`
+      // carve-out bails on every companion anyway, so deleting the
+      // `localRaw != null` guard on the malformed branch left all 35 green.
+      // Here local HOLDS a companion, so the guard is the only thing deciding —
+      // remove it and this reddens.
+      final r = UserRepository.mergeCloudProgress(
+        local: <String, dynamic>{'phase_started_at': 'LOCAL'},
+        cloud: <String, dynamic>{
+          'current_phase': 'garbage',
+          'phase_started_at': 'CLOUD',
+        },
+      );
+      expect(r.merged['phase_started_at'], 'CLOUD',
+          reason: 'local never had a phase, so nothing was "kept" and the '
+              'companions must not be coupled');
+      expect(r.refusedPhaseDeltaFields, isEmpty);
+    });
+
+    test('OI-83 kill-switch ON: phase AND companions all take cloud, no split',
+        () async {
+      await HiveService.instance.configBox.put(
+          UserRepository.kDisableProgressRestoreMonotonicMergeKey, true);
+      addTearDown(() => HiveService.instance.configBox
+          .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey));
+
+      final r = UserRepository.mergeCloudProgress(
+          local: localAdvanced(), cloud: cloudStale());
+      expect(r.merged['current_phase'], 1);
+      expect(r.merged['current_week'], 4);
+      expect(r.merged['phase_started_at'], '2026-04-27T00:00:00.000Z',
+          reason: 'rolling the OI-83 switch must not leave a phase/companion '
+              'split that does not exist today');
+    });
+
+    test('coupling kill-switch ON: companions take cloud, OI-83 guard intact',
+        () async {
+      await HiveService.instance.configBox
+          .put(UserRepository.kDisableProgressPhaseDeltaCouplingKey, true);
+      addTearDown(() => HiveService.instance.configBox
+          .delete(UserRepository.kDisableProgressPhaseDeltaCouplingKey));
+
+      final r = UserRepository.mergeCloudProgress(
+          local: localAdvanced(), cloud: cloudStale());
+      expect(r.merged['current_phase'], 2,
+          reason: 'the two switches are independent — rolling the new one '
+              'must not disable the shipped OI-83 guard');
+      expect(r.merged['current_week'], 4);
+    });
+
+    test('OI-83 switch ON also disables the coupling on the KEY-ABSENT path '
+        '(B-pass F1)', () {
+      // The older switch promises "verbatim pre-OI-83", and pre-OI-83 had no
+      // companion coupling at all. The N1 seed originally ran BEFORE guardOff
+      // was even read, so rolling the wider rollback left the newer coupling
+      // still firing. Proved by the B-pass with a probe test.
+      HiveService.instance.configBox
+          .put(UserRepository.kDisableProgressRestoreMonotonicMergeKey, true);
+      addTearDown(() => HiveService.instance.configBox
+          .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey));
+
+      final r = UserRepository.mergeCloudProgress(
+        local: localAdvanced(),
+        cloud: <String, dynamic>{'phase_started_at': 'CLOUD'},
+      );
+      expect(r.merged['phase_started_at'], 'CLOUD',
+          reason: 'with the OI-83 switch ON, cloud must win the companion — '
+              'the switch is the WIDER rollback and must disable the newer '
+              'coupling too');
+      expect(r.refusedPhaseDeltaFields, isEmpty);
+    });
+
+    test('OI-83 switch ON also disables the coupling on the CLOUD-NULL path '
+        '(B-pass F1)', () {
+      HiveService.instance.configBox
+          .put(UserRepository.kDisableProgressRestoreMonotonicMergeKey, true);
+      addTearDown(() => HiveService.instance.configBox
+          .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey));
+
+      final r = UserRepository.mergeCloudProgress(
+        local: localAdvanced(),
+        cloud: <String, dynamic>{
+          'current_phase': null,
+          'phase_started_at': 'CLOUD',
+        },
+      );
+      expect(r.merged['phase_started_at'], 'CLOUD');
+      expect(r.refusedPhaseDeltaFields, isEmpty);
+    });
+
+    test('unrelated non-monotonic keys still take cloud while coupled', () {
+      final r = UserRepository.mergeCloudProgress(
+        local: <String, dynamic>{'current_phase': 5, 'current_streak_days': 9},
+        cloud: <String, dynamic>{'current_phase': 2, 'current_streak_days': 0},
+      );
+      expect(r.merged['current_streak_days'], 0,
+          reason: 'the coupling must not leak into unrelated keys');
+    });
+
+    test('cloud map with current_phase LAST is still coupled', () {
+      // The post-pass is order-independent by construction; this pins it, so a
+      // future in-loop rewrite that reintroduces order dependence reddens.
+      final cloud = <String, dynamic>{
+        'phase_started_at': '2026-04-27T00:00:00.000Z',
+        'current_week': 4,
+        'plan_generated_at': '2026-04-27T00:00:00.000Z',
+        'current_phase': 1,
+      };
+      final r = UserRepository.mergeCloudProgress(
+          local: localAdvanced(), cloud: cloud);
+      expect(r.merged['phase_started_at'], '2026-05-25T00:00:00.000Z');
+    });
+
+    test('cloud current_phase ABSENT: local survives, so companions couple '
+        '(N1)', () {
+      // The loop never visits a key cloud does not have, so it cannot signal
+      // that local's phase survived. Seeded before the loop instead.
+      final r = UserRepository.mergeCloudProgress(
+        local: localAdvanced(),
+        cloud: <String, dynamic>{'phase_started_at': 'CLOUD'},
+      );
+      expect(r.merged['phase_started_at'], '2026-05-25T00:00:00.000Z',
+          reason: 'cloud omitting current_phase leaves local ahead — the '
+              'companions must move with it or the fix leaves the very split '
+              'it exists to prevent');
+      expect(r.refusedPhaseDeltaFields, contains('phase_started_at'));
+    });
+
+    test('cloud current_phase explicitly NULL: same (N1)', () {
+      final r = UserRepository.mergeCloudProgress(
+        local: localAdvanced(),
+        cloud: <String, dynamic>{
+          'current_phase': null,
+          'phase_started_at': 'CLOUD',
+        },
+      );
+      expect(r.merged['current_phase'], 2);
+      expect(r.merged['phase_started_at'], '2026-05-25T00:00:00.000Z');
+    });
+
+    test('cloud phase absent AND local absent: no coupling (N1 carve-out)', () {
+      final r = UserRepository.mergeCloudProgress(
+        local: <String, dynamic>{'phase_started_at': 'LOCAL'},
+        cloud: <String, dynamic>{'phase_started_at': 'CLOUD'},
+      );
+      expect(r.merged['phase_started_at'], 'CLOUD',
+          reason: 'local never had a phase, so nothing was kept');
+      expect(r.refusedPhaseDeltaFields, isEmpty);
+    });
+
+    test('a refusal is EMITTED, not just recorded (N2)', () {
+      // ⚠ The first version of this test asserted only that
+      // `refusedPhaseDeltaFields` was non-empty — which the MERGE populates
+      // whether or not the REPORTER reads it. Deleting the reporter's loop
+      // left it green (§2.41 absorbed). Capture the emission instead.
+      final seen = <String>[];
+      ErrorTelemetry.debugOnLogEventForTests =
+          (op, {String? message}) => seen.add('$op|$message');
+      addTearDown(() => ErrorTelemetry.debugOnLogEventForTests = null);
+
+      final r = UserRepository.mergeCloudProgress(
+          local: localAdvanced(), cloud: cloudStale());
+      reportProgressDemotionsDeclined(r, source: 'test');
+
+      final refusals =
+          seen.where((e) => e.startsWith('progress_restore_phase_delta_refused'));
+      expect(refusals, hasLength(3),
+          reason: 'one event per refused companion — without them the coupling '
+              'fires invisibly and nobody can tell from client_errors whether '
+              'the fix ever engages');
+      expect(refusals.join(), contains('phase_started_at'));
+    });
+
+    test('nothing refused → no phase-delta event at all (N2 control)', () {
+      final seen = <String>[];
+      ErrorTelemetry.debugOnLogEventForTests =
+          (op, {String? message}) => seen.add('$op|$message');
+      addTearDown(() => ErrorTelemetry.debugOnLogEventForTests = null);
+
+      final r = UserRepository.mergeCloudProgress(
+        local: <String, dynamic>{'current_phase': 1},
+        cloud: <String, dynamic>{'current_phase': 3, 'phase_started_at': 'C'},
+      );
+      reportProgressDemotionsDeclined(r, source: 'test');
+      expect(seen.where((e) => e.contains('phase_delta_refused')), isEmpty,
+          reason: 'a cloud-wins restore must emit nothing — else the event is '
+              'noise and its presence proves nothing');
+    });
+
+    test('current_phase demotion telemetry is unchanged by the coupling', () {
+      final r = UserRepository.mergeCloudProgress(
+          local: localAdvanced(), cloud: cloudStale());
+      expect(r.declinedFields.map((d) => d.field), contains('current_phase'));
+      final d = r.declinedFields.firstWhere((x) => x.field == 'current_phase');
+      expect(d.localValue, 2);
+      expect(d.cloudValue, 1);
+    });
+  });
+
   group('restore merge round-trips through Hive', () {
     test('a locally-advanced phase survives a stale cloud restore', () async {
       await UserRepository.instance.saveProgress({
@@ -334,9 +646,15 @@ void main() {
       final readBack = UserRepository.instance.getProgress()!;
       expect(readBack['current_phase'], 5);
       expect(readBack['total_workouts_done'], 80);
-      // Non-monotonic field still took the cloud value — the merge is scoped,
-      // not a blanket local-wins.
-      expect(readBack['current_week'], 1);
+      // OI-150: `current_week` is a phase-delta COMPANION, so it now moves
+      // with `current_phase` rather than taking cloud independently.
+      //
+      // Supersedes this test's original assertion `expect(..., 1)` and its
+      // rationale "the merge is scoped, not a blanket local-wins". That
+      // rationale was correct for the three MONOTONIC fields and is still
+      // pinned by the unrelated-keys case in the coupling group above — but it
+      // was wrong for the four fields commitPhaseAdvance writes atomically.
+      expect(readBack['current_week'], 2);
     });
   });
 

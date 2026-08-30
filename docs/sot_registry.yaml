@@ -2458,7 +2458,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 489-491
+        line_range: 632-634
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -3584,8 +3584,13 @@ concepts:
       conversational_log_handler). Both paths must be handled in sync/restore.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 459-484
-        method: BiometricNotifier.logSleep
+        line_range: 540-548
+        method: logSleep
+        # Was `BiometricNotifier.logSleep`. check_sot_registry_parity's
+        # _extractSymbol takes the FIRST identifier of a dotted value, so the
+        # CLASS was being validated instead of the method — which is why the
+        # previous (wrong, 109 lines off) range passed the gate while the
+        # correct one failed it. B-pass finding 3, 2026-08-30.
         notes: writes sleep_log_<IST-date> key
       - file: lib/features/ai_coach/services/conversational_log_handler.dart
         line_range: 97-125
@@ -3669,7 +3674,7 @@ concepts:
     sync_methods: [_syncSleepLogs]
     restore_methods: [_restoreSleepLogs]
     ist_sites:
-      - { file: lib/features/profile/providers/profile_provider.dart, line: 575, fn: logSleep }
+      - { file: lib/features/profile/providers/profile_provider.dart, line: 540, fn: logSleep }
     telemetry:
       failure_op_types: [upsert_sleep_log, upsert_sleep_log_chat]
     class_constraints: |
@@ -3718,7 +3723,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 579-669
+        line_range: 679-818
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [full_name, email]
@@ -3894,7 +3899,7 @@ concepts:
           after Unit 3b's own P1 fix (pushOnboardingProgressSnapshot, inserted
           earlier in the file) shifted both down ~80 lines each.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 567-650
+        line_range: 679-818
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [avatar_url, banner_url]
@@ -3955,7 +3960,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 494-496
+        line_range: 637-639
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 1-450
@@ -6813,6 +6818,107 @@ concepts:
 
   # ── APK obs batch 2026-06-02 ─────────────────────────────────────────────
 
+  - concept: phase_delta_companion_coupling
+    domain: workout
+    behavioral_test_path: test/contracts/progress_restore_monotonic_behavioral_test.dart
+    description: |
+      OI-150 / diagnose 321062. `commitPhaseAdvance` writes FOUR fields as one
+      atomic delta — current_phase + current_week + phase_started_at +
+      plan_generated_at — and its own doc says a skip must skip the WHOLE delta.
+      OI-83 guarded only the first, so a stale cloud row split the group on
+      restore and the merged result was written back to Hive, leaving local and
+      cloud agreeing on a shape neither wrote.
+
+      The three companions are NOT monotonic and must never join
+      monotonicProgressFields: two are ISO dates and one is a reset-to-1
+      counter, so max-wins on any of them is a guard pointed the wrong way (the
+      longest_gap_days mistake). They are refused as a group, keyed on the phase
+      decision the merge actually took, and only when local HOLDS a value for
+      that key — a phase-ahead map with no dates is reachable via
+      updateProgress' seed plus a counter-only reconciler advance, and refusing
+      an absent key would drop it from the map entirely.
+    writers:
+      - file: lib/shared/repositories/user_repository.dart
+        method: mergeCloudProgress (post-pass over the merged map)
+        notes: >
+          A POST-PASS, not an in-loop decision: cloud's key order comes from
+          PostgREST and is not ours to control, so a mid-loop rule could see a
+          companion before it has seen the phase. The loop is untouched, which
+          is why current_phase's OI-83 demotion/malformed telemetry still works.
+          Kill-switch disable_progress_phase_delta_coupling, INDEPENDENT of
+          disable_progress_restore_monotonic_merge so rolling one back cannot
+          disable the other.
+      - file: lib/shared/services/pro_phase_advance.dart
+        method: commitPhaseAdvance
+        notes: >
+          The writer whose atomicity this contract preserves. NOT
+          phase_progress_reconciler.dart, which advances the counter ALONE by
+          design ("WITHOUT touching the in-progress plan") — keeping local's
+          companions after a counter-only advance is correct by THAT writer's
+          contract, not because the values happen to match cloud's.
+    readers:
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        method: resolvePlanRegenStart
+        notes: >
+          Anchors the login plan regeneration on the GUARDED post-merge Hive
+          value. The pre-fix code read progressRows.first['phase_started_at'] —
+          the raw PRE-merge cloud row — eight lines below an eleven-line comment
+          explaining why the raw row must not be trusted there.
+      - file: lib/shared/repositories/user_repository.dart
+        method: reportProgressDemotionsDeclined
+        notes: >
+          Emits progress_restore_phase_delta_refused per refused companion, and
+          ONLY when the two sides differed. Without it the coupling fires
+          invisibly — the silent half of the very bug it closes.
+
+  - concept: profile_derived_target_recompute
+    domain: auth_profile
+    behavioral_test_path: test/contracts/profile_target_recompute_test.dart
+    description: |
+      OI-150 / diagnose 321062. The profile map splits into INPUTS the user
+      supplies and values DERIVED from them (bmr, tdee, daily_calories,
+      protein/carbs/fat, activity_level, water_target_ml). _restoreUserProfile
+      merges cloud over local per key with NO guard, so it can take cloud's
+      weight while keeping the phone's calorie target.
+
+      Profile has no client-written version stamp to arbitrate with — updated_at
+      is server-set and absent from the 34-field client payload — so instead of
+      versioning it, merge the inputs and RECOMPUTE the outputs.
+
+      ⚠ The recompute runs ONLY when the merge changed a derivation input. That
+      gate is load-bearing for a founder-locked decision, not an optimisation:
+      body_fat_default_healer.dart states "NO daily_calories recompute
+      (founder-locked: no silent backfill)". The healer clears the cloud column
+      first and then the local one, so by the next restore both are null, the
+      merge changes nothing, and no recompute fires. The lock is honoured
+      structurally rather than by a special case for body fat.
+    writers:
+      - file: lib/features/profile/services/profile_target_recompute.dart
+        method: recomputeDerivedTargets
+        notes: >
+          The single derivation for the EDIT and RESTORE paths;
+          ProfileProvider.recalculateTargets delegates here. Body fat routes
+          through BmrCalculator.bodyFatForCalc so disable_bodyfat_calc reaches
+          this path — without it the switch was half-effective (Mifflin at
+          onboarding, Katch-McArdle here, same device). Never defaults body fat
+          (c3f2d8). Calendar age, matching onboarding.
+      - file: lib/core/services/sync/sync_profile.dart
+        method: _restoreUserProfile
+        notes: >
+          Applies the overlay AFTER the merge and BEFORE the Hive write, gated
+          on derivedTargetInputsChanged. Fail-open: a throw here must cost the
+          derived refresh, never the whole profile restore (which carries the
+          full_name path d4e9a2 exists to protect). Kill-switch
+          disable_profile_target_recompute.
+    readers:
+      - file: lib/features/profile/providers/profile_provider.dart
+        method: recalculateTargets
+        notes: >
+          Delegates to the shared derivation rather than repeating it. It
+          previously lived here AND was mirrored again in
+          profile_edit_recompute_consistency_test.dart; a third copy on the
+          restore path would have been the drift class this repo tracks.
+
   - concept: phase_progress_current_phase
     domain: workout
     # c8f3d1 / Unit 3c: was phase_progress_reconciler_test.dart, which is a PURE
@@ -8949,7 +9055,7 @@ concepts:
       the banner is week-model work, out of scope here.
     writers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 267-363
+        line_range: 388-462
         method: _syncUserProgress
         notes: |
           THE canonical writer. Projects the program week into the current_week
@@ -9167,7 +9273,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 878-902
+        line_range: 963-987
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -9177,7 +9283,7 @@ concepts:
           record, so an unrestored device can no longer assert an all-enabled
           default over the stored copy.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 476-520
+        line_range: 588-673
         method: _syncUserPreferences
         semantic: latest
         notes: |
@@ -9215,7 +9321,7 @@ concepts:
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 800-870
+        line_range: 949-1019
         method: _restoreUserPreferences
         semantic: latest
         fields_read: [enabled]
@@ -9464,11 +9570,11 @@ concepts:
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2094-2097
+        line_range: 2188-2245
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2106-2108
+        line_range: 2203-2205
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:

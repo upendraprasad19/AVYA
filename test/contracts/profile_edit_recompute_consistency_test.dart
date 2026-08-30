@@ -71,14 +71,29 @@ void main() {
 
     test('recalculateTargets writes the canonical back via toMap, through the '
         'canonical BmrCalculator (write-back contract — source pin)', () {
+      // OI-150 — REPOINTED, not loosened. The derivation moved out of
+      // profile_provider.dart into the shared `recomputeDerivedTargets` so the
+      // restore path and this edit path cannot drift (it previously lived in
+      // the provider AND was mirrored again in this file's own `compute()`
+      // helper above — two copies, and the restore path was about to be a
+      // third). Both original assertions still hold; they now hold at the new
+      // home, and a third assertion pins that the provider still DELEGATES —
+      // which the single-file grep structurally could not catch.
       final src = _stripDartComments(
-          File('lib/features/profile/providers/profile_provider.dart')
+          File('lib/features/profile/services/profile_target_recompute.dart')
               .readAsStringSync());
       expect(src.contains('targets.toMap()'), isTrue,
-          reason: 'recalculateTargets must persist the recomputed canonical '
+          reason: 'the recompute must persist the recomputed canonical '
               '(daily_calories/protein/carb/fat) back to the profile.');
       expect(src.contains('BmrCalculator.calculateTargets'), isTrue,
           reason: 'the recompute must go through the canonical BmrCalculator.');
+
+      final providerSrc = _stripDartComments(
+          File('lib/features/profile/providers/profile_provider.dart')
+              .readAsStringSync());
+      expect(providerSrc.contains('recomputeDerivedTargets('), isTrue,
+          reason: 'recalculateTargets must DELEGATE to the shared derivation — '
+              'a re-inlined copy here is exactly the drift this move removed');
     });
   });
 }

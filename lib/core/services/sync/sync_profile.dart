@@ -145,10 +145,21 @@ extension SyncServiceProfile on SyncService {
     );
   }
 
-  Future<void> _syncUserProfile(String userId) async {
+  /// [fromQueue] is set ONLY by the `SyncQueue` drain executor: it skips the
+  /// enqueue-on-failure branch (a drain must not mint a fresh marker) and
+  /// takes the direct upsert, whose exception propagates so the executor can
+  /// return `Result.err`. Same contract as [_syncUserProgress].
+  Future<void> _syncUserProfile(String userId, {bool fromQueue = false}) async {
     final userBox = _hive.userBox;
     final profile = userBox.get('profile');
-    if (profile == null) return;
+    if (profile == null) {
+      // N10 — same reasoning as _syncUserProgress: a drain must not silently
+      // delete a marker for a push that never happened.
+      if (fromQueue) {
+        throw StateError('no local profile map to push (queued marker)');
+      }
+      return;
+    }
 
     final p = Map<String, dynamic>.from(profile as Map);
 
@@ -244,7 +255,7 @@ extension SyncServiceProfile on SyncService {
         'water_target_ml': (p['water_target_ml'] as num).round(),
     };
 
-    if (_syncReliabilityEnabled) {
+    if (_syncReliabilityEnabled && !fromQueue) {
       // Route through the queue: on failure the op is persisted to Hive
       // and retried with exponential backoff instead of disappearing.
       final result = await _executeUserProfileUpsert(payload);
@@ -252,11 +263,34 @@ extension SyncServiceProfile on SyncService {
         final err = (result as Err<void, SyncError>).error;
         debugPrint('[SyncService._syncUserProfile] enqueue after ${err.code}: '
             '${err.message}');
-        await SyncQueue.instance.enqueue(
-          opType: 'upsert_user_profile',
-          payload: payload,
-          initialError: err,
-        );
+        // B1 (review round 2). Taking the queue branch stops the throw, so
+        // `syncProfileNow`'s catch never runs — and with it went the
+        // `recordNonFatal` + `_reportSyncFailure` that its own doc comment
+        // calls "what the old silent path was missing when all 24 onboarding
+        // fields stayed NULL on fresh signups". Report here so flipping
+        // `sync_reliability_v1` cannot re-create that silence: for a transient
+        // error nothing else would reach the server until dead-letter, ~2.5h
+        // later by the backoff schedule.
+        unawaited(ErrorTelemetry.recordNonFatal(
+            StateError('${err.code}: ${err.message}'), StackTrace.current,
+            reason: 'sync_service_sync_user_profile_enqueued'));
+        try {
+          await _reportSyncFailure(opType: 'upsert_user_profile', error: err);
+        } catch (_) {}
+        // OI-150: enqueue a MARKER, not the 34-field payload. A stored
+        // snapshot replayed minutes later pushes STALE values over whatever
+        // has landed since — the same staleness the progress marker avoids.
+        // The executor re-reads current Hive at drain time instead.
+        // N9: markers are idempotent, so a second one for the same user does
+        // a redundant round-trip and inflates SyncBanner's count.
+        if (!SyncQueue.instance
+            .hasPendingMarker('sync_user_profile_marker', userId)) {
+          await SyncQueue.instance.enqueue(
+            opType: 'sync_user_profile_marker',
+            payload: <String, dynamic>{'user_id': userId},
+            initialError: err,
+          );
+        }
       }
       return;
     }
@@ -342,10 +376,28 @@ extension SyncServiceProfile on SyncService {
   /// B both read a stale snapshot, whichever writes last silently wins,
   /// clobbering the other) applied here too, just with no RPC to close it
   /// until now.
-  Future<void> _syncUserProgress(String userId) async {
+  /// [fromQueue] is set ONLY by the `SyncQueue` drain executor.
+  ///
+  /// It changes two things and both matter (plan-review round 1, B2):
+  ///   * the catch RETHROWS instead of swallowing, so the executor can return
+  ///     `Result.err` — otherwise its own catch is unreachable and every drain
+  ///     reports success for a push that failed;
+  ///   * the catch does NOT re-enqueue, so a still-failing op does not mint a
+  ///     fresh marker on every drain — which would reset `retryCount` forever,
+  ///     never escalate backoff, and never dead-letter.
+  Future<void> _syncUserProgress(String userId, {bool fromQueue = false}) async {
     try {
       final progress = _hive.userBox.get('progress');
-      if (progress == null) return;
+      if (progress == null) {
+        // N10 (review round 2): under a drain this must NOT return normally —
+        // the executor would report Ok and SyncQueue would delete the marker
+        // with nothing pushed and no telemetry, silently discarding the debt.
+        // Reachable after a partial `clearAllData`.
+        if (fromQueue) {
+          throw StateError('no local progress map to push (queued marker)');
+        }
+        return;
+      }
 
       final p = Map<String, dynamic>.from(progress as Map);
       final rpcParams = _buildUserProgressRpcParams(p);
@@ -374,6 +426,7 @@ extension SyncServiceProfile on SyncService {
         await _retrySyncUserProgressOnceAfterConflict(
           userId: userId,
           rpcParams: rpcParams,
+          fromQueue: fromQueue,
         );
       }
     } catch (e, st) {
@@ -384,6 +437,27 @@ extension SyncServiceProfile on SyncService {
       try {
         await _reportSyncFailure(opType: 'sync_user_progress', error: e);
       } catch (_) {}
+      // OI-150: let the drain see the failure, and never re-enqueue from
+      // inside a drain (see the doc comment on this method).
+      if (fromQueue) rethrow;
+      if (_syncReliabilityEnabled) {
+        // Persist the debt. A fire-and-forget push lives only in RAM, so
+        // process death destroys it with nothing recording that it was owed.
+        // The entry is a MARKER, not a payload: the RPC carries
+        // `p_expected_version`, so a stored payload replayed minutes later
+        // would be rejected as stale. The executor re-reads current Hive.
+        // N9 — see the profile enqueue above. `syncProgressNow` fires from
+        // every progress delta, so an offline day would otherwise mint one
+        // marker per write.
+        if (!SyncQueue.instance
+            .hasPendingMarker('sync_user_progress', userId)) {
+          await SyncQueue.instance.enqueue(
+            opType: 'sync_user_progress',
+            payload: <String, dynamic>{'user_id': userId},
+            initialError: SyncError.classify(e),
+          );
+        }
+      }
     }
   }
 
@@ -391,9 +465,13 @@ extension SyncServiceProfile on SyncService {
   /// version mismatch. Re-fetches ONLY the fresh version (not the field
   /// values — local is authoritative for these fields), retries ONCE, then
   /// drops (logs telemetry, does not loop).
+  /// [fromQueue] propagates the drain context so the enqueue below is skipped
+  /// when this runs INSIDE a drain — a drain that re-enqueues resets
+  /// retryCount forever and the op never dead-letters.
   Future<void> _retrySyncUserProgressOnceAfterConflict({
     required String userId,
     required Map<String, dynamic> rpcParams,
+    bool fromQueue = false,
   }) async {
     final Object? rawRes = await _supabase.client
         .from('user_progress')
@@ -413,11 +491,23 @@ extension SyncServiceProfile on SyncService {
         message: 'user=$userId — cloud row absent on retry re-fetch, '
             'dropped whole snapshot',
       ));
+      // B-pass finding 2 (N10 class, recurring). Under a drain this must NOT
+      // return normally: the executor would report Result.ok and SyncQueue
+      // would DELETE the marker for a push that was dropped.
+      if (fromQueue) {
+        throw StateError('cloud row absent on retry re-fetch (queued marker)');
+      }
       return;
     }
     final freshVersion =
         ((rawRes as Map)['streak_progress_version'] as num?)?.toInt();
-    if (freshVersion == null) return;
+    if (freshVersion == null) {
+      // B-pass finding 2 — see above.
+      if (fromQueue) {
+        throw StateError('no version on retry re-fetch (queued marker)');
+      }
+      return;
+    }
 
     // B-pass round-2 (2026-07-30): rebuild from a FRESH Hive read rather
     // than resending the params the caller captured before its own first
@@ -474,11 +564,43 @@ extension SyncServiceProfile on SyncService {
       // Second consecutive mismatch — drop rather than loop. The next
       // updateProgress() call's own sync (or the next restore) reconciles
       // from a fresher snapshot.
+      // B3 (review round 2). The plan required this and the first
+      // implementation omitted it: dropping here discards the very debt the
+      // marker exists to hold, and live telemetry shows this path firing 8
+      // times across 3 users. Enqueue so the push is retried later against a
+      // freshly-read version rather than abandoned.
+      //
+      // NOT when already draining — a drain that re-enqueues resets
+      // retryCount forever and the op never dead-letters.
+      if (_syncReliabilityEnabled && !fromQueue) {
+        if (!SyncQueue.instance
+            .hasPendingMarker('sync_user_progress', userId)) {
+          await SyncQueue.instance.enqueue(
+            opType: 'sync_user_progress',
+            payload: <String, dynamic>{'user_id': userId},
+            initialError: NetworkError(
+              message:
+                  'user_progress version conflict — retry with a fresh read',
+              at: DateTime.now(),
+            ),
+          );
+        }
+      }
       unawaited(ErrorTelemetry.logEvent(
         'sync_user_progress_retry_dropped',
         message: 'user=$userId expected=$freshVersion — dropped after '
             'one retry',
       ));
+      // B-pass finding 2. The enqueue above is correctly skipped under a
+      // drain, but returning normally afterwards let the executor report
+      // Result.ok and SyncQueue delete the marker — reporting a synced write
+      // that was in fact dropped, and making SyncBanner's "0 pending" a lie.
+      // Throw instead, so the drain retries with backoff and eventually
+      // dead-letters honestly.
+      if (fromQueue) {
+        throw StateError(
+            'second consecutive version conflict (queued marker)');
+      }
       return;
     }
     SyncService._stampProgressVersion(retryVersion, userId: userId);
@@ -652,6 +774,55 @@ extension SyncServiceProfile on SyncService {
         // the `users` row was found.
         'id': userId,
       };
+
+      // ── OI-150 Unit 2a: regenerate the DERIVED half ──────────────────────
+      //
+      // The merge above is cloud-non-null-wins PER KEY with no guard, so it can
+      // take cloud's `current_weight_kg` while keeping local's
+      // `daily_calories` — a target computed from a weight that is no longer
+      // in the map. The derived fields are a pure function of the inputs, so
+      // rather than versioning the profile (it has no client-written version
+      // stamp — `updated_at` is server-set and never pushed), recompute them
+      // from whichever inputs won. Nothing is left to keep consistent.
+      //
+      // FAIL-OPEN, deliberately: this sits inside the restore's own try, and a
+      // throw here would swallow the ENTIRE profile restore into telemetry —
+      // including the `full_name` path that `_fetchUsersRowForRestore` and
+      // diagnose `d4e9a2` exist to protect. A recompute that cannot run must
+      // cost the derived refresh, never the restore. Same reasoning as the two
+      // kill-switch readers at `user_repository.dart:317-327 and :340-350`.
+      try {
+        if (_hive.configBox.get(SyncService.kDisableProfileTargetRecomputeKey) !=
+                true &&
+            // ⚠ ONLY when the merge actually changed a derivation INPUT.
+            //
+            // Without this gate the recompute fires on every sign-in
+            // (`_restoreUserProfile` is reached from `restoreLightweightAlways`),
+            // which would silently rewrite `daily_calories` for anyone whose
+            // fabricated body-fat had been healed — overriding the
+            // founder-locked "no silent backfill" decision recorded at
+            // `body_fat_default_healer.dart:28` through a different door.
+            //
+            // With it, the healer's own change never triggers a recompute (it
+            // clears cloud then local, so the merge sees no difference), while
+            // the defect this exists to fix — cloud's weight landing beside
+            // local's stale target — does. Narrow by construction.
+            derivedTargetInputsChanged(existingMap, merged)) {
+          final overlay = recomputeDerivedTargets(
+            merged,
+            now: DateTime.now(),
+            bodyFatCalcDisabled:
+                _hive.configBox.get('disable_bodyfat_calc') == true,
+          );
+          // null = incomplete inputs; leave the merged map exactly as-is
+          // rather than writing a partial or invented set.
+          if (overlay != null) merged.addAll(overlay);
+        }
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_service_restore_profile_recompute'));
+      }
+
       // Audit 2026-05-20 A4 — restore-class write routed through
       // canonical service with skipSync: true. The data we just merged
       // came FROM cloud; re-pushing it would create a redundant

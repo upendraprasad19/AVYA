@@ -227,6 +227,22 @@ class SyncQueue {
   /// initial banner state without having to subscribe.
   int get pendingCountSync => _loadAll().length;
 
+  /// True when a marker for [opType] and [userId] is ALREADY queued (OI-150 /
+  /// review round 2 N9).
+  ///
+  /// Markers are idempotent by construction — each says only "push X for user
+  /// Y" and the executor re-reads current state — so N copies do N redundant
+  /// round-trips and inflate the `SyncBanner` count for no benefit. An offline
+  /// day mints one per failed write, since `syncProgressNow` fires from every
+  /// progress delta. Callers that enqueue a marker check this first.
+  ///
+  /// Deliberately narrow: it matches on `payload['user_id']`, so it is only
+  /// meaningful for the marker ops. A payload op (`upsert_user_profile`) is
+  /// NOT deduped — two of those can legitimately carry different field values.
+  bool hasPendingMarker(String opType, String userId) => _loadAll().any(
+        (op) => op.opType == opType && op.payload['user_id'] == userId,
+      );
+
   Future<void> _runOne(PendingSyncOp op) async {
     final executor = _executors[op.opType];
     if (executor == null) {

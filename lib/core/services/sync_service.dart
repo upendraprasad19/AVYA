@@ -37,6 +37,7 @@ import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/profile/services/notification_prefs_repository.dart';
+import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
@@ -113,6 +114,12 @@ int _coerceInt(dynamic value, {required int fallback}) {
 const Object _kNoInject = Object();
 
 class SyncService {
+  /// §4.6 kill-switch for the OI-150 profile derived-target recompute on
+  /// restore. Set `true` in `configBox` for verbatim pre-fix behaviour.
+  @visibleForTesting
+  static const String kDisableProfileTargetRecomputeKey =
+      'disable_profile_target_recompute';
+
   SyncService._() {
     _registerLifecycle();
     // H1a (Unit H, 2026-06-27) — flush owed trailing sync passes when the app
@@ -619,12 +626,23 @@ class SyncService {
   /// retried with exponential backoff. Dead-lettered failures are reported
   /// to the `log-client-error` Edge Function.
   ///
-  /// When false (default): existing fire-and-forget behavior is preserved —
-  /// failures are logged to `debugPrint` only. This is a safety flag for
-  /// the sync-reliability rollout; flip to `true` after dark-launch
-  /// validation.
+  /// FLIPPED ON 2026-08-30 (OI-150). Dark-launched 2026-04-17 with the
+  /// sync-reliability spec's Pillar B and never flipped — it appeared in
+  /// neither `docs/ship_dark_pending_review.yaml` nor the OI board for four
+  /// months, which is precisely the failure that ledger exists to catch.
+  ///
+  /// Set `false` in `configBox` to restore the pre-flip behaviour: failures
+  /// bubble to `debugPrint` and the write is lost with nothing recording the
+  /// debt.
+  ///
+  /// Scope of the flip, measured rather than assumed: THREE gates across two
+  /// public entry points — `_syncUserProfile`, `_syncUserProgress`, and its
+  /// conflict-retry helper `_retrySyncUserProgressOnceAfterConflict` — all on
+  /// the FAILURE / version-conflict paths. The success path is byte-identical
+  /// either way. (B-pass finding 4: this said TWO, written before the B3
+  /// drop-path enqueue added the third.)
   bool get _syncReliabilityEnabled =>
-      _hive.configBox.get('sync_reliability_v1', defaultValue: false) as bool;
+      _hive.configBox.get('sync_reliability_v1', defaultValue: true) as bool;
 
   /// One-time queue initialization — registers op executors and the
   /// dead-letter telemetry hook. Must be called AFTER Hive init and
@@ -639,12 +657,91 @@ class SyncService {
       _executeUserProfileUpsert,
     );
 
+    SyncQueue.instance.registerExecutor(
+      'sync_user_progress',
+      _executeUserProgressSync,
+    );
+
+    SyncQueue.instance.registerExecutor(
+      'sync_user_profile_marker',
+      _executeUserProfileMarker,
+    );
+
     SyncQueue.instance.onDeadLetter = _sendDeadLetterTelemetry;
   }
 
-  /// Executor for `upsert_user_profile` ops. The payload is the full
-  /// column map (keys already mirror `user_profile` column names).
-  /// Returns a typed `Result` — success or classified `SyncError`.
+  /// Drain-time executor for a queued PROFILE push (OI-150). Marker-only:
+  /// re-reads current Hive state rather than replaying a 34-field snapshot
+  /// captured minutes earlier, which would push stale values over whatever has
+  /// landed since. Refuses an op belonging to a different account, and does so
+  /// with a NON-TRANSIENT [ValidationError] so it dead-letters immediately
+  /// instead of burning the full retry budget on something that can never
+  /// succeed (`syncBox` is SHARED, not user-scoped, so a marker can outlive an
+  /// account switch whose `clearAllData` partially failed).
+  Future<Result<void, SyncError>> _executeUserProfileMarker(
+    Map<String, dynamic> payload,
+  ) async {
+    final userId = payload['user_id'] as String?;
+    if (userId == null) {
+      return Result.err(ValidationError(
+          message: 'queued sync_user_profile_marker had no user_id', at: DateTime.now()));
+    }
+    final current = _supabase.currentUser?.id;
+    if (current != userId) {
+      return Result.err(ValidationError(
+          message: 'queued sync_user_profile_marker belongs to a different account', at: DateTime.now()));
+    }
+    try {
+      await _syncUserProfile(userId, fromQueue: true);
+      return Result.ok(null);
+    } catch (e) {
+      return Result.err(SyncError.classify(e));
+    }
+  }
+
+  /// Drain-time executor for a queued PROGRESS push (OI-150).
+  ///
+  /// The queued entry is a MARKER carrying only `user_id`, never a field
+  /// payload: `_syncUserProgress` sends `p_expected_version` to an
+  /// optimistic-locked RPC, so a payload stored now and replayed minutes later
+  /// carries a stale version and is rejected. These fields are
+  /// client-authoritative, so re-reading current Hive at drain time sends the
+  /// latest truth.
+  ///
+  /// ⚠ Cross-account guard, NON-TRANSIENT by construction. Migration 115
+  /// raises `cross-account progress write blocked` server-side, so such an op
+  /// could never succeed; a [ValidationError] dead-letters it at once rather
+  /// than retrying for hours and inflating `SyncBanner`'s pending count with a
+  /// stranger's account.
+  Future<Result<void, SyncError>> _executeUserProgressSync(
+    Map<String, dynamic> payload,
+  ) async {
+    final userId = payload['user_id'] as String?;
+    if (userId == null) {
+      return Result.err(ValidationError(
+          message: 'queued sync_user_progress marker had no user_id', at: DateTime.now()));
+    }
+    final current = _supabase.currentUser?.id;
+    if (current != userId) {
+      return Result.err(ValidationError(
+          message: 'queued sync_user_progress belongs to a different account', at: DateTime.now()));
+    }
+    try {
+      await _syncUserProgress(userId, fromQueue: true);
+      return Result.ok(null);
+    } catch (e) {
+      return Result.err(SyncError.classify(e));
+    }
+  }
+
+  /// Executor for `upsert_user_profile` ops. The payload is the full column
+  /// map (keys already mirror `user_profile` column names). Returns a typed
+  /// `Result` — success or classified `SyncError`.
+  ///
+  /// Still registered for backward compatibility: OI-150 changed the ENQUEUE
+  /// to mint `sync_user_profile_marker` instead, but an entry persisted under
+  /// the old shape must still drain. Also used inline by `_syncUserProfile` as
+  /// its single direct attempt before enqueueing.
   Future<Result<void, SyncError>> _executeUserProfileUpsert(
     Map<String, dynamic> payload,
   ) async {

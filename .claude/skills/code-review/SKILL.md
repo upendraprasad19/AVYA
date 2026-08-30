@@ -190,6 +190,40 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-08-30 (c)** — blast-radius **platform** — branch `oi150-phase-merge`
+  (OI-150 progress + profile write durability). **4 findings (0 P0, 2 P1, 1 P2,
+  1 P3); 0 false_alarm — all four real, all fixed in-batch.** Review:
+  `docs/reviews/375e3a351e7b-review.md`.
+  **The result worth recording: BOTH P1s were defects the batch's own earlier
+  remediation created**, in a batch that had already survived three review
+  rounds on a withdrawn design, one on the plan, and two on the implementation.
+  P1-1: a fix for a missed coupling path (the "key-absent seed") was inserted
+  ABOVE the line that reads the older kill-switch, so rolling
+  `disable_progress_restore_monotonic_merge` — documented as restoring
+  "verbatim pre-OI-83" behaviour — left the new coupling still firing. P1-2: an
+  N10-class fix ("a drain must not delete a marker for a push that never
+  happened") was applied to two call frames and not to the third, where three
+  early `return`s let a drain report `Result.ok` and delete the marker.
+  **Tuning made — lens 6 gains an ORDERING question, which is new.** Its
+  existing method says mutate-and-run and follow-the-return-value-to-its-caller.
+  Add: **when a fix INSERTS a statement near an existing guard, check where it
+  lands relative to that guard's own predicate.** P1-1 was not a wrong
+  condition — the condition was right and simply ran three lines too early, and
+  no amount of reading the guard reveals that. The reviewer found it by setting
+  the older switch and running, which is the only thing that does. Sibling
+  formulation: *a guard added ABOVE the switch that is supposed to disable it is
+  not disabled by that switch.*
+  **Second tuning — a NEGATIVE result on lens 8 worth keeping.** The reviewer
+  re-derived this batch's "~2.1% of birthdays, 232 of 10,958" prose claim by
+  brute-force sweeping every DOB 1980-2009 and got 232/10,958 = 2.117% — an
+  exact match. Recording the confirmation matters as much as recording a
+  refutation: the lens's value is that the number gets CHECKED, and a history
+  that only logs catches would imply the checks are free.
+  ⚠ Process note: the reviewer ran two probe tests and one mutation against the
+  live tree, then reverted all three and verified clean against the staged index
+  before reporting. That disclosure is the behaviour to keep.
+  False-alarm rate 0/4 → no change to lenses 1-5, 7, 8.
+
 - **2026-08-30 (b)** — blast-radius **platform** — branch `process-hardening` (the
   batch that closes defect classes found in `profile-phase-fixes`). **3 findings
   (1 P0, 1 P1, 1 P2); 0 false_alarm — all three real, all fixed in-batch.**

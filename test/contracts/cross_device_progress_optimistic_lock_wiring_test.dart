@@ -248,13 +248,33 @@ void main() {
 
   group('_syncUserProgress() routes through update_user_progress_snapshot',
       () {
+    // OI-150 — REPOINTED, not loosened. `_syncUserProgress` gained an optional
+    // `{bool fromQueue = false}` so the SyncQueue drain executor can observe
+    // failure (the method otherwise swallows, which made the executor's own
+    // catch unreachable and every drain re-enqueue a duplicate). The parameter
+    // list is now matched permissively so a future named parameter does not
+    // break this pin again, while the leading `String userId` stays required.
     final sig = RegExp(
-      r'Future<void>\s+_syncUserProgress\(String userId\)\s*async\s*\{([\s\S]*?)\n  \}\n',
+      r'Future<void>\s+_syncUserProgress\(\s*String userId[^)]*\)\s*async\s*\{([\s\S]*?)\n  \}\n',
     ).firstMatch(syncProfileSource);
 
     test('signature resolves', () => expect(sig, isNotNull));
 
     final body = sig!.group(1)!;
+
+    test('OI-150: the queue contract is intact — fromQueue rethrows so a '
+        'drain can see failure, and does not re-enqueue from inside a drain',
+        () {
+      expect(body.contains('if (fromQueue) rethrow;'), isTrue,
+          reason: 'without the rethrow the executor\'s catch is unreachable '
+              'and every drain reports Ok for a push that failed');
+      final rethrowAt = body.indexOf('if (fromQueue) rethrow;');
+      final enqueueAt = body.indexOf('SyncQueue.instance.enqueue');
+      expect(enqueueAt, greaterThan(rethrowAt),
+          reason: 'the enqueue must sit AFTER the rethrow, so a drain never '
+              'mints a fresh marker — that would reset retryCount forever '
+              'and the op would never dead-letter');
+    });
 
     test('calls the update_user_progress_snapshot RPC, not a raw upsert',
         () {

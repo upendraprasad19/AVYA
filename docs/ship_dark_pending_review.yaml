@@ -305,6 +305,29 @@ pending:
 # found by live verification or independent review on 2026-07-25 and every one
 # is currently UNFIXED. A holder today would be told a falsehood by the coach
 # and by the Sunday push.
+  - flag: sync_reliability_v1
+    branch: oi150-phase-merge
+    build_commit: null
+    build_date: 2026-04-17
+    flip_reviewed: false
+    flip_commit: pending
+    note: >
+      BUILT-AND-FLIPPED-BY-DIFFERENT-BATCHES, recorded retroactively. Shipped
+      dark 2026-04-17 by docs/superpowers/specs/2026-04-17-sync-reliability.md
+      (Pillar B) and never flipped: it appeared in NEITHER this ledger NOR the
+      OI board for four months, which is exactly the failure this file exists
+      to catch. Its own spec's section 6 checklist shows items 1-9 shipped and
+      10-13 never done. build_commit is null because that build predates this
+      branch and its sha is not this batch's to claim - the same shape
+      enable_equipment_capability_floor uses. Flipped ON here with OI-150.
+      Scope of the flip was MEASURED, not assumed - two gates
+      (_syncUserProfile, _syncUserProgress), both FAILURE-path only; the
+      success path is byte-identical. Two marker ops ride it
+      (sync_user_progress, sync_user_profile_marker). Per 4.12.4 a flag-flip
+      commit takes the FULL x2 review regardless of how lightly the build was
+      reviewed, so this does NOT claim the ship-dark tier.
+
+
 flip_on_blockers:
   flag: enable_hold_weeks
   raised: 2026-07-25
