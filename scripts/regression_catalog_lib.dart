@@ -83,13 +83,40 @@ Set<String> extractRecentTestPaths(String indexContent, DateTime cutoff) {
 /// the gate-e2e family already shares (test/contracts/gate_e2e_env_hermetic_test.dart)
 /// — one of the affected files reads `GITHUB_EVENT_PATH` (diagnose c3f8e1).
 ///
+/// `ALLOW_RAW_GIT` and `FOUNDER_APPROVED_NO_VERIFY` are scrubbed for a DIFFERENT
+/// reason, and it is the reason 4f2a9e missed them (diagnose d81f3c). The vars
+/// above are set by a MACHINE — git exports `GIT_*` into every hook, Actions
+/// exports `GITHUB_*` into every job — so they are easy to enumerate by asking
+/// "what does the runner set?". These two are set by the OPERATOR, on the
+/// command line, and specifically when they are about to run the merge that
+/// invokes this gate. `scripts/git_safety_hook.dart:126-127` reads both and
+/// treats either as permission to allow a raw `git commit` / `git push`, so a
+/// leak does not merely misdirect the child: it inverts the assertion.
+/// `git_safety_hook_integration_test.dart` asserts the hook DENIES, and under a
+/// leak the hook correctly allows — the test fails while both halves behave as
+/// designed, which reads as a code regression whose obvious remedy is
+/// `--no-verify`. Measured 2026-08-30, merging `oi150-phase-merge`: 3 assertions
+/// failed that way; dropping the var from the parent shell made the same merge
+/// pass with the catalog reporting 64 recent tests green.
+///
 /// Everything else — PATH above all — is preserved: the child still has to find
 /// `flutter`.
+///
+/// This is the ONE canonical scrub. `git_safety_hook_integration_test.dart`
+/// delegates here rather than keeping the second, narrower copy it used to
+/// carry, because two lists that must agree are the drift class this repo
+/// tracks — and they had already drifted: that copy stripped the three `GIT_*`
+/// names only, so it leaked both hatches straight into the hook under test even
+/// when this function was never involved.
 Map<String, String> scrubbedChildEnvironment(Map<String, String> parent) {
   final env = Map<String, String>.from(parent);
   env.removeWhere((k, _) {
     final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
+    return u.startsWith('GIT_') ||
+        u.startsWith('GITHUB_') ||
+        u == 'PUSH_BEFORE' ||
+        u == 'ALLOW_RAW_GIT' ||
+        u == 'FOUNDER_APPROVED_NO_VERIFY';
   });
   return env;
 }

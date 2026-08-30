@@ -38,6 +38,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../scripts/regression_catalog_lib.dart' show scrubbedChildEnvironment;
+
 void main() {
   late String repoRoot;
 
@@ -79,13 +81,22 @@ void main() {
   /// Removed case-insensitively: Windows env keys are case-insensitive, and
   /// `Map.from(Platform.environment)` yields a case-SENSITIVE copy, so a
   /// literal `.remove('GIT_DIR')` could silently miss a `Git_Dir`.
-  Map<String, String> scrubbedEnv() {
-    const leaky = {'git_dir', 'git_work_tree', 'git_index_file'};
-    return {
-      for (final e in Platform.environment.entries)
-        if (!leaky.contains(e.key.toLowerCase())) e.key: e.value,
-    };
-  }
+  ///
+  /// DELEGATES to the canonical scrub (diagnose d81f3c). This used to carry its
+  /// own list — `git_dir`, `git_work_tree`, `git_index_file` and nothing else —
+  /// which meant it leaked `ALLOW_RAW_GIT` and `FOUNDER_APPROVED_NO_VERIFY`
+  /// into the very hook whose refusals this file asserts. Those two are read at
+  /// `scripts/git_safety_hook.dart:126-127` and each one turns a DENY into an
+  /// ALLOW, so an operator who had legitimately used the escape hatch in this
+  /// shell saw this file fail with the hook working perfectly. Sharing one list
+  /// is the fix: two lists that must agree is the drift class, and these two
+  /// had already drifted.
+  ///
+  /// [parent] exists so a test can drive a synthetic environment — Dart cannot
+  /// mutate its own `Platform.environment`, so without it the leak is
+  /// unreachable from a test and could only ever be caught in production again.
+  Map<String, String> scrubbedEnv([Map<String, String>? parent]) =>
+      scrubbedChildEnvironment(parent ?? Platform.environment);
 
   // A typed record instead of dart:io's ProcessResult -- that SDK class
   // types stdout/stderr as `dynamic` (it supports byte-list mode too),
@@ -96,13 +107,18 @@ void main() {
   // in a test) -- typed decode at the source instead of casting at each
   // call site.
   Future<({int exitCode, String stdout, String stderr})> runHook(
-    Map<String, dynamic> payload,
-  ) async {
+    Map<String, dynamic> payload, {
+    /// The environment to scrub and hand the hook. Defaults to this process's
+    /// own. A test passes a synthetic map to prove the scrub actually removes
+    /// something — Dart cannot mutate `Platform.environment`, so a leak is
+    /// otherwise untestable and could only be found in production (d81f3c).
+    Map<String, String>? parentEnv,
+  }) async {
     final process = await Process.start(
       'dart',
       ['run', '--verbosity=error', 'scripts/git_safety_hook.dart'],
       workingDirectory: repoRoot,
-      environment: scrubbedEnv(),
+      environment: scrubbedEnv(parentEnv),
       includeParentEnvironment: false,
       // runInShell: Windows' Process.start does not do PATHEXT resolution
       // the way a shell does -- without this, even a PATH-available `dart`
@@ -213,6 +229,45 @@ void main() {
       final result =
           await runHook(payload('git commit -m "x" --no-verify'));
       expect(result.exitCode, 2);
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    // THE LEAK IS THE POINT OF THESE TWO (diagnose d81f3c).
+    //
+    // Both hatches are set by a HUMAN, in the shell, at exactly the moment they
+    // are about to run the merge that spawns this file. So the parent env
+    // genuinely carries them, and until the scrub covered them the hook under
+    // test read them and ALLOWED what these tests assert it denies. The failure
+    // presents as a broken guard, not as a polluted environment — which is why
+    // it cost a merge unwind on 2026-08-30 rather than a minute.
+    //
+    // These drive a synthetic parent rather than the real one so the assertion
+    // holds regardless of the shell the suite happens to run in: a test that
+    // only passed when the var was absent would assert nothing on the one
+    // machine state that matters.
+    test('a leaked ALLOW_RAW_GIT cannot turn a DENY into an ALLOW', () async {
+      final result = await runHook(
+        payload('git commit -m "x"'),
+        parentEnv: {...Platform.environment, 'ALLOW_RAW_GIT': '1'},
+      );
+      expect(result.exitCode, 2,
+          reason: 'the hatch belongs to the operator\'s shell, not to the hook '
+              'this test spawns; leaking it inverts every deny assertion here');
+      expect(result.stderr, contains('safe_commit.sh'));
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('a leaked FOUNDER_APPROVED_NO_VERIFY cannot un-deny --no-verify',
+        () async {
+      final result = await runHook(
+        payload('git commit -m "x" --no-verify'),
+        parentEnv: {
+          ...Platform.environment,
+          'FOUNDER_APPROVED_NO_VERIFY': '1',
+        },
+      );
+      expect(result.exitCode, 2,
+          reason: 'the --no-verify override is per-invocation and founder-'
+              'approved in chat; inheriting it from an ambient var is exactly '
+              'the bypass CLAUDE.md 4.3 says has no hatch');
     }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('a non-git Bash command is allowed silently (exit 0, no output)',

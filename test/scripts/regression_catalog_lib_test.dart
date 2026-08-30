@@ -152,6 +152,44 @@ void main() {
           reason: 'one affected file reads GITHUB_EVENT_PATH (diagnose c3f8e1)');
     });
 
+    // d81f3c. 4f2a9e scrubbed what a MACHINE sets — git's GIT_*, Actions'
+    // GITHUB_*. These two are set by a PERSON, in the shell, immediately before
+    // the merge that runs this gate, so they are at least as likely to be
+    // present and were the ones it missed.
+    test('removes the operator escape hatches (diagnose d81f3c)', () {
+      final out = scrubbedChildEnvironment({
+        'ALLOW_RAW_GIT': '1',
+        'FOUNDER_APPROVED_NO_VERIFY': '1',
+        'PATH': '/usr/bin',
+      });
+      expect(out.keys, ['PATH'],
+          reason: 'git_safety_hook.dart:126-127 reads both and treats either as '
+              'permission to allow a raw commit/push — a leak does not just '
+              'misdirect the child, it INVERTS the deny assertions in '
+              'git_safety_hook_integration_test.dart');
+    });
+
+    test('the hatches are removed case-insensitively too', () {
+      final out = scrubbedChildEnvironment({
+        'allow_raw_git': '1',
+        'Founder_Approved_No_Verify': '1',
+      });
+      expect(out, isEmpty,
+          reason: 'same Windows case-insensitivity that motivated the GIT_ '
+              'case — an exact-case match would leak a lowercase spelling');
+    });
+
+    test('keeps vars that merely CONTAIN a hatch name', () {
+      final out = scrubbedChildEnvironment({
+        'ALLOW_RAW_GIT_LEGACY': 'keep',
+        'MY_ALLOW_RAW_GIT': 'keep',
+        'ALLOW_RAW_GIT': '/drop',
+      });
+      expect(out.keys.toSet(), {'ALLOW_RAW_GIT_LEGACY', 'MY_ALLOW_RAW_GIT'},
+          reason: 'these are EXACT matches, not prefixes like GIT_ — widening '
+              'them to startsWith would silently eat unrelated vars');
+    });
+
     test('is case-insensitive on the prefix', () {
       final out = scrubbedChildEnvironment({'git_dir': '/x', 'Git_Work_Tree': '/y'});
       expect(out, isEmpty,
