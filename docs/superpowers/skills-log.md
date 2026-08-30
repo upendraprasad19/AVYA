@@ -315,3 +315,34 @@
     skill — the agent cannot invoke it.** Recorded again rather than left implicit, since it has
     now cost three entries; the skill's step 5 ("After founder approves: invoke /compact") is
     not executable as written and should say "hand the preserve list to the founder to run".
+
+- **2026-08-29 ~22:30 → 2026-08-30 ~00:10 IST — `exercise-plates`, TWO invocations one
+  boundary apart. First DECLINED-until-verified, second ACCEPTED (founder ran /compact).**
+  Trigger both times: **batch ship** (plates merged `d884134d`, pushed, Vercel live) with
+  follow-up work continuing in-session.
+  → **The step-4 boundary-quality caveat changed the founder's answer for the SECOND time.**
+    The first invocation disclosed that a CI rerun was still in flight; founder replied *"Don't
+    compact yet. Wait for the rerun. If it goes green, this becomes a genuinely clean boundary
+    and the compact is easy."* That is the same shape as the 2026-08-26 entry that motivated
+    adding the caveat. Two-for-two on invocations where the boundary was imperfect is a strong
+    argument the caveat earns its cost — it is the only step of this skill that has been
+    observed to change an outcome rather than just describe one.
+  → **Step 5's documented defect is FIXED and this invocation confirms it.** The skill now
+    says "HAND THE PRESERVE LIST TO THE FOUNDER TO RUN" and warns the agent cannot invoke
+    `/compact`. Three prior entries logged that limitation without the text changing; it has
+    changed, and the flow worked as written. Nothing further owed here.
+  → ⚠ **A stale-read mistake worth recording, because it happened INSIDE the checklist meant
+    to catch it.** During the second invocation's final state check I reported "CI: success" and
+    cited run `33264420481` — which is the run for `d884134d`, while `main` had by then moved to
+    `0823e32c` (another session merged `process-hardening`) and was **RED**. The run id was
+    correct for the commit I had read earlier and wrong for the repository as it then stood.
+    Self-caught in the same turn, and the corrected boundary assessment ("clean for my work,
+    `main` red for an unrelated reason") is what the founder actually approved against. The
+    lesson is the one this repo already has a memory for — a read is a snapshot, not a
+    subscription — and the specific tell is that a state check performed at the END of a long
+    session must RE-READ `git log`/`gh run list` rather than quoting a value gathered when the
+    session's own work landed. **Concrete tuning for step 2: re-derive branch + HEAD + CI at the
+    moment of the offer, never carry them forward.**
+  → Logged here from a worktree (`oi105-close`) rather than the shared main folder, riding with
+    the OI-105 board closure so both land in one push rather than two CI cycles — same rationale
+    as the 2026-08-06 entry.
