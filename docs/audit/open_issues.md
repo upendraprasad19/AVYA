@@ -2902,15 +2902,37 @@ case — "wait / manual `rm -rf`, never silently proceed concurrently".
   platform-independent and states the real invariant ("the hook that runs IS the hook in git").
 - **Blast radius estimate**: `platform`.
 
-## OI-105 — the `Supabase Integration Tests` CI job has verified NOTHING since it was written: the repo has zero Actions secrets (P2)
+## OI-105 — the `Supabase Integration Tests` CI job verified NOTHING: the repo had zero Actions secrets (P2)
 
-- **Status**: OPEN
-- **Blocked on**: **founder — this is not an agent-actionable item.** Adding an Actions secret
-  requires repo-settings access; an agent can neither read nor write them. Nothing else blocks it.
-- **Verified**: 2026-08-11 — queried the authoritative source, not inferred from behaviour:
-  `gh api repos/upendraprasad19/AVYA/actions/secrets` → `{"total_count":0,"secrets":[]}`. Checked
-  the RAW response deliberately, because an empty `--jq` result and a swallowed auth error are
-  indistinguishable at the shell (`feedback_green_check_input_set_width`).
+- **Status**: CLOSED · 2026-08-30 · the job now verifies something, proven on run
+  `33296974513` (HEAD `7fc359f3`, push to `main`) rather than inferred from the secrets existing.
+  **Both real steps report `success`, NOT `skipped`** — which is the whole distinction this entry
+  was filed on, since a skipped step rolls up to a green job just as happily. `Run Edge Function
+  tests` ends `00:25 +22: All tests passed!`, and the announce step printed its positive branch:
+  *"All four Supabase test secrets are configured — integration tests will run."* The `::warning::`
+  has stopped firing, which the fix shape below nominated in advance as "the cheapest available
+  proof".
+- **Status was**: OPEN — blocked on a founder-only action. Filed 2026-08-11, secrets landed
+  2026-08-12/14, closed once a run was actually read rather than assumed.
+- **Blocked on**: nothing. All four secrets exist —
+  `gh api repos/upendraprasad19/AVYA/actions/secrets` → `{"total_count":4,...}`:
+  `SUPABASE_URL` + `SUPABASE_ANON_KEY` (2026-08-12T15:44Z), `SUPABASE_TEST_EMAIL` +
+  `SUPABASE_TEST_PASSWORD` (2026-08-14T17:49Z, arriving with the four-input guard so a
+  three-secret run cannot reach a live `signInWithPassword` holding an empty field).
+- **Verified**: 2026-08-30 — the RAW response again, deliberately, for the reason the original
+  entry gave: an empty `--jq` result and a swallowed auth error are indistinguishable at the shell
+  (`feedback_green_check_input_set_width`). **Then the check was widened past "secrets exist",
+  which is NOT what this entry asked for** — four present secrets plus a green job is ALSO the
+  exact observable state the bug produced, so the step-level conclusions and the job log were read
+  instead. **All six originally-uncovered files ran**: `webhook_test`, `redeem_referral_test`,
+  `ai_proxy_test`, `pgvector_test` (`test/edge_functions/`), `auth_restore_test`,
+  `sync_service_test` (`test/supabase/`) — plus three added since
+  (`http_override_restored_test`, `prepare_binding_order_test`, `cleanup_target_guard_test`).
+- **The one prediction that did NOT hold, recorded rather than quietly dropped**: step 2 of the fix
+  shape said to *"expect the job to go RED on first real run and treat that as the point, not a
+  regression"*. It is green. ⚠ This closure reads exactly ONE run and says nothing about the runs
+  between 2026-08-14 and today — whether the first real run was red and triaged is a question this
+  entry does not answer, and should not be read as answering.
 - **Identified**: 2026-08-11 · carried out of the gate-registry/CI-speedup batch, where it was
   recorded only as a "founder-only owed" line in a memory index. Filed as a real OI once the §5
   rule change made clear that a residual living only in agent memory is not tracked at all
