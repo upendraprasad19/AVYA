@@ -879,3 +879,79 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
   `feedback_mistake_guard_without_its_mirror` #20;
   `test/contracts/git_safety_hook_integration_test.dart`,
   `test/scripts/regression_catalog_lib_test.dart`.
+
+### 2.57 A citation is checked in ONE direction only — the claim is never verified against what actually happened (NEW 2026-08-30)
+
+- **Telltale:** a commit message (or a diagnose-doc, or an agent's own summary)
+  says "closes OI-NN" / "fixes X" / "done", and later — sometimes much
+  later — the thing it claims to have finished is still open. No error, no
+  test failure, no gate output. The claim simply went unchecked.
+- **Root-cause shape:** a validation gate exists, but it only fires when the
+  ARTIFACT being closed is touched. `check_closes_oi_cited.dart` enforces
+  `status-change => citation` — it demands a citation whenever the board
+  moves OPEN to CLOSED — and opens with `if (nothing staged for the board)
+  exit(0)`. That guard is correct for what it checks and is also the whole
+  gap: a commit that CITES a close without performing the board write
+  touches no board file, so the gate never looks. **A one-directional
+  contract reads as complete because the other direction was never asked
+  for.** Measured across this repo's own history, not assumed: of 65 OIs
+  some commit declared closed via `closes-oi:`, 2 disagreed with the board.
+- **Two DISTINCT failure shapes hide inside "the citation was wrong," and
+  conflating them sends the fix in the wrong direction.**
+  - **Zero work performed (OI-150).** The fix shipped, merged, went green on
+    every CI job — and the board write was simply never done. An agent then
+    asserted "closed" in its own summary on the strength of the merge alone,
+    which is the tell: a dense pile of proof about the FIX is not proof about
+    the BOARD, even when they share a name. Unambiguous once checked: the
+    cited entry is not `CLOSED`, full stop.
+  - **Real work, wrong scope (OI-58).** The commit's own body was precise
+    about what it did and did not close ("OI-58b … remains OPEN and is not
+    claimed here"), and STILL cited the two-part PARENT ticket in its
+    trailer. This is not fabrication — genuine, tested, verified work landed
+    the very next day — but the citation named a broader entry than what was
+    actually closed, and the board's prose describing the other, still-open
+    half went uncorrected for 33 days. **The fix for this shape is not
+    "trust the commit body's nuance," it is "cite the specific entry the fix
+    actually closes."** A citation against a bundled ticket should wait for
+    the whole bundle, or the ticket should be split so a partial citation can
+    be exact.
+- **A downstream document can carry the identical defect independently.** A
+  companion per-batch closure ledger (`gate-input-family.closure.yaml`) had
+  its own entry for the same sub-problem frozen at `terminal_state:
+  upstream_blocked` for 34 days — directly contradicting its OWN file
+  header, two lines above the entry, which already said "closed in code."
+  One correct sentence and one stale field sat next to each other in the
+  same document. **A written justification does not update itself just
+  because it is true elsewhere in the file.**
+- **Fix pattern:** build the MIRROR gate — `citation => status-change`, not
+  only `status-change => citation` — and run it at the point where the whole
+  claim is visible at once. For a citation spanning multiple commits (a
+  batch that fixes in one commit and closes the board in the next, which
+  this repo's own §4.3 recommends), that point is the MERGE, not the
+  individual commit: `check_closes_oi_performed.dart` reads `HEAD^1..HEAD^2`
+  and checks every `closes-oi:` brought in against the board's state AT
+  the merge, matching the placement `check_plan_review_record_exists.dart`
+  already uses for the identical reason. Keep the two failure shapes
+  SEPARATE in the gate's output — "the board disagrees" (block) versus "the
+  board has never heard of this number, likely a renumber or typo" (warn
+  only; this board has been renumbered on a branch six times, and blocking
+  on a dangling reference trains people to bypass the gate).
+- **Mutation lesson layered on top, same batch:** the merge-detection guard's
+  first mutation attempt was ABSORBED — every test stayed green with the
+  guard removed, because a downstream git call fails for an unrelated reason
+  on the same input (`HEAD^2` cannot resolve off any single-parent commit
+  regardless of whether the guard ran), and a pre-existing fallback caught it
+  with the identical exit code. Confirmed absorbed by manually neutering the
+  guard and running the suite BEFORE trusting the green — not skipped past.
+  Fixed by asserting on OUTPUT rather than exit code: the real guard exits
+  silently by design; the absorbed path prints a message. **Two different
+  code paths can produce the same exit code for different reasons, and exit
+  code alone cannot tell you which one ran.**
+- Ref: OI-150, OI-58, diagnose `e2c481` (concept `closes_oi_citation_unverified`);
+  `feedback_mistake_unverified_done_claims.md` — harness memory ONLY, not
+  committed to this repo's `memory/` (verified: only
+  `feedback_worktree_per_session.md` is), the identical trap rule 21 already
+  flags for `feedback_source_grep_false_confidence.md` — don't burn a search
+  on it here;
+  `test/scripts/oi_closure_lib_test.dart`,
+  `test/scripts/closes_oi_performed_e2e_test.dart`.
