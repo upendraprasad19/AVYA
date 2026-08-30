@@ -384,6 +384,21 @@ export PATH
     // is a defense the next refactor deletes for free. Note this is NOT the
     // bare-filename case above — that path contains no backslash to normalize,
     // so it exercises a different arm.
+    //
+    // ⚠ WINDOWS-ONLY, and the first version of these two tests was NOT and
+    // turned `main` RED (2026-08-30, CI run on `0823e32c`). A backslash is a
+    // path separator only under Windows/MSYS; on POSIX it is an ordinary
+    // filename character, so `sh 'scripts\_dart_bin.sh'` is simply
+    // file-not-found — exit **2**, never reaching the guard — and the
+    // assertion `expect(exitCode, 64)` fails for a reason that has nothing to
+    // do with the guard. Local Windows green, Linux CI red: the
+    // `feedback_local_ci_env_divergence` class. Skipped rather than widened to
+    // "64 or 2", which would pass on Linux without asserting anything.
+    final backslashSkip = Platform.isWindows
+        ? null
+        : 'Windows/MSYS only: on POSIX a backslash is a literal filename '
+            'character, so this path is file-not-found (exit 2) and the '
+            'guard is never reached.';
     for (final entry in const {
       'scripts/_dart_bin.sh': r'scripts\_dart_bin.sh',
       'scripts/_git_lock.sh': r'scripts\_git_lock.sh',
@@ -403,7 +418,7 @@ export PATH
                 'environment; without `tr \\ /` the guard silently exits 0 '
                 'and the original no-op bug is back.');
         expect('${r.stderr}', contains('must be SOURCED'));
-      });
+      }, skip: backslashSkip);
     }
 
     test('SOURCING still resolves a real dart binary (guard does not fire)',
