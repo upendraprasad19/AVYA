@@ -8,11 +8,23 @@
 // ±10% band, `--record` to re-baseline). Nothing guarded the artifacts the
 // AGENT loads on every session, and they drifted badly before anyone measured:
 //
-//   docs/audit/open_issues.md   67,895 -> 357,664 B in 31 days. That is ~9,347
-//                                B/day = ~2,600 tok/day averaged over the window,
-//                                and ~3,200 tok/day over the last 7 days of it.
-//                                Both are stated because ONE number here would be
-//                                the exact defect this gate exists to catch.
+//   docs/audit/open_issues.md   67,895 -> 357,664 B between 2026-07-30 and
+//                                2026-08-30: 31 days, ~9,347 B/day, ~2,600
+//                                tok/day. The last 7 days of that window ran
+//                                ~6,877 B/day = ~1,910 tok/day -- SLOWER than
+//                                the average, not faster.
+//                                ⚠ An earlier draft of this comment claimed
+//                                ~3,200 tok/day for those 7 days and implied
+//                                acceleration. Both halves were wrong, and the
+//                                cause is worth more than the number:
+//                                `main@{7 days ago}` is a REFLOG query, not a
+//                                date query. It resolves by when refs moved on
+//                                THIS machine, and here it landed on a commit
+//                                dated 2026-08-18 -- a 12-day span that was then
+//                                divided by 7. Use `--before=<date>` when you
+//                                mean a date. Caught by review round 2, in the
+//                                header of the gate whose whole subject is
+//                                numbers nobody re-derives.
 //   docs/audit/OPEN_INDEX.md     3,759 ->  18,958 B, while CLAUDE.md §7 still
 //                                advertised it as "~950 tokens" — a claim that
 //                                was TRUE when written (`e4bc9040`, 2026-07-29)

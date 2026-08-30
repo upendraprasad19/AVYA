@@ -10,14 +10,18 @@
 // still loads from scripts/, while the script's relative data paths
 // (`CLAUDE.md`, `docs/audit/`, `backups/`) resolve against the fixture.
 
-@Timeout(Duration(minutes: 4))
+@Timeout(Duration(minutes: 6))
 library;
 
-// TIMEOUT RAISED FROM THE 30s DEFAULT. This file spawns real `dart run`
+// TIMEOUT RAISED FROM THE 30s DEFAULT. This file spawns 15 real `dart run`
 // subprocesses and each pays the flutter/bin/dart wrapper cost CLAUDE.md §0
-// measures at 3.4-10.5s for a no-op. Six sequential spawns fit inside 30s when
-// the file runs ALONE and do not when the suite runs ~40 files concurrently — a
-// targeted run is a DIFFERENT input set from the suite, not a subset.
+// measures at 3.4-10.5s for a no-op. They fit inside 30s when the file runs
+// ALONE and do not when the suite runs ~40 files concurrently — a targeted run
+// is a DIFFERENT input set from the suite, not a subset.
+// 6 MINUTES, raised from 4 by review round 2: at 15 spawns the worst case is
+// ~158s, and sibling files budget ~60s/spawn (gate_index_e2e 3/3min,
+// retire_worktree_e2e 4/4min) while 4 minutes here was ~16s/spawn — a thinner
+// margin than precedent, on the axis most likely to break under contention.
 
 import 'dart:io';
 
@@ -195,6 +199,46 @@ void main() {
     final r = _run(dir.path);
     expect(r.exitCode, 1, reason: '${r.stdout}${r.stderr}');
     expect(r.stderr.toString(), contains('CLAUDE.md'));
+
+    // ROUND 2: the band NAMED must be the band CROSSED. Before this, the report
+    // hardcoded the growth thresholds, so this very fixture printed "grew past
+    // the hard band ... Past the 50% hard band" for a file that shrank 100% and
+    // tripped the -90% floor. Revert the direction-aware branch and these three
+    // redden.
+    expect(r.stderr.toString(), contains('shrank'),
+        reason: 'a file that lost 100% of its bytes did not "grow"');
+    expect(r.stderr.toString(), contains('90% hard shrink floor'),
+        reason: 'must name the floor it crossed, not the growth band');
+    expect(r.stderr.toString(), isNot(contains('grew')));
+  });
+
+  test('a SOFT shrink names the shrink floor, not the growth band', () {
+    final dir = track(_fixture(
+      claudeMd: 400, // -60% against 1000: past soft shrink, inside hard
+      index: 1000,
+      board: 1000,
+      baselineJson: _baselines(claudeMd: 1000, index: 1000, board: 1000),
+    ));
+    final r = _run(dir.path);
+    expect(r.exitCode, 0, reason: 'a soft shrink warns, never blocks');
+    expect(r.stdout.toString(), contains('shrank'));
+    expect(r.stdout.toString(), contains('50% soft shrink floor'));
+  });
+
+  test('a GROWTH breach still says grew, and names the growth band', () {
+    // The mirror of the mirror: fixing the shrink wording must not break the
+    // growth wording.
+    final dir = track(_fixture(
+      claudeMd: 1000,
+      index: 2000,
+      board: 1000,
+      baselineJson: _baselines(claudeMd: 1000, index: 1000, board: 1000),
+    ));
+    final r = _run(dir.path);
+    expect(r.exitCode, 1);
+    expect(r.stderr.toString(), contains('grew'));
+    expect(r.stderr.toString(), contains('50% hard band'));
+    expect(r.stderr.toString(), isNot(contains('shrank')));
   });
 
   test('--record writes baselines, and the next check passes', () {

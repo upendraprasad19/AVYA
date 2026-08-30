@@ -106,21 +106,36 @@ void main(List<String> args) {
   }
 
   // ── report ────────────────────────────────────────────────────────────────
+  //
+  // ⚠ The band NAMED here must be the band actually crossed. Review round 2
+  // caught these branches hardcoding kSoftBand/kHardBand and the verb "grew"
+  // while the LOGIC had already been fixed to two-sided bands — so the very
+  // fixture round 1 built to expose the missing shrink floor (a CLAUDE.md
+  // truncated to 0 B) printed "grew past the hard band ... Past the 50% hard
+  // band", naming a threshold it had not crossed in a direction it had not
+  // moved. Fixing a classifier and leaving its report describing the old
+  // classifier is the same defect as P2-6 in the commit that introduced it:
+  // failing correctly while explaining it wrong.
   for (final f in findings) {
+    final shrank = (f.drift ?? 0) < 0;
+    final verb = shrank ? 'shrank' : 'grew';
+    final softPct = ((shrank ? kSoftShrink : kSoftBand).abs() * 100).round();
+    final hardPct = ((shrank ? kHardShrink : kHardBand).abs() * 100).round();
     switch (f.status) {
       case BudgetStatus.skipped:
         stdout.writeln('[context-budget] SKIPPED ${f.path} — ${f.reason}');
       case BudgetStatus.warn:
         stdout.writeln('[context-budget] WARN ${f.path} '
             '${f.baseline} → ${f.actual} B (${f.driftLabel}, '
-            '~${approxTokens(f.actual!)} tok). Past the ${(kSoftBand * 100).round()}% '
-            'soft band. Not blocking — but this is the drift nobody was '
-            'measuring when OPEN_INDEX.md reached 5x its advertised size.');
+            '~${approxTokens(f.actual!)} tok). It $verb past the $softPct% soft '
+            '${shrank ? 'shrink floor' : 'band'}. Not blocking — but this is the '
+            'drift nobody was measuring when OPEN_INDEX.md reached 5x its '
+            'advertised size.');
       case BudgetStatus.fail:
         stderr.writeln('[context-budget] FAIL ${f.path} '
             '${f.baseline} → ${f.actual} B (${f.driftLabel}, '
-            '~${approxTokens(f.actual!)} tok). Past the ${(kHardBand * 100).round()}% '
-            'hard band.');
+            '~${approxTokens(f.actual!)} tok). It $verb past the $hardPct% hard '
+            '${shrank ? 'shrink floor' : 'band'}.');
       case BudgetStatus.ok:
         break;
     }
@@ -143,10 +158,12 @@ void main(List<String> args) {
   }
 
   stderr.writeln('');
-  stderr.writeln('An always-loaded artifact grew past the hard band. This is a '
+  stderr.writeln('An always-loaded artifact moved past a hard band — see the '
+      'FAIL line(s) above for the direction and the threshold. This is a '
       'cumulative check, not a diff check — no single commit looks guilty, '
       'which is exactly why nothing else catches it.');
-  stderr.writeln('If the growth is intended, re-baseline deliberately:');
+  stderr.writeln('If the change is intended — including a deliberate split of a '
+      'big doc into modules, which is a legitimate large SHRINK — re-baseline:');
   stderr.writeln('    dart run scripts/check_context_artifact_budget.dart --record');
   exit(1);
 }

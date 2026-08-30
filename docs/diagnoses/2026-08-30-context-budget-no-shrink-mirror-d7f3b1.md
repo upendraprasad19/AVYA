@@ -16,14 +16,14 @@ sot_registry_entry: null
 writers:
   - file: scripts/context_budget_lib.dart
     method: evaluateOne (status ternary)
-    line: 162
+    line: 171
 readers:
   - file: scripts/check_context_artifact_budget.dart
-    method_or_widget: main (report loop + anyBlocking)
-    line: 104
+    method_or_widget: main (report loop; anyBlocking at :144)
+    line: 119
   - file: scripts/pre-commit.sh
     method_or_widget: "the scripts/check_*.dart bounded-parallel gate loop"
-    line: 326
+    line: 324
 hive_key_prefix: null
 hive_key_formula: null
 sync_methods: []
@@ -70,7 +70,7 @@ regression_test_planned:
   - test/scripts/context_budget_lib_test.dart
   - test/scripts/context_artifact_budget_e2e_test.dart
 touched_layers_checked:
-  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "scripts/context_budget_lib.dart:162 now tests both directions. 35 tests green across the lib + e2e files; mutation deleting the shrink floor reddens 5, deleting the hard growth band reddens 7, removing fail-open 4, narrowing the key union 4; restored 35/35. Each mutation verified applied by an exact-match replace that aborts unless it matches exactly once." }
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "scripts/context_budget_lib.dart:171 now tests both directions, and check_context_artifact_budget.dart:119-142 names the band actually crossed (round 2 found the LOGIC fixed and the REPORT still hardcoding the growth thresholds, so the zero-byte fixture printed 'grew past the 50% hard band'). 37 tests green across the lib + e2e files. FIVE mutation legs, all re-measured against that same 37-test baseline: hard growth band 8 red, shrink floor 6, fail-open 4, key union 4, message direction 2; restored 37/37. Each mutation verified applied by an exact-match replace that aborts unless it matches exactly once." }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "The gate reads file lengths and a JSON baseline. No Hive box is opened; context_budget_lib.dart imports nothing from dart:io at all." }
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "No DDL." }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "No cloud row is read or written." }
@@ -81,7 +81,7 @@ touched_layers_checked:
   - { tier: 9, name: storage, status: not_applicable, evidence: "No bucket or object involved." }
   - { tier: 10, name: secrets, status: not_applicable, evidence: "The gate reads no secret and makes no network call." }
   - { tier: 11, name: external_services, status: not_applicable, evidence: "No external service is contacted." }
-  - { tier: 12, name: client_server_contract, status: verified, evidence: "End-to-end through the real script: test/scripts/context_artifact_budget_e2e_test.dart runs the actual gate against temp fixtures and asserts exitCode 1 for a zero-byte CLAUDE.md against a 95,297 B baseline, plus exit 0 for every fail-open path. 10 e2e tests green." }
+  - { tier: 12, name: client_server_contract, status: verified, evidence: "End-to-end through the real script: test/scripts/context_artifact_budget_e2e_test.dart runs the actual gate against temp fixtures and asserts exitCode 1 for a zero-byte CLAUDE.md against a 95,297 B baseline, that the FAIL line says 'shrank' and names the 90% shrink floor, that a growth breach still says 'grew', and exit 0 for every fail-open path. 12 e2e tests green." }
 ---
 
 # A size gate with no lower bound calls a truncated file clean
@@ -133,8 +133,9 @@ ask instead what every test in the file silently assumes.*
 ## Recurrence
 
 This is `guard_without_its_mirror` again — the class
-`memory/feedback_mistake_guard_without_its_mirror.md` tracks at 15 instances
-across 7 sessions. The specific shape here is the cheapest one to state: **a
+`memory/feedback_mistake_guard_without_its_mirror.md` records as instance #19
+(its own description said "15" while the body already ran to #18 — the count was
+itself stale, which is the class documenting itself). The specific shape here is the cheapest one to state: **a
 threshold written for the direction you fear leaves the opposite direction
 completely unguarded, and a band is two-sided by nature.** The author reached
 for "how much growth is too much" and never asked the mirror question, "how much
