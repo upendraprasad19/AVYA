@@ -65,6 +65,31 @@ check_commit_from_worktree.dart:
 check_container_color_decoration.dart:
   grandfathered: 2026-08-10
 
+check_context_artifact_budget.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/context_budget_lib_test.dart
+    - test/scripts/context_artifact_budget_e2e_test.dart
+  evidence: >
+    NEW gate 2026-08-30. Guards the size of the artifacts an AGENT loads, the
+    way check_apk_size_within_bounds.dart guards the one USERS download.
+    Three protective legs, each mutated separately against the real gate, each
+    mutation VERIFIED APPLIED by a scripted exact-match replace that aborts
+    unless it matches exactly once (a regex that silently matches nothing makes
+    a green run read as proof of nothing — recorded twice in this repo):
+    (1) DELETE THE HARD BAND, so every breach degrades to warn and nothing can
+    ever block — 7 of 29 red (5 lib + 2 e2e, incl. the e2e asserting exitCode 1).
+    This is the leg that matters: the drift that motivated the gate was +427%
+    on OPEN_INDEX.md.
+    (2) STOP FAILING OPEN — treat an unreadable artifact as a breach instead of
+    SKIPPED — 4 red. Fail-open is load-bearing: a hygiene gate that can wedge
+    every commit in the repo is worse than the drift it watches.
+    (3) NARROW THE KEY UNION to baselines.keys, so an artifact tracked in the
+    script but not yet baselined silently escapes the budget forever — 4 red.
+    Restored: 29/29 green. Bands are two-tier on purpose — soft 15% warns and
+    never blocks (open_issues.md legitimately grows when an issue is filed),
+    hard 50% blocks, because that is growth nobody reaches by accident.
+
 check_copy_centralization.dart:
   grandfathered: 2026-08-10
 
