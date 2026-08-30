@@ -825,3 +825,57 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
   in front of it, and a barbell-to-a-beginner hazard the moment the gate went. **When
   deleting a guard, ask what the guard was standing in front of.**
 - Ref: OI-144, diagnose `a9e3c7`, `feedback_mistake_guard_without_its_mirror` #17.
+
+### 2.56 An inherited environment variable INVERTS a test's assertion instead of misdirecting it (NEW 2026-08-30)
+
+- **Telltale:** a test asserting that a guard REFUSES something starts failing, and the
+  guard is working perfectly. Exit codes flip from deny to allow. It reproduces for one
+  operator and not in CI, not on a colleague's machine, and not after a reboot — because
+  the variable lives in one shell.
+- **Root-cause shape:** a parent process hands a spawned child an environment containing a
+  variable the child TRUSTS. The child then does the right thing for the environment it
+  was given. Three instances so far, all in this repo's own tooling: `GITHUB_EVENT_PATH`
+  (`c3f8e1`), `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE` (`4f2a9e`), and the two operator
+  escape hatches `ALLOW_RAW_GIT` / `FOUNDER_APPROVED_NO_VERIFY` (`d81f3c`).
+- **The distinction that matters diagnostically — MISDIRECT vs INVERT.** A leaked
+  `GIT_DIR` makes the child operate on the wrong repository: loud, weird, obviously
+  environmental, and you go looking at the environment quickly. A leaked permission flag
+  makes the child *correctly* allow what the test expects it to refuse. Nothing looks
+  environmental. The failure message says the safety guard did not fire, so the natural
+  reading is "the guard regressed" — and for a guard whose whole job is to block a bypass,
+  the remedy that suggests itself is the very bypass it exists to prevent. **Ask which of
+  the two shapes you have before believing the failure is about your diff.**
+- **Why the earlier fixes did not generalise, which is the transferable half:** the first
+  two leaks were both variables set by a MACHINE — git exports its own into every hook,
+  Actions exports its own into every job. That set has a manifest; you find it by asking
+  *what does the runner export?*, and the completeness of the answer makes it feel like
+  the whole job. The third set is written **by a person, on the command line**, and in
+  this case specifically at the moment they are about to run the integration merge that
+  spawns the gate. **Enumerating an environment means asking BOTH questions: what does the
+  machine write, and what does a human write?** The human-written set is smaller and far
+  easier to forget precisely because nothing enumerates it for you.
+- **Investigation, in one command:** `grep -n "env\[" <the consumer script>`. Enumerate
+  what the CONSUMER actually reads before deciding what the producer must strip. In
+  `d81f3c` that single grep returned the whole answer (exactly two reads) and also proved
+  the consumer had no CI branch — which is what made collapsing two duplicate scrub lists
+  into one provably safe rather than merely tidy.
+- **Count the seams before believing one edit closes the path.** `d81f3c` had TWO
+  independent leaks on one route: the merge-time catalog walk, and the test file's own
+  private, narrower copy of the scrub. Either alone reproduces the failure, and the second
+  was the likelier route (it fires for anyone running `flutter test` in that shell, with
+  the walk nowhere in the picture). Fixing only the first — which is how the task was
+  scoped — would have looked correct and left the leak live. Proven by mutation: reverting
+  only the delegation, canonical scrub left fixed, still reddened 2 tests.
+- **Fix pattern:** scrub at the producer with `includeParentEnvironment: false`, match
+  complete variable names by `==` and prefixes by `startsWith` (never widen an exact name
+  to a prefix — it silently eats `ALLOW_RAW_GIT_LEGACY`), and where N copies of the list
+  exist, COLLAPSE them rather than syncing them. Give the spawn helper an optional
+  parent-env parameter: Dart cannot mutate `Platform.environment`, so without that seam
+  the leak is unreachable from a test and can only ever be found in production again.
+- **Regression test shape:** spawn the real consumer with a synthetic parent env carrying
+  the variable and assert the refusal still holds. A test that only passes when the
+  variable is absent asserts nothing about the one machine state that matters.
+- Ref: diagnoses `d81f3c`, `4f2a9e`, `c3f8e1` (concept `git_hook_env_leak`);
+  `feedback_mistake_guard_without_its_mirror` #20;
+  `test/contracts/git_safety_hook_integration_test.dart`,
+  `test/scripts/regression_catalog_lib_test.dart`.
