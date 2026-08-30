@@ -4550,3 +4550,56 @@ exercises simply show no BREATHING section.
 ⚠ **That makes this LESS likely to be noticed, not more** — which is exactly why it is filed rather
 than left to the guards. The fix is 136 lines of coaching copy.
 
+
+## OI-150 — mergeCloudProgress resolves current_phase and current_week/phase_started_at independently, so a not-yet-pushed phase advance reverts the week+date and cements the mismatch (P2)
+
+- **Status**: OPEN
+- **Blocked on**: **nothing external** — a scoped change to `UserRepository.mergeCloudProgress`
+  plus its behavioral tests. Filed rather than fixed in `profile-phase-fixes` because that batch
+  ships three display/restore fixes to a different concept, and this is a data-integrity change
+  to a `platform`-tier monotonic-merge function whose field list two prior OI-83 review rounds
+  already got wrong once.
+- **Verified**: 2026-08-30 — mechanism traced end-to-end in code (below). NOT reproduced on a live
+  account, and see the retention caveat.
+
+**The asymmetry.** `UserRepository.mergeCloudProgress` (`user_repository.dart:299-381`) resolves
+each cloud field independently:
+
+- `current_phase` is in `monotonicProgressFields` (`:235-239`) → **local-max-wins** (`:368-377`).
+- `current_week` and `phase_started_at` are **not** in that list → **cloud-non-null-wins
+  unconditionally** (`:312-314`).
+
+**Why that combination bites.** `commitPhaseAdvance` (`pro_phase_advance.dart:304-350`) bumps all
+three together locally, then pushes fire-and-forget via `unawaited(SyncService.instance
+.syncProgressNow())` (`user_repository.dart:448`) — never awaited, as coding rule 1 requires. If
+that push has not landed before the next launch (app closed right after a workout, a network
+blip — ordinary offline-first usage, not a QA action), the next sign-in runs
+`restoreLightweightAlways` (`sync_service.dart:1243`, the NON-empty-Hive branch taken by every
+returning user, `:1222-1230`) → `_restoreUserProgress` → `mergeCloudProgress` against a stale
+cloud row. Result: `current_phase` stays advanced, `current_week` and `phase_started_at` revert.
+The merged map is then written straight back to Hive (`sync_profile.dart:783`), so local and cloud
+now AGREE on the wrong shape and nothing flags it again.
+
+That produces exactly the state behind diagnose `c9e4b7` / `b7f1c8`'s missing-Phase-I symptom:
+`current_phase=2, current_week=8, phase_started_at` still the original date.
+
+**Silent by construction.** `reportProgressDemotionsDeclined` only fires for MONOTONIC fields that
+were declined. A non-monotonic field being overwritten from cloud emits nothing — there is no
+telemetry to grep for, which is why `b7f1c8`'s investigation could neither confirm nor exclude it.
+
+⚠ **Not confirmed on either affected account, and the evidence window cannot settle it.**
+`client_errors` retains from 2026-08-01 only, and zero `progress_restore_demotion_declined` /
+`phase_advance_conflict_skipped` rows exist for ANY account in that window. With just 2 accounts
+ever reaching phase 2 in a pre-launch app, that is an absence of population, not evidence the
+mechanism does not fire. Direct Postgres manipulation during past QA remains an equally live
+hypothesis for these two specific accounts.
+
+**Proposed fix (not yet reviewed):** couple the three fields — accept cloud's `current_week` /
+`phase_started_at` only when cloud's `current_phase` is also `>=` local's, so a stale cloud row
+cannot half-revert a local advance. Needs its own ×2 review: the OI-83 history is that this exact
+field list was wrong twice (`longest_gap_days` was included when higher is WORSE for it, caught in
+round 1), and the function carries a `disable_progress_restore_monotonic_merge` kill-switch that
+any change must keep honouring.
+
+**Related:** diagnose `b7f1c8` (which surfaced this, in plan-review round 2), diagnose `c9e4b7`
+(the original display symptom), OI-83 (the monotonic-merge guard this extends), diagnose `d1f6b3`.

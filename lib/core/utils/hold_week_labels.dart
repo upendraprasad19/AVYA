@@ -146,3 +146,28 @@ String? dayDetailWeekLabel(Map<dynamic, dynamic>? scheduleRow) {
   final week = scheduleRow?['week'] as int? ?? 0;
   return week > 0 ? 'WEEK $week' : null;
 }
+
+/// Train screen deployment eyebrow — `DEPLOYMENT 02  ·  STRENGTH  ·  WK 4 OF 4`
+/// / `DEPLOYMENT 02  ·  STRENGTH` (holding — the week counter is dropped, same
+/// rule every other formatter in this file applies).
+///
+/// `phase` IS the deployment number: 1 deployment = 1 completed phase
+/// (`user_repository.dart:186-195`, `deployments_complete = current_phase -
+/// 1`), so the deployment currently IN PROGRESS is `phase` itself — this
+/// takes the phase int directly rather than `deployments_complete`, the same
+/// choice `WeekSelector`/`HoldRoadmapStrip` already make (`plan.phase`), so
+/// there is one read of "what phase am I on" for this screen, not a second
+/// independent one.
+///
+/// Was a hardcoded literal `'DEPLOYMENT 01'` regardless of `phase` — diagnose
+/// b7f1c8.
+String deploymentEyebrowLabel({
+  required int phase,
+  required String phaseName,
+  required int currentWeek,
+  required bool isHolding,
+}) {
+  final deployment = 'DEPLOYMENT ${phase.toString().padLeft(2, '0')}'
+      '  ·  ${phaseName.toUpperCase()}';
+  return isHolding ? deployment : '$deployment  ·  WK $currentWeek OF 4';
+}

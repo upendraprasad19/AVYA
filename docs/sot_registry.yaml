@@ -2458,7 +2458,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 469-475
+        line_range: 489-491
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -2768,7 +2768,7 @@ concepts:
     restore_methods: [_restoreWorkoutPlan, _restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider, streakProvider]
     ist_sites:
-      - { file: lib/core/services/workout_schedule_read_service.dart, line: 317, fn: generateAndScheduleFromDate }
+      - { file: lib/core/services/workout_schedule_read_service.dart, line: 325, fn: generateAndScheduleFromDate }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.put.*schedule.*status.*planned", reason: "Never overwrite status=completed; check guard first" }
     class_constraints: |
@@ -3718,7 +3718,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 567-650
+        line_range: 579-669
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [full_name, email]
@@ -3727,6 +3727,44 @@ concepts:
           (2026-05-13). APK Test #12.8 fix — SELECTs from 'users' table
           for full_name + email IN ADDITION to user_profile columns
           because user_profile has no full_name column.
+
+          Diagnose d4e9a2: the 'users'
+          select ran with NO retry, so a token expiring mid-restore came
+          back as an RLS-filtered EMPTY result (HTTP 200, null) — no
+          exception, indistinguishable from "no such row" — and silently
+          dropped full_name from the merge while the rest of the restore
+          succeeded (hasProfile=true, rawName=<null> at every reader below;
+          confirmed live via profile_full_name_empty_at_read on 2 accounts
+          — upendraprasad19@gmail.com (4×) and anoopdd13@gmail.com (2×) —
+          6 occurrences, 2026-08-01 through 2026-08-29). Fixed by delegating
+          to _fetchUsersRowForRestore (same file, lines 688-733): proactive
+          ensureFreshToken() + one retry behind a hard auth.refreshSession()
+          before accepting an empty result — mirrors
+          AuthSessionBootstrapper.resolveDestination's existing c2e9f4
+          pattern for the identical ambiguity.
+
+          COVERAGE BOUNDARY (B-pass finding 1, same batch): this retry is
+          only reachable on the legacy fallback restore path. The C3
+          single-call restore (tried first for every restore,
+          sync_service.dart:1417) injects the 'users' row directly via
+          preFetchedUsers, bypassing _fetchUsersRowForRestore — a real null
+          there now logs restore_users_row_null_via_singlecall (the branch
+          opens at line 603, the logEvent call is at line 615)
+          instead of silently doing nothing; no retry is attempted there
+          because the EF behind C3 uses a service-role client (RLS-immune)
+          and throws on real errors, so a null result there cannot be the
+          stale-token ambiguity this fix targets.
+
+          Regression guard:
+          test/contracts/restore_users_row_retry_test.dart (source-grep —
+          same infra limitation auth_session_bootstrapper_test.dart already
+          documents for this exact retry shape: no mocked Supabase client).
+          Plan-review round 1 (same batch) demonstrated by mutation that the
+          original assertions didn't pin the retry's RETURN value (call
+          count + ordering + telemetry substrings all stayed green on
+          `return first;` replacing `return retried;` — the exact pre-fix
+          defect) — closed with a dedicated assertion, verified to fail on
+          that same mutation before being accepted.
       - file: lib/features/home/providers/home_provider.dart
         line_range: 131-150
         method: UserGreetingNotifier.build (userGreetingProvider)
@@ -3917,7 +3955,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 477-480
+        line_range: 494-496
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 1-450
@@ -6664,6 +6702,33 @@ concepts:
         method: the five pure formatters every surface renders through (homeWeekSegment / profileWeekSegment / journeyWeekLabel / journeyPhaseOneMilestone / roadmapWeekLabel) — extracted after a B-pass inverted an inlined ternary and all 16 tests still passed; behavioral coverage in test/contracts/hold_week_labels_test.dart
         semantic: latest
         fields_read: [WeekIdentity.holdOrdinal, WeekIdentity.weekInPhase]
+      - file: lib/core/utils/hold_week_labels.dart
+        line_range: 149-173
+        method: deploymentEyebrowLabel — the Train screen's deployment eyebrow ("DEPLOYMENT NN · PHASE · WK n OF 4"); hold-aware, drops the week counter while holding
+        semantic: latest
+        fields_read: [CurrentPlanData.phase, CurrentPlanData.phaseName, CurrentPlanData.currentWeek, HoldStatus.isHolding]
+        notes: |
+          Added by diagnose b7f1c8 (2026-08-30). Registered here rather than
+          left unlisted (plan-review round 2 finding 4) because this file's
+          formatters are an established SoT writer surface — the sibling
+          five-formatter entry above and holdIdentityLabel are both
+          registered, and lib/CLAUDE.md requires the registry entry to move
+          in the same commit as the writer.
+
+          Replaces a hardcoded 'DEPLOYMENT 01' literal that rendered for
+          EVERY account at every phase. Reads `phase` directly (NOT
+          `deployments_complete`): the two are related by the existing
+          `deployments_complete = current_phase - 1` invariant
+          (user_repository.dart:186-201, verified live across all 17
+          accounts — 15x(1,0), 2x(2,1), no counterexample), so the
+          deployment IN PROGRESS is `phase` itself. Uses the same
+          `plan.phase` read WeekSelector/HoldRoadmapStrip already use on
+          this screen rather than introducing a fourth independent
+          "what phase am I on" path.
+
+          Behavioral: test/contracts/hold_week_labels_test.dart
+          (deploymentEyebrowLabel group — exact-string assertions for
+          phase 1 / phase 2 / phase 12 zero-pad boundary / holding).
       - file: lib/features/profile/screens/reports_screen.dart
         method: share-as-video inputProps.holdOrdinal → Remotion renders "HOLD Hn RECAP"
         semantic: latest
@@ -9150,7 +9215,7 @@ concepts:
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 723-793
+        line_range: 800-870
         method: _restoreUserPreferences
         semantic: latest
         fields_read: [enabled]
@@ -9300,13 +9365,26 @@ concepts:
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1384-1385
+        line_range: 1391-1392
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1436-1444
+        line_range: 1443-1468
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
+        notes: |
+          Diagnose b7f1c8: as of
+          2026-08-30 the only two accounts EVER observed hitting the
+          strict-empty + currentPhase>1 branch (upendraprasad19@gmail.com,
+          amar@gmail.com) are both test/QA accounts — no organic Phase-2+
+          user has been confirmed in this shape. Added a session-scoped
+          (per-account, reset in _onUserChanged) telemetry tripwire
+          (past_phase_blocks_strict_empty) so the first real occurrence is
+          observable in client_errors without re-deriving this
+          investigation. Pure observability — does not change `recovered`.
+          Behavioral: past_phase_display_recovery_behavioral_test.dart
+          group E (fires once, dedups across rebuilds, silent on a healthy
+          account).
     readers:
       - file: lib/features/train/widgets/week_selector.dart
         line_range: 137

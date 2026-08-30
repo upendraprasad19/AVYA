@@ -146,9 +146,16 @@ class WorkoutScheduleReadService {
   }
 
   void _onUserChanged() {
-    // No in-memory state — all schedule state lives in workoutBox / userBox
-    // via MigratedKey.
+    // Re-arm the tripwire below for the newly-signed-in account.
+    _strictEmptyTripwireLogged = false;
   }
+
+  // Session-scoped dedup for the pastPhaseBlocksForDisplay tripwire below —
+  // pastPhaseBlocksForDisplay is called from WeekSelector.build(), which can
+  // rebuild on every scroll frame (its own scroll listener setState()s).
+  // Without this guard the probe would fire a real network call per rebuild
+  // instead of once per account per session.
+  bool _strictEmptyTripwireLogged = false;
 
   // ── Keys (kept in sync with WorkoutScheduleWriteService / SwapService) ──
 
@@ -1439,8 +1446,25 @@ class WorkoutScheduleReadService {
     final all = bucketPastRows(_scheduleRowsBefore(null));
     // <2 blocks means every row belongs to the window we are training in now —
     // nothing is genuinely behind us, so show nothing rather than invent a group.
-    if (all.length < 2) return const [];
-    return all.sublist(0, all.length - 1);
+    final recovered = all.length < 2 ? const <PastPhaseBlock>[] : all.sublist(0, all.length - 1);
+    // Tripwire (2026-08-30) — every account known to hit this branch so far
+    // (upendraprasad19@gmail.com, amar@gmail.com) is a test/QA account with
+    // no organic Phase-2+ user ever observed in this shape; see diagnose
+    // b7f1c8. Pure observability
+    // — does not change `recovered`, which is returned either way. Logged at
+    // most ONCE per account per session (`_strictEmptyTripwireLogged`) — this
+    // method is called from WeekSelector.build(), which rebuilds on every
+    // scroll frame; without the guard a session in this state would post a
+    // real network call per rebuild instead of once.
+    if (!_strictEmptyTripwireLogged) {
+      _strictEmptyTripwireLogged = true;
+      unawaited(ErrorTelemetry.logEvent(
+        'past_phase_blocks_strict_empty',
+        message: 'currentPhase=$currentPhase recoveredBlocks=${recovered.length} '
+            'phaseStartedAt=${UserRepository.instance.getPhaseStartedAtIso()}',
+      ));
+    }
+    return recovered;
   }
 
   /// Pure bucketing behind [pastPhaseBlocks] (visible for testing — no Hive).

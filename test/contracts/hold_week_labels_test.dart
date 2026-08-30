@@ -244,4 +244,60 @@ void main() {
       expect(rowIsHold(null), isFalse);
     });
   });
+
+  group('deploymentEyebrowLabel (diagnose 2026-08-30-deployment-label-hardcoded)', () {
+    test('not holding → DEPLOYMENT NN · PHASE NAME · WK n OF 4', () {
+      expect(
+        deploymentEyebrowLabel(
+          phase: 1,
+          phaseName: 'Foundation',
+          currentWeek: 3,
+          isHolding: false,
+        ),
+        'DEPLOYMENT 01  ·  FOUNDATION  ·  WK 3 OF 4',
+      );
+    });
+
+    test('phase number drives the deployment number, zero-padded', () {
+      expect(
+        deploymentEyebrowLabel(
+          phase: 2,
+          phaseName: 'Strength',
+          currentWeek: 4,
+          isHolding: false,
+        ),
+        'DEPLOYMENT 02  ·  STRENGTH  ·  WK 4 OF 4',
+        reason: 'the pre-fix bug: this printed "DEPLOYMENT 01" verbatim '
+            'regardless of phase — a phase-2 account (deployments_complete=1) '
+            'must read DEPLOYMENT 02, not 01.',
+      );
+    });
+
+    test('phase 12 is not truncated by the zero-pad', () {
+      expect(
+        deploymentEyebrowLabel(
+          phase: 12,
+          phaseName: 'Deployment 12',
+          currentWeek: 1,
+          isHolding: false,
+        ),
+        'DEPLOYMENT 12  ·  DEPLOYMENT 12  ·  WK 1 OF 4',
+      );
+    });
+
+    test('holding → the week counter is dropped, same rule as every other '
+        'formatter in this file', () {
+      final label = deploymentEyebrowLabel(
+        phase: 2,
+        phaseName: 'Strength',
+        currentWeek: 4,
+        isHolding: true,
+      );
+      expect(label, 'DEPLOYMENT 02  ·  STRENGTH');
+      expect(label.contains('WK'), isFalse,
+          reason: 'a hold sits outside the phase\'s 4 weeks — no honest '
+              '"WK n OF 4" for it, and the HOLDING pill states the identity '
+              'elsewhere on this same screen.');
+    });
+  });
 }

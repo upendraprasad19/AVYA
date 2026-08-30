@@ -233,10 +233,18 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                         // same scroll view). Same rule the letterhead eyebrow
                         // already applies — see plan_header.dart. The pill owns
                         // the week identity during a hold.
-                        holdStatus.isHolding
-                            ? 'DEPLOYMENT 01  ·  ${plan.phaseName.toUpperCase()}'
-                            : 'DEPLOYMENT 01  ·  ${plan.phaseName.toUpperCase()}'
-                                '  ·  WK ${plan.currentWeek} OF 4',
+                        // DEPLOYMENT NN — see deploymentEyebrowLabel's doc
+                        // comment (hold_week_labels.dart) for why `phase` is
+                        // the deployment number and why this is a pure
+                        // formatter rather than an inline ternary (same
+                        // untestable-inline-ternary lesson every other label
+                        // in that file was extracted for).
+                        deploymentEyebrowLabel(
+                          phase: plan.phase,
+                          phaseName: plan.phaseName,
+                          currentWeek: plan.currentWeek,
+                          isHolding: holdStatus.isHolding,
+                        ),
                         style: AppTypography.mono.copyWith(
                           color: AppColors.textMute,
                           letterSpacing: 2,

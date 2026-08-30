@@ -27,6 +27,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -235,6 +236,101 @@ void main() {
           reason: 'the wrapper must short-circuit to the strict result the '
               'moment it is non-empty — the recovery branch must never run '
               'for, or alter, an account that is not drifted.');
+    });
+  });
+
+  group('E · tripwire telemetry (diagnose b7f1c8)',
+      () {
+    final events = <String>[];
+
+    setUp(() {
+      events.clear();
+      ErrorTelemetry.debugOnLogEventForTests = (opType, {message}) {
+        events.add('$opType|${message ?? ''}');
+      };
+    });
+
+    tearDown(() {
+      ErrorTelemetry.debugOnLogEventForTests = null;
+    });
+
+    test('fires once when strict is empty on a drifted phase-2+ account',
+        () async {
+      await seedDriftedAccount(stamped: true);
+
+      read.pastPhaseBlocksForDisplay(2);
+      final fired = events
+          .where((e) => e.startsWith('past_phase_blocks_strict_empty|'))
+          .toList();
+      expect(
+        fired.length,
+        1,
+        reason: 'the anomaly this account hits (strict empty + '
+            'currentPhase>1) must be observable in client_errors — no '
+            'organic Phase-2+ user has ever been confirmed in this shape, '
+            'so the first real one must be catchable without re-deriving '
+            'this whole investigation again.',
+      );
+
+      // Plan-review round 2 finding 3 — the assertion above only pins that
+      // the event FIRES. Demonstrated: replacing the whole message with a
+      // literal left all 9 tests in this file green, i.e. the tripwire's
+      // entire diagnostic payload could regress to nothing (a renamed Hive
+      // key, a typo, a throwing interpolation) while still reporting
+      // "working". The event's stated purpose is to make the first real
+      // occurrence diagnosable WITHOUT re-deriving this investigation, and
+      // an event with no context does not do that — bad news and no news
+      // must not collapse into the same signal.
+      final message = fired.single.split('|').skip(1).join('|');
+      expect(message, contains('currentPhase=2'),
+          reason: 'the phase is what distinguishes this anomaly from an '
+              'ordinary empty history — without it the event cannot be '
+              'triaged from client_errors alone.');
+      expect(message, contains('recoveredBlocks='),
+          reason: 'whether the recovery salvaged anything separates "the '
+              'display is degraded" from "the display is empty".');
+      expect(message, contains('phaseStartedAt='),
+          reason: 'phase_started_at vs the schedule rows is the exact '
+              'comparison that identifies the drifted shape — it is the '
+              'single most load-bearing field in the payload.');
+    });
+
+    test('does NOT fire again on a second call in the same session',
+        () async {
+      await seedDriftedAccount(stamped: true);
+
+      read.pastPhaseBlocksForDisplay(2);
+      read.pastPhaseBlocksForDisplay(2);
+      read.pastPhaseBlocksForDisplay(2);
+      expect(
+        events.where((e) => e.startsWith('past_phase_blocks_strict_empty|'))
+            .length,
+        1,
+        reason: 'pastPhaseBlocksForDisplay is called from '
+            'WeekSelector.build(), which rebuilds on every scroll frame — '
+            'without a dedup guard this would post a real network call per '
+            'rebuild instead of once per account per session.',
+      );
+    });
+
+    test('does NOT fire for a healthy (non-drifted) account', () async {
+      final phase2Start = DateTime(2026, 6, 29);
+      await MigratedKey.write(
+          'plan_start_date', phase2Start.toIso8601String());
+      await MigratedKey.write('plan_end_date',
+          phase2Start.add(const Duration(days: 27)).toIso8601String());
+      await writeBlock(onboardingMonday, phase: 1);
+      await writeBlock(phase2Start, phase: 2);
+
+      read.pastPhaseBlocksForDisplay(2);
+      expect(
+        events.where((e) => e.startsWith('past_phase_blocks_strict_empty|')),
+        isEmpty,
+        reason: 'a healthy account short-circuits on the non-empty strict '
+            'result before the tripwire — this must stay silent for every '
+            'account that is not actually anomalous, or it stops being a '
+            'signal.',
+      );
     });
   });
 }
