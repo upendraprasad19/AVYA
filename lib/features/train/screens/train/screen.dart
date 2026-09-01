@@ -39,6 +39,14 @@ import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 
+// NOT a dead import: this library's `part` files use it — hero_cards.dart:142
+// and planned_expansion.dart:66 both call beginWorkoutWithReadiness. A `part of`
+// file has no imports of its own; it inherits the parent library's. Removing
+// this on 2026-09-02 (on a grep scoped to screen.dart alone) broke the build,
+// and only the FULL analyze at pre-push could see it — a per-file analyze of
+// screen.dart reports clean because the parts are analysed with the library.
+import '../../widgets/readiness_sheet.dart';
+
 part 'plan_header.dart';
 part 'hero_cards.dart';
 part 'week_rows.dart';
