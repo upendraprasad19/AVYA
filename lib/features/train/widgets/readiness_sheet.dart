@@ -92,7 +92,10 @@ class _ReadinessSheetState extends State<_ReadinessSheet> {
     if (_requestingSleep) return;
     setState(() => _requestingSleep = true);
     final granted = await HealthSyncService.instance.requestSleepPermission();
-    if (granted) await HealthSyncService.instance.syncToHive();
+    // syncSleepOnly, NOT syncToHive: the latter falls through to the
+    // steps/weight permission request and would show a STEPS+WEIGHT consent
+    // dialog to a user who tapped "sync my sleep" (B-pass F1).
+    if (granted) await HealthSyncService.instance.syncSleepOnly();
     if (!mounted) return;
     setState(() {
       _requestingSleep = false;

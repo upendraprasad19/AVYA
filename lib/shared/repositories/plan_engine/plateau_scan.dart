@@ -15,7 +15,7 @@
 // SAFE polarity + inert seams:
 //   • `enable_plateau_escalation` DEFAULT OFF → mergePlateauSetDeltas returns the
 //     input map unchanged (same ref) → applyToWeeks identity → byte-identical.
-//   • ALSO gated on `enable_readiness` (mirrors DeloadEvaluator's guard) — the
+//   • ALSO gated on readiness (`disable_readiness` kill-switch; mirrors DeloadEvaluator) — the
 //     fatigue gate needs readiness rows; without them +sets would fire blind.
 //   • `phase >= 2` self-gate (PRO — free is phase 1; the two fresh-advance callers
 //     are PRO-gated, inheriting the server-verified phases_2_to_12 gate).

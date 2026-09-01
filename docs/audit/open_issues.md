@@ -239,7 +239,7 @@ Everything currently owed, from any source — not only audit findings. `MEMORY.
 durable *why* (scars, retrospectives) but lives in the harness dir outside git and is invisible to
 cloud sessions; **this file is the cross-session backlog.**
 
-## OI-53 — Flip the remaining 12 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05)
+## OI-53 — Flip the remaining 10 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01)
 
 - **Status**: OPEN
 - **Verified**: 2026-08-05 — flag inventory, dependency order and the data lag all re-derived from
@@ -247,13 +247,26 @@ cloud sessions; **this file is the cross-session backlog.**
   `ship_dark_pending_review.yaml:76-101`), not carried from the entry's original text.
 - **Identified**: 2026-07-26 · workout-generator overhaul complete `7bb766fa`
 - **Blocked on**: FOUNDER — but read the shape below before treating this as one decision.
+  ⚠ **DATED FOUNDER DECISION 2026-09-01: readiness + triggered deload were approved and
+  flipped together** (branch `readiness-flip`, record `docs/plan-reviews/readiness-flip.md`).
+  Recorded here because a repo-only reader cannot otherwise reconcile `Blocked on: FOUNDER`
+  with those two flips existing. **10 remain.**
 - **What this actually is — 13 product decisions, not one toggle.** The ledger is explicit:
   *"there is no batch discount, and flipping thirteen flags in one commit would be one review
   pretending to be thirteen."* Each flip-on commit needs its own **full ×2 + `bpass: accepted`**
   (§4.12.4 — the lighter `ship_dark_build` tier does NOT apply to a flip). Nothing is broken by
   leaving them OFF: every shipped APK to date has run with all 13 dark, so OFF *is* the current
   product. What is owed is a decision per flag, not a flip.
-- **The order is forced by code, not preference.** `enable_readiness` must flip FIRST:
+- ✅ **`enable_readiness` + `enable_triggered_deload` — FLIPPED 2026-09-01.** Together, and the
+  coupling was mechanical: `plan_generator.dart` gates `stashWorkingBase` on the deload flag at
+  GENERATION time, so a plan generated with it OFF can never be lifted — flipping deload later
+  would have helped no existing plan. Sleep is now MEASURED from Health Connect
+  (`SLEEP_SESSION`) rather than self-reported, so the check-in is 2 taps when sleep is known.
+  Readiness trends are FREE for all (the Reports paywall branch was removed, not gated).
+  ⚠ Three Android-side defects were caught in review, each invisible to `flutter test`:
+  the wrong data type (`SLEEP_ASLEEP` matches STAGES, not the session), `READ_SLEEP` declared
+  in no manifest, and a permission-request function with no caller.
+- **The order is forced by code, not preference.** `enable_readiness` had to flip FIRST:
   - `enable_triggered_deload`'s evaluator **early-returns** on readiness
     (`deload_evaluator.dart:56` — `if (!PlanEngineFlags.readinessEnabled) return;`; the
     ledger's `&& readinessEnabled` phrasing describes the effect, not the code shape) —

@@ -13,7 +13,7 @@
 // +1 (add volume) requires POSITIVE recovery evidence (enough readiness rows AND
 // not systemically sore).
 // ⚠ CORRECTED 2026-09-01: this used to say "with readiness ship-dark (0 rows)
-// titration therefore only ever TRIMS". readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:56 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate.
+// titration therefore only ever TRIMS". readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:60 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate.
 // So the safety here is the SIBLING FLAG, not an absence of data. When
 // enable_volume_titration is flipped, _recovered() will immediately consume
 // whatever readiness rows have accumulated since.

@@ -119,7 +119,7 @@ per-group e1RM trend (trailing-35-IST-day `exlog_*`, the shared `lib/core/utils/
 `muscleGroupOf` (the scorecard's `_muscleToGroup`, now DELEGATED here — content byte-identical so
 the frozen D3 baseline is unmoved) + a GLOBAL readiness soreness damper (soreness is a single daily
 axis, NOT per-muscle). SAFE polarity: −1 on demonstrated e1RM DECLINE alone; +1 ONLY with POSITIVE
-readiness recovery (≥3 rows, <40% beat-up). ⚠ **CORRECTED 2026-09-01:** this used to read "with readiness ship-dark (0 rows) it only ever TRIMS" — readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:56 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate.
+readiness recovery (≥3 rows, <40% beat-up). ⚠ **CORRECTED 2026-09-01:** this used to read "with readiness ship-dark (0 rows) it only ever TRIMS" — readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:60 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate.
 TWO inert seams: kill-switch `enable_volume_titration` (DEFAULT OFF → `resolveDeltas` `{}`) AND opt-in
 `applyVolumeTitration` — the orchestrator applies it ONLY when the caller passes true, and the two
 advance callers (`autoGenerateNextPhaseIfNeeded` `:483` + `graduation_screen._onPro` `:644`) pass

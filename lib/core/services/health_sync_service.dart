@@ -184,6 +184,49 @@ class HealthSyncService {
     }
   }
 
+  /// Whether a Health-Connect sleep reading should be written for today.
+  ///
+  /// Pure so the decision is testable and mutation-provable on its own -- the
+  /// enclosing sync method needs a live plugin and cannot be exercised in this
+  /// suite. A manual / AI-coach entry ALWAYS wins: [existingRow] non-null means
+  /// somebody already logged today and the sync must not overwrite them.
+  static bool shouldWriteSyncedSleep(double? hours, Object? existingRow) =>
+      hours != null && hours > 0 && existingRow == null;
+
+  /// Fetches sleep ONLY, without touching the steps/weight permission path.
+  ///
+  /// WARNING: do NOT call syncToHive() for a sleep-only user action. That path
+  /// falls through to _checkPermissionsQuietly()/requestPermissions(), which
+  /// shows the full native STEPS+WEIGHT consent dialog -- a dialog with no
+  /// relationship to what the user tapped -- and can write step/weight rows
+  /// while health_sync_enabled is still false. The mirror of "a steps denial
+  /// must not kill sleep" is "a sleep-only action must not reach steps".
+  Future<bool> syncSleepOnly() async {
+    if (kIsWeb) return false;
+    try {
+      final hours = await fetchSleepHoursLastNight();
+      final hive = HiveService.instance;
+      final todayStr = istTodayStr();
+      if (!shouldWriteSyncedSleep(
+          hours, hive.healthBox.get('sleep_log_$todayStr'))) {
+        return false;
+      }
+      await HealthWriteService.instance.logSleep(
+        date: nowWall(),
+        hours: hours!,
+        quality: 'auto',
+        source: WriteSource.healthConnect,
+      );
+      debugPrint('[HealthSync] synced sleep (sleep-only): ${hours}h for $todayStr');
+      return true;
+    } catch (e, st) {
+      debugPrint('[HealthSync] syncSleepOnly error: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_sync_sleep_only'));
+      return false;
+    }
+  }
+
   /// Requests the sleep permission. Call ONLY from an explicit user action
   /// (the Profile health-sync toggle, or the readiness sheet's sync nudge).
   Future<bool> requestSleepPermission() async {
@@ -314,15 +357,20 @@ class HealthSyncService {
     // gate: a steps denial must not kill sleep, just as a sleep denial must not
     // kill steps. A manual / AI-coach entry ALWAYS wins, matching Weight below.
     final sleepHours = await fetchSleepHoursLastNight();
-    if (sleepHours != null &&
-        hive.healthBox.get('sleep_log_$todayStr') == null) {
+    if (shouldWriteSyncedSleep(
+        sleepHours, hive.healthBox.get('sleep_log_$todayStr'))) {
       // Through the WriteService, not a raw put: it stamps `duration_hrs`
       // alongside `sleep_hours` (the cloud push reads duration_hrs with NO
       // fallback, so a raw put would upsert NULL over a good row), takes the
       // per-day lock, and fires the cloud sync.
       await HealthWriteService.instance.logSleep(
-        date: now,
-        hours: sleepHours,
+        // nowWall(), NOT `now` (raw DateTime.now()): the guard above keys on
+        // istTodayStr(), which honours the dev-panel test clock. Passing the
+        // raw clock lets the guard check one date and the write land on
+        // another under time-travel -- which is exactly the surface used to
+        // verify this feature on-device.
+        date: nowWall(),
+        hours: sleepHours!,
         quality: 'auto',
         source: WriteSource.healthConnect,
       );

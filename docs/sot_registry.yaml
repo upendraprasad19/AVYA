@@ -8260,7 +8260,7 @@ concepts:
       governs the +1 direction only). SAFE polarity: −1 (trim) fires on demonstrated
       e1RM DECLINE alone; +1 (add) requires POSITIVE readiness recovery evidence (≥3
       check-ins AND not persistently beat-up). ⚠ CORRECTED 2026-09-01: this said
-      "with readiness ship-dark (0 rows) titration only ever TRIMS" — readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:56 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate. Deltas key + clamp on the MAJOR GROUP (shared
+      "with readiness ship-dark (0 rows) titration only ever TRIMS" — readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:60 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate. Deltas key + clamp on the MAJOR GROUP (shared
       muscleGroupOf, extracted from the scorecard's _muscleToGroup) so [8,20] is a
       science-valid per-group band, not a per-fragmented-sub-token one. TWO inert seams:
       (1) enable_volume_titration DEFAULT OFF → resolveDeltas {}; (2) OPT-IN — the
