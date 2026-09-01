@@ -58,6 +58,12 @@ enum WriteSource {
   manual,
   /// Initial seed during onboarding (e.g. starting weight from stats step).
   onboarding,
+
+  /// Written automatically by `HealthSyncService` from a Health Connect /
+  /// Google Fit read (steps, weight, sleep) — NOT a user tap. Distinguishing
+  /// this from [manual] is what lets the readiness sheet render "◆ SYNCED"
+  /// over a measured value instead of one the user typed.
+  healthConnect,
 }
 
 extension WriteSourceCode on WriteSource {
@@ -83,6 +89,8 @@ extension WriteSourceCode on WriteSource {
         return 'manual';
       case WriteSource.onboarding:
         return 'onboarding';
+      case WriteSource.healthConnect:
+        return 'health_connect';
     }
   }
 }

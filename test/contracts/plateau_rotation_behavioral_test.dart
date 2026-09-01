@@ -152,7 +152,6 @@ void main() {
     await cb.clear();
     // Both gate flags ON by default (variety stays OFF unless a test enables it).
     await cb.put('enable_plateau_escalation', true);
-    await cb.put('enable_readiness', true);
   });
 
   group('rung-3 rotation (Hive-seeded, baseline-derived targets)', () {
@@ -322,7 +321,7 @@ void main() {
     });
 
     test('readiness flag OFF → {}', () async {
-      await cb.put('enable_readiness', false);
+      await cb.put('disable_readiness', true);
       await seedReadiness(3, flagged: false);
       expect(await seedOneFlatCompoundThenScan(2), isEmpty);
     });

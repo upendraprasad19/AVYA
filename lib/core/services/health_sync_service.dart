@@ -5,6 +5,8 @@ import 'package:health/health.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/services/health_write_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 
 /// Wraps the `health` package to sync data from Google Fit / Health Connect
 /// (Android) or Apple HealthKit (iOS) into local Hive storage.
@@ -30,6 +32,27 @@ class HealthSyncService {
   ];
 
   static final _permissions = _types.map((_) => HealthDataAccess.READ).toList();
+
+  /// WARNING: Sleep is tracked SEPARATELY from [_types] on purpose. Health
+  /// Connect treats sleep as its own permission; folding it into [_types] would
+  /// make `hasPermissions(_types)` false for anyone who denies sleep, and
+  /// `_syncToHiveLocked` aborts the WHOLE sync on that -- silently breaking
+  /// steps + weight for existing users. Sleep must fail soft, both ways.
+  ///
+  /// WARNING: SLEEP_SESSION, never SLEEP_ASLEEP. The plugin returns the whole
+  /// session only for SLEEP_SESSION; every other sleep type matches individual
+  /// STAGES, so a stageless session (manual entry, Google Fit import) or a
+  /// granular tracker (light/deep/REM) yields ZERO points. Verified against
+  /// health-13.3.1 HealthDataReader.handleSleepData + mapSleepStageToType.
+  /// (iOS has no SLEEP_SESSION in dataTypeKeysIOS -- revisit at an iOS port.)
+  static const _sleepTypes = [HealthDataType.SLEEP_SESSION];
+
+  /// Derived, never hardcoded: the plugin throws ArgumentError when the
+  /// permissions list length differs from the types list length.
+  static final _sleepPermissions =
+      _sleepTypes.map((_) => HealthDataAccess.READ).toList();
+
+  bool _sleepPermissionGranted = false;
 
   /// Ensure the Health plugin is configured. Safe to call multiple times.
   /// On cold start, [_health] is null — this re-creates and configures it
@@ -104,6 +127,122 @@ class HealthSyncService {
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'health_sync_fetch_steps_today'));
       return null;
+    }
+  }
+
+  /// Total slept hours for LAST NIGHT, or null when unavailable.
+  ///
+  /// WARNING: NEVER requests permission -- it only READS an already-granted
+  /// one. Requesting here would fire a Health Connect dialog at cold launch
+  /// with no user gesture, and re-fire every launch (the granted flag is
+  /// in-memory on a singleton, so it resets each cold start); Android throttles
+  /// repeated requests and then silently refuses, burning the grant. The ASK
+  /// lives on an explicit user action -- see [requestSleepPermission].
+  Future<double?> fetchSleepHoursLastNight() async {
+    if (kIsWeb) return null; // native-only, mirrors steps/weight
+    try {
+      // Idempotent and dialog-free. Needed because this runs ABOVE the
+      // steps/weight permission block, which is the only other place the
+      // plugin gets configured.
+      _ensureConfigured();
+      if (!_sleepPermissionGranted) {
+        final has = await _health!
+            .hasPermissions(_sleepTypes, permissions: _sleepPermissions);
+        _sleepPermissionGranted = has == true;
+        if (!_sleepPermissionGranted) {
+          debugPrint(
+              '[HealthSync] sleep permission absent - skipping (no prompt)');
+          return null;
+        }
+      }
+      // 18:00 yesterday -> now, with each interval CLAMPED to the window so a
+      // session starting before it is not counted whole.
+      final now = DateTime.now();
+      final windowStart = DateTime(now.year, now.month, now.day)
+          .subtract(const Duration(hours: 6));
+      final points = await _health!.getHealthDataFromTypes(
+        startTime: windowStart,
+        endTime: now,
+        types: _sleepTypes,
+      );
+      if (points.isEmpty) return null;
+      var minutes = 0.0;
+      for (final pt in points) {
+        final from =
+            pt.dateFrom.isBefore(windowStart) ? windowStart : pt.dateFrom;
+        final to = pt.dateTo.isAfter(now) ? now : pt.dateTo;
+        final mins = to.difference(from).inMinutes;
+        if (mins > 0) minutes += mins.toDouble();
+      }
+      if (minutes <= 0) return null;
+      return minutes / 60.0;
+    } catch (e, st) {
+      debugPrint('[HealthSync] fetchSleepHoursLastNight error: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_sync_fetch_sleep'));
+      return null;
+    }
+  }
+
+  /// Whether a Health-Connect sleep reading should be written for today.
+  ///
+  /// Pure so the decision is testable and mutation-provable on its own -- the
+  /// enclosing sync method needs a live plugin and cannot be exercised in this
+  /// suite. A manual / AI-coach entry ALWAYS wins: [existingRow] non-null means
+  /// somebody already logged today and the sync must not overwrite them.
+  static bool shouldWriteSyncedSleep(double? hours, Object? existingRow) =>
+      hours != null && hours > 0 && existingRow == null;
+
+  /// Fetches sleep ONLY, without touching the steps/weight permission path.
+  ///
+  /// WARNING: do NOT call syncToHive() for a sleep-only user action. That path
+  /// falls through to _checkPermissionsQuietly()/requestPermissions(), which
+  /// shows the full native STEPS+WEIGHT consent dialog -- a dialog with no
+  /// relationship to what the user tapped -- and can write step/weight rows
+  /// while health_sync_enabled is still false. The mirror of "a steps denial
+  /// must not kill sleep" is "a sleep-only action must not reach steps".
+  Future<bool> syncSleepOnly() async {
+    if (kIsWeb) return false;
+    try {
+      final hours = await fetchSleepHoursLastNight();
+      final hive = HiveService.instance;
+      final todayStr = istTodayStr();
+      if (!shouldWriteSyncedSleep(
+          hours, hive.healthBox.get('sleep_log_$todayStr'))) {
+        return false;
+      }
+      await HealthWriteService.instance.logSleep(
+        date: nowWall(),
+        hours: hours!,
+        quality: 'auto',
+        source: WriteSource.healthConnect,
+      );
+      debugPrint('[HealthSync] synced sleep (sleep-only): ${hours}h for $todayStr');
+      return true;
+    } catch (e, st) {
+      debugPrint('[HealthSync] syncSleepOnly error: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_sync_sleep_only'));
+      return false;
+    }
+  }
+
+  /// Requests the sleep permission. Call ONLY from an explicit user action
+  /// (the Profile health-sync toggle, or the readiness sheet's sync nudge).
+  Future<bool> requestSleepPermission() async {
+    if (kIsWeb) return false;
+    try {
+      _ensureConfigured();
+      _sleepPermissionGranted = await _health!
+          .requestAuthorization(_sleepTypes, permissions: _sleepPermissions);
+      debugPrint(
+          '[HealthSync] sleep permission granted=$_sleepPermissionGranted');
+      return _sleepPermissionGranted;
+    } catch (e, st) {
+      debugPrint('[HealthSync] requestSleepPermission error: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_sync_request_sleep_permission'));
+      return false;
     }
   }
 
@@ -206,6 +345,38 @@ class HealthSyncService {
     if (kIsWeb) return; // Unit 3 obs 2b — native-only; no-op on web
     _lastSyncWroteData = false;
 
+    // Declared ABOVE the steps/weight permission gate so the sleep block below
+    // can run regardless of it -- the two tracks must not be able to disable
+    // each other in EITHER direction.
+    final hive = HiveService.instance;
+    final now = DateTime.now();
+    final todayStr = istTodayStr();
+
+    // -- Sleep --------------------------------------------------
+    // Feeds the readiness check-in's SLEEP axis. Runs BEFORE the steps/weight
+    // gate: a steps denial must not kill sleep, just as a sleep denial must not
+    // kill steps. A manual / AI-coach entry ALWAYS wins, matching Weight below.
+    final sleepHours = await fetchSleepHoursLastNight();
+    if (shouldWriteSyncedSleep(
+        sleepHours, hive.healthBox.get('sleep_log_$todayStr'))) {
+      // Through the WriteService, not a raw put: it stamps `duration_hrs`
+      // alongside `sleep_hours` (the cloud push reads duration_hrs with NO
+      // fallback, so a raw put would upsert NULL over a good row), takes the
+      // per-day lock, and fires the cloud sync.
+      await HealthWriteService.instance.logSleep(
+        // nowWall(), NOT `now` (raw DateTime.now()): the guard above keys on
+        // istTodayStr(), which honours the dev-panel test clock. Passing the
+        // raw clock lets the guard check one date and the write land on
+        // another under time-travel -- which is exactly the surface used to
+        // verify this feature on-device.
+        date: nowWall(),
+        hours: sleepHours!,
+        quality: 'auto',
+        source: WriteSource.healthConnect,
+      );
+      debugPrint('[HealthSync] synced sleep: ${sleepHours}h for $todayStr');
+    }
+
     if (_health == null || !_permissionsGranted) {
       // First try the quiet path (no dialog). On a relaunch where the user
       // previously granted access, this will succeed silently.
@@ -219,10 +390,6 @@ class HealthSyncService {
         }
       }
     }
-
-    final hive = HiveService.instance;
-    final now = DateTime.now();
-    final todayStr = istTodayStr();
 
     // ── Steps ────────────────────────────────────────────────
     final steps = await fetchStepsToday();

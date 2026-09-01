@@ -1,6 +1,7 @@
 // Behavioral regression — ⑥ Batch 6 (W2.3): readiness check-in → deterministic
 // Green/Yellow/Red → a Red-day isolation SET-DROP (the 0-set floor is automatic).
-// Behind `enable_readiness` (default OFF, ship dark). `readinessLevel` lives on
+// Behind `disable_readiness` (kill-switch; readiness LIVE since 2026-09-01).
+// `readinessLevel` lives on
 // `ActiveWorkoutData` (session-only) + MUST survive `copyWith` (the ⑦b F1 bug).
 // Re-entry: `startWorkout` with no param re-applies today's STORED check-in
 // (never re-prompt / re-derive). The LOAD cut is 6-B (`exercise_card.dart`, NOT
@@ -151,9 +152,6 @@ void main() {
       ExerciseData(name: 'Bench Press', sets: '4', exerciseType: 'compound'),
     ]);
 
-    Future<void> enableReadiness() async =>
-        HiveService.instance.configBox.put('enable_readiness', true);
-
     Future<void> seedReadiness(String level) async {
       await HiveService.instance.healthBox.put(
         'readiness_${istDateStr(fixedNow)}',
@@ -177,9 +175,8 @@ void main() {
     String setsOf(List<ExerciseData> ex, String name) =>
         ex.firstWhere((e) => e.name == name).sets;
 
-    test('flag ON + Red (passed) → drops 1 isolation set; compound untouched',
+    test('default (readiness ON) + Red (passed) → drops 1 isolation set; compound untouched',
         () async {
-      await enableReadiness();
       final ex = startAndGet(readiness: ReadinessLevel.red);
       expect(setsOf(ex, 'Cable Fly'), '2'); // 3 → 2 (isolation)
       expect(setsOf(ex, 'Bench Press'), '4'); // compound unchanged
@@ -191,22 +188,24 @@ void main() {
           ReadinessLevel.red);
     });
 
-    test('flag ON + Red STORED (re-entry, NO param) → same drop', () async {
-      await enableReadiness();
+    test('default (readiness ON) + Red STORED (re-entry, NO param) → same drop',
+        () async {
       await seedReadiness('red');
       final ex = startAndGet(); // no param → re-applies the stored check-in
       expect(setsOf(ex, 'Cable Fly'), '2');
     });
 
-    test('flag ON + Green → no drop', () async {
-      await enableReadiness();
+    test('default (readiness ON) + Green → no drop', () async {
       final ex = startAndGet(readiness: ReadinessLevel.green);
       expect(setsOf(ex, 'Cable Fly'), '3');
     });
 
-    test('flag OFF (default) + Red stored → NO drop (byte-identical), no level',
+    test('kill-switch ON + Red stored → NO drop (byte-identical), no level',
         () async {
-      await seedReadiness('red'); // present, but flag off → never read
+      // Post-2026-09-01 readiness is ON by default, so "off" must be written
+      // as the kill-switch. Skipping the write no longer disables anything.
+      await HiveService.instance.configBox.put('disable_readiness', true);
+      await seedReadiness('red'); // present, but killed → never read
       final ex = startAndGet();
       expect(setsOf(ex, 'Cable Fly'), '3');
       expect(container.read(activeWorkoutProvider).readinessLevel, isNull);

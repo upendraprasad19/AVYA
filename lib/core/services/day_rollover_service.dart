@@ -171,7 +171,7 @@ class DayRolloverObserver with WidgetsBindingObserver {
     await HiveService.instance.configBox.put(_hiveKey, today);
 
     // ⑥ Batch 7-B-2 (W2.4) — triggered-deload eval. Ship-dark (no-op unless BOTH
-    // enable_triggered_deload + enable_readiness are on). Placed BEFORE the
+    // triggered-deload + readiness are live; disable_* kills them). Placed BEFORE the
     // invalidation block so a lifted week-4 repaints via the currentPlan /
     // todayWorkout / calendarWeek invalidations below. AWAITED so the rewrite
     // lands before the repaint; the eval's own durability sync is unawaited so

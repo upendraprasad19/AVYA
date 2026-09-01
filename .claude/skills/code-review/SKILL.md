@@ -190,6 +190,43 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-09-02** — blast-radius **platform** — branch `readiness-flip` @ `9e4c5681`
+  (OI-53 flags 1+2: readiness + triggered deload flipped live, Health Connect
+  sleep). **5 findings (0 P0, 1 P1, 2 P2, 2 P3); 0 false_alarm.** All fixed
+  in-batch. Review: `docs/reviews/9e4c5681-review.md`.
+  **Tuning — lens 6 gains a PERMISSION-SCOPE question, and lens 7 gains the
+  layer BELOW the API.** Both come from the same batch getting Android wrong
+  three times in three rounds, each time in a way NO `flutter test` could see.
+  1. **Lens 7 (`missing_input`) must descend to the PLATFORM MANIFEST, not stop
+     at the API.** Plan review round 1 caught that `SLEEP_ASLEEP` was the wrong
+     data type (the plugin returns a whole session only for `SLEEP_SESSION`;
+     every other sleep type matches individual STAGES, so a stageless or
+     granular-tracker session yields zero points). Round 2 then found the layer
+     underneath: `android.permission.health.READ_SLEEP` was declared in **no
+     manifest**, so the permission could never be granted and the feature was a
+     permanent no-op *regardless* of the data type. **A correct API call against
+     an undeclared permission is indistinguishable from a correct feature until
+     it runs on a device.** Ask: for every new platform capability, is it
+     declared where the OS reads declarations — and did anyone check, or did the
+     enum's existence stand in for it?
+  2. **Lens 6 gains: when a user action requests permission X, does its code path
+     also request Y?** The B-pass P1: the sheet's "sync your sleep" nudge called
+     the shared `syncToHive()`, which falls through to the steps/weight
+     permission request — so a user tapping about SLEEP would get a
+     STEPS+WEIGHT consent dialog and unrequested step/weight writes. The file's
+     own comment promised "sleep must fail soft, both ways" and only one
+     direction was guarded. **A shared entry point inherits the union of every
+     caller's side effects; a narrow user action must not reach a wide one.**
+  3. **A NEGATIVE result worth recording, per this history's own convention:**
+     the reviewer independently re-ran Mutation B (kill-switch polarity flip) and
+     measured 22 failures, matching the commit's claim exactly — then reverted and
+     verified the tree clean before reporting. Confirming a mutation count costs
+     one run and is the only thing that makes the claim mean anything.
+  ⚠ Also, third instance in this batch of the stale-self-citation class: a
+  comment the batch ADDED cited `volume_titration.dart:56` while its own
+  insertion had shifted the guard to `:60`. **Capture line citations LAST.**
+  False-alarm rate 0/5 → no change to lenses 1-5, 8, 9.
+
 - **2026-08-30 (c)** — blast-radius **platform** — branch `oi150-phase-merge`
   (OI-150 progress + profile write durability). **4 findings (0 P0, 2 P1, 1 P2,
   1 P3); 0 false_alarm — all four real, all fixed in-batch.** Review:

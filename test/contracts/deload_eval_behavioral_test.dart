@@ -201,8 +201,18 @@ void main() {
   }
 
   Future<void> enableFlags({bool deload = true, bool readiness = true}) async {
-    if (deload) await cb.put('enable_triggered_deload', true);
-    if (readiness) await cb.put('enable_readiness', true);
+    // Both flags default ON since 2026-09-01, so "off" must be written as an
+    // explicit kill-switch — skipping the write no longer disables anything.
+    if (deload) {
+      await cb.delete('disable_triggered_deload');
+    } else {
+      await cb.put('disable_triggered_deload', true);
+    }
+    if (readiness) {
+      await cb.delete('disable_readiness');
+    } else {
+      await cb.put('disable_readiness', true);
+    }
   }
 
   // Read the first wk4 workout row back (day 0 = today).
@@ -639,8 +649,9 @@ void main() {
     test('reader gate: flag OFF → null even with a stamped key', () async {
       await seedWk4(phase: 2);
       await wb.put('deload_reason_phase_2', 'stale reason string');
-      // triggered_deload OFF (only readiness on) → the reader gate returns null.
-      await cb.put('enable_readiness', true);
+      // The reader gate is triggeredDeloadEnabled — write it EXPLICITLY.
+      // Before the 2026-09-01 flip this relied on that flag defaulting OFF.
+      await cb.put('disable_triggered_deload', true);
       expect(WorkoutScheduleService.instance.currentDeloadReason(), isNull);
     });
   });

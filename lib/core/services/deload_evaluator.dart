@@ -11,7 +11,7 @@
 // e1rmNoFatigue` — ALL clauses require POSITIVE evidence; any false / unknown /
 // missing → KEEP (recovery is the safe failure mode).
 //
-// Ship-dark: gated on `enable_triggered_deload` AND `enable_readiness` (the
+// LIVE since 2026-09-01: gated on `disable_triggered_deload` AND `disable_readiness` (the
 // readiness clause is a keep signal — running without readiness data would bias
 // toward LIFTING). OFF → returns immediately → byte-identical to 7-B-1.
 //

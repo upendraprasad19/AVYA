@@ -499,17 +499,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  // ⑥ Batch 6 (W3.7) — PRO readiness trend. A parallel colored-day strip (NOT
+  // ⑥ Batch 6 (W3.7) — readiness trend. A parallel colored-day strip (NOT
   // _buildLineChart, which hardcodes weight_kg). Hidden entirely until there is
-  // ≥1 check-in. Free users see a locked teaser → paywall.
+  // ≥1 check-in. FREE for all since 2026-09-01 — the PRO gate and its paywall
+  // teaser were removed when readiness went live (founder decision).
   Widget _buildReadinessTrend() {
     final history = HealthReadService.instance.readinessHistory();
     if (history.isEmpty) return const SizedBox.shrink();
-    // Rule 5: gate via the provider, not an inline SubscriptionService.isPro() —
-    // reactive (upgrade reveals the strip without a manual rebuild). The trend is
-    // a synchronous teaser render, so the provider is correct here (the async
-    // callback gate() is for the video-render ACTION below, not a build-time pick).
-    final isPro = ref.watch(subscriptionInfoProvider).isPro;
+    // Readiness trends are FREE for all (founder decision 2026-08-31) --
+    // flipping an engine flag must not introduce a monetization surface.
     // history is newest-first; show the last 14 oldest→newest for the strip.
     final strip = history.take(14).toList().reversed.toList();
     final last30 = history.take(30).toList();
@@ -531,44 +529,29 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             children: [
               Text('Readiness', style: AppTypography.titleS),
               const Spacer(),
-              if (!isPro)
-                const Icon(Icons.lock_outline,
-                    size: 14, color: AppColors.accent),
             ],
           ),
           const SizedBox(height: 12),
-          if (isPro) ...[
-            Wrap(
-              spacing: 5,
-              runSpacing: 5,
-              children: [
-                for (final c in strip)
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: _readinessColor(c.level),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+          Wrap(
+            spacing: 5,
+            runSpacing: 5,
+            children: [
+              for (final c in strip)
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: _readinessColor(c.level),
+                    borderRadius: BorderRadius.circular(4),
                   ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '${last30.length} check-ins · $green green · $red red (last 30 days)',
-              style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
-            ),
-          ] else
-            GestureDetector(
-              onTap: () =>
-                  showPaywallSheet(context, feature: 'Readiness Trends'),
-              child: Text(
-                'Unlock readiness trends with PRO — see how sleep, soreness and '
-                'energy track alongside your training.',
-                style:
-                    AppTypography.bodyS.copyWith(color: AppColors.textDim, height: 1.4),
-              ),
-            ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${last30.length} check-ins · $green green · $red red (last 30 days)',
+            style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
+          ),
         ],
       ),
     );

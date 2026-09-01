@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### readiness_daily (1 bugs)
+- 2026-09-02 4c1e7a — Tapping "Sync your sleep for a sharper read." in the pre-workout readiness sheet showed the user the full native Health Connect STEPS + WEIGHT consent dialog -- data they did not ask to share -- and,…
+
 ### closes_oi_citation_unverified (1 bugs)
 - 2026-08-30 e2c481 — Two OIs a commit declared closed via `closes-oi:` were NOT closed on the board. OI-150 (commit `c2534257`): the fix shipped, merged, went 7/7 CI green; the board write was simply never done, and an…
 
@@ -1100,6 +1103,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-02 | 4c1e7a | Tapping "Sync your sleep for a sharper read." in the pre-workout readiness sheet showed the user the full native Health Connect STEPS + WEIGHT consent dialog -- data they did not ask to share -- and,… | readiness_daily | test/contracts/readiness_sheet_states_test.dart |
 | 2026-08-30 | e2c481 | Two OIs a commit declared closed via `closes-oi:` were NOT closed on the board. OI-150 (commit `c2534257`): the fix shipped, merged, went 7/7 CI green; the board write was simply never done, and an… | closes_oi_citation_unverified | test/scripts/oi_closure_lib_test.dart, test/scripts/closes_oi_performed_e2e_test.dart |
 | 2026-08-30 | d7f3b1 | `check_context_artifact_budget.dart` — a gate whose entire job is to notice when a context artifact changes size — reported `PASS: 3 within band` for a `CLAUDE.md` truncated to ZERO BYTES. Every… | context_artifact_budget | test/scripts/context_budget_lib_test.dart |
 | 2026-08-30 | b7f1c8 | Founder observation on the Train screen: the deployment eyebrow above the week strip always read "DEPLOYMENT 01" regardless of which phase/deployment the account was actually on. Same screen, separate… | past_phase_display_recovery | test/contracts/hold_week_labels_test.dart |

@@ -108,7 +108,7 @@ unified; acknowledged, not implied).
   - `dropped` → **−1** (pull volume back — fires on e1RM alone, no readiness needed).
   - `heldOrGained && recovered` → **+1** (add volume ONLY with positive recovery evidence).
   - else (heldOrGained but not recovered / insufficient readiness / systemicFatigue /
-    no evaluable exercise) → **omit** (hold). ⟹ with readiness ship-dark (0 rows),
+    no evaluable exercise) → **omit** (hold). ⚠ **CORRECTED 2026-09-01 — readiness is LIVE; the parenthetical below describes the pre-flip world only.** ⟹ with readiness ship-dark (0 rows),
     titration ONLY ever trims on demonstrated decline; +1 unlocks once readiness has
     adoption. Honest, safe, incremental.
 - Deterministic: build the map, then return entries **sorted by group key** (so

@@ -217,7 +217,7 @@ pending:
     build_commit: 21d155f1
     build_date: 2026-07-17
     merge_commit: 7a9ba3c7
-    flip_reviewed: false
+    flip_reviewed: true
     flip_commit: null
     note: >
       FLIP THIS ONE FIRST. Both enable_plateau_escalation and the
@@ -239,7 +239,7 @@ pending:
     build_commit: 2c3ec370
     build_date: 2026-07-17
     merge_commit: bf2e352b
-    flip_reviewed: false
+    flip_reviewed: true
     flip_commit: null
     note: >
       Depends on enable_readiness (see above). The deload cut is
@@ -260,6 +260,14 @@ pending:
     merge_commit: 38706bae
     flip_reviewed: false
     flip_commit: null
+    note: >
+      WARNING added 2026-09-01: this flag's readiness dependency is now LIVE
+      (enable_readiness flipped that day), and unlike triggered_deload's and
+      plateau_escalation's it is NOT enforced in code. _recovered()
+      (volume_titration.dart:112-132) has no readiness gate at all; titration is
+      inert ONLY because THIS flag short-circuits at :60 before it runs. Whoever
+      flips this will immediately consume every readiness row accumulated since.
+
 
   - flag: enable_exercise_id_history
     branch: workout-idkey-variety-11

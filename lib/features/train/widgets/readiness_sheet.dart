@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:icanbefitter/core/services/health_read_service.dart';
+import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
@@ -63,6 +64,56 @@ class _ReadinessSheetState extends State<_ReadinessSheet> {
   // 0 = best, 1 = mid, 2 = worst. Default mid (a neutral starting point).
   int _sleep = 1, _soreness = 1, _energy = 1;
 
+  /// Measured sleep for today, or null when we have none. Non-null puts the
+  /// sheet in STATE A -- sleep is SHOWN, not asked.
+  double? _measuredSleepHours;
+  bool _requestingSleep = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveMeasuredSleep();
+  }
+
+  void _resolveMeasuredSleep() {
+    final hours = HealthReadService.instance.sleepHoursForDate(nowWall());
+    _measuredSleepHours = hours;
+    // resolveSleepAxis IS the state decision -- null means State B (ask).
+    // Do not re-derive this branch inline; it is pinned by
+    // readiness_sheet_states_test.dart.
+    final axis = resolveSleepAxis(hours);
+    if (axis != null) _sleep = axis;
+  }
+
+  /// STATE B's nudge is TAPPABLE -- this is the only in-sheet path to the
+  /// Health Connect sleep grant. Without it the permission has no grant path
+  /// at all and State A can never appear.
+  Future<void> _onTapSyncSleep() async {
+    if (_requestingSleep) return;
+    setState(() => _requestingSleep = true);
+    final granted = await HealthSyncService.instance.requestSleepPermission();
+    // syncSleepOnly, NOT syncToHive: the latter falls through to the
+    // steps/weight permission request and would show a STEPS+WEIGHT consent
+    // dialog to a user who tapped "sync my sleep" (B-pass F1).
+    if (granted) await HealthSyncService.instance.syncSleepOnly();
+    if (!mounted) return;
+    setState(() {
+      _requestingSleep = false;
+      if (granted) _resolveMeasuredSleep();
+    });
+  }
+
+  /// Reuses [_sleepLabels] rather than a second copy -- two lists is a drift
+  /// seam.
+  String get _sleepBandLabel => _sleepLabels[_sleep];
+
+  /// Round to minutes FIRST, then divide: `((h - h.floor()) * 60).round()` on
+  /// h = 7.999 renders "7h 60m".
+  String get _sleepHoursLabel {
+    final totalMins = (_measuredSleepHours! * 60).round();
+    return '${totalMins ~/ 60}h ${totalMins % 60}m';
+  }
+
   static const _sleepLabels = ['Solid', 'Okay', 'Rough'];
   static const _soreLabels = ['Fresh', 'A little', 'Beat up'];
   static const _energyLabels = ['Charged', 'Normal', 'Running low'];
@@ -101,12 +152,68 @@ class _ReadinessSheetState extends State<_ReadinessSheet> {
                   AppTypography.monoXs.copyWith(color: AppColors.textDim, height: 1.4),
             ),
             const SizedBox(height: 18),
-            _Row(
-              label: 'SLEEP',
-              options: _sleepLabels,
-              selected: _sleep,
-              onSelect: (i) => setState(() => _sleep = i),
-            ),
+            if (_measuredSleepHours != null) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('SLEEP',
+                      style: AppTypography.monoXs.copyWith(
+                          color: AppColors.textDim, letterSpacing: 1.9)),
+                  Text('\u25C6 SYNCED',
+                      style: AppTypography.monoXs.copyWith(
+                          color: AppColors.ok, letterSpacing: 0.9)),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                decoration: BoxDecoration(
+                  color: AppColors.ok.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(8),
+                  border:
+                      Border.all(color: AppColors.ok.withValues(alpha: 0.45)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_sleepHoursLabel,
+                            style: AppTypography.h3
+                                .copyWith(fontSize: 15, color: AppColors.ok)),
+                        Text(_sleepBandLabel,
+                            style: AppTypography.bodyS
+                                .copyWith(color: AppColors.textDim)),
+                      ],
+                    ),
+                    Text('Already synced\n\u2014 nothing to tap',
+                        textAlign: TextAlign.right,
+                        style: AppTypography.monoXs.copyWith(
+                            color: AppColors.textDim, height: 1.35)),
+                  ],
+                ),
+              ),
+            ] else ...[
+              _Row(
+                label: 'SLEEP',
+                options: _sleepLabels,
+                selected: _sleep,
+                onSelect: (i) => setState(() => _sleep = i),
+              ),
+              const SizedBox(height: 5),
+              GestureDetector(
+                onTap: _requestingSleep ? null : _onTapSyncSleep,
+                child: Text(
+                  _requestingSleep
+                      ? 'Connecting\u2026'
+                      : 'Sync your sleep for a sharper read.',
+                  style: AppTypography.monoXs.copyWith(
+                      color: AppColors.accent, height: 1.4),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             _Row(
               label: 'SORENESS',

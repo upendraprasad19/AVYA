@@ -3210,7 +3210,7 @@ concepts:
           entry point UI callers fire, and it adds the companion
           ProfileWriteService current_weight_kg update.
       - file: lib/core/services/health_sync_service.dart
-        line_range: 205-262
+        line_range: 301-388
         method: _syncToHiveLocked
         notes: |
           Health Connect import (weight portion). Unit 3a (progress-map-
@@ -3583,6 +3583,22 @@ concepts:
       A legacy list key 'sleep_logs' also exists (chat-logged path via
       conversational_log_handler). Both paths must be handled in sync/restore.
     writers:
+      - file: lib/core/services/health_sync_service.dart
+        line_range: 301-388
+        method: _syncToHiveLocked
+        notes: |
+          The sleep block itself is :312-329; the range above is the enclosing
+          method, because the parity gate validates that the NAMED METHOD sits
+          at the cited range.
+          THIRD writer path, added 2026-09-01 with the readiness flip. Health
+          Connect SLEEP_SESSION -> HealthWriteService.logSleep(source:
+          healthConnect). Routed through the WriteService deliberately, NOT a raw
+          healthBox.put: sync_health.dart pushes `duration_hrs` with NO fallback
+          to `sleep_hours`, so a raw put would upsert NULL over a good cloud row,
+          and _restoreSleepLogs would write that back — leaving
+          sleepHoursForDate null forever after a reinstall. A manual / AI-coach
+          entry always wins (the block no-ops when a row already exists).
+          Consumed by the readiness sheet's SLEEP axis via sleepAxisFromHours.
       - file: lib/features/profile/providers/profile_provider.dart
         line_range: 540-548
         method: logSleep
@@ -8243,8 +8259,8 @@ concepts:
       GLOBAL readiness soreness damper (readiness is a single daily axis, NOT per-muscle —
       governs the +1 direction only). SAFE polarity: −1 (trim) fires on demonstrated
       e1RM DECLINE alone; +1 (add) requires POSITIVE readiness recovery evidence (≥3
-      check-ins AND not persistently beat-up), so with readiness ship-dark (0 rows)
-      titration only ever TRIMS. Deltas key + clamp on the MAJOR GROUP (shared
+      check-ins AND not persistently beat-up). ⚠ CORRECTED 2026-09-01: this said
+      "with readiness ship-dark (0 rows) titration only ever TRIMS" — readiness went LIVE 2026-09-01, so rows DO accumulate; titration is inert only because enable_volume_titration is still OFF and short-circuits at volume_titration.dart:60 BEFORE _recovered() runs -- _recovered() itself has NO readiness gate. Deltas key + clamp on the MAJOR GROUP (shared
       muscleGroupOf, extracted from the scorecard's _muscleToGroup) so [8,20] is a
       science-valid per-group band, not a per-fragmented-sub-token one. TWO inert seams:
       (1) enable_volume_titration DEFAULT OFF → resolveDeltas {}; (2) OPT-IN — the
