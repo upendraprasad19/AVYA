@@ -29,7 +29,6 @@ import '../../providers/train_provider.dart';
 import 'package:icanbefitter/features/home/widgets/weight_log_sheet.dart';
 import '../../widgets/create_custom_exercise_sheet.dart';
 import '../../widgets/edit_workout_log_sheet.dart';
-import '../../widgets/readiness_sheet.dart';
 import '../../widgets/week_selector.dart';
 import '../../widgets/phase_arc_strip.dart';
 import '../../widgets/hold_roadmap_strip.dart';

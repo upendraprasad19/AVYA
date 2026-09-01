@@ -521,6 +521,11 @@ class BiometricNotifier extends Notifier<BiometricData> {
         debugPrint('[BiometricNotifier] Health permissions denied — not enabling sync');
         return; // Don't enable toggle if permissions denied
       }
+      // Sleep is a SEPARATE Health Connect grant from steps/weight. Ask for it
+      // here too -- this toggle is an explicit user action, which is the only
+      // place a permission dialog belongs. A denial is non-fatal: sleep simply
+      // stays unavailable and the readiness sheet asks for it instead.
+      await HealthSyncService.instance.requestSleepPermission();
       // Sync data immediately after permissions granted
       await HealthSyncService.instance.syncToHive();
     }

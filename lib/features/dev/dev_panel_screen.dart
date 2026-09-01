@@ -287,6 +287,48 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
         '— regenerate a plan to see the effect');
   }
 
+  /// Readiness kill-switch. Deleting the key returns to the default (ON).
+  ///
+  /// Added because a gate nothing can close is not reachable (CLAUDE.md 4.6) --
+  /// the equipment-exclusions flip hit this identical gap and its fix records
+  /// why at the sibling method below.
+  Future<void> _toggleReadiness() async {
+    final nextEnabled = !PlanEngineFlags.readinessEnabled;
+    final cfg = HiveService.instance.configBox;
+    if (nextEnabled) {
+      await cfg.delete('disable_readiness');
+    } else {
+      await cfg.put('disable_readiness', true);
+    }
+    await DayRolloverObserver.instance.runRolloverNow(ref);
+    if (!mounted) return;
+    setState(() {});
+    _toast('readiness = ${nextEnabled ? 'ON' : 'OFF (killed)'} '
+        '-- applies on your next Start Workout');
+  }
+
+  /// Triggered-deload kill-switch.
+  ///
+  /// WARNING: turning this OFF also stops NEW plans stashing their working
+  /// base, so a plan generated while it is off can never be lifted later.
+  /// runRolloverNow is load-bearing here: it is what invokes
+  /// DeloadEvaluator.maybeEvaluate(), so without it the toggle has no
+  /// observable effect until the next real rollover.
+  Future<void> _toggleTriggeredDeload() async {
+    final nextEnabled = !PlanEngineFlags.triggeredDeloadEnabled;
+    final cfg = HiveService.instance.configBox;
+    if (nextEnabled) {
+      await cfg.delete('disable_triggered_deload');
+    } else {
+      await cfg.put('disable_triggered_deload', true);
+    }
+    await DayRolloverObserver.instance.runRolloverNow(ref);
+    if (!mounted) return;
+    setState(() {});
+    _toast('triggered deload = ${nextEnabled ? 'ON' : 'OFF (killed)'} '
+        '-- generate a new plan for the stash to apply');
+  }
+
   void _toast(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
@@ -368,6 +410,10 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
               // `disable_equipment_exclusions`, so "off" here means killed.
               _kv('equipment exclusions (+ WU-2 gym cardio)',
                   PlanEngineFlags.equipmentExclusionsEnabled ? 'ON' : 'KILLED'),
+              _kv('readiness',
+                  PlanEngineFlags.readinessEnabled ? 'ON' : 'KILLED'),
+              _kv('triggered deload',
+                  PlanEngineFlags.triggeredDeloadEnabled ? 'ON' : 'KILLED'),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -384,6 +430,18 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                         ? 'KILL equipment exclusions'
                         : 'Restore equipment exclusions',
                     () => _toggleEquipmentExclusions(),
+                  ),
+                  _btn(
+                    PlanEngineFlags.readinessEnabled
+                        ? 'KILL readiness'
+                        : 'Restore readiness',
+                    () => _toggleReadiness(),
+                  ),
+                  _btn(
+                    PlanEngineFlags.triggeredDeloadEnabled
+                        ? 'KILL triggered deload'
+                        : 'Restore triggered deload',
+                    () => _toggleTriggeredDeload(),
                   ),
                   // Use after every time-travel jump — the clock buttons above
                   // do NOT invalidate providers on their own.

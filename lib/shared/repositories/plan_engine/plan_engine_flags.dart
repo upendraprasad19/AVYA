@@ -176,18 +176,20 @@ class PlanEngineFlags {
     }
   }
 
-  /// ⑥ Batch 6 (W2.3) readiness check-in + session adjustment + PRO trends.
-  /// Ship-dark DEFAULT OFF (§4.6 — a new active-workout sheet + a session load/
-  /// set adjustment). When OFF: no sheet shown, no `readiness_*` read/write, no
-  /// session adjustment → byte-identical to today. Home is a domain stretch
-  /// (readiness is active-workout/health, not the generator) but mirrors ⑦b's
-  /// `sessionDetrainingCutEnabled` precedent. Set
-  /// `configBox['enable_readiness'] = true` to enable.
+  /// ⑥ Batch 6 (W2.3) readiness check-in + session adjustment + trends.
+  /// LIVE since 2026-09-01 (OI-53 flag 1 of 12). Kill-switch
+  /// `configBox['disable_readiness'] = true` restores the pre-flip path: no
+  /// sheet, no `readiness_*` read/write, no session adjustment.
+  ///
+  /// ⚠ The kill-switch stops new COLLECTION; it does not retroactively hide
+  /// readiness history already rendered by the Reports trend card, which reads
+  /// `readiness_*` rows directly with no flag gate. The CODE path reverts
+  /// verbatim (§4.6's actual requirement); the DATA persists.
   static bool get readinessEnabled {
     try {
-      return HiveService.instance.configBox.get('enable_readiness') == true;
+      return HiveService.instance.configBox.get('disable_readiness') != true;
     } catch (_) {
-      return false; // no Hive (pure unit test) → safe default: OFF
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 
@@ -206,20 +208,25 @@ class PlanEngineFlags {
   }
 
   /// ⑥ Batch 7-B (W2.4 triggered deload): the whole deload feature flag. 7-B-1
-  /// gates the GENERATION-STASH of peak-equivalent `working_sets`/`working_reps` on
-  /// the deload week (so a later lifted deload is lossless — the deload cut is
-  /// non-invertible). Ship-dark DEFAULT OFF (§4.6 — a plan-engine change). OFF → no
-  /// stash → byte-identical. NOTE: the 7-B-2 eval/trigger that CONSUMES the stash
-  /// additionally requires readiness ON (`&& readinessEnabled` at the eval site —
-  /// flag-ordering safety; the readiness clause is a keep-deload signal, so running
-  /// the eval without it biases toward LIFTING). Set
-  /// `configBox['enable_triggered_deload'] = true` to enable.
+  /// gates the GENERATION-STASH of peak-equivalent `working_sets`/`working_reps`
+  /// on the deload week (so a later lifted deload is lossless — the deload cut
+  /// is non-invertible). LIVE since 2026-09-01 (OI-53 flag 2 of 12).
+  /// Kill-switch `configBox['disable_triggered_deload'] = true`.
+  ///
+  /// ⚠ Flipped in the SAME commit as `disable_readiness`, and the coupling is
+  /// MECHANICAL, not convenience: `plan_generator.dart` gates `stashWorkingBase`
+  /// on THIS flag at GENERATION time, so a plan generated while it was OFF
+  /// carries no stash and can never be lifted (`deload_evaluator.dart` guards on
+  /// stash presence). The eval also early-returns without readiness.
+  ///
+  /// ⚠ Killing this switch does NOT revert a lift already applied — the week
+  /// stays `week_character: 'working'` and only the reason strip disappears.
   static bool get triggeredDeloadEnabled {
     try {
-      return HiveService.instance.configBox.get('enable_triggered_deload') ==
+      return HiveService.instance.configBox.get('disable_triggered_deload') !=
           true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 

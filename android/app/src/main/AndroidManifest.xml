@@ -10,6 +10,10 @@
     <!-- Health Connect permissions (Android 14+) -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <!-- Sleep feeds the readiness check-in's SLEEP axis. Health Connect
+         treats this as a SEPARATE grant from steps/weight; undeclared, it can
+         never be granted and the read returns null on every device. -->
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
 
     <!-- Legacy Google Fit permissions (Android 13 and below) -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />

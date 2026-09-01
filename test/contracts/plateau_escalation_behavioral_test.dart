@@ -181,7 +181,6 @@ void main() {
     // Default: BOTH gate flags ON so a case only has to seed data. Individual
     // tests override to pin the flag gates.
     await cb.put('enable_plateau_escalation', true);
-    await cb.put('enable_readiness', true);
   });
 
   group('plateauedGroups (Hive-seeded detector)', () {
@@ -211,7 +210,7 @@ void main() {
     });
 
     test('readiness flag OFF (flag-ordering) → {} even with plateau ON', () async {
-      await cb.put('enable_readiness', false);
+      await cb.put('disable_readiness', true);
       await seedFlatPlateau();
       expect(PlateauScan.plateauedGroups(phase: 2), isEmpty);
     });

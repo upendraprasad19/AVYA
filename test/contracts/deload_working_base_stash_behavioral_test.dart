@@ -5,7 +5,7 @@
 // working_sets/working_reps stashed on the deload week (weekIdx 3) MUST survive
 // the superset pairer's `copyWith(supersetGroup:)` (the `?? this.workingSets`
 // idiom on the new fields). A stash lost here would ship broken with green unit
-// tests. Flag `enable_triggered_deload` (ship-dark DEFAULT OFF).
+// tests. Kill-switch `disable_triggered_deload` (LIVE since 2026-09-01).
 //
 // Proves: (1) flag OFF → NO working_sets on any exercise + `toMap` omits the key
 // (byte-identical); (2) flag ON → EVERY week-4 exercise carries working_sets/reps
@@ -61,9 +61,9 @@ void main() {
   Future<void> setFlag(bool on) async {
     final cfg = Hive.box(HiveService.configBoxName);
     if (on) {
-      await cfg.put('enable_triggered_deload', true);
+      await cfg.delete('disable_triggered_deload');
     } else {
-      await cfg.delete('enable_triggered_deload');
+      await cfg.put('disable_triggered_deload', true);
     }
   }
 

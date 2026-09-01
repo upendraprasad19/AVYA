@@ -75,3 +75,31 @@ ReadinessLevel readinessLevelFor({
   if (flags >= 1) return ReadinessLevel.yellow;
   return ReadinessLevel.green;
 }
+
+/// Maps MEASURED sleep hours onto the readiness sleep axis (0 best → 2 worst),
+/// so a Health-Connect reading feeds the same flag count as a tapped answer.
+///
+/// Founder-locked 2026-09-01. Both boundary values belong to the MIDDLE band:
+///   > 6.5      → 0 (Solid)
+///   4.5 … 6.5  → 1 (Okay)   ← 6.5 and 4.5 BOTH land here
+///   < 4.5      → 2 (Rough)
+///
+/// Because this returns the same 0/1/2 a tap does, [readinessLevelFor] needs
+/// no change at all — measured sleep is just a better-sourced axis value.
+int sleepAxisFromHours(double hours) {
+  if (hours > 6.5) return 0;
+  if (hours >= 4.5) return 1;
+  return 2;
+}
+
+/// The readiness sheet's SLEEP-row state, resolved from whatever measurement
+/// we hold for today.
+///
+/// `null`  -> STATE B: no measurement, the sheet must ASK (3 tap rows).
+/// `0/1/2` -> STATE A: show the measured value + band, no tap needed.
+///
+/// Extracted from the widget deliberately: a private `initState` branch cannot
+/// be mutation-tested, and this is the one decision that changes what the user
+/// sees. The widget must call THIS, not re-derive the branch inline.
+int? resolveSleepAxis(double? measuredHours) =>
+    measuredHours == null ? null : sleepAxisFromHours(measuredHours);
