@@ -11,6 +11,7 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/widgets/scroll_date_picker.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import '../providers/onboarding_provider.dart';
 
@@ -723,6 +724,16 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
                           // Refresh all home/nutrition/train providers so fresh
                           // onboarding data (name, macros, plan) is visible immediately.
                           ref.invalidate(calendarWeekProvider);
+                          // b3c9d4 — the three name providers below now DERIVE
+                          // from userProfileProvider, and completeOnboarding
+                          // writes Hive through ProfileWriteService without
+                          // touching that notifier's Riverpod state. Without
+                          // this line they would rebuild against a stale
+                          // source. Currently unreachable (this route runs
+                          // before the tab shell mounts), so this is
+                          // defence-in-depth against the exact class b3c9d4
+                          // closes, not a live bug.
+                          ref.invalidate(userProfileProvider);
                           ref.invalidate(userFirstNameProvider);
                           ref.invalidate(userInitialProvider);
                           ref.invalidate(userGreetingProvider);

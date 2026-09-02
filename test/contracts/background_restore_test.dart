@@ -33,7 +33,7 @@ String _strip(String s) => s
     .replaceAll(RegExp(r'(?<!:)//[^\n]*'), '');
 
 void main() {
-  late String restoring, splash, sync, home, supa;
+  late String restoring, splash, sync, home, supa, tabMixin;
   setUpAll(() {
     restoring = _strip(
         readRestoringScreenSource());
@@ -43,6 +43,8 @@ void main() {
         File('lib/core/services/sync_service.dart').readAsStringSync());
     home = _strip(File('lib/features/home/screens/home_screen.dart')
         .readAsStringSync());
+    tabMixin = _strip(
+        File('lib/shared/mixins/hive_tab_scaffold.dart').readAsStringSync());
     supa = _strip(File('lib/core/services/supabase_service.dart')
         .readAsStringSync());
   });
@@ -75,11 +77,33 @@ void main() {
       expect(sync.contains('restoreCompletedTick'), isTrue);
       expect(sync.contains('void bumpRestoreCompleted()'), isTrue);
     });
-    test('home listens to the tick (added + removed) + invalidateOnRetry', () {
-      expect(home.contains('restoreCompletedTick.addListener'), isTrue);
-      expect(home.contains('restoreCompletedTick.removeListener'), isTrue,
+    // b3c9d4 (2026-09-02) — REPOINTED, not loosened or deleted. The listener
+    // MOVED out of home_screen into HiveTabScaffoldMixin so all four tab
+    // screens get it. While it lived in home_screen only Home refreshed after
+    // a background restore, so Profile and Edit Profile served a pre-restore
+    // profile map for the whole session (founder saw Home render the name
+    // while Profile showed 'User'). These assertions are STRONGER than the
+    // single one they replace: they pin the new home, that Home does not
+    // re-register it, and the specific provider whose omission caused the bug.
+    test('the shared tab mixin listens to the tick (added + removed) + '
+        'invalidateOnRetry', () {
+      expect(tabMixin.contains('restoreCompletedTick'), isTrue);
+      expect(tabMixin.contains('.addListener(_onRestoreCompleted)'), isTrue,
+          reason: 'registration belongs to the mixin so EVERY tab gets it — '
+              'a per-screen list is exactly what got forgotten');
+      expect(tabMixin.contains('.removeListener(_onRestoreCompleted)'), isTrue,
           reason: 'listener must be removed in dispose (no leak)');
-      expect(home.contains('invalidateOnRetry(ref)'), isTrue);
+      expect(tabMixin.contains('invalidateOnRetry(ref)'), isTrue);
+    });
+    test('home does NOT also register the tick (no double-invalidate)', () {
+      expect(home.contains('restoreCompletedTick.addListener'), isFalse,
+          reason: 'home inherits the mixin registration; re-adding it here '
+              'would invalidate every home provider twice per restore');
+    });
+    test('home refreshes userProfileProvider on the tick — THE omission', () {
+      expect(home.contains('ref.invalidate(userProfileProvider)'), isTrue,
+          reason: 'omitting it stranded Profile + Edit Profile on a '
+              'pre-restore profile map for the whole session (b3c9d4)');
     });
   });
 

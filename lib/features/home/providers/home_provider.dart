@@ -139,8 +139,12 @@ class UserGreetingNotifier extends Notifier<String> {
   @override
   String build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    final profile = UserRepository.instance.getProfile();
-    final name = profile?['full_name'] as String? ?? 'there';
+    // b3c9d4 — derive from the ONE Hive read (userProfileProvider)
+    // instead of a second independent one. Two providers reading the
+    // same key could hold different answers; Home rendered the name
+    // while Profile rendered 'User' for a whole session.
+    final profile = ref.watch(userProfileProvider);
+    final name = profile['full_name'] as String? ?? 'there';
     final firstName = name.split(' ').first;
     final hour = DateTime.now().hour;
 
@@ -186,8 +190,9 @@ class UserFirstNameNotifier extends Notifier<String> {
   @override
   String build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    final profile = UserRepository.instance.getProfile();
-    final rawName = profile?['full_name'] as String?;
+    // b3c9d4 — derived, not an independent Hive read. See above.
+    final profile = ref.watch(userProfileProvider);
+    final rawName = profile['full_name'] as String?;
     // APK Test #12.8 — probe for the founder's "Profile name USER"
     // observation. Fires when the canonical home-greeting reader sees
     // a null/empty/placeholder full_name despite an authenticated
@@ -196,9 +201,15 @@ class UserFirstNameNotifier extends Notifier<String> {
     if (rawName == null || rawName.trim().isEmpty || rawName == 'User') {
       unawaited(ErrorTelemetry.logEvent(
         'profile_full_name_empty_at_read',
+        // hasProfile reads profile.isNotEmpty because userProfileProvider maps
+        // an absent map to {} where getProfile() returned null. Equivalent to
+        // the old `!= null` ONLY because every writer stamps updated_at
+        // (profile_write_service.dart), so a present-but-empty map cannot
+        // occur. If that invariant ever changes, this probe's meaning changes
+        // with it (B-pass finding 6).
         message: 'reader=user_first_name '
             'rawName=${rawName ?? "<null>"} '
-            'hasProfile=${profile != null}',
+            'hasProfile=${profile.isNotEmpty}',
       ));
     }
     final name = rawName ?? 'User';
@@ -215,8 +226,9 @@ class UserInitialNotifier extends Notifier<String> {
   @override
   String build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    final profile = UserRepository.instance.getProfile();
-    final name = profile?['full_name'] as String? ?? 'U';
+    // b3c9d4 — derived, not an independent Hive read. See above.
+    final profile = ref.watch(userProfileProvider);
+    final name = profile['full_name'] as String? ?? 'U';
     return name.isNotEmpty ? name[0].toUpperCase() : 'U';
   }
 }

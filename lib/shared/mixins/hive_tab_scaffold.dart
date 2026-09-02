@@ -72,6 +72,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 /// Mixin for `ConsumerState<T>` tab screens that follow the
@@ -102,6 +103,21 @@ mixin HiveTabScaffoldMixin<T extends ConsumerStatefulWidget>
   /// the error state.
   void invalidateOnRetry(WidgetRef ref) {}
 
+  /// Providers to refresh when a BACKGROUND RESTORE completes — an event
+  /// with no user action behind it. Defaults to [invalidateOnRetry], which is
+  /// right for most tabs.
+  ///
+  /// Override when a provider is safe to invalidate on a USER-INITIATED retry
+  /// but NOT on an involuntary background event. B-pass finding 1 on b3c9d4:
+  /// Nutrition's retry set includes `aiBreakdownProvider`, and
+  /// `ai_mode_body.dart:41` treats its non-null -> null transition as "the user
+  /// committed or cancelled" and pops the Log Food sheet. That inference is
+  /// sound for a retry tap and FALSE for a restore tick, which would have
+  /// closed the sheet and discarded a just-generated AI analysis with no
+  /// explanation. Being safe for a user-tapped retry does not make a provider
+  /// safe for an automatic trigger; that is what this seam separates.
+  void invalidateOnBackgroundRestore(WidgetRef ref) => invalidateOnRetry(ref);
+
   /// First-mount hook. Runs inside the initial microtask, BEFORE the
   /// `isLoading = false` flip. Default no-op. Override for side effects
   /// (e.g. `_checkStreakFreezeUsed`, prediction poller, fire-and-forget
@@ -125,6 +141,29 @@ mixin HiveTabScaffoldMixin<T extends ConsumerStatefulWidget>
   @override
   void initState() {
     super.initState();
+    // b3c9d4 — every tab screen listens for the background restore
+    // completing. Until this lived here it was wired ONLY in
+    // home_screen.dart, so Home healed after a bg restore and Nutrition,
+    // Train and Profile served their pre-restore snapshot for the whole
+    // session (founder saw Home render the name while Profile showed
+    // 'User'). Registration belongs to the mixin, not to each screen:
+    // a per-screen list is a thing to remember, and the bug this fixes
+    // WAS a forgotten entry in exactly such a list.
+    //
+    // Deliberately ABOVE the _skeletonFirstFrameDisabled early-return —
+    // that kill-switch governs skeleton timing only, and a listener
+    // registered below it would silently not exist whenever the switch
+    // is engaged.
+    try {
+      SyncService.instance.restoreCompletedTick
+          .addListener(_onRestoreCompleted);
+    } catch (e, s) {
+      // A tab must never fail to mount because sync isn't initialised
+      // (widget tests pump these screens without SyncService).
+      debugPrint('[HiveTabScaffoldMixin] tick listen failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, s,
+          reason: 'hive_tab_scaffold_restore_tick_listen'));
+    }
     if (_skeletonFirstFrameDisabled) {
       // Pre-Unit-H behavior: flip only after initTab() fully resolves.
       Future.microtask(() async {
@@ -155,6 +194,31 @@ mixin HiveTabScaffoldMixin<T extends ConsumerStatefulWidget>
       unawaited(ErrorTelemetry.recordNonFatal(e, s,
           reason: 'hive_tab_scaffold_init_tab'));
     }));
+  }
+
+  /// b3c9d4 — a completed background restore rewrote Hive underneath a
+  /// screen that already built its providers. Refresh this tab's declared
+  /// provider set.
+  ///
+  /// Calls [invalidateOnRetry] directly rather than [retry] on purpose:
+  /// retry() cycles `isLoading`, which would flash a skeleton across every
+  /// mounted tab on a routine restore. Mirrors the shape home_screen's
+  /// bespoke `_onRestoreTick` used before it moved here.
+  void _onRestoreCompleted() {
+    if (!mounted) return;
+    invalidateOnBackgroundRestore(ref);
+  }
+
+  @override
+  void dispose() {
+    try {
+      SyncService.instance.restoreCompletedTick
+          .removeListener(_onRestoreCompleted);
+    } catch (_) {
+      // Symmetric with the guarded add above: if the listener was never
+      // registered there is nothing to remove.
+    }
+    super.dispose();
   }
 
   /// Re-fetch path for the screen's error-state retry button. Calls

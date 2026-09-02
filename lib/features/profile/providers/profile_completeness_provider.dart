@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
-import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 /// Tier 2 profile fields ordered by plan impact (highest first).
 const kTier2Fields = <({String key, String label, String benefit})>[
@@ -35,7 +35,15 @@ class ProfileCompletenessData {
 
 final profileCompletenessProvider = Provider<ProfileCompletenessData>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-  final profile = UserRepository.instance.getProfile() ?? {};
+  // b3c9d4 (round-1 review finding 1) — DERIVED from userProfileProvider, not
+  // a fourth independent Hive read. `full_name` is one of the 10 kTier1Fields
+  // above, each worth 6 points, so a profile map that has not yet merged the
+  // `users` row renders 94% instead of 100% — which is exactly what the
+  // founder's Profile screenshot showed. As a plain Provider this cached the
+  // pre-restore read for the whole session and sat in NO tab's
+  // invalidateOnRetry, so nothing could heal it. Watching the source fixes
+  // that without adding it to any hand-maintained list.
+  final profile = ref.watch(userProfileProvider);
 
   // Count Tier 1 filled
   int tier1Filled = 0;
