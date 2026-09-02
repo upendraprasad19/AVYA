@@ -23,6 +23,18 @@
 #                    review_rounds >= 2 + bpass: accepted; then true
 #   flip_commit:     sha of the flip-on commit (fill in when flip_reviewed
 #                    flips to true; null until then)
+#   flip_review_record: path to the plan-review record that EVIDENCES
+#                    flip_reviewed: true. Required on every `resolved:` entry.
+#
+# `flip_reviewed: false` is AMBIGUOUS and that is this file's own known defect:
+# it means both "this flip has had no x2 review" and "the review happened and
+# nobody came back to edit this line". The two read identically and the second
+# is indistinguishable from the first without opening docs/plan-reviews/ by
+# hand. On 2026-09-02 all five flipped flags were audited against their records
+# and every one had review_rounds >= 2 + bpass: accepted -- so BOTH remaining
+# `false` values were stale bookkeeping, not review debt, and a reader who
+# trusted the field would have reported two live-unreviewed flags that did not
+# exist. `flip_review_record:` exists so the claim carries its evidence.
 
 pending:
   - flag: enable_hold_weeks
@@ -150,82 +162,6 @@ pending:
     flip_reviewed: false
     flip_commit: null
 
-  - flag: enable_equipment_capability_floor
-    branch: oi89-bodyweight-floor
-    build_commit: null            # built and flipped in the SAME batch
-    build_date: 2026-08-28
-    merge_commit: null
-    flip_reviewed: true
-    flip_commit: pending          # this batch's commit; the ×2 record is
-                                  # docs/plan-reviews/oi89-bodyweight-floor.md
-    note: >
-      Built AND flipped in one batch, so it never sat dark. §4.12.4's lighter
-      ship-dark build review does NOT apply and was not claimed: this batch
-      carries the full ×2 plan review plus a B-pass, which is what §4.12.4 itself
-      requires of the flip-on commit.
-      WHY IT WAS NOT SHIPPED DARK: the same batch corrects the exercise library so
-      that Chin Up truthfully declares a pull-up bar. Leaving the floor dark would
-      have shipped a library that knows what its exercises need alongside a
-      generator that is not reading the field. Measured with the flag OFF against
-      the CORRECTED library, the bodyweight tier still carried 468 equipment
-      violations, because the attempt-5 universal pool bypasses queryV4 and picks
-      by NAME. The tier data and the capability check each close a hole the other
-      cannot reach; shipping one without the other closes neither.
-      Kill switch is now `disable_equipment_capability_floor` (default ON),
-      matching the five sibling default-ON flags in plan_engine_flags.dart.
-      ⚠ The flip's blast radius is NOT limited to bodyweight users, and the
-      measurement is what showed it: re-deriving equipment_tier from
-      equipment_needed removed 38 rows from `home_dumbbells` and 16 from
-      `basic_gym` as well. Those tiers' pools were being propped up by the same
-      over-tags. Result across all 606 personas: equipment-violating plans
-      201 → 0, missing picks 0, unsafe 0; total fallback picks 1184 → 2719, which
-      is the honest price of refusing exercises the user cannot do.
-
-  - flag: enable_equipment_exclusions
-    branch: workout-equipment-filter
-    build_commit: a8583f01
-    build_date: 2026-07-16
-    merge_commit: 95b9bd6e
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      FLIPPED ON 2026-08-05 on branch `deps-board-equipment`. The kill-switch key
-      changed from `enable_equipment_exclusions` to `disable_equipment_exclusions`
-      (default ON), matching the four sibling default-ON flags in
-      plan_engine_flags.dart. Flipped ahead of the other twelve OI-53 flags because
-      this one was not dormant: edit_profile_screen.dart:1686 already WROTE
-      `equipment_exclusions` and sync_profile.dart:200 already synced it, so the app
-      was collecting an equipment preference it then ignored — a live broken promise
-      rather than an unshipped feature.
-      ⚠ TWO behaviours ride this one flag, and the flip-on review must cover BOTH:
-      (1) the exclusion filter itself (plan_generator.dart:140-142), which only
-      affects users who set an exclusion; and (2) ⑥ C2's WU-2 gym-cardio gate
-      (plan_generator.dart:298-308), whose `hasGymOverride` stops being null — per
-      diagnose b7a4e2 the predicate it deferred to was ALWAYS FALSE on the generated
-      path, so gym-cardio warmup/finisher pools (Treadmill/Bike) now activate for
-      EVERY gym-tier user, including those with no exclusions. (2) is the wider half
-      of the blast radius.
-      `flip_reviewed` stays FALSE until the flip commit's plan-review record shows
-      review_rounds >= 2 + `bpass: accepted` (§4.12.4). Discriminating regression
-      test: test/contracts/equipment_exclusion_filter_behavioral_test.dart
-      "DEFAULT (no config key at all): exclusions are HONOURED — the flip", proven
-      to FAIL on pre-flip code by mutation (Actual: <true> — cables prescribed to a
-      cables-excluding user) and PASS after, with a kill-switch negative control.
-
-  - flag: enable_readiness
-    branch: workout-6-readiness
-    build_commit: 21d155f1
-    build_date: 2026-07-17
-    merge_commit: 7a9ba3c7
-    flip_reviewed: true
-    flip_commit: null
-    note: >
-      FLIP THIS ONE FIRST. Both enable_plateau_escalation and the
-      enable_triggered_deload evaluator self-gate on readinessEnabled, so
-      flipping either of those while this is OFF leaves them inert at best and
-      biased at worst. Its build also carried migration 105, so unlike the
-      others this flag has live cloud state behind it.
-
   - flag: enable_phase_arc
     branch: workout-7a-phase-arc
     build_commit: ea7a603e
@@ -233,17 +169,6 @@ pending:
     merge_commit: b14186fa
     flip_reviewed: false
     flip_commit: null
-
-  - flag: enable_triggered_deload
-    branch: workout-7b-deload
-    build_commit: 2c3ec370
-    build_date: 2026-07-17
-    merge_commit: bf2e352b
-    flip_reviewed: true
-    flip_commit: null
-    note: >
-      Depends on enable_readiness (see above). The deload cut is
-      non-invertible, which is why the build stashes the pre-cut week.
 
   - flag: enable_adherence_gate
     branch: workout-adherence-8a2int
@@ -267,7 +192,6 @@ pending:
       (volume_titration.dart:112-132) has no readiness gate at all; titration is
       inert ONLY because THIS flag short-circuits at :60 before it runs. Whoever
       flips this will immediately consume every readiness row accumulated since.
-
 
   - flag: enable_exercise_id_history
     branch: workout-idkey-variety-11
@@ -313,12 +237,105 @@ pending:
 # found by live verification or independent review on 2026-07-25 and every one
 # is currently UNFIXED. A holder today would be told a falsehood by the coach
 # and by the Sunday push.
+
+resolved:
+  - flag: enable_equipment_capability_floor
+    branch: oi89-bodyweight-floor
+    build_commit: null            # built and flipped in the SAME batch
+    build_date: 2026-08-28
+    merge_commit: null
+    flip_reviewed: true
+    flip_commit: a7c2d194
+    flip_review_record: docs/plan-reviews/oi89-bodyweight-floor.md
+    note: >
+      Built AND flipped in one batch, so it never sat dark. §4.12.4's lighter
+      ship-dark build review does NOT apply and was not claimed: this batch
+      carries the full ×2 plan review plus a B-pass, which is what §4.12.4 itself
+      requires of the flip-on commit.
+      WHY IT WAS NOT SHIPPED DARK: the same batch corrects the exercise library so
+      that Chin Up truthfully declares a pull-up bar. Leaving the floor dark would
+      have shipped a library that knows what its exercises need alongside a
+      generator that is not reading the field. Measured with the flag OFF against
+      the CORRECTED library, the bodyweight tier still carried 468 equipment
+      violations, because the attempt-5 universal pool bypasses queryV4 and picks
+      by NAME. The tier data and the capability check each close a hole the other
+      cannot reach; shipping one without the other closes neither.
+      Kill switch is now `disable_equipment_capability_floor` (default ON),
+      matching the five sibling default-ON flags in plan_engine_flags.dart.
+      ⚠ The flip's blast radius is NOT limited to bodyweight users, and the
+      measurement is what showed it: re-deriving equipment_tier from
+      equipment_needed removed 38 rows from `home_dumbbells` and 16 from
+      `basic_gym` as well. Those tiers' pools were being propped up by the same
+      over-tags. Result across all 606 personas: equipment-violating plans
+      201 → 0, missing picks 0, unsafe 0; total fallback picks 1184 → 2719, which
+      is the honest price of refusing exercises the user cannot do.
+
+  - flag: enable_equipment_exclusions
+    branch: workout-equipment-filter
+    build_commit: a8583f01
+    build_date: 2026-07-16
+    merge_commit: 95b9bd6e
+    flip_reviewed: true
+    flip_commit: e6a8a8ae
+    flip_review_record: docs/plan-reviews/deps-board-equipment.md
+    note: >
+      FLIPPED ON 2026-08-05 on branch `deps-board-equipment`. The kill-switch key
+      changed from `enable_equipment_exclusions` to `disable_equipment_exclusions`
+      (default ON), matching the four sibling default-ON flags in
+      plan_engine_flags.dart. Flipped ahead of the other twelve OI-53 flags because
+      this one was not dormant: edit_profile_screen.dart:1686 already WROTE
+      `equipment_exclusions` and sync_profile.dart:200 already synced it, so the app
+      was collecting an equipment preference it then ignored — a live broken promise
+      rather than an unshipped feature.
+      ⚠ TWO behaviours ride this one flag, and the flip-on review must cover BOTH:
+      (1) the exclusion filter itself (plan_generator.dart:140-142), which only
+      affects users who set an exclusion; and (2) ⑥ C2's WU-2 gym-cardio gate
+      (plan_generator.dart:298-308), whose `hasGymOverride` stops being null — per
+      diagnose b7a4e2 the predicate it deferred to was ALWAYS FALSE on the generated
+      path, so gym-cardio warmup/finisher pools (Treadmill/Bike) now activate for
+      EVERY gym-tier user, including those with no exclusions. (2) is the wider half
+      of the blast radius.
+      `flip_reviewed` stays FALSE until the flip commit's plan-review record shows
+      review_rounds >= 2 + `bpass: accepted` (§4.12.4). Discriminating regression
+      test: test/contracts/equipment_exclusion_filter_behavioral_test.dart
+      "DEFAULT (no config key at all): exclusions are HONOURED — the flip", proven
+      to FAIL on pre-flip code by mutation (Actual: <true> — cables prescribed to a
+      cables-excluding user) and PASS after, with a kill-switch negative control.
+
+  - flag: enable_readiness
+    branch: workout-6-readiness
+    build_commit: 21d155f1
+    build_date: 2026-07-17
+    merge_commit: 7a9ba3c7
+    flip_reviewed: true
+    flip_commit: 9e4c5681
+    flip_review_record: docs/plan-reviews/readiness-flip.md
+    note: >
+      FLIP THIS ONE FIRST. Both enable_plateau_escalation and the
+      enable_triggered_deload evaluator self-gate on readinessEnabled, so
+      flipping either of those while this is OFF leaves them inert at best and
+      biased at worst. Its build also carried migration 105, so unlike the
+      others this flag has live cloud state behind it.
+
+  - flag: enable_triggered_deload
+    branch: workout-7b-deload
+    build_commit: 2c3ec370
+    build_date: 2026-07-17
+    merge_commit: bf2e352b
+    flip_reviewed: true
+    flip_commit: 9e4c5681
+    flip_review_record: docs/plan-reviews/readiness-flip.md
+    note: >
+      Depends on enable_readiness (see above). The deload cut is
+      non-invertible, which is why the build stashes the pre-cut week.
+
   - flag: sync_reliability_v1
     branch: oi150-phase-merge
     build_commit: null
     build_date: 2026-04-17
-    flip_reviewed: false
-    flip_commit: pending
+    flip_reviewed: true
+    flip_commit: c2534257
+    flip_review_record: docs/plan-reviews/oi150-phase-merge.md
     note: >
       BUILT-AND-FLIPPED-BY-DIFFERENT-BATCHES, recorded retroactively. Shipped
       dark 2026-04-17 by docs/superpowers/specs/2026-04-17-sync-reliability.md
@@ -475,5 +492,3 @@ flip_on_blockers:
         with no size check and no FC7 untrusted-data wrapper (unlike ai-proxy);
         and ai-proxy's size-envelope comment cites the wrong line for its own
         10K check.
-
-resolved: []
