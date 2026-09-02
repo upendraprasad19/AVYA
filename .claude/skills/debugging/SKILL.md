@@ -955,3 +955,70 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
   on it here;
   `test/scripts/oi_closure_lib_test.dart`,
   `test/scripts/closes_oi_performed_e2e_test.dart`.
+
+### 2.58 N providers read ONE store independently; the invalidation list forgets one, so two screens visibly disagree about the same key (NEW 2026-09-02)
+
+- **Telltale:** two surfaces render the SAME underlying field differently in the
+  same session — Home shows "UPENDRA", the Profile tab shows "User", Edit
+  Profile is blank. Reading the code makes it look impossible: all three read
+  `userBox['profile']['full_name']`. **"One screen is right and another is
+  wrong about the same key" is not a read bug — it is a staleness bug**, and
+  the question to ask is not *what does each read* but *when did each last
+  read, and what made it re-read*.
+- **Root-cause shape:** an async hydration (cloud restore) lands AFTER first
+  paint. A returning user takes the background-restore branch
+  (`restoring_screen.dart` `_goHome`, `isReturning` true) and reaches /home
+  while the restore is still in flight, so every provider built in that window
+  caches a pre-hydration snapshot. Recovery is wired as a
+  **hand-maintained list of consumers to invalidate** — and the list omitted
+  `userProfileProvider`, which four screens depend on. Home listed the three
+  providers it renders, healed, and looked correct; everything reading the
+  omitted one served the pre-restore map for the rest of the session.
+- **Why it survives review:** the omission is invisible in the diff (nothing is
+  wrong with any line), invisible to the type system, and invisible to a
+  targeted test. It is only visible by asking "who else reads this?" — and an
+  enumeration from memory will miss one. Use a SEARCH: `grep -rn
+  "getProfile()" lib/`. This batch's author enumerated three readers, wrote
+  "nothing exposed is left unfixed", and had missed a fourth
+  (`profileCompletenessProvider`) that rendered a permanently wrong completeness
+  percentage on the same screen as the wrong name.
+- **Diagnostic that settles it in one query, when a probe exists:** compare the
+  probe's timestamp against the hydration's. Here `restore_started`
+  19:23:23.492 → probe `rawName=<null>` 19:23:27.267 → `restore_step_done`
+  19:23:31.194: **the read beat the restore by 3.8 s.** A symptom probe that
+  reports only "the value was absent" CANNOT distinguish "the fetch failed"
+  from "the read was early" — do not read it as evidence for either. Add the
+  discriminator (an in-flight flag / tick value) rather than reasoning about it.
+- **Fix pattern — shorten the list rather than lengthen it.** Make the derived
+  readers actually DERIVE from one source provider (`ref.watch(theSource)`), so
+  invalidating the source cascades and two screens cannot hold different
+  answers. Then register the recovery hook where the lifecycle already lives
+  (a shared mixin), not per-screen: a per-screen list is a thing to remember,
+  and a forgotten entry in such a list IS this bug.
+- ⚠ **The companion trap, and it bit this very fix (see also the code-review
+  skill's lens 6 "trigger provenance"):** moving that listener into the shared
+  mixin made every tab's existing invalidation set fire from a NEW trigger.
+  One of them (`aiBreakdownProvider`) has an observer that reads its
+  non-null→null transition as "the user committed or cancelled" and pops the
+  Log Food sheet — correct for a retry TAP, false for a background tick, which
+  would have discarded a just-generated AI analysis silently. **A provider set
+  assembled under "safe when the user taps retry" is not validated for "safe
+  when anything fires it."** Split the seam (`invalidateOnBackgroundRestore`
+  defaulting to `invalidateOnRetry`) instead of widening the set. Before
+  wiring an automatic trigger to an existing set, run `grep -rn "ref\.listen\b\|ref\.listenManual\b" lib/`
+  and ask of each hit: does this observer infer USER INTENT from a change?
+- ⚠ **A controller is not a provider.** A `TextEditingController` seeded once in
+  `initState` cannot heal when the provider later does; and if a validator
+  refuses the empty value (`_save()` here rejects a blank name), the user is
+  locked out of saving anything until they navigate away and back. Re-seed via
+  `ref.listenManual`, guarded by an explicit "user edited" flag — inferring
+  untouched from `text == seeded` cannot see a user who retyped the same string.
+- **Prior incidents:** diagnose `b3c9d4` (2026-09-02) — this one, fixed by
+  deriving 4 providers from `userProfileProvider` + moving the tick listener
+  into `HiveTabScaffoldMixin`. Predecessor `d4e9a2` (2026-08-30) misdiagnosed
+  the SAME symptom as a token/RLS retry failure and shipped a fix that was
+  deployed and never executed — its telemetry stayed silent for three days
+  because the live restore path (`path=singlecall`) bypasses the helper it
+  patched. **Absence of a new fix's telemetry is a signal, not silence.**
+  Tests `test/contracts/profile_provider_single_source_test.dart`,
+  `test/contracts/background_restore_test.dart`. SoT concept `user_full_name`.
