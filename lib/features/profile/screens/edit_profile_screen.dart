@@ -93,6 +93,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late String _originalPhysiqueFocus;
   late List<String> _originalInjuries;
 
+  /// b3c9d4 — what we last wrote into [_nameController] ourselves. Used to
+  /// tell an untouched field from one the user has edited.
+  String _seededName = '';
+
+  /// b3c9d4 (round-2 review finding 2) — set the moment the user actually
+  /// CHANGES the name text. Inferring "untouched" from `text == _seededName`
+  /// could not see a user who retypes the identical string, and would then
+  /// overwrite their deliberate re-entry. A controller listener also fires on
+  /// cursor/selection moves, so the listener compares text before flagging.
+  bool _userEditedName = false;
+
+  /// True only while THIS class writes _nameController.text, so our own heal
+  /// write is never mistaken for a user edit.
+  bool _applyingNameHeal = false;
+  ProviderSubscription<Map<String, dynamic>>? _nameHealSub;
+
   // Track original target weight for prediction invalidation (Bug #12)
   late double _originalTargetWeight;
 
@@ -131,6 +147,34 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
     _nameController =
         TextEditingController(text: fullNameAtRead ?? '');
+    // b3c9d4 (round-1 review finding 5) — a TextEditingController seeded once
+    // here does NOT react to userProfileProvider healing later. If the
+    // background restore lands while this screen is already open, the field
+    // stays blank for as long as it stays open — and _save() hard-refuses an
+    // empty name, so the user cannot save ANY profile edit until they
+    // navigate away and back. Re-seed when the name arrives, but ONLY while
+    // the field still holds exactly what we seeded: an in-progress edit is
+    // never clobbered.
+    _seededName = fullNameAtRead ?? '';
+    _nameController.addListener(() {
+      if (_applyingNameHeal) return;
+      if (_nameController.text == _seededName) return; // selection move only
+      _userEditedName = true;
+    });
+    _nameHealSub = ref.listenManual<Map<String, dynamic>>(
+      userProfileProvider,
+      (prev, next) {
+        if (!mounted) return;
+        final healed = next['full_name'] as String?;
+        if (healed == null || healed.trim().isEmpty) return;
+        if (_userEditedName) return; // a real edit — never clobber it
+        if (_nameController.text == healed) return;
+        _applyingNameHeal = true;
+        _seededName = healed;
+        _nameController.text = healed;
+        _applyingNameHeal = false;
+      },
+    );
 
     // Convert height/weight values to the user's preferred units for display.
     // Storage is always metric (cm, kg); we convert on the way in and out.
@@ -252,6 +296,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   void dispose() {
+    _nameHealSub?.close();
     _nameController.dispose();
     _heightController.dispose();
     _weightController.dispose();

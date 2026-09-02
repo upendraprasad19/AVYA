@@ -390,7 +390,7 @@ concepts:
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(date)]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 503-525
+        line_range: 518-531
         method: todayWorkoutProvider
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(DateTime.now())]
@@ -537,7 +537,7 @@ concepts:
           Reads pre-delete log entry to stash audit row in
           'recent_deletes' bucket; falls back to legacy 'calories' key.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 707-730
+        line_range: 740-782
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
@@ -881,7 +881,7 @@ concepts:
           razorpay_service.dart:540. Its build() MUST use proStateSnapshot(),
           never isPro() — pinned by subscription_cqrs_behavioral_test group E.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 500-502
+        line_range: 512-517
         method: subscriptionExpiryBannerProvider
         semantic: derived
         fields_read: [isPro, daysUntilExpiry, proLapsedAt]
@@ -1572,7 +1572,7 @@ concepts:
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 707-730
+        line_range: 740-782
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
@@ -2666,7 +2666,7 @@ concepts:
         semantic: flag-check
         fields_read: [status, completed_at]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 503-525
+        line_range: 518-531
         method: todayWorkoutProvider
         semantic: flag-check
         fields_read: [status, completed_at, exercises]
@@ -3334,7 +3334,7 @@ concepts:
         line_range: 202-227
         method: reckonStreakDecayAndPersist (D2 f9d2e7 — single gated consume site; rollover + completeWorkout; restoreCompletedTick + non-empty-schedule gated)
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 244-270
+        line_range: 273-309
         method: StreakFreezeNotifier._refillIfNewWeek
     reader_manifest_complete: true
     readers:
@@ -3786,16 +3786,43 @@ concepts:
           `return first;` replacing `return retried;` — the exact pre-fix
           defect) — closed with a dedicated assertion, verified to fail on
           that same mutation before being accepted.
+      - file: lib/features/profile/providers/profile_provider.dart
+        line_range: 37-42
+        method: UserProfileNotifier.build
+        semantic: pass-through
+        fields_read: [full_name]
+        notes: |
+          b3c9d4 — THE canonical Hive read for the profile map, and since
+          that fix the SINGLE source the three Home name providers below
+          derive from. Previously each of them ran its own
+          UserRepository.getProfile(), so Home and Profile could hold
+          DIFFERENT answers about full_name: a background restore landing
+          after first paint refreshed the name providers via
+          home_screen.invalidateOnRetry but not this one, so Profile and
+          Edit Profile served a pre-restore map for the whole session.
+          Invalidating THIS provider now refreshes every reader below it.
+      - file: lib/features/profile/providers/profile_completeness_provider.dart
+        line_range: 36-56
+        method: profileCompletenessProvider
+        semantic: display-only
+        fields_read: [full_name]
+        notes: |
+          b3c9d4 — DERIVED from userProfileProvider. full_name is one of the
+          10 kTier1Fields, tier 1 weighted 60%, so an unmerged name costs
+          exactly 6 points and renders 94% instead of 100%. Was a fourth
+          independent getProfile() read in no invalidateOnRetry list, so it
+          cached the pre-restore map for the whole session.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 131-150
+        line_range: 138-165
         method: UserGreetingNotifier.build (userGreetingProvider)
         semantic: display-only
         fields_read: [full_name]
         notes: |
           "Good morning, <FirstName>" greeting on Home. Splits on
-          first space; fallback "there".
+          first space; fallback "there". b3c9d4 — DERIVED from
+          userProfileProvider; does not read Hive itself.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 178-203
+        line_range: 189-215
         method: UserFirstNameNotifier.build (userFirstNameProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -3803,8 +3830,11 @@ concepts:
           Uppercased first-name for header display. Fires telemetry
           event profile_full_name_empty_at_read when name is null/empty/
           'User' placeholder — surfaces silent restore failures.
+          b3c9d4 — DERIVED from userProfileProvider; the probe's
+          hasProfile field reports profile.isNotEmpty (the source maps an
+          absent map to {}, where getProfile() returned null).
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 207-218
+        line_range: 219-231
         method: UserInitialNotifier.build (userInitialProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -4328,7 +4358,7 @@ concepts:
           Nightly walks of coachBox.values to extract facts +
           patterns into coaching_notes singleton + memory_embeddings.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 615-640
+        line_range: 648-718
         method: AiInsightNotifier._getLatestCoachTip
         semantic: latest
         fields_read: [ai_response, created_at]

@@ -190,6 +190,47 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-09-02 (b)** — blast-radius **platform** — branch `profile-stale-restore`
+  (diagnose b3c9d4, Profile tab serving a pre-restore profile map). **8 findings
+  (0 P0, 1 P1, 3 P2, 4 P3); 0 false_alarm — 7 fixed in-batch, 1 DECLINED with
+  evidence.** Review: `docs/reviews/d8f51f77c896-review.md` (that file also
+  carries the two context-blind plan-review rounds, 7 + 3 findings, same
+  0 false alarms).
+  **The result worth recording: the P1 was a regression the FIX ITSELF
+  introduced, and it was invisible from reading the diff.** The batch moved a
+  `restoreCompletedTick` listener into the shared tab mixin so all 4 tabs
+  refresh after a background restore. Correct in isolation — but Nutrition's
+  `invalidateOnRetry` includes `aiBreakdownProvider`, and
+  `ai_mode_body.dart:41` reads that provider's non-null→null transition as
+  "the user committed or cancelled" and pops the Log Food sheet. So a restore
+  completing while someone reviewed an AI food analysis would have closed the
+  sheet and discarded it, silently. The diff's own diagnose-doc asserted the
+  opposite in writing ("no provider is being invalidated that was not already
+  designed to be").
+  **Tuning made — lens 6 gains a TRIGGER-PROVENANCE question.** Its existing
+  method asks for the mirror case, the ordering, and the caller. Add: **when a
+  change causes an existing call to fire from a NEW trigger, re-audit that
+  call's whole target set against the new trigger's provenance.** "Safe when a
+  user taps retry" and "safe when a background event fires" are different
+  claims, and a set assembled under the first is not validated for the second.
+  The tell is a diff that changes WHO calls something rather than WHAT it does
+  — the call site looks untouched, so it reads as out of scope.
+  **Second tuning — lens 3 (stale_or_wrong_citation) earns a mechanical note.**
+  Two of the three P2s were citation errors, and one was inherited: the doc
+  copied `sync_profile.dart:648` forward from the PRIOR diagnose-doc for the
+  same concept without re-deriving it (the real line is 764). A citation
+  copied from another document is not a verified citation. Cheap rule: any
+  file:line lifted from an existing doc gets re-grepped, because the file it
+  points into has moved since that doc was written — by definition, or the doc
+  would not be old enough to copy from.
+  ⚠ Process note worth keeping: the DECLINED finding (remove Home's now-
+  "redundant" Train-provider invalidation) was refuted by checking
+  `app_router.dart:359` — `StatefulShellRoute.indexedStack` with no `preload`,
+  so an unvisited Train tab has no State and no listener, making those lines
+  load-bearing. A reviewer's "this is now redundant" is a hypothesis about
+  runtime lifetime, and lifetime is exactly what static reading cannot see.
+  False-alarm rate 0/8 → no change to lenses 1-5, 7, 8.
+
 - **2026-09-02** — blast-radius **platform** — branch `readiness-flip` @ `9e4c5681`
   (OI-53 flags 1+2: readiness + triggered deload flipped live, Health Connect
   sleep). **5 findings (0 P0, 1 P1, 2 P2, 2 P3); 0 false_alarm.** All fixed

@@ -46,6 +46,20 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
     ref.invalidate(weeklyNutritionProvider);
   }
 
+  // b3c9d4 / B-pass finding 1 — the background-restore tick fires with NO
+  // user action behind it, so it must NOT invalidate aiBreakdownProvider:
+  // ai_mode_body.dart:41 reads that provider's non-null -> null transition
+  // as "the user committed or cancelled" and pops the Log Food sheet. On a
+  // retry TAP that inference is correct; on a restore tick it would close
+  // the sheet and throw away a just-generated AI analysis silently.
+  // Everything else in the retry set is a plain re-read and stays.
+  @override
+  void invalidateOnBackgroundRestore(WidgetRef ref) {
+    ref.invalidate(dailyNutritionProvider);
+    ref.invalidate(macroTargetsProvider);
+    ref.invalidate(weeklyNutritionProvider);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

@@ -68,16 +68,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Obs 4 (2026-06-05): when a background restore + heals complete, refresh
     // the home cards from the now-updated Hive (offline-first background-restore
     // — the user reached home before the cloud restore finished).
-    SyncService.instance.restoreCompletedTick.addListener(_onRestoreTick);
-  }
-
-  void _onRestoreTick() {
-    if (mounted) invalidateOnRetry(ref);
+    //
+    // b3c9d4 — that listener MOVED to HiveTabScaffoldMixin. Home's behaviour
+    // is unchanged; Nutrition, Train and Profile now get it too, which they
+    // never did while it was wired here. Do not re-add it locally: it would
+    // double-invalidate.
   }
 
   @override
   void dispose() {
-    SyncService.instance.restoreCompletedTick.removeListener(_onRestoreTick);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -139,6 +138,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void invalidateOnRetry(WidgetRef ref) {
+    // b3c9d4 — THE omission. This list had 14 entries and not this one,
+    // so a completed background restore refreshed Home's name but left
+    // userProfileProvider holding its pre-restore map for the rest of the
+    // session: Profile rendered 'User', Edit Profile rendered blank, and
+    // Home's own avatar_url stayed stale. The three name providers now
+    // DERIVE from this one, so this single line refreshes all of them.
+    ref.invalidate(userProfileProvider);
     ref.invalidate(userFirstNameProvider);
     ref.invalidate(userInitialProvider);
     ref.invalidate(streakProvider);
@@ -147,6 +153,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.invalidate(todayWorkoutProvider);
     // Train-tab plan providers too, so a bg-restore heal reaches the Train
     // screen (review P2 2026-06-06).
+    //
+    // b3c9d4 — B-pass finding 7 proposed removing these as redundant now that
+    // Train has its own mixin-registered tick listener. DECLINED, verified:
+    // app_router.dart:359 uses StatefulShellRoute.indexedStack with NO
+    // preload, so a branch is not built until first visited. A user who has
+    // never opened the Train tab has no Train State and therefore no listener,
+    // and these two lines are the only thing refreshing its plan providers.
+    // Redundant ONLY once Train has been visited; load-bearing before that.
     ref.invalidate(currentPlanProvider);
     ref.invalidate(selectedWeekProvider);
     ref.invalidate(nutritionSummaryProvider);

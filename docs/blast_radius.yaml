@@ -291,6 +291,19 @@ paths:
   # exactly this one file (verified by ls) — a directory glob would silently
   # promote whatever lands there next, which is a claim this rule cannot make.
   - { glob: "lib/shared/services/pro_phase_advance.dart", tier: account }
+  # b3c9d4 (2026-09-02), same one-file argument as the rule above.
+  # hive_tab_scaffold.dart is mixed into 4 of the 5 tab screens (Home,
+  # Train, Nutrition, Profile — verified by grep; AI Coach is the documented
+  # exception) and owns their initState/dispose plus the restore-completed
+  # refresh every one of them depends on. It sits under lib/shared/**, which
+  # is feature-tier at the bottom of this file, so a diff touching ONLY it
+  # would clear zero review gate while changing lifecycle for every tab in
+  # the app. That is exactly what this batch's diff did before this pin.
+  # Scoped to the file rather than lib/shared/mixins/** because that
+  # directory currently holds exactly this one file (verified by ls) — a
+  # directory glob would silently promote whatever lands there next, which
+  # is a claim this rule cannot make.
+  - { glob: "lib/shared/mixins/hive_tab_scaffold.dart", tier: account }
 
   # ----- feature (explicit overrides over default) -----
   - { glob: "lib/features/profile/**", tier: feature }

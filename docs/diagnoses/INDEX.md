@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### user_full_name (2 bugs)
+- 2026-09-02 b3c9d4 — Founder observed (web, app.icanbefitter.com, signed-in returning session): the Home header rendered "UPENDRA" while the Profile tab rendered "User" and Edit Profile's Full Name field was BLANK — same…
+- 2026-08-30 d4e9a2 — Founder (upendraprasad19@gmail.com) signed in via a fresh private/incognito browser tab (web, so genuinely empty local Hive — the same shape as a fresh install). Edit Profile's "Full Name" field…
+
 ### readiness_daily (1 bugs)
 - 2026-09-02 4c1e7a — Tapping "Sync your sleep for a sharper read." in the pre-workout readiness sheet showed the user the full native Health Connect STEPS + WEIGHT consent dialog -- data they did not ask to share -- and,…
 
@@ -22,9 +26,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### git_hook_env_leak (2 bugs)
 - 2026-08-30 d81f3c — `test/contracts/git_safety_hook_integration_test.dart` fails 3 deny assertions ("raw git commit is denied", "raw git push is denied", "--no-verify is denied") whenever the operator has…
 - 2026-08-13 4f2a9e — The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across…
-
-### user_full_name (1 bugs)
-- 2026-08-30 d4e9a2 — Founder (upendraprasad19@gmail.com) signed in via a fresh private/incognito browser tab (web, so genuinely empty local Hive — the same shape as a fresh install). Edit Profile's "Full Name" field…
 
 ### phase_progress_current_phase (3 bugs)
 - 2026-08-30 321062 — A phase advance writes four fields to Hive as one atomic delta, then pushes fire-and-forget. If the push has not landed before the next launch — the app closed after a workout, a network blip,…
@@ -1103,6 +1104,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-02 | b3c9d4 | Founder observed (web, app.icanbefitter.com, signed-in returning session): the Home header rendered "UPENDRA" while the Profile tab rendered "User" and Edit Profile's Full Name field was BLANK — same… | user_full_name | test/contracts/profile_provider_single_source_test.dart |
 | 2026-09-02 | 4c1e7a | Tapping "Sync your sleep for a sharper read." in the pre-workout readiness sheet showed the user the full native Health Connect STEPS + WEIGHT consent dialog -- data they did not ask to share -- and,… | readiness_daily | test/contracts/readiness_sheet_states_test.dart |
 | 2026-08-30 | e2c481 | Two OIs a commit declared closed via `closes-oi:` were NOT closed on the board. OI-150 (commit `c2534257`): the fix shipped, merged, went 7/7 CI green; the board write was simply never done, and an… | closes_oi_citation_unverified | test/scripts/oi_closure_lib_test.dart, test/scripts/closes_oi_performed_e2e_test.dart |
 | 2026-08-30 | d7f3b1 | `check_context_artifact_budget.dart` — a gate whose entire job is to notice when a context artifact changes size — reported `PASS: 3 within band` for a `CLAUDE.md` truncated to ZERO BYTES. Every… | context_artifact_budget | test/scripts/context_budget_lib_test.dart |
