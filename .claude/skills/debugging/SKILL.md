@@ -1022,3 +1022,72 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
   patched. **Absence of a new fix's telemetry is a signal, not silence.**
   Tests `test/contracts/profile_provider_single_source_test.dart`,
   `test/contracts/background_restore_test.dart`. SoT concept `user_full_name`.
+
+### 2.59 A gating read discards its `error`, so the FAILURE path grants access instead of denying it (NEW 2026-09-03)
+
+- **Telltale:** a paid-feature gate that "works" in every test and every manual
+  check, because every test and every manual check has a HEALTHY database. The
+  defect only appears when a query fails — and when it does, the user gets
+  MORE access, not less. Symptom in the wild is usually a cost anomaly or a
+  free user holding a PRO artifact, never an error report, because the grant
+  path is silent by construction.
+- **Root-cause shape:** `const { count } = await supabase…` with no `error`
+  binding. supabase-js **RESOLVES** on a PostgREST failure (it does not reject
+  — `feedback_postgrest_builder_no_catch.md`), so `count` is `null`, and a
+  downstream `(count ?? 0) === 0` reads that null as "zero rows so far", which
+  is exactly the permissive branch. The outer `try/catch` cannot see it either.
+  Real instance (`e4d1b7`): `isFirstReport` went TRUE on a failed count, the
+  `!hasPro && !isFirstReport` gate did not fire, and a FREE user received an
+  unbounded Gemini 2.5 **Pro** report.
+- **The mirror question, which is where these are actually found:** the guard
+  is usually ALREADY PRESENT on a sibling query in the same function. In
+  `e4d1b7` the subscription query eleven lines above destructured
+  `error: subError` and used it. **Grep the enclosing function for the other
+  `await`s before concluding the author did not know the pattern** — they did;
+  they applied it to one of two reads.
+- **Second half, and it is the half that gets missed:** find the read's
+  **WRITER** too. If the writer's result is also discarded, a silent insert
+  failure pins the counter at its permissive value FOREVER, so fixing the
+  reader alone leaves the gate open. Same instance: the sole
+  `channel='weekly_report'` insert discarded its result.
+- **Fix shape:** destructure `error`; on error take the DENYING branch; log
+  with an identifier so the denial is attributable. State the compound case in
+  the diagnose-doc — if BOTH reads fail, a legitimate paying user is now
+  denied, which is the correct trade but is a real cost and must be written
+  down rather than discovered later.
+- **Where else to look:** `grep -rn "const { count" supabase/functions/ | grep -v error`
+  and the same for `{ data }`. Tracked as OI-157's neighbourhood; the wider
+  rate-limit matrix (lens L29) is the systematic version of this question.
+- **Regression test:** `test/contracts/weekly_report_pro_gate_writer_to_reader_test.dart`
+  (pins the fail-closed ternary AND the writer's destructure).
+
+### 2.60 A validator SKIPS its real check when a field is unparseable, and reports PASS (NEW 2026-09-03)
+
+- **Telltale:** a citation, path, or symbol is flat wrong, and a gate that
+  exists precisely to verify that field ran over it and said **PASS**. Reading
+  the gate's source shows nothing broken — because nothing IS broken; the
+  value simply never entered the branch that checks anything.
+- **Root-cause shape:** the validator has a "skip what I cannot parse" arm.
+  `check_sot_registry_parity.dart` verifies a `method:` field ONLY when it
+  parses as a bare identifier or dotted path; anything else is treated as
+  prose and the symbol check is **silently skipped**, leaving only
+  file-exists + line-in-range. Real instance (B-pass `db5584050b6b` Finding 1):
+  a `writers:` entry cited `migrations/052:82-85` — a **comment block**, in a
+  file containing no `INSERT` at all — and passed, because
+  `"subscriptions table — payment path inserts rows"` is prose. Both legs the
+  gate DID check were trivially true of a comment.
+- **Why it survives review:** the field looks checked. A reviewer sees a gate
+  named for exactly this, sees it green, and moves on. The PASS from "verified"
+  and the PASS from "skipped" are byte-identical.
+- **How to detect:** for any citation living in a gated field, ask **"could
+  this gate's PARSER read this value?"** — not "did the gate pass". Cheap test:
+  put a deliberately absurd value in the same field shape and see whether the
+  gate notices. If it still passes, the field is unchecked in practice.
+- **Sibling instances in this repo, same shape:** Gate 33's allowlist maps a
+  filename to a free-text reason nobody parses, which is how six gates ended up
+  wired into no runner at all (OI-155); and OI-100's `prior_art_checked:` must
+  reference a verified artifact rather than free text.
+- **Fix shape (for the citation, not the gate):** name the real writers by
+  `file:line` per §4.1 and re-grep them. Fixing the GATE — making an
+  unparseable value a FAILURE rather than a skip — is a separate, wider change
+  with its own blast radius; file it rather than bundling it.
