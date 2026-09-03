@@ -82,14 +82,37 @@ serve(async (req: Request) => {
       .limit(1)
       .maybeSingle();
 
-    // Allow first free report (check if user has ever generated one)
-    const { count: previousReportCount } = await supabase
-      .from("ai_coach_interactions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", targetUserId)
-      .eq("channel", "weekly_report");
+    // Allow first free report (check if user has ever generated one).
+    //
+    // audit-2026-09-02 CODE-8 — FAIL CLOSED on a query error. `count` is null
+    // when the query fails, and `(null ?? 0) === 0` made isFirstReport TRUE, so
+    // any transient PostgREST failure granted an unbounded Gemini 2.5 Pro
+    // report to a free user. The sibling subscription query above already
+    // destructures its error (`subError`); this one did not — same function,
+    // mirror not applied. Related: c8f229 (verify-payment fail-open guard).
+    const { count: previousReportCount, error: previousReportError } =
+      await supabase
+        .from("ai_coach_interactions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", targetUserId)
+        .eq("channel", "weekly_report");
 
-    const isFirstReport = (previousReportCount ?? 0) === 0;
+    if (previousReportError) {
+      console.error(
+        `[weekly-report] previous-report count failed for user=${targetUserId}` +
+          ` — failing closed (treating as NOT first report):`,
+        previousReportError.message,
+      );
+    }
+
+    // A failed count DENIES rather than grants. Compound case, stated because
+    // it is a real cost: if the subscription query ALSO failed, a genuine PRO
+    // user gets 403 NOT_PRO. That is the intended trade — a denied report is
+    // recoverable, an unbounded Gemini 2.5 Pro call is not — and the log above
+    // is what makes such a 403 attributable rather than mysterious.
+    const isFirstReport = previousReportError
+      ? false
+      : (previousReportCount ?? 0) === 0;
     const hasPro = subscription && !subError;
 
     if (!hasPro && !isFirstReport) {
@@ -556,16 +579,32 @@ ${Object.entries(dailyTotals)
       .limit(1)
       .maybeSingle();
 
-    await supabase.from("ai_coach_interactions").insert({
-      user_id: targetUserId,
-      snapshot_id: snapshotData?.id ?? null,
-      channel: "weekly_report",
-      user_message: `Weekly report request for ${sevenDaysAgoStr} to ${todayStr}`,
-      ai_response: JSON.stringify(report),
-      model_used: modelUsed ?? PRO_MODEL_LABEL,
-      tokens_used: tokensUsed,
-      created_at: new Date().toISOString(),
-    });
+    // audit-2026-09-02 CODE-8 (writer half) — this insert is the SOLE writer
+    // for the `previousReportCount` reader above. Its result was discarded, so
+    // a silent failure here keeps the count at 0 forever and leaves the
+    // first-free-report gate permanently open. supabase-js RESOLVES (never
+    // rejects) on a PostgREST error, so the outer catch cannot see it either.
+    const { error: reportLogError } = await supabase
+      .from("ai_coach_interactions")
+      .insert({
+        user_id: targetUserId,
+        snapshot_id: snapshotData?.id ?? null,
+        channel: "weekly_report",
+        user_message:
+          `Weekly report request for ${sevenDaysAgoStr} to ${todayStr}`,
+        ai_response: JSON.stringify(report),
+        model_used: modelUsed ?? PRO_MODEL_LABEL,
+        tokens_used: tokensUsed,
+        created_at: new Date().toISOString(),
+      });
+
+    if (reportLogError) {
+      console.error(
+        `[weekly-report] report-log insert FAILED for user=${targetUserId}` +
+          ` — the first-free-report gate stays open until this is fixed:`,
+        reportLogError.message,
+      );
+    }
 
     // ── Return structured report ───────────────────────────────
     return jsonResponse({

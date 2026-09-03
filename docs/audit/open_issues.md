@@ -2650,3 +2650,276 @@ be derived from the sync that just ran (one round-trip), not to drop it.
 change.
 
 **Related:** diagnose `c4f8d2` (SyncCoalescer), `e7c1a9` (pushSnapshot debounce), OI-150.
+
+---
+
+## OI-153 — PRO media caps read a `channel` value nothing writes (P1)
+
+- **Status**: OPEN
+- **Blocked on**: enumerate every `channel` reader first
+- **Verified**: 2026-09-03 — source + live prod
+- **What**: tech-debt audit 2026-09-02 findings CODE-1, CODE-2, CODE-3, CODE-4 (Slice B). The PRO
+  50/day image cap counts `channel IN ('pro_image_analysis','image_analysis')`
+  (`ai-media-proxy/index.ts:98`) but the only insert writes `'free_image_analysis'` or `'app'`
+  (`:663-666`). `pro_image_analysis` appears **once** in the repo — that read. Live prod
+  `ai_coach_interactions` holds **0** rows on either counted channel, so the cap has never fired.
+  CODE-2: PRO+video matches neither `:433` (`isVideo && !isPro`) nor `:504` (`!isVideo && isPro`) —
+  the most expensive request type is uncapped.
+- **Why it is not a one-line fix**: stamping `pro_image_analysis` drops those rows out of two
+  allowlists outside `supabase/functions/` — `coach_interaction_repository.dart:282`
+  (`_coachChatChannels`, filters the coach's replayed history) and
+  `migrations/120_...sql:125` (`founder_metrics_engagement()`, live). Three review passes each
+  found readers the previous one missed, so **the enumeration must be run to empty before design**.
+  Changing the read to count `'app'` is REJECTED — `'app'` is shared with ai-proxy text chat.
+- **Also**: CODE-1/CODE-2 share one ternary at `:663-665`; `"image_analysis"` is a second dead
+  channel with no disposition; updating `founder_metrics_engagement()` needs a migration that may
+  collide with the in-flight backend-CPU-starvation batch (migration 120).
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §11 Slice B.
+
+## OI-154 — a cleared profile field silently reverts on the next sign-in (P1)
+
+- **Status**: OPEN
+- **Blocked on**: needs a design spec (tombstone + migration)
+- **Verified**: 2026-09-03 — source, full chain traced
+- **What**: audit finding ARCH-1 (Slice C). `_hasValue` returns false for `''`
+  (`sync_service.dart:2366-2370`), so `sync_profile.dart:230` omits a cleared field from the upsert
+  entirely; the cloud keeps its old value; restore at `:766-767`
+  (`for (final e in cloud.entries) if (e.value != null)`) re-hydrates it; and
+  `restoreLightweightAlways` runs on **every sign-in** (`sync_service.dart:1326`) — not just reinstall.
+- **Blast radius — 33 fields, not 6**: `_hasValue(p[` ×**20** plus `_hasNumber(p[` ×**13**
+  (`_hasNumber` at `sync_service.dart:2374-2378` shares the absent/cleared conflation). Two audit
+  passes reported 6 then 20; both were too narrow.
+- **Two designs already REFUTED — do not re-propose**: (1) "make a server-side null authoritative"
+  causes DATA LOSS — `sync_profile.dart:755-757` documents that cloud nulls deliberately do not wipe
+  Hive, to preserve local-only edits not yet synced. (2) a per-field sentinel is inexpressible —
+  the guarded set spans `date`, `numeric` and `text[]`, and for arrays `[]` already means
+  "not answered" (`:216-221`). Only a tombstone (new column + migration + restore-side subtraction)
+  survives.
+- **Must exclude** `equipment_owned` (`:223`) — its omission is deliberate. **Must converge with**
+  diagnose `c3f2d8`, which fixed this for `body_fat_percent` — itself a `_hasNumber` field (`:233`).
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §11 Slice C.
+
+## OI-155 — six gates are wired to no runner, and Gate 33 cannot detect it (P1)
+
+- **Status**: OPEN
+- **Blocked on**: re-enumerate the skip block mechanically
+- **Verified**: 2026-09-03 — greps with positive control
+- **What**: audit findings INFRA-2, INFRA-11 (Slice D). `check_gate_scripts_wired.dart` allow-lists
+  gates with a free-text reason such as *"runs in /build-apk skill Gate 14b"*. For six of them
+  `.claude/commands/build-apk.md` contains **0** occurrences (control: `check_apk_size_within_bounds`
+  → 1), while their only occurrences in `pre-commit.sh:327-341` and `test.yml:236-249` are **skip
+  entries**. They execute nowhere. Two are security-relevant
+  (`check_two_user_cross_account`, `check_onconflict_live_arbiter`).
+- **The audit said five; it is six** — `check_test_runtime_budget.dart` (`pre-commit.sh:338`,
+  `test.yml:248`, 0 in `build-apk.md`) has the identical shape. Re-derive with `comm` rather than
+  copying a number.
+- **INFRA-11 is the mechanism, not a duplicate**: the allowlist reason is prose nobody parses. Fixing
+  the six entries without machine-checking the allowlist leaves the class open.
+- **Landing hazard**: a hard-fail INFRA-11 landing before INFRA-2 blocks every commit repo-wide.
+  Land together, or warn-only first (§4.11 point 2). `check_test_runtime_budget` may need an explicit
+  `runner: manual` state since it can name no runner file.
+- **Un-dormanting these surfaces pre-existing violations** their allowlist already names
+  ("1 unapplied migration", "3 schema-arbiter conflicts", "1 missing test"). ⚠ The
+  snapshot-contract one is **stale** — that gate now passes ("57 keys checked").
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §11 Slice D.
+
+## OI-156 — CLAUDE.md numeric claims drift because nothing re-derives them (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — mechanical
+- **Verified**: 2026-09-03 — each count re-measured
+- **What**: audit findings DOC-1..DOC-9, DOC-15..DOC-19, INFRA-3, INFRA-7, TEST-8 (Slice E).
+  Measured vs claimed: gates **95** not 90 (`pre-commit.sh` says 89 — three surfaces, three numbers);
+  live tables **50** not 47 (`CLAUDE.md:224`, `:819`, `database.md:12`), with `alerts`,
+  `readiness_daily`, `admin_metrics_daily` documented nowhere; GATE_INDEX **49 of 96** not "49 of 87";
+  `presence_only:` **10** not 6; `docs/reviews/` **87 of 177** not "81 of 164"; committed
+  `feedback_*.md` **1** not two; nested `lib/**/CLAUDE.md` **12** vs §7's 10.
+- **The control that proves the mechanism**: every GATED numeric held
+  (`check_context_artifact_budget` → PASS, 3 within band); nearly every UNGATED one drifted.
+- **Fix is a gate, not a sweep**: `check_claude_md_numeric_claims.dart` re-deriving each count from
+  its source of truth. ⚠ Two exclusions: the live table count cannot be gated (a pre-commit gate must
+  not need DB access), and DOC-15/16/17 are **not** count drift — they are dangling method names
+  (`logSteps`/`logMood`/`logEnergy`: 0 hits repo-wide), dangling `test/contracts/` paths (3 missing),
+  and a dangling file path (`profile_screen.dart` does not exist). Those need path/symbol resolution,
+  which Gate 26 (§N headings only) does not do.
+- **DOC-18 is an invariant edit**: rule 14 protects `plan_generator.dart`, now a **5-line re-export
+  shim** — repoint it at `plan_engine/plan_generator.dart`.
+- **INFRA-7**: the 14 non-root `CLAUDE.md` (207 KB) are auto-loaded agent context and sit outside
+  `backups/context_artifact_sizes.json`, which tracks 3 files.
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §11 Slice E.
+
+## OI-157 — no SAST and no SCA run anywhere in CI (P1)
+
+- **Status**: OPEN
+- **Blocked on**: founder call on Semgrep scope
+- **Verified**: 2026-09-03 — grep, 0 hits
+- **What**: audit findings INFRA-1 / DEP-5 (the founder-seeded item) + DEP-9.
+  `grep -rniE "semgrep|opengrep|codeql|trivy|gitleaks|snyk|osv-scanner|npm audit|pub audit"
+  .github/ scripts/` → **0**. `.github/workflows/` holds one file; its 7 jobs are analyze, unit-test,
+  deno-edge-functions, audit-gates, plan-review-record, supabase-tests, build-check.
+  `deno check` type-checks but applies no security rules. The ~95 `check_*.dart` gates encode KNOWN
+  bug classes, so they are structurally blind to unknown ones.
+- **SCA is the wider, unseeded half**: `dependabot.yml` covers `pub` (:13) and `github-actions` (:51)
+  only — no npm, no Deno, across ~110 server-side remote imports.
+- **Scope recommendation**: Semgrep (Apache-2.0; Opengrep only matters for the paywalled ruleset)
+  scoped to `supabase/functions/` — Dart support is thin and `lib/` already has ~95 bespoke gates
+  plus `flutter analyze`. **Coupled to DEP-9**: `deno.lock` is gitignored (`.gitignore:140`), so 105
+  integrity hashes exist on one machine only; URL pins fix the version, never the bytes. Commit the
+  lockfile first, then scanning has something to scan.
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §6.
+
+## OI-158 — tests and gates that cannot fail (P2)
+
+- **Status**: OPEN
+- **Blocked on**: TEST-1 needs one device run to establish truth
+- **Verified**: 2026-09-03 — source-verified
+- **What**: audit findings TEST-1..TEST-7, TEST-9..TEST-13, ARCH-6, CODE-14.
+  **TEST-2**: `test('SKIPPED: …', () {});` then `return` renders as a **PASS** in 5 live-cloud files —
+  a credential-less run is indistinguishable from success. The sibling `redeem_referral_test.dart:157`
+  already diagnoses and fixes this; the lesson reached 1 of 6 files.
+  **TEST-3**: `subprocess_test_timeouts_declared_test.dart` asserts `hasLength(3)` on its guarded
+  set, so **adding a 4th guarded file fails the test**; `sot_registry_citations_test.dart` spawns 2
+  subprocesses with no `@Timeout`. **TEST-4**: `dart_test.yaml` still has no repo-wide `timeout:` —
+  the self-documented better fix, still undone; do BOTH (a repo-wide timeout raises the floor for
+  genuinely hung tests). **TEST-1**: ~129 non-skipped `integration_test/` tests are run by nothing
+  (`pre-push.sh:141` and `test.yml:112` are both `flutter test test/`); they may not even compile.
+  **INFRA-4/TEST-5**: Gate 42 `exit(0)`s if `sot_registry.yaml` is absent and never resolves a
+  `behavioral_test_path:` to disk. **ARCH-6**: Gate 46 claims to catch an 8th leak-prone singleton
+  against a hardcoded const of 7. **CODE-14**: Gate 20 advisory 3.5 months, live **81+** findings,
+  and its tracker OI-44 is CLOSED and about a different topic.
+- **blocked_on_user**: TEST-12 — all 4 Patrol device flows are `skip: true` and Gate 54 stays green;
+  needs a founder run on the Pixel before the gate means anything.
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §4.
+
+## OI-159 — sync and Edge Function correctness residue (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — but see OI-154 for the ARCH-1 half
+- **Verified**: 2026-09-03 — source-verified
+- **What**: audit findings ARCH-2..ARCH-5, ARCH-7..ARCH-10, CODE-5, CODE-9, CODE-10, CODE-11, CODE-12.
+  **ARCH-2**: `sync_queue.dart:8-12` documents 4 drain triggers; `connectivity_plus` is **not a
+  dependency** (`grep -c connectivity pubspec.yaml` → 0) and no periodic timer exists — a transient
+  failure waits for a cold launch or a manual tap. **ARCH-3**: `_backoffSeconds` has 7 entries but
+  `_isDue` clamps to `retryCount-1` while dead-lettering at `>= 7`, so the 24h step is
+  **unreachable** — real budget ≈ **2h35m**, not ~26h; and the test cited at `:102` to pin it
+  (`sync_queue_retry_budget_consistency_test.dart`) **does not exist** — repo-wide grep returns only
+  the citation. **ARCH-4**: `_executeUserProfileUpsert` (`sync_service.dart:745-757`) lacks the
+  cross-account guard both siblings carry (`:689-693`, `:724-728`). **CODE-10**: a weekly-recalc run
+  where 49% of users failed writes `success` to `cron_call_log`, so the health alert can never see it.
+  **CODE-11**: an unchecked read feeds a spread-merge that can replace a day's `snapshot_json` with
+  three keys. **CODE-5**: fire-and-forget embedding write; `EdgeRuntime.waitUntil` appears **nowhere**
+  in the tree. **CODE-9**: IST date concatenated with a `Z` suffix — 5h30m window drift.
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §5.
+
+## OI-160 — dependency + build-toolchain hygiene (P2)
+
+- **Status**: OPEN
+- **Blocked on**: DEP-7 needs a founder unpin decision
+- **Verified**: 2026-09-03 — versions read from files
+- **What**: audit findings DEP-1, DEP-2, DEP-3, DEP-4, DEP-6, DEP-8, DEP-11, DEP-13, CODE-13.
+  **DEP-8**: CI builds the APK on **JDK 17** (`test.yml:494`) while the machine and CLAUDE.md require
+  **JDK 21** (`openjdk 21.0.12.1`) — CI cannot catch a JDK-21-only Gradle failure.
+  **DEP-2/DEP-3**: `@supabase/supabase-js` at 3 versions (37× 2.39.3, 1× 2.42.0, 2× 2.45.4) and
+  `deno.land/std` at 3 (9× 0.177.0, 3× 0.208.0, 62× 0.224.0) — the Feb-2023 `std@0.177.0` sits on the
+  payment path. **DEP-1**: `import_map.json` is inert — 0 imports resolve through it.
+  ⚠ **Do NOT simply delete it**: Gate 27 asserts THREE things, and its floating-pin scan is wrapped in
+  `if (importMap.existsSync())` (`check_import_map_present.dart:62`), so deleting the file disables
+  the detector during the very work that converges pins (§4.11 inversion). Make the scan
+  unconditional FIRST. Note the scan matches **only** `supabase-js` (`:71`), so DEP-3 gets no cover
+  from it. **DEP-6**: 84 packages locked below available, 11 constraints below resolvable.
+  **DEP-11**: `riverpod_annotation` (a runtime dep with 0 `@riverpod` uses and 0 `.g.dart` files),
+  `cupertino_icons`, `pg` all unused.
+- **DEP-7 (blocked_on_user)**: pub's solver now shows `share_plus 13.3.0` as *Resolvable*, so the
+  block recorded in `project_share_plus_13_blocked.md` may have lifted. Needs a real
+  `pub upgrade --dry-run` (runnable without the founder) and then an unpin decision (not).
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §6.
+
+## OI-161 — two blind spots in our own observability and discipline gates (P3)
+
+- **Status**: OPEN
+- **Blocked on**: INFRA-13 is platform-tier, needs its own review
+- **Verified**: 2026-09-03 — live query + grep
+- **What**: audit findings INFRA-12, INFRA-13.
+  **INFRA-12** — telemetry `error_code` values are opaque: one live hour (2026-08-29 18:00) held
+  `minified:a0Y` ×47, `String` ×22, `minified:a4d` ×4. `String` is exactly the
+  `error.runtimeType.toString()` antipattern lens L32 names, and `minified:*` are unresolved web-build
+  symbols. Writer is `lib/core/services/error_telemetry.dart:267,278`. These rows also count toward
+  the alert threshold while carrying no diagnostic value.
+  **INFRA-13** — `check_gate_scripts_wired.dart:62-77` contains *"tracked separately"* ×4 and
+  *"dedicated remediation batches"*, which §4.2 bans. `check_no_deferral_euphemism.dart:15-16` scans
+  only staged `*.md` plus a full sweep of CLAUDE.md and `.claude/skills/**/SKILL.md` — it **never
+  scans `.dart` source**, so the gate built to catch deferral euphemisms is blind to the ones inside
+  gate source.
+  ⚠ **INFRA-13's fix is not a one-line widening**: the same banned phrases appear in
+  `check_no_deferral_euphemism.dart`'s own header (it quotes the ban), in `discipline_hook.dart`, and
+  17× across `lib/`+`test/`+`supabase/`. Markdown has a `deu-quote` escape (`:129-130`); a Dart-comment
+  equivalent must be designed, and that script self-declares **platform tier** (`:37-38`), so the
+  change needs its own plan-review record + B-pass.
+- **THIRD instance, added 2026-09-03 by the Slice A B-pass (`docs/reviews/db5584050b6b-review.md`
+  Finding 3): Gate 42 under-reports its own tally.**
+  `dart run scripts/check_sot_behavioral_test_paths.dart` prints
+  *"…; 7 carry presence_only: true (Deno-EF/static)"* while
+  `grep -c "presence_only: true" docs/sot_registry.yaml` → **12**. Cause at
+  `scripts/check_sot_behavioral_test_paths.dart:78-86`: the classifier is
+  `if (hasBehavioralPath) … else if (hasPresenceOnly) …`, so a concept carrying BOTH fields — the
+  CORRECT, documented pattern — is bucketed as behavioral for reporting and never counted.
+  ⚠ Does NOT affect the PASS/FAIL verdict (a concept needs only one of the two fields), so this is
+  a self-reported-count defect, not a coverage hole. Same class as CLAUDE.md rule 21's own
+  *"6 entries carry it today"*, which is likewise wrong — it is 12.
+  Fix: count both independently, or test `presence_only` first. Left here rather than folded into
+  Slice A because it is a platform-tier gate edit unrelated to that slice's correctness, and the
+  slice was deliberately narrowed after two review rounds.
+- **NOT a finding — recorded so it is not re-raised**: the 37-day client-error alert silence is
+  CORRECT. The detector is alive (670 succeeded / 2 failed in 7 days) and thresholds were tuned
+  2026-06-06 to `info_at: 100` REAL errors/hour excluding `event`/`info` breadcrumbs; the worst recent
+  hour held 76 real errors. Verified by re-measuring the hour under the actual rule, including the
+  failure-shaped op_type re-inclusion (which added ~0).
+- **Related**: `docs/audit/2026-09-02/findings-by-lens.md` INFRA-5 resolution.
+
+## OI-162 — the delete-account rate limit is INERT in production; its counter has never written a row (P1)
+
+- **Status**: OPEN
+- **Blocked on**: needs OI-153's channel-reader enumeration
+- **Verified**: 2026-09-03 — schema + DDL + repo grep + prod
+- **Security impact**: `7ad009` (2026-05-11) added a rate limit to the delete-account
+  confirmation-token check because *"a malicious actor knowing a target's 8-char user_id prefix could
+  repeatedly POST attempts."* **That limit has never functioned.** `attemptCount` is structurally
+  always 0, so `delete-account/index.ts:159`'s `>= RATE_LIMIT_MAX` can never fire and the
+  token-guessing path on the DPDP §17 erasure endpoint is unthrottled.
+- **Why the counter always fails** — the insert at `:176-182` is malformed two independent ways:
+  1. `prompt_snippet` (`:179`) and `response_snippet` (`:180`) **do not exist** on
+     `ai_coach_interactions`. Live snapshot: `[id, user_id, snapshot_id, channel, user_message,
+     ai_response, model_used, tokens_used, was_helpful, created_at, summarized, tool_calls]`.
+     Repo-wide `prompt_snippet` appears **once** — that line. ⇒ 400 / PGRST204.
+  2. `user_message text NOT NULL` (`005_create_ai_tables.sql:32`) is never sent ⇒ 23502.
+  **Prod confirms**: the `ai_coach_interactions` channel census lists `in_app_orphan` 57, `app_event`
+  30, `food_text_analysis` 25, `app` 8, `in_app` 5, `promotion_ceremony` 5 — `delete_account_attempt`
+  is absent at a granularity that shows 5-row channels.
+- ⚠ **The obvious fix is a TRAP — do not just correct the columns and ship.** Making the insert
+  succeed introduces a NEW channel value, and `rolling-context/index.ts:351` filters by
+  `.neq("channel","app_event")` — a **denylist**, deliberately (`:347-350`), so any new channel is
+  treated as conversation. Its own header (`:332-344`) records the Hermes P1-E/P1-F incident of
+  2026-08-20: such rows *"were being embedded into memory_embeddings as source_type='conversation' —
+  92 of 598 rows"* and reached ai-proxy's **SYSTEM prompt**, and the delete at `:466-472` then
+  **removed them** — which here would silently reset the very counter the limit reads.
+  ⇒ Either add `.neq("channel","delete_account_attempt")` to rolling-context's predicates in the same
+  batch (also re-check `restore-user-snapshot:254`, `daily-snapshot:61`, `sync_coach.dart:121`), or
+  record the attempt somewhere that is not `ai_coach_interactions`.
+- **Paired gate finding (INFRA-14) — why this shipped undetected**:
+  `scripts/check_schema_column_refs.dart` validates insert-map keys *"single-line + **first line** of
+  multi-line maps"* (its own SCOPE/LIMITS, `:32-34`). `.insert({` puts every key from line 2 onward,
+  so most of every multi-line insert map is unchecked; it runs clean today
+  (`840 references validated; 0 drift`) while missing both phantom columns. Its header states this
+  class *"was invisible BY CONSTRUCTION. Measured: 53% of recent fix-regressions were this
+  cloud-contract class"* — it closed the single-line half only.
+  ⚠ **A naive balanced-brace extension produces false positives**: a prototype measured 12
+  violations of which **10** were keys of nested JSONB value objects (`ai-proxy:1081-1088`
+  `metadata: { date, channel, model, is_pro }`, `rolling-context:394-397`, `daily-snapshot:222`,
+  `proactive-coach-promotion:154-157`). The fix needs **brace-depth-1-only** key validation, and
+  should also add ES6 **shorthand** keys (`.insert({ user_id, embedding, content })` currently
+  contributes zero checked refs). ⚠ It can never catch defect #2 — the snapshot stores column
+  **names only**, no nullability — so a Deno test asserting `error === null` is the acceptance
+  evidence for the NOT NULL half.
+- **Provenance**: tech-debt audit 2026-09-02 finding CODE-7, root cause rewritten by Slice A review
+  round 1, hazard found by round 2. Split out of Slice A because its blocker is OI-153's enumeration.
+- **Related**: OI-153, `docs/audit/2026-09-02/slice-a-plan.md`, diagnose `7ad009`.
