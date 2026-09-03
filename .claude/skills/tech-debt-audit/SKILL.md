@@ -81,9 +81,22 @@ findings:
     category: <category>
     title: <one-line>
     score: <priority>
-    terminal_state: closed_in_commit | upstream_blocked | verified_clean
+    terminal_state: closed_in_commit | upstream_blocked | blocked_on_user | verified_clean
     # state-specific fields per the schema (see scripts/validate_audit_closure.dart)
 ```
+
+⚠ **FOUR states, not three — corrected 2026-09-03 (audit 2026-09-02, finding DOC-19).**
+`scripts/validate_audit_closure.dart:57-62` has always accepted **`blocked_on_user`**, and CLAUDE.md
+§4.2 lists it, but this file and CLAUDE.md **§4.10** both documented only three. `blocked_on_user`
+is the correct state for an item needing FOUNDER action (a Play Console setting, a device run, a
+live-deploy authorization) — anyone drafting a ledger from the docs alone would not know it exists
+and would mis-file such an item as `upstream_blocked`, whose `reopen_when:` semantics are different.
+
+**Required fields per state — drafted from the VALIDATOR, not from prose:**
+`closed_in_commit` → `commit:` **and** (`verification:` or `notes:`) ·
+`upstream_blocked` → `blocker:` **and** `reopen_when:` ·
+`blocked_on_user` → `reason:` ·
+`verified_clean` → `evidence:` or `notes:`
 
 **NO `deferred:` key permitted** per `feedback_no_deferrals_tech_debt_class.md`. Validator rejects it.
 
@@ -157,6 +170,31 @@ A successful audit produces:
 - **Paternalistic pause framing during execution** (B5 D1 5th-instance codification per `feedback_no_stop_until_done.md`). When the agent is tempted to write a status update with "options" / "honest path" / "natural session boundary" / "fresh sessions" / "13-15 days of focused work cannot fit" — those are banned framings. The work IS the status update; commits + closure YAML + diagnose-docs ARE the report. Stop ONLY when the batch is genuinely done OR genuinely blocked on user action.
 - **Subagent runs out of usage mid-task.** Recovery pattern (B5 D9-D10 first instance): parent reads the agent's partial state, verifies with `flutter analyze --no-fatal-infos`, completes the missing scaffolding (gate / regression test / diagnose-doc) itself, then commits combining the agent's work + the recovery scaffolding. Document in commit message that the agent terminated early and the parent finished.
 - **Refactor without its detection gate landing first** (CLAUDE.md §4.11). A refactor touching a known bug class doesn't merge without its detection gate. Gate ships in the SAME batch as the refactor, in an EARLIER commit. Default the gate to WARN for 24h smoke window before flipping to hard-fail.
+- **Writing the closure YAML before every finding is terminal** (added 2026-09-03). Gate 40 validates
+  **every** `docs/audit/*_audit_closures.yaml` on **every commit in the repo**, and its closed==N
+  invariant fails on any non-terminal entry. So a half-filled ledger committed early does not just
+  fail your commit — it blocks every commit in the repo, including a concurrent session's. Keep
+  findings in `docs/audit/<date>/findings-by-lens.md` (unvalidated) and write the ledger when the
+  findings are actually terminal. This is a consequence of the gate's semantics, not a deferral.
+- **Reviewing the whole remediation plan a third time instead of SPLITTING it** (added 2026-09-03).
+  §4.12.1's split rule applies to the audit's own plan, and the signal is specific: **round 2
+  finding defects INSIDE round 1's corrections.** On this audit it fired twice — the parent plan
+  (4 of 5 round-2 blockers were created by round 1's fixes) and then Slice A itself (3 of 4). Both
+  times the fix was to ship a smaller unit, not to write a v4. If two rounds both produce material
+  blockers, stop reviewing and re-derive the boundary.
+- **Widening an enumeration by re-running the SAME query** (added 2026-09-03 — committed three
+  times in one audit, by the author of the audit). After a reviewer says "your count is too
+  narrow", the reflex is to re-run the original grep over a wider path. Ask instead: **what OTHER
+  predicate, file, or scope holds members of this set?** Measured instances: `channel` readers
+  (searched `supabase/functions/`, missed two allowlists outside it); `_hasValue` fields (9-line
+  window → 6, re-grep → 20, real answer **33** because `_hasNumber` is a second predicate with the
+  identical defect); the ledger tally (totalled by arithmetic twice, dropping 3 findings each time).
+- **Reporting a dramatic live finding without reading the config that would refute it** (added
+  2026-09-03). Three live queries pointed at "the client-error alerting is silently dead" —
+  detector alive with 670 successful runs, 37 days of silence, hours with 289 errors. The fourth
+  query, reading `alerts/_thresholds.yaml`, reversed it: thresholds were tuned to `info_at: 100`
+  REAL errors excluding breadcrumbs, and the worst hour held 76. **Silence was correct.** A finding
+  that confirms your suspicion is exactly when the refuting artifact is cheapest and most owed.
 
 ## Related skills
 
@@ -165,6 +203,27 @@ A successful audit produces:
 - `dep-bump-sweep/SKILL.md` — recurring dep update cadence (B3 sibling)
 
 ## Changelog
+
+- **2026-09-03** — Second full run of this skill (audit 2026-09-02, **83 findings**; Slice A shipped
+  `a0e20576`). Corrections to the skill itself, per step 9:
+  - **Step 6's terminal-state list was WRONG** — it named three states; the validator has always
+    accepted four. `blocked_on_user` is the state for founder-only actions and was undocumented
+    here AND in CLAUDE.md §4.10. Added, with the per-state required fields drafted from the
+    validator rather than from prose.
+  - **Five new anti-patterns**, each earned by this run: writing the closure YAML before findings
+    are terminal (it blocks every commit repo-wide, not just yours); re-reviewing a plan instead of
+    splitting when round 2 finds defects inside round 1's corrections; widening an enumeration by
+    re-running the same query; and reporting a dramatic live finding without reading the config
+    that would refute it.
+  - **Dispatch note that held up well:** the 6 category agents were told to grep
+    `docs/audit/OPEN_INDEX.md` FIRST and skip anything already tracked, and to mark FALSE_ALARM +
+    name the gate when one of the ~95 existing gates already covers the finding. Both instructions
+    materially cut noise — several agents returned explicit "already OI-NN, skipped" lines, and the
+    FALSE_ALARM blocks (cleared with evidence) are now the record that stops the next audit
+    re-opening them.
+  - ⚠ **One agent's first report was never delivered** and only its addendum arrived; it had to be
+    re-requested by name. If an agent references "my earlier report" and you do not have one, ASK —
+    do not proceed on the partial set.
 
 - **2026-05-21** — Skill created. Codifies the audit methodology used in the 2026-05-20 audit (81 findings, ~64% closed at skill-creation time).
 - **2026-05-22** — Updated with B5 final closure (81/81 = 100%) learnings:
