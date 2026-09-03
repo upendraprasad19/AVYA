@@ -6,6 +6,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### ai_coach_pro_entitlement (1 bugs)
+- 2026-09-03 f2b9d4 — A PAYING PRO user silently loses every PRO coach tool, and nothing anywhere records that it happened. `ai-proxy/index.ts` resolves entitlement through `checkPro()`: async function checkPro(client,…
+
+### weekly_report_pro_gate (1 bugs)
+- 2026-09-03 e4d1b7 — A PostgREST failure on ONE count query hands a FREE user an unbounded Gemini 2.5 Pro weekly report — the most expensive model call in the app. `weekly-report/index.ts` gates ongoing reports on "has…
+
 ### user_full_name (2 bugs)
 - 2026-09-02 b3c9d4 — Founder observed (web, app.icanbefitter.com, signed-in returning session): the Home header rendered "UPENDRA" while the Profile tab rendered "User" and Edit Profile's Full Name field was BLANK — same…
 - 2026-08-30 d4e9a2 — Founder (upendraprasad19@gmail.com) signed in via a fresh private/incognito browser tab (web, so genuinely empty local Hive — the same shape as a fresh install). Edit Profile's "Full Name" field…
@@ -1104,6 +1110,8 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-03 | f2b9d4 | A PAYING PRO user silently loses every PRO coach tool, and nothing anywhere records that it happened. `ai-proxy/index.ts` resolves entitlement through `checkPro()`: async function checkPro(client,… | ai_coach_pro_entitlement | test/contracts/ai_coach_pro_entitlement_writer_to_reader_test.dart |
+| 2026-09-03 | e4d1b7 | A PostgREST failure on ONE count query hands a FREE user an unbounded Gemini 2.5 Pro weekly report — the most expensive model call in the app. `weekly-report/index.ts` gates ongoing reports on "has… | weekly_report_pro_gate | test/contracts/weekly_report_pro_gate_writer_to_reader_test.dart |
 | 2026-09-02 | b3c9d4 | Founder observed (web, app.icanbefitter.com, signed-in returning session): the Home header rendered "UPENDRA" while the Profile tab rendered "User" and Edit Profile's Full Name field was BLANK — same… | user_full_name | test/contracts/profile_provider_single_source_test.dart |
 | 2026-09-02 | 4c1e7a | Tapping "Sync your sleep for a sharper read." in the pre-workout readiness sheet showed the user the full native Health Connect STEPS + WEIGHT consent dialog -- data they did not ask to share -- and,… | readiness_daily | test/contracts/readiness_sheet_states_test.dart |
 | 2026-08-30 | e2c481 | Two OIs a commit declared closed via `closes-oi:` were NOT closed on the board. OI-150 (commit `c2534257`): the fix shipped, merged, went 7/7 CI green; the board write was simply never done, and an… | closes_oi_citation_unverified | test/scripts/oi_closure_lib_test.dart, test/scripts/closes_oi_performed_e2e_test.dart |

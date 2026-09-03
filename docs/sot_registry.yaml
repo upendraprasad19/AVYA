@@ -10044,3 +10044,106 @@ concepts:
       - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
         line_range: 93-100
         method: build
+
+  # tech-debt audit 2026-09-02 / Slice A (CODE-8, diagnose e4d1b7) — the
+  # weekly-report PRO gate is a genuine cloud writer→reader contract on
+  # ai_coach_interactions, and it DRIFTED: the reader discarded its error and
+  # the writer discarded its result, so a failure on either side silently
+  # opened the gate. Registered so the drift audit can see it.
+  - concept: weekly_report_pro_gate
+    domain: cross_domain
+    behavioral_test_path: test/contracts/weekly_report_pro_gate_writer_to_reader_test.dart
+    presence_only: true  # Deno Edge Function — `serve(async (req) => {…})` with no exports and no Deno on the dev machine, so no importable surface exists to round-trip. CI `deno check` is the compile proof (rule 21 honesty).
+    description: |
+      "Has this user ever generated a weekly report?" — the predicate that
+      allows exactly one free report before requiring PRO. The writer stamps
+      channel='weekly_report' on ai_coach_interactions after a successful
+      report; the reader counts those rows before deciding.
+
+      FAIL-CLOSED CONTRACT: on a read error the gate must DENY (treat as NOT
+      first report), never grant. A null count from a failed query previously
+      read as "first report" and handed a free user an unbounded Gemini 2.5
+      Pro call.
+    writers:
+      - file: supabase/functions/weekly-report/index.ts
+        line_range: 587-600
+        method: serve handler — report-log insert
+        semantic: cloud-write
+        notes: |
+          SOLE writer for the reader below. Result must be destructured — a
+          silent insert failure keeps the count at 0 forever, which leaves the
+          gate permanently open for that user.
+    readers:
+      - file: supabase/functions/weekly-report/index.ts
+        line_range: 93-120
+        method: serve handler — first-free-report gate
+        semantic: cloud-read
+        notes: |
+          Must destructure `error` and fail closed. The sibling subscription
+          query 11 lines above already does; this one did not (e4d1b7).
+    hive:
+      box: "n/a — server-side gate, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: ai_coach_interactions
+      columns: [user_id, snapshot_id, channel, user_message, ai_response, model_used, tokens_used, created_at]
+    sync_methods: []
+
+  # tech-debt audit 2026-09-02 / Slice A (CODE-6, diagnose f2b9d4) — PRO
+  # entitlement for the AI coach is read per-request from subscriptions. There
+  # is NO UNIQUE on subscriptions(user_id), so the reader must tolerate ≥2
+  # active rows; it did not, and a renewal silently downgraded a paying user.
+  - concept: ai_coach_pro_entitlement
+    domain: ai_coach
+    behavioral_test_path: test/contracts/ai_coach_pro_entitlement_writer_to_reader_test.dart
+    presence_only: true  # Deno Edge Function — checkPro is module-private inside serve() with no exports, and ai-proxy reads Deno.env.get(...)! at module load; no importable surface. CI `deno check` is the compile proof (rule 21 honesty).
+    description: |
+      Whether the caller holds an active PRO subscription, resolved per
+      request and used as toolCtx.isPro to decide which coach tools exist.
+
+      TWO CONTRACTS, both load-bearing:
+      1. FAIL CLOSED on error — returning false is DELIBERATE ("cheaper to
+         incorrectly gate a PRO user than to leak unlimited chat to a free
+         user"). Must never be "fixed" into returning true.
+      2. TOLERATE ≥2 ACTIVE ROWS — there is no UNIQUE on
+         subscriptions(user_id) (only razorpay_payment_id). A renewal bought
+         before the old end_date lapses produces two active rows, and a bare
+         .maybeSingle() then synthesises PGRST116 and strips PRO.
+    writers:
+      - file: supabase/functions/verify-payment/index.ts
+        line_range: 505-517
+        method: payment confirmation handler — subscription insert
+        semantic: cloud-write
+        notes: |
+          Inserts status='active' with start_date/end_date and does NOT check
+          for an existing active row, so a renewal bought before the old
+          end_date lapses leaves TWO active rows for one user.
+      - file: supabase/functions/razorpay-webhook/index.ts
+        line_range: 572-584
+        method: webhook handler — subscription insert
+        semantic: cloud-write
+        notes: |
+          Second writer, same shape; tolerates 23505 from a concurrent racer.
+          ⚠ CITATION CORRECTED (B-pass db5584050b6b, Finding 1): this entry
+          first named migrations/052:82-85 as the writer. Those lines are a
+          COMMENT BLOCK about the razorpay_payment_id constraint — that file
+          contains no INSERT at all. It remains valid EVIDENCE for the
+          no-UNIQUE-on-user_id claim, but it is not a writer. No gate caught
+          this: check_sot_registry_parity treats a prose  as
+          unresolvable and skips the symbol check.
+    readers:
+      - file: supabase/functions/ai-proxy/index.ts
+        line_range: 96-130
+        method: checkPro
+        semantic: cloud-read
+        notes: |
+          Must carry .order("end_date", {ascending:false}).limit(1) — the
+          sibling query at weekly-report/index.ts:74-84 already does — and must
+          log the downgrade, which was silent pre-f2b9d4.
+    hive:
+      box: "n/a — server-side entitlement read, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: subscriptions
+      columns: [user_id, status, end_date]
+    sync_methods: []

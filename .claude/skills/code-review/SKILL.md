@@ -190,6 +190,38 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-09-03** — blast-radius **platform** — branch `techdebt-audit-sep02`, Slice A of the
+  2026-09-02 tech-debt audit (diagnoses `e4d1b7`, `f2b9d4`). **3 findings (0 P0, 1 P1, 1 P2,
+  1 P3); 0 false_alarm.** 1 fixed in-batch, 1 answered in the plan-review record, 1 tracked as
+  OI-161. Review: `docs/reviews/db5584050b6b-review.md`.
+  **Tuning — lens 10 (`stale_or_wrong_citation`) gains a question about the GATE, not the
+  citation.** The P1 was a `writers:` entry, in both a SoT registry concept and its diagnose-doc,
+  naming `migrations/052:82-85` — a **comment block** in a file containing no `INSERT` at all. The
+  real writers were two Edge Functions one grep away. What makes it worth recording is *why it
+  survived*: `check_sot_registry_parity.dart` verifies a `method:` field ONLY when it parses as a
+  bare identifier or dotted path. `"subscriptions table — payment path inserts rows"` is prose, so
+  the gate **silently skipped the symbol check** and verified only file-exists + line-in-bounds —
+  both trivially true of a comment. So the citation was "gated" in the sense that a gate ran over
+  it and said PASS, and unchecked in every sense that matters.
+  **Add to lens 10: when a citation lives in a field a gate reads, check whether the gate's parser
+  could actually READ THIS VALUE — prose in a structured field converts a checked claim into an
+  unchecked one, and the PASS is indistinguishable either way.** Generalises past this gate: any
+  validator with a "skip what I cannot parse" branch has the same shape, and free-text is the
+  easiest thing in the world to write into a field meant for a symbol. Sibling of OI-100
+  (`prior_art_checked:` must reference a verified artifact, not free text) and of INFRA-11 in this
+  same audit (Gate 33's allowlist reasons are unparsed prose).
+  **Second, a NEGATIVE result worth keeping, per this history's own convention:** the reviewer
+  mutated **to the real pre-fix `HEAD` content** of both files rather than to a convenient
+  synthetic edit, and reported 7-of-9 assertions reddening with the 2 green ones correctly pinning
+  invariants the diff never touched. That is the mutate-the-way-a-real-regression-re-enters rule
+  applied without being asked, and it is the strongest form of the check — it also independently
+  reproduced the author's own three isolated mutation runs.
+  ⚠ Process note: the author's `blast_radius: account` claim in both diagnose-docs was wrong — the
+  two EF files ALONE classify **platform**. Caught not by review but by the pre-commit loop's own
+  printed tier line. **A tier you estimated and a tier the classifier computed are different
+  claims**, and only the second one gates the review requirement.
+  False-alarm rate 0/3 → no change to lenses 1-9.
+
 - **2026-09-02 (b)** — blast-radius **platform** — branch `profile-stale-restore`
   (diagnose b3c9d4, Profile tab serving a pre-restore profile map). **8 findings
   (0 P0, 1 P1, 3 P2, 4 P3); 0 false_alarm — 7 fixed in-batch, 1 DECLINED with

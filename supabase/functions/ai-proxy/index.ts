@@ -80,20 +80,51 @@ const LABEL_FLASH_LITE = "Gemini 2.5 Flash Lite";
  * error (fail closed — cheaper to incorrectly gate a PRO user than to
  * leak unlimited chat to a free user).
  */
+// audit-2026-09-02 CODE-6 — two defects fixed below, NEITHER of which changes
+// the deliberate fail-closed contract documented above:
+//
+//   1. `.order("end_date").limit(1)` was missing. There is NO UNIQUE on
+//      `subscriptions(user_id)` (the only subscriptions UNIQUE is
+//      `razorpay_payment_id`), so a user holding two overlapping active rows —
+//      a renewal bought before the old `end_date` — made `maybeSingle()`
+//      synthesise PGRST116, and a PAYING user silently lost every PRO tool.
+//      The sibling query in `weekly-report/index.ts` already defends this way;
+//      this one did not.
+//   2. `error` was never destructured and the catch was silent, so that
+//      downgrade produced no evidence at all. Related: 9d12af (a gating
+//      decision going wrong with no log, silent for an unknown number of days).
 async function checkPro(
   client: SupabaseClient,
   userId: string,
 ): Promise<boolean> {
   try {
-    const { data } = await client
+    const { data, error } = await client
       .from("subscriptions")
       .select("status")
       .eq("user_id", userId)
       .eq("status", "active")
       .gt("end_date", new Date().toISOString())
+      .order("end_date", { ascending: false })
+      .limit(1)
       .maybeSingle();
+    if (error) {
+      // Fail closed (unchanged) — but never silently. This branch is a PAYING
+      // user losing PRO tools, and without this line it is indistinguishable
+      // from a free user being correctly gated.
+      console.error(
+        `[ai-proxy.checkPro] subscription lookup failed for user=${userId}` +
+          ` — failing closed (treating as non-PRO):`,
+        error.message,
+      );
+      return false;
+    }
     return data !== null;
-  } catch (_) {
+  } catch (e) {
+    console.error(
+      `[ai-proxy.checkPro] subscription lookup threw for user=${userId}` +
+        ` — failing closed (treating as non-PRO):`,
+      e,
+    );
     return false;
   }
 }
