@@ -432,7 +432,17 @@ After observations captured + before brainstorming:
     ⚠ **Confirm the mutation actually APPLIED** (`grep -c` the removed token,
     or run the broken form once) — a regex that silently matched nothing makes
     a green run read as proof when it is proof of nothing, which this repo has
-    already recorded twice. ⚠ **And confirm the FIXTURE reproduces a state the
+    already recorded twice. ⚠ **AND A COMPILE ERROR IS NOT A
+    MUTATION PROOF** (2026-09-04, OI-162 slice 1's gate). Two mutations there
+    reddened the run by making the file **fail to compile** — removing a null
+    check broke Dart's null promotion in the following `else if`, so the runner
+    reported `loading … [E]` and "Some tests failed". That is red for the WRONG
+    REASON: it proves the file is now invalid, not that any assertion detects
+    the defect. Read the failure, do not just count it. **A valid mutation
+    leaves the code compiling and semantically wrong**; if yours does not,
+    pick a different one — mutating the ALLOWLIST rather than the branch that
+    reads it worked here, and was a better proof anyway because it showed which
+    of the two was doing the work. ⚠ **And confirm the FIXTURE reproduces a state the
     real workflow actually produces**, because a mutation run against a
     fictional fixture proves nothing either. That is not hypothetical: the
     `safe_merge.sh` precheck shipped in this same batch was mutation-"proven"
