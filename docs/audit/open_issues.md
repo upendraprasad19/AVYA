@@ -2676,6 +2676,80 @@ change.
   collide with the in-flight backend-CPU-starvation batch (migration 120).
 - **Related**: `docs/audit/2026-09-02/remediation-plan.md` §11 Slice B.
 
+### Folded in 2026-09-03 from OI-162 — the FREE-IMAGE LIFETIME QUOTA resets itself
+
+A third instance of the counter-in-a-summarized-table class, split out of OI-162 because its storage
+semantics are the OPPOSITE of a windowed rate limit and it belongs with this entry's channel work.
+
+- **The defect**: `ai-media-proxy/index.ts:62-76` `countFreeImageAnalyses` enforces
+  `FREE_IMAGE_ANALYSIS_LIMIT = 5` (`:16`, checked `:466`) by counting **lifetime** rows —
+  `.eq("user_id").eq("channel","free_image_analysis")` with **no `created_at` bound** (its own
+  docstring says "lifetime"). Those rows are non-`app_event`, so `rolling-context:329-351` selects
+  them and `:463-472` deletes all but the newest 10 once `:364` passes `MESSAGE_THRESHOLD = 50`.
+  **A lifetime quota has no window to survive deletion on — the 5-image free cap resets toward
+  unlimited.** Verified: no guard blocks it.
+- ⚠ **Second, independent defect in the same function**: `if (error) return 0` with a docstring
+  arguing *"fail-open is safer … because 0 < 5"* — which is precisely when the gate does NOT fire.
+  (Audit finding CODE-3.) Both must be fixed together.
+- ⚠ **A client-side TWIN exists and is easy to miss**:
+  `lib/features/ai_coach/repositories/ai_coach_repository.dart:279-292`
+  `getFreeImageAnalysisCount()` reads the same `channel='free_image_analysis'`. Currently **uncalled**
+  (`grep -rn getFreeImageAnalysisCount lib/ test/` → 1 hit, its own definition), which makes it cheap
+  to fix now and easy to forget later — textbook writer/reader drift (§4.1).
+- **LATENT, not live** (verified 2026-09-03): **zero** `free_image_analysis` rows exist, and no user
+  is near the 50-row prune threshold (max non-`app_event` = 25). The mechanism is real; nobody has
+  hit it. So the "migrate existing consumed quota" question is currently moot — there is nothing to
+  migrate.
+- **Why NOT in the OI-162 table**: a lifetime quota must never be pruned, while a windowed rate limit
+  must be. Fusing them forced a retention exclusion that would have retained a `user_id` forever
+  after a DPDP erasure. They are different concepts that share a word.
+### ALSO 2026-09-03 — the WEEKLY-REPORT first-free gate is a lifetime count and resets the same way
+
+⚠ **Found in code shipped to prod hours earlier the same day** (`a0e20576`, diagnose `e4d1b7`).
+That fix closed the gate's FAIL-OPEN half (a failed count granted a free Gemini 2.5 **Pro** report).
+It did not touch — and the diagnose-doc never asked about — what DELETES the rows the gate counts.
+
+- `weekly-report/index.ts:93-98`: `.select("id", { count: "exact", head: true })
+  .eq("user_id", …).eq("channel", "weekly_report")` — **no `created_at` bound**, i.e. a LIFETIME
+  count, feeding `isFirstReport` at `:113` and the PRO gate at `:116`.
+- `weekly_report` is non-`app_event`, so `rolling-context:329-351` summarizes and `:463-472` deletes
+  it once the user passes `MESSAGE_THRESHOLD = 50`. Count returns to 0 ⇒ `isFirstReport` true ⇒
+  **another free Gemini 2.5 Pro report**, repeatedly.
+- Same class as the free-image lifetime quota above; same remedy (a quota ledger that is not pruned).
+- **How it was found, worth recording:** a plan reviewer proposed replacing a VOCABULARY-based gate
+  matcher (`rate.?limit|attempt|throttle` near the table) with a STRUCTURAL one — `count: "exact"`
+  in the same statement as an `.eq/.in("channel")` filter. Run over `supabase/functions/` it returns
+  **exactly 5 sites, zero false positives**, and this was site 5. The vocabulary matcher missed it
+  and two others, while firing on two `rate_limit` mentions that were COMMENTS. **Match on what the
+  code DOES, not on what its prose calls itself.**
+
+### ALSO folded in 2026-09-03 — the nightly summarizer RESETS two paid-tier daily caps
+
+Found while checking a different question; nobody had looked. Same root as the entry above
+(a counter whose rows `rolling-context` deletes) but a DIFFERENT mechanism — these caps are
+enforced by **Postgres triggers**, not Edge Function code, so an EF-only search misses them.
+
+- `rolling-context/index.ts:27-28` — `MESSAGE_THRESHOLD = 50`, `KEEP_RECENT = 10`; `:369-370`
+  summarizes everything except the newest 10 and `:463-472` DELETES it, for any user with >= 50
+  non-`app_event` rows.
+- The three daily caps count an **IST-day window** over `ai_coach_interactions` (live
+  `pg_get_functiondef`): `enforce_chat_app_daily_limit` >= **10**,
+  `enforce_food_text_daily_limit` >= **50** free / 200 PRO, `enforce_vision_analysis_daily_limit`
+  >= **20**.
+- **Where the cap exceeds KEEP_RECENT, the cap is resettable.** A free user who reaches the 50/day
+  food-text cap has 50 rows today; the 02:30 IST cron keeps the newest 10 and deletes 40, the
+  trigger recounts 10, and **40 more analyses unlock**. Same shape for vision (20/day).
+- ✅ **chat (10/day) is SAFE — by coincidence, not design.** The cap blocks the 11th row, so a user
+  can hold at most 10 rows for the day, and KEEP_RECENT is also 10, so today's rows are exactly the
+  ones kept. ⚠ **That safety evaporates if either constant is changed independently** — they are in
+  different files with no comment linking them.
+- **LATENT** (verified 2026-09-03): max non-`app_event` rows for any user is **25**, below the 50
+  threshold, so this has not fired. Both caps are paid-tier boundaries, so it is a revenue issue
+  once usage grows.
+- **Design note for whoever takes this**: this is a **quota ledger**, not a rate limiter. It also
+  needs `countProImageAnalysesToday` (`:88-99`, IST-day) resolved at the same time — that is CODE-1
+  above, the dead `pro_image_analysis` read, so the two are one piece of work.
+
 ## OI-154 — a cleared profile field silently reverts on the next sign-in (P1)
 
 - **Status**: OPEN
@@ -2922,4 +2996,18 @@ change.
   evidence for the NOT NULL half.
 - **Provenance**: tech-debt audit 2026-09-02 finding CODE-7, root cause rewritten by Slice A review
   round 1, hazard found by round 2. Split out of Slice A because its blocker is OI-153's enumeration.
-- **Related**: OI-153, `docs/audit/2026-09-02/slice-a-plan.md`, diagnose `7ad009`.
+- **RESCOPED 2026-09-03 to the WINDOWED counters only** (`delete_account` 5/60min,
+  `verify_payment` 20/10min). The free-image LIFETIME quota — a third instance found during this
+  plan review — **folded into OI-153**, because a lifetime quota must never be pruned while a
+  windowed limit must be, and fusing them forced a retention exclusion that would have retained a
+  `user_id` forever after a DPDP erasure.
+- ⚠ **verify-payment is instance B and its root cause is NOT deletion** (corrected in review round 2):
+  it counts only `>= now()-10min` and `rolling-context` is nightly, so the overlap is narrow. Its
+  real defects are the **un-awaited** fire-and-forget `.then()` (`verify-payment/index.ts:258`) and
+  inline magic numbers (`>= 20` at `:230`, `600`) instead of named constants.
+- ⚠ **DPDP, settled by live query**: `ai_coach_interactions.user_id` is already
+  `REFERENCES users(id) ON DELETE CASCADE`, and `users.id` is `REFERENCES auth.users(id) ON DELETE
+  CASCADE`. So today's attempt rows ALREADY erase with the user. Any new table must preserve that —
+  a no-FK design would be a REGRESSION on the erasure endpoint, not a neutral choice.
+- **Related**: OI-153, `docs/audit/2026-09-02/slice-a-plan.md`, `docs/audit/oi162-plan.md`,
+  diagnose `7ad009`.
