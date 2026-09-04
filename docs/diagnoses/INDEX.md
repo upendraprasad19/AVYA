@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### A tool that WRITES INTO the worktree made the worktree permanently unretirable, for the third time. `safe_push.sh`'s LANDED path calls `arm_ci_reconcile.sh`, which appends one JSON line to `.claude/.ci_reconcile_pending.jsonl` in whatever worktree the push came from. `retire_worktree_lib.dart` treats any gitignored file absent from its exact-match `regenerableIgnoredPaths` list as PRECIOUS and refuses — correct by the predicate, wrong in effect.
+What makes this instance worse than its two predecessors is that the queue cannot self-clean. `reconcile_ci.dart` drains it at SessionStart and deletes the file when nothing survives, but `_statePath` is RELATIVE, so the drain only ever runs inside the worktree that armed the entry. A finished worktree is precisely the one no session reopens. The primary worktree holds no such file for the mirror-image reason: sessions start there constantly, so it drains every time. (1 bugs)
+- 2026-09-04 a9c4f2 — `dart run scripts/retire_worktree.dart` reports `KEEP readiness-flip [2 non-regenerable ignored file(s)]` for a worktree that is merged, tracked-clean and has nothing unpushed. The message states a…
+
 ### ai_coach_pro_entitlement (1 bugs)
 - 2026-09-03 f2b9d4 — A PAYING PRO user silently loses every PRO coach tool, and nothing anywhere records that it happened. `ai-proxy/index.ts` resolves entitlement through `checkPro()`: async function checkPro(client,…
 
@@ -1110,6 +1114,8 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-04 | a9c4f2 | `dart run scripts/retire_worktree.dart` reports `KEEP readiness-flip [2 non-regenerable ignored file(s)]` for a worktree that is merged, tracked-clean and has nothing unpushed. The message states a… | A tool that WRITES INTO the worktree made the worktree permanently unretirable, for the third time. `safe_push.sh`'s LANDED path calls `arm_ci_reconcile.sh`, which appends one JSON line to `.claude/.ci_reconcile_pending.jsonl` in whatever worktree the push came from. `retire_worktree_lib.dart` treats any gitignored file absent from its exact-match `regenerableIgnoredPaths` list as PRECIOUS and refuses — correct by the predicate, wrong in effect.
+What makes this instance worse than its two predecessors is that the queue cannot self-clean. `reconcile_ci.dart` drains it at SessionStart and deletes the file when nothing survives, but `_statePath` is RELATIVE, so the drain only ever runs inside the worktree that armed the entry. A finished worktree is precisely the one no session reopens. The primary worktree holds no such file for the mirror-image reason: sessions start there constantly, so it drains every time. | test/scripts/retire_worktree_lib_test.dart |
 | 2026-09-03 | f2b9d4 | A PAYING PRO user silently loses every PRO coach tool, and nothing anywhere records that it happened. `ai-proxy/index.ts` resolves entitlement through `checkPro()`: async function checkPro(client,… | ai_coach_pro_entitlement | test/contracts/ai_coach_pro_entitlement_writer_to_reader_test.dart |
 | 2026-09-03 | e4d1b7 | A PostgREST failure on ONE count query hands a FREE user an unbounded Gemini 2.5 Pro weekly report — the most expensive model call in the app. `weekly-report/index.ts` gates ongoing reports on "has… | weekly_report_pro_gate | test/contracts/weekly_report_pro_gate_writer_to_reader_test.dart |
 | 2026-09-02 | b3c9d4 | Founder observed (web, app.icanbefitter.com, signed-in returning session): the Home header rendered "UPENDRA" while the Profile tab rendered "User" and Edit Profile's Full Name field was BLANK — same… | user_full_name | test/contracts/profile_provider_single_source_test.dart |
