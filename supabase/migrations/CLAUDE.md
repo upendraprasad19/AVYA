@@ -45,6 +45,35 @@ ALTER TABLE subscriptions ALTER COLUMN end_date SET NOT NULL;
 
 Every `mcp__supabase__apply_migration` call MUST be paired with a `backups/applied_migrations.json` update in the same git commit (CLAUDE.md §4.5 `feedback_migration_apply_record_pair.md`). The pre-commit hook does not enforce this yet; manual gate via review.
 
+### An APPLIED migration is IMMUTABLE — including its comments (b8f4c2, 2026-09-04)
+
+Once a migration has been applied to prod, **do not edit the file at all** — not the
+DDL, not the four-tag header, not a typo in a comment. The `hash` field in
+`backups/applied_migrations.json` is a sha256 of the file *as applied*, so any edit
+silently falsifies the audit trail: the ledger then claims a hash that no version of
+the file has.
+
+⚠ **Nothing catches this.** `scripts/check_applied_migrations_ledger.dart` (Gate 39)
+checks only that the `hash` key is PRESENT and non-empty — it never recomputes or
+compares it. Board item **OI-135** already documents the class as open and explicitly
+non-gated. So the only guard is this rule.
+
+**Measured 2026-09-04.** A review correctly flagged that migration 127's header called
+itself the "FOURTH definition" when there are three (026 / 113 / 127). Correcting that
+one word changed the file's hash from `305622fb…` to `bbbbaf8a…` while the ledger still
+recorded the former. The live function was unaffected (a comment cannot change
+`pg_get_functiondef` output), which is exactly what makes it dangerous — nothing
+anywhere reports a problem. Caught only by a later review recomputing the sha256 by
+hand.
+
+**Where a correction goes instead:** the diagnose-doc, and — if it is a durable trap —
+a row in root `CLAUDE.md` §4.9. Both are readable by the next person and neither is
+hashed. The wrong word stays in the migration file; that is the cost of an immutable
+artifact, and it is cheaper than a lying ledger.
+
+**Corollary for reviewers:** "fix the comment in migration NNN" is only safe advice if
+NNN has not been applied. Check `backups/applied_migrations.json` before suggesting it.
+
 ## Single-source-of-truth contracts
 
 Migrations themselves are not SoT-bearing objects, but each migration **lands a

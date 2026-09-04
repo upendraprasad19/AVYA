@@ -28,7 +28,7 @@ sync_methods: []
 restore_methods: []
 cloud_table: ai_coach_interactions
 cloud_columns: [user_id, channel, user_message, ai_response, model_used, tokens_used, created_at]
-contract_test_path: test/contracts/ai_message_limit_parity_test.dart
+contract_test_path: test/contracts/food_text_analysis_daily_cap_writer_to_reader_test.dart
 ist_handling:
   - { file: supabase/migrations/127_food_text_free_cap_parity_10.sql, line: 74, method: IST day boundary carried VERBATIM from migration 113 — the fix for 7ad0d3; not re-derived }
 provider_invalidations: "none — no client state changes; the client constant and every widget reading it are untouched"
@@ -47,13 +47,25 @@ proposed_fix: >
   "10/day free". The parity regression test is widened from the chat cap alone
   to cover food text and the vision ceiling.
 regression_test_planned: >
-  test/contracts/ai_message_limit_parity_test.dart — widened from 2 tests to 4.
-  New: (1) client freeAiTextLogsPerDay must equal the trigger's FREE arm, with
-  PRO pinned at 200 so the deliberate divergence stays a decision; (2) the
-  vision ceiling must be >= proScanMealPerDay + proCartAuditorPerDay, so adding
-  a third vision channel reddens the suite until the ceiling is raised. Caps are
-  resolved from the HIGHEST-numbered migration defining each function, because
-  CREATE OR REPLACE means only the last definition is live.
+  Split across two files because Gate 9 requires one contract file per SoT
+  concept. Counts verified by running them, not asserted.
+
+  test/contracts/food_text_analysis_daily_cap_writer_to_reader_test.dart (5
+  tests, NEW) owns this concept: the trigger's FREE arm must equal client
+  freeAiTextLogsPerDay; PRO pinned at 200 so the deliberate client/server
+  divergence stays a decision; ai-proxy's 429-body constants must equal the
+  trigger arms AND sit on the correct branches (association, not just
+  membership — a branch swap passed clean until round 2 caught it); every client
+  reader routes through the one constant; the IST day boundary survives.
+
+  test/contracts/ai_message_limit_parity_test.dart (3 tests, WIDENED) keeps the
+  sibling pairs: the chat cap against ai-proxy's FREE_DAILY_LIMIT, the shared
+  vision ceiling against proScanMealPerDay + proCartAuditorPerDay, and the
+  vestigial trial's removal.
+
+  Both resolve server caps from the HIGHEST-numbered migration defining each
+  function via test/helpers/migration_cap_reader.dart, because CREATE OR REPLACE
+  means only the last definition is live.
 impact_analysis: >
   No user loses access they have today. All three client read sites block at 10,
   so no in-app user can reach an 11th food-text log; the change closes a
