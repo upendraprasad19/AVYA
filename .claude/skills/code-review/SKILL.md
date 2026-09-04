@@ -231,6 +231,16 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   cheap and worth doing** — an unearned mutation-proof is invisible by construction,
   and "0 red" is the easiest number to omit rather than report.
   False-alarm rate 1/8 → no change to lenses 2-4, 6-9.
+  **Addendum, same day, from the full-suite pre-push run:** lens 6 should ask, of any diff
+  that adds a FILE-LEVEL annotation or default, whether a PER-ITEM override survives it. The
+  push went red on `batch_close_hook_e2e_test.dart` — a file `0a99a0b7` had already fixed for
+  full-suite contention by adding `@Timeout(Duration(minutes: 6))`. One test in it carried its
+  own `timeout: const Timeout(Duration(seconds: 60))`, and **a per-test `timeout:` takes
+  precedence over the file annotation**, so the fix never reached the one test that needed it.
+  Green targeted (7/7) and green across all of `test/scripts/` (555/555); red only in the
+  ~5300-test suite. Generalises past timeouts: a file-level default plus a surviving local
+  override is a guard whose mirror is the override, and the override is invisible from the
+  diff that adds the default.
 
 - **2026-09-03** — blast-radius **platform** — branch `techdebt-audit-sep02`, Slice A of the
   2026-09-02 tech-debt audit (diagnoses `e4d1b7`, `f2b9d4`). **3 findings (0 P0, 1 P1, 1 P2,
