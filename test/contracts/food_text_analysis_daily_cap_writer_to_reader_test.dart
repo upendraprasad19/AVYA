@@ -56,8 +56,9 @@ void main() {
               '${migration.uri.pathSegments.last}) must equal '
               'AppConstants.freeAiTextLogsPerDay ($clientFree). They drifted '
               '50-vs-10 until b8f4c2 — a 5x server-side bypass reachable by '
-              'calling ai-proxy directly. docs/architecture/business-rules.md '
-              'lines 17 and 36 also say 10.');
+              'calling ai-proxy directly. docs/architecture/business-rules.md:17 '
+              '(the FREE-tier row) also says 10 — :36 is the PRO row and reads '
+              'unlimited, so it was never evidence for this value.');
       expect(clientFree, 10,
           reason: 'Founder decision 2026-09-04: free food text = 10/day.');
     });
@@ -111,7 +112,31 @@ void main() {
           reason: 'ai-proxy FOOD_TEXT_PRO_DAILY_CAP must equal the live '
               'trigger PRO arm (${caps.pro}).');
 
-      // The exact pre-fix shape, pinned absent so it cannot come back by hand.
+      // ASSOCIATION, not just membership. Round 2 of the ×2 review proved the
+      // two assertions above are not enough: swapping the ternary's branches
+      // (telling PRO users "10/day" and free users "200/day") left all 5 tests
+      // GREEN, because both arms are still named constants holding the right
+      // values — they are simply on the wrong sides. Checking that the right
+      // numbers EXIST says nothing about which branch reads which.
+      final ternary = RegExp(
+        r'const cap = isProUser\s*\?\s*([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)\s*;',
+      ).firstMatch(src);
+      expect(ternary, isNotNull,
+          reason: 'Could not find the `const cap = isProUser ? … : …;` ternary '
+              'in ai-proxy. If it was restructured, re-point this assertion — '
+              'do NOT delete it; without it a branch swap ships silently.');
+      expect(ternary!.group(1), 'FOOD_TEXT_PRO_DAILY_CAP',
+          reason: 'The TRUE branch of `isProUser ? … : …` must be the PRO cap. '
+              'Found "${ternary.group(1)}". A swap tells paying users the free '
+              'limit and free users the PRO limit.');
+      expect(ternary.group(2), 'FOOD_TEXT_FREE_DAILY_CAP',
+          reason: 'The FALSE branch must be the FREE cap. '
+              'Found "${ternary.group(2)}".');
+
+      // The exact pre-fix shape, kept as a redundant tripwire documenting the
+      // historical defect. The association check above strictly subsumes it (a
+      // numeric literal fails group-name equality), but this one names the
+      // specific regression in its failure message.
       expect(RegExp(r'isProUser\s*\?\s*\d+\s*:\s*\d+').hasMatch(src), isFalse,
           reason: 'The food-text 429 cap must not be an inline numeric ternary '
               '— that literal is what went stale for four months.');

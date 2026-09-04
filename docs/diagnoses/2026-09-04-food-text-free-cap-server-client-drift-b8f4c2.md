@@ -222,6 +222,52 @@ the new ai-proxy assertion, each confirmed applied first: setting
 `FOOD_TEXT_FREE_DAILY_CAP = 50` reddens 1 test, and restoring the literal
 `isProUser ? 200 : 50` reddens 1 test.
 
+## What review round 2 found — the remediation was still incomplete, twice over
+
+Round 2 (context-blind, on the post-B-pass tree) returned **NOT CONVERGED** with
+6 findings. All six verified and fixed. Two are worth reading:
+
+**The regression test I wrote for the B-pass's P1 could not catch a branch swap.**
+It asserted that ai-proxy's two constants hold the trigger's values, and that the
+old `isProUser ? 200 : 50` literal is absent. Round 2 swapped the ternary's
+branches — `? FOOD_TEXT_FREE_DAILY_CAP : FOOD_TEXT_PRO_DAILY_CAP`, which tells
+PRO users "10/day" and free users "200/day" — and **all 5 tests stayed green**,
+because both arms are still named constants holding the right values; they are
+merely on the wrong sides. I reproduced it before believing it. The test asserted
+MEMBERSHIP and ABSENCE and never ASSOCIATION. Now fixed with a capture-group
+assertion on which constant follows `?` and which follows `:`; the swap reddens 1
+test, and the un-mutated tree is 5/5.
+
+**Propagation was STILL incomplete after the B-pass fixed six sites — there were
+eight.** Round 2 found `README.md:13` ("50 logs/day", the project's top-level
+README) and `lib/core/services/subscription_service.dart:620,623` (live client
+code documenting "free 50 / PRO 200" and citing migration 026 as the live
+definition). So: my grep missed 6, the B-pass's wider grep missed 2 more, and
+only a third independently-scoped search found those. **Two rounds of "is this
+complete?" both answered yes and both were wrong** — which is the strongest
+argument in this batch for the ×2 rule being a floor rather than a formality.
+
+Also fixed: a `reason:` string still citing `business-rules.md:36` as saying 10
+(this batch changed it), and two test headers disagreeing about which file owns
+the food-text cap values.
+
+### Why migration 127 still says "FOURTH definition"
+
+The B-pass flagged that word as wrong (there are three: 026, 113, 127) and I
+corrected it in-file. Round 2 caught what that cost: **migration 127 was already
+APPLIED to prod, and editing it invalidated the sha256 recorded in
+`backups/applied_migrations.json`.** The ledger hash is a record of what was
+actually applied; a comment-only edit does not change the live function, but it
+does silently falsify the audit trail — and no gate notices, because
+`check_applied_migrations_ledger.dart` only checks the hash key is present, never
+recomputes it. (Open board item OI-135 already documents this exact class.)
+
+The edit is therefore **reverted**: `127_food_text_free_cap_parity_10.sql` is
+byte-identical to what was applied, and its hash matches the ledger again. The
+off-by-one wording stands in the file, corrected here instead. **An applied
+migration is immutable — including its comments.** The correct home for a
+correction to one is the diagnose-doc, not the file.
+
 ## What was deliberately NOT changed
 
 - **PRO stays 200/day.** The client returns `999999` ("unlimited"). Founder

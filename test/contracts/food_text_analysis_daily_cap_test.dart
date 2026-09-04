@@ -7,10 +7,18 @@
 // every test here stayed green. A title that claims more than the assertions
 // deliver is worse than no test, because it answers "is this covered?" wrongly.
 //
-// The VALUES are pinned by test/contracts/ai_message_limit_parity_test.dart,
-// which reads them from the LATEST migration defining the trigger function and
-// compares them against the client constants. Add new cap-value assertions
-// there, not here — one enumeration of every client<->server limit pair.
+// The VALUES are pinned by
+// test/contracts/food_text_analysis_daily_cap_writer_to_reader_test.dart, which
+// reads them from the LATEST migration defining the trigger function and checks
+// them against BOTH the client constant and ai-proxy's 429-body constants. Add
+// new food-text cap assertions there, not here.
+//
+// (ai_message_limit_parity_test.dart holds the SIBLING pairs — the chat cap and
+// the shared vision ceiling. Gate 9 requires one contract file per SoT concept,
+// which is why the enumeration is split by concept rather than kept in one file.
+// This pointer said "ai_message_limit_parity_test.dart" until round 2 of the ×2
+// review caught that the two headers disagreed about which file owns the
+// food-text values.)
 //
 // Originally landed as T-8 of `audit_2026_05_11_t1_t11_contracts_test.dart`.
 // Split per concept per tech-debt audit 2026-05-20 T12.
