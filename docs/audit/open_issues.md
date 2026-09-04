@@ -2749,6 +2749,29 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Design note for whoever takes this**: this is a **quota ledger**, not a rate limiter. It also
   needs `countProImageAnalysesToday` (`:88-99`, IST-day) resolved at the same time — that is CODE-1
   above, the dead `pro_image_analysis` read, so the two are one piece of work.
+- **THREE DEFECTS MOVED HERE from the OI-162 review, 2026-09-04** — they were surfaced by review
+  round 1 of the usage-counter redesign and, until this edit, lived ONLY in
+  `docs/plan-reviews/oi162-round1-findings.md`. A known bug parked in a review-notes file nobody
+  has a reason to open is a §4.2 deferral in substance, whatever it is called. They are recorded
+  here because this OI already owns `ai-media-proxy` + `weekly-report` quota territory:
+  1. **Consumption moves from success-time to request-time** if a counter is naively swapped to an
+     increment call. Today the free-image row is written at `ai-media-proxy:669`, AFTER Gemini
+     returns; the 502 path returns at `:645` writing nothing. An increment at the pre-flight gate
+     means **a free user whose Gemini call fails permanently loses one of five lifetime analyses**,
+     and a weekly-report failure burns their single free Gemini 2.5 Pro report — with no report.
+     Needs either a read-only pre-flight (`peek`) plus consume-at-the-existing-write-point, or an
+     explicit release-on-failure path with every failure path enumerated.
+  2. **`ai-media-proxy:687` is a SECOND call to the same counter** — a display re-count after the
+     insert, commented at `:680-682` as "re-count AFTER insert so the displayed remaining is
+     accurate". Under an increment-based counter it burns a second unit on every success, turning
+     the 5-image cap into 2. Any fix must make `:687` read the value the single consume returned,
+     not re-query.
+  3. **The `rolling-context` prune interaction is not testable in CI.** `rolling-context:117-125` is
+     cron-only (`isAuthorizedCronCall`), and CI carries no `CRON_SECRET` — so "the summarizer runs
+     and the quota survives", the assertion that most directly pins this whole bug class, has no
+     automated home. Either drive the SQL directly in a Deno test under `supabase/functions/`
+     (CI's `deno-edge-functions` job runs), or record it as a manual live check in the diagnose-doc.
+     Do NOT ship a test that silently skips and reads as green.
 
 ## OI-154 — a cleared profile field silently reverts on the next sign-in (P1)
 
