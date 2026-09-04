@@ -190,6 +190,34 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-09-04 (b)** — blast-radius **platform** — branch `oi162-delete-account-counter`,
+  PLAN-STAGE (no code). Two context-blind rounds on a migration spec: round 1 **2 BLOCKING**,
+  round 2 **0 blocking / 2 major / 2 minor**. **Tuning only — no review file produced**, logged
+  here because §5.1 asks for a new bug-class in ANY skill, and both are reusable lenses.
+  **Lens 3 (`blast_radius_mismatch`) gains an INPUT-EXISTS check.** The plan claimed
+  `platform` and said "computed not estimated" — having run
+  `blast_radius_from_diff.dart` against **a path that did not exist on disk**. The classifier
+  has a CONTENT rule (`SECURITY DEFINER` in a migration ⇒ catastrophic) that can only fire on
+  a file it can READ, so a missing file silently yields the path-glob tier. **A tier computed
+  before the file exists is not a computed tier.** Ask of any blast-radius claim: did the
+  classifier have CONTENT to read? The cost is not cosmetic — catastrophic requires
+  `hermes: accepted`, so the wrong tier drops a mandatory review round.
+  **Lens 7 (`missing_input`) gains: a test that needs credentials must LIVE where the
+  credentialed job looks.** The plan specified a behavioural test "runs in CI against live
+  prod" without naming a directory. CI's `supabase-tests` job — the only one with live
+  secrets — runs exactly `test/supabase/` and `test/edge_functions/` (`test.yml:441,465`).
+  Placed in `test/contracts/`, where its source-grep sibling correctly belongs, it would have
+  landed in the credential-less unit job, hit the repo-standard `hasCredentials` guard, and
+  **skipped forever while reading green** — the section's central claim false, with a passing
+  suite. **For any test asserting live behaviour, verify the DIRECTORY is in the runner's
+  path list before believing the claim.** Sibling of the "green check is only as wide as its
+  input set" family, applied to CI job scoping rather than to a grep.
+  **A negative result worth keeping:** round 2 was told the DEFINER→INVOKER correction might
+  have swapped one false premise for another, and tested it rather than reasoning — reading
+  every `createClient` call in the five EFs, and checking `prosecdef` on all three live cap
+  triggers. It came back clean and said so. Asking a reviewer to attack the CORRECTION, by
+  name, is what round 2 is for.
+
 - **2026-09-04** — blast-radius **platform** — branch `food-text-limit-parity` @ `9b3e688d`
   (diagnose `b8f4c2`: the free food-text cap was 10 in the client and in
   business-rules, 50 in the Postgres trigger that enforces it). **8 findings

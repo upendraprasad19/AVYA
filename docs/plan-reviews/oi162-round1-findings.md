@@ -1,4 +1,4 @@
-# OI-162 — review findings of record (rounds on the superseded plan, and on slice 1)
+# OI-162 — review findings of record (all rounds, all findings)
 
 Written 2026-09-04 because round 1's findings existed **only in conversation**. The slice-1
 reviewer could not verify the plan's claim that every finding was dispositioned, and said so —
@@ -89,3 +89,43 @@ returned exactly 1…19 — no duplicates, no gaps, no lost updates.** Migration
 unused. The dual-revoke reasoning was correct *for a DEFINER function* (090/091 and the
 `supabase/migrations/CLAUDE.md` pitfalls row document opposite no-ops). CI carries exactly
 four Supabase secrets and no service-role key.
+
+
+---
+
+## Round 2 on `docs/audit/oi162-slice1-plan.md` v2 — NOT CONVERGED, 0 blocking
+
+Tabulated here because round 3 caught this file claiming to hold "every finding from both
+rounds" while round 2's existed only as inline citations inside the spec. A findings-of-record
+that overclaims its own coverage is the same defect class as a `contract_test_path:` pointing
+at the wrong file — the artifact reads as authoritative and is not.
+
+**Round 2's verdict on the architecture:** *"the DEFINER→INVOKER correction itself holds up
+under live, adversarial testing."* It was pointed specifically at whether the correction had
+swapped one false premise for another, and tested rather than reasoned — reading every
+`createClient` call in the five Edge Functions (all `SUPABASE_SERVICE_ROLE_KEY`) and checking
+`prosecdef` on all three live cap triggers (all `false`/INVOKER, owned by `postgres`). Clean.
+
+| # | Finding | Disposition |
+|---|---|---|
+| R2-1 | **MAJOR** — findings 2, 3 and 7 were tracked ONLY in this file, which `OPEN_INDEX.md` does not index. A known bug parked where nobody has a reason to look is a §4.2 deferral in substance. | **FIXED** — all three filed onto `docs/audit/open_issues.md` under OI-153 (which already owns that file territory and had already absorbed finding 4), with file:line citations. Round 3 verified each citation live. |
+| R2-2 | **MAJOR** — §6's behavioural test named no directory, and the only placement that RUNS is non-default: CI's `supabase-tests` job executes exactly `test/supabase/` and `test/edge_functions/` (`test.yml:441,465`). In `test/contracts/` it would land in the credential-less unit job, hit the `hasCredentials` guard, and **skip forever while reading green** — making §6's central claim silently false. | **FIXED** — spec now names `test/edge_functions/usage_counters_rls_denies_client_test.dart` explicitly, with the reasoning inline so it is not "corrected" back later. |
+| R2-3 | **MINOR** — the explicit `GRANT EXECUTE` is redundant and `anon` holds EXECUTE anyway: this project's schema-level default privileges grant it on every new `public` function to all four roles. §4's "deliberate and safe" framing implied a scoped decision the schema had already made. | **FIXED** — §4 now states the default ACL, verified live (`{postgres=X,anon=X,authenticated=X,service_role=X}`, both grantors, no PUBLIC entry), and explains that the design deliberately does not rely on grants at all. |
+| R2-4 | **MINOR** — the automated test covers only `authenticated`; nothing pins `anon`'s denial, despite it holding the same default EXECUTE. | **FIXED** — the manual live-check row in §6 now explicitly covers `anon` as well. |
+
+## Round 3 (narrow confirmation) — CONVERGED
+
+All four R2 fixes verified independently: OI-153 entries present with citations that resolve
+live; `test.yml:441,465` confirmed; the live `pg_default_acl` matches the spec's quoted value;
+the `anon` row present. `git diff 6a04cfb2..7a5420c9` introduces no new defects, and no
+sentence in the spec still assumes `SECURITY DEFINER` is live.
+
+**Worth keeping — the error-shape claim was traced to source, not assumed.** Round 3 read the
+pinned package (`pubspec.lock` → `postgrest 2.9.1`) and confirmed
+`PostgrestException.fromJson` takes `code` from the **response body**, falling back to the HTTP
+status only when the body lacks one. Since PostgREST returns `{"code":"42501", …}` with HTTP
+**401**, `.code` is `'42501'` — so §6's "assert the SQLSTATE, not the status" is mechanically
+correct rather than plausible.
+
+**R3-1 (MINOR, fixed by this section):** this file's own header claimed to hold every finding
+from both rounds while omitting round 2's. Now tabulated above.
