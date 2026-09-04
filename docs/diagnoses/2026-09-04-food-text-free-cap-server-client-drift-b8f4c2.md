@@ -21,6 +21,7 @@ readers:
   - { file: lib/core/services/usage_counter_service.dart, line: 127, method: _limit — returns 999999 for PRO, the client constant for free }
   - { file: lib/features/nutrition/widgets/food_logger_section.dart, line: 107, method: build — Log Food tab meter }
   - { file: lib/features/profile/screens/profile/subscription_section.dart, line: 174, method: build — free-tier rate-limit meter }
+  - { file: supabase/functions/ai-proxy/index.ts, line: 84, method: FOOD_TEXT_FREE_DAILY_CAP — display-only, renders the 429 body; was an inline literal reporting 50 until the B-pass }
 hive_key_prefix: "n/a — the counter is a row count on ai_coach_interactions, not a Hive key"
 hive_key_formula: "n/a — no Hive surface for this concept"
 sync_methods: []
@@ -91,15 +92,24 @@ recurrence: >
 
 ## What was actually wrong
 
-Four sources of truth describe the free food-text daily limit. Three said 10:
+Several sources of truth describe the free food-text daily limit. These said 10:
 
 - `lib/core/constants/app_constants.dart:78` — `freeAiTextLogsPerDay = 10`
-- `docs/architecture/business-rules.md:17` and `:36` — "AI food text analysis — 10 text logs/day"
+- `docs/architecture/business-rules.md:17` — the FREE-tier row, "AI food text analysis — 10 text logs/day"
 - the UI meters at `food_logger_section.dart:107` and `subscription_section.dart:174`
 
 One said 50, and it was the only one that enforces anything:
 `enforce_food_text_daily_limit`, whose live definition at the time was migration
 113 (`daily_cap := CASE WHEN is_pro THEN 200 ELSE 50 END`).
+
+⚠ **Corrected by the B-pass:** an earlier version of this doc cited
+`business-rules.md:17` **and `:36`** as two confirmations of the free value.
+Line 36 is in the **PRO** section, not the free one — so it was never evidence
+for the free cap, and it was independently WRONG, documenting PRO at 10/day when
+PRO is unlimited client-side with a 200/day server ceiling. Counting it as
+corroboration is the input-set error this batch is about, committed inside the
+writeup of that error. `:36` now reads "unlimited (server-side abuse ceiling
+200/day)".
 
 The client blocks at 10 before a request is made, so no in-app user could ever
 observe the gap. It was reachable only by calling the Edge Function directly —
@@ -173,6 +183,44 @@ previous value (`ELSE 50`) at line 32, **above** the live `ELSE 10` at line 65
 — so an unstripped `firstMatch` reads the rollback prose as the live cap.
 Documenting the old value in a header makes the file self-trapping for any
 naive grep.
+
+## What the B-pass found — the first fix was the INSTANCE, not the class
+
+The context-blind B-pass (`docs/reviews/9b3e688d-review.md`) reproduced all four
+mutation results exactly and confirmed live prod state, then found **8 findings,
+every one of them the same shape: the number was corrected where it is enforced
+and left stale everywhere it is REPORTED or DOCUMENTED.**
+
+- **P1 — `ai-proxy/index.ts` rendered the 429 body from an inline
+  `isProUser ? 200 : 50`.** So after the trigger began enforcing 10, the error
+  text still told callers "50/day" — misinforming *precisely* the direct-API
+  population this cap exists to constrain, and doing it in the one message they
+  actually see. Fixed by naming `FOOD_TEXT_FREE_DAILY_CAP` /
+  `FOOD_TEXT_PRO_DAILY_CAP` (mirroring `FREE_DAILY_LIMIT`, which f1a70c already
+  named and pinned for the chat cap) and pinning both to the live trigger arms.
+- **P1 — two auto-loaded nested `CLAUDE.md` files still said "50/day free".**
+  `supabase/functions/CLAUDE.md` and `lib/features/nutrition/CLAUDE.md` load into
+  every future session working in those subtrees, so the stale number would have
+  been fed back as authoritative context indefinitely. The reviewer noticed
+  because they were injected into its own context during the review.
+- **P2 ×2 —** a second stale comment 90 lines below the one that was fixed, and
+  the `business-rules.md:36` citation error described above.
+- **P3 ×3 —** this migration's header called itself the "FOURTH definition" when
+  there are three (026 / 113 / 127); the vision test's "now it fires
+  automatically" framing overstated what two hardcoded constant names can do;
+  and `docs/architecture/{ai,functionality-flow}.md` both still said 50.
+
+**Why the original grep missed all of it, stated plainly because it is the
+fourth instance in one session:** the pre-commit check was
+`grep -rn "50/day free\|200/day PRO\|50/day" test/ scripts/` — scoped to two
+directories, on a repo-wide constant. It returned zero hits and was read as
+"nothing else references this". The same defect that produced the bug produced
+the incomplete fix, and only a reviewer with a different input set found it.
+
+Every one of the eight is fixed in this batch. Two further mutations were run on
+the new ai-proxy assertion, each confirmed applied first: setting
+`FOOD_TEXT_FREE_DAILY_CAP = 50` reddens 1 test, and restoring the literal
+`isProUser ? 200 : 50` reddens 1 test.
 
 ## What was deliberately NOT changed
 

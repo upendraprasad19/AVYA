@@ -33,7 +33,7 @@ status: scaffold
 
 ## PRO — ₹349/month or ₹2,999/year
 - Auto-generate new plans after Week 4 (phases 2-12)
-- AI food text analysis — 10 text logs/day
+- AI food text analysis — unlimited (server-side abuse ceiling 200/day)
 - Scan meal camera — 10 scans/day (soft cap warning at 7/10)
 - Cart Auditor — 10 scans/day (soft cap warning at 7/10)
 - Weekly AI nutrition report + Telegram push (ongoing)

@@ -68,11 +68,16 @@ void main() {
     // PRO user hit a live 429 with headroom still showing in-app ("confirmed
     // live-discoverable, not hypothetical" — 114's own header).
     //
-    // THIS ASSERTION IS THE TRIGGER for raising the ceiling. Adding a third
-    // vision channel with its own advertised PRO allowance reddens the suite
-    // until a new migration raises the shared ceiling to cover the new sum.
-    // The founder plan of 2026-09-04 was "we'll increase the max to ~30 when we
-    // add one" — an intention with nothing to fire it. Now it fires.
+    // THIS ASSERTION IS THE TRIGGER for raising the ceiling — but read its
+    // scope exactly, because the first version of this comment overstated it
+    // (B-pass P3). It compares the live ceiling against TWO NAMED CONSTANTS,
+    // `proScanMealPerDay` + `proCartAuditorPerDay`. It is not dynamic discovery
+    // of vision channels: a third channel fires this test only once its own PRO
+    // constant is ADDED to the sum below. What it does guarantee is that the
+    // sum and the ceiling cannot silently disagree — which is the half that was
+    // pure intent before ("we'll raise the max to ~30 when we add one",
+    // founder, 2026-09-04). Adding a channel means editing this line; that edit
+    // is the reminder.
     expect(ceiling, greaterThanOrEqualTo(proTotal),
         reason: 'Vision ceiling ($ceiling, ${mig.uri.pathSegments.last}) is '
             'below the advertised PRO allowance (proScanMealPerDay $proScan + '

@@ -33,7 +33,7 @@
 --   (drifted) free cap. Note 113 also carries the IST boundary fix, so roll
 --   back to 113's body, NOT to migration 026's.
 --
--- ⚠ This is the FOURTH definition of enforce_food_text_daily_limit (026 -> 113
+-- ⚠ This is the THIRD definition of enforce_food_text_daily_limit (026 -> 113
 --   -> this). The LAST CREATE OR REPLACE wins; a citation into an earlier
 --   migration's body is stale by construction. The same trap cost a wrong cap
 --   value earlier in this batch's own planning, where migration 111's vision

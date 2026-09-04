@@ -10209,6 +10209,16 @@ concepts:
         line_range: 172-176
         method: build — free-tier rate-limit meter
         semantic: client-read
+      - file: supabase/functions/ai-proxy/index.ts
+        line_range: 84-85
+        method: FOOD_TEXT_FREE_DAILY_CAP / FOOD_TEXT_PRO_DAILY_CAP
+        semantic: cloud-read
+        notes: |
+          DISPLAY-ONLY reader — renders the 429 body. Was an inline
+          `isProUser ? 200 : 50` literal until the B-pass on b8f4c2 caught it
+          still reporting 50 after migration 127 lowered the real cap to 10,
+          misinforming exactly the direct-API population the cap targets.
+          Pinned to the live trigger arms by the behavioral_test_path above.
     hive:
       box: "n/a — the counter is a row count on the cloud table, not a Hive key"
       key_prefix: "n/a"

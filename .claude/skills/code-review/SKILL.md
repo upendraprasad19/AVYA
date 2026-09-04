@@ -190,6 +190,48 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-09-04** — blast-radius **platform** — branch `food-text-limit-parity` @ `9b3e688d`
+  (diagnose `b8f4c2`: the free food-text cap was 10 in the client and in
+  business-rules, 50 in the Postgres trigger that enforces it). **8 findings
+  (0 P0, 2 P1, 2 P2, 4 P3); 1 false_alarm (12.5%).** 7 fixed in-batch, 1
+  informational. Review: `docs/reviews/9b3e688d-review.md`.
+  **All four mutation claims and the live-prod state reproduced EXACTLY — and the
+  pass still found eight things, every one the same shape.** The fix had been
+  applied where the cap is ENFORCED and nowhere it is REPORTED. `ai-proxy`
+  rendered its 429 body from an inline `isProUser ? 200 : 50`, so the one message
+  a capped caller actually reads kept saying "50/day" — misinforming precisely
+  the direct-API population the cap exists to constrain.
+  **Tuning — lens 1 (`writer_reader_drift`) gains a DISPLAY-READER question, and it
+  is not the same as the data-reader question the lens already asks.** When a diff
+  changes a VALUE (a cap, a threshold, a price, a limit), enumerate everywhere that
+  value is *reported* — error bodies, user-facing copy, log lines, docs — not only
+  where it is *enforced*. A display reader has no functional coupling to the writer,
+  so nothing breaks when it drifts; it just starts lying, silently, to the only
+  audience that asked.
+  **Second tuning, and it is new to this history: AUTO-LOADED CONTEXT FILES ARE A
+  PROPAGATION TARGET.** Two nested `CLAUDE.md` files (`supabase/functions/`,
+  `lib/features/nutrition/`) still documented 50/day. Those load automatically into
+  every future session working in those subtrees, so a stale number there is fed
+  back to the next agent as authoritative context and will be reasoned from. The
+  reviewer noticed because they were injected into its OWN context mid-review. Add
+  to lens 5: when a diff changes a documented constant, `grep` the nested
+  `CLAUDE.md` set specifically — they are the highest-leverage stale docs in the
+  repo and the easiest to forget, because nobody opens them deliberately.
+  **Third — the author's grep was the bug, again.** The pre-commit check was
+  `grep -rn "50/day" test/ scripts/` on a repo-wide constant: zero hits, read as
+  proof of absence. Fourth instance in one session of
+  `feedback_green_check_input_set_width`, and it happened *inside the fix for a bug
+  whose cause was exactly that*. Worth stating in this history because it is the
+  argument for the B-pass existing at all — the author cannot audit their own input
+  set, since the too-narrow scope feels complete from inside it.
+  ⚠ **Also, a NEGATIVE claim the reviewer was asked to check and did:** the commit
+  asserted that removing comment-stripping from `latestMigrationDefining` reddens
+  ZERO tests (recorded as defensive-only rather than claimed as proven). The
+  reviewer reproduced the zero. **Asking a reviewer to verify a negative result is
+  cheap and worth doing** — an unearned mutation-proof is invisible by construction,
+  and "0 red" is the easiest number to omit rather than report.
+  False-alarm rate 1/8 → no change to lenses 2-4, 6-9.
+
 - **2026-09-03** — blast-radius **platform** — branch `techdebt-audit-sep02`, Slice A of the
   2026-09-02 tech-debt audit (diagnoses `e4d1b7`, `f2b9d4`). **3 findings (0 P0, 1 P1, 1 P2,
   1 P3); 0 false_alarm.** 1 fixed in-batch, 1 answered in the plan-review record, 1 tracked as

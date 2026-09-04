@@ -76,6 +76,47 @@ void main() {
               'abuse backstop behind that promise.');
     });
 
+    test('ai-proxy 429 body reports the SAME caps the trigger enforces', () {
+      // Added by the B-pass on b8f4c2's own commit. ai-proxy renders the 429
+      // message from its own numbers, and they were an inline
+      // `isProUser ? 200 : 50` literal — so after migration 127 lowered the
+      // real free cap to 10, the error text kept telling users "50/day",
+      // misinforming precisely the direct-API population the cap targets.
+      // The first fix corrected the trigger and left this reader stale: the
+      // instance fixed, the class open.
+      final caps = readProFreeCap(migration);
+      expect(caps, isNotNull);
+
+      final src = stripDartComments(
+          File('supabase/functions/ai-proxy/index.ts').readAsStringSync());
+
+      final free =
+          RegExp(r'FOOD_TEXT_FREE_DAILY_CAP\s*=\s*(\d+)').firstMatch(src);
+      final pro =
+          RegExp(r'FOOD_TEXT_PRO_DAILY_CAP\s*=\s*(\d+)').firstMatch(src);
+      expect(free, isNotNull,
+          reason: 'ai-proxy must name its food-text free cap as '
+              'FOOD_TEXT_FREE_DAILY_CAP, not inline it — an unnamed literal is '
+              'what drifted.');
+      expect(pro, isNotNull,
+          reason: 'ai-proxy must name its food-text PRO cap as '
+              'FOOD_TEXT_PRO_DAILY_CAP.');
+
+      expect(int.parse(free!.group(1)!), caps!.free,
+          reason: 'ai-proxy FOOD_TEXT_FREE_DAILY_CAP must equal the live '
+              'trigger FREE arm (${caps.free}, '
+              '${migration.uri.pathSegments.last}). The 429 body is the only '
+              'thing that tells a caller what the limit is.');
+      expect(int.parse(pro!.group(1)!), caps.pro,
+          reason: 'ai-proxy FOOD_TEXT_PRO_DAILY_CAP must equal the live '
+              'trigger PRO arm (${caps.pro}).');
+
+      // The exact pre-fix shape, pinned absent so it cannot come back by hand.
+      expect(RegExp(r'isProUser\s*\?\s*\d+\s*:\s*\d+').hasMatch(src), isFalse,
+          reason: 'The food-text 429 cap must not be an inline numeric ternary '
+              '— that literal is what went stale for four months.');
+    });
+
     test('every client reader routes through the one constant', () {
       // Writer/reader drift is cheapest to prevent by keeping ONE reader
       // symbol. If a screen ever hardcodes 10, this contract stops covering it.
