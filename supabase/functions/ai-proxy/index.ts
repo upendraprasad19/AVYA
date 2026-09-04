@@ -11,7 +11,7 @@
  *   `isPro` gate is simpler.
  *
  * Routing table (set by request body `type`):
- *   food_text_analysis  → gemini-2.5-flash, JSON mode, 50/day free · 200/day PRO
+ *   food_text_analysis  → gemini-2.5-flash, JSON mode, 10/day free · 200/day PRO
  *   scan_meal           → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ cart_auditor)
  *   cart_auditor        → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ scan_meal)
  *   prediction          → gemini-2.5-flash, JSON mode, no daily cap (onboarding/monthly)

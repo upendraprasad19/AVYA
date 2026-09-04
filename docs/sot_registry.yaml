@@ -10147,3 +10147,72 @@ concepts:
       table: subscriptions
       columns: [user_id, status, end_date]
     sync_methods: []
+
+  # b8f4c2 (2026-09-04) — the free food-text cap existed in FOUR places and one
+  # disagreed. Client + business-rules said 10/day; the Postgres trigger said 50,
+  # a 5x bypass for anyone calling ai-proxy directly. Registered here because
+  # supabase/migrations/CLAUDE.md:68 already listed this concept as SoT-bearing
+  # while the registry had no such entry — the doc's claim was right and the
+  # registry was the gap.
+  - concept: food_text_analysis_daily_cap
+    domain: nutrition
+    behavioral_test_path: test/contracts/food_text_analysis_daily_cap_writer_to_reader_test.dart
+    presence_only: true  # Postgres trigger function — enforcement is plpgsql on the live DB, raised as P0001 at INSERT time. There is no Dart or Deno runtime surface to round-trip in the unit suite. Live proof is the migration apply plus the 11th-insert check recorded in the diagnose-doc (rule 21 honesty).
+    description: |
+      How many AI food-text analyses a user may run per IST day. FREE = 10,
+      PRO = 200. The number lives in two independent places that must agree:
+      a Dart constant the UI meters against, and a Postgres BEFORE INSERT
+      trigger that is the actual enforcement.
+
+      PARITY CONTRACT: the client constant and the trigger's FREE arm must be
+      equal. When they drift, the looser side wins silently and the tighter
+      side becomes decorative — a user calling the Edge Function directly gets
+      the server's number, not the one the app displays. This is the same
+      failure f1a70c fixed for the CHAT cap (client 15 vs server 10); food text
+      drifted the opposite way (client 10 vs server 50) and went unnoticed
+      because f1a70c's regression test pinned only the chat pair.
+
+      PRO DIVERGENCE IS DELIBERATE, not drift: the client reports 999999
+      ("unlimited") while the server holds 200/day. Founder decision
+      2026-09-04 — 200 logs in one IST day is an abuse ceiling, not a product
+      limit. Pinned so it stays a decision.
+
+      ⚠ READ THE CAP FROM THE HIGHEST-NUMBERED MIGRATION THAT DEFINES THE
+      FUNCTION. `CREATE OR REPLACE` makes the directory append-only, so 026,
+      113 and 127 all contain a definition and only the last is live. Citing
+      an earlier one is stale by construction — that exact mistake produced a
+      wrong cap value during this batch's own planning.
+    writers:
+      - file: supabase/migrations/127_food_text_free_cap_parity_10.sql
+        line_range: 45-83
+        method: enforce_food_text_daily_limit trigger function (live definition)
+        semantic: cloud-enforcement
+        notes: |
+          Authoritative. Raises P0001 'food_text_daily_limit_reached' on the
+          INSERT that would exceed the cap. Fires on INSERT only, never UPDATE
+          — which is why ai-proxy's 60s dedup refresh does not burn a slot.
+    readers:
+      - file: lib/core/constants/app_constants.dart
+        line_range: 76-79
+        method: freeAiTextLogsPerDay
+        semantic: client-constant
+        notes: must equal the trigger's FREE arm; pinned by the behavioral_test_path above
+      - file: lib/core/services/usage_counter_service.dart
+        line_range: 124-128
+        method: _limit — returns 999999 for PRO, the client constant for free
+        semantic: client-read
+      - file: lib/features/nutrition/widgets/food_logger_section.dart
+        line_range: 105-109
+        method: build — meter shown on the Log Food tab
+        semantic: client-read
+      - file: lib/features/profile/screens/profile/subscription_section.dart
+        line_range: 172-176
+        method: build — free-tier rate-limit meter
+        semantic: client-read
+    hive:
+      box: "n/a — the counter is a row count on the cloud table, not a Hive key"
+      key_prefix: "n/a"
+    cloud:
+      table: ai_coach_interactions
+      columns: [user_id, channel, user_message, ai_response, model_used, tokens_used, created_at]
+    sync_methods: []
