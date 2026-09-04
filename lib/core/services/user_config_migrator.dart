@@ -74,7 +74,7 @@ class UserConfigMigrator {
     'pattern_insights', 'last_ai_greeting_date', 'ai_trial_start',
     'telegram_connected', 'coach_channel',
     // Rate limit counters (per-user free-tier window — leaking these
-    // lets a sign-out → sign-up cycle reset 50/day caps).
+    // lets a sign-out → sign-up cycle reset the daily caps).
     'ai_text_log_count_today', 'scan_meal_count_today',
     'cart_auditor_count_today', 'last_daily_reset',
     // Workout plan + travel + swap state (per-user plan window, swap

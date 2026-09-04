@@ -38,7 +38,7 @@ for `nlog_*` Hive rows + `nutrition_logs` cloud) + `nutrition_read_service.dart`
 | `water_logs` | `health_write_service.dart` `setWaterMl` (audit-fixwave F12 — was mis-named `logWater`, now deleted) | `water_section.dart` `WardGlassGrid`. |
 | `water_target` | `water_target_service.dart` (Hive `configBox['water_target_ml']`) | `waterTargetProvider`. |
 | `diet_plan_saved_loaded` | `diet_plan_screen.dart` `_savePlan` → `configBox['saved_diet_plan']` + `ref.invalidate(dietPlanProvider)` | `TodaysMealsCard` renders "FROM YOUR DIET PLAN" hints on empty slots. |
-| `food_text_analysis` daily cap | server-side trigger `trg_food_text_rate_limit` (migration 024) — 50/day free, 200/day PRO. Insert-first pattern: `ai-proxy` inserts placeholder row BEFORE Gemini. | client error mapping returns 429 → "limit reached". |
+| `food_text_analysis` daily cap | server-side trigger `trg_food_text_rate_limit` (live definition migration 127) — 10/day free, 200/day PRO. Free arm lowered 50→10 in b8f4c2 to match `AppConstants.freeAiTextLogsPerDay`. Insert-first pattern: `ai-proxy` inserts placeholder row BEFORE Gemini. | client error mapping returns 429 → "limit reached". |
 
 ## Common pitfalls
 

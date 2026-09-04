@@ -227,8 +227,28 @@ void main() {
     p.stdin.write('{}');
     await p.stdin.flush();
 
+    // ⚠ 25s here was NOT enough under full-suite contention, and this is the
+    // FIFTH recurrence of the documented class in CLAUDE.md §4.9 — in the very
+    // file that `0a99a0b7` ("the two new e2e files had no file-level timeout,
+    // and the full suite caught it") already fixed once.
+    //
+    // What that fix missed: it added `@Timeout(Duration(minutes: 6))` at the
+    // FILE level, and this test's own `timeout:` override (60s, below) silently
+    // took precedence over it — so the file-level budget never applied here.
+    // Inside that, 25s bounded the child. Solo the child costs ~5s (3s stdin
+    // self-release + dart startup) and 25s looks generous; in the full suite
+    // ~40 files compete and every `dart` child pays the wrapper cost §0
+    // measures at 3.4-10.5s FOR A NO-OP. Measured 2026-09-04: green targeted
+    // (7/7) and green across all of test/scripts/ (555/555), RED only in the
+    // ~5300-test suite — exactly "a targeted run is a different input set, not
+    // a subset".
+    //
+    // 90s keeps the failure meaningful: the hook self-releases in 3s, so 30x
+    // that is still unambiguously "released" rather than "hung", and it sits
+    // far enough inside the file's 6-minute budget that a genuine hang fails
+    // HERE with the message below rather than as an opaque file timeout.
     final code = await p.exitCode.timeout(
-      const Duration(seconds: 25),
+      const Duration(seconds: 90),
       onTimeout: () {
         p.kill(ProcessSignal.sigkill);
         return -1;
@@ -244,5 +264,11 @@ void main() {
         reason: 'the hook must self-release on its stdin timeout rather than '
             'block forever waiting for a close that never comes');
     expect(code, 0, reason: 'and it must still exit 0');
-  }, timeout: const Timeout(Duration(seconds: 60)));
+    // NO per-test `timeout:` override here, deliberately. One used to sit on
+    // this line (60s) and it DEFEATED the file-level `@Timeout(minutes: 6)`
+    // added by 0a99a0b7 for exactly this contention problem — a per-test
+    // `timeout:` takes precedence over the file annotation, so the file got the
+    // fix and this test kept the old ceiling. Inheriting the file budget is the
+    // point; do not re-add a tighter one without re-reading §4.9.
+  });
 }

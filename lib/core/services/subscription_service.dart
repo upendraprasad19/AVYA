@@ -617,10 +617,11 @@ class SubscriptionService {
   /// is intentionally tolerated because their real spend cap is enforced
   /// SERVER-SIDE inside Postgres, not by this client gate: the
   /// `trg_food_text_rate_limit` trigger (function
-  /// `enforce_food_text_daily_limit`, migration 026 on `ai_coach_interactions`)
+  /// `enforce_food_text_daily_limit`, live definition migration 127 — created by
+  /// 026 — on `ai_coach_interactions`)
   /// runs BEFORE INSERT in the same transaction as the row, re-derives PRO
   /// status from the `subscriptions` table (status='active' AND end_date>now()),
-  /// and raises SQLSTATE P0001 once the per-day cap is hit (free 50 / PRO 200) —
+  /// and raises SQLSTATE P0001 once the per-day cap is hit (free 10 / PRO 200) —
   /// which `ai-proxy` maps to a 429. A spoofed client isPro() therefore cannot
   /// exceed the paid Gemini quota; the worst it buys is the free-tier daily cap,
   /// which the server grants anyway. Adding these to server-verification here

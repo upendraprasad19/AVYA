@@ -10,7 +10,7 @@ Personalised fitness and nutrition platform for young professionals (22-35) in I
 - Phase 1 workout plan — 4 weeks, auto-generated locally (no API cost)
 - Workout template builder + copy week
 - Food database logging — 1,431 Indian-first foods (seeded from `assets/data/food_database.json`)
-- AI food text analysis — 50 logs/day (server-side cap)
+- AI food text analysis — 10 logs/day (server-side cap)
 - Scan meal (camera) — 15 scans/day (server-side cap)
 - Cart Auditor (grocery screenshot health audit) — 15 scans/day
 - Weight, body measurements, streak, water tracking
