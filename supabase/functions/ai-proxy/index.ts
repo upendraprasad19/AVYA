@@ -11,7 +11,7 @@
  *   `isPro` gate is simpler.
  *
  * Routing table (set by request body `type`):
- *   food_text_analysis  → gemini-2.5-flash, JSON mode, 50/day free · 200/day PRO
+ *   food_text_analysis  → gemini-2.5-flash, JSON mode, 10/day free · 200/day PRO
  *   scan_meal           → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ cart_auditor)
  *   cart_auditor        → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ scan_meal)
  *   prediction          → gemini-2.5-flash, JSON mode, no daily cap (onboarding/monthly)
@@ -69,6 +69,21 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // OQ-1 decision: free users get 10 messages/day forever (no time-limited trial).
 // Captain Manual reflects this. Never re-introduce a trial window without an OQ change.
 const FREE_DAILY_LIMIT = 10;
+
+// Food-text analysis daily caps — DISPLAY ONLY. The Postgres trigger
+// `enforce_food_text_daily_limit` is the enforcement; these exist purely to
+// render the 429 body, and a wrong value here misinforms exactly the direct-API
+// population the cap is aimed at.
+//
+// FREE must equal AppConstants.freeAiTextLogsPerDay AND the FREE arm of the
+// live trigger. It was an inline `isProUser ? 200 : 50` literal until b8f4c2 —
+// which kept reporting 50 after migration 127 lowered the real cap to 10.
+// Named + pinned by test/contracts/food_text_analysis_daily_cap_writer_to_reader_test.dart
+// so the three can no longer drift apart silently, the way FREE_DAILY_LIMIT
+// above is pinned by ai_message_limit_parity_test.dart (f1a70c).
+const FOOD_TEXT_FREE_DAILY_CAP = 10;
+const FOOD_TEXT_PRO_DAILY_CAP = 200;
+
 const DEDUP_WINDOW_SECS = 30; // Ignore duplicate messages within 30 seconds
 
 // Human-readable labels for the ai_coach_interactions.model_used column.
@@ -228,8 +243,9 @@ serve(async (req: Request) => {
       body;
 
     // ── Food text analysis ────────────────────────────────────────
-    // Free: 50/day  ·  PRO: 200/day. Enforced atomically by Postgres
-    // trigger `trg_food_text_rate_limit` (migration 024) on the
+    // Free: 10/day  ·  PRO: 200/day. Enforced atomically by Postgres
+    // trigger `trg_food_text_rate_limit` (live definition: migration 127;
+    // first created by 026, IST boundary fixed by 113) on the
     // `ai_coach_interactions` table — not by a check-then-insert dance
     // inside this handler. The old TOCTOU race (two simultaneous
     // requests both seeing count=49 and both inserting) is closed.
@@ -321,7 +337,9 @@ serve(async (req: Request) => {
         const msg = String(insertErr.message ?? "");
         if (msg.includes("food_text_daily_limit_reached")) {
           const isProUser = await checkPro(supabaseClient, userId);
-          const cap = isProUser ? 200 : 50;
+          const cap = isProUser
+            ? FOOD_TEXT_PRO_DAILY_CAP
+            : FOOD_TEXT_FREE_DAILY_CAP;
           return err(
             429,
             `Daily food analysis limit reached (${cap}/day). Try again tomorrow.`,

@@ -885,5 +885,14 @@
     "diagnose": "f7b2c4",
     "slug": "fix_incline_dumbbell_press_equipment",
     "note": "OI-89 B-pass finding 2. E260 Incline Dumbbell Press claimed equipment_needed=['dumbbells'] while its FIRST coaching cue says 'Set bench to 30-45 degree incline' unconditionally - so it was tagged home_dumbbells, a tier that grants no bench. A new number rather than an edit to 125 (applied minutes earlier and therefore immutable - the OI-135 ledger-hash drift class). Found by running check_equipment_audit.dart --all-tiers: its default was BODYWEIGHT-TIER ONLY, and that scope was the blind spot, because a row over-tagged in equipment_needed rather than equipment_tier is not bodyweight-tier to begin with. E260 was the one real defect among 18 gym-tier findings; the other 17 are comparison prose, now recorded with reasons in acceptedMentions. The gate default is all-tiers as of the same commit. Verified post-apply: {dumbbells,bench}."
+  },
+  {
+    "migration": "127",
+    "applied_at": "2026-09-04T17:18:20+05:30",
+    "hash": "sha256:305622fba7cd22019e3c73810aae952f7446159e1731fca1db94fbc02f7ad0ca",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "b8f4c2",
+    "slug": "food_text_free_cap_parity_10",
+    "note": "Lowers the FREE food_text_analysis daily cap 50 -> 10 so the server agrees with AppConstants.freeAiTextLogsPerDay and docs/architecture/business-rules.md; only this trigger said 50, a 5x bypass for callers reaching ai-proxy directly. PRO unchanged at 200 (founder decision 2026-09-04). CREATE OR REPLACE on migration 113 s function; IST day boundary (7ad0d3 fix) carried verbatim. Cloud version 20260904114820. Live-verified via pg_proc: cap expr now ELSE 10, Asia/Kolkata boundary present, trg_food_text_rate_limit still attached."
   }
 ]
