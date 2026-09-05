@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### usage_quota_ledger (1 bugs)
+- 2026-09-05 d3a7f1 — Nine quota checks derive their count from rows in `ai_coach_interactions`, and `rolling-context` prunes that table nightly — it summarises and DELETES once a user passes 50 non-app_event rows, keeping…
+
 ### food_text_analysis_daily_cap (1 bugs)
 - 2026-09-04 b8f4c2 — The free AI food-text daily cap was declared 10/day by the client and by docs/architecture/business-rules.md, but the Postgres trigger that actually enforces it allowed 50/day. Any caller reaching…
 
@@ -1113,6 +1116,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-05 | d3a7f1 | Nine quota checks derive their count from rows in `ai_coach_interactions`, and `rolling-context` prunes that table nightly — it summarises and DELETES once a user passes 50 non-app_event rows, keeping… | usage_quota_ledger | test/contracts/usage_counters_infrastructure_test.dart |
 | 2026-09-04 | b8f4c2 | The free AI food-text daily cap was declared 10/day by the client and by docs/architecture/business-rules.md, but the Postgres trigger that actually enforces it allowed 50/day. Any caller reaching… | food_text_analysis_daily_cap | test/contracts/food_text_analysis_daily_cap_writer_to_reader_test.dart |
 | 2026-09-03 | f2b9d4 | A PAYING PRO user silently loses every PRO coach tool, and nothing anywhere records that it happened. `ai-proxy/index.ts` resolves entitlement through `checkPro()`: async function checkPro(client,… | ai_coach_pro_entitlement | test/contracts/ai_coach_pro_entitlement_writer_to_reader_test.dart |
 | 2026-09-03 | e4d1b7 | A PostgREST failure on ONE count query hands a FREE user an unbounded Gemini 2.5 Pro weekly report — the most expensive model call in the app. `weekly-report/index.ts` gates ongoing reports on "has… | weekly_report_pro_gate | test/contracts/weekly_report_pro_gate_writer_to_reader_test.dart |

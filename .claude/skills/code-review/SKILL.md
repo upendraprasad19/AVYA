@@ -190,6 +190,65 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-09-05** — blast-radius **platform** — branch `oi162-delete-account-counter` @
+  `303c57af` (OI-162 slice 1: migration 128, the usage_counters ledger, applied to prod).
+  **7 findings (0 P0, 1 P1, 3 P2, 3 P3); 0 false_alarm.** 4 fixed, 3 recorded as named
+  invariants. Review: `docs/reviews/303c57af-review.md`.
+  **The P1 would have failed CI at the merge commit** — the keystone plan-review record for
+  the branch simply did not exist yet. Worth noting because the batch had run three plan-review
+  rounds and produced two review documents; neither is the artifact
+  `check_plan_review_record_exists.dart` reads, which is branch-keyed with `---` frontmatter.
+  **Producing review artifacts is not the same as producing THE artifact the gate reads.**
+  **Tuning — a TENTH lens, `tool_action_side_effects`.** Finding 6 is the one no lens asked
+  for and no amount of reading the diff would surface: `git checkout -- <file>` — the obvious
+  way to undo a test mutation — silently converts an applied migration's CRLF to LF via
+  `.gitattributes` `eol=lf`, **invalidating the ledger's recorded sha256 while `git status`
+  and `git diff` both read CLEAN**, because git compares normalized content and the ledger
+  hashes bytes. The reviewer hit it by doing the natural thing, then checked the hash anyway.
+  Ask: **does the tool I am using to VERIFY or RESTORE have side effects on the artifact being
+  measured?** Sibling of "a green check is only as wide as its input set", pointed at the
+  instrument rather than the sample. Now recorded in `supabase/migrations/CLAUDE.md`.
+  **Second tuning — lens 8 gains COMPLETENESS, not just correctness.** Finding 7's fix was
+  itself defeated: an assertion `contains("RAISE EXCEPTION 'consume_quota:")` stayed GREEN
+  when one of the TWO such guards was converted to `RETURN -1`, because the other still
+  matched. A `contains` over a pattern that occurs N times cannot detect one of them
+  disappearing. Ask of any absent/present assertion: **how many times does this pattern occur,
+  and would the test notice if exactly one went away?** Same family as 2026-09-04's
+  membership-is-not-association, one step further.
+  ⚠ Also: two of the seven were defects in this batch's OWN corrections (line citations
+  captured before a later edit to the same file; the test written to close a finding). That
+  ratio keeps recurring and is the argument for the B-pass running AFTER remediation, not
+  alongside it.
+  False-alarm rate 0/7 → no change to lenses 1-9.
+
+- **2026-09-04 (b)** — blast-radius **platform** — branch `oi162-delete-account-counter`,
+  PLAN-STAGE (no code). Two context-blind rounds on a migration spec: round 1 **2 BLOCKING**,
+  round 2 **0 blocking / 2 major / 2 minor**. **Tuning only — no review file produced**, logged
+  here because §5.1 asks for a new bug-class in ANY skill, and both are reusable lenses.
+  **Lens 3 (`blast_radius_mismatch`) gains an INPUT-EXISTS check.** The plan claimed
+  `platform` and said "computed not estimated" — having run
+  `blast_radius_from_diff.dart` against **a path that did not exist on disk**. The classifier
+  has a CONTENT rule (`SECURITY DEFINER` in a migration ⇒ catastrophic) that can only fire on
+  a file it can READ, so a missing file silently yields the path-glob tier. **A tier computed
+  before the file exists is not a computed tier.** Ask of any blast-radius claim: did the
+  classifier have CONTENT to read? The cost is not cosmetic — catastrophic requires
+  `hermes: accepted`, so the wrong tier drops a mandatory review round.
+  **Lens 7 (`missing_input`) gains: a test that needs credentials must LIVE where the
+  credentialed job looks.** The plan specified a behavioural test "runs in CI against live
+  prod" without naming a directory. CI's `supabase-tests` job — the only one with live
+  secrets — runs exactly `test/supabase/` and `test/edge_functions/` (`test.yml:441,465`).
+  Placed in `test/contracts/`, where its source-grep sibling correctly belongs, it would have
+  landed in the credential-less unit job, hit the repo-standard `hasCredentials` guard, and
+  **skipped forever while reading green** — the section's central claim false, with a passing
+  suite. **For any test asserting live behaviour, verify the DIRECTORY is in the runner's
+  path list before believing the claim.** Sibling of the "green check is only as wide as its
+  input set" family, applied to CI job scoping rather than to a grep.
+  **A negative result worth keeping:** round 2 was told the DEFINER→INVOKER correction might
+  have swapped one false premise for another, and tested it rather than reasoning — reading
+  every `createClient` call in the five EFs, and checking `prosecdef` on all three live cap
+  triggers. It came back clean and said so. Asking a reviewer to attack the CORRECTION, by
+  name, is what round 2 is for.
+
 - **2026-09-04** — blast-radius **platform** — branch `food-text-limit-parity` @ `9b3e688d`
   (diagnose `b8f4c2`: the free food-text cap was 10 in the client and in
   business-rules, 50 in the Postgres trigger that enforces it). **8 findings

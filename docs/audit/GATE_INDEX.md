@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **96** (49 numbered, 47 by filename only).
+Total gates: **97** (49 numbered, 48 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -103,6 +103,7 @@ Total gates: **96** (49 numbered, 47 by filename only).
 | — | `check_two_user_cross_account.dart` | WI-2 (regression-prevention batch 2026-06-08) — live-DB TWO-USER | grandfathered |
 | 20 | `check_unawaited_has_error_sink.dart` | every `unawaited(...)` call in lib/ must be near (within | grandfathered |
 | — | `check_unbounded_cron_reads.dart` | every fan-out read in a cron-dispatched Edge Function must be bounded. | grandfathered |
+| — | `check_usage_counter_source.dart` | Blocks a TENTH quota counter being derived from `ai_coach_interactions`. | mutation_proven |
 | — | `check_week_selector_phase_labels.dart` | the Train week selector must derive phase labels from the real current_phase, never hardcode | grandfathered |
 | 36 | `check_widget_no_direct_supabase.dart` | enforce CLAUDE.md rule #4 (Repository pattern) — widgets / screens must NEVER | grandfathered |
 | 47 | `check_workout_schedule_split.dart` | assert the 4-way split of `WorkoutScheduleService` is in place. | grandfathered |

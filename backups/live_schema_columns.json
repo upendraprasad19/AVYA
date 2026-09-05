@@ -4,8 +4,8 @@
     "project_id": "dedsavbjuwgarrhphgnl",
     "captured_at": "2026-08-26",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
-    "regenerated_at": "2026-08-28",
-    "regenerated_for": "migration 124 (user_profile.equipment_owned, OI-89). Verified against live information_schema on project dedsavbjuwgarrhphgnl AFTER the apply. Migration 125 (exercise_library re-seed) added ROWS, not columns, so it moves nothing here."
+    "regenerated_at": "2026-09-05",
+    "regenerated_for": "migration 128 (usage_counters — new table, OI-162 slice 1). Verified against live information_schema on project dedsavbjuwgarrhphgnl AFTER the apply (cloud version 20260905014952). Only the new table was added; no existing table gained, lost or renamed a column. Migration 127 changed a trigger function body only, so it moves nothing here."
   },
   "storage_buckets": [
     "chat-media",
@@ -419,6 +419,13 @@
       "rest_seconds",
       "notes",
       "created_at"
+    ],
+    "usage_counters": [
+      "user_id",
+      "quota_key",
+      "window_start",
+      "used",
+      "updated_at"
     ],
     "user_custom_exercises": [
       "id",

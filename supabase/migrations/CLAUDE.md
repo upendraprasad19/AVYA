@@ -74,6 +74,28 @@ artifact, and it is cheaper than a lying ledger.
 **Corollary for reviewers:** "fix the comment in migration NNN" is only safe advice if
 NNN has not been applied. Check `backups/applied_migrations.json` before suggesting it.
 
+⚠ **`git checkout -- <migration>` IS NOT A SAFE RESTORE HERE (2026-09-05, B-pass on
+`303c57af`).** If you mutate an applied migration to prove a test — which rule 21 requires —
+the obvious undo silently converts the file's line endings. `.gitattributes` sets `eol=lf`,
+so a checkout writes LF where the committed working copy had CRLF. **The sha256 changes; the
+ledger no longer matches; and `git status` / `git diff` both read CLEAN throughout**, because
+git is comparing normalized content while the ledger hashes bytes on disk.
+
+Restore with **`cp` from a copy you made first**, then prove it:
+
+```bash
+cp supabase/migrations/NNN_x.sql "$SCRATCH/NNN.bak"   # BEFORE mutating
+# ... mutate, run the test, then:
+cp "$SCRATCH/NNN.bak" supabase/migrations/NNN_x.sql
+sha256sum supabase/migrations/NNN_x.sql              # MUST equal the ledger entry
+```
+
+This is the same OI-135 class the section above describes — the ledger hash is unguarded —
+but arriving through a completely ordinary action rather than a deliberate edit, which is
+what makes it worth its own note. A `git status` that says "M" on such a file after a restore
+is expected (an eol attribute artifact) and is NOT evidence of drift; **the sha256 is the only
+thing that settles it, in either direction.**
+
 ## Single-source-of-truth contracts
 
 Migrations themselves are not SoT-bearing objects, but each migration **lands a

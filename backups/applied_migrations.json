@@ -894,5 +894,14 @@
     "diagnose": "b8f4c2",
     "slug": "food_text_free_cap_parity_10",
     "note": "Lowers the FREE food_text_analysis daily cap 50 -> 10 so the server agrees with AppConstants.freeAiTextLogsPerDay and docs/architecture/business-rules.md; only this trigger said 50, a 5x bypass for callers reaching ai-proxy directly. PRO unchanged at 200 (founder decision 2026-09-04). CREATE OR REPLACE on migration 113 s function; IST day boundary (7ad0d3 fix) carried verbatim. Cloud version 20260904114820. Live-verified via pg_proc: cap expr now ELSE 10, Asia/Kolkata boundary present, trg_food_text_rate_limit still attached."
+  },
+  {
+    "migration": "128",
+    "applied_at": "2026-09-05T07:19:52+05:30",
+    "hash": "sha256:36bb9ae7c38bfb3c9c8b29ab883a4bae1ef8454bf0eabaf3fdd16c01bb226546",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "d3a7f1",
+    "slug": "usage_counters",
+    "note": "OI-162 slice 1. Creates the usage_counters quota ledger + consume_quota() + cleanup_usage_counters() + the usage_counters_retention_daily cron (03:45 UTC). NOTHING CALLS IT — deliberately inert infrastructure so the nine ai_coach_interactions-derived quotas migrate one slice at a time. No SECURITY-DEFINER function anywhere: RLS-with-no-policy is the guard, which keeps the tier at platform and removes the escalation surface. Cloud version 20260905014952. Live-verified: CASCADE FK (confdeltype=c), relrowsecurity true with 0 policies, both functions prosecdef=false, cron owned by postgres; behaviour 1/2/3 then -1, p_limit=0 returns -1 on the first call, retention deletes a stale windowed row and KEEPS the epoch row; authenticated and anon both refused 42501 while holding EXECUTE, service_role writes."
   }
 ]
