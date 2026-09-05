@@ -67,6 +67,22 @@ check_usage_counter_source.dart:
     resettable. Ships BEFORE the refactor it protects (§4.11); starts
     --warn-only. Baseline re-derived by running the matcher, not inherited:
     5 Edge Function quota sites + 9 migrations.
+    2026-09-05 (slice 2): migration 129 added to `allowedMigrations` BY NAME.
+    Its three counts are the one-time backfill that seeds usage_counters before
+    the triggers stop reading the log — the fix for this very bug class — and
+    left unlisted the gate blocked its own remedy, which is how a gate gets
+    switched off instead of fixed.
+    ⚠ A per-STATEMENT pattern exemption was implemented FIRST and REVERTED: the
+    B-pass on 004af467 defeated it three ways in one sitting (a real quota read
+    behind a no-op INSERT INTO usage_counters in a data-modifying CTE; a /* */
+    block comment the stripper did not remove; and a legitimate CTE-first
+    backfill that it wrongly FLAGGED). Recorded rather than quietly replaced,
+    because the general lesson is the code-review skill's own: when a guard is
+    a source grep, tightening the pattern never converges — an enumerated,
+    grep-auditable allowlist does. Tests now 16, including "THE SAME backfill
+    text in an unlisted migration IS a violation" (exemption follows the NAME,
+    not the shape) and a block-comment case. The comment stripper gained a
+    /* */ arm in the same change.
     SIX mutations, each confirmed APPLIED by an assert on the anchor before
     running, each reddening exactly 1 of 12 tests, tree restored identical
     afterwards and re-verified 12/12 green:

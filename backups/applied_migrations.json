@@ -903,5 +903,15 @@
     "diagnose": "d3a7f1",
     "slug": "usage_counters",
     "note": "OI-162 slice 1. Creates the usage_counters quota ledger + consume_quota() + cleanup_usage_counters() + the usage_counters_retention_daily cron (03:45 UTC). NOTHING CALLS IT — deliberately inert infrastructure so the nine ai_coach_interactions-derived quotas migrate one slice at a time. No SECURITY-DEFINER function anywhere: RLS-with-no-policy is the guard, which keeps the tier at platform and removes the escalation surface. Cloud version 20260905014952. Live-verified: CASCADE FK (confdeltype=c), relrowsecurity true with 0 policies, both functions prosecdef=false, cron owned by postgres; behaviour 1/2/3 then -1, p_limit=0 returns -1 on the first call, retention deletes a stale windowed row and KEEPS the epoch row; authenticated and anon both refused 42501 while holding EXECUTE, service_role writes."
+  },
+  {
+    "migration": "129",
+    "applied_at": "2026-09-05T12:47:59+05:30",
+    "hash": "sha256:1b0ffc945c8bdce14cdbee269ee475465bbf8ad14e1b243f5234c99c85abf1e5",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "e7c4b2",
+    "slug": "cap_triggers_use_usage_counters",
+    "cloud_version": "20260905071759",
+    "note": "OI-162 slice 2. Moves the three Postgres cap triggers (enforce_chat_app_daily_limit / enforce_vision_analysis_daily_limit / enforce_food_text_daily_limit) off count(*) over ai_coach_interactions and onto consume_quota() against usage_counters. Backfill runs FIRST, before the three CREATE OR REPLACEs; a migration applies in one transaction so no session sees the new logic before the seed lands. Verified live post-apply: all three prosecdef=false (INVOKER), all three call consume_quota, none still references ai_coach_interactions, all three carry the Asia/Kolkata boundary. Backfill landed chat_app used=3 at window 2026-09-04T18:30Z (= midnight IST); vision_analysis and food_text had zero rows today so correctly produced none. The three P0001 base identifiers ai-proxy greps at index.ts:338/:524/:765 are preserved verbatim. No Edge Function or client change; no deploy. Six of nine legacy quota readers REMAIN on the old table (slices 3-4). Closes-diagnose e7c4b2."
   }
 ]

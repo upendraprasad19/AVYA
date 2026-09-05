@@ -40,7 +40,7 @@ void main() {
     });
 
     test('writer FREE arm == reader freeAiTextLogsPerDay', () {
-      final caps = readProFreeCap(migration);
+      final caps = readProFreeCap(migration, 'enforce_food_text_daily_limit');
       expect(caps, isNotNull,
           reason: 'daily_cap CASE expression not found in '
               '${migration.uri.pathSegments.last}. If the trigger changed '
@@ -69,7 +69,7 @@ void main() {
       // 200 food logs in one IST day is an abuse ceiling, not a product limit.
       // Pinned so nobody "fixes" it into agreement, and so nobody lowers it
       // without a decision.
-      final caps = readProFreeCap(migration);
+      final caps = readProFreeCap(migration, 'enforce_food_text_daily_limit');
       expect(caps, isNotNull);
       expect(caps!.pro, 200,
           reason: 'PRO food_text ceiling is 200/day (founder decision '
@@ -85,7 +85,7 @@ void main() {
       // misinforming precisely the direct-API population the cap targets.
       // The first fix corrected the trigger and left this reader stale: the
       // instance fixed, the class open.
-      final caps = readProFreeCap(migration);
+      final caps = readProFreeCap(migration, 'enforce_food_text_daily_limit');
       expect(caps, isNotNull);
 
       final src = stripDartComments(

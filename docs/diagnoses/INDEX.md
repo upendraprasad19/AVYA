@@ -6,7 +6,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
-### usage_quota_ledger (1 bugs)
+### usage_quota_ledger (2 bugs)
+- 2026-09-05 e7c4b2 — The three Postgres cap triggers answered "has this user hit their daily cap?" by running count(*) over `ai_coach_interactions` — the conversation log that `rolling-context` prunes nightly (summarises…
 - 2026-09-05 d3a7f1 — Nine quota checks derive their count from rows in `ai_coach_interactions`, and `rolling-context` prunes that table nightly — it summarises and DELETES once a user passes 50 non-app_event rows, keeping…
 
 ### food_text_analysis_daily_cap (1 bugs)
@@ -1116,6 +1117,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-05 | e7c4b2 | The three Postgres cap triggers answered "has this user hit their daily cap?" by running count(*) over `ai_coach_interactions` — the conversation log that `rolling-context` prunes nightly (summarises… | usage_quota_ledger | test/contracts/cap_triggers_use_usage_counters_test.dart |
 | 2026-09-05 | d3a7f1 | Nine quota checks derive their count from rows in `ai_coach_interactions`, and `rolling-context` prunes that table nightly — it summarises and DELETES once a user passes 50 non-app_event rows, keeping… | usage_quota_ledger | test/contracts/usage_counters_infrastructure_test.dart |
 | 2026-09-04 | b8f4c2 | The free AI food-text daily cap was declared 10/day by the client and by docs/architecture/business-rules.md, but the Postgres trigger that actually enforces it allowed 50/day. Any caller reaching… | food_text_analysis_daily_cap | test/contracts/food_text_analysis_daily_cap_writer_to_reader_test.dart |
 | 2026-09-03 | f2b9d4 | A PAYING PRO user silently loses every PRO coach tool, and nothing anywhere records that it happened. `ai-proxy/index.ts` resolves entitlement through `checkPro()`: async function checkPro(client,… | ai_coach_pro_entitlement | test/contracts/ai_coach_pro_entitlement_writer_to_reader_test.dart |

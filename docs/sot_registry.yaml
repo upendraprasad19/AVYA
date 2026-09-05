@@ -10264,9 +10264,23 @@ concepts:
          live: authenticated and anon both refused 42501 while holding EXECUTE;
          service_role writes.
 
-      ⚠ SLICE 1 HAS NO READERS. All nine legacy quota readers still count
-      `ai_coach_interactions` rows, so the bug is still live. Slices 2-4 migrate
-      them; dispositions in docs/plan-reviews/oi162-round1-findings.md.
+      ⚠ SLICE 2 LANDED THE FIRST THREE READERS (2026-09-05, migration 129):
+      the chat / vision / food_text cap triggers. They no longer count
+      `ai_coach_interactions` rows. The remaining six legacy readers still do,
+      so the bug is still live for lifetime meters and the two rate limits;
+      slices 3-4 migrate them. Dispositions in
+      docs/plan-reviews/oi162-round1-findings.md.
+
+      ⚠ CHAT'S PRO EXEMPTION IS ASYMMETRIC WITH THE OTHER TWO, and the
+      difference is invisible unless stated. Chat returns BEFORE consuming, so
+      a PRO user writes no ledger row at all; food_text always consumes and
+      only varies its limit. Consequence: a PRO user's ledger FREEZES, and a
+      same-day downgrade resumes from the pre-upgrade value — granting up to a
+      full extra 10 messages. The old count(*) form re-counted the PRO-era
+      rows instead. Accepted deliberately (bounded, needs a subscription
+      lapsing mid-day mid-conversation, no security consequence); the
+      alternative required inventing a sentinel limit for a tier documented as
+      unlimited.
 
       ⚠ THE INVARIANT THE DATABASE DOES NOT ENFORCE (B-pass on 303c57af):
       `p_limit` is a per-CALL argument, so the `WHERE uc.used < p_limit` guard
@@ -10274,11 +10288,19 @@ concepts:
       (user_id, quota_key, window_start) with different limits do not agree —
       demonstrated live: a caller with p_limit=1 caps at 1, then a caller with
       p_limit=100 increments the same row to 2.
-      **ONE quota_key => ONE call site => ONE limit literal.** Nothing in SQL
-      holds this; it is carried by convention, and convention decays. If a
-      second caller for an existing key ever becomes necessary, the limit moves
-      to a lookup, not to a second argument. ai-media-proxy has TWO quotas and
-      must use TWO keys.
+      **ONE quota_key => ONE call site.** Nothing in SQL holds this; it is
+      carried by convention, and convention decays. If a second caller for an
+      existing key ever becomes necessary, the limit moves to a lookup, not to
+      a second argument. ai-media-proxy has TWO quotas and must use TWO keys.
+
+      ⚠ The limit need not be a LITERAL — it must be UNAMBIGUOUS. Slice 2's
+      food_text trigger passes `CASE WHEN is_pro THEN 200 ELSE 10 END` from its
+      single call site, which is fine: one caller, deriving its limit from the
+      caller's own live tier. The defect this clause guards against is TWO call
+      sites disagreeing about one key, not one call site whose limit depends on
+      who is asking. (The earlier wording said "ONE limit literal", which would
+      have read as forbidding exactly the correct construction on its first
+      real use.)
 
       ⚠ RETENTION IS NOT COUPLED TO WINDOW SIZE. The 7-day cutoff is verified
       safe for all four shapes this ledger will hold (lifetime/epoch — excluded
@@ -10302,7 +10324,26 @@ concepts:
         notes: |
           Sole deleter, run by pg_cron as postgres (rolbypassrls). BOTH
           conjuncts of its predicate are load-bearing.
-    readers: []
+    readers:
+      - file: supabase/migrations/129_cap_triggers_use_usage_counters.sql
+        method: enforce_chat_app_daily_limit
+        semantic: cloud-read
+        notes: |
+          quota_key `chat_app`, 10/day, IST window. Returns BEFORE consuming
+          when the user is PRO — see the asymmetry note in the description.
+      - file: supabase/migrations/129_cap_triggers_use_usage_counters.sql
+        method: enforce_vision_analysis_daily_limit
+        semantic: cloud-read
+        notes: |
+          quota_key `vision_analysis`, 20/day. scan_meal and cart_auditor share
+          ONE key deliberately — it is one combined budget, not two caps.
+      - file: supabase/migrations/129_cap_triggers_use_usage_counters.sql
+        method: enforce_food_text_daily_limit
+        semantic: cloud-read
+        notes: |
+          quota_key `food_text`. The only reader whose limit varies by tier
+          (200 PRO / 10 free) from a SINGLE call site — permitted, see the
+          "ONE quota_key => ONE call site" note.
     reader_manifest_complete: true
     hive:
       box: "n/a — cloud-only ledger, no Hive surface"

@@ -163,5 +163,70 @@ void main() {
       );
       expect(r.violations, isEmpty);
     });
+
+    // --- the one-time ledger backfill (slice 2, migration 129) --------------
+    // Migration 129 reads the old table three times, once per quota_key, to
+    // seed usage_counters before the triggers stop reading it. It is exempt BY
+    // NAME, not by a pattern exemption — the first attempt used the latter and
+    // the B-pass defeated it three ways (see migrationCountsInteractions).
+    const backfill = "INSERT INTO public.usage_counters "
+        "(user_id, quota_key, window_start, used)\n"
+        "SELECT user_id, 'chat_app', now(), count(*)\n"
+        "FROM public.ai_coach_interactions\n"
+        "WHERE channel = 'app'\n"
+        "GROUP BY user_id\n"
+        "ON CONFLICT DO NOTHING;";
+
+    test('migration 129 is exempt by NAME, not by shape', () {
+      final r = sweep(
+        efSources: const {},
+        migrationSources: {
+          '129_cap_triggers_use_usage_counters.sql': backfill,
+        },
+      );
+      expect(r.violations, isEmpty,
+          reason: 'seeding the ledger from the log is the FIX, not the bug');
+      expect(allowedMigrations, contains('129_cap_triggers_use_usage_counters.sql'));
+    });
+
+    test('THE SAME backfill text in an unlisted migration IS a violation', () {
+      // The load-bearing case: exemption follows the NAME, so a future
+      // migration cannot inherit 129's immunity by copying its shape. It has
+      // to be added to the allowlist, which forces a human to look once.
+      final r = sweep(
+        efSources: const {},
+        migrationSources: {'130_copycat.sql': backfill},
+      );
+      expect(r.violations, hasLength(1),
+          reason: 'a NEW migration must be reviewed and listed by name, not '
+              'excused for resembling one that was');
+    });
+
+    test('a count inside a /* block comment */ is not a violation', () {
+      // The stripper handled `--` only until 2026-09-05, so a block-commented
+      // count was read as live code and reported. MUTATION: drop the block-
+      // comment arm of stripSqlCommentsPreservingLines and this reddens.
+      final r = sweep(
+        efSources: const {},
+        migrationSources: {
+          '131_documented.sql': '/* historical note:\n'
+              '   SELECT count(*) FROM ai_coach_interactions WHERE channel = 1;\n'
+              '*/\nSELECT 1;',
+        },
+      );
+      expect(r.violations, isEmpty);
+    });
+
+    test('a bare count in an unlisted migration is still caught', () {
+      final r = sweep(
+        efSources: const {},
+        migrationSources: {
+          '132_plain.sql':
+              'SELECT count(*) INTO n FROM public.ai_coach_interactions '
+                  "WHERE channel = 'app';",
+        },
+      );
+      expect(r.violations, hasLength(1));
+    });
   });
 }

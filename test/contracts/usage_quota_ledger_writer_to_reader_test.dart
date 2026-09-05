@@ -95,32 +95,48 @@ void main() {
     });
   });
 
-  group('usage_quota_ledger — reader side (slice 1: none)', () {
-    test('no application code touches usage_counters directly yet', () {
+  group('usage_quota_ledger — reader side (slice 2: three, all in-database)',
+      () {
+    // ⚠ Slice 1 predicted these assertions would FAIL in slice 2. They did not,
+    // and the reason is worth keeping: slice 2's three readers are Postgres
+    // TRIGGERS (migration 129), and `_appSources()` scans lib/ +
+    // supabase/functions/ only. So "no APPLICATION code reads the ledger"
+    // remains true and is still the contract worth pinning — the ledger is
+    // reached through consume_quota, never by a direct client/EF query.
+    // A prediction that misses in a benign direction still has to be corrected,
+    // or the next reader trusts the stale half.
+    test('no application code touches usage_counters directly', () {
       final offenders = <String>[];
       for (final e in _appSources()) {
         if (e.value.contains('usage_counters')) offenders.add(e.key);
       }
       expect(offenders, isEmpty,
-          reason: 'Slice 1 is inert infrastructure: nothing calls consume_quota '
-              'and nothing reads usage_counters. Found: $offenders.\n'
-              'If you are migrating the first call site (slice 2), that is '
-              'CORRECT and expected — update this test to name the new reader '
-              'rather than deleting the assertion.');
+          reason: 'The ledger is reached through consume_quota() inside the '
+              'database, never by a direct query from client or Edge Function '
+              'code. Found: $offenders.\n'
+              'If you are migrating a call site to query usage_counters '
+              'DIRECTLY, stop: route it through consume_quota instead, or the '
+              'atomicity guarantee and the p_limit guard are both lost.');
     });
 
-    test('no application code calls consume_quota yet', () {
+    test('no application code calls consume_quota directly', () {
       final offenders = <String>[];
       for (final e in _appSources()) {
         if (e.value.contains('consume_quota')) offenders.add(e.key);
       }
       expect(offenders, isEmpty,
-          reason: 'Same as above — slice 1 wires nothing. Found: $offenders');
+          reason: 'Slice 2 wires the three cap TRIGGERS, which call '
+              'consume_quota in-database. No client or Edge Function calls it '
+              'directly, and none should — the trigger is the enforcement '
+              'point. Found: $offenders');
     });
 
-    test('and the nine legacy quota readers are still on the old table', () {
+    test('and the SIX remaining legacy quota readers are still on the old '
+        'table', () {
       // Stated as an invariant so the batch cannot be misread as having fixed
-      // the bug. It has not: slice 1 only makes the fix possible.
+      // the whole bug. Slice 2 moved THREE of nine (the chat / vision /
+      // food_text cap triggers). Six remain: the lifetime image meters, the
+      // weekly-report meter, and the two rate limits. Slices 3-4 own them.
       final aiMedia = File('supabase/functions/ai-media-proxy/index.ts')
           .readAsStringSync();
       expect(aiMedia.contains('ai_coach_interactions'), isTrue,
