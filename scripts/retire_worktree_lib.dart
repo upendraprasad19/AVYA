@@ -272,6 +272,29 @@ const regenerableIgnoredPaths = <String>[
   // the worktree permanently unretirable, and the hygiene loop §4.13 point 6
   // exists to close would have decayed silently, one worktree at a time.
   '.claude/.batch_close_state', // .gitignore:188
+  // The CI-reconcile queue and its rename staging file (.gitignore:86-87,
+  // written by scripts/arm_ci_reconcile.sh:47-48 and reconcile_ci.dart:194-196).
+  // safe_push.sh arms one line per LANDED push into the worktree it pushed
+  // from, and reconcile_ci.dart drains it at the next SessionStart — but
+  // _statePath is RELATIVE, so the drain only ever runs in that same worktree.
+  // A finished worktree is precisely the one no session opens again, so the
+  // queue arms and is never drained. The primary worktree self-cleans for the
+  // opposite reason: sessions start there constantly.
+  //
+  // Not precious. Retirement already requires the branch MERGED (leg 1) and
+  // nothing unpushed (leg 4), so a surviving entry is either resolved — the
+  // drain drops those saying nothing — or past the 48 h bound on a branch CI
+  // never ran on, which ci_reconcile_state_lib.dart:79 drops silently too.
+  // `keeps` is true for stillPending ALONE (:105). The most this can destroy
+  // is a warning that was already unreachable.
+  //
+  // The .tmp is the MIRROR, and the reason this entry is two lines and not
+  // one: _writeState writes `$_statePath.tmp` and then renames it, so a
+  // process that dies in between leaves a gitignored file with the identical
+  // blocking property. Fixing only the file that was REPORTED would have left
+  // the same bug reachable by a narrower path.
+  '.claude/.ci_reconcile_pending.jsonl', // .gitignore:86
+  '.claude/.ci_reconcile_pending.jsonl.tmp', // .gitignore:87
   // DELIBERATELY ABSENT: `test/goldens/**/failures/` (.gitignore:183). It is
   // genuinely regenerable, but it is a PATTERN, and this list's whole rule is
   // exact-match-only — three review rounds each found a P0 here from looser

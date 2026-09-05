@@ -335,6 +335,38 @@ void main() {
       expect(isRegenerableIgnored('test/goldens/home/failures/'), isFalse);
     });
 
+    test('the CI-reconcile queue is regenerable, or every worktree that has '
+        'ever PUSHED becomes permanently unretirable', () {
+      // Found live 2026-09-04 on `readiness-flip`: merged, tracked-clean,
+      // nothing unpushed, and held by `.claude/.ci_reconcile_pending.jsonl`
+      // alone — two entries armed 2026-09-01 by safe_push.sh's LANDED path.
+      // Third instance of this exact class (d7b3e9 -> f2a9c7 -> b4d7e9): a
+      // tool writes a gitignored file INTO the worktree and nobody adds its
+      // path here.
+      //
+      // It cannot self-clean. reconcile_ci.dart drains the queue at
+      // SessionStart, but _statePath is RELATIVE, so the drain only ever runs
+      // in the worktree that armed the entry — and a finished worktree is
+      // precisely the one no session reopens. The primary worktree stays
+      // clean for the opposite reason: sessions start there constantly.
+      expect(isRegenerableIgnored('.claude/.ci_reconcile_pending.jsonl'), isTrue);
+      // The MIRROR, and why this fix is two entries rather than the one that
+      // was reported: _writeState writes `<path>.tmp` and then renames it, so
+      // a process dying in between leaves a gitignored file with the identical
+      // blocking property.
+      expect(isRegenerableIgnored('.claude/.ci_reconcile_pending.jsonl.tmp'),
+          isTrue);
+      // Exact-match, as ever — and the neighbour that must NOT inherit it is
+      // the kill switch, because that file exists only when a human made a
+      // deliberate choice to create it. Same directory, opposite preciousness.
+      expect(isRegenerableIgnored('.claude/.reconcile_ci.disabled'), isFalse);
+      expect(isRegenerableIgnored('.claude/.ci_reconcile_pending.jsonl.bak'),
+          isFalse);
+      expect(isRegenerableIgnored('backup/.claude/.ci_reconcile_pending.jsonl'),
+          isFalse);
+      expect(isRegenerableIgnored('.claude/'), isFalse);
+    });
+
     test('handles Windows backslashes', () {
       expect(isRegenerableIgnored(r'android\local.properties'), isTrue);
       expect(isRegenerableIgnored(r'secrets\creds.txt'), isFalse);
