@@ -1,14 +1,14 @@
 {
   "CLAUDE.md": {
-    "bytes": 107108,
-    "recorded_at": "2026-09-05T15:17:33.349704Z"
+    "bytes": 107282,
+    "recorded_at": "2026-09-05T16:40:22.028363Z"
   },
   "docs/audit/OPEN_INDEX.md": {
-    "bytes": 15733,
-    "recorded_at": "2026-09-05T15:17:33.349704Z"
+    "bytes": 16337,
+    "recorded_at": "2026-09-05T16:40:22.028363Z"
   },
   "docs/audit/open_issues.md": {
-    "bytes": 230638,
-    "recorded_at": "2026-09-05T15:17:33.349704Z"
+    "bytes": 235720,
+    "recorded_at": "2026-09-05T16:40:22.028363Z"
   }
 }

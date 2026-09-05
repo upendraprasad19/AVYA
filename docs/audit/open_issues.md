@@ -3058,3 +3058,71 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
   a no-FK design would be a REGRESSION on the erasure endpoint, not a neutral choice.
 - **Related**: OI-153, `docs/audit/2026-09-02/slice-a-plan.md`, `docs/audit/oi162-plan.md`,
   diagnose `7ad009`.
+
+## OI-163 — the four-tag migration header has NO gate, and two places claimed it did (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — needs a gate written, mutation-proven, ledger entry
+- **Verified**: 2026-09-05 — repo-wide grep + the live cost on migration 129
+- **What is true**: `supabase/migrations/CLAUDE.md` mandates a four-line header (`Intent:`,
+  `Destructive?:`, `Rollback strategy:`, `Linked diagnose-doc:`). **Nothing enforces any of it.**
+  `grep -c Destructive scripts/pre-commit.sh` → 0; no `check_*.dart` reads the tags. The only
+  repo-wide hit for `Destructive?:` under `scripts/` is `seed_exercise_library.js:74`, which
+  WRITES the tag into a migration it generates.
+- **Why it is filed rather than assumed harmless**: that file asserted, in TWO places, that the
+  pre-commit hook greps for the tags. Both were false and both were believed. Corrected
+  2026-09-05 (`485bde42`) to say self-attested — but a correction is not a gate.
+- **It has already cost one migration, permanently**: 129 shipped with `Intent:` and
+  `Rollback strategy:` only, while its own diagnose-doc (`e7c4b2`) asserted it "carries the
+  four-tag header". Caught by a context-blind B-pass grepping instead of reading. An applied
+  migration is IMMUTABLE, so the omission cannot be repaired — only recorded.
+- **Shape of the fix**: a `check_*.dart` reading the STAGED blob of any added
+  `supabase/migrations/*.sql`, requiring all four tags. Rule 24 applies — mutation proof + a
+  `gate_test_ledger.yaml` entry in the same commit. Grandfathering by name is the established
+  pattern for the migrations that predate it.
+- **Related**: `supabase/migrations/CLAUDE.md` (the correction), diagnose `e7c4b2`, OI-135
+  (the sibling class: the ledger `hash` field is present-but-never-compared).
+
+## OI-164 — the shared QA account caps CI at ~3 runs per IST day (P2)
+
+- **Status**: OPEN
+- **Blocked on**: a founder decision on test-account provisioning
+- **Verified**: 2026-09-05 — live `usage_counters` + the arithmetic + a red CI run
+- **What changed**: OI-162 slice 2 (migration 129) made the chat cap actually enforce. It counts
+  a durable ledger now instead of a table `rolling-context` prunes nightly.
+- **The arithmetic**: `ai_proxy_test.dart` sends THREE live chats per run (T15/T18/T19), all as
+  ONE shared QA account, against a 10/day free cap. **Three full CI runs per IST day**; the
+  fourth is refused. Observed live: `test6@gmail.com chat_app used=10`, and `485bde42` went red
+  with `Expected: <200> Actual: <429>`.
+- ⚠ **Main is NOT red today and this is not urgent.** `c46ccd5b` taught those tests to accept
+  200 OR 429 and assert the contract of each, so the ceiling no longer reddens the build. **The
+  ceiling itself is unchanged** — that fix corrected an assertion, it did not buy quota.
+- **Why it will get worse**: slices 3 and 4 move six more quota readers onto the same ledger, and
+  any new live-quota test spends the same account.
+- **Options, none chosen**: a dedicated per-run QA account; a PRO QA account (the chat trigger
+  exempts PRO entirely, so its chats cost nothing); or resetting the counter pre-run — which is a
+  CI job mutating prod state and is the worst of the three.
+- **Related**: diagnose `e7c4b2`, `test/edge_functions/ai_proxy_test.dart`
+  (`chatBodyOrAssertCapped`), root CLAUDE.md §4.9 enforcement-repair row.
+
+## OI-165 — `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live harness is un-runnable by its documented command (P2)
+
+- **Status**: OPEN
+- **Blocked on**: identifying which token the runner needs (Management API vs service-role)
+- **Verified**: 2026-09-05 — ran it; and the harness header records the same failure 2026-07-30
+- **Symptom**: `dart run scripts/check_onconflict_live_arbiter.dart --sql <file>` →
+  `FATAL — Management API HTTP 403 — "Your account does not have the necessary privileges to
+  access this endpoint."` It resolves a token (44 bytes) and warns it is using the
+  `SUPABASE_ACCESS_TOKEN` env fallback.
+- ⚠ **Not new, and that is the point.** `test/sql/oi46_daily_cap_triggers_live_verify.sql`'s own
+  header records the identical 403 on **2026-07-30**, worked around the same way. Five weeks
+  un-fixed because the workaround is invisible: whoever hits it hand-pastes the SQL through MCP
+  `execute_sql` and moves on, exactly as I did on 2026-09-05 for the slice-2 assertions.
+- **Why it matters more than a broken script**: these harnesses are the ONLY behavioural proof
+  for Postgres trigger/constraint logic — rule 21 says a source-grep proves presence only. A test
+  that cannot be run by its documented command decays; it is not in the gate loop (deliberately,
+  `pre-commit.sh` + `test.yml` both case-skip it), so nothing else notices.
+- **What is NOT the fix**: deleting the runner and documenting the MCP paste. That makes the
+  harness un-runnable by anyone without this MCP, including CI.
+- **Related**: `test/sql/onconflict_live_arbiter.sql`, `oi46_daily_cap_triggers_live_verify.sql`,
+  rule 21, `docs/operations/SECRET_INVENTORY.md`.
