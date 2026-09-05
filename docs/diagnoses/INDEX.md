@@ -6,7 +6,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
-### usage_quota_ledger (1 bugs)
+### usage_quota_ledger (2 bugs)
+- 2026-09-05 e7c4b2 — The three Postgres cap triggers answered "has this user hit their daily cap?" by running count(*) over `ai_coach_interactions` — the conversation log that `rolling-context` prunes nightly (summarises…
 - 2026-09-05 d3a7f1 — Nine quota checks derive their count from rows in `ai_coach_interactions`, and `rolling-context` prunes that table nightly — it summarises and DELETES once a user passes 50 non-app_event rows, keeping…
 
 ### A tool that WRITES INTO the worktree made the worktree permanently unretirable, for the third time. `safe_push.sh`'s LANDED path calls `arm_ci_reconcile.sh`, which appends one JSON line to `.claude/.ci_reconcile_pending.jsonl` in whatever worktree the push came from. `retire_worktree_lib.dart` treats any gitignored file absent from its exact-match `regenerableIgnoredPaths` list as PRECIOUS and refuses — correct by the predicate, wrong in effect.
@@ -1120,6 +1121,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-05 | e7c4b2 | The three Postgres cap triggers answered "has this user hit their daily cap?" by running count(*) over `ai_coach_interactions` — the conversation log that `rolling-context` prunes nightly (summarises… | usage_quota_ledger | test/contracts/cap_triggers_use_usage_counters_test.dart |
 | 2026-09-05 | d3a7f1 | Nine quota checks derive their count from rows in `ai_coach_interactions`, and `rolling-context` prunes that table nightly — it summarises and DELETES once a user passes 50 non-app_event rows, keeping… | usage_quota_ledger | test/contracts/usage_counters_infrastructure_test.dart |
 | 2026-09-04 | a9c4f2 | `dart run scripts/retire_worktree.dart` reports `KEEP readiness-flip [2 non-regenerable ignored file(s)]` for a worktree that is merged, tracked-clean and has nothing unpushed. The message states a… | A tool that WRITES INTO the worktree made the worktree permanently unretirable, for the third time. `safe_push.sh`'s LANDED path calls `arm_ci_reconcile.sh`, which appends one JSON line to `.claude/.ci_reconcile_pending.jsonl` in whatever worktree the push came from. `retire_worktree_lib.dart` treats any gitignored file absent from its exact-match `regenerableIgnoredPaths` list as PRECIOUS and refuses — correct by the predicate, wrong in effect.
 What makes this instance worse than its two predecessors is that the queue cannot self-clean. `reconcile_ci.dart` drains it at SessionStart and deletes the file when nothing survives, but `_statePath` is RELATIVE, so the drain only ever runs inside the worktree that armed the entry. A finished worktree is precisely the one no session reopens. The primary worktree holds no such file for the mirror-image reason: sessions start there constantly, so it drains every time. | test/scripts/retire_worktree_lib_test.dart |

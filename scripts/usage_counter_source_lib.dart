@@ -62,14 +62,26 @@ String stripDartLikeCommentsPreservingLines(String src) {
       .join('\n');
 }
 
-/// Blanks out `--` comments in SQL, preserving line count.
-String stripSqlCommentsPreservingLines(String src) => src
-    .split('\n')
-    .map((l) {
-      final i = l.indexOf('--');
-      return i >= 0 ? l.substring(0, i) : l;
-    })
-    .join('\n');
+/// Blanks out SQL comments, preserving line count.
+///
+/// ⚠ Handles BOTH `--` and `/* … */`. The block form was missing until
+/// 2026-09-05 (B-pass on `004af467`), so a count sitting inside a block comment
+/// was read as live code and reported as a violation — a false positive, and
+/// the kind that trains people to distrust the gate. Newlines inside a block
+/// comment are preserved so every other line number stays correct.
+String stripSqlCommentsPreservingLines(String src) {
+  final noBlock = src.replaceAllMapped(
+    RegExp(r'/\*[\s\S]*?\*/'),
+    (m) => m.group(0)!.replaceAll(RegExp(r'[^\n]'), ' '),
+  );
+  return noBlock
+      .split('\n')
+      .map((l) {
+        final i = l.indexOf('--');
+        return i >= 0 ? l.substring(0, i) : l;
+      })
+      .join('\n');
+}
 
 /// How many lines after a `count: "exact"` to look for the channel filter.
 /// 6 covers every real site (the filters are chained immediately after) without
@@ -102,6 +114,27 @@ List<CounterSite> findEdgeFunctionCounterSites(String path, String source) {
 
 /// True if [source] (a migration body) derives a count from
 /// `ai_coach_interactions`.
+///
+/// ⚠ **A one-time ledger BACKFILL is handled by the allowlist below, NOT by a
+/// pattern exemption here — and that is a deliberate reversal.** Migration 129
+/// legitimately reads `count(*) FROM ai_coach_interactions` three times, once
+/// per quota_key, to seed `usage_counters` for the current window; without it,
+/// swapping the source hands every user a fresh allowance.
+///
+/// The first attempt at this exempted any count sitting inside a statement that
+/// INSERTs into `usage_counters`. The B-pass defeated it three ways in one
+/// sitting: a real quota read hidden behind a no-op `INSERT INTO
+/// usage_counters` in a data-modifying CTE; a `/* */` block comment (which the
+/// stripper did not remove); and a legitimate CTE-first backfill that the
+/// heuristic wrongly FLAGGED, because the count precedes the INSERT in the
+/// statement text.
+///
+/// The lesson is the one the code-review skill already states: **when a guard
+/// is a source grep, tightening the pattern never converges.** An enumerated,
+/// grep-auditable allowlist does converge — a future backfill has to be added
+/// BY NAME, which forces a human to look at it exactly once. That is the same
+/// trade `check_no_deferral_euphemism.dart` makes with its visible `deu-quote`
+/// marker, and the same one rule 24 makes with `grandfathered:`.
 bool migrationCountsInteractions(String source) {
   final src = stripSqlCommentsPreservingLines(source);
   return RegExp(
@@ -143,6 +176,12 @@ const Set<String> allowedMigrations = {
   '114_raise_vision_analysis_cap_to_20.sql',
   '120_engagement_metric_channel_filter_and_hold_telemetry.sql',
   '127_food_text_free_cap_parity_10.sql',
+  // ⚠ 129 is the OPPOSITE of a violation and is listed for the opposite
+  // reason to the rest: its three counts are the one-time BACKFILL that seeds
+  // `usage_counters` from the log before the triggers stop reading it. It is
+  // the migration that FIXES this bug class for the three cap triggers. Listed
+  // by name rather than pattern-exempted — see migrationCountsInteractions.
+  '129_cap_triggers_use_usage_counters.sql',
 };
 
 /// Result of a full sweep.

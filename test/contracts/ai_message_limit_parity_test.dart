@@ -51,7 +51,7 @@ void main() {
     expect(mig, isNotNull,
         reason: 'No migration defines enforce_vision_analysis_daily_limit.');
 
-    final ceiling = readSingleCeiling(mig!);
+    final ceiling = readSingleCeiling(mig!, 'enforce_vision_analysis_daily_limit');
     expect(ceiling, isNotNull,
         reason: 'vision cap comparison not found in '
             '${mig.uri.pathSegments.last}.');

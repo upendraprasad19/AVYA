@@ -190,6 +190,39 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-09-05** — blast-radius **platform** — branch `oi162-slice2-triggers`, OI-162 slice 2
+  (diagnose `e7c4b2`). **8 findings (0 P0, 2 P1, 4 P2, 2 P3); 0 false_alarm.** All 8 fixed
+  in-batch. Review: `docs/reviews/004af467034f-review.md`.
+  **Tuning — lens 6 (`guard_without_its_mirror`) gains INDIRECTION AS A FIRST-CLASS CASE, not a
+  footnote.** The lens already says "if the guard is a SOURCE GREP, assume it is defeatable and
+  try indirection". Two findings this pass were exactly that, and both were in guards written
+  BY THIS BATCH to be careful:
+  (a) a landmine guard matching `channel: '<literal>'` was blind to
+  `'channel': _channel` — a `static const` 35 lines up — **live, today, in one of the guard's own
+  two positive-control files**. Fixed by resolving same-file consts and, crucially, FAILING
+  CLOSED on any channel value it cannot statically resolve. A guard that cannot read a value must
+  refuse to pass it, not skip it.
+  (b) a per-STATEMENT SQL exemption was defeated three ways in one sitting (data-modifying CTE,
+  unstripped `/* */` comment, and a false POSITIVE on legitimate CTE-first ordering).
+  **Add to lens 6: when the fix for a defeated grep is "tighten the pattern", that is the signal
+  the pattern is the wrong mechanism.** Prefer an enumerated, grep-auditable allowlist (the repo's
+  `deu-quote` / `grandfathered:` precedent) or a runtime test. Tightening never converges; a named
+  list converges by construction, because a new entry forces a human to look exactly once.
+  **Second tuning — a NEW question for lens 7 (`inert check`): "would this assertion pass against
+  the code it replaces?"** Not "would it pass if the feature did nothing" (already covered) — the
+  sharper, cheaper form for a MIGRATION: restore the old implementation inside a rolled-back
+  transaction and re-run. Done here after the first B-pass attempt died mid-run having proposed
+  exactly that: **5 of 7 new behavioural assertions passed against the pre-migration triggers.**
+  Two were vacuous (NULL compared to NULL) and were fixed; three were legitimate
+  behaviour-invariants and are now LABELLED as such in the harness header, so nobody cites a
+  contract regression test as evidence that a migration landed.
+  ⚠ Process note: both P1s were the author's own **false verification claims** — one asserting a
+  four-tag migration header that has only two tags, the other claiming "zero stale citations
+  remain" after running a NARROWER grep than the one the same document tells everyone to run.
+  Neither is a code defect; both are the `feedback_mistake_unverified_done_claims` class, and a
+  context-blind reviewer re-running the PUBLISHED command is what caught them.
+  False-alarm rate 0/8 → no lens removed.
+
 - **2026-09-05** — blast-radius **platform** — branch `oi162-delete-account-counter` @
   `303c57af` (OI-162 slice 1: migration 128, the usage_counters ledger, applied to prod).
   **7 findings (0 P0, 1 P1, 3 P2, 3 P3); 0 false_alarm.** 4 fixed, 3 recorded as named
