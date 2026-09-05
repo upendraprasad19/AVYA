@@ -1106,6 +1106,13 @@ class WorkoutScheduleReadService {
   /// reversibility (a stale reason hides the moment the flag is turned OFF). Reads
   /// the same `deload_reason_phase_<P>` key the eval wrote, deriving P via
   /// [deloadPhaseFromWeek4] → writer==reader by construction. Crash-safe.
+  ///
+  /// Unit B: the stored value is a MAP (`{week_character, text}`) and this reader
+  /// returns `text` ONLY while the stamped character still equals week 4's
+  /// character in the blob [currentWaveCharacters] → the strip can never show a
+  /// reason that contradicts the wave node above it. Legacy bare Strings and any
+  /// mismatch resolve to `null` (no line), which is byte-identical to the
+  /// pre-flip state.
   String? currentDeloadReason() {
     try {
       if (!PlanEngineFlags.triggeredDeloadEnabled) return null;
@@ -1113,7 +1120,31 @@ class WorkoutScheduleReadService {
       if (phase == null) return null;
       final v =
           HiveService.instance.workoutBox.get('$deloadReasonKeyPrefix$phase');
-      return (v is String && v.isNotEmpty) ? v : null;
+      // Unit B — SELF-VALIDATING. A bare String is a LEGACY value (the writer
+      // stamped prose alone from 2026-09-01 until Unit B) carrying no outcome to
+      // check against, so it is indistinguishable from a stale one → drop it.
+      if (v is! Map) return null;
+      final text = v['text'];
+      if (text is! String || text.isEmpty) return null;
+      final stamped = v['week_character'];
+      if (stamped is! String || stamped.isEmpty) return null;
+      // Validate against the SAME source the strip RENDERS — the blob, via
+      // [currentWaveCharacters] — not the scheduled rows this method derives its
+      // phase from. A reason contradicting the node directly above it is worse
+      // than no reason. Two plan-mutating paths re-stamp week 4 back to `deload`
+      // after a lift (`generateAndScheduleFromDate` at :388 via
+      // `edit_profile_screen.dart:2029`, and `regenerate_plan_planner.dart:294`)
+      // while `deload_evaluator.dart:79`'s idempotency flag blocks any re-eval
+      // from correcting the string; guarding at the READER covers both, plus
+      // cross-device sync, restore, and any future third path.
+      //
+      // EQUALITY, not `== 'working'`: the mirror case — stored `deload` while the
+      // blob says `working`, reachable when a sync lands a lifted blob over a
+      // local keep — is exactly as stale and must drop too.
+      final waves = currentWaveCharacters();
+      if (waves.length < 4) return null; // strip renders nothing below 4 anyway
+      if (waves[3] != stamped) return null;
+      return text;
     } catch (_) {
       return null;
     }

@@ -219,25 +219,35 @@ class PlanEngineFlags {
   }
 
   /// ⑥ Batch 10 (W3.1 explainability): the week-4 deload "why" line rendered
-  /// INSIDE `PhaseArcStrip`. Ship-dark DEFAULT OFF (§4.6).
+  /// INSIDE `PhaseArcStrip`. LIVE since 2026-09-06 (OI-53 flag 4 of 12).
+  /// Kill-switch `configBox['disable_deload_reason_line'] = true`.
   ///
-  /// Split out of the phase-arc flip on 2026-09-05 (founder decision) because
-  /// the line carries an unfixed defect: `deload_reason_phase_<P>` is never
-  /// deleted anywhere in `lib/`, while a mid-phase regen rewrites the plan blob
-  /// unconditionally (`workout_schedule_read_service.dart:388`) and re-stamps
-  /// week 4 as `deload`. The idempotency flag (`deload_evaluator.dart:79`) then
-  /// blocks any re-evaluation from correcting the stale string, so the strip
-  /// would render a `DELOAD` node above a line reading "Working week — you've
-  /// recovered", permanently. Unit B fixes that first; this flag flips there.
+  /// Split out of the phase-arc flip on 2026-09-05 (founder decision) because the
+  /// line carried a stale-reason defect: `deload_reason_phase_<P>` is never
+  /// deleted anywhere in `lib/`, while TWO plan-mutating paths re-stamp week 4
+  /// back to `deload` after a lift — `generateAndScheduleFromDate`
+  /// (`workout_schedule_read_service.dart:388`, live caller
+  /// `edit_profile_screen.dart:2029`) and the AI-coach regen
+  /// (`regenerate_plan_planner.dart:294`) — while `deload_evaluator.dart:79`'s
+  /// idempotency flag blocks any re-evaluation from correcting the string. The
+  /// strip would have rendered a `DELOAD` node above "Working week — you've
+  /// recovered", permanently.
   ///
-  /// OFF → no reason line → the strip is byte-identical to Batch 7-A.
-  /// Set `configBox['enable_deload_reason_line'] = true` to enable.
+  /// FIXED in Unit B (diagnose `c5a8f3`) at the READER rather than by adding a
+  /// deleter to each path: the eval now stamps the outcome `week_character`
+  /// beside the prose, and `currentDeloadReason()` returns the text only while
+  /// that character still equals week 4's in the blob the strip renders. Any
+  /// mismatch, and every legacy bare-String value, → no line, which is
+  /// byte-identical to the pre-flip state.
+  ///
+  /// ⚠ There is NO release-build kill-switch (OI-95) — see [phaseArcEnabled].
   static bool get deloadReasonLineEnabled {
     try {
-      return HiveService.instance.configBox.get('enable_deload_reason_line') ==
+      return HiveService.instance.configBox
+              .get('disable_deload_reason_line') !=
           true;
     } catch (_) {
-      return false; // no Hive (pure unit test) → safe default: OFF
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 

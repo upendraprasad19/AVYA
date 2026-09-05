@@ -361,7 +361,7 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                     // ⑥ Batch 7-A (W3.2): phase wave arc — ship-dark; renders
                     // nothing when disable_phase_arc is set or there's no plan.
                     // LIVE since 2026-09-05; the week-4 reason line inside it
-                    // stays dark behind enable_deload_reason_line.
+                    // is LIVE (kill-switch disable_deload_reason_line).
                     const PhaseArcStrip(),
 
                     // Compact week rows

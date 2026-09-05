@@ -239,7 +239,7 @@ Everything currently owed, from any source — not only audit findings. `MEMORY.
 durable *why* (scars, retrospectives) but lives in the harness dir outside git and is invisible to
 cloud sessions; **this file is the cross-session backlog.**
 
-## OI-53 — Flip the remaining 9 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05)
+## OI-53 — Flip the remaining 8 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05; deload-reason-line flipped 2026-09-06)
 
 - **Status**: OPEN
 - **Verified**: 2026-08-05 — flag inventory, dependency order and the data lag all re-derived from
@@ -252,7 +252,10 @@ cloud sessions; **this file is the cross-session backlog.**
   Recorded here because a repo-only reader cannot otherwise reconcile `Blocked on: FOUNDER`
   with those two flips existing. ⚠ **DATED FOUNDER DECISION 2026-09-05: `enable_phase_arc`
   approved and flipped** (branch `phase-arc-flip`, record `docs/plan-reviews/phase-arc-flip.md`).
-  **9 remain.**
+  ⚠ **DATED FOUNDER DECISION 2026-09-06: `enable_deload_reason_line` approved and flipped** as Unit B (branch
+  `unitb-deload-reason`, record `docs/plan-reviews/unitb-deload-reason.md`) — the piece split
+  out of the phase-arc flip the day before, once its stale-reason defect was fixed (diagnose
+  `c5a8f3`). **8 remain.**
 - **What this actually is — 13 product decisions, not one toggle.** The ledger is explicit:
   *"there is no batch discount, and flipping thirteen flags in one commit would be one review
   pretending to be thirteen."* Each flip-on commit needs its own **full ×2 + `bpass: accepted`**

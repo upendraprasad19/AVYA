@@ -8083,13 +8083,21 @@ concepts:
       triggeredDeloadEnabled (clean kill-switch reversibility). PhaseArcStrip renders it as a
       textDim line ONLY on the deload week (currentWeek==4); null / not-week-4 → no line →
       byte-identical to Batch 7-A. Additive, LOCAL-only, no migration. Rides the parent flags
-      (enable_triggered_deload + enable_readiness for the write). SHIP-DARK for the RENDER since
-      2026-09-05: the phase-arc strip went live WITHOUT this line, behind its own
-      `enable_deload_reason_line` (DEFAULT OFF), because the stamped reason can outlive the blob
-      state it describes — a mid-phase regen rewrites week 4 back to `deload`
-      (workout_schedule_read_service.dart:388) while the reason still reads "Working week", and
-      the idempotency flag (deload_evaluator.dart:79) blocks any correction. Unit B fixes that,
-      then flips the flag.
+      (enable_triggered_deload + enable_readiness for the write). LIVE for the RENDER since 2026-09-06
+      (OI-53 flag 4 of 12; kill-switch `disable_deload_reason_line`). It shipped dark on
+      2026-09-05 because the stamped reason can outlive the blob state it describes: THREE paths
+      rewrite the plan and re-stamp week 4 as `deload` — generateAndScheduleFromDate
+      (workout_schedule_read_service.dart:388, live caller edit_profile_screen.dart:2029),
+      generateAndSchedule (:227) and the AI-coach regen (regenerate_plan_planner.dart:294) —
+      while the idempotency flag (deload_evaluator.dart:79) blocks any correction and NOTHING in
+      lib/ deletes the key. FIXED in Unit B (diagnose c5a8f3) at the READER rather than by adding
+      a deleter to each path: the stored VALUE is now a map {week_character, text}, and
+      currentDeloadReason() returns text ONLY while that character equals currentWaveCharacters()
+      [3] — the blob the STRIP renders, deliberately not the scheduled rows this method derives
+      its phase from, so the line can never contradict the node above it. The check is EQUALITY,
+      so the mirror (stored `deload`, blob `working`, reachable when a sync lands a lifted blob
+      over a local keep) drops too. Legacy bare-String values (written 2026-09-01 until Unit B)
+      resolve to no line and self-heal at the next phase advance.
     writers:
       - file: lib/core/services/deload_evaluator.dart
         method: DeloadEvaluator.maybeEvaluate (stamps deload_reason_phase_<P>)
@@ -8097,6 +8105,9 @@ concepts:
           keyed via WorkoutScheduleReadService.deloadReasonKeyPrefix + deloadPhaseFromWeek4(wk4)
           (the SAME phase source as the flag/marker); reason from deloadDecisionReason(...,
           liftedAny: _liftWeekFour now returns bool) on every path (lift / firm-keep / transient).
+          Unit B: stores a MAP {week_character: liftedAny ? 'working' : 'deload', text: <reason>}
+          — liftedAny is already the predicate the COPY branches on, so the stamp records what
+          the text always assumed, and makes it checkable by the reader.
       - file: lib/core/utils/deload_reason.dart
         method: deloadDecisionReason
         notes: pure + total; structural-before-evidence; had-data-gated; outcome-based (liftedAny).
@@ -8106,11 +8117,24 @@ concepts:
         semantic: >
           same deloadPhaseFromWeek4 derivation → writer==reader; triggeredDeloadEnabled-gated;
           rendered by PhaseArcStrip only on week 4 (train_provider.dart deloadReasonProvider).
+          Unit B: SELF-VALIDATING — returns text only while the stamped week_character equals
+          currentWaveCharacters()[3]; mismatch / legacy bare String / malformed map / blob shorter
+          than 4 weeks all → null → no line, byte-identical to the pre-flip state.
       - file: test/contracts/deload_eval_behavioral_test.dart
         method_or_widget: round-trip — real maybeEvaluate() writes → real currentDeloadReason() reads
         semantic: >
-          LIFT→"Working week", KEEP(decline)→"dipped", flag-OFF→null; + deload_reason_test.dart pure truth-table
-    contract_test_path: test/contracts/deload_eval_behavioral_test.dart
+          LIFT→"Working week", KEEP(decline)→"dipped", flag-OFF→null; + deload_reason_test.dart pure truth-table;
+          Unit B added an end-to-end REGEN case (real evaluator lifts, blob re-stamped to deload)
+          asserting the key SURVIVES + the idempotency flag stays set while the reader suppresses.
+      - file: test/contracts/deload_reason_staleness_behavioral_test.dart
+        method_or_widget: the staleness contract — 12 assertions over the validated value shape
+        semantic: >
+          regression (lift reason + regenned blob → null), positive control, the MIRROR, legacy
+          bare String, malformed maps, short/absent blob, phase mismatch, and the kill-switch gate
+          driven with a VALID value (a bare String there would pass for the wrong reason).
+          Mutation-proven on 3 legs: guard deleted → 2 red, guard made one-sided → 1 red
+          (the mirror alone), writer reverted to a bare String → 3 red.
+    contract_test_path: test/contracts/deload_reason_staleness_behavioral_test.dart
 
   - concept: phase_adherence_rate
     domain: workout
@@ -9131,7 +9155,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1267-1282
+        line_range: 1306-1321
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -9528,15 +9552,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1391-1410
+        line_range: 1430-1447
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1391-1392
+        line_range: 1423-1424
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1443-1468
+        line_range: 1475-1500
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |

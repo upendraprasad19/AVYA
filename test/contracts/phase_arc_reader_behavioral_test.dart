@@ -200,14 +200,24 @@ void main() {
     });
   });
 
-  group('deload reason line — ship-dark after the 2026-09-05 split', () {
-    test('default OFF → the strip asks for no reason', () {
-      expect(PlanEngineFlags.deloadReasonLineEnabled, isFalse);
-    });
-    test('explicit ON → enabled (Unit B flips this)', () async {
-      await HiveService.instance.configBox
-          .put('enable_deload_reason_line', true);
+  group('deload reason line — LIVE since 2026-09-06 (Unit B flip)', () {
+    test('default ON → the strip asks for a reason', () {
       expect(PlanEngineFlags.deloadReasonLineEnabled, isTrue);
+    });
+    test('kill-switch set → OFF; deleting the key restores the default',
+        () async {
+      final cfg = HiveService.instance.configBox;
+      await cfg.put('disable_deload_reason_line', true);
+      expect(PlanEngineFlags.deloadReasonLineEnabled, isFalse);
+      await cfg.delete('disable_deload_reason_line');
+      expect(PlanEngineFlags.deloadReasonLineEnabled, isTrue);
+    });
+    test('the retired enable_ key is inert — it must not gate anything',
+        () async {
+      final cfg = HiveService.instance.configBox;
+      await cfg.put('enable_deload_reason_line', false);
+      expect(PlanEngineFlags.deloadReasonLineEnabled, isTrue);
+      await cfg.delete('enable_deload_reason_line');
     });
   });
 }
