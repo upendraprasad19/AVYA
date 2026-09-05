@@ -255,7 +255,7 @@ resolved:
     build_date: 2026-07-17
     merge_commit: b14186fa
     flip_reviewed: true
-    flip_commit: PENDING_COMMIT_SHA
+    flip_commit: 55035cd7
     flip_review_record: docs/plan-reviews/phase-arc-flip.md
     note: >
       FLIPPED ON 2026-09-05 (OI-53 flag 3 of 12). Kill-switch key is now `disable_phase_arc`
