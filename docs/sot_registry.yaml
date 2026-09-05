@@ -10267,6 +10267,24 @@ concepts:
       ⚠ SLICE 1 HAS NO READERS. All nine legacy quota readers still count
       `ai_coach_interactions` rows, so the bug is still live. Slices 2-4 migrate
       them; dispositions in docs/plan-reviews/oi162-round1-findings.md.
+
+      ⚠ THE INVARIANT THE DATABASE DOES NOT ENFORCE (B-pass on 303c57af):
+      `p_limit` is a per-CALL argument, so the `WHERE uc.used < p_limit` guard
+      uses whatever limit THAT caller passed. Two call sites naming the same
+      (user_id, quota_key, window_start) with different limits do not agree —
+      demonstrated live: a caller with p_limit=1 caps at 1, then a caller with
+      p_limit=100 increments the same row to 2.
+      **ONE quota_key => ONE call site => ONE limit literal.** Nothing in SQL
+      holds this; it is carried by convention, and convention decays. If a
+      second caller for an existing key ever becomes necessary, the limit moves
+      to a lookup, not to a second argument. ai-media-proxy has TWO quotas and
+      must use TWO keys.
+
+      ⚠ RETENTION IS NOT COUPLED TO WINDOW SIZE. The 7-day cutoff is verified
+      safe for all four shapes this ledger will hold (lifetime/epoch — excluded
+      entirely; IST day; rolling 60 min; rolling 10 min) but is a constant. Any
+      slice introducing a window longer than 1 day must raise it in the same
+      migration, or retention will delete rows a live quota still needs.
     writers:
       - file: supabase/migrations/128_usage_counters.sql
         line_range: 69-113

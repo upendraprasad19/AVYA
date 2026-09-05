@@ -190,6 +190,37 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
+- **2026-09-05** — blast-radius **platform** — branch `oi162-delete-account-counter` @
+  `303c57af` (OI-162 slice 1: migration 128, the usage_counters ledger, applied to prod).
+  **7 findings (0 P0, 1 P1, 3 P2, 3 P3); 0 false_alarm.** 4 fixed, 3 recorded as named
+  invariants. Review: `docs/reviews/303c57af-review.md`.
+  **The P1 would have failed CI at the merge commit** — the keystone plan-review record for
+  the branch simply did not exist yet. Worth noting because the batch had run three plan-review
+  rounds and produced two review documents; neither is the artifact
+  `check_plan_review_record_exists.dart` reads, which is branch-keyed with `---` frontmatter.
+  **Producing review artifacts is not the same as producing THE artifact the gate reads.**
+  **Tuning — a TENTH lens, `tool_action_side_effects`.** Finding 6 is the one no lens asked
+  for and no amount of reading the diff would surface: `git checkout -- <file>` — the obvious
+  way to undo a test mutation — silently converts an applied migration's CRLF to LF via
+  `.gitattributes` `eol=lf`, **invalidating the ledger's recorded sha256 while `git status`
+  and `git diff` both read CLEAN**, because git compares normalized content and the ledger
+  hashes bytes. The reviewer hit it by doing the natural thing, then checked the hash anyway.
+  Ask: **does the tool I am using to VERIFY or RESTORE have side effects on the artifact being
+  measured?** Sibling of "a green check is only as wide as its input set", pointed at the
+  instrument rather than the sample. Now recorded in `supabase/migrations/CLAUDE.md`.
+  **Second tuning — lens 8 gains COMPLETENESS, not just correctness.** Finding 7's fix was
+  itself defeated: an assertion `contains("RAISE EXCEPTION 'consume_quota:")` stayed GREEN
+  when one of the TWO such guards was converted to `RETURN -1`, because the other still
+  matched. A `contains` over a pattern that occurs N times cannot detect one of them
+  disappearing. Ask of any absent/present assertion: **how many times does this pattern occur,
+  and would the test notice if exactly one went away?** Same family as 2026-09-04's
+  membership-is-not-association, one step further.
+  ⚠ Also: two of the seven were defects in this batch's OWN corrections (line citations
+  captured before a later edit to the same file; the test written to close a finding). That
+  ratio keeps recurring and is the argument for the B-pass running AFTER remediation, not
+  alongside it.
+  False-alarm rate 0/7 → no change to lenses 1-9.
+
 - **2026-09-04 (b)** — blast-radius **platform** — branch `oi162-delete-account-counter`,
   PLAN-STAGE (no code). Two context-blind rounds on a migration spec: round 1 **2 BLOCKING**,
   round 2 **0 blocking / 2 major / 2 minor**. **Tuning only — no review file produced**, logged

@@ -98,6 +98,41 @@ void main() {
           reason: 'Without this the counter increments past the limit forever.');
     });
 
+    test('null and negative arguments raise rather than silently proceeding', () {
+      // B-pass finding 7: the p_limit=0 guard was pinned and its siblings were
+      // not. Verified live that both raise P0001, but nothing held them in
+      // place. A dropped null-check would let a NULL user_id reach the INSERT
+      // and fail on the NOT NULL column — a confusing error far from the cause;
+      // a dropped negative-check would make `used < -1` false forever, so the
+      // quota would reject every call and read as "always exhausted".
+      expect(
+          sql.contains(RegExp(
+              r'IF\s+p_user_id\s+IS NULL\s+OR\s+p_quota_key\s+IS NULL\s+OR\s+p_window_start\s+IS NULL\s+THEN')),
+          isTrue,
+          reason: 'the null-argument guard must stay');
+      expect(
+          sql.contains(
+              RegExp(r'IF\s+p_limit\s+IS NULL\s+OR\s+p_limit\s*<\s*0\s+THEN')),
+          isTrue,
+          reason: 'the invalid-limit guard must stay');
+      // ⚠ EACH guard is pinned SEPARATELY, and that is not pedantry. The first
+      // version of this assertion was `contains(RAISE EXCEPTION 'consume_quota:)`
+      // — and a mutation converting the null guard's RAISE to `RETURN -1` left
+      // it GREEN, because the OTHER raise still matched. Membership is not
+      // completeness: a `contains` over a pattern that occurs twice cannot
+      // detect one of them disappearing.
+      expect(sql.contains(RegExp(r"RAISE EXCEPTION\s+'consume_quota: null argument'")),
+          isTrue,
+          reason: 'the null guard must RAISE. If it returns a sentinel instead, '
+              'a programming error at the call site becomes indistinguishable '
+              'from an exhausted quota.');
+      expect(
+          sql.contains(
+              RegExp(r"RAISE EXCEPTION\s+'consume_quota: invalid limit")),
+          isTrue,
+          reason: 'the invalid-limit guard must RAISE, for the same reason.');
+    });
+
     test('an exhausted quota returns -1 rather than NULL', () {
       expect(sql.contains(RegExp(r'IF\s+NOT FOUND\s+OR\s+v_used\s+IS NULL\s+THEN')),
           isTrue);

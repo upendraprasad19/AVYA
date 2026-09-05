@@ -14,8 +14,8 @@ symptom: >
 concept: usage_quota_ledger
 sot_registry_entry: usage_quota_ledger
 writers:
-  - { file: supabase/migrations/128_usage_counters.sql, line: 62, method: consume_quota — the only writer of usage_counters, atomic INSERT ON CONFLICT DO UPDATE RETURNING }
-  - { file: supabase/migrations/128_usage_counters.sql, line: 126, method: cleanup_usage_counters — retention, deletes windowed rows only, never lifetime }
+  - { file: supabase/migrations/128_usage_counters.sql, line: 69, method: consume_quota — the only writer of usage_counters, atomic INSERT ON CONFLICT DO UPDATE RETURNING }
+  - { file: supabase/migrations/128_usage_counters.sql, line: 133, method: cleanup_usage_counters — retention, deletes windowed rows only, never lifetime }
 readers:
   - { file: supabase/functions/ai-media-proxy/index.ts, line: 74, method: countFreeImageAnalyses — free image lifetime quota, NOT yet migrated (slice 3) }
   - { file: supabase/functions/ai-media-proxy/index.ts, line: 96, method: countProImageAnalysesToday — PRO image IST-day cap, NOT yet migrated (slice 3) }
@@ -160,6 +160,38 @@ Verified live in a rolled-back transaction before the design was accepted:
 And 19 concurrent calls on one key returned exactly 1…19 — no duplicates, no
 gaps, no lost updates. That is the property the nine existing `count(*)` →
 decide → insert sites do not have.
+
+## The invariant `consume_quota` does NOT enforce — read this before slice 2
+
+**`p_limit` is a per-CALL argument, not a property of the quota.** The `WHERE uc.used <
+p_limit` guard uses whatever limit THAT caller passed. So two call sites naming the same
+`(user_id, quota_key, window_start)` with different limits do not agree: the B-pass
+demonstrated it live — caller A with `p_limit = 1` correctly caps at 1, then caller B with
+`p_limit = 100` increments the same row to 2.
+
+**The invariant every future slice must hold: one `quota_key` has exactly ONE call site, and
+that call site passes exactly ONE limit literal.** Nothing in the database enforces this.
+That is a deliberate consequence of keeping the limit at the call site (where the
+free/PRO branch already lives) rather than duplicating tier logic into SQL — but it is an
+invariant carried by convention, and convention decays.
+
+Consequences for slices 2-4, stated here so they are not rediscovered:
+- The three cap triggers (slice 2) each own one `quota_key` and pass one literal.
+- `ai-media-proxy` has TWO quotas and must use two distinct keys, never one key with two
+  limits.
+- If a second caller for an existing key ever becomes necessary, the limit belongs in a
+  lookup (a `quota_limits` table or a SQL constant), not in a second argument.
+
+## Two accepted limitations, named rather than discovered later
+
+**`used` and `p_limit` are `int4`.** No overflow guard. Reaching it needs ~2.1 billion calls
+against one key in one window; every real limit is ≤ 200. Accepted.
+
+**The 7-day retention cutoff is a constant, not derived.** Verified safe for all four window
+shapes this ledger will hold — lifetime (`epoch`, excluded from deletion entirely), IST day,
+rolling 60 min, rolling 10 min. It is NOT coupled to any registry of window sizes, so a
+future window longer than 7 days would silently delete rows a live quota still needs. Any
+slice adding a window > 1 day must raise this cutoff in the same migration.
 
 ## The gate shipped first
 
