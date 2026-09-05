@@ -126,6 +126,17 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    perfectly designed and still assert `CCL` about a function that returns `CSC`.
    **The sharper question:** for a suppression or absence test — *would this pass if the feature
    did nothing at all?* Pair it with a positive case, or it asserts nothing.
+   **Second sharper question, added 2026-09-05 (OI-162 slice 2):** *does this assertion depend on
+   state the test does not CONTROL?* A status code, a count, or a "success" against a SHARED,
+   rate-limited, or quota-bearing resource is not a fixture value — it is a reading of live
+   mutable state. Three `ai_proxy_test.dart` tests asserted a bare `200` from a live chat as one
+   shared QA account; they were green for months because the daily cap was broken, and went red
+   the moment a migration repaired it. **The tell is an assertion about an outcome that another
+   test, another CI run, or a real user could have changed.** The fix is not to loosen it: accept
+   both outcomes and pin the CONTRACT of each, which usually adds an assertion (the refusal path
+   here had none). ⚠ Paired lens for the diff side: when a change repairs an enforcement, grep the
+   test tree for anything exercising the now-enforced path and asserting success — those tests are
+   untouched by the diff and invisible to a targeted run.
    **Sibling shape — the check that matches ITSELF.** A test or gate that NAMES the thing it
    forbids, then scans a tree containing its own source, always finds itself and can never pass.
    Found 2026-08-29 in a plan whose dead-field scan was widened from `lib/` to `lib/`+`test/` — a
