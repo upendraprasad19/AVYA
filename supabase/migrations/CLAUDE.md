@@ -19,7 +19,10 @@ Every new migration file MUST begin with the following four-line header
 ⚠ **NOTHING ENFORCES THIS. This section claimed "the pre-commit hook and any
 future gate scripts grep for these tags" and that was FALSE** — corrected
 2026-09-05 (B-pass on `004af467`). `grep -rn Destructive scripts/pre-commit.sh`
-returns nothing, and no `check_*.dart` reads the tags either. The same section
+returns nothing, and no `check_*.dart` reads the tags either. ⚠ Precisely: the
+only hit for `Destructive?:` anywhere under `scripts/` is
+`seed_exercise_library.js:74`, which WRITES the tag into a migration it
+generates. Nothing READS or validates one. The same section
 is cited elsewhere in this file under "Tests pinning the rules here" as
 "enforced by the migration-header convention above (the pre-commit hook greps
 for the four tags)" — also false, and both statements have been believed.
