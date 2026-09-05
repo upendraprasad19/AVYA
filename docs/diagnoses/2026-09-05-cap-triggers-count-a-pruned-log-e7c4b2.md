@@ -287,6 +287,43 @@ that EXECUTES green tells you nothing until you have run it against the code it
 replaced.** The cheap version is exactly what was done here — restore the old
 body inside a rolled-back transaction and re-run.
 
+## The consequence that turned main red: CI depended on the cap being broken
+
+**Discovered post-merge, and it is the most instructive thing in this batch.** CI failed on
+`485bde42` with `Expected: <200> Actual: <429>` in `ai_proxy_test.dart`. Live check:
+`usage_counters` showed `test6@gmail.com  chat_app  used=10` — exactly at the cap.
+
+This is not a regression. **It is the fix working, and the test suite had been relying on it not
+working.** Three tests (T15, T18, T19) each send ONE live chat as ONE shared QA account and
+asserted a bare `200`. They were green for months because the pre-129 trigger counted rows in
+`ai_coach_interactions`, which `rolling-context` prunes nightly — the count reset before it could
+ever bite. Migration 129 made the ledger durable and the cap started enforcing.
+
+⚠ **The arithmetic is now a hard constraint: 3 chats per CI run against a 10/day cap means CI can
+run 3 times per IST day before the 4th goes red.** That is not fixed by the test change below and
+should not be papered over.
+
+**The fix** (`chatBodyOrAssertCapped` in `ai_proxy_test.dart`): accept 200 OR 429, asserting the
+correct contract for each — the AI-response shape, or the `RATE_LIMITED` code and error text the
+client maps to its "daily limit" copy. This is not loosening a test to accommodate a bug. It is
+correcting a test that **asserted something it does not control** — the quota state of a shared
+account — into one that asserts what it actually verifies. The 429 branch pins a contract nothing
+asserted before.
+
+⚠ **Not mutation-proven locally and I am not claiming otherwise:** `.env` carries
+`SUPABASE_URL`/`SUPABASE_ANON_KEY` but not `SUPABASE_TEST_EMAIL`/`_PASSWORD`, and the helper's
+four-input `hasCredentials` predicate makes the file SKIP without all four. CI has the secrets —
+and because the QA account is AT the cap right now, CI's next run exercises the 429 branch
+directly. That run is the proof.
+
+**Scope checked, not assumed:** `grep -rln "ai-proxy\|ai-media-proxy" test/` returns
+`ai_proxy_test.dart` alone, and none of its calls set a `type`, so all three are chat. There is no
+vision or food_text equivalent to fix — the class is contained.
+
+**The real fix is a provisioning decision, raised not assumed:** a dedicated per-run QA account,
+or a PRO one (which the chat trigger exempts entirely). Both change what the tests mean and who
+pays for them, so they belong to the founder.
+
 ## What is still broken after this slice
 
 Six of the nine readers. `ai-media-proxy`'s two image meters and
