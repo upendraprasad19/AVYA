@@ -36,7 +36,9 @@ class VolumeFilter {
   /// Filter a flat list of MuscleSlots down to what fits the user's constraints.
   ///
   /// [experience] — beginner | intermediate | advanced.
-  /// [weekCharacter] — baseline | overreach | peak | deload.
+  /// [weekCharacter] — baseline | overreach | peak | deload. (A lifted deload
+  /// is stamped `working` in the blob, but that happens after generation, so
+  /// this filter never sees it.)
   /// [daysPerWeek] — training days per week (3-6).
   static List<MuscleSlot> filter(
     List<MuscleSlot> slots, {

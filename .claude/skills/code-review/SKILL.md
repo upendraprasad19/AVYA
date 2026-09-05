@@ -188,6 +188,40 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-05** — blast-radius **platform** — branch `phase-arc-flip`
+  (flip `enable_phase_arc` live; new ship-dark `enable_deload_reason_line`).
+  **5 findings (1 P0, 2 P2, 2 P3); 0 false_alarm.** Review:
+  `docs/reviews/phase-arc-flip-bpass.md`.
+  **The P0 is a lens this skill did not have: TRACKING DOCS THAT ATTEST TO
+  THEMSELVES.** The batch's closure ledger listed `plan_review_record:` and
+  `bpass_review:` as existing artifacts, and one entry asserted in the PAST
+  TENSE that a tuning entry "was appended … in this commit". None of the three
+  existed or were staged. Every code lens passed; the batch would still have
+  failed `check_plan_review_record_exists.dart` in CI **at the merge commit**,
+  where the repair is a `git reset --hard` unwind.
+  **Tuning made — a new lens, `self_attesting_artifact`:** for every path a
+  staged doc CLAIMS exists — `plan_review_record:`, `bpass_review:`,
+  `hermes_report:`, `behavioral_test_path:`, `flip_review_record:`,
+  `contract_test_path:`, any `docs/…` pointer in a ledger — run
+  `git cat-file -e :<path>` (the STAGED blob, not the working tree) and report
+  every one that resolves to nothing. Also flag past-tense claims about the
+  commit's own contents ("was added in this commit") whose subject is absent
+  from `git diff --cached --name-only`. This is cheap, fully mechanical, and
+  catches the class the code lenses structurally cannot: a diff can be perfect
+  and still be un-mergeable because a doc lied about a sibling file.
+  **Second, smaller tuning — lens 6 gains a UI-reachability question.** F4:
+  a new debug kill-switch called `setState` in the dev panel, which rebuilds the
+  DEV screen and not the screen under test, while the provider read the flag
+  non-reactively. The guard was correct and unobservable. Every sibling toggle
+  in that file forces invalidation via `runRolloverNow(ref)`; this one forced
+  nothing. Ask of any added toggle: **what re-runs the thing it toggles?**
+  A false-alarm note worth keeping: the reviewer's own P3 correctly identified
+  this as a PRE-EXISTING pattern (`phaseArcProvider` has always read its flag
+  non-reactively) and still flagged it, because the new toggle is what makes it
+  reachable. Distinguishing "pre-existing" from "newly reachable" is the right
+  call and the review made it explicitly.
+  False-alarm rate 0/5 → no change to lenses 1-5, 7, 8.
+
 > Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
 
 - **2026-09-05** — blast-radius **platform** — branch `oi162-delete-account-counter` @

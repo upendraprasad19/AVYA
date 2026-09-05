@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/dev/simulation_service.dart';
 import 'package:icanbefitter/features/dev/plan_xls.dart';
 
@@ -307,6 +308,36 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
         '-- applies on your next Start Workout');
   }
 
+  /// Phase-arc kill-switch. Deleting the key returns to the default (ON).
+  ///
+  /// Added with the 2026-09-05 flip, for the same reason as the sibling above:
+  /// a gate nothing can close is not reachable (CLAUDE.md §4.6). ⚠ This is
+  /// DEBUG-ONLY and is NOT a production rollback — `/dev` is registered behind
+  /// `kDebugMode` (`app_router.dart:337`), so it is compiled out of
+  /// `--flavor prod --release` and there is no RemoteConfig. Reverting the flip
+  /// for real users means a code revert plus a store round-trip (OI-95).
+  Future<void> _togglePhaseArc() async {
+    final nextEnabled = !PlanEngineFlags.phaseArcEnabled;
+    final cfg = HiveService.instance.configBox;
+    if (nextEnabled) {
+      await cfg.delete('disable_phase_arc');
+    } else {
+      await cfg.put('disable_phase_arc', true);
+    }
+    // Load-bearing, and the reason the sibling toggles all call
+    // runRolloverNow: `setState` rebuilds THIS screen, not the Train tab.
+    // phaseArcProvider reads the flag non-reactively and watches
+    // currentPlanProvider, so invalidating that is what actually re-runs the
+    // gate. Without it the switch appears inert until something else forces a
+    // Train rebuild -- a kill-switch you cannot observe working is the same
+    // problem as one you cannot reach.
+    ref.invalidate(currentPlanProvider);
+    if (!mounted) return;
+    setState(() {});
+    _toast('phase arc = ${nextEnabled ? 'ON' : 'OFF (killed)'} '
+        '-- applies on your next Train tab rebuild');
+  }
+
   /// Triggered-deload kill-switch.
   ///
   /// WARNING: turning this OFF also stops NEW plans stashing their working
@@ -442,6 +473,12 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                         ? 'KILL triggered deload'
                         : 'Restore triggered deload',
                     () => _toggleTriggeredDeload(),
+                  ),
+                  _btn(
+                    PlanEngineFlags.phaseArcEnabled
+                        ? 'KILL phase arc'
+                        : 'Restore phase arc',
+                    () => _togglePhaseArc(),
                   ),
                   // Use after every time-travel jump — the clock buttons above
                   // do NOT invalidate providers on their own.

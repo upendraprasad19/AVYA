@@ -239,7 +239,7 @@ Everything currently owed, from any source — not only audit findings. `MEMORY.
 durable *why* (scars, retrospectives) but lives in the harness dir outside git and is invisible to
 cloud sessions; **this file is the cross-session backlog.**
 
-## OI-53 — Flip the remaining 10 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01)
+## OI-53 — Flip the remaining 9 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05)
 
 - **Status**: OPEN
 - **Verified**: 2026-08-05 — flag inventory, dependency order and the data lag all re-derived from
@@ -250,7 +250,9 @@ cloud sessions; **this file is the cross-session backlog.**
   ⚠ **DATED FOUNDER DECISION 2026-09-01: readiness + triggered deload were approved and
   flipped together** (branch `readiness-flip`, record `docs/plan-reviews/readiness-flip.md`).
   Recorded here because a repo-only reader cannot otherwise reconcile `Blocked on: FOUNDER`
-  with those two flips existing. **10 remain.**
+  with those two flips existing. ⚠ **DATED FOUNDER DECISION 2026-09-05: `enable_phase_arc`
+  approved and flipped** (branch `phase-arc-flip`, record `docs/plan-reviews/phase-arc-flip.md`).
+  **9 remain.**
 - **What this actually is — 13 product decisions, not one toggle.** The ledger is explicit:
   *"there is no batch discount, and flipping thirteen flags in one commit would be one review
   pretending to be thirteen."* Each flip-on commit needs its own **full ×2 + `bpass: accepted`**
@@ -266,6 +268,21 @@ cloud sessions; **this file is the cross-session backlog.**
   ⚠ Three Android-side defects were caught in review, each invisible to `flutter test`:
   the wrong data type (`SLEEP_ASLEEP` matches STAGES, not the session), `READ_SLEEP` declared
   in no manifest, and a permission-request function with no caller.
+- ✅ **`enable_phase_arc` — FLIPPED 2026-09-05.** Display-only, no engine coupling. Taken
+  first deliberately: it changes nothing about prescribed training, so it was the cheapest
+  ×2 and it put `week_character` on screen before anything that alters load.
+  ⚠ **It did NOT ship alone — the batch was SPLIT.** The week-4 deload-"why" line lives
+  INSIDE the same widget, so the flip would have lit it too. Plan-review round 2 found the
+  stamped `deload_reason_phase_<P>` is never deleted anywhere in `lib/` while a mid-phase
+  regen re-stamps week 4 as `deload`, so the strip would render DELOAD above "Working week
+  — you've recovered", permanently. That line now sits behind its own ship-dark
+  `enable_deload_reason_line` and is Unit B, with its own ×2.
+  ⚠ Three defects were fixed in the flip itself, none of them the flag: the fifth wave token
+  `working` was unmapped; the label lookup trimmed while its fallback did not; and the
+  `length < 2` guard let a 2-3 week blob render a strip whose clamped-to-4 highlight could
+  mark no node at all. Also raised FOB-8 against OI-60 — the strip reads
+  `getCurrentWeekNumber()` directly, so it is a seventh week-identity surface.
+
 - **The order is forced by code, not preference.** `enable_readiness` had to flip FIRST:
   - `enable_triggered_deload`'s evaluator **early-returns** on readiness
     (`deload_evaluator.dart:56` — `if (!PlanEngineFlags.readinessEnabled) return;`; the

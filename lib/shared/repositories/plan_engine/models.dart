@@ -61,7 +61,10 @@ class WeekPlan {
   final int weekNumber;
   final int weekInPhase;
   final String overloadNotes;
-  final String weekCharacter; // baseline | overreach | peak | deload
+  // baseline | overreach | peak | deload — plus `working`, written back by
+  // deload_evaluator.dart:231 when a deload is lifted. The generator only ever
+  // emits the first four; the fifth arrives by rewrite.
+  final String weekCharacter;
   final List<WorkoutDay> workoutDays;
 
   const WeekPlan({

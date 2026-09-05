@@ -17,4 +17,19 @@ void main() {
   test('triggeredDeloadEnabled defaults TRUE when Hive is unavailable', () {
     expect(PlanEngineFlags.triggeredDeloadEnabled, isTrue);
   });
+
+  // Added with the 2026-09-05 phase-arc flip. The flip inverts BOTH halves of
+  // the getter — the key (`enable_` → `disable_`) and the catch-block default
+  // (`false` → `true`). Flipping only the key would leave a no-Hive context
+  // rendering nothing while a Hive context renders the strip, which is the
+  // fallback silently contradicting the flag.
+  test('phaseArcEnabled defaults TRUE when Hive is unavailable', () {
+    expect(PlanEngineFlags.phaseArcEnabled, isTrue);
+  });
+
+  // The reason line is the half that stayed dark in the split, so its default
+  // is the opposite. Pinned here so a future flip has to change it deliberately.
+  test('deloadReasonLineEnabled defaults FALSE when Hive is unavailable', () {
+    expect(PlanEngineFlags.deloadReasonLineEnabled, isFalse);
+  });
 }
