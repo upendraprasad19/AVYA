@@ -10226,3 +10226,70 @@ concepts:
       table: ai_coach_interactions
       columns: [user_id, channel, user_message, ai_response, model_used, tokens_used, created_at]
     sync_methods: []
+
+  # OI-162 slice 1 (d3a7f1, 2026-09-05). The ledger that quota enforcement moves
+  # ONTO. Registered now, with zero readers, because slice 1 establishes the
+  # writer contract that slices 2-4 depend on: exactly one writer, exactly one
+  # deleter, nothing else touching the table.
+  - concept: usage_quota_ledger
+    domain: cross_domain
+    behavioral_test_path: test/edge_functions/usage_counters_rls_denies_client_test.dart
+    description: |
+      Per-user quota state, held in `usage_counters` as one row per
+      (user_id, quota_key, window_start). Lifetime quotas use the sentinel
+      window_start = 'epoch'; windowed quotas use the bucket start.
+
+      WHY IT EXISTS: nine quota checks derive their count from rows in
+      `ai_coach_interactions`, and `rolling-context` prunes that table nightly.
+      Deleting a log is correct; deleting a ledger resets every quota built on
+      it. A free user regains 5 lifetime image analyses and a free Gemini 2.5
+      Pro weekly report; brute-force guards can be reset by chatting.
+
+      THE CONTRACT:
+      1. `consume_quota()` is the ONLY writer. It is atomic — a single
+         INSERT ... ON CONFLICT DO UPDATE ... RETURNING — which also removes the
+         read-then-write race every legacy site has (c9e3b1 found that same
+         defect client-side in July).
+      2. `cleanup_usage_counters()` is the ONLY deleter, and its predicate is
+         TWO-SIDED: it never deletes a lifetime row. Dropping the epoch
+         exclusion recreates the original bug inside the new table.
+      3. `consume_quota` returns the new count (>=1), or -1 when exhausted or
+         when p_limit = 0. It NEVER returns NULL — a skipped DO UPDATE yields no
+         row, and NULL reads as "fine" at a call site (`null >= limit` is
+         false), which fails OPEN.
+      4. SECURITY: RLS is enabled on `usage_counters` with NO policy, and
+         `consume_quota` is SECURITY INVOKER. The EXECUTE grant is deliberately
+         NOT the guard — this project's schema default hands EXECUTE on every
+         new public function to anon and authenticated anyway (a9d3f1). Verified
+         live: authenticated and anon both refused 42501 while holding EXECUTE;
+         service_role writes.
+
+      ⚠ SLICE 1 HAS NO READERS. All nine legacy quota readers still count
+      `ai_coach_interactions` rows, so the bug is still live. Slices 2-4 migrate
+      them; dispositions in docs/plan-reviews/oi162-round1-findings.md.
+    writers:
+      - file: supabase/migrations/128_usage_counters.sql
+        line_range: 69-113
+        method: consume_quota
+        semantic: cloud-write
+        notes: |
+          Sole writer. Atomic upsert; the ON CONFLICT arm is guarded by
+          `WHERE uc.used < p_limit` so the counter cannot pass the limit, and
+          the INSERT arm inserts 1 (not the column default, which would grant
+          one extra unit on the first call).
+      - file: supabase/migrations/128_usage_counters.sql
+        line_range: 133-145
+        method: cleanup_usage_counters
+        semantic: cloud-delete
+        notes: |
+          Sole deleter, run by pg_cron as postgres (rolbypassrls). BOTH
+          conjuncts of its predicate are load-bearing.
+    readers: []
+    reader_manifest_complete: true
+    hive:
+      box: "n/a — cloud-only ledger, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: usage_counters
+      columns: [user_id, quota_key, window_start, used, updated_at]
+    sync_methods: []

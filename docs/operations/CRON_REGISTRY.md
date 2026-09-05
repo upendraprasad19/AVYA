@@ -48,6 +48,7 @@
 | 110 | `alert_cron_function_dead` | `47 6 * * *` | 12:17 | (intra-DB) | n/a | Per-function complement: a function that succeeded within 14d but not in 8d is presumed dead. Catches the shape `alert_cron_silence` misses |
 | 121 | `jrd_retention_daily` (33) | `22 4 * * *` | 09:52 | (intra-DB) | n/a | **DELETES `cron.job_run_details`** older than 14d, always sparing the newest row per job. Reconstructed 2026-08-20 — see the note below |
 | 121 | `client_errors_retention_daily` (34) | `25 4 * * *` | 09:55 | (intra-DB) | n/a | **DELETES `public.client_errors`** older than 30d. Reconstructed 2026-08-20 |
+| 128 | `usage_counters_retention_daily` (37) | `45 3 * * *` | 09:15 | (intra-DB) | n/a | **DELETES `public.usage_counters`** windowed rows older than 7d. ⚠ NEVER deletes LIFETIME rows — the predicate is two-sided (`window_start <> 'epoch' AND window_start < now() - 7d`); dropping the first conjunct wipes every lifetime entitlement and recreates the resettable-quota bug (OI-162 / d3a7f1) inside the new table. `cleanup_usage_counters()` is SECURITY INVOKER and works because pg_cron runs it as `postgres`, which has `rolbypassrls` |
 | 121 | `jrd_vacuum_daily` (35) | `38 4 * * *` | 10:08 | (intra-DB) | n/a | `VACUUM (ANALYZE) cron.job_run_details`. Not row-destructive |
 | 121 | `client_errors_vacuum_daily` (36) | `41 4 * * *` | 10:11 | (intra-DB) | n/a | `VACUUM (ANALYZE) public.client_errors`. Not row-destructive |
 
