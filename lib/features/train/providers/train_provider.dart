@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
@@ -888,13 +889,17 @@ final currentPlanProvider =
 // ── ⑥ Batch 7-A (W3.2): Phase Arc ────────────────────────────────
 
 /// Read-only data for the Train-screen phase arc: the current phase's periodization
-/// wave characters (baseline→overreach→peak→deload) + which week is "now". `null`
-/// when the flag is OFF (ship-dark) or there is no materialized plan → the strip
-/// renders nothing. Rebuilds when the plan (re)materializes (watches
-/// [currentPlanProvider]); no engine coupling — pure display of stamped data.
+/// wave characters + which week is "now". `null` when the kill-switch is set or
+/// there is no materialized plan → the strip renders nothing. Rebuilds when the
+/// plan (re)materializes (watches [currentPlanProvider]); no engine coupling —
+/// pure display of stamped data.
+///
+/// ⚠ The wave vocabulary is FIVE tokens — `baseline | overreach | peak | deload`
+/// plus `working` (`deload_evaluator.dart:231`) — and the reader synthesises a
+/// sixth, the empty string, for a malformed entry.
 class PhaseArcData {
-  final List<String> waves; // week_character per week, ordered week 1..N
-  final int currentWeek; // 1-based
+  final List<String> waves; // week_character per week, ordered week 1..4
+  final int currentWeek; // 1-based, clamped 1..4
   const PhaseArcData({required this.waves, required this.currentWeek});
 }
 
@@ -902,9 +907,33 @@ final phaseArcProvider = Provider<PhaseArcData?>((ref) {
   ref.watch(currentPlanProvider); // rebuild on (re)materialize
   if (!PlanEngineFlags.phaseArcEnabled) return null;
   final waves = WorkoutScheduleService.instance.currentWaveCharacters();
-  if (waves.length < 2) return null; // no / degenerate plan → render nothing
+  // The highlight is `getCurrentWeekNumber()`, CLAMPED to 1..4
+  // (`workout_schedule_read_service.dart:1214`). A blob with fewer than 4 weeks
+  // therefore renders a strip on which the clamp can address no node at all —
+  // every node dim, nothing marked "now", which reads as a rendering fault
+  // rather than as missing data. Render nothing instead; that is exactly what
+  // shipped before this flip, so it is the no-change direction.
+  //
+  // `>= 4` (not `== 4`) deliberately matches `deload_evaluator.dart:228`, which
+  // accepts `weeks.length >= 4` before rewriting week 4. A guard stricter than
+  // the writer it shadows would hide a strip the evaluator is still maintaining.
+  // Only the first 4 are rendered, since the clamp can never address a 5th.
+  if (waves.length < 4) {
+    // A TRUNCATED blob (1..3) is a real anomaly worth seeing. Length 0 is the
+    // ordinary no-plan state — every pre-onboarding user, on every rebuild — so
+    // it must stay silent. `logEvent`, not `recordNonFatal`: the latter is
+    // reserved for actual exceptions and is treated as HIGH-priority, bypassing
+    // the cooldown (`error_telemetry.dart:240-244`).
+    if (waves.isNotEmpty) {
+      unawaited(ErrorTelemetry.logEvent(
+        'phase_arc_truncated_week_plans',
+        message: 'week_plans length ${waves.length}, expected >= 4',
+      ));
+    }
+    return null;
+  }
   final week = WorkoutScheduleService.instance.getCurrentWeekNumber();
-  return PhaseArcData(waves: waves, currentWeek: week);
+  return PhaseArcData(waves: waves.take(4).toList(), currentWeek: week);
 });
 
 /// Batch 10 (W3.1 explainability): the one-line deload "why" for the current

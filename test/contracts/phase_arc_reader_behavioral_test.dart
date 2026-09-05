@@ -1,7 +1,8 @@
 // Behavioral — ⑥ Batch 7-A (W3.2 phase arc): `currentWaveCharacters()` reads the
 // materialized `current_plan` blob's `week_plans[].week_character` (snake_case per
 // WeekPlan.toMap), crash-safe on absent/malformed blobs. `phaseArcProvider` is
-// flag-gated (`enable_phase_arc`, ship-dark DEFAULT OFF) → null when OFF / no plan.
+// flag-gated. The flag FLIPPED LIVE 2026-09-05: the key is now
+// `disable_phase_arc` (kill-switch) and the catch-block default is ON.
 
 import 'dart:io';
 
@@ -15,6 +16,8 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/features/train/widgets/phase_arc_strip.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -103,28 +106,108 @@ void main() {
     });
   });
 
-  group('phaseArcProvider — flag-gated (ship-dark OFF)', () {
-    test('flag OFF (default) → null even with a plan', () async {
+  group('phaseArcProvider — LIVE, kill-switch reversible (flipped 2026-09-05)', () {
+    test('default (no key) → renders, because the flag now defaults ON', () async {
+      await seedPlan(['baseline', 'overreach', 'peak', 'deload']);
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final arc = c.read(phaseArcProvider);
+      expect(arc, isNotNull,
+          reason: 'the flip inverted the default; absent key must mean ON');
+      expect(arc!.waves, ['baseline', 'overreach', 'peak', 'deload']);
+      expect(arc.currentWeek, inInclusiveRange(1, 4));
+    });
+
+    // THE MIRROR. Every pre-flip test proved the ON path; nothing proved the
+    // kill-switch, and the kill-switch IS the entire rollback path.
+    test('disable_phase_arc = true → null (the rollback path actually works)',
+        () async {
+      await HiveService.instance.configBox.put('disable_phase_arc', true);
       await seedPlan(['baseline', 'overreach', 'peak', 'deload']);
       final c = ProviderContainer();
       addTearDown(c.dispose);
       expect(c.read(phaseArcProvider), isNull);
     });
-    test('flag ON + plan → PhaseArcData (waves + current week 1-4)', () async {
-      await HiveService.instance.configBox.put('enable_phase_arc', true);
-      await seedPlan(['baseline', 'overreach', 'peak', 'deload']);
+
+    test('no plan → null (degenerate guard, unchanged by the flip)', () async {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      expect(c.read(phaseArcProvider), isNull);
+    });
+
+    // R11/F3: the highlight is clamped to 1..4, so a blob with fewer than 4
+    // weeks renders a strip on which NO node can ever be marked "now" — every
+    // node dim, which reads as a rendering fault rather than as missing data.
+    test('short blob (3 weeks) → null, not an un-highlightable strip', () async {
+      await seedPlan(['baseline', 'overreach', 'peak']);
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      expect(c.read(phaseArcProvider), isNull);
+    });
+
+    // >= 4 deliberately matches deload_evaluator.dart:228. A 5-week blob is
+    // still maintained by the evaluator, so the strip must not vanish for it —
+    // it renders the first 4, which is all the clamp can address.
+    test('over-long blob (5 weeks) → renders exactly the first 4', () async {
+      await seedPlan(['baseline', 'overreach', 'peak', 'deload', 'working']);
       final c = ProviderContainer();
       addTearDown(c.dispose);
       final arc = c.read(phaseArcProvider);
       expect(arc, isNotNull);
       expect(arc!.waves, ['baseline', 'overreach', 'peak', 'deload']);
-      expect(arc.currentWeek, inInclusiveRange(1, 4));
+      expect(arc.waves.length, 4);
     });
-    test('flag ON but no plan → null (degenerate guard)', () async {
-      await HiveService.instance.configBox.put('enable_phase_arc', true);
+
+    // The lifted-deload state. `working` is written by deload_evaluator.dart:231
+    // and that evaluator is LIVE, so this is a producible blob, not a synthetic.
+    test('lifted deload (working in week 4) survives to the reader', () async {
+      await seedPlan(['baseline', 'overreach', 'peak', 'working']);
       final c = ProviderContainer();
       addTearDown(c.dispose);
-      expect(c.read(phaseArcProvider), isNull);
+      expect(c.read(phaseArcProvider)!.waves.last, 'working');
+    });
+  });
+
+  group('PhaseArcStrip.labelFor — all six states, normalised once', () {
+    test('the five real tokens map to deliberate labels', () {
+      expect(PhaseArcStrip.labelFor('baseline'), 'BASELINE');
+      expect(PhaseArcStrip.labelFor('overreach'), 'OVERREACH');
+      expect(PhaseArcStrip.labelFor('peak'), 'PEAK');
+      expect(PhaseArcStrip.labelFor('deload'), 'DELOAD');
+      // The fifth. Rendered correctly before it was mapped, via the fallback —
+      // by luck, not decision.
+      expect(PhaseArcStrip.labelFor('working'), 'WORKING');
+    });
+
+    // R10: the lookup trimmed while the fallback did not, so '  ' missed the
+    // map, fell through UNTRIMMED, and '  '.isEmpty is FALSE — a dot with no
+    // label. An isEmpty-only floor does not catch this; normalising once does.
+    test('whitespace-only token floors to the em dash, not a blank node', () {
+      expect(PhaseArcStrip.labelFor('   '), '—');
+      expect(PhaseArcStrip.labelFor('\t'), '—');
+    });
+
+    test('empty token (synthesised by the reader) floors to the em dash', () {
+      expect(PhaseArcStrip.labelFor(''), '—');
+    });
+
+    test('case and padding are normalised before lookup', () {
+      expect(PhaseArcStrip.labelFor('  DeLoAd  '), 'DELOAD');
+    });
+
+    test('an unknown token still renders, upper-cased and trimmed', () {
+      expect(PhaseArcStrip.labelFor(' taper '), 'TAPER');
+    });
+  });
+
+  group('deload reason line — ship-dark after the 2026-09-05 split', () {
+    test('default OFF → the strip asks for no reason', () {
+      expect(PlanEngineFlags.deloadReasonLineEnabled, isFalse);
+    });
+    test('explicit ON → enabled (Unit B flips this)', () async {
+      await HiveService.instance.configBox
+          .put('enable_deload_reason_line', true);
+      expect(PlanEngineFlags.deloadReasonLineEnabled, isTrue);
     });
   });
 }

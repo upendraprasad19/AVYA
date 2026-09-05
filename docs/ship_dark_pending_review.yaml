@@ -162,13 +162,23 @@ pending:
     flip_reviewed: false
     flip_commit: null
 
-  - flag: enable_phase_arc
-    branch: workout-7a-phase-arc
-    build_commit: ea7a603e
-    build_date: 2026-07-17
-    merge_commit: b14186fa
+  - flag: enable_deload_reason_line
+    branch: phase-arc-flip
+    build_commit: null            # built and shipped dark in the phase-arc flip batch
+    build_date: 2026-09-05
+    merge_commit: null
     flip_reviewed: false
     flip_commit: null
+    note: >
+      SPLIT OUT of the phase-arc flip on 2026-09-05 (founder decision) rather than shipping
+      with it. The week-4 deload "why" line lives INSIDE PhaseArcStrip, so flipping
+      enable_phase_arc would have lit it too. It carries an unfixed defect found by plan-review
+      round 2: `deload_reason_phase_<P>` is never deleted anywhere in lib/, while a mid-phase
+      regen rewrites the plan blob unconditionally (workout_schedule_read_service.dart:388) and
+      re-stamps week 4 as `deload`. The idempotency flag (deload_evaluator.dart:79) then blocks
+      re-evaluation from correcting the stale string, so the strip would render a DELOAD node
+      above a line reading "Working week -- you've recovered", permanently. Unit B fixes that
+      first; this flag flips there with its own full x2 review.
 
   - flag: enable_adherence_gate
     branch: workout-adherence-8a2int
@@ -239,6 +249,30 @@ pending:
 # and by the Sunday push.
 
 resolved:
+  - flag: enable_phase_arc
+    branch: phase-arc-flip
+    build_commit: ea7a603e
+    build_date: 2026-07-17
+    merge_commit: b14186fa
+    flip_reviewed: true
+    flip_commit: 55035cd7
+    flip_review_record: docs/plan-reviews/phase-arc-flip.md
+    note: >
+      FLIPPED ON 2026-09-05 (OI-53 flag 3 of 12). Kill-switch key is now `disable_phase_arc`
+      and the catch-block default inverted to ON, matching the sibling default-ON flags.
+      Reviewed x2 context-blind (13 findings, then 20 on the hardened plan) plus a scoped
+      split-verification; the ROUND-2 headline was that round 1's own correction was defective,
+      which is what triggered the SPLIT: the week-4 deload-reason line inside the same widget
+      stayed dark behind the new `enable_deload_reason_line`.
+      Three real defects were fixed in the flip itself, none of them the flag: the fifth wave
+      token `working` was unmapped (rendering correctly only via the unknown-token fallback);
+      the label lookup trimmed while its fallback did not, so a whitespace token rendered a
+      dot with no label; and the provider's `length < 2` guard let a 2-3 week blob render a
+      strip on which the clamped-to-4 highlight could mark no node at all.
+      ⚠ There is NO release-build kill-switch (OI-95, accepted risk across all OI-53 flags):
+      every toggle lives in the kDebugMode dev panel and there is no RemoteConfig, so a real
+      rollback is a code revert plus a store round-trip.
+
   - flag: enable_equipment_capability_floor
     branch: oi89-bodyweight-floor
     build_commit: null            # built and flipped in the SAME batch
@@ -492,3 +526,34 @@ flip_on_blockers:
         with no size check and no FC7 untrusted-data wrapper (unlike ai-proxy);
         and ai-proxy's size-envelope comment cites the wrong line for its own
         10K check.
+    - id: FOB-8
+      raised: 2026-09-05
+      title: >
+        PhaseArcStrip is a SEVENTH "you are in week 4" surface, and it went live
+        on 2026-09-05 while enable_hold_weeks was still dark.
+      detail: >
+        FOB-1 closed the week-identity class across six surfaces by routing them
+        through weekIdentityProvider / weekIdentity(). The phase-arc strip was
+        examined during that batch and CLEARED — docs/plan-reviews/round2-oi-pending-hold-weeks.md:35
+        names phaseArcProvider explicitly and reasons that it "doesn't render a
+        week number as user-facing text". That was TRUE ONLY WHILE THE FLAG WAS
+        OFF, and the flag is now on.
+        phaseArcProvider (train_provider.dart) reads
+        WorkoutScheduleService.getCurrentWeekNumber() DIRECTLY, not
+        weekIdentityProvider. That call clamps to 4
+        (workout_schedule_read_service.dart:1214), and a hold extends plan_end
+        locally so isPhaseExpired() is false and PlanExpiredCard does not appear
+        to correct it. So for a holding user the strip would highlight DELOAD as
+        "now", in Campaign Gold, roughly 40px below a plan_header that has
+        deliberately DROPPED its "WK 4 OF 4" because a hold week has no honest
+        week number.
+        Nobody is affected today: enable_hold_weeks is `== true`-gated and
+        DEFAULT OFF (plan_engine_flags.dart:65). This is a flip-on blocker, not
+        a live bug.
+      fix: >
+        Route phaseArcProvider's currentWeek through weekIdentity() /
+        weekIdentityProvider like the other six, and decide what the strip shows
+        during a hold (the honest answer is probably "no node is current", which
+        the widget already renders correctly when currentWeek falls outside
+        1..waves.length).
+      found_by: plan-review round 2 of the phase-arc flip

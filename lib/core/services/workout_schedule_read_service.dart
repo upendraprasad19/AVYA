@@ -1215,7 +1215,8 @@ class WorkoutScheduleReadService {
   }
 
   /// ⑥ Batch 7-A (W3.2 phase arc): the periodization wave character per week of
-  /// the CURRENT phase — baseline / overreach / peak / deload — read from the
+  /// the CURRENT phase — baseline / overreach / peak / deload, plus `working`
+  /// once a deload is lifted (deload_evaluator.dart:231) — read from the
   /// materialized `current_plan` blob (`week_plans[i]['week_character']`,
   /// snake_case per `WeekPlan.toMap`). Read-only DISPLAY source for the
   /// Train-screen wave strip; no engine coupling. Crash-safe: a missing /

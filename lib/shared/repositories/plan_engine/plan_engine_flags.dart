@@ -194,16 +194,50 @@ class PlanEngineFlags {
   }
 
   /// ⑥ Batch 7-A (W3.2 phase arc): the Train-screen strip showing the current
-  /// phase's periodization wave (baseline→overreach→peak→deload) with this week
-  /// highlighted, sourced from the already-materialized `week_character` (no engine
-  /// change — pure read-only DISPLAY). Ship-dark DEFAULT OFF (§4.6 — a new visible
-  /// UI element, verify on-device before it ships lit). OFF → the strip renders
-  /// nothing → byte-identical. Set `configBox['enable_phase_arc'] = true` to enable.
+  /// phase's periodization wave with this week highlighted, sourced from the
+  /// already-materialized `week_character` (no engine change — pure read-only
+  /// DISPLAY). LIVE since 2026-09-05 (OI-53 flag 3 of 12).
+  /// Kill-switch `configBox['disable_phase_arc'] = true`.
+  ///
+  /// ⚠ The wave vocabulary is FIVE tokens, not the four this comment used to
+  /// name: `baseline | overreach | peak | deload`, plus **`working`**, written
+  /// by `deload_evaluator.dart:231` when a deload is lifted. A sixth state, the
+  /// empty string, is synthesised by the READER
+  /// (`workout_schedule_read_service.dart:1229`) for a malformed entry.
+  /// `PhaseArcStrip` maps all five and floors the empty case.
+  ///
+  /// ⚠ There is NO release-build kill-switch: every flag toggle lives in the
+  /// `kDebugMode`-gated dev panel and there is no RemoteConfig, so reverting
+  /// means a code revert plus a store round-trip (OI-95, accepted risk across
+  /// all OI-53 flags).
   static bool get phaseArcEnabled {
     try {
-      return HiveService.instance.configBox.get('enable_phase_arc') == true;
+      return HiveService.instance.configBox.get('disable_phase_arc') != true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
+    }
+  }
+
+  /// ⑥ Batch 10 (W3.1 explainability): the week-4 deload "why" line rendered
+  /// INSIDE `PhaseArcStrip`. Ship-dark DEFAULT OFF (§4.6).
+  ///
+  /// Split out of the phase-arc flip on 2026-09-05 (founder decision) because
+  /// the line carries an unfixed defect: `deload_reason_phase_<P>` is never
+  /// deleted anywhere in `lib/`, while a mid-phase regen rewrites the plan blob
+  /// unconditionally (`workout_schedule_read_service.dart:388`) and re-stamps
+  /// week 4 as `deload`. The idempotency flag (`deload_evaluator.dart:79`) then
+  /// blocks any re-evaluation from correcting the stale string, so the strip
+  /// would render a `DELOAD` node above a line reading "Working week — you've
+  /// recovered", permanently. Unit B fixes that first; this flag flips there.
+  ///
+  /// OFF → no reason line → the strip is byte-identical to Batch 7-A.
+  /// Set `configBox['enable_deload_reason_line'] = true` to enable.
+  static bool get deloadReasonLineEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_deload_reason_line') ==
+          true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → safe default: OFF
     }
   }
 
@@ -220,7 +254,11 @@ class PlanEngineFlags {
   /// stash presence). The eval also early-returns without readiness.
   ///
   /// ⚠ Killing this switch does NOT revert a lift already applied — the week
-  /// stays `week_character: 'working'` and only the reason strip disappears.
+  /// stays `week_character: 'working'`. Corrected 2026-09-05: this used to add
+  /// "and only the reason strip disappears", which is no longer true — the
+  /// reason line has its own flag, [deloadReasonLineEnabled], DEFAULT OFF, so
+  /// killing this switch changes nothing visible until that one flips too. The
+  /// lifted week still renders as `WORKING` on the phase-arc strip either way.
   static bool get triggeredDeloadEnabled {
     try {
       return HiveService.instance.configBox.get('disable_triggered_deload') !=
