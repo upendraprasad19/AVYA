@@ -14,8 +14,29 @@ status: active
 ## Migration header convention
 
 Every new migration file MUST begin with the following four-line header
-(in this exact order, as SQL comments). The pre-commit hook and any future
-gate scripts grep for these tags — keep the casing and the colon-space.
+(in this exact order, as SQL comments). Keep the casing and the colon-space.
+
+⚠ **NOTHING ENFORCES THIS. This section claimed "the pre-commit hook and any
+future gate scripts grep for these tags" and that was FALSE** — corrected
+2026-09-05 (B-pass on `004af467`). `grep -rn Destructive scripts/pre-commit.sh`
+returns nothing, and no `check_*.dart` reads the tags either. The same section
+is cited elsewhere in this file under "Tests pinning the rules here" as
+"enforced by the migration-header convention above (the pre-commit hook greps
+for the four tags)" — also false, and both statements have been believed.
+
+**It has already cost one migration.** 129 shipped with only `Intent:` and
+`Rollback strategy:`, missing `Destructive?:` and `Linked diagnose-doc:`, and
+its diagnose-doc asserted in writing that it "carries the four-tag header".
+Nobody noticed until a context-blind reviewer grepped for the tags instead of
+reading the sentence claiming they were there. Because an applied migration is
+immutable (see below), that omission is now permanent.
+
+**Until a gate exists, the header is checked by whoever writes the migration
+and by review — treat it exactly as self-attested**, the same trust model as
+rule 21's `presence_only:` and rule 24's ledger. Do not assume a red gate will
+catch a missing tag; there is no gate. Same shape as the OI board's
+"fixed by `check_open_issues_reconciled.dart`" note describing a script that
+was never written.
 
 ```sql
 -- Intent: <one-line description of what this migration accomplishes>
@@ -149,7 +170,7 @@ Three migration filename schemes coexist in `supabase/migrations/`. This is book
 
 - `test/contracts/applied_migrations_parity_test.dart` — every `mcp__supabase__apply_migration` call must be reflected in `backups/applied_migrations.json`.
 - `test/contracts/dead_columns_dropped_test.dart` — flags columns dropped via migration but still referenced in code.
-- Migration 4-tag header — there is **no** standalone `migration_header_contract_test.dart`; the header is enforced by the migration-header convention above (the pre-commit hook greps for the four tags).
+- Migration 4-tag header — there is **no** standalone `migration_header_contract_test.dart` **and no gate of any kind**. This line previously said the header "is enforced by ... (the pre-commit hook greps for the four tags)"; it does not, and never did. See the correction under "Migration header convention" above. The header is self-attested.
 - `test/sql/onconflict_live_arbiter.sql` + `scripts/check_onconflict_live_arbiter.dart` — the live-Postgres ON CONFLICT arbiter check (every client `onConflict` pair resolves on the real schema). Runs at `/build-apk` against a live DB, so there is **no** unit-suite `onconflict_live_arbiter_test.dart`. (NB 2026-06-03: the scaffold carries broad pre-existing schema drift — ~10 blocks reference columns that no longer exist; a dedicated schema-sync pass is tracked as a follow-up. The 082/083 arbiter blocks were updated in this batch.)
 
 ## See also

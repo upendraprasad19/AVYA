@@ -2978,6 +2978,13 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Status**: OPEN
 - **Blocked on**: needs OI-153's channel-reader enumeration
 - **Verified**: 2026-09-03 — schema + DDL + repo grep + prod
+- **PROGRESS 2026-09-05 (does NOT close this)**: the `usage_counters` ledger this issue's fix will
+  use is now live AND proven in production with three real readers — migration 129 (`c7b95fe5`)
+  moved the chat / vision / food_text cap triggers onto `consume_quota()`. That is slice 2 of 4;
+  this issue is slice 4's target and is untouched. What it de-risks: the ledger's atomicity, its
+  RLS-with-no-policy guard and its retention are no longer theoretical. ⚠ The trap noted below is
+  UNCHANGED and still applies — the fix here still introduces a new channel value, and
+  `delete_account_attempt` rows must not become quota state.
 - **Security impact**: `7ad009` (2026-05-11) added a rate limit to the delete-account
   confirmation-token check because *"a malicious actor knowing a target's 8-char user_id prefix could
   repeatedly POST attempts."* **That limit has never functioned.** `attemptCount` is structurally
