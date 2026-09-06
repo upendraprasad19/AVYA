@@ -114,9 +114,11 @@ regression_test_planned: >
   stays set while the reader suppresses.
 
   MUTATION-PROVEN on four legs, each leaving the code compiling (a compile error is not a
-  proof), each confirmed applied by `grep -c` first, and each MEASURED ACROSS ALL FOUR
-  TOUCHED TEST FILES — not one — because the first attempt ran leg 1 against a
-  single file and under-reported it as 2. Deleting the equality guard reddens 4; making it
+  proof), each confirmed applied by `grep -c` first, and each MEASURED ACROSS EVERY TOUCHED
+  TEST FILE — not one — because the first attempt ran leg 1 against a single file and
+  under-reported it as 2. (The set was FOUR files when this was written and is FIVE at HEAD:
+  the round-2 remediation added `deload_reason_test.dart`, re-invalidating the very
+  input-set claim it was correcting. Re-measured across all five: unchanged.) Deleting the equality guard reddens 4; making it
   one-sided (`stamped == 'working' && ...`) reddens 2 (the mirror in both layers); reverting
   the writer to a bare String reddens 3 (lift shape, keep shape, regen precondition);
   deleting the `waves.length < 4` guard reddens 1.

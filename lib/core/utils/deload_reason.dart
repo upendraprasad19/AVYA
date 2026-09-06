@@ -9,9 +9,11 @@
 // ⚠ A DECISION BOOLEAN IS NOT AN EXPLANATION. Every branch here reads a flag the
 // evaluator computed to decide, and a flag can be safely false for several
 // different reasons. `notBackstop` is the one that bit: false means "cannot
-// confirm a recent real deload", which covers never-taken AND overdue, and the
-// overdue wording is a falsehood for the never-taken user. Before adding a
-// branch, ask what ELSE makes its flag false.
+// confirm a recent real deload", which covers THREE worlds — never taken,
+// overdue (>=2 phases), and a future/corrupt marker — and the overdue wording
+// is a falsehood for the never-taken user. Before adding a branch, ask what
+// ELSE makes its flag false, and COUNT — this comment itself said "two" while
+// the branch 35 lines below said "three", which round 3 caught.
 //
 // Consumed by `deload_evaluator.dart` (writer → `deload_reason_phase_<N>`) and
 // rendered by the phase-arc strip via `WorkoutScheduleReadService.currentDeloadReason`.

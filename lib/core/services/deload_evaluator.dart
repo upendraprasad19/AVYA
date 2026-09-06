@@ -154,7 +154,7 @@ class DeloadEvaluator {
     // ([WorkoutScheduleReadService.currentDeloadReason]) compares this character
     // against the blob the strip renders and drops a reason that no longer
     // describes the week. `liftedAny` is the same predicate the copy branches on
-    // (`deload_reason.dart:27-31`), so this records what the text already assumes.
+    // (`deload_reason.dart:41-43`), so this records what the text already assumes.
     await box.put(
       '${WorkoutScheduleReadService.deloadReasonKeyPrefix}$phase',
       <String, dynamic>{

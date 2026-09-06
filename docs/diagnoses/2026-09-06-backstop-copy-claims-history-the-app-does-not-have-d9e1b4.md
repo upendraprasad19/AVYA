@@ -6,9 +6,13 @@ status: fixed
 blast_radius: platform
 related_bugs: [c5a8f3, e3b7d1]
 recurrence: >
-  Not a recurrence of a named bug — `grep -inE "deload" docs/diagnoses/INDEX.md` returns zero,
-  and the sibling `c5a8f3` filed in this same batch is a different mechanism (a stale stored
-  value, not a wrong branch). It IS the FOURTH consecutive ship-dark flip to find the dark code
+  Not a recurrence of a named bug. The check must be run against the tree BEFORE this batch, or
+  it returns this batch's own two entries and reads as a recurrence of itself:
+  `git show 12e7906c:docs/diagnoses/INDEX.md | grep -icE deload` → **0**. (At HEAD the same
+  grep returns 4, all of them `c5a8f3` and `d9e1b4`. An earlier draft of this line published
+  the unscoped command with the answer "zero" — a command that self-refutes on the tree it
+  ships in, caught by plan-review round 3.) The sibling `c5a8f3` filed in this same batch is a
+  different mechanism (a stale stored value, not a wrong branch). It IS the FOURTH consecutive ship-dark flip to find the dark code
   was not ready (`e2d6b8`, the 2026-09-01 readiness flip, `e3b7d1`, now this) — and the sharpest
   instance of the class, because the defect is not in the flag's own code at all but in copy the
   flag makes reachable.

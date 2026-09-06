@@ -7952,11 +7952,11 @@ concepts:
       LIVE since 2026-09-05 (OI-53 flag 3 of 12); kill-switch `disable_phase_arc`
       → the strip renders nothing → byte-identical. Crash-safe on an
       absent/malformed blob (→ const []). The provider renders ONLY at
-      `week_plans.length >= 4` (matching deload_evaluator.dart:241) and takes the
+      `week_plans.length >= 4` (matching deload_evaluator.dart:242) and takes the
       first 4, because the week highlight is clamped to 1..4 — a shorter blob
       would render a strip on which no node can be marked "now". The wave
       vocabulary is FIVE tokens (baseline|overreach|peak|deload plus `working`,
-      written by deload_evaluator.dart:244) and the reader synthesises a sixth,
+      written by deload_evaluator.dart:245) and the reader synthesises a sixth,
       the empty string, for a malformed entry.
     writers:
       - file: lib/shared/repositories/plan_engine/periodization_engine.dart
@@ -8148,7 +8148,7 @@ concepts:
           regression (lift reason + regenned blob → null), positive control, the MIRROR, legacy
           bare String, malformed maps, short/absent blob, phase mismatch, and the kill-switch gate
           driven with a VALID value (a bare String there would pass for the wrong reason).
-          Mutation-proven on 4 legs, measured across ALL FOUR touched test files: equality guard
+          Mutation-proven on 4 legs, measured across ALL FIVE touched test files: equality guard
           deleted → 4 red, guard made one-sided → 2 red (the mirror in both layers), writer
           reverted to a bare String → 3 red, `waves.length < 4` guard deleted → 1 red. The
           earlier "3 legs / 2-1-3" claim here was measured against ONE file and is retracted.

@@ -162,24 +162,6 @@ pending:
     flip_reviewed: false
     flip_commit: null
 
-  - flag: enable_deload_reason_line
-    branch: phase-arc-flip
-    build_commit: null            # built and shipped dark in the phase-arc flip batch
-    build_date: 2026-09-05
-    merge_commit: null
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      SPLIT OUT of the phase-arc flip on 2026-09-05 (founder decision) rather than shipping
-      with it. The week-4 deload "why" line lives INSIDE PhaseArcStrip, so flipping
-      enable_phase_arc would have lit it too. It carries an unfixed defect found by plan-review
-      round 2: `deload_reason_phase_<P>` is never deleted anywhere in lib/, while a mid-phase
-      regen rewrites the plan blob unconditionally (workout_schedule_read_service.dart:388) and
-      re-stamps week 4 as `deload`. The idempotency flag (deload_evaluator.dart:79) then blocks
-      re-evaluation from correcting the stale string, so the strip would render a DELOAD node
-      above a line reading "Working week -- you've recovered", permanently. Unit B fixes that
-      first; this flag flips there with its own full x2 review.
-
   - flag: enable_adherence_gate
     branch: workout-adherence-8a2int
     build_commit: f47de745
@@ -249,6 +231,39 @@ pending:
 # and by the Sunday push.
 
 resolved:
+  - flag: enable_deload_reason_line
+    branch: unitb-deload-reason
+    build_commit: null            # built and shipped dark in the phase-arc flip batch
+    build_date: 2026-09-05
+    merge_commit: null
+    flip_reviewed: true
+    flip_commit: c22e12c2
+    flip_review_record: docs/plan-reviews/unitb-deload-reason.md
+    note: >
+      FLIPPED ON 2026-09-06 (OI-53 flag 4 of 12). Kill-switch key is now
+      `disable_deload_reason_line` and the catch-block default inverted to ON. Full ⚠ review
+      (a B-pass plus three context-blind plan-review rounds); 38 findings terminal in
+      docs/audit/unitb-deload-reason.closure.yaml.
+      SPLIT OUT of the phase-arc flip on 2026-09-05 (founder decision) because the week-4 "why"
+      line lives INSIDE PhaseArcStrip, so flipping enable_phase_arc would have lit it too, and it
+      carried an unfixed defect: `deload_reason_phase_<P>` is deleted nowhere in lib/, while TWO
+      blob-rewriting paths (workout_schedule_read_service.dart:388 and :227) re-stamp week 4 as
+      `deload` and deload_evaluator.dart:79's idempotency flag blocks any correction. FIXED at the
+      READER (diagnose c5a8f3): the eval stamps the outcome `week_character` beside the prose and
+      `validatedDeloadReason` returns the text only while it still equals week 4's in the blob the
+      strip renders.
+      ⚠ A SECOND defect was found by review round 2 and fixed here (diagnose d9e1b4): the flip
+      makes five PRE-EXISTING copy branches user-visible for the first time, and one told a
+      first-block user they were "two blocks in". That is the ship-dark lesson in its sharpest
+      form -- the risk was not in the flag's own code, it was in code the flag made reachable.
+      ⚠ There is NO release-build kill-switch (OI-95, accepted risk across all OI-53 flags):
+      every toggle lives in the kDebugMode dev panel and there is no RemoteConfig, so a real
+      rollback is a code revert plus a store round-trip.
+      ⚠ NOT closed by this batch, and terminal as `blocked_on_user` in the closure ledger:
+      OI-166 -- the AI-coach regen writes rows and never `current_plan`, so the phase-arc strip
+      renders a stale wave. Pre-existing since flag 3 shipped 2026-09-05; invisible to this
+      batch's guard by construction.
+
   - flag: enable_phase_arc
     branch: phase-arc-flip
     build_commit: ea7a603e

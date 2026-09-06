@@ -201,7 +201,7 @@ class PlanEngineFlags {
   ///
   /// ⚠ The wave vocabulary is FIVE tokens, not the four this comment used to
   /// name: `baseline | overreach | peak | deload`, plus **`working`**, written
-  /// by `deload_evaluator.dart:244` when a deload is lifted. A sixth state, the
+  /// by `deload_evaluator.dart:245` when a deload is lifted. A sixth state, the
   /// empty string, is synthesised by the READER
   /// (`workout_schedule_read_service.dart:1279`) for a malformed entry.
   /// `PhaseArcStrip` maps all five and floors the empty case.

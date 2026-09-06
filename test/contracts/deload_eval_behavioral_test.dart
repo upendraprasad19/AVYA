@@ -636,9 +636,13 @@ void main() {
           reason: 'precondition: the lift reason is live');
 
       // The regen: `generateAndScheduleFromDate` (:388) / the AI-coach regen
-      // `generateAndSchedule` (`:227`) re-stamp the BLOB's week 4 back to
-      // `deload`. Only those two rewrite the blob, which is what this fixture
-      // does; the AI-coach regen writes rows only and cannot produce this state.
+      // `generateAndSchedule` (`:227`) RE-STAMP an existing blob's week 4 back
+      // to `deload` — the state this fixture builds. (`current_plan` has FOUR
+      // writers in all; the other two are the lift itself and the restore, and
+      // neither re-stamps a lifted week back to `deload`. Narrowed after round 3
+      // caught this sentence contradicting OI-166's writer inventory, filed in
+      // the same commit.) The AI-coach regen writes rows only and cannot
+      // produce this state at all.
       // Nothing deletes the reason key, and `deload_evaluator.dart:79`'s
       // idempotency flag blocks any re-eval from correcting it.
       final blob = Map<String, dynamic>.from(wb.get('current_plan') as Map);

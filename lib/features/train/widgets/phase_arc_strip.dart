@@ -15,7 +15,7 @@ import '../providers/train_provider.dart';
 ///
 /// ⚠ The wave vocabulary is FIVE tokens, not the four this comment used to name:
 /// `baseline | overreach | peak | deload` plus `working`
-/// (`deload_evaluator.dart:244`, written when a deload is lifted). The reader
+/// (`deload_evaluator.dart:245`, written when a deload is lifted). The reader
 /// also synthesises a sixth state, the empty string, for a malformed entry. See
 /// [labelFor].
 class PhaseArcStrip extends ConsumerWidget {
@@ -24,7 +24,7 @@ class PhaseArcStrip extends ConsumerWidget {
   /// Raw `week_character` → display label. Unknown → the raw token upper-cased
   /// (crash-safe: a future/renamed wave still renders something sensible).
   ///
-  /// `working` is the FIFTH token, written by `deload_evaluator.dart:244` when a
+  /// `working` is the FIFTH token, written by `deload_evaluator.dart:245` when a
   /// deload is lifted. It rendered correctly before this entry existed — via the
   /// unknown-token fallback — which is exactly why it went unnoticed: it read
   /// acceptably by luck rather than by decision. Mapping it makes it deliberate.

@@ -132,7 +132,13 @@ void main() {
       expect(s, contains('no recovery block on record'));
     });
 
-    test('deload ON record (overdue) → keeps the two-blocks copy', () {
+    // CONTROL, not evidence the fix landed: this stays green under the
+    // collapse mutation, because collapsing returns exactly this string. It
+    // pins a behaviour-invariant (an overdue keep must still read "two
+    // blocks"), which is worth having and is not discrimination. Labelled per
+    // CLAUDE.md §4.9's "a test that EXECUTES green tells you nothing until you
+    // run it against the code it replaces".
+    test('CONTROL: deload ON record (overdue) → keeps the two-blocks copy', () {
       final s = r(
           shouldLift: false,
           liftedAny: false,
@@ -156,7 +162,12 @@ void main() {
       expect(absent, isNot(equals(present)));
     });
 
-    test('hasDeloadOnRecord is INERT unless the backstop branch is reached', () {
+    // CONTROL for the same reason: inertness elsewhere holds under the
+    // collapse too. The two DISCRIMINATING assertions in this group are the
+    // "never says two blocks" one and the "two branches are DIFFERENT
+    // strings" one — those are the 2 that redden.
+    test('CONTROL: hasDeloadOnRecord is INERT unless the backstop branch is reached',
+        () {
       // It must not leak into any other branch's copy.
       for (final notDeloadPhase in [true, false]) {
         for (final shouldLift in [true, false]) {

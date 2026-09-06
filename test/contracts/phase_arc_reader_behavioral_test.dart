@@ -145,7 +145,7 @@ void main() {
       expect(c.read(phaseArcProvider), isNull);
     });
 
-    // >= 4 deliberately matches deload_evaluator.dart:241. A 5-week blob is
+    // >= 4 deliberately matches deload_evaluator.dart:242. A 5-week blob is
     // still maintained by the evaluator, so the strip must not vanish for it —
     // it renders the first 4, which is all the clamp can address.
     test('over-long blob (5 weeks) → renders exactly the first 4', () async {
@@ -158,7 +158,7 @@ void main() {
       expect(arc.waves.length, 4);
     });
 
-    // The lifted-deload state. `working` is written by deload_evaluator.dart:244
+    // The lifted-deload state. `working` is written by deload_evaluator.dart:245
     // and that evaluator is LIVE, so this is a producible blob, not a synthetic.
     test('lifted deload (working in week 4) survives to the reader', () async {
       await seedPlan(['baseline', 'overreach', 'peak', 'working']);

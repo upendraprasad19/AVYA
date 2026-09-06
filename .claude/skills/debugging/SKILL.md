@@ -689,6 +689,64 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 
 ---
 
+### 2.61 Prose that DESCRIBES a state, persisted without the state itself, is undetectably stale (NEW 2026-09-06)
+
+**Bug ID:** `c5a8f3` · **Test:** `test/contracts/deload_reason_staleness_behavioral_test.dart`
+
+A writer persists a human-facing sentence ABOUT some state — an explanation, a
+summary, a status line — and stores only the sentence. Nothing can later tell
+whether it still describes anything, because there is no machine-checkable fact
+beside it to compare against.
+
+**The trigger phrase:** *"we stamp a one-liner explaining X"*. Ask immediately:
+what happens to that string when X changes, and what would DETECT it?
+
+Here `deload_reason_phase_<P>` held the reason a week-4 deload was kept or lifted.
+Neither the writer nor the reader was wrong in isolation. The drift came from
+THREE other paths that rewrite the plan, plus an idempotency flag guaranteeing the
+prose is written at most once per phase — which is exactly what makes it unable to
+track anything afterwards. Nothing in `lib/` deleted the key. Result: a `DELOAD`
+node above "Working week — you've recovered", permanently.
+
+**Fix pattern.** Persist the machine-checkable FACT alongside the prose, and have
+the READER re-validate against live state before rendering. Guard at the reader,
+not with a deleter per mutating path — there were three, and a fourth added later
+would owe one silently with no gate to notice. **And validate against whatever the
+DISPLAY reads**: here the strip renders the plan blob while the reason reader
+derived its phase from the scheduled rows, so validating against rows would have
+let the line contradict the node directly above it.
+
+**Tell:** a `put(key, someString)` whose value was computed from state the key does
+not also record.
+
+### 2.62 A DECISION boolean reused as an EXPLANATION (NEW 2026-09-06)
+
+**Bug ID:** `d9e1b4` · **Test:** `test/contracts/deload_reason_test.dart`
+
+A flag is computed to make a safe choice, then reused to choose user-facing copy.
+The choice is correct for every reason the flag is false; the sentence is correct
+for only one of them.
+
+`notBackstop` was false in THREE worlds — no deload ever recorded, one overdue, a
+corrupt future marker. All three should keep the deload, so the decision was right.
+The copy was written for "overdue", and the backing key has exactly one writer in
+the repo and is never synced or restored — so on a user's FIRST ever evaluation it
+is null, and a user in block ONE read *"you're two blocks in."*
+
+**Method.** For every user-facing string selected by a boolean, **enumerate what
+else makes that boolean take that value.** If more than one thing does, the copy
+needs a distinction the decision did not. The distinguishing input usually already
+exists a few lines up — here `markerPhase` was read, used, and discarded.
+
+**Where it hides:** ship-dark flips. This copy had never rendered, so it had never
+been reviewed; the flip commit is where every string a flag makes reachable
+becomes new code. ⚠ A diagnose-doc sentence — *"no new copy reaches a user"* —
+exempted all five branches from two prior review rounds. True of the guard being
+added, false of the flip being performed.
+
+**Tell:** a ternary or if-chain over a flag whose name is a negation
+(`notX`, `isNotY`, `cannotZ`); such a name almost always covers several worlds.
+
 ## 6. Cross-references
 
 - `docs/playbook/common-pitfalls.md` — the canonical project-side bug list (migrated out of the old CLAUDE.md §19, which no longer exists)
