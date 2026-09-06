@@ -239,7 +239,7 @@ Everything currently owed, from any source — not only audit findings. `MEMORY.
 durable *why* (scars, retrospectives) but lives in the harness dir outside git and is invisible to
 cloud sessions; **this file is the cross-session backlog.**
 
-## OI-53 — Flip the remaining 9 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05)
+## OI-53 — Flip the remaining 8 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05; deload-reason-line flipped 2026-09-06)
 
 - **Status**: OPEN
 - **Verified**: 2026-08-05 — flag inventory, dependency order and the data lag all re-derived from
@@ -252,7 +252,10 @@ cloud sessions; **this file is the cross-session backlog.**
   Recorded here because a repo-only reader cannot otherwise reconcile `Blocked on: FOUNDER`
   with those two flips existing. ⚠ **DATED FOUNDER DECISION 2026-09-05: `enable_phase_arc`
   approved and flipped** (branch `phase-arc-flip`, record `docs/plan-reviews/phase-arc-flip.md`).
-  **9 remain.**
+  ⚠ **DATED FOUNDER DECISION 2026-09-06: `enable_deload_reason_line` approved and flipped** as Unit B (branch
+  `unitb-deload-reason`, record `docs/plan-reviews/unitb-deload-reason.md`) — the piece split
+  out of the phase-arc flip the day before, once its stale-reason defect was fixed (diagnose
+  `c5a8f3`). **8 remain.**
 - **What this actually is — 13 product decisions, not one toggle.** The ledger is explicit:
   *"there is no batch discount, and flipping thirteen flags in one commit would be one review
   pretending to be thirteen."* Each flip-on commit needs its own **full ×2 + `bpass: accepted`**
@@ -3126,3 +3129,36 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
   harness un-runnable by anyone without this MCP, including CI.
 - **Related**: `test/sql/onconflict_live_arbiter.sql`, `oi46_daily_cap_triggers_live_verify.sql`,
   rule 21, `docs/operations/SECRET_INVENTORY.md`.
+
+## OI-166 — the AI-coach regen writes schedule ROWS but never `current_plan`, so the phase-arc strip renders the stale wave (P2)
+
+- **Status**: OPEN
+- **Blocked on**: FOUNDER — the fix changes what the AI coach WRITES, a different blast radius from the display bug it causes
+- **Verified**: 2026-09-06 — `grep -c "current_plan\|_planKey\|week_plans" lib/features/ai_coach/services/regenerate_plan_planner.dart lib/core/services/workout_write_service.dart` → **0 and 0**. ⚠ The blob-writer inventory is **FOUR**, not three: use `grep -rn "put(_planKey\|put(_kPlanKey\|put('current_plan'" lib/`. An earlier narrower grep here matched only `put(_planKey` and missed `deload_evaluator.dart`'s own `put(_kPlanKey, plan)` (the lift's blob rewrite; `_kPlanKey == 'current_plan'`). The conclusion is unchanged — the coach is not among them — but the count in an evidence field was wrong, which is exactly the class this board keeps recording
+- **Identified**: 2026-09-06 · surfaced by BOTH independent reviewers of the Unit B flip (`unitb-deload-reason`), which is why it is filed rather than absorbed
+- **Symptom**: the user asks the AI coach to regenerate their plan. `RegeneratePlanPlanner`
+  produces schedule rows and `tool_dispatcher.dart:867-871` applies them one at a time through
+  `WorkoutWriteService.upsertScheduled`. Neither touches `current_plan`. The phase-arc strip
+  reads `current_plan.week_plans[i].week_character` (`workout_schedule_read_service.dart:1279`
+  via `phaseArcProvider`), so **after an AI-coach regen the strip shows the OLD phase's wave**
+  — `WORKING` on a week the regen has re-made into a `deload`, indefinitely.
+- ⚠ **Pre-existing, and NOT introduced by Unit B.** `enable_phase_arc` went live
+  2026-09-05 (OI-53 flag 3); this defect shipped with it. Unit B (flag 4, 2026-09-06) makes it
+  more visible by adding a reason line beneath the node — and the line will AGREE with the
+  stale node rather than contradict it, because both read the same blob. Unit B's guard
+  (`validatedDeloadReason`) is therefore correct and blind here by construction: it compares the
+  stamp against the blob, and this path moves neither.
+- **Why it is not folded into Unit B**: the honest fix writes the regenerated wave into
+  `current_plan`, which changes an AI-coach WRITE path. Unit B is a read-side display fix on the
+  train screen. Per §4.12.1 (successive reviews surfacing new material issues → split and ship
+  the smallest converged piece), this is its own unit with its own blast radius.
+- **Options, for the decision**:
+  1. Have the coach's apply step write `current_plan` from the `Phase` it already generates
+     (`regenerate_plan_planner.dart:190`). Correct, but the planner writes rows over a DATE RANGE
+     that need not align with the plan's week boundaries — that mismatch is the real work.
+  2. Make the strip read the wave from the week-4 ROWS instead of the blob. Smaller, but it moves
+     the phase-arc SoT and would need its own writer/reader audit.
+  3. Suppress the strip entirely for a phase whose blob and rows disagree. Cheapest, honest,
+     and strictly a reduction — but it hides a real inconsistency instead of resolving it.
+- **Recommendation**: option 1, as its own unit, before OI-53's remaining flags add more surfaces
+  that read the blob.

@@ -84,8 +84,26 @@ precedence, each evidence branch had-data-gated, keyed on the ACTUAL outcome `li
 not contradictory, subtext). `WorkoutScheduleReadService.currentDeloadReason` reads the SAME key
 via the SAME derivation (writer==reader by construction) gated on `triggeredDeloadEnabled`; the
 Train `PhaseArcStrip` renders it only on the deload week (`currentWeek==4`) → null / not-week-4 →
-byte-identical to 7-A. Additive, LOCAL-only, no migration. SoT `deload_decision_reason`;
-behavioral `deload_reason_test.dart` (pure) + a `deload_eval_behavioral_test.dart` round-trip.
+byte-identical to 7-A. Additive, LOCAL-only, no migration.
+
+**LIVE since 2026-09-06** (OI-53 flag 4; kill-switch `disable_deload_reason_line`), and the
+stored VALUE changed with the flip. Unit B (diagnose `c5a8f3`) found the stamped reason can
+outlive the week it describes: two BLOB-rewriting paths re-stamp week 4 back to `deload` after a
+lift (`workout_schedule_read_service.dart:388` and `:227`) while `deload_evaluator.dart:79`'s
+idempotency flag blocks any correction and NOTHING in `lib/` deletes the key. The key now holds a
+MAP `{week_character, text}` — `week_character` is `liftedAny ? 'working' : 'deload'`, the same
+predicate the copy already branches on — and the pure
+`WorkoutScheduleReadService.validatedDeloadReason` returns the text ONLY while that character
+still equals week 4's in `currentWaveCharacters()` (the BLOB the strip renders, deliberately not
+the scheduled rows), compared lowercase+trimmed on both sides. Mismatch in EITHER direction, a
+legacy bare String, a malformed map or a blob under 4 weeks all → no line. That validator is a
+SEPARATE pure function on purpose: inline, its nulls were indistinguishable from the enclosing
+`catch`, and three guard-deletion mutations reddened zero tests.
+⚠ It cannot see the AI-coach regen, which writes rows and no blob (OI-166).
+
+SoT `deload_decision_reason`; behavioral `deload_reason_test.dart` (pure) +
+`deload_eval_behavioral_test.dart` (round-trip through the real evaluator) +
+`deload_reason_staleness_behavioral_test.dart` (the staleness contract, 20 assertions).
 The adherence-gate "why" (W3.1's other half) is a copy-only non-shaming lead-in in
 `advance_choice_sheet.dart` (no completion %, per the codified non-shaming brand soul).
 

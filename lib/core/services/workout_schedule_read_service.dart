@@ -1106,6 +1106,13 @@ class WorkoutScheduleReadService {
   /// reversibility (a stale reason hides the moment the flag is turned OFF). Reads
   /// the same `deload_reason_phase_<P>` key the eval wrote, deriving P via
   /// [deloadPhaseFromWeek4] → writer==reader by construction. Crash-safe.
+  ///
+  /// Unit B: the stored value is a MAP (`{week_character, text}`) and this reader
+  /// returns `text` ONLY while the stamped character still equals week 4's
+  /// character in the blob [currentWaveCharacters] → the strip can never show a
+  /// reason that contradicts the wave node above it. Legacy bare Strings and any
+  /// mismatch resolve to `null` (no line), which is byte-identical to the
+  /// pre-flip state.
   String? currentDeloadReason() {
     try {
       if (!PlanEngineFlags.triggeredDeloadEnabled) return null;
@@ -1113,10 +1120,52 @@ class WorkoutScheduleReadService {
       if (phase == null) return null;
       final v =
           HiveService.instance.workoutBox.get('$deloadReasonKeyPrefix$phase');
-      return (v is String && v.isNotEmpty) ? v : null;
+      return validatedDeloadReason(v, currentWaveCharacters());
     } catch (_) {
       return null;
     }
+  }
+
+  /// PURE (visible for testing) — Unit B's validation, lifted OUT of
+  /// [currentDeloadReason] so it can be tested without that method's crash-safety
+  /// `catch`. That extraction is not cosmetic: with the guards inline, plan-review
+  /// round 1 measured that deleting the `waves.length` guard, the `is! Map` guard
+  /// or the `stamped` shape guard reddened **ZERO** of twelve assertions — the
+  /// resulting RangeError / NoSuchMethodError was swallowed by the `catch` and
+  /// produced the SAME null the tests asserted. Four tests were checking the
+  /// exception handler, not the guard. Here every null comes from an explicit
+  /// guard, so deleting one throws and the test goes red for the right reason.
+  ///
+  /// Returns the stored reason text only while the stamped outcome still matches
+  /// week 4 of [waves] — the blob the STRIP renders, deliberately not the
+  /// scheduled rows [currentDeloadReason] derives its phase from, because a line
+  /// contradicting the node directly above it is worse than no line.
+  ///
+  /// Comparison is NORMALISED on both sides. `PhaseArcStrip.labelFor` lowercases
+  /// and trims before rendering, and its own history records `'  '` shipping as a
+  /// dot with no label — so padded/mixed-case `week_character` is a state this
+  /// codebase already treats as reachable, and a raw compare would disagree with
+  /// the display about what "the same character" is.
+  ///
+  /// EQUALITY, not `== 'working'`: the mirror — stored `deload` while the blob
+  /// says `working`, reachable when a sync lands a lifted blob over a local keep
+  /// — is exactly as stale and must drop too.
+  ///
+  /// A bare String is a LEGACY value (the writer stamped prose alone from
+  /// 2026-09-01 until Unit B) carrying no outcome to check, so it is
+  /// indistinguishable from a stale one and resolves to null.
+  @visibleForTesting
+  static String? validatedDeloadReason(Object? stored, List<String> waves) {
+    if (stored is! Map) return null;
+    final text = stored['text'];
+    if (text is! String || text.isEmpty) return null;
+    final rawStamp = stored['week_character'];
+    if (rawStamp is! String) return null;
+    final stamped = rawStamp.toLowerCase().trim();
+    if (stamped.isEmpty) return null;
+    if (waves.length < 4) return null; // the strip renders nothing below 4 anyway
+    if (waves[3].toLowerCase().trim() != stamped) return null;
+    return text;
   }
 
   /// ⑧ Batch 8 (W2.5 adherence gate) — the current phase's completion rate:
@@ -1216,7 +1265,7 @@ class WorkoutScheduleReadService {
 
   /// ⑥ Batch 7-A (W3.2 phase arc): the periodization wave character per week of
   /// the CURRENT phase — baseline / overreach / peak / deload, plus `working`
-  /// once a deload is lifted (deload_evaluator.dart:231) — read from the
+  /// once a deload is lifted (deload_evaluator.dart:245) — read from the
   /// materialized `current_plan` blob (`week_plans[i]['week_character']`,
   /// snake_case per `WeekPlan.toMap`). Read-only DISPLAY source for the
   /// Train-screen wave strip; no engine coupling. Crash-safe: a missing /

@@ -338,6 +338,30 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
         '-- applies on your next Train tab rebuild');
   }
 
+  /// Deload-reason-line kill-switch (OI-53 flag 4, live 2026-09-06).
+  ///
+  /// Same shape as [_togglePhaseArc]. The invalidate is load-bearing, but name
+  /// the chain precisely: the FLAG is read in `PhaseArcStrip.build`, NOT in
+  /// deloadReasonProvider, and non-reactively — so nothing about
+  /// deloadReasonProvider's VALUE changes when the flag toggles. What rebuilds
+  /// the widget is `phaseArcProvider` re-emitting a new `PhaseArcData`, which
+  /// works only because that class has no `==` override. Adding value equality
+  /// to it would make this toggle silently inert.
+  Future<void> _toggleDeloadReasonLine() async {
+    final nextEnabled = !PlanEngineFlags.deloadReasonLineEnabled;
+    final cfg = HiveService.instance.configBox;
+    if (nextEnabled) {
+      await cfg.delete('disable_deload_reason_line');
+    } else {
+      await cfg.put('disable_deload_reason_line', true);
+    }
+    ref.invalidate(currentPlanProvider);
+    if (!mounted) return;
+    setState(() {});
+    _toast('deload reason line = ${nextEnabled ? 'ON' : 'OFF (killed)'} '
+        '-- applies on your next Train tab rebuild');
+  }
+
   /// Triggered-deload kill-switch.
   ///
   /// WARNING: turning this OFF also stops NEW plans stashing their working
@@ -479,6 +503,12 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                         ? 'KILL phase arc'
                         : 'Restore phase arc',
                     () => _togglePhaseArc(),
+                  ),
+                  _btn(
+                    PlanEngineFlags.deloadReasonLineEnabled
+                        ? 'KILL deload reason line'
+                        : 'Restore deload reason line',
+                    () => _toggleDeloadReasonLine(),
                   ),
                   // Use after every time-travel jump — the clock buttons above
                   // do NOT invalidate providers on their own.

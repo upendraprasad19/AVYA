@@ -145,18 +145,32 @@ class DeloadEvaluator {
     // the ACTUAL outcome (`liftedAny` — a shouldLift with nothing eligible to lift
     // leaves the week a `deload`, so the copy must match the wave the strip shows).
     // Additive + LOCAL-only; only reached under the two flags (Guard 1) → inert off.
+    //
+    // Unit B: stored as a MAP carrying the outcome `week_character` beside the
+    // prose, because the prose alone cannot be validated later. A regen re-stamps
+    // week 4 back to `deload` (`workout_schedule_read_service.dart:388`,
+    // `:227`) while the idempotency flag at :79 blocks
+    // any re-eval from correcting the string — so the READER
+    // ([WorkoutScheduleReadService.currentDeloadReason]) compares this character
+    // against the blob the strip renders and drops a reason that no longer
+    // describes the week. `liftedAny` is the same predicate the copy branches on
+    // (`deload_reason.dart:41-43`), so this records what the text already assumes.
     await box.put(
       '${WorkoutScheduleReadService.deloadReasonKeyPrefix}$phase',
-      deloadDecisionReason(
-        shouldLift: shouldLift,
-        liftedAny: liftedAny,
-        notDeloadPhase: notDeloadPhase,
-        notBackstop: notBackstop,
-        readinessGood: readiness.good,
-        readinessHadData: readiness.hadData,
-        e1rmNoFatigue: e1rm.noFatigue,
-        e1rmHasEvidence: e1rm.hasCompoundEvidence,
-      ),
+      <String, dynamic>{
+        'week_character': liftedAny ? 'working' : 'deload',
+        'text': deloadDecisionReason(
+          shouldLift: shouldLift,
+          liftedAny: liftedAny,
+          notDeloadPhase: notDeloadPhase,
+          notBackstop: notBackstop,
+          hasDeloadOnRecord: markerPhase != null,
+          readinessGood: readiness.good,
+          readinessHadData: readiness.hadData,
+          e1rmNoFatigue: e1rm.noFatigue,
+          e1rmHasEvidence: e1rm.hasCompoundEvidence,
+        ),
+      },
     );
   }
 

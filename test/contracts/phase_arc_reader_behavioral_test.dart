@@ -145,7 +145,7 @@ void main() {
       expect(c.read(phaseArcProvider), isNull);
     });
 
-    // >= 4 deliberately matches deload_evaluator.dart:228. A 5-week blob is
+    // >= 4 deliberately matches deload_evaluator.dart:242. A 5-week blob is
     // still maintained by the evaluator, so the strip must not vanish for it —
     // it renders the first 4, which is all the clamp can address.
     test('over-long blob (5 weeks) → renders exactly the first 4', () async {
@@ -158,7 +158,7 @@ void main() {
       expect(arc.waves.length, 4);
     });
 
-    // The lifted-deload state. `working` is written by deload_evaluator.dart:231
+    // The lifted-deload state. `working` is written by deload_evaluator.dart:245
     // and that evaluator is LIVE, so this is a producible blob, not a synthetic.
     test('lifted deload (working in week 4) survives to the reader', () async {
       await seedPlan(['baseline', 'overreach', 'peak', 'working']);
@@ -200,14 +200,24 @@ void main() {
     });
   });
 
-  group('deload reason line — ship-dark after the 2026-09-05 split', () {
-    test('default OFF → the strip asks for no reason', () {
-      expect(PlanEngineFlags.deloadReasonLineEnabled, isFalse);
-    });
-    test('explicit ON → enabled (Unit B flips this)', () async {
-      await HiveService.instance.configBox
-          .put('enable_deload_reason_line', true);
+  group('deload reason line — LIVE since 2026-09-06 (Unit B flip)', () {
+    test('default ON → the strip asks for a reason', () {
       expect(PlanEngineFlags.deloadReasonLineEnabled, isTrue);
+    });
+    test('kill-switch set → OFF; deleting the key restores the default',
+        () async {
+      final cfg = HiveService.instance.configBox;
+      await cfg.put('disable_deload_reason_line', true);
+      expect(PlanEngineFlags.deloadReasonLineEnabled, isFalse);
+      await cfg.delete('disable_deload_reason_line');
+      expect(PlanEngineFlags.deloadReasonLineEnabled, isTrue);
+    });
+    test('the retired enable_ key is inert — it must not gate anything',
+        () async {
+      final cfg = HiveService.instance.configBox;
+      await cfg.put('enable_deload_reason_line', false);
+      expect(PlanEngineFlags.deloadReasonLineEnabled, isTrue);
+      await cfg.delete('enable_deload_reason_line');
     });
   });
 }

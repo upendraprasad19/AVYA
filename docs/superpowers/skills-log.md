@@ -346,3 +346,23 @@
   → Logged here from a worktree (`oi105-close`) rather than the shared main folder, riding with
     the OI-105 board closure so both land in one push rather than two CI cycles — same rationale
     as the 2026-08-06 entry.
+
+- **2026-09-06 ~04:30 IST — `phase-arc-flip` just merged, ACCEPTED (founder ran
+  `/compact` with the offered preserve list) · trigger: BATCH SHIPPED (merge `02d7c56e`
+  landed, CI green, 0 unpushed).**
+  Offered at a boundary that was genuinely clean, and SAID SO explicitly per step 4: merge
+  landed, CI green, `origin/main` matched local, nothing in flight. Naming the boundary
+  quality is the whole point of that step — the PREVIOUS invocation (2026-08-26) had to
+  caveat the opposite (foreign unpushed commits, a live migration ahead of origin) and the
+  caveat CHANGED the founder's answer. Stating it either way is what makes the two
+  situations distinguishable to someone who cannot see the agent's reasoning.
+  ⚠ **Tuning for step 1: 'about to OPEN a review-heavy batch' deserves to be a trigger
+  in its own right, not folded into 'a batch shipped'.** The session had already run three
+  plan-review rounds plus a B-pass, and Unit B ahead of it is platform-tier needing its own
+  ×2. Both errors that session self-caught — a closure ledger attesting to artifacts
+  that did not exist yet, and two `blast_radius_from_diff` calls missing the stdin `-` —
+  happened late in a long stretch. Compacting BEFORE the next heavy unit is the cheap move;
+  compacting after it would have been the expensive one.
+  → Logged from the `unitb-deload-reason` worktree, riding with Unit B so the entry and the
+    work it describes land in ONE push rather than two CI cycles — same rationale as the
+    2026-08-06 and 2026-08-30 entries.
