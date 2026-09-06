@@ -28,43 +28,28 @@ symptom: >
   Never observed in production because the render is behind `enable_deload_reason_line`, which
   has been OFF since it was built. The WRITE, however, has been live since 2026-09-01, so the
   stale values already exist in real users' Hive.
-concept: >
-  The reason string and the wave character are two views of ONE decision, and only the character
-  is maintained by the three paths that rewrite a plan. The prose is written once, by the
-  evaluator, under an idempotency flag that guarantees it is written AT MOST ONCE per phase —
-  which is exactly what makes it unable to track anything that happens afterwards.
-
-  The fix does not add a deleter to each rewriting path. There are three today
-  (`generateAndSchedule`, `generateAndScheduleFromDate`, the AI-coach regen) and any fourth added
-  later would silently owe one — the "fixed the instance, not the class" shape from
-  `feedback_mistake_guard_without_its_mirror.md`. Instead the writer records the OUTCOME beside
-  the prose and the READER refuses to return prose whose outcome no longer matches the plan. One
-  seam covers all three paths, plus cross-device sync, restore, and anything added later.
-
-  The validation reads the BLOB, not the scheduled rows, because the blob is what the strip
-  renders (`phaseArcProvider` -> `currentWaveCharacters`). Validating against rows would have let
-  the line contradict the node directly above it whenever the two disagreed — the same
-  writer/reader question the fix exists to answer, one level down.
+concept: deload_decision_reason
 sot_registry_entry: deload_decision_reason
 sot_registry_note: >
   Updated in this commit: the stored VALUE is now a map (`{week_character, text}`) rather than a
   bare String; the reader is documented as self-validating against `currentWaveCharacters()[3]`;
   the ship-dark note became the `disable_deload_reason_line` kill-switch; and the new behavioral
   test is cited. The description previously named only ONE re-stamping path (`:388`); it now
-  names all three.
+  distinguishes the TWO blob-rewriting paths (`:388`, `:227`) that this guard can see from the
+  AI-coach regen, which writes rows only and is therefore invisible to it (OI-166).
 writers:
   - { file: lib/core/services/deload_evaluator.dart, method: "maybeEvaluate — stamps deload_reason_phase_<P> as {week_character, text}; week_character is liftedAny ? working : deload, the same predicate the copy branches on", line: 159 }
   - { file: lib/core/utils/deload_reason.dart, method: "deloadDecisionReason — pure + total; structural-before-evidence; had-data-gated; outcome-based on liftedAny", line: 16 }
   - { file: lib/core/services/deload_evaluator.dart, method: "_liftWeekFour — rewrites week_plans[3].week_character to 'working'; the blob edit the reader now validates against", line: 244 }
   - { file: lib/core/services/workout_schedule_read_service.dart, method: "generateAndScheduleFromDate — re-stamps the blob unconditionally on a mid-phase regen; live caller edit_profile_screen.dart:2029 passes the CURRENT phase", line: 388 }
   - { file: lib/core/services/workout_schedule_read_service.dart, method: "generateAndSchedule — the third blob writer; moves plan_start, so usually a NEW phase (absent key) but re-stamps in-phase on a faithful repeat", line: 227 }
-  - { file: lib/features/ai_coach/services/regenerate_plan_planner.dart, method: "AI-coach regen — re-stamps week_character on rows using resolvedPhase (the real current phase, :168-177)", line: 294 }
+  - { file: lib/features/ai_coach/services/regenerate_plan_planner.dart, method: "AI-coach regen — re-stamps week_character on ROWS ONLY; writes NO blob, so it is invisible to this guard by construction. Filed as OI-166, not fixed here", line: 294 }
 readers:
   - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "currentDeloadReason — SELF-VALIDATING: returns text only while the stamped week_character equals waves[3]", line: 1116 }
-  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "the equality check itself — EQUALITY not '== working', so the mirror (stored deload, blob working) drops too", line: 1146 }
-  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "currentWaveCharacters — the blob the strip renders; the validation source, deliberately not the scheduled rows", line: 1255 }
+  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "the equality check itself — EQUALITY not '== working', so the mirror (stored deload, blob working) drops too", line: 1167 }
+  - { file: lib/core/services/workout_schedule_read_service.dart, method_or_widget: "currentWaveCharacters — the blob the strip renders; the validation source, deliberately not the scheduled rows", line: 1273 }
   - { file: lib/features/train/providers/train_provider.dart, method_or_widget: "deloadReasonProvider — watches currentPlanProvider so a regen rebuilds it", line: 944 }
-  - { file: lib/features/train/widgets/phase_arc_strip.dart, method_or_widget: "the flag gate + week-4 condition; null reason renders no line", line: 67 }
+  - { file: lib/features/train/widgets/phase_arc_strip.dart, method_or_widget: "the flag gate + week-4 condition; null reason renders no line", line: 74 }
 hive_key_prefix: deload_reason_phase_
 hive_key_formula: >
   workoutBox['deload_reason_phase_<P>'] where P = deloadPhaseFromWeek4(getWeek(4)) — the SHARED
@@ -128,11 +113,20 @@ regression_test_planned: >
   an end-to-end REGEN case driven by the real evaluator, asserting the key SURVIVES and the flag
   stays set while the reader suppresses.
 
-  MUTATION-PROVEN on three legs, each leaving the code compiling (a compile error is not a
-  proof): deleting the equality guard reddens 2 (regression + mirror); making it one-sided
-  (`stamped == 'working' && ...`) reddens exactly 1 (the mirror alone); reverting the writer to a
-  bare String reddens 3 (lift shape, keep shape, regen precondition). Every failure was a real
-  assertion failure, and each mutation was confirmed applied by `grep -c` before running.
+  MUTATION-PROVEN on four legs, each leaving the code compiling (a compile error is not a
+  proof), each confirmed applied by `grep -c` first, and each MEASURED ACROSS ALL FOUR
+  TOUCHED TEST FILES — not one — because the first attempt ran leg 1 against a
+  single file and under-reported it as 2. Deleting the equality guard reddens 4; making it
+  one-sided (`stamped == 'working' && ...`) reddens 2 (the mirror in both layers); reverting
+  the writer to a bare String reddens 3 (lift shape, keep shape, regen precondition);
+  deleting the `waves.length < 4` guard reddens 1.
+
+  That last leg is why `validatedDeloadReason` exists as a separate pure function. With the
+  guards inline in `currentDeloadReason`, plan-review round 1 measured that deleting the
+  length guard, the `is! Map` guard or the `stamped`-shape guard reddened ZERO of twelve
+  assertions: the resulting RangeError / NoSuchMethodError was swallowed by that method's
+  crash-safety `catch` and produced the SAME null the tests asserted. Four assertions were
+  testing the exception handler. The extraction makes every null come from an explicit guard.
 touched_layers_checked:
   - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "flutter analyze lib/ + the three touched test files — 0 warnings, 0 errors (44 infos, all pre-existing deprecations)" }
   - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "the stored value shape changed from String to Map; 12 new behavioral assertions drive real Hive boxes through HiveUserSession, plus the end-to-end evaluator round-trip" }
@@ -189,9 +183,34 @@ recovered", and nothing will ever reconcile them.
 
 ## Why the fix is at the reader
 
-A deleter would have to be added to three call sites, and a fourth added later would owe one
-silently — with no gate to notice. The reader is a single seam that also covers cross-device sync
-and restore, neither of which any deleter would have caught.
+A deleter would have to be added to both blob-rewriting call sites, and a third added later
+would owe one silently — with no gate to notice. The reader is a single seam that also
+covers cross-device sync and restore, neither of which any deleter would have caught.
+
+## What this does NOT close, stated precisely
+
+Both independent reviewers pushed on the same two boundaries, and an earlier draft of this
+doc overclaimed both. Recording them so nobody reads the class as closed.
+
+**1. The AI-coach regen is invisible to this guard, by construction.**
+`RegeneratePlanPlanner` writes schedule ROWS only — applied one at a time through
+`WorkoutWriteService.upsertScheduled` — and touches no blob (a `current_plan` /
+`_planKey` / `week_plans` grep over both files returns 0). So it cannot make the line
+contradict the node: it moves neither. What it does is leave BOTH stale together, which is a
+pre-existing defect of the phase-arc strip itself, shipped with flag 3 on 2026-09-05.
+**Filed as OI-166**, with fix options and a recommendation, because the honest repair
+changes an AI-coach WRITE path — a different blast radius from the read-side display fix
+this batch is.
+
+**2. A KEEP reason survives a regen that produces another deload week.** Stamp `deload`,
+blob `deload` after the regen — the equality holds and the line renders. Round 1 read this
+as the defect still being live for the common case. It is not the same defect: the shipped
+bug was a CONTRADICTION (a `working` line under a `DELOAD` node), and here node and line
+agree, both saying recovery week, which is what the user is actually doing. The reason's
+*evidence* is older than the regen, but its *claim* — "this is a recovery week" —
+remains true. The guard detects an OUTCOME change; it deliberately does not attempt "was
+this decision re-made", which would need a generation nonce and cannot be inferred from the
+wave character. Said plainly rather than letting "SELF-VALIDATING" imply more than it does.
 
 What made this possible cheaply is that the writer already computes the answer. `liftedAny` is the
 exact predicate `deloadDecisionReason` branches on to choose between "Working week" and "Recovery
@@ -207,13 +226,48 @@ allowed the line to contradict the node above it any time the two disagreed. The
 the blob for exactly the same reason `deloadPhaseFromWeek4` is shared between writer and reader:
 whatever the display uses is what the guard must use.
 
+## The concept, in full
+
+(This was the `concept:` field until plan-review round 1 pointed out that
+`build_bug_index.dart` renders that field verbatim into a markdown TABLE CELL and a
+heading, so a multi-paragraph block scalar breaks the generated `INDEX.md` — the file
+§4.1.5 tells every session to grep first. `concept:` is specified as a name from
+`docs/sot_registry.yaml`; the prose belongs here.)
+
+The reason string and the wave character are two views of ONE decision, and only the character
+is maintained by the three paths that rewrite a plan. The prose is written once, by the
+evaluator, under an idempotency flag that guarantees it is written AT MOST ONCE per phase —
+which is exactly what makes it unable to track anything that happens afterwards.
+
+The fix does not add a deleter to each rewriting path. There are three today
+(`generateAndSchedule`, `generateAndScheduleFromDate`, the AI-coach regen) and any fourth added
+later would silently owe one — the "fixed the instance, not the class" shape from
+`feedback_mistake_guard_without_its_mirror.md`. Instead the writer records the OUTCOME beside
+the prose and the READER refuses to return prose whose outcome no longer matches the plan. One
+seam covers all three paths, plus cross-device sync, restore, and anything added later.
+
+The validation reads the BLOB, not the scheduled rows, because the blob is what the strip
+renders (`phaseArcProvider` -> `currentWaveCharacters`). Validating against rows would have let
+the line contradict the node directly above it whenever the two disagreed — the same
+writer/reader question the fix exists to answer, one level down.
+
 ## Mutation results
+
+Measured across ALL FOUR touched test files (`deload_reason_staleness_behavioral_test.dart`,
+`deload_eval_behavioral_test.dart`, `phase_arc_reader_behavioral_test.dart`,
+`readiness_flag_no_hive_default_test.dart`) — 63 assertions green at baseline.
 
 | Mutation | Compiles | Red | Which |
 |---|---|---|---|
-| Delete `if (waves[3] != stamped) return null;` | yes | 2 | the regression + the mirror |
-| One-sided: `stamped == 'working' && waves[3] != stamped` | yes | 1 | the mirror alone |
+| Delete the equality guard | yes | 4 | regression + mirror, in both the behavioural and pure layers |
+| One-sided: `stamped == 'working' && ...` | yes | 2 | the mirror alone, in both layers |
 | Writer stores a bare String again | yes | 3 | lift shape, keep shape, regen precondition |
+| Delete `if (waves.length < 4) return null;` | yes | 1 | the pure-layer index guard |
 
 Each was confirmed applied with `grep -c` before running, and each failure was an assertion
 failure rather than a compile error.
+
+⚠ **The first three were originally reported as 2 / 1 / 3, measured against ONE file.**
+That is this repo's own "a green check is only as wide as its input set" rule, broken by
+the person who had just written it down. Leg 4 previously reddened ZERO — it is the leg
+that motivated extracting `validatedDeloadReason`.

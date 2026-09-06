@@ -15,7 +15,7 @@ import '../providers/train_provider.dart';
 ///
 /// ⚠ The wave vocabulary is FIVE tokens, not the four this comment used to name:
 /// `baseline | overreach | peak | deload` plus `working`
-/// (`deload_evaluator.dart:231`, written when a deload is lifted). The reader
+/// (`deload_evaluator.dart:244`, written when a deload is lifted). The reader
 /// also synthesises a sixth state, the empty string, for a malformed entry. See
 /// [labelFor].
 class PhaseArcStrip extends ConsumerWidget {
@@ -24,7 +24,7 @@ class PhaseArcStrip extends ConsumerWidget {
   /// Raw `week_character` → display label. Unknown → the raw token upper-cased
   /// (crash-safe: a future/renamed wave still renders something sensible).
   ///
-  /// `working` is the FIFTH token, written by `deload_evaluator.dart:231` when a
+  /// `working` is the FIFTH token, written by `deload_evaluator.dart:244` when a
   /// deload is lifted. It rendered correctly before this entry existed — via the
   /// unknown-token fallback — which is exactly why it went unnoticed: it read
   /// acceptably by luck rather than by decision. Mapping it makes it deliberate.
@@ -43,7 +43,7 @@ class PhaseArcStrip extends ConsumerWidget {
   /// `.toLowerCase().trim()` while the fallback used the RAW token, so `'  '`
   /// missed the map, fell through untrimmed, and `'  '.isEmpty` is FALSE — a
   /// node with a dot and no visible label. The empty string is a real state:
-  /// `workout_schedule_read_service.dart:1229` synthesises it for any entry
+  /// `workout_schedule_read_service.dart:1279` synthesises it for any entry
   /// that is not a Map or whose key is null.
   static String labelFor(String rawToken) {
     final t = rawToken.toLowerCase().trim();
@@ -59,11 +59,18 @@ class PhaseArcStrip extends ConsumerWidget {
     // deload week (week 4), when a reason was stamped (deload feature ON). Null /
     // not-week-4 → no line → the strip is byte-identical to Batch 7-A.
     //
-    // SHIP-DARK behind its own flag since 2026-09-05: the phase-arc strip went
-    // live without this line, because the stamped reason can outlive the blob
-    // state it describes (a regen re-stamps week 4 as `deload` while the reason
-    // still reads "Working week"). Unit B fixes that, then flips the flag. The
-    // flag is checked FIRST so the provider is not even watched while dark.
+    // LIVE since 2026-09-06 (Unit B, OI-53 flag 4; kill-switch
+    // `disable_deload_reason_line`). It shipped dark on 2026-09-05 because the
+    // stamped reason can outlive the blob state it describes — a regen
+    // re-stamps week 4 as `deload` while the reason still reads "Working week".
+    // Unit B fixed that at the READER (diagnose `c5a8f3`): the reason is stored
+    // with its outcome `week_character` and
+    // `WorkoutScheduleReadService.validatedDeloadReason` returns the text ONLY
+    // while that still equals week 4 of the SAME blob this strip renders — so
+    // the line can never contradict the node above it.
+    //
+    // The flag is still checked FIRST, so the provider is not watched when the
+    // kill-switch is set.
     final reason = PlanEngineFlags.deloadReasonLineEnabled &&
             arc.currentWeek == 4
         ? ref.watch(deloadReasonProvider)

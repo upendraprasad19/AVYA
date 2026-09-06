@@ -7952,11 +7952,11 @@ concepts:
       LIVE since 2026-09-05 (OI-53 flag 3 of 12); kill-switch `disable_phase_arc`
       → the strip renders nothing → byte-identical. Crash-safe on an
       absent/malformed blob (→ const []). The provider renders ONLY at
-      `week_plans.length >= 4` (matching deload_evaluator.dart:228) and takes the
+      `week_plans.length >= 4` (matching deload_evaluator.dart:241) and takes the
       first 4, because the week highlight is clamped to 1..4 — a shorter blob
       would render a strip on which no node can be marked "now". The wave
       vocabulary is FIVE tokens (baseline|overreach|peak|deload plus `working`,
-      written by deload_evaluator.dart:231) and the reader synthesises a sixth,
+      written by deload_evaluator.dart:244) and the reader synthesises a sixth,
       the empty string, for a malformed entry.
     writers:
       - file: lib/shared/repositories/plan_engine/periodization_engine.dart
@@ -8085,11 +8085,11 @@ concepts:
       byte-identical to Batch 7-A. Additive, LOCAL-only, no migration. Rides the parent flags
       (enable_triggered_deload + enable_readiness for the write). LIVE for the RENDER since 2026-09-06
       (OI-53 flag 4 of 12; kill-switch `disable_deload_reason_line`). It shipped dark on
-      2026-09-05 because the stamped reason can outlive the blob state it describes: THREE paths
-      rewrite the plan and re-stamp week 4 as `deload` — generateAndScheduleFromDate
-      (workout_schedule_read_service.dart:388, live caller edit_profile_screen.dart:2029),
-      generateAndSchedule (:227) and the AI-coach regen (regenerate_plan_planner.dart:294) —
-      while the idempotency flag (deload_evaluator.dart:79) blocks any correction and NOTHING in
+      2026-09-05 because the stamped reason can outlive the blob state it describes: TWO
+      BLOB-rewriting paths re-stamp week 4 as `deload` — generateAndScheduleFromDate
+      (workout_schedule_read_service.dart:388, live caller edit_profile_screen.dart:2029) and
+      generateAndSchedule (:227) — while the idempotency flag (deload_evaluator.dart:79)
+      blocks any correction and NOTHING in
       lib/ deletes the key. FIXED in Unit B (diagnose c5a8f3) at the READER rather than by adding
       a deleter to each path: the stored VALUE is now a map {week_character, text}, and
       currentDeloadReason() returns text ONLY while that character equals currentWaveCharacters()
@@ -8097,7 +8097,15 @@ concepts:
       its phase from, so the line can never contradict the node above it. The check is EQUALITY,
       so the mirror (stored `deload`, blob `working`, reachable when a sync lands a lifted blob
       over a local keep) drops too. Legacy bare-String values (written 2026-09-01 until Unit B)
-      resolve to no line and self-heal at the next phase advance.
+      resolve to no line and self-heal at the next phase advance. The comparison is NORMALISED
+      (lowercase+trim) on both sides, matching PhaseArcStrip.labelFor, so the guard and the
+      display agree on what "the same character" means.
+      SCOPE, stated because an earlier draft overclaimed it: the AI-coach regen
+      (regenerate_plan_planner.dart, applied row-by-row via upsertScheduled) writes NO blob, so it
+      is invisible to this guard by construction — it leaves node AND line stale together
+      rather than in contradiction. That is a pre-existing phase-arc defect, filed as OI-166.
+      The guard detects an OUTCOME change, not "was this decision re-made": a KEEP reason
+      surviving a regen that produces another deload week still renders, and correctly so.
     writers:
       - file: lib/core/services/deload_evaluator.dart
         method: DeloadEvaluator.maybeEvaluate (stamps deload_reason_phase_<P>)
@@ -9155,7 +9163,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1306-1321
+        line_range: 1324-1339
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -9552,15 +9560,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1430-1447
+        line_range: 1448-1465
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1423-1424
+        line_range: 1441-1442
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1475-1500
+        line_range: 1493-1518
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |

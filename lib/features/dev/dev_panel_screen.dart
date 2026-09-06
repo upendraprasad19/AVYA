@@ -340,9 +340,13 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
 
   /// Deload-reason-line kill-switch (OI-53 flag 4, live 2026-09-06).
   ///
-  /// Same shape as [_togglePhaseArc], and load-bearing for the same reason:
-  /// the line is read inside PhaseArcStrip via deloadReasonProvider, which
-  /// watches currentPlanProvider, so invalidating that is what re-runs the gate.
+  /// Same shape as [_togglePhaseArc]. The invalidate is load-bearing, but name
+  /// the chain precisely: the FLAG is read in `PhaseArcStrip.build`, NOT in
+  /// deloadReasonProvider, and non-reactively — so nothing about
+  /// deloadReasonProvider's VALUE changes when the flag toggles. What rebuilds
+  /// the widget is `phaseArcProvider` re-emitting a new `PhaseArcData`, which
+  /// works only because that class has no `==` override. Adding value equality
+  /// to it would make this toggle silently inert.
   Future<void> _toggleDeloadReasonLine() async {
     final nextEnabled = !PlanEngineFlags.deloadReasonLineEnabled;
     final cfg = HiveService.instance.configBox;

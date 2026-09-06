@@ -1,12 +1,12 @@
 // Behavioral — Unit B (diagnose `c5a8f3`): the week-4 deload reason line must
 // never contradict the wave node it renders under.
 //
-// `deload_reason_phase_<P>` is written by `deload_evaluator.dart:148` and is
-// deleted NOWHERE in `lib/`. Two plan-mutating paths re-stamp week 4 back to
+// `deload_reason_phase_<P>` is written by `deload_evaluator.dart:159` and is
+// deleted NOWHERE in `lib/`. TWO BLOB-rewriting paths re-stamp week 4 back to
 // `deload` after a lift — `generateAndScheduleFromDate`
 // (`workout_schedule_read_service.dart:388`, live caller
-// `edit_profile_screen.dart:2029`) and the AI-coach regen
-// (`regenerate_plan_planner.dart:294`) — while the idempotency flag at
+// `edit_profile_screen.dart:2029`) and `generateAndSchedule` (`:227`) — while the
+// idempotency flag at
 // `deload_evaluator.dart:79` blocks any re-evaluation from correcting the string.
 // The strip would then render a DELOAD node above "Working week — you've
 // recovered", for the rest of the phase.
@@ -16,6 +16,13 @@
 // character still equals week 4's in the SAME blob the strip renders
 // (`currentWaveCharacters`). Validating against the blob rather than the
 // scheduled rows is deliberate — the strip renders the blob.
+//
+// SCOPE, stated precisely because an earlier draft of this header overclaimed it:
+// the AI-coach regen (`regenerate_plan_planner.dart` — applied row-by-row through
+// `WorkoutWriteService.upsertScheduled`) writes NO blob at all. It therefore
+// cannot make the line contradict the node, because it moves neither; what it
+// does is leave BOTH stale together, which is a separate pre-existing defect of
+// the phase-arc strip itself (OI-166), not something this reader can see.
 
 import 'dart:io';
 
@@ -223,6 +230,101 @@ void main() {
       await stampReason(2, {'week_character': 'working', 'text': liftText});
       await seedBlob('working');
       expect(read(), isNull);
+    });
+  });
+
+  // PURE-layer tests. The group above drives the real reader, whose crash-safety
+  // `catch` converts ANY throw into the same null those tests assert — so plan-review
+  // round 1 measured that deleting the `waves.length`, `is! Map` or `stamped`-shape
+  // guard reddened ZERO of them. They were asserting the exception handler.
+  // These call the guard directly, with no `catch` above it: delete a guard and
+  // the next line throws (RangeError / NoSuchMethodError) and the test goes red.
+  group('validatedDeloadReason — every null comes from an explicit guard', () {
+    const good = {'week_character': 'working', 'text': liftText};
+    const waves4 = ['baseline', 'overreach', 'peak', 'working'];
+
+    test('match → the text (positive control for this whole group)', () {
+      expect(WorkoutScheduleReadService.validatedDeloadReason(good, waves4),
+          liftText);
+    });
+
+    test('LEGACY bare String → null (guards the `is! Map` line)', () {
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(liftText, waves4),
+          isNull);
+    });
+
+    test('null stored value → null', () {
+      expect(WorkoutScheduleReadService.validatedDeloadReason(null, waves4),
+          isNull);
+    });
+
+    test('missing / non-String / empty text → null', () {
+      const w = ['baseline', 'overreach', 'peak', 'working'];
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              {'week_character': 'working'}, w),
+          isNull);
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              {'week_character': 'working', 'text': 7}, w),
+          isNull);
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              {'week_character': 'working', 'text': ''}, w),
+          isNull);
+    });
+
+    test('missing / non-String / whitespace week_character → null', () {
+      const w = ['baseline', 'overreach', 'peak', 'working'];
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              {'text': liftText}, w),
+          isNull);
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              {'week_character': 3, 'text': liftText}, w),
+          isNull);
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              {'week_character': '   ', 'text': liftText}, w),
+          isNull,
+          reason: 'whitespace-only must not sneak past via trim() to an empty '
+              'match against an equally blank wave slot');
+    });
+
+    test('waves shorter than 4 → null (guards the index, not the catch)', () {
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              good, ['baseline', 'overreach', 'peak']),
+          isNull);
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(good, const []),
+          isNull);
+    });
+
+    test('mismatch → null, in BOTH directions', () {
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              good, ['baseline', 'overreach', 'peak', 'deload']),
+          isNull);
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              {'week_character': 'deload', 'text': keepText},
+              ['baseline', 'overreach', 'peak', 'working']),
+          isNull);
+    });
+
+    test(
+        'comparison is NORMALISED on both sides, matching PhaseArcStrip.labelFor',
+        () {
+      expect(
+          WorkoutScheduleReadService.validatedDeloadReason(
+              {'week_character': '  WORKING ', 'text': liftText},
+              ['baseline', 'overreach', 'peak', ' Working  ']),
+          liftText,
+          reason: 'the widget lowercases and trims before rendering; a raw '
+              'compare would disagree with the display about sameness');
     });
   });
 

@@ -1120,34 +1120,52 @@ class WorkoutScheduleReadService {
       if (phase == null) return null;
       final v =
           HiveService.instance.workoutBox.get('$deloadReasonKeyPrefix$phase');
-      // Unit B — SELF-VALIDATING. A bare String is a LEGACY value (the writer
-      // stamped prose alone from 2026-09-01 until Unit B) carrying no outcome to
-      // check against, so it is indistinguishable from a stale one → drop it.
-      if (v is! Map) return null;
-      final text = v['text'];
-      if (text is! String || text.isEmpty) return null;
-      final stamped = v['week_character'];
-      if (stamped is! String || stamped.isEmpty) return null;
-      // Validate against the SAME source the strip RENDERS — the blob, via
-      // [currentWaveCharacters] — not the scheduled rows this method derives its
-      // phase from. A reason contradicting the node directly above it is worse
-      // than no reason. Two plan-mutating paths re-stamp week 4 back to `deload`
-      // after a lift (`generateAndScheduleFromDate` at :388 via
-      // `edit_profile_screen.dart:2029`, and `regenerate_plan_planner.dart:294`)
-      // while `deload_evaluator.dart:79`'s idempotency flag blocks any re-eval
-      // from correcting the string; guarding at the READER covers both, plus
-      // cross-device sync, restore, and any future third path.
-      //
-      // EQUALITY, not `== 'working'`: the mirror case — stored `deload` while the
-      // blob says `working`, reachable when a sync lands a lifted blob over a
-      // local keep — is exactly as stale and must drop too.
-      final waves = currentWaveCharacters();
-      if (waves.length < 4) return null; // strip renders nothing below 4 anyway
-      if (waves[3] != stamped) return null;
-      return text;
+      return validatedDeloadReason(v, currentWaveCharacters());
     } catch (_) {
       return null;
     }
+  }
+
+  /// PURE (visible for testing) — Unit B's validation, lifted OUT of
+  /// [currentDeloadReason] so it can be tested without that method's crash-safety
+  /// `catch`. That extraction is not cosmetic: with the guards inline, plan-review
+  /// round 1 measured that deleting the `waves.length` guard, the `is! Map` guard
+  /// or the `stamped` shape guard reddened **ZERO** of twelve assertions — the
+  /// resulting RangeError / NoSuchMethodError was swallowed by the `catch` and
+  /// produced the SAME null the tests asserted. Four tests were checking the
+  /// exception handler, not the guard. Here every null comes from an explicit
+  /// guard, so deleting one throws and the test goes red for the right reason.
+  ///
+  /// Returns the stored reason text only while the stamped outcome still matches
+  /// week 4 of [waves] — the blob the STRIP renders, deliberately not the
+  /// scheduled rows [currentDeloadReason] derives its phase from, because a line
+  /// contradicting the node directly above it is worse than no line.
+  ///
+  /// Comparison is NORMALISED on both sides. `PhaseArcStrip.labelFor` lowercases
+  /// and trims before rendering, and its own history records `'  '` shipping as a
+  /// dot with no label — so padded/mixed-case `week_character` is a state this
+  /// codebase already treats as reachable, and a raw compare would disagree with
+  /// the display about what "the same character" is.
+  ///
+  /// EQUALITY, not `== 'working'`: the mirror — stored `deload` while the blob
+  /// says `working`, reachable when a sync lands a lifted blob over a local keep
+  /// — is exactly as stale and must drop too.
+  ///
+  /// A bare String is a LEGACY value (the writer stamped prose alone from
+  /// 2026-09-01 until Unit B) carrying no outcome to check, so it is
+  /// indistinguishable from a stale one and resolves to null.
+  @visibleForTesting
+  static String? validatedDeloadReason(Object? stored, List<String> waves) {
+    if (stored is! Map) return null;
+    final text = stored['text'];
+    if (text is! String || text.isEmpty) return null;
+    final rawStamp = stored['week_character'];
+    if (rawStamp is! String) return null;
+    final stamped = rawStamp.toLowerCase().trim();
+    if (stamped.isEmpty) return null;
+    if (waves.length < 4) return null; // the strip renders nothing below 4 anyway
+    if (waves[3].toLowerCase().trim() != stamped) return null;
+    return text;
   }
 
   /// ⑧ Batch 8 (W2.5 adherence gate) — the current phase's completion rate:
@@ -1247,7 +1265,7 @@ class WorkoutScheduleReadService {
 
   /// ⑥ Batch 7-A (W3.2 phase arc): the periodization wave character per week of
   /// the CURRENT phase — baseline / overreach / peak / deload, plus `working`
-  /// once a deload is lifted (deload_evaluator.dart:231) — read from the
+  /// once a deload is lifted (deload_evaluator.dart:244) — read from the
   /// materialized `current_plan` blob (`week_plans[i]['week_character']`,
   /// snake_case per `WeekPlan.toMap`). Read-only DISPLAY source for the
   /// Train-screen wave strip; no engine coupling. Crash-safe: a missing /

@@ -21,7 +21,7 @@ decision are stored in two places and only one of them is maintained.
 
 ## 2. The defect — writer and reader by file:line
 
-**Reason WRITER** — `lib/core/services/deload_evaluator.dart:148-162`
+**Reason WRITER** — `lib/core/services/deload_evaluator.dart:159-162`
 `box.put('deload_reason_phase_$phase', deloadDecisionReason(...))`.
 Reached only under Guard 1 (`triggeredDeloadEnabled && readinessEnabled`,
 `:55-56`) — **both LIVE since 2026-09-01**, so these keys exist in real users'
@@ -65,7 +65,7 @@ reader so the key can never drift.
 
 ## 4. The fix
 
-**Writer** (`deload_evaluator.dart:148-162`) — store the decision's OUTCOME
+**Writer** (`deload_evaluator.dart:159-162`) — store the decision's OUTCOME
 alongside its prose:
 
 ```dart

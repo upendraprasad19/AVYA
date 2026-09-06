@@ -895,7 +895,7 @@ final currentPlanProvider =
 /// pure display of stamped data.
 ///
 /// ⚠ The wave vocabulary is FIVE tokens — `baseline | overreach | peak | deload`
-/// plus `working` (`deload_evaluator.dart:231`) — and the reader synthesises a
+/// plus `working` (`deload_evaluator.dart:244`) — and the reader synthesises a
 /// sixth, the empty string, for a malformed entry.
 class PhaseArcData {
   final List<String> waves; // week_character per week, ordered week 1..4
@@ -914,7 +914,7 @@ final phaseArcProvider = Provider<PhaseArcData?>((ref) {
   // rather than as missing data. Render nothing instead; that is exactly what
   // shipped before this flip, so it is the no-change direction.
   //
-  // `>= 4` (not `== 4`) deliberately matches `deload_evaluator.dart:228`, which
+  // `>= 4` (not `== 4`) deliberately matches `deload_evaluator.dart:241`, which
   // accepts `weeks.length >= 4` before rewriting week 4. A guard stricter than
   // the writer it shadows would hide a strip the evaluator is still maintaining.
   // Only the first 4 are rendered, since the clamp can never address a 5th.

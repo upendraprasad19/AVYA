@@ -201,9 +201,9 @@ class PlanEngineFlags {
   ///
   /// ⚠ The wave vocabulary is FIVE tokens, not the four this comment used to
   /// name: `baseline | overreach | peak | deload`, plus **`working`**, written
-  /// by `deload_evaluator.dart:231` when a deload is lifted. A sixth state, the
+  /// by `deload_evaluator.dart:244` when a deload is lifted. A sixth state, the
   /// empty string, is synthesised by the READER
-  /// (`workout_schedule_read_service.dart:1229`) for a malformed entry.
+  /// (`workout_schedule_read_service.dart:1279`) for a malformed entry.
   /// `PhaseArcStrip` maps all five and floors the empty case.
   ///
   /// ⚠ There is NO release-build kill-switch: every flag toggle lives in the
@@ -224,11 +224,11 @@ class PlanEngineFlags {
   ///
   /// Split out of the phase-arc flip on 2026-09-05 (founder decision) because the
   /// line carried a stale-reason defect: `deload_reason_phase_<P>` is never
-  /// deleted anywhere in `lib/`, while TWO plan-mutating paths re-stamp week 4
+  /// deleted anywhere in `lib/`, while TWO BLOB-rewriting paths re-stamp week 4
   /// back to `deload` after a lift — `generateAndScheduleFromDate`
   /// (`workout_schedule_read_service.dart:388`, live caller
-  /// `edit_profile_screen.dart:2029`) and the AI-coach regen
-  /// (`regenerate_plan_planner.dart:294`) — while `deload_evaluator.dart:79`'s
+  /// `edit_profile_screen.dart:2029`) and `generateAndSchedule` (`:227`) — while
+  /// `deload_evaluator.dart:79`'s
   /// idempotency flag blocks any re-evaluation from correcting the string. The
   /// strip would have rendered a `DELOAD` node above "Working week — you've
   /// recovered", permanently.
@@ -264,11 +264,14 @@ class PlanEngineFlags {
   /// stash presence). The eval also early-returns without readiness.
   ///
   /// ⚠ Killing this switch does NOT revert a lift already applied — the week
-  /// stays `week_character: 'working'`. Corrected 2026-09-05: this used to add
-  /// "and only the reason strip disappears", which is no longer true — the
-  /// reason line has its own flag, [deloadReasonLineEnabled], DEFAULT OFF, so
-  /// killing this switch changes nothing visible until that one flips too. The
-  /// lifted week still renders as `WORKING` on the phase-arc strip either way.
+  /// stays `week_character: 'working'` and still renders as `WORKING` on the
+  /// phase-arc strip. Corrected TWICE, and the second correction is the live one:
+  /// the 2026-09-05 text said the reason line has its own flag DEFAULT OFF "so
+  /// killing this switch changes nothing visible until that one flips too". Unit
+  /// B flipped [deloadReasonLineEnabled] ON (2026-09-06), so killing THIS switch
+  /// now DOES change something visible — `currentDeloadReason()` gates on
+  /// `triggeredDeloadEnabled` before anything else, so the week-4 "why" line
+  /// disappears with it. The wave node itself does not.
   static bool get triggeredDeloadEnabled {
     try {
       return HiveService.instance.configBox.get('disable_triggered_deload') !=
