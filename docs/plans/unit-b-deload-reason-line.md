@@ -7,6 +7,12 @@ Split out of the phase-arc flip on 2026-09-05 by founder decision, because the
 line carries an unfixed defect. This unit fixes it, then flips
 `enable_deload_reason_line` → `disable_deload_reason_line`.
 
+> ⚠ **PRE-IMPLEMENTATION ARTIFACT.** Every `file:line` below is as-of plan time and
+> the implementation moved several of them. Do not cite this document for a line number — the
+> diagnose-doc (`2026-09-06-...-c5a8f3.md`) and `docs/sot_registry.yaml` carry the
+> maintained citations. Kept as written, deliberately: a plan records what was intended at
+> the time. Only claims that were WRONG when written are corrected, and one was — see §3.
+
 ## 1. Bug-history lookup (§4.1.5)
 
 `docs/diagnoses/INDEX.md` contains **zero** entries matching `deload`
@@ -41,7 +47,14 @@ to `deload` while the reason still says `working`):
 | # | Path | Re-stamps blob | Re-stamps rows | Stays in phase P |
 |---|---|---|---|---|
 | 1 | `workout_schedule_read_service.dart:388` (`generateAndScheduleFromDate`), live caller `edit_profile_screen.dart:2029` | yes (`plan.toMap()`) | yes (`:288/:309/:487/:508`) | yes — `phase: currentPhase` (`edit_profile_screen.dart:2022`) |
-| 2 | `regenerate_plan_planner.dart:294` (AI-coach regen) | — | yes | yes — `resolvedPhase` (`:168-177`) |
+| 2 | `regenerate_plan_planner.dart:294` (AI-coach regen) | **no** | yes | yes — `resolvedPhase` (`:168-177`) |
+
+> ⚠ **Corrected 2026-09-06 (plan-review round 2).** Row 2 belongs in a DIFFERENT
+> category from row 1 and this table blurred them, which is where the shipped artifacts'
+> "three paths" overclaim came from. The AI-coach regen writes NO blob, so it cannot make
+> the reason contradict the wave node — it moves neither, leaving both stale together.
+> It is not a path a blob-based reader guard can see. The real defect it causes (the strip
+> rendering a stale wave) is **OI-166**.
 
 Path 2 was **not** named in the phase-arc flip's split note; found by this
 investigation. Both are reachable by an ordinary user mid-phase.

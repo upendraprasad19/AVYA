@@ -199,6 +199,46 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-06** — blast-radius **platform** — branch `unitb-deload-reason`
+  (Unit B: fix the stale deload reason, then flip `enable_deload_reason_line`).
+  **10 B-pass findings (1 P0, 1 P1, 3 P2, 5 P3); 0 false_alarm.** Review:
+  `docs/reviews/06d7bc7f5e28-bpass.md`. Two independent plan-review rounds ran
+  alongside; between them the batch took **22 findings**, of which the author
+  accepted 21.
+  **Tuning 1 — lens 6 gains a MUTATION-RESULT reading rule, and it is the
+  inverse of the one rule 21 already has.** CLAUDE.md warns that a mutation
+  reddening for a COMPILE error proves nothing. This batch found the mirror: a
+  mutation reddening **NOTHING** also proves nothing. Deleting three separate
+  guards each reddened ZERO of twelve assertions, because the guards sat inside
+  a method whose `catch (_) { return null; }` turned the resulting RangeError /
+  NoSuchMethodError into the SAME null the tests asserted. Four assertions were
+  testing the exception handler. **When a mutation reddens 0, do not record
+  "already covered" — ask what absorbed it.** The structural fix is to extract
+  the guarded logic into a pure function with no `catch` above it, so every
+  returned value has one source; that turned 0 red into 1 red with no test
+  changed. Added to rule 21 in CLAUDE.md as the third named mutation trap.
+  **Tuning 2 — a new lens, `decision_boolean_as_explanation`, for any diff that
+  renders COPY derived from control flow.** Round 2's only P1 was not in the
+  batch's code at all: the flip made five pre-existing copy branches
+  user-visible, and one of them read a decision flag (`notBackstop`) whose false
+  case covers BOTH "a deload is overdue" and "none has ever been recorded". The
+  wording was written for the first, so a user in block ONE was told they were
+  "two blocks in". **For every user-facing string chosen by a boolean, enumerate
+  what ELSE makes that boolean take that value.** A flag computed to make a safe
+  DECISION is routinely false for several unrelated reasons; the decision is
+  identical for all of them and the sentence is not.
+  **Tuning 3 — a flip commit must review the copy it makes reachable, and the
+  diagnose-doc sentence that prevented it is worth naming.** The doc asserted
+  "no new copy reaches a user" one line after "the line becomes visible for the
+  first time". True of the guard, false of the flip — and it exempted all five
+  copy branches from a B-pass and a full round-1 review. **On any ship-dark
+  flip, treat every string the flag makes reachable as new code, because for
+  every user it is.**
+  ⚠ **Process note for whoever dispatches these: do NOT run two reviewers
+  against one worktree concurrently.** Both were told they may mutate to verify;
+  they did, saw each other's edits mid-run, and each had to discount results and
+  re-derive. Serialise them, or give each its own worktree.
+
 - **2026-09-05** — blast-radius **platform** — branch `phase-arc-flip`
   (flip `enable_phase_arc` live; new ship-dark `enable_deload_reason_line`).
   **5 findings (1 P0, 2 P2, 2 P3); 0 false_alarm.** Review:

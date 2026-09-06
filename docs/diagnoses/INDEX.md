@@ -6,7 +6,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
-### deload_decision_reason (1 bugs)
+### deload_decision_reason (2 bugs)
+- 2026-09-06 d9e1b4 — A user in their FIRST training block, on week 4, would be told: "Recovery week — you're two blocks in. Time to bank the gains." They are in block one. The same line appears for any user after a…
 - 2026-09-06 c5a8f3 — A user who completes a week-4 deload that the evaluator LIFTS (week becomes `working`, reason stamped "Working week — you've recovered"), and then edits their profile and taps Reschedule — or asks the…
 
 ### usage_quota_ledger (2 bugs)
@@ -1128,6 +1129,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-06 | d9e1b4 | A user in their FIRST training block, on week 4, would be told: "Recovery week — you're two blocks in. Time to bank the gains." They are in block one. The same line appears for any user after a… | deload_decision_reason | test/contracts/deload_reason_test.dart |
 | 2026-09-06 | c5a8f3 | A user who completes a week-4 deload that the evaluator LIFTS (week becomes `working`, reason stamped "Working week — you've recovered"), and then edits their profile and taps Reschedule — or asks the… | deload_decision_reason | test/contracts/deload_reason_staleness_behavioral_test.dart |
 | 2026-09-05 | e7c4b2 | The three Postgres cap triggers answered "has this user hit their daily cap?" by running count(*) over `ai_coach_interactions` — the conversation log that `rolling-context` prunes nightly (summarises… | usage_quota_ledger | test/contracts/cap_triggers_use_usage_counters_test.dart |
 | 2026-09-05 | e3b7d1 | Three latent defects in `PhaseArcStrip`, none of them user-visible before this batch because the widget was dark. (1) The wave vocabulary is FIVE tokens but `_labels` mapped four — `working`, written… | Ship-dark code is code nobody has run. `enable_phase_arc` shipped 2026-07-17 and stayed OFF for 50 days, so its three defects were unreachable and therefore undetected — the widget's own behavioral test seeded only well-formed 4-entry blobs with canonical tokens.

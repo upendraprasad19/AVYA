@@ -149,7 +149,7 @@ class DeloadEvaluator {
     // Unit B: stored as a MAP carrying the outcome `week_character` beside the
     // prose, because the prose alone cannot be validated later. A regen re-stamps
     // week 4 back to `deload` (`workout_schedule_read_service.dart:388`,
-    // `regenerate_plan_planner.dart:294`) while the idempotency flag at :79 blocks
+    // `:227`) while the idempotency flag at :79 blocks
     // any re-eval from correcting the string — so the READER
     // ([WorkoutScheduleReadService.currentDeloadReason]) compares this character
     // against the blob the strip renders and drops a reason that no longer
@@ -164,6 +164,7 @@ class DeloadEvaluator {
           liftedAny: liftedAny,
           notDeloadPhase: notDeloadPhase,
           notBackstop: notBackstop,
+          hasDeloadOnRecord: markerPhase != null,
           readinessGood: readiness.good,
           readinessHadData: readiness.hadData,
           e1rmNoFatigue: e1rm.noFatigue,

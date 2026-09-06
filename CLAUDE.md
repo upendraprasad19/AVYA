@@ -442,7 +442,23 @@ After observations captured + before brainstorming:
     leaves the code compiling and semantically wrong**; if yours does not,
     pick a different one — mutating the ALLOWLIST rather than the branch that
     reads it worked here, and was a better proof anyway because it showed which
-    of the two was doing the work. ⚠ **And confirm the FIXTURE reproduces a state the
+    of the two was doing the work.
+    ⚠ **AND A MUTATION THAT REDDENS *NOTHING* IS NOT PROOF THE CASE IS
+    ALREADY COVERED** (2026-09-06, Unit B, diagnose `c5a8f3`). The third
+    member of this family and the quietest: a guard sitting inside a method
+    whose `catch (_) { return null; }` converts the resulting error into the
+    SAME value the test asserts. Deleting the `waves.length < 4` guard, the
+    `is! Map` guard and the `stamped`-shape guard each reddened **ZERO of
+    twelve** assertions — the RangeError / NoSuchMethodError was swallowed
+    and the tests, which asserted `null`, stayed green. FOUR of them were
+    testing the exception handler rather than the guard. A zero-red mutation
+    has exactly two explanations — the case is covered elsewhere, or
+    **something absorbed it** — and they are indistinguishable from the run
+    alone, so go find out which. The fix is structural: **extract the guards
+    into a pure function with no `catch` above it**, so every returned value
+    has exactly one source. Same shape as the compile-error trap above (red
+    for the wrong reason), inverted: green for the wrong reason.
+    ⚠ **And confirm the FIXTURE reproduces a state the
     real workflow actually produces**, because a mutation run against a
     fictional fixture proves nothing either. That is not hypothetical: the
     `safe_merge.sh` precheck shipped in this same batch was mutation-"proven"

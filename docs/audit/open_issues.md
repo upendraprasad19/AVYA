@@ -3134,7 +3134,7 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 - **Status**: OPEN
 - **Blocked on**: FOUNDER — the fix changes what the AI coach WRITES, a different blast radius from the display bug it causes
-- **Verified**: 2026-09-06 — `grep -c "current_plan\|_planKey\|week_plans" lib/features/ai_coach/services/regenerate_plan_planner.dart lib/core/services/workout_write_service.dart` → **0 and 0**; and `grep -rn "put('current_plan'\|put(_planKey" lib/` returns exactly THREE writers, none of them the coach
+- **Verified**: 2026-09-06 — `grep -c "current_plan\|_planKey\|week_plans" lib/features/ai_coach/services/regenerate_plan_planner.dart lib/core/services/workout_write_service.dart` → **0 and 0**. ⚠ The blob-writer inventory is **FOUR**, not three: use `grep -rn "put(_planKey\|put(_kPlanKey\|put('current_plan'" lib/`. An earlier narrower grep here matched only `put(_planKey` and missed `deload_evaluator.dart`'s own `put(_kPlanKey, plan)` (the lift's blob rewrite; `_kPlanKey == 'current_plan'`). The conclusion is unchanged — the coach is not among them — but the count in an evidence field was wrong, which is exactly the class this board keeps recording
 - **Identified**: 2026-09-06 · surfaced by BOTH independent reviewers of the Unit B flip (`unitb-deload-reason`), which is why it is filed rather than absorbed
 - **Symptom**: the user asks the AI coach to regenerate their plan. `RegeneratePlanPlanner`
   produces schedule rows and `tool_dispatcher.dart:867-871` applies them one at a time through

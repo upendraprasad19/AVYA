@@ -106,7 +106,7 @@ proposed_fix: >
   regenerated week 4; and `_liftWeekFour` returning blob-write state, which round 2 of the
   phase-arc review proved targets an unreachable contradiction while creating a reachable one.
 regression_test_planned: >
-  `test/contracts/deload_reason_staleness_behavioral_test.dart` (12 tests) covers the regression,
+  `test/contracts/deload_reason_staleness_behavioral_test.dart` (20 tests) covers the regression,
   a positive control, the mirror, both legacy/malformed shapes, the short-blob and absent-blob
   cases, phase mismatch, and that the kill-switch gate still works on a VALID value (a bare
   String there would have passed for the wrong reason). `deload_eval_behavioral_test.dart` gained
@@ -144,7 +144,16 @@ impact_analysis: >
   User-visible change is the flip itself: the week-4 deload line becomes visible for the first
   time. Its content is unchanged; what changed is that it can now be SUPPRESSED. Suppression is
   strictly a reduction — every state that previously rendered a line either still renders the
-  same line or renders none, so no new copy reaches a user.
+  same line or renders none.
+
+  ⚠ An earlier draft ended that sentence "so no new copy reaches a user", which was FALSE
+  and load-bearing: it is true of the GUARD and false of the FLIP. This commit makes ALL FIVE
+  copy branches of `deloadDecisionReason` user-visible for the first time, and plan-review
+  round 2 found one of them stating a falsehood — the backstop branch told a first-block user
+  they were "two blocks in", because `notBackstop` is ALSO false when no deload has ever been
+  recorded. Fixed in this batch; see diagnose `d9e1b4`. The lesson is that one clause exempted
+  every copy branch from review at precisely the commit §4.12.4 calls "the moment real user
+  risk starts".
 
   Existing users carry LEGACY bare-String values written since 2026-09-01. These resolve to no
   line for the remainder of their current phase and self-heal at the next phase advance, when the
@@ -244,7 +253,10 @@ The fix does not add a deleter to each rewriting path. There are three today
 later would silently owe one — the "fixed the instance, not the class" shape from
 `feedback_mistake_guard_without_its_mirror.md`. Instead the writer records the OUTCOME beside
 the prose and the READER refuses to return prose whose outcome no longer matches the plan. One
-seam covers all three paths, plus cross-device sync, restore, and anything added later.
+seam covers both blob-rewriting paths, plus cross-device sync, restore, and anything added
+later. (It does NOT cover the AI-coach regen, which writes no blob at all — see "What this does
+NOT close" above. This paragraph said "all three paths" until plan-review round 2 caught that the
+retraction had been added without the original claim being struck.)
 
 The validation reads the BLOB, not the scheduled rows, because the blob is what the strip
 renders (`phaseArcProvider` -> `currentWaveCharacters`). Validating against rows would have let

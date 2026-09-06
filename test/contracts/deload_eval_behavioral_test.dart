@@ -636,7 +636,9 @@ void main() {
           reason: 'precondition: the lift reason is live');
 
       // The regen: `generateAndScheduleFromDate` (:388) / the AI-coach regen
-      // (`regenerate_plan_planner.dart:294`) re-stamp week 4 back to `deload`.
+      // `generateAndSchedule` (`:227`) re-stamp the BLOB's week 4 back to
+      // `deload`. Only those two rewrite the blob, which is what this fixture
+      // does; the AI-coach regen writes rows only and cannot produce this state.
       // Nothing deletes the reason key, and `deload_evaluator.dart:79`'s
       // idempotency flag blocks any re-eval from correcting it.
       final blob = Map<String, dynamic>.from(wb.get('current_plan') as Map);

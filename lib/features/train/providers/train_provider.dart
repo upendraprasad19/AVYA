@@ -941,6 +941,9 @@ final phaseArcProvider = Provider<PhaseArcData?>((ref) {
 /// arc data shape is untouched. Null unless the deload feature is ON (gated in the
 /// read service on `triggeredDeloadEnabled`) AND a reason was stamped; the strip
 /// renders it only on the deload week (week 4).
+// Unit B: null ALSO when a reason IS stamped but no longer describes week 4 —
+// `validatedDeloadReason` suppresses a stamp whose outcome no longer matches the
+// blob the strip renders. Three null causes, one rendering: no line.
 final deloadReasonProvider = Provider<String?>((ref) {
   ref.watch(currentPlanProvider); // rebuild on (re)materialize / rollover un-deload
   return WorkoutScheduleService.instance.currentDeloadReason();
