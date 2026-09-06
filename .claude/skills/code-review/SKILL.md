@@ -126,6 +126,19 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    perfectly designed and still assert `CCL` about a function that returns `CSC`.
    **The sharper question:** for a suppression or absence test — *would this pass if the feature
    did nothing at all?* Pair it with a positive case, or it asserts nothing.
+   **Third question, added 2026-09-06 (OI-162 slice 3a) — the one that catches a fix's own
+   fallout: *does this change alter the SHAPE of a read or write, and if so, what are the NEW
+   outcome states?*** A `count: "exact"` query has two (a number, an error). A value-select has
+   THREE — row, error, and `data: null, error: null`, the successful read of an absent row. A
+   rule written for two states silently assigns the third to whichever branch reads more
+   naturally, and that is usually the strict one. Here a "fail CLOSED on an unreadable counter"
+   rule — itself added to satisfy an earlier review round — would have swallowed the absent case
+   and refused EVERY first-time free user permanently, because at cutover every user is in the
+   empty state. ⚠ **Check the cold-start state first**: a bug that only affects users with no
+   rows affects all of them on day one. ⚠ And note the shape of the miss — the mirror did not
+   exist in the original design; **the remediation created it**, so "I already checked the
+   mirror" was true of the old code and false of the new.
+
    **Second sharper question, added 2026-09-05 (OI-162 slice 2):** *does this assertion depend on
    state the test does not CONTROL?* A status code, a count, or a "success" against a SHARED,
    rate-limited, or quota-bearing resource is not a fixture value — it is a reading of live
