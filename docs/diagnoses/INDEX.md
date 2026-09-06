@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### weekly_report_pro_gate (2 bugs)
+- 2026-09-06 f4a2d8 — The one free weekly report silently regenerated. `weekly-report`'s first-free gate asked "has this user ever generated a report?" by counting rows in `ai_coach_interactions` with…
+- 2026-09-03 e4d1b7 — A PostgREST failure on ONE count query hands a FREE user an unbounded Gemini 2.5 Pro weekly report — the most expensive model call in the app. `weekly-report/index.ts` gates ongoing reports on "has…
+
 ### usage_quota_ledger (2 bugs)
 - 2026-09-05 e7c4b2 — The three Postgres cap triggers answered "has this user hit their daily cap?" by running count(*) over `ai_coach_interactions` — the conversation log that `rolling-context` prunes nightly (summarises…
 - 2026-09-05 d3a7f1 — Nine quota checks derive their count from rows in `ai_coach_interactions`, and `rolling-context` prunes that table nightly — it summarises and DELETES once a user passes 50 non-app_event rows, keeping…
@@ -23,9 +27,6 @@ What makes this instance worse than its two predecessors is that the queue canno
 
 ### ai_coach_pro_entitlement (1 bugs)
 - 2026-09-03 f2b9d4 — A PAYING PRO user silently loses every PRO coach tool, and nothing anywhere records that it happened. `ai-proxy/index.ts` resolves entitlement through `checkPro()`: async function checkPro(client,…
-
-### weekly_report_pro_gate (1 bugs)
-- 2026-09-03 e4d1b7 — A PostgREST failure on ONE count query hands a FREE user an unbounded Gemini 2.5 Pro weekly report — the most expensive model call in the app. `weekly-report/index.ts` gates ongoing reports on "has…
 
 ### user_full_name (2 bugs)
 - 2026-09-02 b3c9d4 — Founder observed (web, app.icanbefitter.com, signed-in returning session): the Home header rendered "UPENDRA" while the Profile tab rendered "User" and Edit Profile's Full Name field was BLANK — same…
@@ -1125,6 +1126,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-06 | f4a2d8 | The one free weekly report silently regenerated. `weekly-report`'s first-free gate asked "has this user ever generated a report?" by counting rows in `ai_coach_interactions` with… | weekly_report_pro_gate | test/contracts/weekly_report_lifetime_meter_test.dart |
 | 2026-09-05 | e7c4b2 | The three Postgres cap triggers answered "has this user hit their daily cap?" by running count(*) over `ai_coach_interactions` — the conversation log that `rolling-context` prunes nightly (summarises… | usage_quota_ledger | test/contracts/cap_triggers_use_usage_counters_test.dart |
 | 2026-09-05 | e3b7d1 | Three latent defects in `PhaseArcStrip`, none of them user-visible before this batch because the widget was dark. (1) The wave vocabulary is FIVE tokens but `_labels` mapped four — `working`, written… | Ship-dark code is code nobody has run. `enable_phase_arc` shipped 2026-07-17 and stayed OFF for 50 days, so its three defects were unreachable and therefore undetected — the widget's own behavioral test seeded only well-formed 4-entry blobs with canonical tokens.
 Each defect is a guard whose mirror was missing. (1) A label map that covers the tokens its author knew about, next to a fallback that quietly rescues the ones they did not — which works until the rescued value stops being a real English word. (2) A normalisation applied on the lookup side and not on the fallback side, so the fallback re-opens exactly the hole the lookup closes. (3) A length guard chosen against the wrong invariant: `< 2` guards "is there a degenerate plan", but the invariant that matters is "can the clamped highlight address a node", which needs 4. | test/contracts/phase_arc_reader_behavioral_test.dart |

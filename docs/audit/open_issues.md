@@ -2720,7 +2720,20 @@ semantics are the OPPOSITE of a windowed rate limit and it belongs with this ent
 - **Why NOT in the OI-162 table**: a lifetime quota must never be pruned, while a windowed rate limit
   must be. Fusing them forced a retention exclusion that would have retained a `user_id` forever
   after a DPDP erasure. They are different concepts that share a word.
-### ALSO 2026-09-03 — the WEEKLY-REPORT first-free gate is a lifetime count and resets the same way
+### ✅ CLOSED 2026-09-06 by OI-162 slice 3a — the WEEKLY-REPORT first-free gate
+
+**Was:** "ALSO 2026-09-03 — the WEEKLY-REPORT first-free gate is a lifetime count and resets the
+same way."
+
+**Fixed in OI-162 slice 3a.** The gate now reads `usage_counters` (quota_key
+`weekly_report_free`, `'epoch'` lifetime sentinel) via an advisory fail-closed read, and
+`consume_quota()` writes it gated on `!hasPro`. `rolling-context` cannot touch that table, so the
+one free Gemini 2.5 Pro report can no longer regenerate. The `ai_coach_interactions` insert stays
+verbatim — it is the sole persisted copy of the report and the row a reinstall restores — but it
+no longer feeds the gate. Pinned by `weekly_report_lifetime_meter_test.dart` (9 assertions, 9
+mutations) and the repointed `weekly_report_pro_gate_writer_to_reader_test.dart`.
+
+⚠ The free-IMAGE lifetime quota below is NOT closed by this — that is slice 3b.
 
 ⚠ **Found in code shipped to prod hours earlier the same day** (`a0e20576`, diagnose `e4d1b7`).
 That fix closed the gate's FAIL-OPEN half (a failed count granted a free Gemini 2.5 **Pro** report).
@@ -2740,7 +2753,21 @@ It did not touch — and the diagnose-doc never asked about — what DELETES the
   and two others, while firing on two `rate_limit` mentions that were COMMENTS. **Match on what the
   code DOES, not on what its prose calls itself.**
 
-### ALSO folded in 2026-09-03 — the nightly summarizer RESETS two paid-tier daily caps
+### ⚠ STALE 2026-09-06 — the nightly summarizer RESETS two paid-tier daily caps
+
+**Superseded by OI-162 slice 2 (`c7b95fe5`, migration 129), not by any work under this OI.**
+Live-verified with `pg_get_functiondef`: all three cap triggers
+(`enforce_chat_app_daily_limit`, `enforce_vision_analysis_daily_limit`,
+`enforce_food_text_daily_limit`) now read `usage_counters` EXCLUSIVELY — zero
+`ai_coach_interactions` references in any trigger body. This subsection's premise, that those
+caps are resettable because the summarizer prunes the rows they count, is structurally
+impossible now.
+
+⚠ Its **"THREE DEFECTS MOVED HERE 2026-09-04"** sub-list below stays OPEN — those are separate
+items, mostly slice-3b scoped, and item 3 (CI cannot drive cron-gated SQL) is unaddressed.
+
+*Original text retained below for provenance.*
+
 
 Found while checking a different question; nobody had looked. Same root as the entry above
 (a counter whose rows `rolling-context` deletes) but a DIFFERENT mechanism — these caps are
@@ -2995,6 +3022,11 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Status**: OPEN
 - **Blocked on**: needs OI-153's channel-reader enumeration
 - **Verified**: 2026-09-03 — schema + DDL + repo grep + prod
+- **PROGRESS 2026-09-06 (does NOT close this)**: slice 3a moved the `weekly-report` first-free
+  lifetime gate onto the ledger — the first EDGE FUNCTION reader to migrate, where slices 1-2 were
+  database-side only. It proves the EF-side pattern this issue's own fix will use: an advisory
+  fail-closed `.maybeSingle()` read, `consume_quota` written AFTER the durable row and gated on
+  tier, and `-1` treated as a successful refusal rather than an error. Six readers → five.
 - **PROGRESS 2026-09-05 (does NOT close this)**: the `usage_counters` ledger this issue's fix will
   use is now live AND proven in production with three real readers — migration 129 (`c7b95fe5`)
   moved the chat / vision / food_text cap triggers onto `consume_quota()`. That is slice 2 of 4;

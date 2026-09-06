@@ -154,7 +154,15 @@ const Map<String, int> allowedEdgeFunctionSites = {
   'supabase/functions/ai-media-proxy/index.ts': 2, // free-image lifetime + pro-image IST day
   'supabase/functions/delete-account/index.ts': 1, // 5 attempts / 60 min
   'supabase/functions/verify-payment/index.ts': 1, // 20 attempts / 10 min
-  'supabase/functions/weekly-report/index.ts': 1, // first-free-report lifetime
+  // OI-162 slice 3a: RATCHETED 1 -> 0. weekly-report's first-free gate now
+  // reads usage_counters, so it holds ZERO quota counters on the old table.
+  // A 0 is not decoration: `sweep()` only flags `count > allowed`, so leaving
+  // this at 1 would let a REVERT back to the ai_coach_interactions count pass
+  // silently. Dropping it to 0 converts the entry from permissive to
+  // proof-of-landing. (Its one remaining read of that table -- the
+  // promotion_ceremony tone lookup -- uses a plain .select("id") with no
+  // count: "exact", so it does not trip the matcher.)
+  'supabase/functions/weekly-report/index.ts': 0,
 };
 
 /// Migrations that already contain a `count(*) FROM ai_coach_interactions`.
