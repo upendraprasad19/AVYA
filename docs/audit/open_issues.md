@@ -3194,3 +3194,54 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
      and strictly a reduction — but it hides a real inconsistency instead of resolving it.
 - **Recommendation**: option 1, as its own unit, before OI-53's remaining flags add more surfaces
   that read the blob.
+
+## OI-167 — the debugging skill's bug-class numbers collide 9×, every one is cited by number from elsewhere, and nothing gates them (P3)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical — needs a per-citation reading, or a decision to stop numbering
+- **Verified**: 2026-09-07 — `grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/SKILL.md | grep -oE '[0-9]+$' | sort -n | uniq -d` → **2.36, 2.37, 2.38, 2.39, 2.40, 2.41, 2.53, 2.54, 2.55** (NINE numbers, each naming TWO unrelated classes). True max is **2.63**. The pairs are genuinely distinct content — `2.36` is both *"a DROP + CREATE on a SECURITY DEFINER function RESETS its ACL"* and *"PostgREST builder is a thenable with NO .catch()"*
+- **Identified**: 2026-09-07 · found by nearly minting a tenth — this session added a `2.61` that already existed, caught it in review, and renumbered to 2.63. **2.61 is therefore NOT in the duplicate list**; it is only how the mechanism was discovered
+- **Symptom**: two unrelated bug classes answer to the same number, so a citation like "debugging skill bug-class 2.38" does not resolve to one entry. A reader following it lands on whichever occurrence they find first, which may be the wrong class entirely.
+
+- **Root cause, worth stating precisely because it will recur**: the numbers are **not monotonic in file order** — 2.61 and 2.62 sit ABOVE 2.53–2.60 in the file. So the natural survey, `grep -nE '^### 2\.[0-9]+' | tail -1`, answers *"the last-positioned entry"* when the question was *"the highest number"*, and returns a number that is already taken. Correct form, now in the section-2 header as a guard:
+
+      grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/SKILL.md | grep -oE '[0-9]+$' | sort -n | tail -1
+
+- **Same class as the OI-number collisions** `scripts/check_oi_numbering_unique.dart` exists to catch (six had shipped by 2026-08-16; `build_oi_index.dart:110-111` records *"OI numbers are minted by eyeballing the board's tail"*). Identical mechanism, identical cause, **no equivalent gate covers `.claude/skills/`**.
+
+- ⚠ **RENUMBERING IS NOT SAFE FOR ANY OF THE NINE.** A first pass at this entry claimed six of them were uncited and "mechanically safe"; a context-blind review disproved it, and the census below is the corrected result. Every one of the nine is cited by number from outside the skill:
+
+      for n in 36 37 38 39 40 41 53 54 55; do echo -n "2.$n -> "; grep -rn "2[.]$n" --include=*.md . | grep -v skills/debugging/SKILL.md | grep -vE 'docs/(audit|reviews|plan-reviews)/' | wc -l; done
+      # every one NON-ZERO. Citing docs span docs/diagnoses/, docs/plans/,
+      # docs/superpowers/, docs/handbook/, docs/adr/ and memory/.
+
+  Deliberately ONE line with no backslash continuations and `2[.]N` rather than `2\.N`: three
+  separate attempts to publish the multi-line form had their escapes eaten in transit, shipping a
+  command with a literal newline inside `printf` and no continuations at all. A guard that
+  prescribes a broken command is worse than no guard, so the form that survives copying wins over
+  the form that reads more nicely.
+
+  ⚠ **The claim is "all nine are non-zero", NOT any particular count** — and the distinction is
+  not pedantry, it is the second defect this entry had to fix. The exact totals are UNSTABLE:
+  2.53 reads 8, 10 or 5 depending purely on which directories the command excludes, and a bare
+  `2.39` also matches version strings and decimals. Worse, the exclusions have to grow as this
+  issue accumulates meta-documentation — the review and plan-review files written FOR this entry
+  quote the same numbers, so the first published command started counting them within minutes
+  (2.36 went 1 → 6). **A count over a corpus that includes the discussion of the count is not a
+  measurement.** Non-zero-ness is the property that survives every exclusion choice, so it is the
+  only thing asserted here.
+
+- ⚠ **Two ways the first pass got this wrong, both worth keeping**:
+  1. Its census filtered to lines also containing `bug.?class|debugging skill`. The real citations mostly do not say that — `docs/diagnoses/2026-06-13-referral-rls-context-d2b9e6.md:80` reads `2.36 (FunctionException not unpacked → masked errors)` and matches no keyword. **A filter narrower than the thing you are counting reports zero and looks like proof.**
+  2. It attributed the citations to "CLAUDE.md, ADRs and diagnose-docs". **No CLAUDE.md cites any of these numbers** — `find . -iname CLAUDE.md -exec grep -Hn "2\.3[789]\|2\.40" {} \;` returns nothing. CLAUDE.md rule 9 cites only 2.35 / 2.31, neither of which is duplicated, so that citation is unaffected.
+
+- ⚠ **The prescribed census must EXCLUDE this board.** This entry names the very numbers it counts, so a naive `grep -rn` scores its own text as citations — the self-matching shape `check_no_deferral_euphemism.dart` handles with a visible `deu-quote` marker. The `grep -v` exclusions above are load-bearing, not decoration.
+
+- **Options**:
+  1. ~~Renumber the uncited duplicates~~ — **there are none**; every one is cited. Any renumber requires reading all citations first, so this is not the cheap option it appears to be.
+  2. Stop numbering new entries and key on the TITLE, the way `GATE_INDEX.md` keys gates on filename with the number as an optional alias — the move CLAUDE.md rule 24 already made, for this exact reason. Existing numbers stay as aliases; the collisions become harmless.
+  3. Gate only, renumber nothing — blocks new collisions, leaves the nine ambiguous.
+
+- **Recommendation**: **option 2 plus a gate.** Rule 24's precedent already exists in this repo — *"the filename is the identity; a number is an optional alias"* — and it is why `GATE_INDEX.md` stopped having this problem. Titles are what readers search for, existing numbers keep resolving as aliases, and no archaeology is needed to stop the bleeding.
+
+- **Not urgent**: this misdirects a reader; it breaks no build and no runtime path. Filed at P3 so it is not lost — the guard now in the section-2 header stops a tenth collision, but a comment is an intention, and this repo's own §4.13 point 6 says intentions decay.

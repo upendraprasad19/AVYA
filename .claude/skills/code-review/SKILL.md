@@ -432,6 +432,32 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   override is a guard whose mirror is the override, and the override is invisible from the
   diff that adds the default.
 
+- **2026-09-07 (b)** — blast-radius **platform** — branch `live-test-budget-docs`, a
+  DOCS-ONLY diff (CLAUDE.md 4.9 row, debugging SKILL.md, OI-167). **6 findings (0 P0, 2 P1,
+  3 P2, 1 P3); 0 false_alarm**, all fixed in-batch. Review:
+  `docs/reviews/0acbed4f3155-review.md`.
+  **Tuning — lens 8 gains the counting rule, because both P1s were miscounts inside a
+  `Verified:` field: A FILTER NARROWER THAN THE THING BEING COUNTED RETURNS ZERO AND LOOKS
+  LIKE PROOF.** The author's census for "which bug-class numbers are cited elsewhere"
+  filtered to lines also containing `bug.?class|debugging skill`. Real citations mostly do
+  not say that — one reads `2.36 (FunctionException not unpacked → masked errors)` and
+  matches no keyword — so the census returned zero for five numbers and the entry declared
+  them "mechanically safe to renumber". Unfiltered, **all nine were cited**. The zero was
+  produced by the filter, not by the world. ⚠ **Ask what the filter EXCLUDES before citing
+  its output**, and sanity-check any zero against one case you have read with your own eyes.
+  Sibling of the empty-input-set rule: a command that returns nothing has two explanations.
+  **Second, and this one no gate can catch — A CITATION DERIVED AGAINST THE PRE-EDIT FILE IS
+  INVALIDATED BY THE EDIT THAT SHIPS IT.** The diff cited exact line numbers in the same file
+  it was modifying; its own inserted block pushed every one of them down 17 lines, so they
+  were correct when derived and wrong the moment the commit existed. **When a diff cites line
+  numbers in a file the diff also changes, re-derive them AFTER staging — or cite the section,
+  not the line.** Fixed here by dropping the line numbers entirely.
+  Third, smaller: a `114-115` citation was copied forward from CLAUDE.md 7 rather than
+  re-derived (real line: 110) — the 2026-09-02 entry's "a citation copied from another
+  document is not a verified citation" rule, recurring, and the CLAUDE.md occurrence is still
+  stale.
+  False-alarm rate 0/6 -> no change to lenses 1-7, 9-10.
+
 - **2026-09-07** — blast-radius **platform** — branch `oi162-slice3-lifetime-meters`, OI-162
   slice 3a (diagnose `f4a2d8`). **6 findings (0 P0, 3 P1, 2 P2, 1 P3); 0 false_alarm**, all fixed
   in-batch. Review: `docs/reviews/4d7054d4aa51-review.md`.
