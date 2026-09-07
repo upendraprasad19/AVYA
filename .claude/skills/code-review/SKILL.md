@@ -137,6 +137,19 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
    here had none). ⚠ Paired lens for the diff side: when a change repairs an enforcement, grep the
    test tree for anything exercising the now-enforced path and asserting success — those tests are
    untouched by the diff and invisible to a targeted run.
+
+   **Third question, added 2026-09-06 (OI-162 slice 3a) — the one that catches a fix's own
+   fallout: *does this change alter the SHAPE of a read or write, and if so, what are the NEW
+   outcome states?*** A `count: "exact"` query has two (a number, an error). A value-select has
+   THREE — row, error, and `data: null, error: null`, the successful read of an absent row. A
+   rule written for two states silently assigns the third to whichever branch reads more
+   naturally, and that is usually the strict one. Here a "fail CLOSED on an unreadable counter"
+   rule — itself added to satisfy an earlier review round — would have swallowed the absent case
+   and refused EVERY first-time free user permanently, because at cutover every user is in the
+   empty state. ⚠ **Check the cold-start state first**: a bug that only affects users with no
+   rows affects all of them on day one. ⚠ And note the shape of the miss — the mirror did not
+   exist in the original design; **the remediation created it**, so "I already checked the
+   mirror" was true of the old code and false of the new.
    **Sibling shape — the check that matches ITSELF.** A test or gate that NAMES the thing it
    forbids, then scans a tree containing its own source, always finds itself and can never pass.
    Found 2026-08-29 in a plan whose dead-field scan was widened from `lib/` to `lib/`+`test/` — a
@@ -418,6 +431,35 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   ~5300-test suite. Generalises past timeouts: a file-level default plus a surviving local
   override is a guard whose mirror is the override, and the override is invisible from the
   diff that adds the default.
+
+- **2026-09-07** — blast-radius **platform** — branch `oi162-slice3-lifetime-meters`, OI-162
+  slice 3a (diagnose `f4a2d8`). **6 findings (0 P0, 3 P1, 2 P2, 1 P3); 0 false_alarm**, all fixed
+  in-batch. Review: `docs/reviews/4d7054d4aa51-review.md`.
+  **Tuning — lens 6 gains a rule about the REMEDIATION, not the finding: when a finding arrives
+  carrying a mutation that defeated the old code, RE-RUN THAT MUTATION against the fix before
+  calling it fixed.** A finding of the form *"this assertion is inert, proven by mutation M"*
+  hands the author a free acceptance test, and the author's natural instinct is to reason about
+  whether the new assertion is stronger rather than to execute M. Measured here: of two inert-test
+  findings, the first fix reddened on re-run and **the second did not**. F2's remediation replaced
+  "the guard appears somewhere above the call" with "the guard is within 200 chars of the call" —
+  which reads as a real tightening and is worthless against this specific mutation, because a
+  decoy guard is planted *adjacent* to the real call by construction. Proximity is not
+  containment. The working form asserts that no other `if (` sits between the guard and the call.
+  ⚠ **The general shape: a remediation written from the finding's PROSE inherits the finding's
+  blind spot the same way a test written by the fix's author inherits the code's.** The mutation
+  is the only part of a review finding that cannot be reasoned around, and it is already written
+  down. Cost of ignoring it here would have been shipping a "fixed" inert test with a review
+  citation attesting that it was checked — strictly worse than the original, which at least did
+  not claim to have been verified.
+  **Second, for lens 7 (`missing_input`), a documentation instance worth naming:** F3 was a test
+  file's own SCOPE header citing a companion live-verification artifact (`slice3a_*` labels in a
+  named `.sql` file) that contained **zero** occurrences of the string. One `grep -c` settles it.
+  The lens is written for paths the CODE reads; a header that tells a future reader "the
+  behavioural half lives over there" is the same failure with a longer fuse, because nothing
+  executes it and the reader who trusts it never runs the check. **Resolved by making the claim
+  true, not by deleting it** — and the new header states explicitly what those assertions do NOT
+  cover, since they verify the ledger and would pass unchanged against the pre-fix Edge Function.
+  False-alarm rate 0/6 → no change to lenses 1-5, 8-10.
 
 - **2026-09-03** — blast-radius **platform** — branch `techdebt-audit-sep02`, Slice A of the
   2026-09-02 tech-debt audit (diagnoses `e4d1b7`, `f2b9d4`). **3 findings (0 P0, 1 P1, 1 P2,

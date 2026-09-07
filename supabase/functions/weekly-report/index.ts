@@ -22,6 +22,23 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // reasoning needed, runs at most once per week per user.
 const PRO_MODEL_LABEL = "Gemini 2.5 Pro";
 
+// ── OI-162 slice 3a — the free first-report gate reads a LEDGER, not a log ──
+//
+// It used to count rows in `ai_coach_interactions` with channel='weekly_report'
+// and no date bound. Those rows are non-`app_event`, so `rolling-context`
+// summarises and DELETES all but the newest 10 once a user passes 50 — and a
+// LIFETIME quota has no window to survive deletion on. The one free report
+// silently regenerated. `usage_counters` is not pruned by anything.
+const WEEKLY_REPORT_FREE_QUOTA_KEY = "weekly_report_free";
+const WEEKLY_REPORT_FREE_LIMIT = 1;
+
+// The lifetime sentinel: `'epoch'::timestamptz` === 1970-01-01T00:00:00+00.
+// `cleanup_usage_counters()`'s predicate is TWO-SIDED — `window_start <>
+// 'epoch' AND window_start < now() - interval '7 days'` — so an epoch row is
+// excluded from retention by the FIRST conjunct, permanently. Dropping that
+// conjunct would recreate the original bug inside the new table.
+const LIFETIME_WINDOW = "1970-01-01T00:00:00+00:00";
+
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -90,12 +107,25 @@ serve(async (req: Request) => {
     // report to a free user. The sibling subscription query above already
     // destructures its error (`subError`); this one did not — same function,
     // mirror not applied. Related: c8f229 (verify-payment fail-open guard).
-    const { count: previousReportCount, error: previousReportError } =
+    // OI-162 slice 3a. ADVISORY read of the durable ledger.
+    //
+    // ⚠ `.maybeSingle()`, NEVER `.single()`. This has THREE outcomes, not the
+    // two the old `count: "exact"` read had, and the third is the one that
+    // matters: a count query returns `count: 0` for "no rows", but a
+    // value-select returns `data: null, error: null` — a SUCCESSFUL read of a
+    // row that is not there. `.single()` would instead throw PGRST116 and
+    // arrive here as an error, which the fail-closed rule below turns into a
+    // refusal. Every user is in the absent state at cutover (`usage_counters`
+    // holds no `weekly_report_free` rows), so conflating absent with
+    // unreadable would refuse EVERY first-time free user, permanently.
+    const { data: freeReportQuota, error: previousReportError } =
       await supabase
-        .from("ai_coach_interactions")
-        .select("id", { count: "exact", head: true })
+        .from("usage_counters")
+        .select("used")
         .eq("user_id", targetUserId)
-        .eq("channel", "weekly_report");
+        .eq("quota_key", WEEKLY_REPORT_FREE_QUOTA_KEY)
+        .eq("window_start", LIFETIME_WINDOW)
+        .maybeSingle();
 
     if (previousReportError) {
       console.error(
@@ -110,9 +140,14 @@ serve(async (req: Request) => {
     // user gets 403 NOT_PRO. That is the intended trade — a denied report is
     // recoverable, an unbounded Gemini 2.5 Pro call is not — and the log above
     // is what makes such a 403 attributable rather than mysterious.
+    // The three outcomes, spelled out because getting the third wrong locks
+    // out every free user:
+    //   populated error -> FAIL CLOSED, deny (unchanged behaviour)
+    //   row present     -> `used >= 1`, the one free report is already spent
+    //   row ABSENT      -> a legitimate `used = 0`. GRANT.
     const isFirstReport = previousReportError
       ? false
-      : (previousReportCount ?? 0) === 0;
+      : (freeReportQuota?.used ?? 0) === 0;
     const hasPro = subscription && !subError;
 
     if (!hasPro && !isFirstReport) {
@@ -579,11 +614,23 @@ ${Object.entries(dailyTotals)
       .limit(1)
       .maybeSingle();
 
-    // audit-2026-09-02 CODE-8 (writer half) — this insert is the SOLE writer
-    // for the `previousReportCount` reader above. Its result was discarded, so
-    // a silent failure here keeps the count at 0 forever and leaves the
-    // first-free-report gate permanently open. supabase-js RESOLVES (never
-    // rejects) on a PostgREST error, so the outer catch cannot see it either.
+    // ⚠ CORRECTED by OI-162 slice 3a. This comment used to read "this insert is
+    // the SOLE writer for the `previousReportCount` reader above" — true until
+    // the gate moved onto `usage_counters`, and false now. **The insert no
+    // longer feeds the gate at all**; `consume_quota` below is the ledger's
+    // only writer. Left as a correction rather than deleted, because the
+    // original wiring is exactly what a future reader would otherwise assume.
+    //
+    // What this insert IS still the sole writer of, and why it must never
+    // become conditional: the persisted copy of the report. `ai_response` here
+    // is the only server-side record of the generated text
+    // (`reports_screen.dart:47` caches one latest report, not a list), and
+    // `sync_coach.dart:178-181` restores `ai_coach_interactions` with NO
+    // channel filter, so this row is also what a reinstall pulls back.
+    //
+    // audit-2026-09-02 CODE-8 (writer half): supabase-js RESOLVES (never
+    // rejects) on a PostgREST error, so the outer catch cannot see it — which
+    // is why the failure is logged explicitly below rather than thrown.
     const { error: reportLogError } = await supabase
       .from("ai_coach_interactions")
       .insert({
@@ -599,11 +646,74 @@ ${Object.entries(dailyTotals)
       });
 
     if (reportLogError) {
+      // ⚠ MESSAGE CORRECTED by OI-162 slice 3a (B-pass 4d7054d4). It used to
+      // say "the first-free-report gate stays open until this is fixed" — true
+      // while the gate COUNTED these rows, false now that it reads the ledger.
+      // A failed insert no longer holds the gate open; it loses the only
+      // persisted copy of the report.
       console.error(
         `[weekly-report] report-log insert FAILED for user=${targetUserId}` +
-          ` — the first-free-report gate stays open until this is fixed:`,
+          ` — the report was generated but NOT persisted, so it is absent from` +
+          ` restore and from history. The quota is deliberately NOT consumed` +
+          ` below in this case:`,
         reportLogError.message,
       );
+    }
+
+    // ── OI-162 slice 3a — consume the ledger unit ────────────────────────────
+    //
+    // ORDER IS LOAD-BEARING: this runs AFTER the insert above, never before.
+    // There is no transaction spanning the two (they are separate PostgREST
+    // calls), so one can fail alone, and the two orderings are not equally
+    // harmful. Consume-then-insert-fails permanently burns a LIFETIME unit AND
+    // loses the row — and that row is the only persisted copy of the report
+    // (`reports_screen.dart:47` caches one, `sync_coach.dart` restores every
+    // channel unfiltered). Insert-then-consume-fails merely under-counts, which
+    // is recoverable and leaves the user with what they were given.
+    //
+    // PRO DOES NOT CONSUME. `:118` never refuses PRO, so this key meters the
+    // FREE tier only — and `reports_screen.dart` fires a report on every screen
+    // open, so consuming unconditionally would burn a PRO user's key on their
+    // first visit and return -1 forever after. Same exemption-before-consume
+    // shape as `enforce_chat_app_daily_limit` (migration 129). Consequence,
+    // stated because it is real: the ledger freezes while PRO, so a downgrade
+    // resumes from the pre-upgrade value.
+    // ⚠ GATED ON THE INSERT HAVING SUCCEEDED (B-pass 4d7054d4, finding 5).
+    // Ordering alone was not enough. Running the insert first protects against
+    // consume-then-insert-fails — but an insert that fails and a consume that
+    // succeeds reaches the SAME end state by another route: a LIFETIME unit
+    // burned and the only copy of the report lost. `!reportLogError` closes it.
+    // Skipping the consume here under-counts, which is the recoverable
+    // direction and the one this design chooses everywhere else.
+    if (!hasPro && !reportLogError) {
+      const { data: consumedCount, error: consumeError } = await supabase.rpc(
+        "consume_quota",
+        {
+          p_user_id: targetUserId,
+          p_quota_key: WEEKLY_REPORT_FREE_QUOTA_KEY,
+          p_window_start: LIFETIME_WINDOW,
+          p_limit: WEEKLY_REPORT_FREE_LIMIT,
+        },
+      );
+
+      // ⚠ `-1` IS NOT AN ERROR. consume_quota returns it on exhaustion with no
+      // `error` field (migration 128) — a successful RPC. Logging it as a
+      // failure would fire on every ordinary second attempt and drown the real
+      // under-counts this line exists to surface.
+      if (consumeError) {
+        console.error(
+          `[weekly-report] consume_quota FAILED for user=${targetUserId}` +
+            ` — the report was delivered but the ledger did not move,` +
+            ` so this user's free report is under-counted:`,
+          consumeError.message,
+        );
+      } else if (consumedCount === -1) {
+        console.warn(
+          `[weekly-report] free report delivered to user=${targetUserId}` +
+            ` while the quota was already exhausted — a concurrent` +
+            ` first-ever request won the race past the advisory gate.`,
+        );
+      }
     }
 
     // ── Return structured report ───────────────────────────────

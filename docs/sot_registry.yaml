@@ -10113,9 +10113,30 @@ concepts:
     presence_only: true  # Deno Edge Function — `serve(async (req) => {…})` with no exports and no Deno on the dev machine, so no importable surface exists to round-trip. CI `deno check` is the compile proof (rule 21 honesty).
     description: |
       "Has this user ever generated a weekly report?" — the predicate that
-      allows exactly one free report before requiring PRO. The writer stamps
-      channel='weekly_report' on ai_coach_interactions after a successful
-      report; the reader counts those rows before deciding.
+      allows exactly one free report before requiring PRO.
+
+      ⚠ REWIRED by OI-162 slice 3a (2026-09-06). It used to read
+      `count(*)` over `ai_coach_interactions` where channel='weekly_report',
+      with no date bound. Those rows are non-`app_event`, so `rolling-context`
+      summarises and DELETES all but the newest 10 past a 50-row threshold —
+      and a LIFETIME quota has no window to survive deletion on. The one free
+      report silently regenerated.
+
+      NOW: the gate reads `usage_counters` (quota_key `weekly_report_free`,
+      window_start = the `'epoch'` lifetime sentinel), and `consume_quota()`
+      writes it. `rolling-context` cannot touch that table.
+
+      ⚠ THERE ARE NOW TWO WRITES WITH DIFFERENT PURPOSES, and the old
+      one-writer framing hid that: the `ai_coach_interactions` insert is still
+      the SOLE persisted copy of the report text and the row a reinstall
+      restores (`sync_coach.dart` restores every channel unfiltered) — but it
+      no longer feeds this gate at all. Deleting either write is a silent
+      regression; the contract test pins both.
+
+      ⚠ PRO DOES NOT CONSUME. The gate never refuses PRO, so this key meters
+      the FREE tier only. The ledger therefore freezes while a user is PRO, and
+      a downgrade resumes from the pre-upgrade value — the same asymmetry
+      `enforce_chat_app_daily_limit` carries (migration 129).
 
       FAIL-CLOSED CONTRACT: on a read error the gate must DENY (treat as NOT
       first report), never grant. A null count from a failed query previously
@@ -10123,21 +10144,32 @@ concepts:
       Pro call.
     writers:
       - file: supabase/functions/weekly-report/index.ts
-        line_range: 587-600
         method: serve handler — report-log insert
         semantic: cloud-write
         notes: |
-          SOLE writer for the reader below. Result must be destructured — a
-          silent insert failure keeps the count at 0 forever, which leaves the
-          gate permanently open for that user.
+          NO LONGER the writer for the gate — it is the sole persisted copy of
+          the report text and the restore source. Kept verbatim and
+          unconditional. Result must still be destructured and logged.
+      - file: supabase/functions/weekly-report/index.ts
+        method: serve handler — consume_quota('weekly_report_free')
+        semantic: cloud-write
+        notes: |
+          The quota writer, and the one the gate below reads. Runs AFTER the
+          insert, never before: there is no transaction spanning the two, and
+          consume-then-insert-fails would burn a LIFETIME unit AND lose the
+          only copy of the report. Gated on `!hasPro`.
     readers:
       - file: supabase/functions/weekly-report/index.ts
-        line_range: 93-120
-        method: serve handler — first-free-report gate
+        method: serve handler — first-free-report gate (advisory ledger read)
         semantic: cloud-read
         notes: |
-          Must destructure `error` and fail closed. The sibling subscription
-          query 11 lines above already does; this one did not (e4d1b7).
+          Reads `usage_counters.used` for quota_key `weekly_report_free`.
+          THREE outcomes, and the third is the dangerous one: a populated
+          `error` fails CLOSED (deny); a present row means the free report is
+          spent; an ABSENT row is a legitimate `used = 0` and must GRANT.
+          Uses `.maybeSingle()`, never `.single()` — the latter throws PGRST116
+          on an absent row, which would arrive as an error and refuse EVERY
+          first-time free user, since no rows exist for this key at cutover.
     hive:
       box: "n/a — server-side gate, no Hive surface"
       key_prefix: "n/a"

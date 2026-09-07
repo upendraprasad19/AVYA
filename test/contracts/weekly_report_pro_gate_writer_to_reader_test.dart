@@ -45,13 +45,19 @@ void main() {
 
   group('weekly_report_pro_gate writer → reader', () {
     test('READER: the previous-report count destructures its error', () {
+      // ⚠ REPOINTED by OI-162 slice 3a, not loosened. The invariant is
+      // unchanged — the read feeding `isFirstReport` must destructure `error`,
+      // because a discarded error yields a falsy count, `(null ?? 0) === 0` is
+      // true, and the gate hands a free user a Gemini 2.5 Pro report. Only the
+      // read MOVED: `count:` over `ai_coach_interactions` became `data:` over
+      // `usage_counters`, so the old shape can no longer match.
       expect(
-        RegExp(r'count:\s*previousReportCount\s*,\s*error:\s*\w+').hasMatch(src),
+        RegExp(r'data:\s*freeReportQuota\s*,\s*error:\s*\w+').hasMatch(src),
         isTrue,
         reason:
-            'The count feeding `isFirstReport` must destructure `error`. '
-            'Without it a failed query yields count=null, `(null ?? 0) === 0` '
-            'is true, and the gate hands a free user a Gemini 2.5 Pro report.',
+            'The ledger read feeding `isFirstReport` must destructure `error`. '
+            'Without it a failed query is indistinguishable from an absent '
+            'row, and the gate hands a free user a Gemini 2.5 Pro report.',
       );
     });
 
@@ -83,16 +89,38 @@ void main() {
     test('WRITER: still stamps the channel the READER counts', () {
       // Pins the writer→reader join itself. If either side's channel string
       // changed independently, the gate would silently count nothing — the
-      // OI-162 shape, where a counter reads a channel nothing writes.
+      // ⚠ REPOINTED by OI-162 slice 3a, and it came back STRONGER.
+      //
+      // It used to pin one pair: the writer stamps the channel the reader
+      // counts. After the slice there are TWO writes with two distinct
+      // purposes, and BOTH are required — which the single-pair assertion
+      // structurally could not express:
+      //
+      //   1. the `ai_coach_interactions` insert  -> the PERSISTED report and
+      //      the row a reinstall restores (sync_coach.dart restores every
+      //      channel unfiltered). No longer feeds the gate at all.
+      //   2. `consume_quota('weekly_report_free')` -> the QUOTA, on a ledger
+      //      `rolling-context` cannot prune. This is what the reader reads.
+      //
+      // Deleting either one is a silent regression the old assertion would
+      // have missed: dropping (1) loses the only copy of the report, dropping
+      // (2) reopens the resettable-quota bug.
       expect(
         RegExp(r'channel:\s*"weekly_report"').hasMatch(src),
         isTrue,
-        reason: 'writer must stamp channel="weekly_report"',
+        reason: 'the record writer must still stamp channel="weekly_report" — '
+            'it is the only persisted copy and the restore source',
       );
       expect(
-        RegExp(r'\.eq\(\s*"channel"\s*,\s*"weekly_report"\s*\)').hasMatch(src),
+        RegExp('''['"]weekly_report_free['"]''').hasMatch(src),
         isTrue,
-        reason: 'reader must count channel="weekly_report" — same string',
+        reason: 'the quota writer must consume the SAME key the reader reads',
+      );
+      expect(
+        RegExp(r'\.eq\(\s*"quota_key"\s*,\s*\w+\s*\)').hasMatch(src),
+        isTrue,
+        reason: 'the reader must filter on quota_key — the writer/reader pair '
+            'is now keyed on the ledger, not on a channel string',
       );
     });
   });

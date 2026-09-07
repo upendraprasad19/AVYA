@@ -568,6 +568,134 @@ BEGIN
 END;
 $slice2$;
 
+-- ===========================================================================
+-- OI-162 slice 3a (2026-09-06) -- weekly-report's first-free gate, moved from
+-- a count over ai_coach_interactions onto a LIFETIME usage_counters row.
+--
+-- WHAT THESE CAN AND CANNOT PROVE. There is no Deno on the dev machine, so
+-- nothing here executes the Edge Function; the EF half is a source-grep
+-- (test/contracts/weekly_report_lifetime_meter_test.dart, presence only) plus
+-- a post-deploy read-path check that has NOT yet run. What IS live-checkable,
+-- and is checked below, is the LEDGER semantics the EF depends on -- the
+-- 'epoch' sentinel that makes a lifetime quota permanent. Every slice2 key is
+-- a windowed daily key, so nothing above exercises the epoch branch of
+-- cleanup_usage_counters() at all.
+--
+-- ⚠ WHICH OF THESE DISCRIMINATE, in the same vocabulary the slice2 header uses:
+--   all three are LEDGER-INVARIANTS, not evidence the EF changed. They fail if
+--   someone re-windows the lifetime key or breaks retention's epoch exclusion;
+--   they would pass unchanged against the pre-slice-3a weekly-report. Citing
+--   them as proof that slice 3a landed would be the exact error the slice2
+--   header warns about one screen up.
+--
+-- ⚠ Assertion 3 is PAIRED deliberately. "the epoch row survived" is satisfied
+--   by a cleanup that deletes NOTHING, so it is run alongside a >7d windowed
+--   row that MUST be deleted by the same call. A one-sided check of a two-sided
+--   predicate asserts half of it.
+--
+-- Status: RUN LIVE 2026-09-06 against the deployed migrations 128/129 -- all
+-- three returned status='ok' ('1970-01-01T00:00:00+00:00 = epoch'; 'first=1,
+-- second=-1'; 'epoch row kept, 30d-old windowed row deleted'). Assertion 3's
+-- pairing was then mutation-proven in a rolled-back transaction, BOTH halves:
+-- dropping the `window_start <> 'epoch'` conjunct -> "REDDENED (lifetime row
+-- deleted)" epoch=0; replacing the whole body with a no-op -> "REDDENED (stale
+-- row survived)" stale=1. The live function was re-read afterwards and the
+-- exclusion is intact. Neither half is decorative and neither alone is enough.
+-- ===========================================================================
+
+DO $slice3a$
+DECLARE
+  v_lt_user    uuid := '00000000-0000-0000-0000-0000000b46d4'::uuid;
+  v_now        timestamptz := now();
+  -- the literal weekly-report/index.ts sends as p_window_start, verbatim
+  v_ef_literal timestamptz := '1970-01-01T00:00:00+00:00'::timestamptz;
+  v_first      int;
+  v_second     int;
+  v_epoch_left int;
+  v_stale_left int;
+BEGIN
+  BEGIN
+    INSERT INTO auth.users (id, email, created_at)
+    VALUES (v_lt_user, 'test+oi162-lifetime@avya.local', v_now)
+    ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.users (id, email, full_name)
+    VALUES (v_lt_user, 'test+oi162-lifetime@avya.local', 'oi162 lifetime')
+    ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+
+  -- 1. The EF's TS literal and the sentinel retention keys on are the SAME
+  --    instant. If they ever diverge, the EF writes a row cleanup_usage_counters
+  --    is free to delete and the free report silently regenerates again -- the
+  --    original bug, reintroduced inside the new table.
+  BEGIN
+    IF v_ef_literal = 'epoch'::timestamptz THEN
+      INSERT INTO _v_results VALUES ('slice3a_epoch_literal_matches_sentinel', 'ok', NULL,
+        '1970-01-01T00:00:00+00:00 = epoch');
+    ELSE
+      INSERT INTO _v_results VALUES ('slice3a_epoch_literal_matches_sentinel', 'fail', NULL,
+        'EF literal resolves to ' || v_ef_literal || ', not epoch');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('slice3a_epoch_literal_matches_sentinel', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- 2. A limit-1 lifetime key grants exactly once. The second call must return
+  --    -1 (refused), NOT 2 -- consume_quota's WHERE uc.used < p_limit is what
+  --    makes the free report one-shot.
+  BEGIN
+    v_first  := consume_quota(v_lt_user, 'weekly_report_free', v_ef_literal, 1);
+    v_second := consume_quota(v_lt_user, 'weekly_report_free', v_ef_literal, 1);
+    IF v_first = 1 AND v_second = -1 THEN
+      INSERT INTO _v_results VALUES ('slice3a_lifetime_meter_one_then_refused', 'ok', NULL,
+        'first=1, second=-1');
+    ELSE
+      INSERT INTO _v_results VALUES ('slice3a_lifetime_meter_one_then_refused', 'fail', NULL,
+        'expected first=1 second=-1, got first=' || v_first || ' second=' || v_second);
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('slice3a_lifetime_meter_one_then_refused', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- 3. Retention's predicate is TWO-SIDED:
+  --      window_start <> 'epoch' AND window_start < now() - interval '7 days'
+  --    so the epoch row must survive AND a stale windowed row must not. Both
+  --    halves are asserted because either alone is satisfied by a cleanup that
+  --    does nothing (or by one that deletes everything).
+  --    ⚠ cleanup_usage_counters() deletes repo-wide; this whole file runs inside
+  --    the BEGIN/ROLLBACK above, so live rows are restored on rollback.
+  BEGIN
+    INSERT INTO public.usage_counters (user_id, quota_key, window_start, used)
+    VALUES (v_lt_user, 'oi162_slice3a_stale_probe', v_now - interval '30 days', 3)
+    ON CONFLICT (user_id, quota_key, window_start) DO UPDATE SET used = 3;
+
+    PERFORM cleanup_usage_counters();
+
+    SELECT count(*) INTO v_epoch_left FROM public.usage_counters
+      WHERE user_id = v_lt_user AND quota_key = 'weekly_report_free';
+    SELECT count(*) INTO v_stale_left FROM public.usage_counters
+      WHERE user_id = v_lt_user AND quota_key = 'oi162_slice3a_stale_probe';
+
+    IF v_epoch_left = 1 AND v_stale_left = 0 THEN
+      INSERT INTO _v_results VALUES ('slice3a_epoch_row_survives_retention', 'ok', NULL,
+        'epoch row kept, 30d-old windowed row deleted');
+    ELSIF v_epoch_left <> 1 THEN
+      INSERT INTO _v_results VALUES ('slice3a_epoch_row_survives_retention', 'fail', NULL,
+        'retention DELETED the lifetime row -- the free report will regenerate');
+    ELSE
+      INSERT INTO _v_results VALUES ('slice3a_epoch_row_survives_retention', 'fail', NULL,
+        'retention kept a 30d-old windowed row, so the survival half proves nothing');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('slice3a_epoch_row_survives_retention', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+END;
+$slice3a$;
+
 SELECT label, status, sqlstate, msg FROM _v_results ORDER BY label;
 
 ROLLBACK;
