@@ -95,29 +95,63 @@ void main() {
       expect(r.violations.single, contains('brand-new'));
     });
 
-    test('an EXTRA counter inside an allowlisted file is a violation', () {
-      // RED PATH. MUTATION: drop the `count > allowed` branch and this reddens.
+    // ⚠ BOTH TESTS BELOW DERIVE THEIR NUMBERS FROM THE ALLOWLIST. They used to
+    // hardcode `weekly-report` at 1, and OI-162 slice 3a ratcheted that entry to
+    // 0 — so "exactly the allowlisted count" became one MORE than allowed and
+    // the file went red in the full suite, in a test the batch never opened.
+    // A fixture that encodes a number the production map owns will go stale
+    // every time that map is ratcheted, which is the whole point of ratcheting.
+    test('one more than the allowlisted count is a violation', () {
       // "This file already had one" is exactly how a tenth counter gets added.
+      final entry =
+          allowedEdgeFunctionSites.entries.firstWhere((e) => e.value >= 1);
+      final over = entry.value + 1;
       final r = sweep(
         efSources: {
-          'supabase/functions/weekly-report/index.ts':
-              '$_quotaCounter\n$_quotaCounter',
+          entry.key: List.filled(over, _quotaCounter).join(),
         },
         migrationSources: const {},
       );
       expect(r.violations, isNotEmpty);
-      expect(r.violations.single, contains('holds 2'));
+      expect(r.violations.single, contains('holds $over'));
     });
 
     test('the allowlisted count exactly is clean', () {
+      final entry =
+          allowedEdgeFunctionSites.entries.firstWhere((e) => e.value >= 1);
       final r = sweep(
         efSources: {
-          'supabase/functions/weekly-report/index.ts': _quotaCounter,
+          entry.key: List.filled(entry.value, _quotaCounter).join(),
         },
         migrationSources: const {},
       );
       expect(r.violations, isEmpty);
       expect(r.isClean, isTrue);
+    });
+
+    test('a ZERO-allowance entry rejects even one counter', () {
+      // The ratchet's entire purpose, and nothing covered it before slice 3a
+      // created the first 0 entry. `sweep()` only flags `count > allowed`, so a
+      // 0 is what turns an allowlist row from permissive into proof-of-landing:
+      // it makes a REVERT to the old ai_coach_interactions count fail loudly
+      // instead of passing silently.
+      final zero = allowedEdgeFunctionSites.entries
+          .where((e) => e.value == 0)
+          .map((e) => e.key)
+          .toList();
+      expect(zero, isNotEmpty,
+          reason: 'no 0-allowance entry exists any more — if a migration was '
+              'reverted, restore it; if the map was rewritten, repoint this '
+              'test rather than deleting it.');
+      for (final k in zero) {
+        final r = sweep(
+          efSources: {k: _quotaCounter},
+          migrationSources: const {},
+        );
+        expect(r.violations, isNotEmpty,
+            reason: '$k is allowlisted for 0 but a counter did not violate');
+        expect(r.violations.single, contains('allowlisted for 0'));
+      }
     });
   });
 
