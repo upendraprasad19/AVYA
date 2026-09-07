@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### edge_function_live_test_harness (1 bugs)
+- 2026-09-07 a7c3e9 — CI went red on `main` at 493d230b. The "Supabase Integration Tests" job failed with `TimeoutException after 0:00:30.000000: Test timed out after 30 seconds` on `ai_proxy_test.dart` T19 — a…
+
 ### deload_decision_reason (2 bugs)
 - 2026-09-06 d9e1b4 — A user in their FIRST training block, on week 4, would be told: "Recovery week — you're two blocks in. Time to bank the gains." They are in block one. The same line appears for any user after a…
 - 2026-09-06 c5a8f3 — A user who completes a week-4 deload that the evaluator LIFTS (week becomes `working`, reason stamped "Working week — you've recovered"), and then edits their profile and taps Reschedule — or asks the…
@@ -1130,6 +1133,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-07 | a7c3e9 | CI went red on `main` at 493d230b. The "Supabase Integration Tests" job failed with `TimeoutException after 0:00:30.000000: Test timed out after 30 seconds` on `ai_proxy_test.dart` T19 — a… | edge_function_live_test_harness | test/edge_functions/ai_proxy_test.dart |
 | 2026-09-06 | d9e1b4 | A user in their FIRST training block, on week 4, would be told: "Recovery week — you're two blocks in. Time to bank the gains." They are in block one. The same line appears for any user after a… | deload_decision_reason | test/contracts/deload_reason_test.dart |
 | 2026-09-06 | c5a8f3 | A user who completes a week-4 deload that the evaluator LIFTS (week becomes `working`, reason stamped "Working week — you've recovered"), and then edits their profile and taps Reschedule — or asks the… | deload_decision_reason | test/contracts/deload_reason_staleness_behavioral_test.dart |
 | 2026-09-06 | f4a2d8 | The one free weekly report silently regenerated. `weekly-report`'s first-free gate asked "has this user ever generated a report?" by counting rows in `ai_coach_interactions` with… | weekly_report_pro_gate | test/contracts/weekly_report_lifetime_meter_test.dart |

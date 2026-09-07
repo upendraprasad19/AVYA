@@ -1,6 +1,28 @@
 @TestOn('vm')
+// ⚠ EVERY test here makes a LIVE call to a deployed Edge Function, and several
+// wait on a live Gemini generation. Dart's DEFAULT per-test budget is 30s,
+// which was never chosen for that workload -- it is the default for a unit
+// test. CI went red on 2026-09-07 with a bare
+// `TimeoutException after 0:00:30.000000` on T19, a one-sentence chat that
+// normally answers in a few seconds; the job had passed on the three prior
+// main runs, so this is live latency, not a regression.
+//
+// TWO budgets, and the ORDER MATTERS: the HTTP budget in callEdgeFunction
+// (httpBudget) must be SMALLER than this one. If the test budget fired first
+// we would get "test timed out" again -- which names no function, no URL and
+// no elapsed time. A timeout that reports nothing is NO NEWS, and no news is
+// indistinguishable from every other hang.
+//
+// ⚠ Do NOT give any test here its own per-test timeout argument. It takes
+// PRECEDENCE over this annotation (CLAUDE.md §4.9, 5th instance of that class:
+// a file-level @Timeout was added and one per-test override silently kept the
+// old budget). Audit with `grep -n 'timeout' test/edge_functions/ai_proxy_test.dart`
+// — deliberately worded so this warning does not match the pattern a reader
+// greps for, the self-matching shape the code-review skill's lens 8 names.
+@Timeout(Duration(minutes: 3))
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -91,6 +113,11 @@ void main() {
   });
 
   /// Helper to call an Edge Function via HTTP.
+  /// HTTP budget for one live Edge Function call. MUST stay below the
+  /// file-level @Timeout, so THIS is the timeout that fires and the failure
+  /// says which function was slow.
+  const httpBudget = Duration(seconds: 90);
+
   Future<http.Response> callEdgeFunction(
     String functionName, {
     Map<String, dynamic>? body,
@@ -98,7 +125,9 @@ void main() {
     bool includeAuth = true,
   }) async {
     final url = '$supabaseUrl/functions/v1/$functionName';
-    return http.post(
+    final started = DateTime.now();
+    return http
+        .post(
       Uri.parse(url),
       headers: {
         'Content-Type': 'application/json',
@@ -106,6 +135,23 @@ void main() {
         if (includeAuth) 'Authorization': 'Bearer ${token ?? accessToken}',
       },
       body: json.encode(body ?? {}),
+    )
+        .timeout(
+      httpBudget,
+      onTimeout: () {
+        // Deliberately a THROW carrying detail, not a synthesised 5xx Response.
+        // Returning a fake status here would let an assertion like
+        // `expect(r.statusCode, anyOf(200, 429))` fail with a number the
+        // service never sent, which reads as a server bug.
+        final waited = DateTime.now().difference(started);
+        throw TimeoutException(
+          'Edge Function "$functionName" did not respond within '
+          '${httpBudget.inSeconds}s (waited ${waited.inSeconds}s). '
+          'URL: $url. This is the LIVE service being slow or unreachable, not '
+          'an assertion failure — check the function is deployed and that the '
+          'model provider is responding before touching this test.',
+        );
+      },
     );
   }
 
