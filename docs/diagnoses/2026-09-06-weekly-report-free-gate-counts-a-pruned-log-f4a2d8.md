@@ -76,7 +76,14 @@ regression_test_planned: >
   denies; PRO does not consume; the ai_coach_interactions insert survives
   unconditional; the insert PRECEDES the consume; and the OI-162 gate's
   allowlist is ratcheted to 0 for this file.
-  PLUS the repointed test/contracts/weekly_report_pro_gate_writer_to_reader_test.dart.
+  PLUS the repointed test/contracts/weekly_report_pro_gate_writer_to_reader_test.dart,
+  PLUS three live-Postgres assertions in
+  test/sql/oi46_daily_cap_triggers_live_verify.sql (slice3a_epoch_literal_
+  matches_sentinel, slice3a_lifetime_meter_one_then_refused,
+  slice3a_epoch_row_survives_retention) covering the LEDGER semantics the gate
+  depends on — the epoch branch of cleanup_usage_counters() that every slice-2
+  windowed key leaves unexercised. They are ledger-invariants, NOT evidence the
+  Edge Function changed, and the file says so at the block header.
 impact_analysis: >
   A free user gets exactly one weekly report, permanently, instead of one per
   prune cycle. PRO is unaffected — the gate never refused PRO and now never
@@ -100,6 +107,7 @@ touched_layers_checked:
   - { tier: 10, name: secrets, status: not_applicable, evidence: "no secret read or added" }
   - { tier: 11, name: external services, status: verified, evidence: "Gemini call path untouched; the gate runs before it exactly as before" }
   - { tier: 12, name: client to server contract, status: verified, evidence: "the 403 NOT_PRO shape is unchanged; only what decides it moved" }
+bpass_review: docs/reviews/4d7054d4aa51-review.md
 related_bugs: [d3a7f1, e7c4b2, e4d1b7, c9e3b1]
 recurrence: >
   RECURRENCE of d3a7f1 by construction — slice 3a of that fix. Same class as
@@ -165,6 +173,36 @@ restored both green:
 | Record writer stops stamping the channel | 3 |
 | Un-ratchet the allowlist | 1 |
 | Swap the insert and consume order | 1 |
+
+Then the **B-pass re-ran two of its own mutations against the fixes** (round 8), and
+that is the part worth reading:
+
+| B-pass mutation | Before the fix | After |
+|---|---|---|
+| Writer's `p_quota_key` retargeted to a hardcoded literal | 0 red (INERT) | 1 red |
+| Decoy guard + real guard → `if (true)` | 0 red (INERT) | **still 0 red after the FIRST fix**; 1 red after the second |
+| `consume_quota` ungated from the insert result | n/a (the gap itself) | 1 red |
+
+⚠ **The middle row is the lesson.** The first remediation replaced *"the guard
+appears somewhere above the call"* with *"the guard is within 200 characters of
+the call"* — which reads as a tightening and is worthless against this exact
+mutation, because a decoy guard is planted ADJACENT to the real call by
+construction. Proximity is not containment. The working assertion is that no
+other `if (` sits between the guard and the RPC. **A remediation written from a
+finding's prose inherits that finding's blind spot**; re-running the published
+mutation is what caught it, and it cost one command.
+
+And the live-Postgres pairing, mutation-proven on BOTH halves inside a
+rolled-back transaction (the live function was re-read afterwards — the
+exclusion is intact):
+
+| Mutation to `cleanup_usage_counters()` | Result |
+|---|---|
+| Drop the `window_start <> 'epoch'` conjunct | REDDENED — lifetime row deleted (epoch=0) |
+| Replace the whole body with a no-op | REDDENED — stale row survived (stale=1) |
+
+A one-sided *"the epoch row survived"* check is satisfied by a cleanup that
+deletes nothing, which is why the stale probe is asserted alongside it.
 
 ## The gate now proves the migration landed
 

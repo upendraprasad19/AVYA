@@ -9,10 +9,21 @@
 //
 // SCOPE — presence only, deliberately. These are source greps over one Edge
 // Function. They prove the code SAYS the right thing; they cannot prove live
-// Deno BEHAVES that way, and there is no Deno on this machine. The behavioural
-// half is `test/sql/oi46_daily_cap_triggers_live_verify.sql`'s `slice3a_*`
-// labels plus a branch-deployed read-path check — see the plan's §5. Saying so
-// because rule 21 is emphatic that a source-grep counts for PRESENCE only.
+// Deno BEHAVES that way, and there is no Deno on this machine.
+//
+// ⚠ WHAT THE OTHER HALF DOES AND DOES NOT COVER, stated precisely because this
+// header previously claimed coverage that did not exist — it cited
+// `oi46_daily_cap_triggers_live_verify.sql`'s `slice3a_*` labels when that file
+// contained ZERO occurrences of the string. The labels exist now (added in this
+// same commit, run live, mutation-proven on both halves of the retention
+// pairing), but they verify the LEDGER — the 'epoch' sentinel, the one-then-
+// refused meter, retention's two-sided predicate. They execute no Edge Function
+// and would pass unchanged against the PRE-slice-3a weekly-report.
+//
+// So nothing anywhere yet proves the EF itself reads the ledger at runtime.
+// That is the post-deploy read-path check in the plan's §5, and it has NOT run
+// — the deploy needs its own explicit authorization. Until it does, this
+// slice's EF half rests on source greps, exactly as rule 21 says to assume.
 
 import 'dart:io';
 
@@ -45,13 +56,29 @@ void main() {
     test('consumes the ledger under the free-tier quota key', () {
       expect(src, contains('consume_quota'),
           reason: 'the gate must delegate to the atomic ledger entry point');
-      // Quote-agnostic: the TypeScript uses double quotes, and pinning one
-      // style makes the assertion fail on a purely cosmetic reformat.
+      // ⚠ ASSOCIATION, not membership. B-pass 4d7054d4 finding 1
+      // mutation-proved the presence form worthless: retargeting the RPC's
+      // `p_quota_key` to a different hardcoded literal — genuine writer/reader
+      // drift, the exact class OI-162 exists to fix — left every assertion
+      // GREEN, because each side independently contained a right-looking
+      // string. Both sides must be pinned to the SAME CONSTANT.
       expect(
-        RegExp('[\'"]weekly_report_free[\'"]').hasMatch(src),
+        RegExp('const WEEKLY_REPORT_FREE_QUOTA_KEY = [\'"]weekly_report_free[\'"]')
+            .hasMatch(src),
         isTrue,
-        reason: 'the quota_key names the FREE gate specifically — PRO is '
-            'exempt, so this key meters only the free tier',
+        reason: 'the key is declared exactly once, as a constant',
+      );
+      expect(
+        RegExp(r'p_quota_key:\s*WEEKLY_REPORT_FREE_QUOTA_KEY').hasMatch(src),
+        isTrue,
+        reason: 'the WRITER must pass the CONSTANT, never a literal — a '
+            'hardcoded literal here is drift no presence check can see',
+      );
+      expect(
+        RegExp(r'\.eq\(\s*"quota_key"\s*,\s*WEEKLY_REPORT_FREE_QUOTA_KEY\s*\)')
+            .hasMatch(src),
+        isTrue,
+        reason: 'the READER must filter on the SAME constant',
       );
     });
 
@@ -122,14 +149,46 @@ void main() {
       // so an unconditional consume would burn a PRO user's lifetime key on
       // their first visit. Same exemption-before-consume shape as
       // enforce_chat_app_daily_limit (migration 129).
+      // ⚠ The guard must WRAP the call, not merely appear somewhere above it.
+      // B-pass 4d7054d4 finding 2 mutation-proved the weaker form worthless: a
+      // decoy `if (!hasPro) {}` elsewhere plus the real guard changed to
+      // `if (true)` — PRO burning the free-tier unit, the exact regression the
+      // code's own comment warns about — left all 9 assertions GREEN.
       final consumeIdx = src.indexOf('consume_quota');
       expect(consumeIdx, greaterThanOrEqualTo(0));
-      final before = src.substring(0, consumeIdx);
+      // ⚠ PROXIMITY IS NOT CONTAINMENT — and the first fix for this finding got
+      // that wrong. A gap check (`consumeIdx - guard.end < 200`) is still
+      // satisfied by a decoy `if (!hasPro && !reportLogError) { }` sitting just
+      // above an `if (true) {` that actually wraps the RPC. Re-running the
+      // B-pass's own mutation caught it: reds=0.
+      //
+      // What actually holds: between the guard and the RPC there must be NO
+      // other `if (`. Anything intervening means the guard found is not the one
+      // in force.
+      final guard = RegExp(r'if\s*\(\s*!hasPro\s*&&\s*!reportLogError\s*\)')
+          .firstMatch(src);
+      expect(guard, isNotNull,
+          reason: 'the consume must be gated on !hasPro AND on the insert '
+              'having succeeded');
+      expect(consumeIdx, greaterThan(guard!.end),
+          reason: 'the guard must precede the consume');
+      final between = src.substring(guard.end, consumeIdx);
       expect(
-        RegExp(r'if\s*\(\s*!hasPro\s*\)').hasMatch(before),
-        isTrue,
-        reason: 'the consume must be gated on !hasPro',
+        RegExp(r'\bif\s*\(').hasMatch(between),
+        isFalse,
+        reason: 'another `if (` sits between the guard and the RPC, so the '
+            'guard matched here is NOT the one wrapping the call — that is '
+            'exactly what a decoy guard looks like',
       );
+      // ⚠ Deliberately STRICTER than the invariant: this also reddens on an
+      // intervening `if` nested legitimately INSIDE the real guard, which would
+      // still wrap the call correctly. Verified by mutation — inserting
+      // `if (Math.random() > 2) { }` between the guard and the RPC reddens it.
+      // That conservatism is the right trade for a source grep (it errs toward
+      // flagging, never toward missing a decoy), but a future refactor that
+      // legitimately needs a branch in there should REPOINT this at the guard's
+      // matching brace rather than loosen it back to a proximity check — that
+      // is the form the B-pass already mutation-proved worthless.
     });
 
     test('the ai_coach_interactions insert survives, unconditional', () {

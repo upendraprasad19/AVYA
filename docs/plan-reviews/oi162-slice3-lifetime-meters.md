@@ -5,8 +5,8 @@ blast_radius: platform
 review_rounds: 7
 ground_truth_verified: true
 verdict: converged
-bpass: pending
-bpass_review: pending
+bpass: accepted
+bpass_review: docs/reviews/4d7054d4aa51-review.md
 ---
 
 # Plan-review record — OI-162 slice 3a, the weekly-report lifetime meter (platform)
@@ -82,3 +82,34 @@ Edge Function calls `consume_quota` yet.
 The B-pass runs at §6 step 3, **before** the deploy — reordered in v6 after round 5 caught that
 v4 copied slice 1's deploy-then-review ordering without its justification (migration 128 was
 inert; this gate is not). `bpass:` and `bpass_review:` are filled in then.
+
+## B-pass (round 8, context-blind, `docs/reviews/4d7054d4aa51-review.md`)
+
+**6 findings — 0 P0, 3 P1, 2 P2, 1 P3 — 0 false alarms, all fixed in this batch. `verdict:
+accepted`.** It independently confirmed the EF is NOT deployed (live `weekly-report` is v26 and
+its source still contains `previousReportCount`), which is the state this record assumes.
+
+Three of the six are worth carrying forward, because they are about THIS batch's own verification
+rather than its code:
+
+1. **Two of the seven new source-grep assertions were INERT**, each proven by a mutation the
+   reviewer ran rather than argued. The key assertion passed while the writer's `p_quota_key` was
+   retargeted to a hardcoded literal — genuine writer/reader drift, the exact class OI-162 exists
+   to fix — because each side independently contained a right-looking string. Membership is not
+   association; both sides now pin the same TS constant.
+2. **The first fix for the second inert assertion was ALSO inert**, and only re-running the
+   reviewer's own mutation revealed it. A proximity check (guard within 200 chars of the call) is
+   defeated by a decoy guard for the same reason the original was — a decoy is planted adjacent to
+   the call. Now: no other `if (` may sit between the guard and the RPC. **A remediation written
+   from a finding's prose inherits that finding's blind spot; the mutation is the part that
+   cannot be reasoned around, and it was already written down.**
+3. **One real logic gap in the shipped code** (F5): `consume_quota` ran on `!hasPro` alone, so an
+   insert-fails-then-consume-succeeds path burns a LIFETIME unit *and* loses the only copy of the
+   report — the precise end state the insert-before-consume ordering exists to prevent. Now
+   `!hasPro && !reportLogError`.
+
+The `slice3a_*` live-verify assertions the SCOPE header had claimed (F3) now exist, ran live 3/3
+`ok`, and the retention pairing is mutation-proven on both halves. They verify the LEDGER and are
+labelled as such — they execute no Edge Function and would pass against the pre-fix code, so they
+are not evidence the slice landed. **Nothing yet proves the EF reads the ledger at runtime; that
+is the post-deploy read-path check, and the deploy needs its own explicit authorization.**

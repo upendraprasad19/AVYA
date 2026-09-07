@@ -646,9 +646,16 @@ ${Object.entries(dailyTotals)
       });
 
     if (reportLogError) {
+      // ⚠ MESSAGE CORRECTED by OI-162 slice 3a (B-pass 4d7054d4). It used to
+      // say "the first-free-report gate stays open until this is fixed" — true
+      // while the gate COUNTED these rows, false now that it reads the ledger.
+      // A failed insert no longer holds the gate open; it loses the only
+      // persisted copy of the report.
       console.error(
         `[weekly-report] report-log insert FAILED for user=${targetUserId}` +
-          ` — the first-free-report gate stays open until this is fixed:`,
+          ` — the report was generated but NOT persisted, so it is absent from` +
+          ` restore and from history. The quota is deliberately NOT consumed` +
+          ` below in this case:`,
         reportLogError.message,
       );
     }
@@ -671,7 +678,14 @@ ${Object.entries(dailyTotals)
     // shape as `enforce_chat_app_daily_limit` (migration 129). Consequence,
     // stated because it is real: the ledger freezes while PRO, so a downgrade
     // resumes from the pre-upgrade value.
-    if (!hasPro) {
+    // ⚠ GATED ON THE INSERT HAVING SUCCEEDED (B-pass 4d7054d4, finding 5).
+    // Ordering alone was not enough. Running the insert first protects against
+    // consume-then-insert-fails — but an insert that fails and a consume that
+    // succeeds reaches the SAME end state by another route: a LIFETIME unit
+    // burned and the only copy of the report lost. `!reportLogError` closes it.
+    // Skipping the consume here under-counts, which is the recoverable
+    // direction and the one this design chooses everywhere else.
+    if (!hasPro && !reportLogError) {
       const { data: consumedCount, error: consumeError } = await supabase.rpc(
         "consume_quota",
         {
