@@ -15,6 +15,22 @@
 // When the first call site migrates, update this file to name that reader —
 // do NOT delete the assertion. Its value is that slice 1's "nothing calls it"
 // claim is mechanically true rather than merely asserted in a plan.
+//
+// ⚠ THAT PREDICTION CAME TRUE IN SLICE 3a (2026-09-07), one slice later than
+// forecast: slice 2 wired the three cap TRIGGERS, which live in-database and so
+// never appeared in `_appSources()`. `weekly-report/index.ts` is the FIRST
+// application-code caller, and it broke both absolutes below — in the full
+// suite, in a file this batch never opened, exactly the class CLAUDE.md §4.9
+// warns about twice and whose slice-2 row literally says "expect this again in
+// slices 3-4".
+//
+// The absolutes are now ALLOWLISTS rather than `isEmpty`. That is deliberately
+// STRONGER than what they replaced, not weaker: an `isEmpty` assertion has to
+// be destroyed the moment any legitimate caller appears, and destroying it
+// removes the guard entirely. An allowlist survives every legitimate migration
+// and still fails on an UNEXPECTED one — which is the thing actually worth
+// catching. Add a slice's new call site here in the SAME commit that migrates
+// it, with the reason; never widen it to make a red run green.
 
 import 'dart:io';
 
@@ -105,44 +121,109 @@ void main() {
     // reached through consume_quota, never by a direct client/EF query.
     // A prediction that misses in a benign direction still has to be corrected,
     // or the next reader trusts the stale half.
-    test('no application code touches usage_counters directly', () {
+    test('only the named call sites touch usage_counters directly', () {
+      // WHY weekly-report is allowed a direct SELECT: its gate must answer
+      // "has this user ever had their one free report?" BEFORE spending a
+      // Gemini 2.5 Pro call. consume_quota is a WRITE -- asking it that question
+      // burns the lifetime unit on every model outage, with no refund path. So
+      // the read is ADVISORY and the write stays authoritative: .maybeSingle()
+      // feeds the 403, consume_quota's -1 is what actually enforces. The
+      // atomicity concern below is untouched, because no quota is DECIDED from
+      // the direct read alone.
+      const allowed = {'supabase/functions/weekly-report/index.ts'};
       final offenders = <String>[];
       for (final e in _appSources()) {
-        if (e.value.contains('usage_counters')) offenders.add(e.key);
+        if (e.value.contains('usage_counters') && !allowed.contains(e.key)) {
+          offenders.add(e.key);
+        }
       }
       expect(offenders, isEmpty,
           reason: 'The ledger is reached through consume_quota() inside the '
               'database, never by a direct query from client or Edge Function '
-              'code. Found: $offenders.\n'
-              'If you are migrating a call site to query usage_counters '
-              'DIRECTLY, stop: route it through consume_quota instead, or the '
-              'atomicity guarantee and the p_limit guard are both lost.');
+              'code. An ADVISORY read paired with an authoritative '
+              'consume_quota (the weekly-report shape) is the ONLY accepted '
+              'exception and belongs in `allowed`, with its reason, in the '
+              'same commit that adds it. Found: $offenders');
+
+      // MIRROR: an allowlist must not outlive what it exempts. A stale entry is
+      // invisible -- it silently exempts a file that no longer needs it, and
+      // the next reader takes it as evidence the file still does this.
+      for (final a in allowed) {
+        expect(File(a).readAsStringSync(), contains('usage_counters'),
+            reason: '$a is allowlisted but no longer touches usage_counters -- '
+                'remove the dead exemption rather than leaving it.');
+      }
     });
 
-    test('no application code calls consume_quota directly', () {
+    test('only the named call sites invoke consume_quota directly', () {
+      // A trigger is the enforcement point wherever a trigger CAN be one. It
+      // cannot be here: nothing is INSERTed at the moment weekly-report decides
+      // to spend the lifetime unit, so there is no row for a trigger to fire
+      // on. The EF calls the RPC itself, which keeps the atomic
+      // ON CONFLICT ... WHERE used < p_limit guard that is the whole point.
+      const allowed = {'supabase/functions/weekly-report/index.ts'};
       final offenders = <String>[];
       for (final e in _appSources()) {
-        if (e.value.contains('consume_quota')) offenders.add(e.key);
+        if (e.value.contains('consume_quota') && !allowed.contains(e.key)) {
+          offenders.add(e.key);
+        }
       }
       expect(offenders, isEmpty,
           reason: 'Slice 2 wires the three cap TRIGGERS, which call '
-              'consume_quota in-database. No client or Edge Function calls it '
-              'directly, and none should — the trigger is the enforcement '
-              'point. Found: $offenders');
+              'consume_quota in-database. A direct call is permitted only '
+              'where no INSERT exists for a trigger to hang off -- add it to '
+              '`allowed` with that reason. Found: $offenders');
+      for (final a in allowed) {
+        expect(File(a).readAsStringSync(), contains('consume_quota'),
+            reason: '$a is allowlisted but no longer calls consume_quota -- '
+                'remove the dead exemption.');
+      }
     });
 
-    test('and the SIX remaining legacy quota readers are still on the old '
-        'table', () {
-      // Stated as an invariant so the batch cannot be misread as having fixed
-      // the whole bug. Slice 2 moved THREE of nine (the chat / vision /
-      // food_text cap triggers). Six remain: the lifetime image meters, the
-      // weekly-report meter, and the two rate limits. Slices 3-4 own them.
-      final aiMedia = File('supabase/functions/ai-media-proxy/index.ts')
-          .readAsStringSync();
-      expect(aiMedia.contains('ai_coach_interactions'), isTrue,
-          reason: 'ai-media-proxy still derives its image quotas from '
-              'ai_coach_interactions. Slice 3 migrates it. If this fails, a '
-              'call site moved without this contract being updated.');
+    test('the FIVE remaining legacy quota readers are still on the old table',
+        () {
+      // Stated as an invariant so no batch can be misread as having fixed the
+      // whole bug. Nine quota readers existed; slice 2 moved THREE (the chat /
+      // vision / food_text cap triggers) and slice 3a moved ONE (weekly-report).
+      // FIVE remain, across four files.
+      //
+      // ⚠ THIS TEST WAS GREEN WHILE ITS OWN TITLE WAS FALSE. It said SIX and
+      // checked exactly ONE representative file (ai-media-proxy), so slice 3a
+      // moving weekly-report off the old table changed nothing it observed.
+      // That is membership-is-not-completeness: a contains() over one member of
+      // a set cannot see another member leave. Every remaining surface is now
+      // pinned BY NAME, and the count is asserted from the list rather than
+      // written in prose.
+      const stillLegacy = <String, String>{
+        'supabase/functions/ai-media-proxy/index.ts':
+            'countFreeImageAnalyses + countProImageAnalysesToday (slice 3b, OI-153)',
+        'lib/features/ai_coach/repositories/ai_coach_repository.dart':
+            'getFreeImageAnalysisCount, the dead client twin (slice 3b)',
+        'supabase/functions/delete-account/index.ts':
+            'delete-attempt rate limit (slice 4, catastrophic)',
+        'supabase/functions/verify-payment/index.ts':
+            'payment-verify rate limit (slice 4, catastrophic)',
+      };
+      for (final e in stillLegacy.entries) {
+        expect(File(e.key).readAsStringSync(), contains('ai_coach_interactions'),
+            reason: '${e.key} was expected to STILL derive a quota from '
+                'ai_coach_interactions (${e.value}). If a slice migrated it, '
+                'update this map and the count in the title -- do not delete '
+                'the entry.');
+      }
+
+      // MIRROR, and the half whose absence let this test go stale: weekly-report
+      // must NOT be back on the old table for its QUOTA. It still INSERTs the
+      // report row there (that insert is the sole persisted copy), so the file
+      // legitimately contains the table name -- what must never return is a
+      // COUNT of that channel feeding the gate.
+      final weekly =
+          File('supabase/functions/weekly-report/index.ts').readAsStringSync();
+      expect(weekly.contains('.eq("channel", "weekly_report")'), isFalse,
+          reason: 'weekly-report is counting its own channel again -- slice 3a '
+              'reverted and the one free report will regenerate.');
+      expect(weekly, contains('usage_counters'),
+          reason: 'weekly-report must still read the ledger.');
     });
   });
 }
