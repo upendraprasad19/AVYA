@@ -84,6 +84,29 @@ Per CLAUDE.md rules 21 + 22:
 
 ## 2. Bug class catalog (seeded — append on each new class)
 
+> ⚠ **NUMBERS IN THIS SECTION ARE NOT MONOTONIC IN FILE ORDER, and NINE are
+> DUPLICATED** — 2.36, 2.37, 2.38, 2.39, 2.40, 2.41, 2.53, 2.54, 2.55 — each
+> naming two unrelated classes. Before adding an entry, get the true maximum:
+>
+> ```sh
+> grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/SKILL.md | grep -oE '[0-9]+$' | sort -n | tail -1
+> ```
+>
+> **`tail -1` on the file itself gives the LAST-POSITIONED entry, not the
+> highest-numbered one.** On 2026-09-07 that mistake minted a second 2.61; it
+> was caught in review and renumbered, so 2.61 is NOT in the duplicate list
+> above — but it is exactly how the other nine got there. Same shape as the
+> OI-number collisions `scripts/check_oi_numbering_unique.dart` exists to catch;
+> **no equivalent gate covers `.claude/skills/`.**
+>
+> ⚠ **Do NOT renumber the nine to tidy them.** Every one is cited by number from
+> outside this file — `docs/diagnoses/`, `docs/plans/`, `docs/superpowers/`,
+> `docs/plan-reviews/` and `memory/` — and because each number names two
+> unrelated classes, a citation cannot be resolved to one of them without
+> reading it. Tracked as **OI-167**, whose recommendation is to key on the TITLE
+> and treat the number as an optional alias, the way CLAUDE.md rule 24 already
+> did for gates.
+
 ### 2.1 Writer/reader field drift
 - **Telltale:** "Saved but doesn't appear" / "Receipt shows 0 sets" / "AI snapshot misses meals." Hive write path uses field name A; consumer reads field name B (or same name with different semantic — e.g. cumulative-vs-first-set).
 - **Root-cause shape:** WriteService rewrite renames field; some consumers updated, others linger on legacy name. OR: field semantics change (per-set → sum) without renaming, so type checks pass but values lie.
@@ -1149,3 +1172,54 @@ added, false of the flip being performed.
   `file:line` per §4.1 and re-grep them. Fixing the GATE — making an
   unparseable value a FAILURE rather than a skip — is a separate, wider change
   with its own blast radius; file it rather than bundling it.
+
+### 2.63 A test bounded by something it does not control — no explicit budget, and a local run that SKIPS while reporting green (NEW 2026-09-07)
+
+- **Telltale:** CI fails with a bare
+  `TimeoutException after 0:00:30.000000: Test timed out after 30 seconds`
+  naming **no function, no URL and no elapsed time** — and the same job passed
+  on the previous runs. Then the obvious next move, running the file locally,
+  reports `+1: All tests passed` and you conclude the fix works.
+- **Root-cause shape, part 1 — the missing budget.** Dart's default per-test
+  timeout is **30 s**, chosen for unit tests. A file making LIVE network calls
+  (an Edge Function, a model generation) inherits that default silently, and
+  the HTTP client underneath usually has **no timeout at all** — so a slow call
+  consumes the test budget and the harness, not the caller, reports the
+  failure. The harness knows nothing about which call was slow, so it cannot
+  say. **A timeout that reports nothing is NO NEWS**, indistinguishable from
+  every other hang (see the bad-news-vs-no-news class).
+- **The fix is TWO budgets and their ORDER, not either number.** Give the HTTP
+  call an explicit `.timeout()` whose `onTimeout` **throws** a message naming
+  the function, the budget and the elapsed wait; give the file an `@Timeout`
+  that is LARGER. If the test budget is smaller it wins the race and you are
+  back to a message that names nothing. ⚠ Make `onTimeout` throw rather than
+  synthesise a 5xx `Response` — a fake status makes an
+  `expect(status, anyOf(200, 429))` fail with a number the service never sent,
+  which reads as a server bug and sends the next reader to the wrong system.
+- ⚠ **Check for a per-test timeout argument after adding a file-level
+  `@Timeout`.** A per-test value takes PRECEDENCE and silently keeps the old
+  budget — CLAUDE.md §4.9 records this costing a full cycle on a file that had
+  ALREADY been "fixed" for this class.
+- **Root-cause shape, part 2 — the green run that ran nothing.** Files under
+  `test/edge_functions/` open with a credential gate:
+  `if (!SupabaseTestHelper.hasCredentials) { test('SKIPPED: …', () {}); return; }`.
+  `SUPABASE_TEST_EMAIL` / `SUPABASE_TEST_PASSWORD` are **CI-only secrets** and
+  are NOT in the local `.env`, so the whole file collapses to that one
+  placeholder. Adding `--dart-define-from-file=.env` does not help — the env
+  lacks those two keys — so the second run looks like confirmation of the
+  first. **READ THE COUNT, NOT THE COLOUR:** `+1` from a file holding two dozen
+  tests is a skip, not a pass.
+- **How to verify anyway, at zero cost:** reproduce the call shape in a
+  throwaway probe pointed at a **black-hole address** (`10.255.255.1:9`). Every
+  call takes the timeout path, no packet reaches the real service, and no
+  shared-account quota is consumed. Mutate it once — delete the `onTimeout`
+  detail and confirm the assertion reddens — then **DELETE the probe**. Keeping
+  it would ship a test that duplicates the shape instead of exercising the real
+  file: protection in appearance only.
+- **Real instance:** diagnose `a7c3e9` (2026-09-07). `main` red at `493d230b`;
+  `ai_proxy_test.dart` T19, a one-sentence chat. Every other CI job passed,
+  including the Deno type-check and the 5406-test unit suite.
+- **Regression test:** none possible in-repo for the wiring itself — the file
+  cannot run outside CI. That limitation is recorded in the diagnose-doc rather
+  than papered over, which is the honest form of this row.
+
