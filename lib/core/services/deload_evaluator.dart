@@ -271,6 +271,20 @@ class DeloadEvaluator {
     // the lifted rows on any later restore. Awaiting here would block cold-launch
     // home navigation (`runRolloverNow` is awaited before `context.go`).
     unawaited(SyncService.instance.pushSnapshot());
+    // OI-171 — the blob write at `:264` happens AFTER the row writes, and each
+    // of those fired its own `syncWorkoutData()` (`workout_write_service.dart:566`)
+    // while the blob still held the PRE-lift value. `pushSnapshot()` above does
+    // not reach `_syncWorkoutPlan` — only `weeklyFullSync()`
+    // (`sync_service.dart:1143`) and this domain push do — so the lifted week 4
+    // otherwise sat un-pushed until an unrelated later write or the weekly sync.
+    // A user who lifts a deload and then logs nothing before reinstalling would
+    // restore the stale blob and see `deload` over rows saying `working`.
+    //
+    // ⚠ UNAWAITED, deliberately, for the same reason the comment above says:
+    // this runs on the cold-launch rollover path, awaited before `context.go`.
+    // Blocking here would delay home navigation. The narrow plan push is used
+    // rather than a full domain sync to keep that cost minimal.
+    unawaited(SyncService.instance.pushWorkoutPlanForSyncDomain());
     return true;
   }
 

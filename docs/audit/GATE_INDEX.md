@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **97** (49 numbered, 48 by filename only).
+Total gates: **98** (49 numbered, 49 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -87,6 +87,7 @@ Total gates: **97** (49 numbered, 48 by filename only).
 | — | `check_schema_column_refs.dart` | Supabase column-reference validation against the live schema. | grandfathered |
 | 52 | `check_schema_payload_parity.dart` | every NOT NULL column on user-tagged Supabase tables must | grandfathered |
 | 23 | `check_secrets_gitignored.dart` | assert that Android signing artifacts and other sensitive secret patterns are never tracked | grandfathered |
+| — | `check_single_schedule_row_builder.dart` | Asserts that only the allowlisted files construct a `schedule_<date>` Hive | mutation_proven |
 | 46 | `check_singleton_provider_migration.dart` | assert the 7 singleton services targeted by A7 have: | grandfathered |
 | — | `check_skill_tuning_history.dart` | a commit that ADDS a `docs/reviews/<x>-review.md` must also append a | mutation_proven |
 | — | `check_skipped_discipline_budget.dart` | assert that no `regression-test-skipped:` waiver entry in `docs/skipped-discipline.md` | grandfathered |

@@ -718,4 +718,45 @@ void main() {
       expect(WorkoutScheduleService.instance.currentDeloadReason(), isNull);
     });
   });
+
+  // ── OI-171 — the lifted blob must be PUSHED, and pushed AFTER it is written ──
+  //
+  // B-pass finding 1 (2026-09-08): this fix shipped with ZERO coverage. The
+  // reviewer deleted the `pushWorkoutPlanForSyncDomain()` line and all 60 tests
+  // across four deload/sync suites stayed green — a reddens-nothing mutation
+  // whose cause is simply that no test executed the line.
+  //
+  // WHY THIS IS A SOURCE PIN AND NOT A BEHAVIORAL ASSERTION, stated plainly:
+  // `SyncService.instance` is a live singleton that opens a session and talks to
+  // Supabase; the defect is the ORDER of two fire-and-forget calls, which no
+  // Hive-level assertion can observe. A behavioral test would need a fake
+  // SyncService seam that does not exist. So this pins POSITION, which is the
+  // defect itself — the pre-fix code pushed the blob's container before the blob
+  // was written, so mere PRESENCE of a push proves nothing.
+  group('OI-171 — deload lift pushes the plan blob after writing it', () {
+    final src = File('lib/core/services/deload_evaluator.dart').readAsStringSync();
+
+    test('the narrow plan push exists inside the lift', () {
+      expect(src, contains('pushWorkoutPlanForSyncDomain()'),
+          reason: 'without it the lifted week 4 reaches the cloud only on an '
+              'unrelated later write or the weekly full sync');
+    });
+
+    test('it is ordered AFTER the current_plan blob write', () {
+      final blobWrite = src.indexOf('await box.put(_kPlanKey, plan)');
+      final planPush = src.indexOf('pushWorkoutPlanForSyncDomain()');
+      expect(blobWrite, isNonNegative, reason: 'blob write must still exist');
+      expect(planPush, isNonNegative);
+      expect(planPush, greaterThan(blobWrite),
+          reason: 'THE BUG: every fan-out that ran before the blob write '
+              'snapshotted the PRE-lift blob. A push above it is a no-op.');
+    });
+
+    test('it stays unawaited — awaiting blocks cold-launch navigation', () {
+      expect(src, contains('unawaited(SyncService.instance.pushWorkoutPlanForSyncDomain())'),
+          reason: 'runRolloverNow is awaited before context.go; blocking here '
+              'delays home navigation, which is why the sibling pushSnapshot() '
+              'is unawaited too');
+    });
+  });
 }

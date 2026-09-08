@@ -1592,7 +1592,11 @@ extension SyncServiceWorkout on SyncService {
       if (date == null) continue;
 
       try {
-        final parsedDate = DateTime.tryParse(date);
+        // OI-170: `parsedDate` lived here solely to feed
+        // `'day_of_week': parsedDate?.weekday` — the 1..7 value that corrupted
+        // every cloud round-trip. With that gone it had no other reader, so it
+        // is deleted rather than left as an unused local (which is a WARNING,
+        // and `flutter analyze --no-fatal-infos` at pre-push fails on warnings).
         final rawTemplateId = entry['template_id']?.toString();
 
         // APK Test #14 / Bug B.1 — resolve cloud template_id by NAME
@@ -1617,7 +1621,16 @@ extension SyncServiceWorkout on SyncService {
               if (tmplId != null) 'template_id': tmplId,
               'scheduled_date': date,
               'week_number': entry['week'] ?? entry['week_number'],
-              'day_of_week': parsedDate?.weekday ?? entry['day_of_week'],
+              // OI-170 — send the app's canon (0=Mon..6=Sun), not Dart's
+              // `weekday` (1..7). This line preferred a RE-DERIVATION over the
+              // stored value AND got the derivation wrong, so the correct local
+              // 0..6 was never sent; the restore then wrote the wrong value
+              // back over it. `parsedDate` comes from this row's own date key
+              // (`:1595`) and is effectively never null, so the `??` fallback
+              // never fired and the stored value was simply discarded.
+              // The restore now derives its own value, which is what actually
+              // heals existing rows; this keeps the cloud honest going forward.
+              'day_of_week': entry['day_of_week'] ?? dayOfWeekFromDate(date),
               'status': entry['status'] ?? 'planned',
               'completed_at': completedAt,
             };
@@ -1957,6 +1970,19 @@ extension SyncServiceWorkout on SyncService {
           }
         }
 
+        // OI-170 — see the `day_of_week` key below. Computed once, here, so the
+        // conditional-key form does not evaluate it twice.
+        //
+        // KILL-SWITCH (§4.6 / blast_radius `platform` requires: feature_flag).
+        // Opt-OUT polarity: the fix is live by default; setting
+        // `configBox['disable_day_of_week_derive'] = true` restores the LEGACY
+        // path verbatim — trust whatever the cloud sent. Kept because this is a
+        // platform-tier change to the restore path, and a bad derivation would
+        // mis-badge every row on every device at once.
+        final derivedDayOfWeek = SyncFlags.deriveDayOfWeekOnRestore
+            ? (dayOfWeekFromDate(date) ?? map['day_of_week'] as int?)
+            : map['day_of_week'] as int?;
+
         final merged = <String, dynamic>{
           ...existingMap,
           'date': date,
@@ -1974,7 +2000,24 @@ extension SyncServiceWorkout on SyncService {
             'completed_at': mergedCompletedAt,
           if (map['week_number'] != null) 'week': map['week_number'],
           if (map['week_number'] != null) 'week_number': map['week_number'],
-          if (map['day_of_week'] != null) 'day_of_week': map['day_of_week'],
+          // OI-170 — DERIVE `day_of_week` from this row's own `scheduled_date`
+          // rather than trusting the transmitted value.
+          //
+          // It is a pure function of the date, so it never needed to round-trip
+          // at all. Trusting the wire value was actively harmful: the push at
+          // `:1620` sent `parsedDate.weekday` (1..7) while the app's canon is
+          // 0..6 (`tool_dispatcher.dart:695` says so explicitly;
+          // `train_provider.dart:619`/`:816` compute
+          // `(week-1)*7 + day_of_week + 1` and render the `D<n>` badge), and
+          // this key sits AFTER the `...existingMap` spread — so the wrong
+          // cloud value OVERWROTE a correct local one on every restore. Monday
+          // of week 1 came back as `D2`, Sunday as `D8`.
+          //
+          // Deriving here also SELF-HEALS every already-corrupted cloud row
+          // with no migration, which is why the fix lives on this side.
+          // ⚠ Falls back to the transmitted value only when the date will not
+          // parse — a row we cannot date is one we cannot derive.
+          if (derivedDayOfWeek != null) 'day_of_week': derivedDayOfWeek,
           // APK Test #15.3 / Bug 4a — overlay template-derived display
           // content LAST so it wins over the existingMap spread above.
           if (hydratedWorkoutName != null) 'workout_name': hydratedWorkoutName,

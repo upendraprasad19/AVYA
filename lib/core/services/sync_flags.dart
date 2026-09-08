@@ -85,6 +85,43 @@ class SyncFlags {
     }
   }
 
+  /// Kill-switch for the OI-170 `day_of_week` derivation on RESTORE.
+  ///
+  /// **Opt-OUT polarity — the fix is LIVE by default.** Set
+  /// `configBox['disable_day_of_week_derive'] = true` to fall back to the
+  /// legacy behaviour of trusting the value the cloud transmitted.
+  ///
+  /// WHY OPT-OUT RATHER THAN SHIP-DARK, since §4.6 step 1 reads as
+  /// "default the NEW path behind a gate". Default-OFF here would preserve a
+  /// path that is KNOWN BROKEN: the push wrote Dart's 1..7 while every reader
+  /// expects 0..6, so a dark default keeps every restored row's `D<n>` badge
+  /// one too high — Monday of week 1 rendering `D2`, Sunday `D8`. A flag whose
+  /// safe-looking default is the bug is not a safety mechanism. §4.6's actual
+  /// requirement — *"old path preserved verbatim, reachable when the gate is
+  /// closed"* — is satisfied exactly as written, and the repo already uses this
+  /// `disable_*` polarity for `disable_phase_arc` and `disable_triggered_deload`.
+  ///
+  /// FAIL DIRECTION IS TOWARD THE FIX, deliberately. On any read failure
+  /// (`configBox` not open — very early boot, or a pure unit test with no Hive
+  /// temp dir) this returns TRUE and derives. Deriving is a pure function of the
+  /// row's own `scheduled_date` and cannot be wrong in a way trusting the wire
+  /// is not; the sibling [useDomainFor] fails toward its legacy path because
+  /// there the legacy path is the proven one, which is the opposite situation.
+  ///
+  /// Scope, so the asymmetry is not read as an oversight: the PUSH side is
+  /// deliberately NOT gated. Reverting the push would re-introduce writing 1..7
+  /// to the cloud, which is the defect itself, and with the restore deriving,
+  /// the transmitted value is never read — so a push kill-switch would protect
+  /// nothing while doubling the branch count on a sync path.
+  static bool get deriveDayOfWeekOnRestore {
+    try {
+      return HiveService.instance.configBox.get('disable_day_of_week_derive') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

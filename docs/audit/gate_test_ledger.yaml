@@ -591,3 +591,74 @@ check_skill_tuning_history.dart:
     SCOPE, so the pass is not read as wider than it is: code-review only.
     /hermes-pass writes to the same directory but keeps its own tuning section;
     wiring that needs its own decision and is not assumed here.
+
+check_single_schedule_row_builder.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/schedule_row_builder_gate_lib_test.dart
+  evidence: >
+    NEW 2026-09-08 (OI-166 Unit 1). Asserts that only allowlisted files construct
+    a schedule_<date> Hive row map, detected by the co-occurrence of BOTH row keys,
+    each matched in EITHER spelling - map-literal ('week_character':) or index
+    assignment (row['week_character'] = ...) - independently, so a file that MIXES
+    the two forms is caught as well. Born from the OI-166 inventory, which
+    found FOUR independent implementations of "lay out schedule rows for a phase"
+    carrying 8 real differences - 4 of them live user-visible defects - while three
+    of the four carried comments asserting they mirrored each other. The fourth
+    (hotel_workout_planner.dart) was missed by three plan-review rounds AND by two
+    versions of that inventory, then found in ONE command by running this very
+    heuristic. That is the argument for a gate over a comment: the detection worked,
+    nobody had run it.
+    MUTATIONS RUN, each leaving the file COMPILING and semantically wrong (a compile
+    error is red for the wrong reason and proves nothing):
+    (1) AND -> OR in constructsScheduleRow -> 4 red. Each arm is exercised by its own
+    single-key fixture, so both halves of the conjunction are pinned.
+    (2) NEUTER stripDartComments (return the source unchanged) -> 4 red. This matters
+    in practice rather than theoretically: these files document each other and quote
+    the very keys the heuristic looks for, so an unstripped match would fire on a
+    doc-comment. Comment-stripping before an absent-pattern grep is a standing repo
+    rule.
+    (3) DELETE the allowlist containsKey check -> 2 red (the allowlist test and the
+    Windows backslash-normalisation test, which reaches the allowlist through a
+    different path).
+    (4) DELETE the index-assignment arm of _writesKey (return false after the
+    literal-key check) -> 3 red. This leg exists because the gate SHIPPED WITHOUT IT
+    and a B-pass reviewer defeated it on the first attempt - see the widening note
+    below. All four legs re-derived after that change rather than carried forward;
+    legs 1 and 2 rose from 2 to 4 because the new mirror fixtures catch them too.
+    TWO FIXTURE DEFECTS WERE FOUND BY RUNNING THESE, NOT BY READING THEM, and both
+    are recorded in the test file at their site. Legs 1 and 2 each reddened only ONE
+    test on the first attempt. The week_character fixture used the INDEX form
+    (row['week_character'] = ...) and the doc-comment fixture omitted the COLONS -
+    so neither contained the literal the matcher keys on, and both stayed green under
+    a mutation they were written to detect. A fixture that merely LOOKS like the real
+    thing tests nothing; it must contain the exact token.
+    A THIRD near-miss on 2026-09-08, worth recording because the guard caught it: the
+    first attempt at leg 4 used a python replace whose anchor did not match, so NOTHING
+    was mutated and the suite reported 26/26 GREEN. Only the mandatory grep -c
+    confirmation (0 markers applied) distinguished that from a real proof. A mutation
+    run without an applied-check is not evidence.
+    WIDENED 2026-09-08 by B-pass finding 2, in the same batch that shipped the gate.
+    The first version matched the map-literal form ONLY. The reviewer planted a file
+    building the map and then assigning row['week_character'] = ... - an ordinary Dart
+    idiom - and the gate reported PASS over 480 files without seeing it. Fixed by
+    matching each key in either spelling. The residual is NAMED, not silently left:
+    named-constant keys (row[_kWeekChar] = ...) STILL escape, verified by planting
+    that exact file and watching it PASS, and pinned as an executable test so the
+    limit reddens if anyone ever closes it. A source grep is bounded by what its
+    author could imagine writing; Unit 2's shared builder is the structural fix.
+    LIVE POSITIVE CONTROL: a temporary lib/ file carrying both keys was reported by
+    name and the gate exited 0 under its warn default; removing the file restored
+    PASS across 479 lib/ files. A gate that has never reported anything is
+    indistinguishable from a broken one.
+    WARN IS THE BUILT-IN DEFAULT (const _hardFail = false), not a call-site flag,
+    because pre-commit.sh and test.yml both auto-wire every check_*.dart BY GLOB with
+    no arguments - CLAUDE.md 4.11's baseline window cannot be expressed any other
+    way here. OI-166 Unit 2's final commit flips it, at which point both
+    pendingUnit2 allowlist entries must already be gone.
+    SCOPE, so this is not read as wider than it is: input set is lib/ ONLY. Run
+    repo-wide the same heuristic matches two existing test fixtures plus every
+    behavioural test Unit 2 adds, so an unscoped hard-fail would break the build on
+    the batch's own tests. Two known blind spots are named in the library header -
+    row constructors that omit week_character (template_service.dart and the
+    sync restore overlay); neither is a phase-layout writer.

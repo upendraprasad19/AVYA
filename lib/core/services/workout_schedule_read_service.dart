@@ -1252,15 +1252,72 @@ class WorkoutScheduleReadService {
           List<Map<String, dynamic>> rows) =>
       rows.where((r) => r['is_hold'] != true);
 
-  /// Current week number (1-4) based on today.
-  int getCurrentWeekNumber() {
+  /// The plan week a given [date] falls in, relative to [planStart].
+  /// **UNCLAMPED** — 1-based, and legitimately >4 or <1.
+  ///
+  /// ONE piece of arithmetic, extracted (OI-166 Unit 1) because it had been
+  /// copy-pasted. `template_service.dart` carried its own identical
+  /// `(diff ~/ 7 + 1).clamp(1, 4)`, invisible to any census of
+  /// `getCurrentWeekNumber()` callers because it is not one. Duplicated
+  /// arithmetic is how the `'week'` stamp drifts, which is the whole subject of
+  /// OI-166.
+  ///
+  /// Callers that need a DISPLAYABLE week clamp to 1..4 themselves — see
+  /// [getCurrentWeekNumber]. Callers reasoning about plan LAYOUT want the raw
+  /// value, because ">4" is a real state (`redoWeek4` extends `plan_end`
+  /// without moving `plan_start`) that clamping silently hides.
+  static int rawWeekNumberFor(DateTime date, DateTime planStart) =>
+      date.difference(planStart).inDays ~/ 7 + 1;
+
+  /// TODAY's plan week, **unclamped**. Returns 1 when no plan start is stored.
+  ///
+  /// Reads the clock through `nowWall()` — seam-aware, so dev time-travel and
+  /// the year-sim move it. That matters more than it looks: a writer computing
+  /// this from `istMidnight(...)` while the reader uses `nowWall()` disagrees by
+  /// a day west of IST, and by a whole WEEK at a 7-day boundary. Keep every
+  /// caller on this one function rather than re-deriving.
+  int rawWeekNumber() {
     final startStr = MigratedKey.read<String>(_planStartKey);
     if (startStr == null) return 1;
 
     final planStart = DateTime.parse(startStr);
     final today = nowWall(); // seam-aware (dev time-travel / year-sim)
-    final diff = today.difference(planStart).inDays;
-    return (diff ~/ 7 + 1).clamp(1, 4);
+    return rawWeekNumberFor(today, planStart);
+  }
+
+  /// Current week number (1-4) based on today.
+  ///
+  /// Behaviour-identical to the pre-extraction body: `startStr == null` → 1
+  /// (and `1.clamp(1, 4)` is 1), otherwise the same `(diff ~/ 7 + 1)` clamped.
+  int getCurrentWeekNumber() => rawWeekNumber().clamp(1, 4);
+
+  /// The plan week (1..4) an arbitrary [date] falls in, together with that
+  /// week's wave character from the `current_plan` blob.
+  ///
+  /// For any writer stamping a row on a date that is NOT today. A hotel plan
+  /// spans up to seven consecutive days from a possibly-future start, so a
+  /// clock-derived week number would stamp today's week on every row of a plan
+  /// that straddles a week boundary — the exact defect class OI-166 exists to
+  /// close, and what the first draft of the hotel-planner fix would have done.
+  ///
+  /// `character` is null when there is no plan, no blob, a short/malformed
+  /// blob, or an empty entry. **Every null has exactly one explicit source and
+  /// there is no `catch` above them** — the lesson [currentDeloadReason]
+  /// records in this same file, where guards buried under a swallowing `catch`
+  /// made three separate mutations redden zero of twelve assertions.
+  ({int week, String? character}) planWeekAndCharacterFor(DateTime date) {
+    final startStr = MigratedKey.read<String>(_planStartKey);
+    if (startStr == null) return (week: 1, character: null);
+
+    final planStart = DateTime.tryParse(startStr);
+    if (planStart == null) return (week: 1, character: null);
+
+    final week = rawWeekNumberFor(date, planStart).clamp(1, 4);
+    final waves = currentWaveCharacters();
+    if (week - 1 >= waves.length) return (week: week, character: null);
+
+    final character = waves[week - 1];
+    return (week: week, character: character.isEmpty ? null : character);
   }
 
   /// ⑥ Batch 7-A (W3.2 phase arc): the periodization wave character per week of

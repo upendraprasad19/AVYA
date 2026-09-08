@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**85 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**89 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -92,4 +92,8 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-163 | the four-tag migration header has NO gate, and two places claimed it did… | nothing — needs a gate written,… | 2026-09-05 — repo-wide grep + the live… | [:3065](open_issues.md#L3065) |
 | OI-164 | the shared QA account caps CI at ~3 runs per IST day (P2) | a founder decision on test-account… | 2026-09-05 — live `usage_counters` + the… | [:3089](open_issues.md#L3089) |
 | OI-165 | `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live… | identifying which token the runner needs… | 2026-09-05 — ran it; and the harness… | [:3111](open_issues.md#L3111) |
-| OI-166 | the AI-coach regen writes schedule ROWS but never `current_plan`, so the… | FOUNDER — the fix changes what the AI… | 2026-09-06 — `grep -c… | [:3133](open_issues.md#L3133) |
+| OI-166 | regeneration RESTARTS the periodization wave instead of continuing it, so… | FOUNDER — sequencing only. The unit… | 2026-09-06 — every citation below… | [:3133](open_issues.md#L3133) |
+| OI-173 | no cold-start weight estimate: a brand-new user, every free user, and any… | none — founder approved 2026-09-06 as… | 2026-09-06 — `plan_generator.dart:234`… | [:3179](open_issues.md#L3179) |
+| OI-174 | schedule rows written past `plan_end` are never pruned, and they delay the… | none — but it is a DESTRUCTIVE migration… | 2026-09-06 — the only schedule deletions… | [:3197](open_issues.md#L3197) |
+| OI-175 | a regeneration past the phase's 4th week (`rawWeek > 4`) has no… | FOUNDER — what a regeneration should DO… | 2026-09-06 — `getCurrentWeekNumber()`… | [:3209](open_issues.md#L3209) |
+| OI-176 | the OI-collision gate answers `PASS (vacuous)` for a branch with no… | none | 2026-09-08 — observed live, not reasoned… | [:3252](open_issues.md#L3252) |
