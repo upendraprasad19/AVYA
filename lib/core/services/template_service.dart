@@ -115,8 +115,12 @@ class TemplateService {
     if (planStartStr != null) {
       final planStart = DateTime.tryParse(planStartStr);
       if (planStart != null) {
-        final diff = date.difference(planStart).inDays;
-        weekNum = (diff ~/ 7 + 1).clamp(1, 4);
+        // OI-166 Unit 1: was an inline copy of the same `(diff ~/ 7 + 1)`
+        // arithmetic. Byte-identical, now sharing the one definition — this
+        // file is invisible to any census of `getCurrentWeekNumber()` callers
+        // (it is not one), which is exactly how the copy survived unnoticed.
+        weekNum = WorkoutScheduleReadService.rawWeekNumberFor(date, planStart)
+            .clamp(1, 4);
       }
     }
 

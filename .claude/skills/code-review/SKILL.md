@@ -212,6 +212,40 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-08** — blast-radius **platform** — branch `regen-wave-alignment`
+  (OI-166 Unit 1: the schedule-row gate + `rawWeekNumber` extraction + the hotel
+  planner's stamps, plus OI-170/171 folded in). **5 findings (2 P0, 1 P1, 2 P2);
+  0 false_alarm.** Review: `docs/reviews/df96a61cf598-bpass.md`. Run as TWO
+  context-blind agents with the lens set split 1-5 / 6-8.
+  **Tuning 1 — SPLIT THE LENS SET ACROSS TWO AGENTS ON A LARGE DIFF, and give
+  the deep lenses their own agent.** 23 files / ~2,590 insertions went to two
+  agents rather than one. The 6-8 agent spent its whole budget on mutation work
+  and produced both P2s by RUNNING things — it defeated the new gate on its
+  first attempt with a four-line fixture, and it deleted the OI-171 line and
+  watched 60 tests stay green. The 1-5 agent, freed of that, found the P0 board
+  collision and the tier mismatch. Neither would plausibly have done the other's
+  work inside one budget: lens 6 alone consumed 55 tool calls. The split is
+  cheap and the skill should default to it above roughly 15 files.
+  **Tuning 2 — lens 3 (`blast_radius_mismatch`) must READ THE `requires:` LIST,
+  not just compare the tier.** The finding here was not "the tier is wrong" but
+  "the tier is right and its `requires:` list was never satisfied":
+  `docs/blast_radius.yaml:25` demands `feature_flag` at `platform`, and
+  **nothing enforces it** — `check_blast_radius_coverage.dart` does not read the
+  list (grep: 0 hits). So a platform-tier change to the sync restore path passed
+  the entire gate loop green with no kill-switch. Lens 3's prompt should now
+  say: resolve the tier, open `blast_radius.yaml`, and check each entry of that
+  tier's `requires:` against the diff INDIVIDUALLY. A declarative requirement
+  with no gate is exactly what a reviewer is for, and it is invisible to every
+  other check.
+  **Tuning 3 — a stale plan document is a finding, and the tell is a
+  self-refuting justification.** The plan header claimed `account` and defended
+  it with *"positive control `sync_workout.dart` → `platform`, so the classifier
+  discriminates"* — a control valid only while that file is OUT of the diff.
+  The batch later folded it IN, so the sentence proving the tier became the
+  sentence refuting it, and nobody re-derived the number. Generalised: when a
+  document justifies a value by naming what is excluded, check whether that
+  thing is still excluded. Same family as the `part`-file analyze row in §4.9 —
+  the measurement was right when taken and its input set moved underneath it.
 - **2026-09-06** — blast-radius **platform** — branch `unitb-deload-reason`
   (Unit B: fix the stale deload reason, then flip `enable_deload_reason_line`).
   **10 B-pass findings (1 P0, 1 P1, 3 P2, 5 P3); 0 false_alarm.** Review:

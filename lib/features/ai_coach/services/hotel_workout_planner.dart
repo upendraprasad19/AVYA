@@ -1,4 +1,5 @@
 import '../../../core/services/hive_service.dart';
+import '../../../core/services/workout_schedule_read_service.dart';
 import '../../../core/utils/injury_vocab.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../shared/repositories/plan_generator.dart';
@@ -137,6 +138,16 @@ class HotelWorkoutPlanner {
       final d = start.add(Duration(days: i));
       final dateStr = _fmt(d);
 
+      // OI-166 Unit 1 — the row's plan week + wave character, derived from THIS
+      // DAY's date, never from the clock. A hotel plan runs up to 7 consecutive
+      // days (`n` above) from a possibly-future `start`, so it can straddle a
+      // plan-week boundary; a clock-derived stamp would put today's week on
+      // every row. Previously `'week': 1` and `'week_character': 'baseline'`
+      // were hardcoded, so a hotel day landing inside a `deload` week 4 claimed
+      // to be a baseline week-1 day.
+      final planWeek =
+          WorkoutScheduleReadService.instance.planWeekAndCharacterFor(d);
+
       final existing = box.get('schedule_$dateStr');
       final isCompleted =
           existing is Map && existing['status'] == 'completed';
@@ -179,8 +190,15 @@ class HotelWorkoutPlanner {
         rawSchedules.add({
           'date': dateStr,
           'phase': resolvedPhase,
-          'week': 1,
-          'day_of_week': d.weekday,
+          'week': planWeek.week,
+          // 0=Mon..6=Sun — the app-wide canon (tool_dispatcher.dart:695 states
+          // it explicitly; train_provider.dart:619/:816 compute
+          // `(week-1)*7 + day_of_week + 1` and render it as the `D<n>` badge).
+          // This wrote raw `d.weekday` (1..7) until OI-166 Unit 1, so every
+          // hotel row's day number was one too high and a Sunday read `D8`.
+          // ⚠ The same off-by-one still exists in the CLOUD round-trip and is
+          // tracked separately as OI-170 — fixing it here does not close that.
+          'day_of_week': d.weekday - 1,
           'type': 'workout',
           'workout_name': workoutName,
           'workout_focus': workout.focus,
@@ -189,7 +207,12 @@ class HotelWorkoutPlanner {
             'warmup': workout.warmup.map((e) => e.toMap()).toList(),
           if (workout.cooldown.isNotEmpty)
             'cooldown': workout.cooldown.map((e) => e.toMap()).toList(),
-          'week_character': 'baseline',
+          // Falls back to 'baseline' only when there is genuinely nothing to
+          // read — no plan start, no `current_plan` blob, or a short/malformed
+          // one. That preserves the pre-fix value for a standalone hotel plan
+          // with no phase behind it, while a day inside a real phase now
+          // carries that week's actual character.
+          'week_character': planWeek.character ?? 'baseline',
           'status': 'planned',
           'completed_at': null,
           'is_swapped': false,
