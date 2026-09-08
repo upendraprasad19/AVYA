@@ -3245,3 +3245,61 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Recommendation**: **option 2 plus a gate.** Rule 24's precedent already exists in this repo — *"the filename is the identity; a number is an optional alias"* — and it is why `GATE_INDEX.md` stopped having this problem. Titles are what readers search for, existing numbers keep resolving as aliases, and no archaeology is needed to stop the bleeding.
 
 - **Not urgent**: this misdirects a reader; it breaks no build and no runtime path. Filed at P3 so it is not lost — the guard now in the section-2 header stops a tenth collision, but a comment is an intention, and this repo's own §4.13 point 6 says intentions decay.
+
+## OI-168 — nothing fires §4.9's "grep the test tree before you land" rule, so it is re-learned by breaking main (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical — needs the gate written, mutation-proven, ledger entry
+- **Verified**: 2026-09-07 — the pre-push full suite on `493d230b` failed 3 assertions in **files the batch never opened**: `test/contracts/usage_quota_ledger_writer_to_reader_test.dart` (×2) and `test/scripts/usage_counter_source_lib_test.dart` (×1). None was a code defect; all three were contracts the change deliberately falsified. Cost: one full push cycle (~20 min) plus a red local `main`
+- **Identified**: 2026-09-07 · during OI-162 slice 3a
+- **Symptom**: you change a production file, run the tests you wrote, they pass, and the full suite then fails in test files you never opened — because source-grep contracts pin code by LOCATION and CONTENT, so relocating or repairing something breaks assertions in files the diff does not touch. A targeted run structurally cannot see them.
+
+- **Root cause is NOT ignorance of the rule — it is that the rule has no trigger.** CLAUDE.md §4.9 already carries this class **twice** ("Extracting or moving code breaks source-grep contracts in files you never touched"; "Repairing a broken ENFORCEMENT breaks every test that was silently relying on it not enforcing"), and the second row's closing sentence, written during slice 2, reads verbatim: *"**Expect this again in slices 3-4** — six more quota readers move onto the same ledger."* That row was loaded into context at session start. The grep it prescribes was not run. **Prediction accuracy was perfect; delivery was zero.** This is §4.13 point 6's own law — *everything with a gate holds, everything on intention decays* — applied to a prose row that names its own future failure.
+
+- **Proposed gate** (`scripts/check_test_grep_coverage.dart`, pre-commit, WARN-first per §4.11):
+  for each staged non-test path P, `grep -rln "<basename or symbol>" test/` and print every hit.
+  v1 is a **reporter, not a blocker** — it prints "these N test files reference what you changed;
+  run them" and exits 0. That alone closes the gap, because the failure mode is not knowing, not
+  refusing.
+- **Why not a blocker on day one**: it cannot know which tests were actually run, so a hard fail
+  would either need a test-run ledger (real work) or would block every commit. §4.11 says the gate
+  ships first and flips later; this is the WARN half.
+- **Sharpest form if it graduates**: pair it with the pre-push tier so a `feature`-tier push that
+  skips the full suite gets the reporter's list run explicitly.
+
+- **Recommendation**: write the WARN reporter. Two commands' worth of logic, and it would have caught this exact batch.
+
+## OI-169 — a local run of `test/edge_functions/` reports "All tests passed" having executed nothing (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing — needs a decision on which signal to use
+- **Verified**: 2026-09-07 — `flutter test test/edge_functions/ai_proxy_test.dart` → `00:00 +1: All tests passed!` on a file containing ~24 tests. `--dart-define-from-file=.env` changes nothing, because the missing keys are not in `.env`
+- **Identified**: 2026-09-07 · while verifying the fix for diagnose `a7c3e9`
+- **Symptom**: every file under `test/edge_functions/` opens with a credential gate — `if (!SupabaseTestHelper.hasCredentials) { test('SKIPPED: …', () {}); return; }`. `SUPABASE_TEST_EMAIL` / `SUPABASE_TEST_PASSWORD` are **CI-only secrets**, absent from the local `.env`, so the whole file collapses to that one placeholder and reports GREEN.
+
+- **Why this is worse than an ordinary skip**: the placeholder is a PASSING test, so the runner's colour, exit code and summary line are all indistinguishable from a real pass. The only tell is the COUNT — `+1` where two dozen were expected — and a count is exactly what a human skims past. It cost a false "the fix is verified" claim during a red-`main` repair, which is the worst possible moment to be wrong about whether a test ran.
+- ⚠ **The skip itself is correct** — a dev machine has no business holding CI secrets. The defect is that the skip is INVISIBLE, not that it happens.
+
+- **Options**:
+  1. Make the placeholder a real `skip:` (`test('…', () {}, skip: 'CI-only secrets')`) so the runner prints `~1` instead of `+1`. One-line change per file, and `~` is visually distinct.
+  2. Have the placeholder PRINT a loud banner naming the missing variables.
+  3. A gate asserting every `test/edge_functions/**` file uses the `skip:` form, so a new file cannot reintroduce the silent shape.
+- **Recommendation**: option 1 + option 3. `skip:` is the mechanism Dart already has for exactly this, and it changes the summary line, which is the thing that lied.
+
+## OI-172 — killing a backgrounded `safe_push` does NOT kill the push; it keeps running and can land (P1)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical — needs a decision on which mitigation
+- **Verified**: 2026-09-07 — a backgrounded `safe_push.sh` was reported by the harness as `status: killed`. Its process (PID 86281) was **still alive**, still holding `.git/.safe_git_op.lock` (`holder` file: `pid=86281 op=safe_push`), and it subsequently completed the full suite and **landed the push**: `[safe_push] OK -- origin/main now at 493d230b… (matches local)`
+- **Identified**: 2026-09-07
+- **Symptom**: the harness's kill terminates the *wrapper* it spawned, not the shell script's own process tree. A reader who trusts "killed" concludes the push did not happen. If they then start a second push, two pushes race one lock; if they conclude the remote is unchanged, they are asserting something they did not check.
+
+- **What saved it this time**: the lock. A second `safe_push` would have found `.safe_git_op.lock` held by a LIVE pid and refused. So the failure mode is not corruption — it is a **false belief about production state**, which is the same class as `feedback_git_landing_verification.md`'s "git said OK but it didn't land", inverted: here the tool said FAILED and it did land.
+- ⚠ **This already has a documented sibling**: that memory file records "a killed push landed anyway and reddened main". The new information is the MECHANISM — the pid survives the harness's kill, and the lock's `holder` file is the way to find out.
+
+- **Options**:
+  1. Document only: after any killed/interrupted git operation, read `.git/.safe_git_op.lock/holder` and `kill -0` the pid before concluding anything. (This is what worked.)
+  2. Have `safe_push.sh` write a terminal result file (`.claude/.last_push_result`) with `LANDED|FAILED|UNVERIFIED` + the sha, so a caller has a machine-readable answer that survives losing the stdout.
+  3. Trap `SIGTERM`/`SIGINT` in the wrapper so a kill releases the lock and records `INTERRUPTED` — ⚠ but NOT so it aborts the push mid-flight, which would be worse.
+
+- **Recommendation**: option 2. It also fixes the adjacent hazard that made this expensive — `safe_push.sh` prints its verdict to stdout, and a caller who appends `; echo $?` gets the ECHO's exit code, not the script's (CLAUDE.md §4.9 documents that footgun; it fired again this session and made a FAILED push read as exit 0). A result file cannot be destroyed by shell composition.
