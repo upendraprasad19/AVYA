@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**86 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**89 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -94,3 +94,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-165 | `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live… | identifying which token the runner needs… | 2026-09-05 — ran it; and the harness… | [:3143](open_issues.md#L3143) |
 | OI-166 | the AI-coach regen writes schedule ROWS but never `current_plan`, so the… | FOUNDER — the fix changes what the AI… | 2026-09-06 — `grep -c… | [:3165](open_issues.md#L3165) |
 | OI-167 | the debugging skill's bug-class numbers collide 9×, every one is cited by… | nothing technical — needs a per-citation… | 2026-09-07 — `grep -oE '^### 2\.[0-9]+'… | [:3198](open_issues.md#L3198) |
+| OI-168 | nothing fires §4.9's "grep the test tree before you land" rule, so it is… | nothing technical — needs the gate… | 2026-09-07 — the pre-push full suite on… | [:3249](open_issues.md#L3249) |
+| OI-169 | a local run of `test/edge_functions/` reports "All tests passed" having… | nothing — needs a decision on which… | 2026-09-07 — `flutter test… | [:3272](open_issues.md#L3272) |
+| OI-172 | killing a backgrounded `safe_push` does NOT kill the push; it keeps… | nothing technical — needs a decision on… | 2026-09-07 — a backgrounded… | [:3289](open_issues.md#L3289) |
