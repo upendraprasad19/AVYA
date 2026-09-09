@@ -27,6 +27,15 @@ class CoachReplies {
       "You've used your 5 free analyses. "
       '[Upgrade to PRO →] for unlimited image + video reads.';
 
+  /// OI-162 slice 3b — the fail-CLOSED path's copy. When the quota ledger is
+  /// unreadable the server refuses, and reusing [imagePaywallExhausted] would
+  /// claim the user spent 5 analyses when they may have spent none. Mirrors
+  /// `imageQuotaUnavailable` in the server's coach_replies.ts.
+  static const String imageQuotaUnavailable =
+      'Photo received, Recruit. Bridge cannot reach the quota log right now, '
+      'so it is standing down rather than guessing. '
+      'Try again in a moment — this is not a limit.';
+
   /// F15 — always-PRO video
   static const String videoPaywall =
       'Video received, Recruit. Bridge sees it. '

@@ -2696,7 +2696,7 @@ change.
   collide with the in-flight backend-CPU-starvation batch (migration 120).
 - **Related**: `docs/audit/2026-09-02/remediation-plan.md` §11 Slice B.
 
-### Folded in 2026-09-03 from OI-162 — the FREE-IMAGE LIFETIME QUOTA resets itself
+### ✅ CLOSED 2026-09-08 by OI-162 slice 3b — the FREE-IMAGE LIFETIME QUOTA resets itself
 
 A third instance of the counter-in-a-summarized-table class, split out of OI-162 because its storage
 semantics are the OPPOSITE of a windowed rate limit and it belongs with this entry's channel work.
@@ -2723,6 +2723,28 @@ semantics are the OPPOSITE of a windowed rate limit and it belongs with this ent
 - **Why NOT in the OI-162 table**: a lifetime quota must never be pruned, while a windowed rate limit
   must be. Fusing them forced a retention exclusion that would have retained a `user_id` forever
   after a DPDP erasure. They are different concepts that share a word.
+- **CLOSED 2026-09-08 by slice 3b.** The gate now does an ADVISORY `.maybeSingle()` read of
+  `usage_counters` (quota_key `free_image_analysis`, `'epoch'` window) and `consume_quota` is the
+  authoritative writer, running AFTER the conversation-log insert and gated on it having succeeded.
+  Both defects above are closed together, as this entry required: the fail-OPEN `if (error) return 0`
+  now fails CLOSED and returns its own `gate_reason: "quota_unavailable"` rather than the paywall's
+  (telling a user who spent nothing that they spent 5 would be a lie). The client twin
+  `getFreeImageAnalysisCount()` was DELETED, not repointed — zero production callers.
+  Pinned by `test/contracts/media_free_image_lifetime_gate_writer_to_reader_test.dart` (10 assertions,
+  mutation-proven on 6 legs) + the ratcheted allowlist in `scripts/usage_counter_source_lib.dart`
+  (2 → 1). No migration: `quota_key` is unconstrained `text`.
+- ⚠ **Two corrections to this entry, recorded rather than silently fixed.** Its
+  `ai-media-proxy/index.ts:62-76` citation was stale by the time it was closed — the function sat at
+  `:67-82`; the entry was written 2026-09-03 and the file shifted under it. And its
+  `grep -rn getFreeImageAnalysisCount lib/ test/ → 1 hit` was scoped to `lib/` in practice: there
+  were **2**, the second being a `stillLegacy` map entry in
+  `usage_quota_ledger_writer_to_reader_test.dart` that asserted this very file still read the old
+  table. Deleting the method broke it. Found by plan-review round 1, before landing.
+- ⚠ **Still LATENT at closure, verified live 2026-09-08:** `select count(*) from
+  ai_coach_interactions where channel = 'free_image_analysis'` → **0**, across 0 distinct users. So
+  the cutover regrant ("everyone starts at used=0") affected nobody. Re-measure rather than citing
+  this; the mechanism was real and would have bitten the first user to spend one.
+
 ### ✅ CLOSED 2026-09-06 by OI-162 slice 3a — the WEEKLY-REPORT first-free gate
 
 **Was:** "ALSO 2026-09-03 — the WEEKLY-REPORT first-free gate is a lifetime count and resets the

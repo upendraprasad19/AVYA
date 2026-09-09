@@ -696,6 +696,134 @@ BEGIN
 END;
 $slice3a$;
 
+-- ===========================================================================
+-- OI-162 slice 3b — ai-media-proxy's free-image LIFETIME meter (5, not 1).
+--
+-- ⚠ WHAT THESE ARE AND ARE NOT, stated per-block because the slice-2 header
+-- learned this the hard way: these verify the LEDGER. They execute no Edge
+-- Function and would pass UNCHANGED against the pre-slice-3b ai-media-proxy.
+-- They are BEHAVIOUR-INVARIANTS, not evidence the slice landed. The evidence
+-- that the EF changed is the source-grep contract test
+-- (test/contracts/media_free_image_lifetime_gate_writer_to_reader_test.dart) plus, eventually,
+-- a post-deploy runtime check that has NOT run.
+--
+-- What they DO add over the slice3a block: that block proved a limit-1 key is
+-- one-shot. This one proves the SAME machinery at limit-5 (a different arm of
+-- `WHERE uc.used < p_limit`), and pins the two-keys invariant that limit-1
+-- could not exercise at all.
+--
+-- STATUS: RUN LIVE 2026-09-09 against prod (founder-authorized) — all 3 cases
+-- returned status='ok'. `five_then_refused` reported the full sequence
+-- `1 2 3 4 5 | sixth=-1`, so the meter advances on every call rather than
+-- merely refusing at the end (a 1,1,1,1,1-then--1 meter would satisfy a
+-- first-and-last assertion; that is why every intermediate return is checked).
+-- ⚠ The `check_onconflict_live_arbiter.dart` wrapper still 403s on the
+-- Management API — the same unrelated token-privilege failure this file's top
+-- Status block already records from 2026-07-30 — so it was run via direct
+-- execute_sql. ROLLBACK verified afterwards: 0 synthetic ledger rows, 0 probe
+-- rows, 0 synthetic auth users left on prod.
+-- ===========================================================================
+DO $slice3b$
+DECLARE
+  v_fi_user    uuid := '00000000-0000-0000-0000-0000000b3b00'::uuid;
+  v_now        timestamptz := now();
+  -- the literal ai-media-proxy/index.ts sends as p_window_start, verbatim
+  v_ef_literal timestamptz := '1970-01-01T00:00:00+00:00'::timestamptz;
+  v_r          int;
+  v_sixth      int;
+  v_seq_ok     boolean := true;
+  v_seq        text := '';
+  v_other      int;
+  v_epoch_left int;
+  v_stale_left int;
+BEGIN
+  BEGIN
+    INSERT INTO auth.users (id, email, created_at)
+    VALUES (v_fi_user, 'test+oi162-freeimage@avya.local', v_now)
+    ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.users (id, email, full_name)
+    VALUES (v_fi_user, 'test+oi162-freeimage@avya.local', 'oi162 free image')
+    ON CONFLICT (id) DO NOTHING;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+
+  -- 1. FIVE grants, then refusal. The sixth call must return -1, not 6.
+  --    Every intermediate return is checked, not just the endpoints: a
+  --    consume that returned 1,1,1,1,1 and then -1 would satisfy a
+  --    first-and-last assertion while the meter was not advancing at all.
+  BEGIN
+    FOR i IN 1..5 LOOP
+      v_r := consume_quota(v_fi_user, 'free_image_analysis', v_ef_literal, 5);
+      v_seq := v_seq || v_r || ' ';
+      IF v_r <> i THEN v_seq_ok := false; END IF;
+    END LOOP;
+    v_sixth := consume_quota(v_fi_user, 'free_image_analysis', v_ef_literal, 5);
+    IF v_seq_ok AND v_sixth = -1 THEN
+      INSERT INTO _v_results VALUES ('slice3b_free_image_five_then_refused', 'ok', NULL,
+        'sequence ' || v_seq || '| sixth=-1');
+    ELSE
+      INSERT INTO _v_results VALUES ('slice3b_free_image_five_then_refused', 'fail', NULL,
+        'expected 1 2 3 4 5 then -1, got ' || v_seq || '| sixth=' || v_sixth);
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('slice3b_free_image_five_then_refused', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- 2. ONE quota_key => ONE counter. ai-media-proxy holds TWO quotas (the free
+  --    lifetime meter and the dormant PRO per-day cap, OI-153) and they MUST
+  --    NOT share a key -- `p_limit` is a per-CALL argument, so two callers
+  --    naming one key with different limits silently disagree and nothing in
+  --    SQL holds it. Consuming the free key must leave every other key alone.
+  BEGIN
+    SELECT count(*) INTO v_other FROM usage_counters
+      WHERE user_id = v_fi_user AND quota_key <> 'free_image_analysis';
+    IF v_other = 0 THEN
+      INSERT INTO _v_results VALUES ('slice3b_free_image_key_is_isolated', 'ok', NULL,
+        'consuming free_image_analysis created no other counter');
+    ELSE
+      INSERT INTO _v_results VALUES ('slice3b_free_image_key_is_isolated', 'fail', NULL,
+        'consuming free_image_analysis moved ' || v_other || ' other counter(s)');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('slice3b_free_image_key_is_isolated', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- 3. Retention, TWO-SIDED for this key specifically. A one-sided "the epoch
+  --    row survived" check is satisfied by a cleanup that deletes NOTHING, so
+  --    a stale windowed row is planted in the same breath and must be gone.
+  BEGIN
+    INSERT INTO usage_counters (user_id, quota_key, window_start, used)
+    VALUES (v_fi_user, 'oi162_slice3b_stale_probe', v_now - interval '30 days', 3)
+    ON CONFLICT (user_id, quota_key, window_start) DO UPDATE SET used = 3;
+
+    PERFORM cleanup_usage_counters();
+
+    SELECT count(*) INTO v_epoch_left FROM usage_counters
+      WHERE user_id = v_fi_user AND quota_key = 'free_image_analysis'
+        AND window_start = 'epoch'::timestamptz;
+    SELECT count(*) INTO v_stale_left FROM usage_counters
+      WHERE user_id = v_fi_user AND quota_key = 'oi162_slice3b_stale_probe';
+
+    IF v_epoch_left = 1 AND v_stale_left = 0 THEN
+      INSERT INTO _v_results VALUES ('slice3b_epoch_row_survives_retention', 'ok', NULL,
+        'lifetime row kept, 30d-old windowed row deleted');
+    ELSIF v_epoch_left <> 1 THEN
+      INSERT INTO _v_results VALUES ('slice3b_epoch_row_survives_retention', 'fail', NULL,
+        'retention DELETED the lifetime row -- the 5 free analyses will reset');
+    ELSE
+      INSERT INTO _v_results VALUES ('slice3b_epoch_row_survives_retention', 'fail', NULL,
+        'retention kept a 30d-old windowed row, so the survival half proves nothing');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('slice3b_epoch_row_survives_retention', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+END;
+$slice3b$;
+
 SELECT label, status, sqlstate, msg FROM _v_results ORDER BY label;
 
 ROLLBACK;

@@ -29,7 +29,6 @@
 //
 // closes-finding: tech-debt-audit-2026-05-20-A10
 
-import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:meta/meta.dart';
 import '../services/ai_snapshot_builder.dart';
 import '../services/coach_memory_service.dart';
@@ -269,26 +268,6 @@ class AiCoachRepository {
     // Fall through: legacy rows without sets[] OR no set matched PR
     // weight (degenerate data) OR empty sets[] array.
     return (log['reps_completed'] as num?)?.toInt();
-  }
-
-  /// F14 · Test #9 — returns the user's lifetime count of free
-  /// image analyses on the AI coach. Server enforces the 5-cap; this is
-  /// purely for "X of 5 free analyses left" display in the chat UI.
-  ///
-  /// Cloud-only read — does not belong on either Hive-bound service.
-  Future<int> getFreeImageAnalysisCount() async {
-    final user = SupabaseService.instance.client.auth.currentUser;
-    if (user == null) return 0;
-    try {
-      final rows = await SupabaseService.instance.client
-          .from('ai_coach_interactions')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('channel', 'free_image_analysis');
-      return rows.length;
-    } catch (_) {
-      return 0;
-    }
   }
 
   /// Snapshot contract key manifest — DO NOT REMOVE.
