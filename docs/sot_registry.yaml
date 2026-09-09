@@ -10178,6 +10178,105 @@ concepts:
       columns: [user_id, snapshot_id, channel, user_message, ai_response, model_used, tokens_used, created_at]
     sync_methods: []
 
+  # OI-162 slice 3b (2026-09-08) — the free tier's 5 LIFETIME image analyses.
+  # Same defect as weekly_report_pro_gate above, different surface: the gate
+  # counted `ai_coach_interactions` rows with channel='free_image_analysis' and
+  # no date bound, and `rolling-context` prunes that table. Registered as its
+  # own concept because the precedent is one concept per GATE — slice 3a did
+  # not add itself to `usage_quota_ledger`'s readers either.
+  - concept: media_free_image_lifetime_gate
+    domain: ai_coach
+    behavioral_test_path: test/contracts/media_free_image_lifetime_gate_writer_to_reader_test.dart
+    presence_only: true  # Deno Edge Function — `serve(async (req) => {…})` with no exports and no Deno on the dev machine, so no importable surface exists to round-trip. CI `deno check` is the compile proof (rule 21 honesty).
+    description: |
+      "How many of their 5 lifetime free image analyses has this free user
+      spent?" — the predicate that allows 5 free Gemini Vision reads before
+      requiring PRO.
+
+      ⚠ REWIRED by OI-162 slice 3b (2026-09-08). It used to `count(*)` rows in
+      `ai_coach_interactions` where channel='free_image_analysis', with NO date
+      bound. Those rows are non-`app_event`, so `rolling-context` summarises and
+      DELETES all but the newest 10 past a 50-row threshold — and a LIFETIME
+      quota has no window to survive deletion on. A free user who chatted enough
+      silently regained all 5, repeatedly.
+
+      NOW: an ADVISORY read of `usage_counters` (quota_key
+      `free_image_analysis`, `'epoch'` window) feeds the gate, and
+      `consume_quota` is the authoritative writer.
+
+      ⚠ A SECOND, INDEPENDENT DEFECT was fixed in the same change. The old
+      reader was fail-OPEN — `if (error) return 0` plus `catch (_) { return 0 }`
+      — with a docstring arguing fail-open was "safer … because 0 < 5", which is
+      precisely when the gate does NOT fire (audit CODE-3). It now fails CLOSED,
+      and returns its OWN `gate_reason: "quota_unavailable"` rather than reusing
+      the paywall's `free_image_limit_reached`: telling a user who spent nothing
+      that they spent 5 is a lie, and it is indistinguishable from the real
+      paywall in the response body.
+
+      ⚠ THE CLIENT TWIN WAS DELETED, NOT REPOINTED.
+      `ai_coach_repository.getFreeImageAnalysisCount()` read the same channel
+      and had ZERO production callers. Repointing a method nothing calls would
+      have invented a reader; deleting dead code is not a deferral.
+
+      ⚠ ONE quota_key => ONE call site => ONE limit. `consume_quota`'s `p_limit`
+      is a per-CALL argument, so two callers naming this key with different
+      limits would silently disagree and nothing in SQL holds it. This key has
+      exactly one call site. Note ai-media-proxy has TWO quotas and therefore
+      needs TWO keys — the PRO per-day cap is NOT this key and is NOT migrated
+      (OI-153, dormant: nothing writes 'pro_image_analysis'/'image_analysis',
+      verified in code and in prod data, so migrating it would ACTIVATE a cap
+      that has never fired — a product decision).
+    writers:
+      - file: supabase/functions/ai-media-proxy/index.ts
+        method: serve handler — conversation-log insert
+        semantic: cloud-write
+        notes: |
+          NO LONGER the writer for the gate — it is the sole persisted copy of
+          the exchange and the restore source (`sync_coach.dart` restores every
+          channel unfiltered). Kept verbatim and UNCONDITIONAL. Its result is
+          now destructured into `interactionLogError`, which the consume below
+          is gated on; it used to be discarded entirely.
+      - file: supabase/functions/ai-media-proxy/index.ts
+        method: serve handler — consume_quota('free_image_analysis')
+        semantic: cloud-write
+        notes: |
+          The quota writer. Runs AFTER the insert and ONLY when that insert
+          succeeded (`isFreeImageAnalysis && !interactionLogError`). There is no
+          transaction spanning the two: consume-then-insert-fails burns a
+          LIFETIME unit AND loses the only copy of the analysis that unit paid
+          for. Insert-then-consume-fails merely under-counts — the recoverable
+          direction. Ordering alone is NOT sufficient, because an insert that
+          FAILED while the consume SUCCEEDED reaches the same bad end state by
+          another route; the `!interactionLogError` conjunct closes it.
+          ⚠ `-1` is a SUCCESSFUL return meaning exhausted, not an error.
+    readers:
+      - file: supabase/functions/ai-media-proxy/index.ts
+        method: readFreeImageQuota — advisory ledger read
+        semantic: cloud-read
+        notes: |
+          Reads `usage_counters.used` for quota_key `free_image_analysis`.
+          THREE outcomes, and the third is the dangerous one: a populated
+          `error` fails CLOSED (deny); a present row is the real `used`; an
+          ABSENT row (`data: null, error: null`) is a legitimate `used = 0` and
+          must GRANT. Uses `.maybeSingle()`, never `.single()` — the latter
+          throws PGRST116 on an absent row, which would arrive as an error and
+          refuse EVERY free user, since zero rows exist for this key at cutover.
+      - file: supabase/functions/ai-media-proxy/index.ts
+        method: serve handler — "X of 5 free analyses left" display
+        semantic: cloud-read
+        notes: |
+          Derived from `consume_quota`'s RETURN VALUE, not from a second count.
+          The pre-fix code ran a full re-count here on every request — a second
+          reader of the pruned log, and a wasted round trip. On an RPC error the
+          counter line is OMITTED rather than filled with a fabricated number.
+    hive:
+      box: "n/a — server-side gate, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: usage_counters
+      columns: [user_id, quota_key, window_start, used, updated_at]
+    sync_methods: []
+
   # tech-debt audit 2026-09-02 / Slice A (CODE-6, diagnose f2b9d4) — PRO
   # entitlement for the AI coach is read per-request from subscriptions. There
   # is NO UNIQUE on subscriptions(user_id), so the reader must tolerate ≥2

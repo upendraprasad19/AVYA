@@ -212,6 +212,32 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-09** — blast-radius **platform** — branch `oi162-slice3b-media-meter`, OI-162 slice 3b
+  (diagnose `c4f9e2`). **3 findings (0 P0, 0 P1, 1 P2, 2 P3); 0 false_alarm.** All fixed in-batch.
+  Review: `docs/reviews/4b31af31a792-review.md`.
+  **Tuning — lens 10 (`stale_or_wrong_citation`) gains the VERIFICATION-WIDTH question, and it is
+  the highest-value thing this pass produced.** Two of the three findings were stale citations, and
+  the P3 is the instructive one: the author HAD run a post-rename sweep and it reported "none". The
+  sweep was `grep -rn --include=*.md --include=*.yaml`, and the surviving stale reference was in a
+  `.sql` file. **A verification narrower than the thing being verified returns zero and is
+  indistinguishable from a clean result.** Add to lens 10: *when a finding is "I already checked
+  that", ask what the CHECK's input set was, in its widest form, and re-run it without the filter.*
+  In this one session that shape fired **four** times — a `lib/`-scoped grep presented as
+  repo-wide; a `^\s+`-anchored warning count that missed a real warning because the line had no
+  leading space; a blast-radius run whose answer was deleted by a `grep -v` filter (the build-hooks
+  banner shares the result's line); and this one. Sibling of `feedback_green_check_input_set_width`.
+  **Second tuning — lens 10 should also flag a citation the SAME COMMIT invalidates.** The P2 cited
+  a line that was correct when written and wrong when shipped, because the diff inserted ~83 lines
+  above it. That is OI-167's class, recurring here. Cheap rule, now applied: **in prose that ships
+  alongside the code it cites, name the SYMBOL, not the line** — the repo's own CLAUDE.md §0 already
+  warns that no gate validates numeric-line prose.
+  **A NEGATIVE result worth keeping, per this history's convention:** the reviewer EXECUTED the
+  test suite (16/16) and re-queried every live-data claim in the diagnose-doc rather than trusting
+  it — including independently confirming `ai-media-proxy` is live at v21 and that
+  `'epoch'::timestamptz` really equals the TS literal. It also traced all four requested mirror
+  cases in source and reported them clean rather than manufacturing a finding. 0/3 false alarms →
+  no change to lenses 1-9.
+
 - **2026-09-08** — blast-radius **platform** — branch `regen-wave-alignment`
   (OI-166 Unit 1: the schedule-row gate + `rawWeekNumber` extraction + the hotel
   planner's stamps, plus OI-170/171 folded in). **5 findings (2 P0, 1 P1, 2 P2);
@@ -246,6 +272,7 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   document justifies a value by naming what is excluded, check whether that
   thing is still excluded. Same family as the `part`-file analyze row in §4.9 —
   the measurement was right when taken and its input set moved underneath it.
+
 - **2026-09-06** — blast-radius **platform** — branch `unitb-deload-reason`
   (Unit B: fix the stale deload reason, then flip `enable_deload_reason_line`).
   **10 B-pass findings (1 P0, 1 P1, 3 P2, 5 P3); 0 false_alarm.** Review:

@@ -80,24 +80,24 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-151 | telemetry outweighs user data 1.7:1; `restore_op_done` is 64% of it and… | nothing technical. It is a PRE-LAUNCH… | 2026-08-30 — measured live on… | [:2582](open_issues.md#L2582) |
 | OI-152 | six-plus call sites fire `syncX()` and `pushSnapshot()` back to back,… | nothing technical. Bounded, mechanical… | 2026-08-30 — every call site below read… | [:2634](open_issues.md#L2634) |
 | OI-153 | PRO media caps read a `channel` value nothing writes (P1) | enumerate every `channel` reader first | 2026-09-03 — source + live prod | [:2676](open_issues.md#L2676) |
-| OI-154 | a cleared profile field silently reverts on the next sign-in (P1) | needs a design spec (tombstone +… | 2026-09-03 — source, full chain traced | [:2823](open_issues.md#L2823) |
-| OI-155 | six gates are wired to no runner, and Gate 33 cannot detect it (P1) | re-enumerate the skip block mechanically | 2026-09-03 — greps with positive control | [:2846](open_issues.md#L2846) |
-| OI-156 | CLAUDE.md numeric claims drift because nothing re-derives them (P2) | nothing — mechanical | 2026-09-03 — each count re-measured | [:2870](open_issues.md#L2870) |
-| OI-157 | no SAST and no SCA run anywhere in CI (P1) | founder call on Semgrep scope | 2026-09-03 — grep, 0 hits | [:2895](open_issues.md#L2895) |
-| OI-158 | tests and gates that cannot fail (P2) | TEST-1 needs one device run to establish… | 2026-09-03 — source-verified | [:2915](open_issues.md#L2915) |
-| OI-159 | sync and Edge Function correctness residue (P2) | nothing — but see OI-154 for the ARCH-1… | 2026-09-03 — source-verified | [:2938](open_issues.md#L2938) |
-| OI-160 | dependency + build-toolchain hygiene (P2) | DEP-7 needs a founder unpin decision | 2026-09-03 — versions read from files | [:2958](open_issues.md#L2958) |
-| OI-161 | two blind spots in our own observability and discipline gates (P3) | INFRA-13 is platform-tier, needs its own… | 2026-09-03 — live query + grep | [:2981](open_issues.md#L2981) |
-| OI-162 | the delete-account rate limit is INERT in production; its counter has… | needs OI-153's channel-reader… | 2026-09-03 — schema + DDL + repo grep +… | [:3023](open_issues.md#L3023) |
-| OI-163 | the four-tag migration header has NO gate, and two places claimed it did… | nothing — needs a gate written,… | 2026-09-05 — repo-wide grep + the live… | [:3097](open_issues.md#L3097) |
-| OI-164 | the shared QA account caps CI at ~3 runs per IST day (P2) | a founder decision on test-account… | 2026-09-05 — live `usage_counters` + the… | [:3121](open_issues.md#L3121) |
-| OI-165 | `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live… | identifying which token the runner needs… | 2026-09-05 — ran it; and the harness… | [:3143](open_issues.md#L3143) |
-| OI-166 | regeneration RESTARTS the periodization wave instead of continuing it, so… | FOUNDER — sequencing only. The unit… | 2026-09-06 — every citation below… | [:3165](open_issues.md#L3165) |
-| OI-167 | the debugging skill's bug-class numbers collide 9×, every one is cited by… | nothing technical — needs a per-citation… | 2026-09-07 — `grep -oE '^### 2\.[0-9]+'… | [:3296](open_issues.md#L3296) |
-| OI-168 | nothing fires §4.9's "grep the test tree before you land" rule, so it is… | nothing technical — needs the gate… | 2026-09-07 — the pre-push full suite on… | [:3347](open_issues.md#L3347) |
-| OI-169 | a local run of `test/edge_functions/` reports "All tests passed" having… | nothing — needs a decision on which… | 2026-09-07 — `flutter test… | [:3370](open_issues.md#L3370) |
-| OI-172 | killing a backgrounded `safe_push` does NOT kill the push; it keeps… | nothing technical — needs a decision on… | 2026-09-07 — a backgrounded… | [:3387](open_issues.md#L3387) |
-| OI-173 | no cold-start weight estimate: a brand-new user, every free user, and any… | none — founder approved 2026-09-06 as… | 2026-09-06 — `plan_generator.dart:234`… | [:3211](open_issues.md#L3211) |
-| OI-174 | schedule rows written past `plan_end` are never pruned, and they delay the… | none — but it is a DESTRUCTIVE migration… | 2026-09-06 — the only schedule deletions… | [:3229](open_issues.md#L3229) |
-| OI-175 | a regeneration past the phase's 4th week (`rawWeek > 4`) has no… | FOUNDER — what a regeneration should DO… | 2026-09-06 — `getCurrentWeekNumber()`… | [:3241](open_issues.md#L3241) |
-| OI-176 | the OI-collision gate answers `PASS (vacuous)` for a branch with no… | none | 2026-09-08 — observed live, not reasoned… | [:3284](open_issues.md#L3284) |
+| OI-154 | a cleared profile field silently reverts on the next sign-in (P1) | needs a design spec (tombstone +… | 2026-09-03 — source, full chain traced | [:2845](open_issues.md#L2845) |
+| OI-155 | six gates are wired to no runner, and Gate 33 cannot detect it (P1) | re-enumerate the skip block mechanically | 2026-09-03 — greps with positive control | [:2868](open_issues.md#L2868) |
+| OI-156 | CLAUDE.md numeric claims drift because nothing re-derives them (P2) | nothing — mechanical | 2026-09-03 — each count re-measured | [:2892](open_issues.md#L2892) |
+| OI-157 | no SAST and no SCA run anywhere in CI (P1) | founder call on Semgrep scope | 2026-09-03 — grep, 0 hits | [:2917](open_issues.md#L2917) |
+| OI-158 | tests and gates that cannot fail (P2) | TEST-1 needs one device run to establish… | 2026-09-03 — source-verified | [:2937](open_issues.md#L2937) |
+| OI-159 | sync and Edge Function correctness residue (P2) | nothing — but see OI-154 for the ARCH-1… | 2026-09-03 — source-verified | [:2960](open_issues.md#L2960) |
+| OI-160 | dependency + build-toolchain hygiene (P2) | DEP-7 needs a founder unpin decision | 2026-09-03 — versions read from files | [:2980](open_issues.md#L2980) |
+| OI-161 | two blind spots in our own observability and discipline gates (P3) | INFRA-13 is platform-tier, needs its own… | 2026-09-03 — live query + grep | [:3003](open_issues.md#L3003) |
+| OI-162 | the delete-account rate limit is INERT in production; its counter has… | needs OI-153's channel-reader… | 2026-09-03 — schema + DDL + repo grep +… | [:3045](open_issues.md#L3045) |
+| OI-163 | the four-tag migration header has NO gate, and two places claimed it did… | nothing — needs a gate written,… | 2026-09-05 — repo-wide grep + the live… | [:3119](open_issues.md#L3119) |
+| OI-164 | the shared QA account caps CI at ~3 runs per IST day (P2) | a founder decision on test-account… | 2026-09-05 — live `usage_counters` + the… | [:3143](open_issues.md#L3143) |
+| OI-165 | `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live… | identifying which token the runner needs… | 2026-09-05 — ran it; and the harness… | [:3165](open_issues.md#L3165) |
+| OI-166 | regeneration RESTARTS the periodization wave instead of continuing it, so… | FOUNDER — sequencing only. The unit… | 2026-09-06 — every citation below… | [:3187](open_issues.md#L3187) |
+| OI-167 | the debugging skill's bug-class numbers collide 9×, every one is cited by… | nothing technical — needs a per-citation… | 2026-09-07 — `grep -oE '^### 2\.[0-9]+'… | [:3318](open_issues.md#L3318) |
+| OI-168 | nothing fires §4.9's "grep the test tree before you land" rule, so it is… | nothing technical — needs the gate… | 2026-09-07 — the pre-push full suite on… | [:3369](open_issues.md#L3369) |
+| OI-169 | a local run of `test/edge_functions/` reports "All tests passed" having… | nothing — needs a decision on which… | 2026-09-07 — `flutter test… | [:3392](open_issues.md#L3392) |
+| OI-172 | killing a backgrounded `safe_push` does NOT kill the push; it keeps… | nothing technical — needs a decision on… | 2026-09-07 — a backgrounded… | [:3409](open_issues.md#L3409) |
+| OI-173 | no cold-start weight estimate: a brand-new user, every free user, and any… | none — founder approved 2026-09-06 as… | 2026-09-06 — `plan_generator.dart:234`… | [:3233](open_issues.md#L3233) |
+| OI-174 | schedule rows written past `plan_end` are never pruned, and they delay the… | none — but it is a DESTRUCTIVE migration… | 2026-09-06 — the only schedule deletions… | [:3251](open_issues.md#L3251) |
+| OI-175 | a regeneration past the phase's 4th week (`rawWeek > 4`) has no… | FOUNDER — what a regeneration should DO… | 2026-09-06 — `getCurrentWeekNumber()`… | [:3263](open_issues.md#L3263) |
+| OI-176 | the OI-collision gate answers `PASS (vacuous)` for a branch with no… | none | 2026-09-08 — observed live, not reasoned… | [:3306](open_issues.md#L3306) |

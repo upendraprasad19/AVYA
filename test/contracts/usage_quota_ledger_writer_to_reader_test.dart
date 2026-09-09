@@ -130,7 +130,17 @@ void main() {
       // feeds the 403, consume_quota's -1 is what actually enforces. The
       // atomicity concern below is untouched, because no quota is DECIDED from
       // the direct read alone.
-      const allowed = {'supabase/functions/weekly-report/index.ts'};
+      //
+      // ai-media-proxy (OI-162 slice 3b) is the SAME shape for the same
+      // reason: its gate must answer "has this free user spent all 5 lifetime
+      // image analyses?" BEFORE paying for a Gemini call, and asking
+      // consume_quota that question would burn a lifetime unit on every model
+      // outage with no refund path. Advisory .maybeSingle() read; authoritative
+      // consume_quota after the insert.
+      const allowed = {
+        'supabase/functions/weekly-report/index.ts',
+        'supabase/functions/ai-media-proxy/index.ts',
+      };
       final offenders = <String>[];
       for (final e in _appSources()) {
         if (e.value.contains('usage_counters') && !allowed.contains(e.key)) {
@@ -161,7 +171,19 @@ void main() {
       // to spend the lifetime unit, so there is no row for a trigger to fire
       // on. The EF calls the RPC itself, which keeps the atomic
       // ON CONFLICT ... WHERE used < p_limit guard that is the whole point.
-      const allowed = {'supabase/functions/weekly-report/index.ts'};
+      //
+      // ai-media-proxy (slice 3b) DOES have an INSERT a trigger could hang off,
+      // so the reasoning differs and is worth stating rather than assuming.
+      // A trigger was rejected on two specific grounds: it cannot return the
+      // new count to the EF, so the "X of 5 left" display would need a THIRD
+      // round trip (the double-count collapse is half the slice's value); and
+      // it RAISES on exhaustion, which would make the unconditional
+      // conversation-log insert throw and force the refusal path to be
+      // restructured around an exception.
+      const allowed = {
+        'supabase/functions/weekly-report/index.ts',
+        'supabase/functions/ai-media-proxy/index.ts',
+      };
       final offenders = <String>[];
       for (final e in _appSources()) {
         if (e.value.contains('consume_quota') && !allowed.contains(e.key)) {
@@ -180,12 +202,15 @@ void main() {
       }
     });
 
-    test('the FIVE remaining legacy quota readers are still on the old table',
+    test('the THREE remaining legacy quota readers are still on the old table',
         () {
       // Stated as an invariant so no batch can be misread as having fixed the
       // whole bug. Nine quota readers existed; slice 2 moved THREE (the chat /
-      // vision / food_text cap triggers) and slice 3a moved ONE (weekly-report).
-      // FIVE remain, across four files.
+      // vision / food_text cap triggers), slice 3a moved ONE (weekly-report),
+      // and slice 3b moved TWO (ai-media-proxy's free-image lifetime meter and
+      // its dead client twin, which was DELETED rather than repointed —
+      // repointing a method with zero callers would be inventing a reader).
+      // THREE remain, across three files.
       //
       // ⚠ THIS TEST WAS GREEN WHILE ITS OWN TITLE WAS FALSE. It said SIX and
       // checked exactly ONE representative file (ai-media-proxy), so slice 3a
@@ -194,16 +219,27 @@ void main() {
       // a set cannot see another member leave. Every remaining surface is now
       // pinned BY NAME, and the count is asserted from the list rather than
       // written in prose.
+      //
+      // ⚠ SECOND-ORDER, found in slice 3b: the paragraph above CLAIMED the
+      // count was asserted from the list, and it was not — the number lived
+      // only in the title and in this comment, both prose. The claim is now
+      // true (see the length expectation below). A comment describing a
+      // protection that does not exist is worse than no comment: it stops the
+      // next reader from adding the protection.
       const stillLegacy = <String, String>{
         'supabase/functions/ai-media-proxy/index.ts':
-            'countFreeImageAnalyses + countProImageAnalysesToday (slice 3b, OI-153)',
-        'lib/features/ai_coach/repositories/ai_coach_repository.dart':
-            'getFreeImageAnalysisCount, the dead client twin (slice 3b)',
+            'countProImageAnalysesToday only — the dormant PRO image cap '
+                '(OI-153). Its free-image sibling moved in slice 3b.',
         'supabase/functions/delete-account/index.ts':
             'delete-attempt rate limit (slice 4, catastrophic)',
         'supabase/functions/verify-payment/index.ts':
             'payment-verify rate limit (slice 4, catastrophic)',
       };
+      expect(stillLegacy, hasLength(3),
+          reason: 'The title says THREE. If a slice migrated one, move it out '
+              'of the map AND update the title in the same commit -- a count '
+              'in prose that no assertion reads is exactly how this test went '
+              'stale before.');
       for (final e in stillLegacy.entries) {
         expect(File(e.key).readAsStringSync(), contains('ai_coach_interactions'),
             reason: '${e.key} was expected to STILL derive a quota from '
@@ -224,6 +260,29 @@ void main() {
               'reverted and the one free report will regenerate.');
       expect(weekly, contains('usage_counters'),
           reason: 'weekly-report must still read the ledger.');
+
+      // MIRROR for slice 3b, and it is REQUIRED for the same reason the
+      // weekly-report one is. ai-media-proxy legitimately still contains
+      // 'ai_coach_interactions' -- the unconditional conversation-log insert
+      // AND the OI-153 PRO counter -- so the stillLegacy contains() above
+      // cannot distinguish "the free meter came back" from "the file still
+      // has its other two legitimate uses". Pin what must never return.
+      final media =
+          File('supabase/functions/ai-media-proxy/index.ts').readAsStringSync();
+      expect(media.contains('.eq("channel", "free_image_analysis")'), isFalse,
+          reason: 'ai-media-proxy is counting the free-image channel again -- '
+              'slice 3b reverted, and the 5 lifetime free analyses will reset '
+              'every time rolling-context prunes the log.');
+      expect(media.contains('countFreeImageAnalyses'), isFalse,
+          reason: 'the row-counting gate is back by name. A revert restores '
+              'the old function, so pin the symbol as well as the query '
+              'shape -- either one alone is one rename away from silent.');
+      expect(media, contains('usage_counters'),
+          reason: 'ai-media-proxy must still READ the ledger (advisory gate).');
+      expect(media, contains('consume_quota'),
+          reason: 'ai-media-proxy must still WRITE the ledger. Losing this '
+              'while keeping the read leaves a gate that can never fire: '
+              'used stays 0 forever and every analysis is granted.');
     });
   });
 }

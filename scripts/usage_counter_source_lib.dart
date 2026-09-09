@@ -151,7 +151,16 @@ bool migrationCountsInteractions(String source) {
 /// Re-derive rather than trusting these numbers:
 ///   dart run scripts/check_usage_counter_source.dart --list
 const Map<String, int> allowedEdgeFunctionSites = {
-  'supabase/functions/ai-media-proxy/index.ts': 2, // free-image lifetime + pro-image IST day
+  // OI-162 slice 3b: RATCHETED 2 -> 1. The free-image LIFETIME meter now reads
+  // usage_counters (advisory) and writes it via consume_quota (authoritative),
+  // so only the PRO per-IST-day counter still counts the old table. Same
+  // reasoning as weekly-report's 1 -> 0 below: `sweep()` flags `count >
+  // allowed`, so leaving this at 2 would let a REVERT to the row-counting gate
+  // pass silently. The remaining 1 is OI-153 — a DORMANT cap, since nothing
+  // writes 'pro_image_analysis' or 'image_analysis' (verified in code and in
+  // prod data), so migrating it would ACTIVATE a cap that has never fired.
+  // That is a product decision, deliberately not made here.
+  'supabase/functions/ai-media-proxy/index.ts': 1, // pro-image IST day (OI-153)
   'supabase/functions/delete-account/index.ts': 1, // 5 attempts / 60 min
   'supabase/functions/verify-payment/index.ts': 1, // 20 attempts / 10 min
   // OI-162 slice 3a: RATCHETED 1 -> 0. weekly-report's first-free gate now

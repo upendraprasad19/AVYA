@@ -15,6 +15,26 @@ import {
 // Counted via ai_coach_interactions.channel='free_image_analysis'.
 const FREE_IMAGE_ANALYSIS_LIMIT = 5;
 
+// OI-162 slice 3b — the free-image LIFETIME meter lives in `usage_counters`,
+// not in `ai_coach_interactions`. The old gate counted rows in that log, which
+// `rolling-context` summarises and prunes nightly (all but the newest 10 past a
+// 50-row threshold). A lifetime quota has no window to survive deletion on, so
+// a free user who chatted enough silently regained all 5 free Gemini image
+// analyses, repeatedly. `usage_counters` is pruned by nothing.
+//
+// ⚠ ONE quota_key => ONE call site => ONE limit (sot_registry
+// `usage_quota_ledger`). `consume_quota`'s `p_limit` is a per-CALL argument, so
+// two callers naming this key with different limits would not agree, and
+// nothing in SQL holds it. This key has exactly one call site, below.
+const FREE_IMAGE_ANALYSIS_QUOTA_KEY = "free_image_analysis";
+
+// The lifetime sentinel: `'epoch'::timestamptz` === 1970-01-01T00:00:00+00.
+// `cleanup_usage_counters()`'s predicate is TWO-SIDED — `window_start <>
+// 'epoch' AND window_start < now() - interval '7 days'` — so an epoch row is
+// excluded from retention by the FIRST conjunct, permanently. Dropping that
+// conjunct would recreate the original bug inside the new table.
+const LIFETIME_WINDOW = "1970-01-01T00:00:00+00:00";
+
 // H-23 (audit-2026-05-11) — PRO daily image-chat soft cap. Pre-fix
 // PRO image-chat had NO rate limit, so a compromised PRO token =
 // unlimited Gemini-vision fanout. Picked at a level no legitimate
@@ -60,24 +80,48 @@ class HttpError extends Error {
 }
 
 /**
- * F14 · Test #9 — counts the user's lifetime free image analyses.
- * Returns 0 on any error (fail-open is safer than fail-closed for counts —
- * the LIMIT comparison still gates correctly because 0 < 5).
+ * F14 · Test #9 · OI-162 slice 3b — ADVISORY read of the user's lifetime
+ * free-image quota from the durable ledger.
+ *
+ * ⚠ THIS READ HAS THREE OUTCOMES, not the two the old `count: "exact"` form
+ * had, and the third is the one that matters. A count query answers `count: 0`
+ * for "no rows"; a value-select answers `data: null, error: null` — a
+ * SUCCESSFUL read of a row that is not there. Every free user is in that
+ * ABSENT state at cutover (`usage_counters` holds no `free_image_analysis`
+ * rows at all), so conflating absent with unreadable would refuse EVERY free
+ * user's first image analysis, permanently.
+ *
+ *   row present  -> the real `used`   -> compare against the limit
+ *   ABSENT       -> 0                 -> GRANT
+ *   error        -> null              -> DENY (fail CLOSED)
+ *
+ * ⚠ `.maybeSingle()`, NEVER `.single()` — the latter throws PGRST116 on zero
+ * rows, which would arrive here as an error and turn every first-time user
+ * into a refusal.
+ *
+ * Returns the consumed count, or `null` when the ledger is UNREADABLE.
+ * The previous version returned 0 on every error and argued fail-open was
+ * "safer ... because 0 < 5" — which is precisely when the gate does NOT fire
+ * (audit finding CODE-3). A transient PostgREST failure granted unbounded free
+ * Gemini image analyses. It now fails CLOSED, and the caller says so honestly
+ * rather than claiming the user spent a quota they did not spend.
  */
-async function countFreeImageAnalyses(
+async function readFreeImageQuota(
   client: SupabaseClient,
   userId: string,
-): Promise<number> {
+): Promise<number | null> {
   try {
-    const { count, error } = await client
-      .from("ai_coach_interactions")
-      .select("id", { count: "exact", head: true })
+    const { data, error } = await client
+      .from("usage_counters")
+      .select("used")
       .eq("user_id", userId)
-      .eq("channel", "free_image_analysis");
-    if (error) return 0;
-    return count ?? 0;
+      .eq("quota_key", FREE_IMAGE_ANALYSIS_QUOTA_KEY)
+      .eq("window_start", LIFETIME_WINDOW)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.used as number | undefined) ?? 0;
   } catch (_) {
-    return 0;
+    return null;
   }
 }
 
@@ -462,7 +506,46 @@ serve(async (req: Request) => {
     // F14 · Test #9 — Free image analysis: 5 LIFETIME cap. After that,
     // paywall reply with NO Gemini call. PRO users skip this branch.
     if (!isVideo && !isPro) {
-      const usedSoFar = await countFreeImageAnalyses(supabaseClient, userId);
+      const usedSoFar = await readFreeImageQuota(supabaseClient, userId);
+
+      // OI-162 slice 3b — FAIL CLOSED on an unreadable ledger, and say so
+      // HONESTLY. `null` means "we do not know", NOT "you are at the limit":
+      // this user may have spent nothing at all. Reusing
+      // `imagePaywallExhausted` + `free_image_limit_reached` here would tell
+      // them they had used all 5 — a lie on a transient DB error — and would
+      // be indistinguishable from the real paywall in the response body.
+      //
+      // ⚠ Deliberately NO `ai_coach_interactions` row for this path. The
+      // paywall branch below logs one because a paywall hit is a real product
+      // event; an infrastructure refusal is not, and logging it under
+      // `image_paywall` would corrupt that signal.
+      // ⚠ `free_image_used` is OMITTED rather than defaulted — §4.3's rule:
+      // never print a fabricated number for a count we could not read.
+      if (usedSoFar === null) {
+        console.error(
+          `[ai-media-proxy] free-image quota UNREADABLE for user=${userId}` +
+            ` — refusing this analysis rather than granting it. The previous` +
+            ` behaviour returned 0 here, which granted unbounded free Gemini` +
+            ` image analyses on any transient PostgREST failure (CODE-3).`,
+        );
+        return new Response(
+          JSON.stringify({
+            reply: COACH_REPLIES.imageQuotaUnavailable,
+            model_used: "gated",
+            tokens_used: 0,
+            actions: [],
+            gated: true,
+            gate_reason: "quota_unavailable",
+            free_image_limit: FREE_IMAGE_ANALYSIS_LIMIT,
+            stored_url: media_url,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
       if (usedSoFar >= FREE_IMAGE_ANALYSIS_LIMIT) {
         const reply = COACH_REPLIES.imagePaywallExhausted;
         await supabaseClient.from("ai_coach_interactions").insert({
@@ -657,38 +740,99 @@ serve(async (req: Request) => {
       .limit(1)
       .maybeSingle();
 
-    // F14 · Test #9 — channel selection drives the lifetime counter.
-    // Free image analyses MUST land on 'free_image_analysis' so
-    // countFreeImageAnalyses() picks them up next request.
+    // F14 · Test #9 · OI-162 slice 3b — channel selection drives the
+    // CONVERSATION LOG, not the quota.
+    // It used to drive the lifetime counter: free analyses had to land on
+    // 'free_image_analysis' so the old row-counting gate would pick them up
+    // next request. THAT COUPLING IS THE BUG — `rolling-context` prunes this
+    // table, so the quota reset with it. The channel still matters, because
+    // `sync_coach.dart` restores every channel unfiltered and this row is the
+    // user's conversation history; it simply no longer feeds any gate.
     const isFreeImageAnalysis = !isVideo && !isPro;
     const interactionChannel = isFreeImageAnalysis
       ? "free_image_analysis"
       : "app";
 
-    // Log interaction (store clean reply without tags)
-    await supabaseClient.from("ai_coach_interactions").insert({
-      user_id: userId,
-      snapshot_id: snapshotData?.id ?? null,
-      channel: interactionChannel,
-      user_message: `[Photo: ${media_type ?? "image"}] ${message}`,
-      ai_response: extracted.reply,
-      model_used: modelLabel,
-      tokens_used: tokensUsed,
-      created_at: new Date().toISOString(),
-    });
+    // Log interaction (store clean reply without tags).
+    // ⚠ UNCONDITIONAL and VERBATIM by design — this row is the only persisted
+    // copy of the exchange and the restore source. Its error is now CAPTURED
+    // (it was discarded) because the consume below is gated on it.
+    const { error: interactionLogError } = await supabaseClient
+      .from("ai_coach_interactions")
+      .insert({
+        user_id: userId,
+        snapshot_id: snapshotData?.id ?? null,
+        channel: interactionChannel,
+        user_message: `[Photo: ${media_type ?? "image"}] ${message}`,
+        ai_response: extracted.reply,
+        model_used: modelLabel,
+        tokens_used: tokensUsed,
+        created_at: new Date().toISOString(),
+      });
+    if (interactionLogError) {
+      console.error(
+        `[ai-media-proxy] interaction log insert FAILED for user=${userId}:`,
+        interactionLogError.message,
+      );
+    }
 
-    // F14 · Test #9 — Append the "X of 5 free analyses left" counter for
-    // free users. Re-count AFTER insert so the displayed remaining is
-    // accurate (this analysis is included).
-    let finalReply = extracted.reply;
+    // OI-162 slice 3b — the AUTHORITATIVE quota write, replacing the second
+    // full table count this function used to run here on every request.
+    //
+    // ⚠ ORDER IS LOAD-BEARING IN BOTH DIRECTIONS, and the guard is not
+    // redundant with it. There is no transaction spanning these two
+    // statements. Consume-then-insert-fails burns a LIFETIME unit AND loses
+    // the only copy of the analysis that unit paid for. Insert-then-consume-
+    // fails under-counts by one — the recoverable direction, chosen here and
+    // everywhere else in this design. `!interactionLogError` closes the third
+    // route to the same bad end state: an insert that FAILED while the consume
+    // SUCCEEDED, which ordering alone does not prevent.
     let freeImageUsed: number | null = null;
     let freeImageRemaining: number | null = null;
-    if (isFreeImageAnalysis) {
-      freeImageUsed = await countFreeImageAnalyses(supabaseClient, userId);
-      freeImageRemaining = Math.max(
-        0,
-        FREE_IMAGE_ANALYSIS_LIMIT - freeImageUsed,
-      );
+    if (isFreeImageAnalysis && !interactionLogError) {
+      const { data: consumedCount, error: consumeError } = await supabaseClient
+        .rpc("consume_quota", {
+          p_user_id: userId,
+          p_quota_key: FREE_IMAGE_ANALYSIS_QUOTA_KEY,
+          p_window_start: LIFETIME_WINDOW,
+          p_limit: FREE_IMAGE_ANALYSIS_LIMIT,
+        });
+
+      // ⚠ `-1` IS NOT AN ERROR. consume_quota returns it on exhaustion with no
+      // `error` field (migration 128) — a successful RPC. Logging it as a
+      // failure would fire on every ordinary race and drown the real
+      // under-counts this branch exists to surface.
+      if (consumeError) {
+        // We do not know the count, so the counter line is OMITTED below
+        // rather than filled with a fabricated number.
+        console.error(
+          `[ai-media-proxy] consume_quota FAILED for user=${userId} — the` +
+            ` analysis was delivered but the ledger did not move, so this` +
+            ` user's free-image quota is under-counted:`,
+          consumeError.message,
+        );
+      } else if (consumedCount === -1) {
+        console.warn(
+          `[ai-media-proxy] free image analysis delivered to user=${userId}` +
+            ` while the quota was already exhausted — a concurrent request` +
+            ` won the race past the advisory gate.`,
+        );
+        freeImageUsed = FREE_IMAGE_ANALYSIS_LIMIT;
+        freeImageRemaining = 0;
+      } else {
+        // The RPC's return IS the post-write count — precisely what the
+        // display needs, with no second round trip.
+        freeImageUsed = consumedCount as number;
+        freeImageRemaining = Math.max(
+          0,
+          FREE_IMAGE_ANALYSIS_LIMIT - freeImageUsed,
+        );
+      }
+    }
+
+    // F14 · Test #9 — append the "X of 5 free analyses left" counter.
+    let finalReply = extracted.reply;
+    if (freeImageRemaining !== null) {
       finalReply = `${extracted.reply}\n\n${COACH_REPLIES.freeImageCounter(freeImageRemaining)}`;
     }
 
