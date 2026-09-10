@@ -3442,7 +3442,11 @@ This gets MORE visible once OI-166 Unit 2 caps `regeneratePlanBlock` at the 4-we
 - **`createCustomTemplate` (live, PRO)** — can only compose from exercises visible in today's snapshot, so "build me a leg day" on a push day is structurally impossible
 - **OI-177's `replaceWorkoutDay`** — blocked on this for the same reason
 
-⚠ **Not yet measured:** what the model actually DOES when it wants an unavailable exercise — refuse, hallucinate an ID and hit `SwapExerciseException('exercise_not_found')` (`swap_service.dart:238-243`), or silently pick a worse in-context exercise. **Check `ai_coach_interactions` for `exercise_not_found` before designing the fix** — the failure mode determines whether this is a silent-quality problem or a visible-error problem, and they warrant different urgency.
+⚠ **UNMEASURABLE TODAY — corrected 2026-09-10, same day this entry was filed.** This row first said *"check `ai_coach_interactions` for `exercise_not_found` before designing the fix"*. **That query returns zero for a reason that has nothing to do with how often it happens**, so acting on it would have been the `bad_news_vs_no_news` collapse:
+  - `tool_dispatcher.dart:281-282` catches `SwapExerciseException` and returns `ToolExecutionResult.failure(_swapExerciseErrorMessage(e))` — **no `logEvent`, no `recordNonFatal`**. The multi-swap site `:598-599` likewise only appends to a local `errors` list.
+  - The generic `logEvent('tool_dispatch_..._unexpected_failure')` at `:227-235` lives in `dispatch()`'s defensive catch and fires ONLY for errors no handler caught — a HANDLED `SwapExerciseException` never reaches it.
+  - `ai_coach_interactions` is chat history + `channel='app_event'` rows (`app_events_service.dart:60`), not tool outcomes.
+  ⇒ `exercise_not_found` reaches **no telemetry sink at all**. Its frequency is currently unknowable, and **"no reports" must not be read as "not happening"**. Any fix for this OI should add telemetry to the swap failure path in the same commit, or the prevalence question stays permanently unanswerable. Related class: `feedback_observability_silent_drop`.
 
 ### Options
 
