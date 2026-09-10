@@ -115,3 +115,24 @@ SELECT 'morning_alert_get_service_key search_path set',
                WHERE n.nspname='private' AND p.proname='morning_alert_get_service_key'
                  AND p.proconfig IS NOT NULL
                  AND EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%'));
+UNION ALL
+-- --------------------------------------------------------------------------
+-- Migration 121 (log_table_retention, diagnose c8e5b3). Added 2026-09-10 from
+-- Hermes L23-F1: both functions are SECURITY DEFINER, their ACL is correct
+-- today ({postgres=X, service_role=X}, verified live), and NOTHING pinned it.
+-- The migration's own rollback is DROP FUNCTION, and a drop-and-recreate
+-- re-inherits anon=X from pg_default_acl -- silently reopening a9d3f1. That is
+-- not hypothetical: migration 120b exists solely because DROP+CREATE lost an
+-- ACL that CREATE OR REPLACE would have preserved.
+-- --------------------------------------------------------------------------
+SELECT 'cleanup_cron_job_run_details anon revoked',
+       has_function_privilege('anon', 'public.cleanup_cron_job_run_details()', 'EXECUTE') = false
+UNION ALL
+SELECT 'cleanup_cron_job_run_details authenticated revoked',
+       has_function_privilege('authenticated', 'public.cleanup_cron_job_run_details()', 'EXECUTE') = false
+UNION ALL
+SELECT 'cleanup_client_errors anon revoked',
+       has_function_privilege('anon', 'public.cleanup_client_errors()', 'EXECUTE') = false
+UNION ALL
+SELECT 'cleanup_client_errors authenticated revoked',
+       has_function_privilege('authenticated', 'public.cleanup_client_errors()', 'EXECUTE') = false;

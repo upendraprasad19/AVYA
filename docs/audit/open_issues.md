@@ -3431,3 +3431,43 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Found while fixing it, and fixed in the same batch**: `safe_push.sh:75`'s own guard was inert. Plain `git rev-parse <unresolvable>` prints the NAME to **stdout** and exits 128, so `LOCAL_SHA` became the literal branch string, the `-z` check never fired, and the script pushed a bogus refspec instead of printing "could not resolve local ref". Now `--verify --quiet`, which prints nothing on failure and resolves real branches and tags identically. Surfaced by the new abort test, not by reading.
 - **Residues, neither fixed, both now visible**: a `kill -9` still leaves no record (the same limit `_git_lock.sh`'s trap has — which is exactly why an absent record must read UNVERIFIED, never FAILED); and a **tag** passed where a branch is expected still gets a wrong `FAILED`, because `probe_remote_sha()` hardcodes `refs/heads/$BRANCH`. The record carries `verified_ref` so a reader can SEE the probe used the wrong namespace, but the verdict is still wrong. Zero call sites pass `--tags` today. Option 3 (trapping SIGTERM) remains **rejected**, as the entry itself argued.
 - Diagnose `docs/diagnoses/2026-09-10-safe-push-outcome-not-recorded-a7f3c1.md`; plan review `docs/plan-reviews/oi172-push-result-file.md` (3 rounds).
+
+## OI-177 — the live-cron snapshot that gives Gate 31 its only fileless-migration coverage has no regeneration trigger, and is already stale (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-10 — `backups/live_cron_jobs.json` holds **28** jobs; `select jobname from cron.job` returns **29**. The absentee is `usage_counters_retention_daily` (jobid 37), scheduled by `128_usage_counters.sql`. The snapshot has not been regenerated since `887fbd82`, the commit that created it.
+- ⚠ **NOT a live coverage gap today, and the entry says so up front so nobody fixes the wrong thing**: that job IS in `128_usage_counters.sql` and IS in `CRON_REGISTRY.md`, so Gate 31's input A (the migration scan) sees it and the gate legitimately passes — `PASS: 6 job(s) from migrations and 28 from the live snapshot`.
+- **The actual risk, which is narrow and specific**: the snapshot exists *only* to catch jobs input A cannot see — a migration applied to prod leaving no `.sql` file, which is exactly what happened on 2026-08-15 and went unseen for five days (OI-132). **A stale snapshot is dangerous for precisely the one class it was built to cover, and harmless for everything else.** It went stale within three weeks of being created.
+- **Why it went stale**: regeneration is "a documented step on any migration that schedules or unschedules a job" — i.e. an intention. `scripts/check_cron_registry.dart:42-43` states the limitation honestly ("proves registry-vs-snapshot parity, not snapshot-vs-live freshness"), so this is a known, disclosed hole rather than a surprise. CLAUDE.md §4.13 point 6 already names the pattern: everything with a gate holds, everything on intention decays.
+- **Proposed repair**: give it a trigger rather than a reminder — either a §5 close-out row (the mechanism that carries worktree retirement and the context budget, both ungateable for the same reason), or a gate comparing the snapshot's last-touched commit against the newest migration containing `cron.schedule`. The latter is checkable offline and needs no credentials, which matters because CI holds zero Actions secrets (OI-105).
+- **Reduced-severity residue from the 2026-08-16 Hermes pass (L24-F1…F5)**: input A's parser still misses `cron.schedule_in_database` (the only form that can set `active=false`), the `cron.unschedule(bigint)` overload, the 2-arg `cron.schedule` form, `$$`-quoting, `EXECUTE '...'`, and direct `INSERT INTO cron.job`. **These are no longer the headline** — input B now covers what input A misses, which is why the architectural fix Hermes asked for was the right call and was made. They matter only in combination with the staleness above.
+- **Blast radius**: `scripts/**` is individually pinned `platform`; a new gate needs its own test plus a `mutation_proven:` ledger entry per rule 24.
+- **Class**: `feedback_green_check_input_set_width` — a second input was added precisely because the first had the wrong corpus; the second now has a freshness problem the first did not.
+
+## OI-178 — pg_cron SQL jobs are structurally invisible to the alerting stack: `cron_call_log` is written only by Edge Functions (P1)
+
+- **Status**: OPEN
+- **Blocked on**: a design decision — telemetry bridge vs. a second alert reading `cron.job_run_details`
+- **Verified**: 2026-09-10 — `cron_call_log` holds **1,080 rows across 16 distinct `function_name`s**, and **0 rows** for any of `jrd_retention_daily`, `client_errors_retention_daily`, `jrd_vacuum_daily`, `client_errors_vacuum_daily`. All four are live and `active=true` in `cron.job` (jobids 33–36).
+- **Identified**: 2026-08-16 · Hermes L31-F2, same pass as [[OI-177]].
+- **The mechanism**: pg_cron records every run in `cron.job_run_details`. This project's alerting reads `public.cron_call_log`, which is written **only** by `_shared/cron_telemetry.ts` — i.e. only by Edge Functions. A cron job whose command is pure SQL therefore emits nothing any alert reads, no matter how it fails. `alerts/_thresholds.yaml` has no retention/vacuum/disk entry at all.
+- ⚠ **Two aggravations that make manual inspection useless as a fallback**:
+  - `return_message` is `"1 row"` for BOTH retention jobs (verified live) — that is the wrapping SELECT's row count, not the DELETE's. **Reading it cannot distinguish 29,029 rows deleted from 0 deleted.**
+  - the documented kill switch (`UPDATE cron.job SET active = false`) writes **no run row at all**, and Gate 31 reads migration files rather than live `cron.job.active` ([[OI-177]]), so a job left switched off is noticed by nothing, anywhere.
+- ⚠ **The migration's own header rejects "a human remembering to run it" as a mitigation, and then adopts exactly that.** Worth reading before designing the fix: the gap is not an oversight, it is a mitigation that was argued against and then relied on.
+- **Blast radius**: `supabase/migrations/**` — content-classified; a `SECURITY DEFINER` body forces **catastrophic**, so classify the written file, never the planned path (§4.9).
+- **Class**: `feedback_observability_silent_drop` + `feedback_bad_news_vs_no_news` — a failing job and a job that never ran are the same observation here: nothing.
+
+## OI-179 — `alert_cron_function_dead` cannot fire across 100% of its range, and never has (P1)
+
+- **Status**: OPEN
+- **Blocked on**: none — one-line predicate fix; the value is in the test that would have caught it
+- **Verified**: 2026-09-10 — `min(started_at)` across `cron_call_log` is **2026-09-03**, so the maximum achievable `days_silent` is **7.46**. The alert's predicate is `days_silent >= 8`. Hermes measured **7.21** on 2026-08-16; three weeks later the ceiling is unchanged because it is set by the pruner, not by traffic.
+- **Identified**: 2026-08-16 · Hermes L1-F3. **Pre-existing — not introduced by the log-retention batch.**
+- **The mechanism**: `cleanup_cron_call_log` prunes `cron_call_log` at 7 days, sparing only the single *globally* newest success. The alert asks whether any function has been silent for **8** days. The table cannot hold evidence that old, so the predicate is unsatisfiable by construction. It has fired **0 times, ever**.
+- ⚠ **The prior diagnose-doc records this as "cannot fire past day 7", which reads like a partial blind spot.** It is not partial: the alert is inert across its entire range. A threshold above its own data-retention ceiling is not a tuning problem, it is a dead alert that reads as coverage — which is worse than having no alert, because it occupies the slot.
+- **Proposed repair**: set the threshold below the retention ceiling (or lengthen retention for the alert's own read), **and** add a test asserting `threshold < retention_window` for every alert that reads a pruned table — the class, not the instance. A one-line fix with no such test leaves the next alert free to repeat it.
+- **Blast radius**: `alerts/_thresholds.yaml` + the alert's SQL; classify the written file.
+- **Class**: `feedback_green_check_input_set_width` — the alert's input set is bounded by a pruner it does not know about. Also `feedback_bad_news_vs_no_news`: zero firings had two explanations (all healthy / cannot fire) and nobody asked which.
+
