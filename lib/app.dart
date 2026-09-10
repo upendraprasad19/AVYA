@@ -80,6 +80,21 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
         // ProviderScope may be disposing — invalidation is best-effort.
       }
     };
+    // e4a7c9 — release PRO-owned resources when entitlement lapses. Wired here
+    // rather than called directly from SubscriptionService because
+    // sync_service.dart already imports subscription_service.dart; the reverse
+    // call would create an import cycle AND touch a lazy singleton from inside
+    // an entitlement write. This file already imports both.
+    //
+    // Cleared in dispose() below — set and clear stay symmetric (OI-51 / e7b3c5,
+    // where RankService was installed and never cleared).
+    SubscriptionService.onDowngrade = () {
+      try {
+        SyncService.instance.unsubscribeRealtime();
+      } catch (_) {
+        // Teardown is best-effort; a downgrade must never fail on it.
+      }
+    };
   }
 
   @override
@@ -93,6 +108,8 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
     // but never cleared here, so its closure outlived every teardown. The set
     // and the clear must stay symmetric: one entry above, one entry here.
     RankService.onStateChanged = null;
+    // e4a7c9 — same symmetry rule for the downgrade hook.
+    SubscriptionService.onDowngrade = null;
     super.dispose();
   }
 

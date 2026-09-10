@@ -92,6 +92,19 @@ class ErrorTelemetry {
     // Auth failures.
     'auth_failure_',
     'auth_signed_out_unexpected',
+
+    // Gate-efficacy metric (e4a7c9). This is the ONLY emitter proving the
+    // realtime PRO gate is turning free users away in prod. It is low-volume
+    // BY DESIGN -- once per free session, latched -- but that means it fires
+    // across essentially the whole free population right after a deploy, which
+    // is precisely when the SHARED (not per-op_type) cooldown at
+    // `_isCooldownActive()` is most likely to be armed. A low-priority event is
+    // then dropped with ZERO network call, so the metric goes dark exactly when
+    // it matters. Same reasoning that already promoted streak_freeze_*,
+    // sync_*_retry_dropped, progress_restore_demotion_declined and
+    // phase_advance_declined_rows_stale (feedback_backend_collapse_blinds_telemetry,
+    // diagnose c4f8d2). Added 2026-09-10 by the B-pass on 4f6eb6532418.
+    'realtime_subscribe_skipped_free_tier',
     'guarded_box_disagreement',
     'hive_session_owner_mismatch',
 

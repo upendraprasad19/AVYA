@@ -176,6 +176,9 @@ What makes this instance worse than its two predecessors is that the queue canno
 ### oi_board_id_uniqueness (1 bugs)
 - 2026-08-13 b7e3d1 — Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw…
 
+### sync_realtime_subscription (1 bugs)
+- 2026-08-13 e4a7c9 — Live pg_stat_statements (143-day window since project creation, never reset) shows realtime.list_changes() — the Supabase Realtime WAL poller, run as supabase_admin — is the single largest CPU…
+
 ### auth_signin_completion (1 bugs)
 - 2026-08-13 a9c4e2 — Founder signed in as test6@gmail.com on the prod web build (app.icanbefitter.com/#/sign-in) at 2026-08-13 23:03 IST. The SIGN IN WITH EMAIL button entered its spinner state and never left it — no…
 
@@ -1217,6 +1220,7 @@ What makes this instance worse than its two predecessors is that the queue canno
 | 2026-08-13 | d7b1f8 | During the 2026-08-13 23:03-23:19 IST backend outage, the app issued auth requests that piled up rather than queueing behind one another, and every one of them sat holding a connection for 10-36… | edge_function_token_freshness | test/contracts/token_refresh_join_behavioral_test.dart |
 | 2026-08-13 | a3f8d1 | TWO defects in the same six lines of ActiveWorkoutNotifier.completeWorkout's weekly-streak block. (1) FOB-2, flag-gated: getCurrentWeekNumber() clamps to [1,4] and a hold week starts at plan_start+28,… | streaks | test/contracts/hold_week_streak_identity_behavioral_test.dart |
 | 2026-08-13 | b7e3d1 | Six OI ids — OI-100 through OI-105 — each named TWO entirely different issues: one set filed on `main`, one on branch `post38-auth-fixes`. Merging the two boards produced NO conflict: git saw… | oi_board_id_uniqueness | test/contracts/oi_index_test.dart |
+| 2026-08-13 | e4a7c9 | Live pg_stat_statements (143-day window since project creation, never reset) shows realtime.list_changes() — the Supabase Realtime WAL poller, run as supabase_admin — is the single largest CPU… | sync_realtime_subscription | test/contracts/realtime_subscription_pro_gated_test.dart |
 | 2026-08-13 | 4f2a9e | The merge-commit regression-catalog walk fails with "at least one recent regression test FAILED" on tests that are green everywhere else. Observed while merging `supabase-http-fix`: 9 failures across… | git_hook_env_leak | test/scripts/regression_catalog_lib_test.dart |
 | 2026-08-13 | a9c4e2 | Founder signed in as test6@gmail.com on the prod web build (app.icanbefitter.com/#/sign-in) at 2026-08-13 23:03 IST. The SIGN IN WITH EMAIL button entered its spinner state and never left it — no… | auth_signin_completion | test/contracts/sign_in_timeout_behavioral_test.dart |
 | 2026-08-13 | c3f9a7 | The merge-commit regression walk (`scripts/check_regression_catalog.dart`) fails intermittently with a DIFFERENT number of failures each run — measured 11, 7, 8, then 4 across four attempts on the… | subprocess_test_timeout_under_suite_parallelism | test/contracts/git_safety_hook_integration_test.dart |

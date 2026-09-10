@@ -212,6 +212,44 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-10 (second entry today)** — blast-radius **platform** — branch
+  `realtime-pro-gate` (the e4a7c9 realtime PRO gate, cherry-picked onto a main 25
+  days newer). **6 findings (0 P0, 2 P1, 3 P2, 1 P3); 0 false_alarm.** Review:
+  `docs/reviews/4f6eb6532418-review.md`. **No functional defect in the code** — the
+  agent ran the suite and its own mutation and confirmed the logic survived intact.
+  Every finding was documentation, and one was hard-blocking.
+  **Tuning 1 — NEW LENS: `rebase_semantic_drift`, for any diff whose code is old
+  and whose BASE is new.** A cherry-pick or long-lived branch carries a review that
+  is a statement about a DIFFERENT tree. Git auto-merging every file means
+  textually compatible, not semantically correct. Brief the agent with the exact
+  list of commits that touched the same files since the merge-base and make it
+  answer, per commit: does this invalidate an assumption the original design made?
+  Here that framing produced both P1s. **Its highest-value output was not a code
+  bug at all** — it was that a pre-commit gate now FAILS on two citations the diff
+  never touches, because the diff's own insertions shifted the methods below them.
+  **Tuning 2 — a count-based source-grep assertion is absorbed by the file's own
+  COMMENTS about the thing it counts.** From the sibling batch the same day:
+  `expect('SECURITY DEFINER'.allMatches(flat).length, greaterThanOrEqualTo(2))`
+  passed after a real function was demoted to INVOKER, because the file says the
+  phrase FOUR times — twice in declarations, twice in prose about a past incident.
+  **Zero of nine tests reddened.** This repo writes deliberately comment-heavy
+  migrations, so any `allMatches(...).length` assertion over a documented file has
+  the same hole. Add to lens 8: **assert the declaration, never the census.**
+  **Tuning 3 — a `false_alarm` verdict records a MEASUREMENT, not a permanent
+  truth.** The 2026-08-16 Hermes pass listed "migration-number collision" among 11
+  false alarms on the then-correct evidence that "main added zero migrations since
+  merge-base; highest is 119". Main now has 120-129, and that dismissed collision
+  is exactly what this batch hit. **Re-verify a false alarm before relying on it to
+  skip a check** — and prefer recording the EVIDENCE with it, which that pass did,
+  and which is the only reason the staleness was detectable.
+  **A NEGATIVE result worth keeping.** The agent's stated CAUSE for its blocking P1
+  was wrong — it blamed four commits on main; clean main passes. The finding was
+  real and the mechanism was not. It also got every line number right, which is the
+  reverse of this history's usual warning. **Verify a subagent's MECHANISM as
+  carefully as its numerics**; a correct finding with a wrong cause teaches the
+  wrong lesson to whoever reads the review next.
+  False-alarm rate 0/6 -> no change to lenses 1-7.
+
 - **2026-09-10** — blast-radius **platform** — branch `oi172-push-result-file`
   (OI-172: a terminal push-result record for `safe_push.sh`, plus the §4.9
   verification-width row). **7 findings (0 P0, 1 P1, 4 P2, 2 P3); 0 false_alarm.**
@@ -1050,3 +1088,40 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   False-alarm rate 0/3 → no tuning to lenses 1-5. Reviews: `docs/reviews/gate-registry-bpass.md`, `docs/reviews/ci-speedup-bpass.md`.
 
 - **2026-06-08** — blast-radius **platform** — commit `b7c8040` (ai-proxy recompose server-enum). **3 findings (1 P1, 2 P2); 1 false_alarm.** 1 P1 (diagnose `blast_radius` account→platform) + 1 P2 (`_executeRegeneratePlanBlock` missing `FitnessGoals.isKnown` guard, asymmetric with `_executeSwitchGoal`) fixed in-batch; Finding 3 (`_humanGoal` default-case for recompose) = intentional/SoT-covered → false_alarm. False-alarm rate 1/3 ≈ 33% nominally > the 30% threshold, but **n=3 is too small to act on** and the false_alarm was lens 1's (writer_reader_drift) soft defense-in-depth sub-note, not a distinct noisy lens → **NO lens tuning**. The pass also independently re-verified the gate regex + token-parse + `describe()` text (zero false-greens) and caught a real P1 + a real P2 the 0 prior reviews missed → net valuable on a prod-bound platform change. Review: `docs/reviews/b7c8040-review.md`.
+
+- **2026-08-15** — blast-radius **platform** — branch
+  `claude/debugging-stuck-issue-89b2e9` (e4a7c9, the realtime PRO gate).
+  **1 finding (1 P0, 0 P1, 0 P2); 0 false_alarm.** Fixed in-batch. Review:
+  `docs/reviews/realtime-pro-gate-bpass.md`.
+  ⚠ **BACKFILLED 2026-09-10.** This entry was owed on 2026-08-15 and never
+  written; the review file sat on an unmerged branch for 25 days, so
+  `check_skill_tuning_history.dart` — which fires on a review file being ADDED —
+  had nothing to fire on until the cherry-pick. That is the gate working exactly
+  as designed and also the proof of its one blind spot: **a review that never
+  merges is a review whose lesson never enters the skill.** The entry is dated to
+  the review, not to the backfill, because the gate matches on `reviewed_at`.
+  **The tuning — lens 6 (`guard_without_its_mirror`) gains its sharpest instance
+  yet: the ANTI-FLOOD MECHANISM RE-CREATED THE FLOOD.** The fix added a latch so
+  a free user logs `realtime_subscribe_skipped_free_tier` once per transition
+  rather than once per resume. The latch was reset inside `unsubscribeRealtime()`
+  — and `day_rollover_service` calls that on EVERY `AppLifecycleState.paused`. So
+  the latch re-armed on every background/foreground cycle and the event re-fired
+  on every resume: an Edge Function invocation plus a `client_errors` row, across
+  essentially the whole free population. **Bug-class 2.13 reintroduced by the
+  very mechanism written to prevent it, inside the fix whose own diagnose-doc
+  names 2.13 as the thing to avoid.**
+  **Why the shipped test could not see it, which is the transferable part:** the
+  case named "the skip is logged ONCE" called `subscribeToRealtimeSync()` three
+  times **with no pause between them**. That is not the production call pattern.
+  The test was written from the same mental model as the code and exercised the
+  same half — precisely what lens 6 says never to accept as evidence. The
+  reviewer reproduced the defect with a throwaway probe first
+  (`Expected: <1> Actual: <5>`), then re-measured it as a mutation.
+  **Rule to carry forward: when a fix adds a latch, a cache, a debounce or a
+  once-flag, find every RESET of it and name the lifecycle event that triggers
+  that reset.** A latch is only as correct as its clear condition, and the clear
+  condition is usually written somewhere the diff does not touch. The repair here
+  moved the reset out of `unsubscribeRealtime()` into `_onUserChanged` alone: the
+  latch means "I have already reported that THIS user is unentitled", so the only
+  thing that may clear it is the user changing.
+  False-alarm rate 0/1 → no change to the lens set.
