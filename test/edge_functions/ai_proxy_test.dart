@@ -109,7 +109,15 @@ void main() {
 
   tearDownAll(() async {
     if (!setUpSucceeded) return;
-    await client.auth.signOut();
+    // Cleanup is hygiene, not an assertion (CLAUDE.md 4.9). A bare await here
+    // turned a fully-passing file RED on 2026-09-10: all 4 tests passed (+4),
+    // then signOut raised AuthRetryableFetchException "Connection reset by
+    // peer" on /auth/v1/logout and made main red. The exception type is
+    // literally named RETRYABLE -- a transient network blip must never be able
+    // to fail a suite whose assertions all held.
+    try {
+      await client.auth.signOut();
+    } catch (_) {}
   });
 
   /// Helper to call an Edge Function via HTTP.

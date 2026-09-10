@@ -509,12 +509,22 @@ exit 0
     // searched by this MSYS shell, so the stub would be silently ignored, the
     // real ls-remote would succeed, and this test would assert LANDED while
     // claiming to test UNVERIFIED -- green for the wrong reason.
-    final posixStub = (Process.runSync('cygpath', ['-u', stubDir.path],
-            runInShell: true)
-        .stdout as String)
-        .trim();
+    // `cygpath` is an MSYS tool and exists ONLY on Windows. On Linux CI it is
+    // absent, Process.runSync returns an empty stdout, and this guard fired --
+    // reddening main on 2026-09-10 in a test that passes on every dev machine
+    // here. On POSIX the temp path is ALREADY POSIX-form, so no conversion is
+    // needed; only the DERIVATION is platform-specific, never the guard.
+    final String posixStub;
+    if (Platform.isWindows) {
+      posixStub = (Process.runSync('cygpath', ['-u', stubDir.path],
+              runInShell: true)
+          .stdout as String)
+          .trim();
+    } else {
+      posixStub = stubDir.path;
+    }
     expect(posixStub, startsWith('/'),
-        reason: 'cygpath must yield a POSIX path or the stub is never found');
+        reason: 'the PATH entry must be POSIX-form or the stub is never found');
 
     final env = _cleanEnv();
     env['PATH'] = '$posixStub:${env['PATH']}';

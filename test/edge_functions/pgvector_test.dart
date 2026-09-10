@@ -109,7 +109,11 @@ void main() {
     try {
       await client.from('memory_embeddings').delete().eq('user_id', userId);
     } catch (_) {}
-    await client.auth.signOut();
+    // The delete above was already guarded and the signOut was not -- the
+    // guard-without-its-mirror shape. Both are cleanup; neither may throw.
+    try {
+      await client.auth.signOut();
+    } catch (_) {}
   });
 
   group('pgvector — Memory Storage', () {
