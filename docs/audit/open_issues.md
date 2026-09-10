@@ -3471,3 +3471,14 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Blast radius**: `alerts/_thresholds.yaml` + the alert's SQL; classify the written file.
 - **Class**: `feedback_green_check_input_set_width` — the alert's input set is bounded by a pruner it does not know about. Also `feedback_bad_news_vs_no_news`: zero firings had two explanations (all healthy / cannot fire) and nobody asked which.
 
+## OI-180 — `check_sot_registry_parity` silently skips every single-number `line_range:`, so 30 citations are validated by nothing (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-10 — `scripts/check_sot_registry_parity.dart:141` matches `line_range:\s*(\d+)-(\d+)` only. Counted in `docs/sot_registry.yaml`: **30** entries use the single-number form and **640** use the dash form. The 30 get no file-exists check, no range check, and no method-appears check — they are not validated at all.
+- **Identified**: 2026-09-10 · B-pass finding 3 on `4f6eb6532418` (the realtime PRO-gate rebase).
+- **How it surfaced, which is the useful part**: the `sync_realtime_subscription` concept cited `sync_service.dart:808 method: checkAndSync`. That was correct when authored and pointed at a bare `}` 167 lines from the real call site after the rebase. **The gate never noticed, because 808 is single-number.** Converting that one citation to the dash form during the fix made the gate check it — and it immediately FAILED, because the range named a call site rather than the declaration. The same gate went from silent to blocking on the same citation purely because of its punctuation.
+- ⚠ **A second, different false negative sits next to it**: the dash-form check asks only whether the method NAME appears anywhere inside the range. `_onUserChanged` cited `158-195`, and line 158 is `SingletonLifecycleRegistry.register('SyncService', _onUserChanged);` — a *reference*, not the definition (which is at 166). The gate was satisfied by the mention. So even the checked form can be green while pointing at the wrong place.
+- **Proposed repair**: validate the single-number form too (at minimum file-exists plus method-appears-near-N), and for the dash form prefer matching a DECLARATION (`method_name(` preceded by a type or `Future<`) over a bare substring. Both are offline checks needing no credentials.
+- **Blast radius**: `scripts/**` is individually pinned `platform`; needs its own gate test + `mutation_proven:` ledger entry per rule 24.
+- **Class**: `feedback_green_check_input_set_width` — the gate's input set silently excluded 4.5% of the citations it exists to police. Also `feedback_bad_news_vs_no_news`: an unchecked citation and a valid one both report nothing.

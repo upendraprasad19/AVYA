@@ -61,7 +61,15 @@ class DayRolloverObserver with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkAndRollover();
-      // Re-subscribe to realtime sync if PRO (was paused on background).
+      // Re-subscribe to realtime sync (was paused on background).
+      //
+      // e4a7c9 — this comment used to read "if PRO", above a line that checked
+      // nothing. The gate lives inside subscribeToRealtimeSync now (on the
+      // sink), so the call is correct as written and needs no condition here —
+      // but the old wording described an entitlement check that did not exist,
+      // which is how every user ended up attaching a PRO-only WAL poller on
+      // every foreground. This is also the free→PRO recovery path: a
+      // newly-upgraded user attaches on their next resume.
       unawaited(SyncService.instance.subscribeToRealtimeSync());
     } else if (state == AppLifecycleState.paused) {
       // Cancel realtime subscription on background to save battery/data.
