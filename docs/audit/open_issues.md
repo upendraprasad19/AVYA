@@ -3253,34 +3253,6 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - ⚠ **Whatever is chosen must not stamp `'week': 5`**: `hold_week_labels.dart:133` renders `row['week']` straight to the Home card, and that file's own header (`:93`) calls `copy['week'] = 4 + n` "the dishonest number, persisted" — it exists to suppress exactly that string
 - **Invariant that holds regardless**: a regeneration never deletes a row it does not replace. ⚠ Note this is already violated in a narrow way — `workout_schedule_read_service.dart:373-376` deletes `displaced_*` keys unconditionally with no `completed` check and no replacement (pre-existing, round 2 P3-N)
 
-## OI-170 — `day_of_week` round-trips through the cloud as 1..7 where every reader expects 0..6, shifting every `D<n>` badge (P1)
-
-- **Status**: CLOSED (2026-09-08, `regen-wave-alignment`) — diagnose `c4e8b2`
-- **Blocked on**: none
-- ⚠ **CLOSED BY BEING FOLDED IN, reversing this entry's own "not folded into the OI-166 batch" reasoning below.** Both stated reasons were wrong in the same direction. (1) The repair needs NO already-corrupt-cloud fixture: deriving from `scheduled_date` makes the transmitted value **unread**, so there is nothing to fixture. (2) "Different layer" did not hold either — the LOCAL half of the identical off-by-one was already being fixed in that batch, so filing this separately would have shipped one off-by-one fixed on one side and live on the other, which is precisely the writer/reader drift class the batch attacks. The `platform` tier note below is the one part that survived: folding it in DID raise the batch from `account` to `platform`, which pulled in a `feature_flag` requirement the batch initially missed and a B-pass caught
-- **Shipped**: restore derives `dayOfWeekFromDate(scheduled_date)` (self-healing, no migration); push sends the stored value with the derivation only as fallback; canon given ONE definition in `lib/core/utils/date_utils.dart:50`. Kill-switch `disable_day_of_week_derive` (opt-OUT — the fix is live by default; default-OFF would have preserved the known-broken path). 13 assertions in `test/contracts/day_of_week_canon_writer_to_reader_test.dart`, mutation-proven on 3 legs (4/4/1 red)
-- **Verified**: 2026-09-07 — canon is 0..6: `tool_dispatcher.dart:695` writes `destDate.weekday - 1` with the explicit comment `// 0=Mon..6=Sun`, `workout_schedule_read_service.dart:415` writes `d.weekday - 1`, and both readers assume it (`train_provider.dart:619` `(row['day_of_week'] as int?) ?? 0`; `:816` and `:622` compute `dayNumber = (week-1)*7 + day_of_week + 1`). Two writers emit 1..7: `sync/sync_workout.dart:1620` (`'day_of_week': parsedDate?.weekday ?? entry['day_of_week']`) and `hotel_workout_planner.dart:183` (`'day_of_week': d.weekday`). Cloud column is a bare `int`, no CHECK, no comment (`supabase/migrations/002_create_fitness_tables.sql:104`); **no Edge Function reads it** (`grep -rn "day_of_week" supabase/functions/` → 0, positive control `scheduled_workouts` → 5 files)
-- **Identified**: 2026-09-07 · surfaced by round 4 of the OI-166 plan review (P1-4), while verifying a *different* claim about `hotel_workout_planner.dart`. Three earlier rounds and two versions of the regen inventory had read the same files and missed it
-- **The mechanism, end to end**: the local write is correct (0..6) → the **push** at `:1620` discards it and re-derives 1..7 from the row's own date (`parsedDate` comes from `:1595`, so it is effectively never null and the `??` fallback never fires) → the **restore** at `:1977` writes `if (map['day_of_week'] != null) 'day_of_week': map['day_of_week']` **after** the `existingMap` spread, so the cloud's 1..7 OVERWRITES a correct local 0..6 → readers add 1 → every day number is one too high
-- **User-visible symptom**: after any cloud round-trip (reinstall, new device, and the background restore that runs on most cold starts for returning users), Monday of week 1 renders **`D2`** and Sunday of week 1 renders **`D8`** inside a seven-day week. Rendered at `week_rows.dart:54` (`'D${day.dayNumber}'`), `day_card.dart:54` and `expandable_day_card.dart:196`. `preview_plan_provider.dart:117` also *matches* on `dayNumber`, so a shifted value silently falls through to its positional-index fallback at `:122`
-- ⚠ **The PUSH is the wrong side, not the restore.** There is no server-side contract to honour — no constraint, no comment, no EF reader — so the app is the only consumer and 0..6 is its canon. The `??` ordering is also backwards: it prefers a re-derivation over the stored canonical value
-- **Proposed repair, not yet reviewed**: (1) the restore DERIVES `day_of_week` from `scheduled_date` (`parsed.weekday - 1`) instead of trusting the transmitted value — it is a pure function of the date, so it never needed to round-trip, and deriving it **self-heals every already-corrupted cloud row with no migration**; (2) the push sends `entry['day_of_week']` rather than re-deriving. (1) alone is sufficient; (2) is correctness hygiene
-- **Blast radius**: `sync/**` is `platform` (`docs/blast_radius.yaml:63`), which is why this is not folded into the `account`-tier OI-166 batch
-- **The local half of the same off-by-one IS fixed in the OI-166 batch** — `hotel_workout_planner.dart:183` — because that file is a schedule-row implementation matched by that batch's new `check_single_schedule_row_builder.dart` gate. This issue owns only the cloud round-trip
-
-## OI-171 — the deload lift writes the `current_plan` blob AFTER the fan-outs that would push it, so the lifted week 4 can sit un-pushed until an unrelated write (P2)
-
-- **Status**: CLOSED (2026-09-08, `regen-wave-alignment`) — diagnose `b6d1f4`
-- **Blocked on**: none
-- **Shipped**: `unawaited(SyncService.instance.pushWorkoutPlanForSyncDomain())` immediately after the blob write — the narrow plan push, kept UNAWAITED exactly as the warning below demands, so cold-launch home navigation is not blocked. ⚠ It first shipped with **zero** regression coverage, self-disclosed in its own diagnose-doc as acceptable "fixture cost" — which is a §4.2 deferral wearing a confession. A B-pass caught it by DELETING the line and watching 60 tests across four suites stay green. Now pinned by a 3-assertion ordering group in `test/contracts/deload_eval_behavioral_test.dart` (`indexOf(push) > indexOf(blobWrite)`), mutation-proven 2 legs: MOVING the push above the blob write reddens exactly the ordering assertion (1), deleting it reddens 3
-- **Verified**: 2026-09-07 — `_liftWeekFour` writes rows via `upsertScheduled` (`deload_evaluator.dart:207-223`), each of which fires `unawaited(SyncService.instance.syncWorkoutData())` (`workout_write_service.dart:566`); it then writes the blob at `deload_evaluator.dart:264` and fires only `unawaited(SyncService.instance.pushSnapshot())` at `:273`. `pushSnapshot` does **not** reach `_syncWorkoutPlan` — the only two call sites of that method are `weeklyFullSync()` (`sync_service.dart:1143` → `:1169`) and `pushWorkoutPlanForSyncDomain()` (`sync_workout.dart:2053-2057`, invoked from `sync_domains/workouts_sync_domain.dart:55`). `_syncWorkoutPlan` (`sync_workout.dart:1024-1057`) is what builds `plan_json` from the blob (`:1045-1056`)
-- **Identified**: 2026-09-07 · round 5 of the OI-166 plan review (P2-9) flagged `deload_evaluator.dart:264` as the one blob writer not paired with `syncWorkoutData()`. ⚠ **Its stated conclusion — that the lifted blob "never reaches `plan_json`" — is WRONG and was corrected on verification**: the row writes' own fan-out does reach it. The real defect is narrower and is an ORDERING one
-- **The actual gap**: the row fan-outs fire **before** the blob is written, so the `plan_json` they push carries the PRE-lift blob. Nothing after `:264` pushes the post-lift blob. It therefore reaches the cloud only on the next unrelated `syncWorkoutData()` (any later workout write) or the weekly `weeklyFullSync()`
-- **Who is exposed**: a user whose week 4 deload is lifted and who then logs nothing before reinstalling or moving device. On restore, `_restoreWorkoutPlan` applies the stale blob and the phase-arc strip shows `deload` for a week whose rows say `working` — the rows-vs-blob disagreement Unit B shipped 2026-09-06 to eliminate, arriving through the sync layer instead of the writer
-- ⚠ **Do NOT "fix" this by appending `syncWorkoutData()` at `:273`.** The comment at `:269-272` is deliberate: *"Durability — UNAWAITED (offline-first) … Awaiting here would block cold-launch home navigation (`runRolloverNow` is awaited before `context.go`)"*. The lift runs on the cold-launch rollover path. The fix must preserve that non-blocking property — most likely `unawaited(SyncService.instance.pushWorkoutPlanForSyncDomain())` after the blob write, which is the narrow push rather than the whole domain
-- **Blast radius**: `lib/core/services/**` → `account` (`docs/blast_radius.yaml:326`); the fix did not touch `sync/**`. The BATCH that shipped it is `platform`, but for OI-170's sake, not this one's
-- ~~**Not folded into the OI-166 batch**~~ — **superseded 2026-09-08: it WAS folded in.** The bullet read *"it is a defect in the deload lift's own durability sequencing, not in either regeneration path"*. That is still an accurate description of the defect and a poor reason to file it separately: it was one line, it was discovered while verifying an OI-166 review finding, and the batch was already re-testing the deload lift's dual write. §4.2 makes the same point structurally — a bug surfaced by a batch is fixed by that batch
-
 ## OI-176 — the OI-collision gate answers `PASS (vacuous)` for a branch with no commits, which is the exact state in which numbers are minted (P2)
 
 - **Status**: OPEN
@@ -3401,3 +3373,85 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
   3. Trap `SIGTERM`/`SIGINT` in the wrapper so a kill releases the lock and records `INTERRUPTED` — ⚠ but NOT so it aborts the push mid-flight, which would be worse.
 
 - **Recommendation**: option 2. It also fixes the adjacent hazard that made this expensive — `safe_push.sh` prints its verdict to stdout, and a caller who appends `; echo $?` gets the ECHO's exit code, not the script's (CLAUDE.md §4.9 documents that footgun; it fired again this session and made a FAILED push read as exit 0). A result file cannot be destroyed by shell composition.
+
+## OI-177 — the AI coach cannot replace ONE day with a different workout: the only route is a 2-step template chain that pollutes the saved-templates library, and it cannot name an exercise outside today's snapshot (P2)
+
+- **Status**: OPEN
+- **Blocked on**: founder product decision on tier (see the FREE-tier note below) — the engineering is unblocked
+- **Verified**: 2026-09-10 — full census of `supabase/functions/_shared/tools/registry.ts:32-65`, **20 registered tools**, read individually. No tool takes "a date + a desired focus" and rewrites that one day. Denominator stated deliberately: an earlier pass in the same session claimed the only route was `regeneratePlanBlock(weeks:1)` and that was WRONG — it had read two of the five tool directories
+- **Identified**: 2026-09-10 · founder scenario: *"today, when he woke up, he asks the coach — I'm not in the mood, so let's do a rest workout today"*, one day only, without touching a completed workout
+
+### What DOES exist for a single day (all verified against the tool files)
+
+| User intent | Tool | Tier | Confirmation |
+|---|---|---|---|
+| rest / skip today | `pausePlan(startDate, days:1)` → `status='paused'`, row preserved | **PRO** | destructive |
+| shorten today | `shortenWorkout(minutes)` — keeps compounds, drops accessories | **FREE** | trivial |
+| move today elsewhere | `rescheduleWeek(daysAvailable)` — non-fitting workouts DROPPED | PRO | destructive |
+| bodyweight/no-gym today | `generateHotelWorkout(days:1)` | PRO | destructive |
+| put a SAVED template on today | `scheduleTemplate(templateId, dates:[today])` | PRO | destructive |
+
+All honour the completed guard already — `pausePlan` *"Already-completed workouts are NOT paused (skipped silently)"*; `scheduleTemplate` *"Already-completed dates are silently skipped — history is never overwritten"*; `generateHotelWorkout` *"completed workouts are preserved"*.
+
+### The actual gap, precisely
+
+"Do legs instead of push today" has exactly one route: `createCustomTemplate` → `scheduleTemplate(dates:[today])`. Three problems with it, none cosmetic:
+
+1. **It permanently pollutes the user's library.** `createCustomTemplate` saves to `snapshot.saved_templates[]` with no ephemeral mode — a one-off mood change leaves "Legs Day" in their saved templates forever.
+2. **Two `destructive` confirmation cards** for a one-day change, versus `shortenWorkout`'s single `trivial` one.
+3. ⚠ **The coach cannot name an exercise it cannot already see.** `createCustomTemplate`'s `exerciseId` says *"Use the exact `exercise_id` from `snapshot.today_workout.exercises[]` OR `snapshot.custom_exercises[]`. Never invent IDs."* — and `swapExercise.ts:8-10` carries the identical constraint for `newExerciseId`. **There is no tool that searches the exercise library.** So when today is a push day, the coach structurally cannot compose a leg session: the leg exercise IDs are not in its context.
+
+Point 3 is the load-bearing one — it means this is not merely an ergonomics gap that a new tool closes on its own. Any `replaceWorkoutDay` tool needs an ID source, so either a `searchExercises` read tool ships with it, or the replacement is generated app-side by `PlanGenerator` from a focus string (`'legs'`) rather than composed by the model. **That half is now tracked as OI-178** (which also found the write path already accepts any library ID — this is a missing READ tool, not a missing capability). **OI-177 cannot be closed without OI-178 or its option 3.**
+
+### Tier question for the founder
+
+`pausePlan` is **PRO**. So a FREE user saying *"I'm not in the mood, rest today"* is refused by the tier gate, while *"I only have 20 minutes"* (`shortenWorkout`, FREE) is honoured. Rule 6 says Phase 1 is always free; whether a free user may take a rest day through the coach is a product call, not a bug. Surfaced, not decided.
+
+### Sequencing note
+
+This gets MORE visible once OI-166 Unit 2 caps `regeneratePlanBlock` at the 4-week phase block (founder locked 2026-09-10). Today a user can abuse `regeneratePlanBlock(weeks:1)` — 7 days from today — as a blunt substitute. After the cap it is still 7 days and still wrong, so the workaround does not improve; it just stops being reachable for longer horizons.
+
+- **Blast radius**: `supabase/functions/**` is `account`; a new tool also touches `registry.ts`, the coach prompt, and `tool_dispatcher.dart`. Needs its own live-deploy authorization per §4.3
+- **Class**: not a writer/reader drift — a genuine capability gap. Related: OI-166 (regen scope), OI-175 (`rawWeek > 4` semantics)
+
+## OI-178 — the AI coach has no read path to the 292-exercise library: the WRITE path already accepts any library ID, the model can never learn one (P2)
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical — needs a design choice between a `searchExercises` read tool and a snapshot digest (options below). Founder directed 2026-09-10: *"ai coach should have the tools whatever necessary"*
+- **Verified**: 2026-09-10 — every claim below re-read against source in-session
+- **Identified**: 2026-09-10 · surfaced while filing OI-177; it is the reason OI-177 cannot be closed by a `replaceWorkoutDay` tool alone
+
+### The asymmetry, which is the whole issue
+
+**The write path is ALREADY fully capable.** `swap_service.dart:221` — `_hive.exerciseBox.get(toExerciseId)` is a direct key lookup into the **complete** library; any of the 292 exercises resolves. (`:225-236` then falls back to `customBox`, matching on id **or name**.)
+
+**The model can never produce a valid ID.** Verified chain:
+- `assets/data/exercise_library.json` holds **292** exercises, keyed by opaque IDs — `E001` = "Barbell Bench Press"
+- `seed_service.dart:185-192` — *"writes every exercise into exerciseBox keyed by its `id`"*. So the Hive key IS `E001`; a NAME does not resolve on the library branch (only on the custom branch)
+- `ai_snapshot_builder.dart` — `grep -c "exercise_library"` → **0**. No library key in the snapshot at all
+- its `custom_exercises` key reads `_hive.customBox` (`_readCustomExercises`) — **user-created only**, not the built-in 292
+- `getFormCues` (the only library-touching read tool) resolves a NAME → cues/mistakes/muscles/difficulty/logging_type and **returns no `id`** (`getFormCues.ts:74-86`, `:101-113`). So there is no name→id recovery hop either
+
+⇒ The tool descriptions are honest about the cage: `createCustomTemplate.ts:5-6` *"Use the exact `exercise_id` from `snapshot.today_workout.exercises[]` OR `snapshot.custom_exercises[]`. **Never invent IDs.**"*; `swapExercise.ts:8-10` identical for `newExerciseId`.
+
+**This is a missing READ tool, not a missing capability.** Nothing in the write path needs to change.
+
+### What it silently costs today, in production
+
+- **`swapExercise` (live, PRO)** — its entire purpose is "swap X for something else", yet the model's only legal `newExerciseId` values are exercises **already in today's workout** (a no-op or a duplicate) or the user's own customs. For a user with no custom exercises the tool cannot make a single meaningful swap the model chose. Its `reason` field advertises *"Equipment substitute for home"*, *"Easier on the shoulder"* — neither is reachable
+- **`createCustomTemplate` (live, PRO)** — can only compose from exercises visible in today's snapshot, so "build me a leg day" on a push day is structurally impossible
+- **OI-177's `replaceWorkoutDay`** — blocked on this for the same reason
+
+⚠ **Not yet measured:** what the model actually DOES when it wants an unavailable exercise — refuse, hallucinate an ID and hit `SwapExerciseException('exercise_not_found')` (`swap_service.dart:238-243`), or silently pick a worse in-context exercise. **Check `ai_coach_interactions` for `exercise_not_found` before designing the fix** — the failure mode determines whether this is a silent-quality problem or a visible-error problem, and they warrant different urgency.
+
+### Options
+
+1. **`searchExercises` read tool** — `(query|muscle_group|equipment) → [{id, name, equipment, muscles}]`, capped ~20 rows. Mirrors `getFormCues`'s existing `exercise_library` Postgres query, so the seam is proven. FREE tier (a read). Composes with every write tool above, including OI-177's.
+2. **Library digest in the snapshot** — all 292 as `id|name|equipment` costs real tokens on EVERY message, for a need that arises rarely. Rejected on cost unless filtered by the user's equipment.
+3. **App-side generation from a focus string** — `replaceWorkoutDay(date, focus:'legs')` hands off to `PlanGenerator`, which already queries the library (rule 8). Solves OI-177 without giving the model IDs, but does NOT fix `swapExercise` or `createCustomTemplate`.
+
+**Recommendation: option 1**, because it is the only one that fixes all three call sites. Option 3 remains worth doing for OI-177's generate-a-day case — they are complementary, not alternatives.
+
+- **Blast radius**: `supabase/functions/**` = `account`. New tool = `registry.ts` + the tool file + coach prompt + `zodToGemini` shape; a read tool needs no `tool_dispatcher.dart` write branch. Live deploy needs its own authorization per §4.3
+- **Class**: capability gap + **`feedback_bad_news_vs_no_news`** — a tool that cannot express the request and one that expresses it badly are indistinguishable from the transcript, which is why this survived 20 shipped tools unnoticed
+- **Related**: OI-177 (blocked on this), OI-166 (regen scope)
