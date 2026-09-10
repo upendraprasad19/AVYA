@@ -51,7 +51,12 @@ void main() {
   });
 
   tearDownAll(() async {
-    if (setUpSucceeded) await SupabaseTestHelper.signOut();
+    if (!setUpSucceeded) return;
+    // Cleanup is hygiene, not an assertion (CLAUDE.md 4.9) -- same unguarded
+    // signOut that reddened ai_proxy_test.dart on 2026-09-10.
+    try {
+      await SupabaseTestHelper.signOut();
+    } catch (_) {}
   });
 
   test('an authenticated client CANNOT write via consume_quota (RLS refuses)',
