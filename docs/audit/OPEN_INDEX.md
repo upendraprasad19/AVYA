@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**93 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**92 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -96,7 +96,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-167 | the debugging skill's bug-class numbers collide 9×, every one is cited by… | nothing technical — needs a per-citation… | 2026-09-07 — `grep -oE '^### 2\.[0-9]+'… | [:3318](open_issues.md#L3318) |
 | OI-168 | nothing fires §4.9's "grep the test tree before you land" rule, so it is… | nothing technical — needs the gate… | 2026-09-07 — the pre-push full suite on… | [:3369](open_issues.md#L3369) |
 | OI-169 | a local run of `test/edge_functions/` reports "All tests passed" having… | nothing — needs a decision on which… | 2026-09-07 — `flutter test… | [:3392](open_issues.md#L3392) |
-| OI-172 | killing a backgrounded `safe_push` does NOT kill the push; it keeps… | nothing technical — needs a decision on… | 2026-09-07 — a backgrounded… | [:3409](open_issues.md#L3409) |
 | OI-173 | no cold-start weight estimate: a brand-new user, every free user, and any… | none — founder approved 2026-09-06 as… | 2026-09-06 — `plan_generator.dart:234`… | [:3233](open_issues.md#L3233) |
 | OI-174 | schedule rows written past `plan_end` are never pruned, and they delay the… | none — but it is a DESTRUCTIVE migration… | 2026-09-06 — the only schedule deletions… | [:3251](open_issues.md#L3251) |
 | OI-175 | a regeneration past the phase's 4th week (`rawWeek > 4`) has no… | FOUNDER — what a regeneration should DO… | 2026-09-06 — `getCurrentWeekNumber()`… | [:3263](open_issues.md#L3263) |

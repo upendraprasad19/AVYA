@@ -17,12 +17,16 @@
 // exports GIT_DIR/GIT_WORK_TREE, which override BOTH `workingDirectory:` and
 // `-C <path>`, so an unscrubbed child git would operate on the REAL repo.
 
-@Timeout(Duration(minutes: 3))
+@Timeout(Duration(minutes: 14))
 library;
 
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+
+// The REAL reader, so the writer->reader test below cannot pass by agreeing
+// with a local helper that shares none of its code.
+import '../../scripts/push_result_lib.dart';
 
 Map<String, String> _cleanEnv() {
   final env = Map<String, String>.from(Platform.environment);
@@ -365,4 +369,457 @@ exit 0
         reason: 'git itself must also report receiving exactly one push '
             'option.\nCaptured:\n$captured');
   });
+
+  // =====================================================================
+  // OI-172 -- the terminal push-result record.
+  //
+  // safe_push.sh distinguishes THREE outcomes, and before this batch nothing
+  // recorded WHICH one happened: the only in-flight evidence was the lock's
+  // `holder` file, which _git_lock.sh deletes via a trap on EXIT/HUP/INT/TERM.
+  // So a push that was reaped, interrupted, or run in a now-closed terminal
+  // left nothing to read afterwards.
+  //
+  // These tests pin the WRITER. The READER contract is pinned separately, and
+  // purely, in test/scripts/push_result_lib_test.dart -- including the
+  // two-refs-at-one-sha case, which is where the contract is easiest to get
+  // wrong.
+  // =====================================================================
+
+  /// The record path, resolved the way the script resolves it.
+  ///
+  /// `--absolute-git-dir`, NOT `--git-dir`: the latter returns a RELATIVE
+  /// `.git` in a primary worktree, which a reader elsewhere would resolve
+  /// against its own cwd.
+  String recordPath(String repo) =>
+      (_run('git', ['rev-parse', '--absolute-git-dir'], repo).stdout as String)
+              .trim() +
+          '/.safe_push_result';
+
+  Map<String, String> readRecord(String repo) {
+    final f = File(recordPath(repo));
+    if (!f.existsSync()) return <String, String>{};
+    final out = <String, String>{};
+    for (final line in f.readAsStringSync().split('\n')) {
+      final t = line.trim();
+      final eq = t.indexOf('=');
+      if (eq > 0) out.putIfAbsent(t.substring(0, eq), () => t.substring(eq + 1));
+    }
+    return out;
+  }
+
+  test('a LANDED push records result=LANDED with local_sha == remote_sha', () {
+    final repo = _setupRepo(_tmp(), Directory.current.path);
+    final r = _run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+
+    final rec = readRecord(repo.primary);
+    expect(rec['result'], 'LANDED');
+    expect(rec['exit'], '0');
+    expect(rec['ref'], 'refs/heads/main');
+    expect(rec['local_sha'], isNotEmpty);
+    expect(rec['remote_sha'], rec['local_sha'],
+        reason: 'LANDED means the remote was OBSERVED at our tip');
+    expect(rec['verified_ref'], 'refs/heads/main');
+    expect(rec['pid'], isNotEmpty);
+    expect(rec['ended'], isNotEmpty, reason: 'a terminal record is timestamped');
+  });
+
+  test(
+      'the record lands in the git dir, NOT the worktree -- nothing named '
+      'safe_push_result appears in `git status --ignored`. This is the '
+      'anti-regression for the class that has already made a worktree '
+      'permanently unretirable three times.', () {
+    final repo = _setupRepo(_tmp(), Directory.current.path);
+
+    expect(_run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary)
+        .exitCode, 0);
+
+    expect(File(recordPath(repo.primary)).existsSync(), isTrue,
+        reason: 'the record must exist, or this test passes vacuously');
+    expect(recordPath(repo.primary), contains('.git'),
+        reason: 'the record must live inside the git admin dir');
+    expect(File('${repo.primary}/.safe_push_result').existsSync(), isFalse);
+    expect(
+        File('${repo.primary}/.claude/.last_push_result').existsSync(), isFalse);
+
+    final after = (_run('git', ['status', '--porcelain', '--ignored'],
+            repo.primary)
+        .stdout as String);
+    // arm_ci_reconcile.sh legitimately adds `.claude/` here, so assert only
+    // that no reported path is OURS rather than requiring byte-identity.
+    expect(after, isNot(contains('safe_push_result')),
+        reason: 'the record must be invisible to git status.\n$after');
+  });
+
+  test('a rejected push records result=FAILED with a non-empty reason', () {
+    final tmp = _tmp();
+    final repo = _setupRepo(tmp, Directory.current.path);
+    expect(_run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary)
+        .exitCode, 0);
+
+    // Move the remote ahead from a second clone so our next push is rejected.
+    final other = '${tmp.path}/other';
+    Directory(other).createSync(recursive: true);
+    expect(_run('git', ['clone', '-q', _fileUri(repo.remote), '.'], other).exitCode, 0);
+    _run('git', ['config', 'user.email', 'test@example.invalid'], other);
+    _run('git', ['config', 'user.name', 'Test'], other);
+    File('$other/theirs.txt').writeAsStringSync('theirs\n');
+    _run('git', ['add', '-A'], other);
+    _run('git', ['commit', '-qm', 'theirs'], other);
+    expect(_run('git', ['push', '-q', 'origin', 'main'], other).exitCode, 0);
+
+    File('${repo.primary}/mine.txt').writeAsStringSync('mine\n');
+    _run('git', ['add', '-A'], repo.primary);
+    _run('git', ['commit', '-qm', 'mine'], repo.primary);
+
+    final r = _run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary);
+    expect(r.exitCode, isNot(0));
+    final rec = readRecord(repo.primary);
+    expect(rec['result'], 'FAILED');
+    expect(rec['reason'], isNotEmpty,
+        reason: 'a FAILED record must say why, or it adds nothing to the exit code');
+  });
+
+  test(
+      'an unreachable PROBE after a SUCCESSFUL push records UNVERIFIED with an '
+      'EMPTY remote_sha -- never FAILED. Collapsing the two re-creates '
+      'diagnose d4f9b2, which is the bug exit code 2 exists to prevent.', () {
+    final tmp = _tmp();
+    final repo = _setupRepo(tmp, Directory.current.path);
+
+    // FIXTURE NOTE, learned by getting it wrong first: pointing `origin` at a
+    // nonexistent path does NOT reach this branch. `git push` itself then fails
+    // (exit 128) and the script takes the FAILED path instead. UNVERIFIED
+    // requires the push to SUCCEED and only the PROBE to fail, so `git` has to
+    // be stubbed on PATH to fail `ls-remote` alone.
+    final stubDir = Directory('${tmp.path}/stub')..createSync(recursive: true);
+    final realGit = (Process.runSync('sh', ['-c', 'command -v git'],
+            runInShell: true)
+        .stdout as String)
+        .trim();
+    expect(realGit, isNotEmpty, reason: 'could not locate the real git');
+    final stub = File('${stubDir.path}/git');
+    stub.writeAsStringSync('#!/bin/sh\n'
+        'if [ "\$1" = "ls-remote" ]; then exit 128; fi\n'
+        'exec "$realGit" "\$@"\n');
+    Process.runSync('chmod', ['+x', stub.path], runInShell: true);
+
+    // The PATH entry MUST be POSIX-form. A Windows `C:/...` entry is not
+    // searched by this MSYS shell, so the stub would be silently ignored, the
+    // real ls-remote would succeed, and this test would assert LANDED while
+    // claiming to test UNVERIFIED -- green for the wrong reason.
+    final posixStub = (Process.runSync('cygpath', ['-u', stubDir.path],
+            runInShell: true)
+        .stdout as String)
+        .trim();
+    expect(posixStub, startsWith('/'),
+        reason: 'cygpath must yield a POSIX path or the stub is never found');
+
+    final env = _cleanEnv();
+    env['PATH'] = '$posixStub:${env['PATH']}';
+    final r = Process.runSync('sh', ['scripts/safe_push.sh', 'origin', 'main'],
+        workingDirectory: repo.primary,
+        environment: env,
+        includeParentEnvironment: false,
+        runInShell: true);
+
+    expect(r.exitCode, 2,
+        reason: 'UNVERIFIED is exit 2, distinct from both 0 and 1.\n'
+            '${r.stdout}${r.stderr}');
+    final rec = readRecord(repo.primary);
+    expect(rec['result'], 'UNVERIFIED');
+    expect(rec['exit'], '2');
+    expect(rec['remote_sha'], isEmpty,
+        reason: 'nothing was observed on the remote, so this must be empty '
+            'rather than carry a stale or invented sha');
+    expect(rec['result'], isNot('FAILED'));
+  });
+
+  test('a second push OVERWRITES the record rather than appending to it', () {
+    final repo = _setupRepo(_tmp(), Directory.current.path);
+    expect(_run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary)
+        .exitCode, 0);
+    final firstSha = readRecord(repo.primary)['local_sha'];
+
+    File('${repo.primary}/second.txt').writeAsStringSync('second\n');
+    _run('git', ['add', '-A'], repo.primary);
+    _run('git', ['commit', '-qm', 'second'], repo.primary);
+    expect(_run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary)
+        .exitCode, 0);
+
+    final text = File(recordPath(repo.primary)).readAsStringSync();
+    expect(RegExp(r'^result=', multiLine: true).allMatches(text).length, 1,
+        reason: 'exactly ONE record, not an accumulating log:\n$text');
+    expect(readRecord(repo.primary)['local_sha'], isNot(firstSha));
+  });
+
+  test(
+      'a pre-push ABORT leaves the prior record untouched, and its local_sha '
+      'therefore stops matching HEAD -- which is what makes the four silent '
+      'abort paths harmless rather than misleading', () {
+    final repo = _setupRepo(_tmp(), Directory.current.path);
+    expect(_run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary)
+        .exitCode, 0);
+    final landedSha = readRecord(repo.primary)['local_sha'];
+    expect(landedSha, isNotEmpty);
+
+    // Abort before any push is attempted: an unresolvable branch name.
+    final r = _run(
+        'sh', ['scripts/safe_push.sh', 'origin', 'no-such-branch-xyz'], repo.primary);
+    expect(r.exitCode, isNot(0));
+
+    final rec = readRecord(repo.primary);
+    expect(rec['result'], 'LANDED',
+        reason: 'the abort must NOT have written a FAILED record -- no push was '
+            'attempted, so claiming failure would be a lie');
+    expect(rec['local_sha'], landedSha);
+
+    // Advance HEAD. The stale record's sha now cannot match, so a reader
+    // following the contract gets UNVERIFIED instead of a stale verdict.
+    File('${repo.primary}/third.txt').writeAsStringSync('third\n');
+    _run('git', ['add', '-A'], repo.primary);
+    _run('git', ['commit', '-qm', 'third'], repo.primary);
+    final head =
+        (_run('git', ['rev-parse', 'HEAD'], repo.primary).stdout as String).trim();
+    expect(readRecord(repo.primary)['local_sha'], isNot(head));
+  });
+
+  test(
+      'a record write that FAILS does not fail the push -- the record is '
+      'advisory, the push verdict is not', () {
+    final repo = _setupRepo(_tmp(), Directory.current.path);
+    // Squat the record path with a DIRECTORY. `mv -T` refuses that outright;
+    // plain `mv` would exit 0 and move the file INSIDE it, so the record would
+    // land where no reader looks while the push reported success. That is why
+    // the script mandates -T, and why this fixture only works because it does.
+    Directory(recordPath(repo.primary)).createSync(recursive: true);
+
+    final r = _run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary);
+    expect(r.exitCode, 0,
+        reason: 'an unwritable record must never turn a landed push into a '
+            'reported failure.\n${r.stdout}${r.stderr}');
+    expect(r.stdout as String, contains('OK --'));
+    expect(Directory(recordPath(repo.primary)).existsSync(), isTrue);
+    expect(Directory(recordPath(repo.primary)).listSync(), isEmpty,
+        reason: 'mv -T must have REFUSED, not moved the file inside the '
+            'directory the way plain mv does');
+    expect(File('${recordPath(repo.primary)}.tmp').existsSync(), isFalse,
+        reason: 'the refused candidate must be cleaned up, not left as litter '
+            'inside .git for every later push to add to');
+  });
+
+  test(
+      'a tag passed where a branch is expected records the namespace actually '
+      'probed, so the wrong verdict is self-diagnosing', () {
+    final repo = _setupRepo(_tmp(), Directory.current.path);
+    expect(_run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary)
+        .exitCode, 0);
+    _run('git', ['tag', 'v9.9.9'], repo.primary);
+
+    // probe_remote_sha() hardcodes refs/heads/$BRANCH, so the tag pushes but
+    // the probe looks in the wrong namespace and the script reports FAILED for
+    // a push that landed. PRE-EXISTING behaviour, not introduced by this batch;
+    // the record makes it visible instead of silently wrong.
+    final r = _run('sh', ['scripts/safe_push.sh', 'origin', 'v9.9.9'], repo.primary);
+    expect(r.exitCode, isNot(0), reason: 'documenting current behaviour');
+
+    final rec = readRecord(repo.primary);
+    expect(rec['ref'], 'refs/tags/v9.9.9');
+    expect(rec['verified_ref'], 'refs/heads/v9.9.9');
+    expect(rec['ref'], isNot(rec['verified_ref']),
+        reason: 'the mismatch is the signal push_result_lib.dart reads as '
+            'probedTheWrongNamespace');
+  });
+
+  test('reason is sanitized to ONE line, so git stderr cannot inject a field',
+      () {
+    final tmp = _tmp();
+    final repo = _setupRepo(tmp, Directory.current.path);
+    expect(_run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary)
+        .exitCode, 0);
+
+    // A rejected push produces multi-line stderr; whatever lands in `reason`
+    // must not add keys. Assert on the KEY SET, which is what a parser sees.
+    final other = '${tmp.path}/other2';
+    Directory(other).createSync(recursive: true);
+    expect(_run('git', ['clone', '-q', _fileUri(repo.remote), '.'], other).exitCode, 0);
+    _run('git', ['config', 'user.email', 'test@example.invalid'], other);
+    _run('git', ['config', 'user.name', 'Test'], other);
+    File('$other/x.txt').writeAsStringSync('x\n');
+    _run('git', ['add', '-A'], other);
+    _run('git', ['commit', '-qm', 'x'], other);
+    _run('git', ['push', '-q', 'origin', 'main'], other);
+
+    File('${repo.primary}/y.txt').writeAsStringSync('y\n');
+    _run('git', ['add', '-A'], repo.primary);
+    _run('git', ['commit', '-qm', 'y'], repo.primary);
+    _run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary);
+
+    final text = File(recordPath(repo.primary)).readAsStringSync();
+    final keys = RegExp(r'^([a-z_]+)=', multiLine: true)
+        .allMatches(text)
+        .map((m) => m.group(1))
+        .toList();
+    expect(keys.length, keys.toSet().length,
+        reason: 'no duplicated keys -- an injected line would duplicate one:\n$text');
+    expect(keys, contains('reason'));
+    final reasonLine =
+        text.split('\n').firstWhere((l) => l.startsWith('reason='), orElse: () => '');
+    expect(reasonLine, isNot(contains('\n')));
+    expect(reasonLine.length, lessThanOrEqualTo(300));
+  });
+
+
+  test(
+      'a push IN FLIGHT leaves result=STARTED carrying a LIVE pid -- the case '
+      'that motivated OI-172, where the push was still running and no terminal '
+      'verdict existed yet, so a terminal-only record would have been absent at '
+      'exactly the moment it was wanted', () async {
+    final tmp = _tmp();
+    final repo = _setupRepo(tmp, Directory.current.path);
+
+    // The mid-flight window is created DELIBERATELY, not sampled by luck: a
+    // sleeping pre-receive hook on the receiving end holds the push open. An
+    // implicit race here would be the 6th recurrence of the
+    // green-targeted/red-in-the-suite class this repo has already paid for 5
+    // times, because suite contention changes the timing.
+    final hookDir = Directory('${repo.remote}/hooks')..createSync(recursive: true);
+    final hookPath = '${hookDir.path}/pre-receive';
+    File(hookPath).writeAsStringSync('#!/usr/bin/env sh\nsleep 6\nexit 0\n');
+    Process.runSync('chmod', ['+x', hookPath], runInShell: true);
+
+    final proc = await Process.start(
+        'sh', ['scripts/safe_push.sh', 'origin', 'main'],
+        workingDirectory: repo.primary,
+        environment: _cleanEnv(),
+        includeParentEnvironment: false,
+        runInShell: true);
+    // Drain, or a full pipe buffer could block the child on Windows.
+    proc.stdout.drain<void>();
+    proc.stderr.drain<void>();
+
+    Map<String, String> seen = <String, String>{};
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (DateTime.now().isBefore(deadline)) {
+      final rec = readRecord(repo.primary);
+      if (rec['result'] == 'STARTED') {
+        seen = rec;
+        break;
+      }
+      if (rec['result'] == 'LANDED') break; // finished before we sampled
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+
+    expect(seen['result'], 'STARTED',
+        reason: 'the record must exist and read STARTED while the push is still '
+            'running -- a terminal-only record cannot answer "is a push in '
+            'flight", which is the question the motivating incident asked');
+    expect(seen['pid'], isNotEmpty);
+    expect(seen['ended'], isEmpty,
+        reason: 'an in-flight record has no end time; a non-empty `ended` here '
+            'would let a reader mistake it for a verdict');
+    expect(seen['exit'], '-',
+        reason: 'no exit code exists yet, and writing 0 would read as success');
+    expect(seen['local_sha'], isNotEmpty);
+
+    // The pid must be a live process: that pairing is the whole point, since
+    // STARTED alone cannot distinguish "running" from "interrupted".
+    final alive = Process.runSync('sh', ['-c', 'kill -0 ${seen['pid']}'],
+        runInShell: true);
+    expect(alive.exitCode, 0,
+        reason: 'pid ${seen['pid']} should still be alive while the remote hook '
+            'sleeps');
+
+    final code = await proc.exitCode;
+    expect(code, 0, reason: 'the push itself must still succeed');
+    final finalRec = readRecord(repo.primary);
+    expect(finalRec['result'], 'LANDED',
+        reason: 'the STARTED record must be REPLACED by the terminal verdict, '
+            'not left behind for a later reader to misread');
+    expect(finalRec['ended'], isNotEmpty);
+  });
+
+
+  test(
+      'WRITER -> READER: a record produced by the real safe_push.sh is parsed '
+      'and classified LANDED by push_result_lib.dart. This is the drift seam -- '
+      'the writer is shell and the reader is Dart, so a renamed field would make '
+      'the reader silently read empty and answer UNVERIFIED forever, which is '
+      'fail-SAFE and therefore invisible.', () {
+    final repo = _setupRepo(_tmp(), Directory.current.path);
+    final r = _run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+
+    // Parse with the REAL reader, not this file's local helper -- the local
+    // helper shares no code with push_result_lib.dart, so it cannot detect a
+    // field name the reader does not know about.
+    final record = parsePushResult(File(recordPath(repo.primary)).readAsStringSync());
+    expect(record, isNotNull,
+        reason: 'the real reader must parse the real writer output');
+
+    final head =
+        (_run('git', ['rev-parse', 'HEAD'], repo.primary).stdout as String).trim();
+    expect(
+      classifyPushResult(record, wantRef: 'refs/heads/main', wantSha: head),
+      PushVerdict.landed,
+      reason: 'end-to-end: the shell wrote it, the Dart reader classified it, and '
+          'the answer is the one the push actually achieved',
+    );
+
+    // And the mirror: the same real record must NOT be readable as a verdict
+    // about a different ref, even though the sha matches exactly.
+    expect(
+      classifyPushResult(record, wantRef: 'refs/heads/other', wantSha: head),
+      PushVerdict.unverified,
+    );
+
+    // Field-level drift guard: assert the reader actually POPULATED the fields it
+    // classifies on, rather than defaulting them to '' and reaching `landed` by
+    // some other route. A rename would leave these empty.
+    expect(record!.ref, 'refs/heads/main');
+    expect(record.localSha, head);
+    expect(record.remoteSha, head);
+    expect(record.verifiedRef, 'refs/heads/main');
+    expect(record.pid, isNotEmpty);
+    expect(record.isInFlight, isFalse);
+    expect(record.probedTheWrongNamespace, isFalse);
+  });
+
+
+  test(
+      'the KILL SWITCH suppresses the record without touching the push — and '
+      'lives beside the record in the git dir, NOT in .claude/, because neither '
+      'existing kill switch is in regenerableIgnoredPaths and a worktree holding '
+      'one would be unretirable', () {
+    final repo = _setupRepo(_tmp(), Directory.current.path);
+    final marker = File('${recordPath(repo.primary)}.disabled')
+      ..writeAsStringSync('');
+
+    final r = _run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary);
+    expect(r.exitCode, 0,
+        reason: 'disabling the record must not affect the push at all.\n'
+            '${r.stdout}${r.stderr}');
+    expect(r.stdout as String, contains('OK --'));
+    expect(File(recordPath(repo.primary)).existsSync(), isFalse,
+        reason: 'no record may be written while the switch is present');
+
+    // The mirror: remove it and the record comes back. Without this leg the test
+    // would pass against a writer that is simply broken.
+    marker.deleteSync();
+    File('${repo.primary}/after.txt').writeAsStringSync('after\n');
+    _run('git', ['add', '-A'], repo.primary);
+    _run('git', ['commit', '-qm', 'after'], repo.primary);
+    expect(_run('sh', ['scripts/safe_push.sh', 'origin', 'main'], repo.primary)
+        .exitCode, 0);
+    expect(File(recordPath(repo.primary)).existsSync(), isTrue,
+        reason: 'with the switch gone the record must be written again');
+    expect(readRecord(repo.primary)['result'], 'LANDED');
+
+    // And the switch itself must not be visible to worktree retirement either.
+    final status = (_run('git', ['status', '--porcelain', '--ignored'],
+            repo.primary)
+        .stdout as String);
+    expect(status, isNot(contains('safe_push_result')));
+  });
+
 }

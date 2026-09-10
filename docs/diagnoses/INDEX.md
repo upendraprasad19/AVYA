@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### safe_push_terminal_result_record (1 bugs)
+- 2026-09-10 a7f3c1 — `safe_push.sh` distinguishes THREE outcomes — 0 LANDED, 1 FAILED, 2 UNVERIFIED — and nothing recorded WHICH one happened. The only in-flight evidence was the lock's `holder` file, and…
+
 ### `day_of_week` has one meaning in the app — 0=Mon..6=Sun — asserted at `tool_dispatcher.dart:695` in a comment and relied on by every reader (`train_provider.dart:619` and `:816` compute `(week - 1) * 7 + day_of_week + 1`). Dart's `DateTime.weekday` is 1..7, so every writer has to remember to subtract one. Most did. The sync push did not: it discarded the correct stored value and re-derived `parsedDate.weekday`.
 What made it durable rather than transient is the ORDER of the restore's merge. The cloud value was written AFTER the `...existingMap` spread, so it overwrote a correct local 0..6 with a wrong 1..7 on every restore. A field that is a pure function of the row's own date was being round-tripped through the network and coming back worse.
 The fix therefore belongs on the READ side even though the WRITE side is what was wrong: the restore now derives the value from `scheduled_date` and ignores the wire entirely, which self-heals every already-corrupted cloud row with no migration. A push-only fix could not do that, because a row nobody edits is never re-pushed. (1 bugs)
@@ -1150,6 +1153,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-10 | a7f3c1 | `safe_push.sh` distinguishes THREE outcomes — 0 LANDED, 1 FAILED, 2 UNVERIFIED — and nothing recorded WHICH one happened. The only in-flight evidence was the lock's `holder` file, and… | safe_push_terminal_result_record | test/scripts/push_result_lib_test.dart |
 | 2026-09-08 | c4e8b2 | After any cloud restore — reinstall, new device, or the background restore most returning users get on cold start — every Train-screen day badge read one too high. Monday of week 1 rendered `D2`;… | `day_of_week` has one meaning in the app — 0=Mon..6=Sun — asserted at `tool_dispatcher.dart:695` in a comment and relied on by every reader (`train_provider.dart:619` and `:816` compute `(week - 1) * 7 + day_of_week + 1`). Dart's `DateTime.weekday` is 1..7, so every writer has to remember to subtract one. Most did. The sync push did not: it discarded the correct stored value and re-derived `parsedDate.weekday`.
 What made it durable rather than transient is the ORDER of the restore's merge. The cloud value was written AFTER the `...existingMap` spread, so it overwrote a correct local 0..6 with a wrong 1..7 on every restore. A field that is a pure function of the row's own date was being round-tripped through the network and coming back worse.
 The fix therefore belongs on the READ side even though the WRITE side is what was wrong: the restore now derives the value from `scheduled_date` and ignores the wire entirely, which self-heals every already-corrupted cloud row with no migration. A push-only fix could not do that, because a row nobody edits is never re-pushed. | test/contracts/day_of_week_canon_writer_to_reader_test.dart |

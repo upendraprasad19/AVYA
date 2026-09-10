@@ -10540,3 +10540,93 @@ concepts:
       table: usage_counters
       columns: [user_id, quota_key, window_start, used, updated_at]
     sync_methods: []
+
+  - concept: safe_push_terminal_result_record
+    domain: infrastructure
+    behavioral_test_path: test/scripts/safe_push_test.dart
+    description: |
+      Which of safe_push.sh's THREE outcomes actually happened, recorded so it
+      survives losing stdout. Before OI-172 (2026-09-10) nothing recorded it: the
+      only in-flight evidence was the lock's `holder` file, and _git_lock.sh
+      `rm -rf`s the lock on a trap over EXIT/HUP/INT/TERM, so on any normal exit
+      that file is gone. The lock answers "is a push running right now" and
+      structurally cannot answer "what happened" -- which is the question a
+      reaped or interrupted push leaves you with.
+
+      Record: `$(git rev-parse --absolute-git-dir)/.safe_push_result`, plain
+      key=value lines. `STARTED` + pid before the push, then exactly one terminal
+      record at each of the four verdict exits. The other four exits precede any
+      push attempt and write NOTHING -- a FAILED record there would claim a push
+      failed when none was attempted.
+
+      WHY THE PATH IS WHAT IT IS, since the obvious answer is wrong three ways:
+        * inside `.git`, NOT the worktree. A gitignored file in a worktree makes
+          it permanently unretirable -- this would have been the FOURTH instance
+          (INDEX.md:45, b4d7e9, OI-128), and an atomic tmp+rename writer owes
+          retire_worktree_lib.dart's list TWO entries, not one.
+        * `--absolute-git-dir`, NOT `--git-dir`: the latter is RELATIVE in the
+          primary worktree, so a reader elsewhere resolves it against its own cwd.
+        * per-worktree, NOT `--git-common-dir`: this matches _git_lock.sh's own
+          key, so the existing lock already serialises writes. A shared path
+          would not be serialised -- the lock is keyed on `--git-dir` and two
+          linked worktrees can push concurrently.
+
+      Published `.tmp` then `mv -T`. The `-T` is load-bearing twice: with a
+      DIRECTORY at the destination plain `mv` exits 0 and moves the record INSIDE
+      it (landing where no reader looks while the push reports success), and onto
+      an existing FILE `-T` replaces unconditionally, which every push after the
+      first needs.
+
+      THE READER CONTRACT IS CODE, NOT PROSE (scripts/push_result_lib.dart), and
+      that was a review finding: while it was prose, its test had to invent its
+      own reader, so the assertion could only prove a stand-in agreed with a
+      paragraph by the same author. Four rules, each wrong in a way that yields a
+      confident wrong answer: absent-or-unparseable => UNVERIFIED and NEVER
+      failed; BOTH `ref` AND `local_sha` must match (not the sha alone -- two
+      refs legitimately share a tip after a fast-forward merge or on a freshly
+      cut branch); STARTED is not a verdict; an unknown `result=` degrades to
+      UNVERIFIED. LANDED never means CI-green -- that is arm_ci_reconcile.sh.
+    writers:
+      - file: scripts/safe_push.sh
+        line_range: 176-220
+        method: _write_push_result
+        semantic: git-dir-write
+        notes: |
+          The SOLE writer. ALWAYS returns 0 and every call is unguarded on its
+          status, because the record is advisory and the push verdict is not -- a
+          failure to record must never turn a landed push into a reported
+          failure, the same reasoning arm_ci_reconcile.sh uses. `reason` is
+          collapsed to one printable line and capped, so raw git stderr cannot
+          inject a bogus key=value line. NOTE: every reason this script currently
+          passes is a constructed single-line string, so the sanitizer is
+          defensive for FUTURE callers and is deliberately NOT claimed as
+          mutation-proven.
+      - file: scripts/safe_push.sh
+        line_range: 230-230
+        method: STARTED write
+        semantic: git-dir-write
+        notes: |
+          Written BEFORE the push, carrying the pid. Without it the record cannot
+          answer the incident that motivated OI-172 -- the push was still
+          RUNNING, so no terminal verdict existed and a terminal-only record
+          would have been absent exactly when wanted. Overwrites any prior record
+          the instant a new attempt begins.
+    readers:
+      - file: scripts/push_result_lib.dart
+        line_range: 127-220
+        method: parsePushResult + classifyPushResult
+        semantic: pure-read
+        notes: |
+          The ONLY sanctioned reader; no file I/O, so it is unit-testable without
+          a repo. `probedTheWrongNamespace` surfaces the tag residual:
+          probe_remote_sha() hardcodes refs/heads/$BRANCH, so a tag passed
+          positionally lands but is probed in the wrong namespace and reported
+          FAILED. The record keeps the verdict the script reached -- it must not
+          silently disagree with stdout -- but the reader can see why it is
+          untrustworthy.
+    hive:
+      key_prefix: "n/a"
+    cloud:
+      table: "n/a"
+      columns: []
+    sync_methods: []
