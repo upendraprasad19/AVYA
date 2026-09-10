@@ -137,4 +137,65 @@ void main() {
       );
     });
   });
+
+  // ------------------------------------------------------------------------
+  // Migration 121 (log_table_retention, c8e5b3). Separate group because `mig`
+  // above is migration 090's text -- these functions are declared in 121, so
+  // adding them to 090's list would assert against a file that never mentions
+  // them. Hermes L23-F1 (2026-08-16): correct today, pinned by nothing.
+  // ------------------------------------------------------------------------
+  group('migration 121 — log-retention SECURITY DEFINER functions (c8e5b3)', () {
+    final mig121 = File(
+      'supabase/migrations/121_log_table_retention.sql',
+    ).readAsStringSync();
+    final flat121 = norm(mig121);
+
+    test('both cleanup functions revoke EXECUTE from anon + authenticated', () {
+      for (final sig in [
+        'public.cleanup_cron_job_run_details()',
+        'public.cleanup_client_errors()',
+      ]) {
+        expect(
+          flat121.contains(norm('REVOKE ALL ON FUNCTION $sig FROM PUBLIC')),
+          isTrue,
+          reason: 'migration 121 must REVOKE ALL FROM PUBLIC on $sig',
+        );
+        expect(
+          flat121.contains(norm('REVOKE ALL ON FUNCTION $sig FROM anon, authenticated')),
+          isTrue,
+          reason: 'migration 121 must REVOKE ALL FROM anon, authenticated on $sig — '
+              'the rollback is DROP FUNCTION, and a drop-and-recreate re-inherits '
+              'anon=X from pg_default_acl, reopening a9d3f1',
+        );
+      }
+    });
+
+    test('both are SECURITY DEFINER with a fixed search_path, asserted PER '
+        'DECLARATION rather than by counting', () {
+      // ⚠ The first version of this test counted 'SECURITY DEFINER' across the
+      // whole file and required >= 2. Mutation proved it WORTHLESS: the file
+      // mentions SECURITY DEFINER 4 times -- twice in declarations and twice in
+      // comments explaining the a9d3f1 incident -- so demoting a real function
+      // to SECURITY INVOKER left 3 and the assertion passed. Zero of 9 tests
+      // reddened. That is rule 21's "something absorbed it" case: the comments
+      // absorbed the mutation. Scoped per declaration, the same mutation reddens.
+      for (final name in [
+        'cleanup_cron_job_run_details',
+        'cleanup_client_errors',
+      ]) {
+        expect(
+          flat121.contains(norm(
+              'CREATE OR REPLACE FUNCTION public.$name() '
+              'RETURNS void '
+              'LANGUAGE sql '
+              'SECURITY DEFINER '
+              "SET search_path TO 'public'")),
+          isTrue,
+          reason: 'public.$name() must be declared SECURITY DEFINER with a fixed '
+              'search_path. Demote it to INVOKER and the REVOKE pinned above stops '
+              'being what protects it, while a file-wide count would still pass.',
+        );
+      }
+    });
+  });
 }

@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**92 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**95 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -100,3 +100,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-174 | schedule rows written past `plan_end` are never pruned, and they delay the… | none — but it is a DESTRUCTIVE migration… | 2026-09-06 — the only schedule deletions… | [:3251](open_issues.md#L3251) |
 | OI-175 | a regeneration past the phase's 4th week (`rawWeek > 4`) has no… | FOUNDER — what a regeneration should DO… | 2026-09-06 — `getCurrentWeekNumber()`… | [:3263](open_issues.md#L3263) |
 | OI-176 | the OI-collision gate answers `PASS (vacuous)` for a branch with no… | none | 2026-09-08 — observed live, not reasoned… | [:3306](open_issues.md#L3306) |
+| OI-177 | the live-cron snapshot that gives Gate 31 its only fileless-migration… | none | 2026-09-10 —… | [:3435](open_issues.md#L3435) |
+| OI-178 | pg_cron SQL jobs are structurally invisible to the alerting stack:… | a design decision — telemetry bridge vs.… | 2026-09-10 — `cron_call_log` holds… | [:3448](open_issues.md#L3448) |
+| OI-179 | `alert_cron_function_dead` cannot fire across 100% of its range, and never… | none — one-line predicate fix; the value… | 2026-09-10 — `min(started_at)` across… | [:3462](open_issues.md#L3462) |
