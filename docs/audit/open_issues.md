@@ -3482,3 +3482,18 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Proposed repair**: validate the single-number form too (at minimum file-exists plus method-appears-near-N), and for the dash form prefer matching a DECLARATION (`method_name(` preceded by a type or `Future<`) over a bare substring. Both are offline checks needing no credentials.
 - **Blast radius**: `scripts/**` is individually pinned `platform`; needs its own gate test + `mutation_proven:` ledger entry per rule 24.
 - **Class**: `feedback_green_check_input_set_width` — the gate's input set silently excluded 4.5% of the citations it exists to police. Also `feedback_bad_news_vs_no_news`: an unchecked citation and a valid one both report nothing.
+## OI-181 — nothing catches a MISSING plan-review record at merge time; both prechecks miss the plain absent case (P1)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-10 — live, by causing it. Branch `hipri-parity` (blast-radius `account`, `supabase/functions/**`) was merged as `dcb94a93` with no `docs/plan-reviews/hipri-parity.md`. Neither merge-time guard fired. The warning arrived from `git_safety_hook.dart` at PUSH time — after the merge — and CI's keystone gate reads the record from the tree AT the merge commit, so no later commit can repair that commit's evaluation.
+- **The two-sided gap, and why "there are two prechecks" reads like coverage**:
+  - `scripts/safe_merge.sh` warns when a record CLAIMS `bpass: accepted` while its `bpass_review:` file lacks `verdict: accepted`. It says nothing when the record is **absent entirely** — its whole predicate starts by reading a file that is not there, and every failure path falls through silently BY DESIGN (advisory, must never wedge the only path onto main).
+  - `scripts/git_safety_hook.dart` DOES detect the missing record — and runs on `git push`. By then the merge commit exists and is immutable for this purpose.
+  So the case that is easiest to hit (forgot the record entirely) is the one case checked only after it is too late to fix cheaply. CLAUDE.md §7 already documents the push-time timing as a known limitation of that hook; what is NOT documented is that `safe_merge.sh` does not cover the absent case either.
+- ⚠ **Cost, measured not estimated**: a red `main`. The repair for a merged-without-record branch is a `git reset --hard` unwind, which §7 records costing a full cycle on 2026-08-30 — the same shape, six weeks apart.
+- **Proposed repair**: extend `safe_merge.sh`'s existing precheck with the absent-record case — it already computes `recordSlug(branch)` and already reads `git show "$BRANCH:<path>"`, so this is a `git cat-file -e` on a path it has in hand. Keep it ADVISORY for the same reason the rest of that script is: a hygiene guard must never be the thing that blocks landing work. An advisory warning BEFORE the merge is worth more than a hard block after it.
+- ⚠ **Do not "fix" this by making the hook block the push** — that is the wrong end. The push-time check is already correct and already fires; the problem is that merge time has no equivalent.
+- **Blast radius**: `scripts/**` is individually pinned `platform`; needs its own test (`test/scripts/safe_merge_test.dart` already exists and its fixture commits the record ON THE BRANCH deliberately — extend it with an absent-record leg) plus mutation proof.
+- **Class**: `feedback_gates_unsatisfiable_at_merge` + `feedback_green_check_input_set_width` — two guards whose union looks total and whose intersection with "record absent, before the merge" is empty.
+
