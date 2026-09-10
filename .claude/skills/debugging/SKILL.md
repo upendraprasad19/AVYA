@@ -1223,3 +1223,46 @@ added, false of the flip being performed.
   cannot run outside CI. That limitation is recorded in the diagnose-doc rather
   than papered over, which is the honest form of this row.
 
+
+### 2.64 Measuring a failure's frequency against a sink the failure never reaches (NEW 2026-09-10)
+
+- **Telltale:** you are about to answer *"how often does X actually happen?"* with a
+  query — `select count(*) … where code = 'X'` — and you have not yet opened the
+  code path that would WRITE that row. The query returns **0**, you report
+  "not happening in practice", and the finding gets downgraded.
+- **Root-cause shape:** a **handled** exception is invisible to telemetry. The
+  handler catches it, converts it into a user-facing string, and returns — no
+  `logEvent`, no `recordNonFatal`, nothing. Meanwhile the file DOES contain
+  telemetry calls, often many, which is what makes this survive review: you grep
+  the file, see `logEvent(...)` a dozen times, and assume coverage.
+  ⚠ **The generic catch is the specific trap.** A dispatcher-level
+  `catch (e) { logEvent('..._unexpected_failure') }` reads like a backstop that
+  catches everything. It does the opposite: it fires **only** for errors no
+  handler caught, so every *well-handled* error — precisely the ones with named,
+  greppable codes — is the set it can never see. Better error handling produces
+  worse observability, which is why nobody suspects it.
+- **Worked instance (OI-178, `swapExercise`):** `tool_dispatcher.dart:281-282`
+  catches `SwapExerciseException` → `ToolExecutionResult.failure(msg)`, no
+  telemetry. The multi-swap site `:598-599` only appends to a local `errors`
+  list. The generic `logEvent('tool_dispatch_..._unexpected_failure')` at
+  `:227-235` sits in `dispatch()`'s defensive catch and never sees a handled
+  one. And `ai_coach_interactions` — the table the check named — holds chat
+  history + `channel='app_event'` rows (`app_events_service.dart:60`), **not tool
+  outcomes**. So `exercise_not_found` reaches no sink at all, and the count
+  would have been 0 no matter how often users hit it.
+- **Fix pattern — three steps, in this order:**
+  1. **Before querying, trace the write.** Name the file:line that INSERTS the
+     row you are about to count. If you cannot name it, the query is not a
+     measurement.
+  2. **Confirm the table holds that KIND of record.** A table named for the
+     feature is not automatically the table for the feature's errors.
+  3. **If no sink exists, say "unmeasurable", not "zero"** — and make adding the
+     telemetry part of the same commit as the fix, or the prevalence question
+     stays permanently unanswerable.
+- **Class rule:** *a count of zero from a sink the event cannot reach is not
+  evidence of absence.* Same family as §2.13 (sink drops past rate limit) but
+  strictly worse: 2.13 loses rows under load, this one never had a row to lose.
+  Memory: `feedback_bad_news_vs_no_news.md`, `feedback_observability_silent_drop.md`.
+- **Prior incidents:** OI-178 (2026-09-10) — caught **before** the query ran, only
+  because the sink was traced first; the board entry had already been committed
+  telling a future reader to run it, and needed correcting in `5f8d6930`.
