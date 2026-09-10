@@ -212,6 +212,54 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-10** — blast-radius **platform** — branch `oi172-push-result-file`
+  (OI-172: a terminal push-result record for `safe_push.sh`, plus the §4.9
+  verification-width row). **7 findings (0 P0, 1 P1, 4 P2, 2 P3); 0 false_alarm.**
+  All accepted, all fixed in-batch. Review: `docs/reviews/08e601e60f35-review.md`.
+  **NO functional defect was found in the shipped logic** — and that is the entry's
+  point, because the pass still earned its keep four times over.
+  **Tuning 1 — lens 10 (`self_attesting_artifact`) should run against the OI BOARD
+  and any closure prose, not only ledgers and diagnose-docs.** The P1 was a
+  citation in `docs/audit/open_issues.md` to
+  `docs/plan-reviews/<branch>.md` — the keystone record — written *before* the file
+  existed. It would have failed `check_plan_review_record_exists.dart` at the merge
+  commit in CI, where the repair is a `git reset --hard` unwind. The author knew the
+  record was still owed and cited it anyway while closing the board entry, which is
+  the shape to hunt: **a resolution block is written at the moment of maximum
+  optimism about what else got done.** Sibling of the 2026-09-05 entry, one
+  document over.
+  **Tuning 2 — lens 8 gains: a mutation count measured against a NARROWER run than
+  the suite can only UNDERCOUNT, and therefore never looks alarming.** The reviewer
+  re-ran 6 of 13 claimed legs against the full three-file suite and found 3
+  undercounted by exactly one, because the author had measured each leg against the
+  single file it obviously touched. **The error direction is what makes it
+  survivable:** an undercount reads as a slightly weaker proof, not as a red flag,
+  so nobody re-checks it — whereas an overcount would be caught immediately. Ask of
+  any per-leg mutation count: *against which files was this measured, and is that
+  the same set the claim is about?* Fourth instance of the input-set-width class in
+  two sessions, and this one shipped **inside the batch adding the CLAUDE.md row
+  about it**.
+  **Tuning 3 — when a lens says "follow the precedent", check whether the precedent
+  carries a defect you would be importing.** F4 (platform tier's unenforced
+  `requires: feature_flag`) was fixed with a kill switch modelled on
+  `.claude/.reconcile_ci.disabled`. Copying its LOCATION would have been wrong:
+  **neither existing `.claude/` kill switch is listed in `retire_worktree_lib.dart`'s
+  `regenerableIgnoredPaths`**, so a worktree where someone flipped one is
+  unretirable until they remember to delete it. The switch shipped beside the record
+  inside `.git` instead. Extends lens 9
+  (`modelled_on_is_a_checkable_claim`): the claim "modelled on X" is checkable in two
+  directions — does it match X, and *should* it, given what X gets wrong.
+  **A NEGATIVE result worth keeping, per this history's convention.** The reviewer
+  was asked to re-verify both PREDICTED-GREEN mutation legs, and both reproduced at
+  exactly 0 red with the stated explanations holding. It also flagged that
+  `git cat-file -t <staging-hash>` fails — correctly noting the discrepancy rather
+  than silently substituting a commit sha, which is what the 2026-08-30 entry
+  records a previous reviewer doing. The hash is unresolvable **by design**
+  (`git hash-object --stdin` without `-w` writes no object, and the gate never
+  resolves it either). **Worth adding to the dispatch protocol's step 3: say so in
+  the brief, so each reviewer does not have to rediscover it.**
+  False-alarm rate 0/7 → no change to lenses 1-7.
+
 - **2026-09-09** — blast-radius **platform** — branch `oi162-slice3b-media-meter`, OI-162 slice 3b
   (diagnose `c4f9e2`). **3 findings (0 P0, 0 P1, 1 P2, 2 P3); 0 false_alarm.** All fixed in-batch.
   Review: `docs/reviews/4b31af31a792-review.md`.
