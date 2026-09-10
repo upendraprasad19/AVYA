@@ -20,6 +20,7 @@
 @Timeout(Duration(minutes: 14))
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -695,8 +696,12 @@ exit 0
         includeParentEnvironment: false,
         runInShell: true);
     // Drain, or a full pipe buffer could block the child on Windows.
-    proc.stdout.drain<void>();
-    proc.stderr.drain<void>();
+    // unawaited, NOT awaited: the point is that these keep draining while the
+    // loop below samples the record mid-flight. A bare call is an
+    // unawaited_futures WARNING, and --no-fatal-infos suppresses infos, not
+    // warnings -- it aborted a real push (2026-09-10).
+    unawaited(proc.stdout.drain<void>());
+    unawaited(proc.stderr.drain<void>());
 
     Map<String, String> seen = <String, String>{};
     final deadline = DateTime.now().add(const Duration(seconds: 20));
