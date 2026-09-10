@@ -166,6 +166,15 @@ const HIGH_PRIORITY_OP_TYPES: readonly string[] = [
   // Auth failures — sign-in/up, session race, cross-account guard.
   "auth_failure_",
   "auth_signed_out_unexpected",
+
+  // Gate-efficacy metric (e4a7c9). Client twin added 2026-09-10; this list
+  // and ErrorTelemetry.highPriorityOpTypes are pinned equal by
+  // test/contracts/high_priority_op_types_parity_test.dart, which is what
+  // caught the one-sided edit. Low-volume by design (once per free session,
+  // latched) but fires across the whole free population right after a deploy
+  // -- exactly when a shared cooldown would drop it and the metric would go
+  // dark precisely when it matters.
+  "realtime_subscribe_skipped_free_tier",
   "guarded_box_disagreement",
   "hive_session_owner_mismatch",
 
