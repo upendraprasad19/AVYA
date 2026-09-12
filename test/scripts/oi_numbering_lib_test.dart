@@ -331,7 +331,10 @@ Some prose mentioning OI-5 — not a heading.
       expect(r.stderr, contains('OI-2'));
       expect(r.stderr, contains('branch two'));
       expect(r.stderr, contains('mainline two'));
-      expect(r.stderr, contains('Next free is OI-3'));
+      // Repointed 2026-09-12 (f3a9c1): the FIX text prescribes mint_oi.sh
+      // instead of an eyeballed number; the number is still reported.
+      expect(r.stderr, contains('mint_oi.sh'));
+      expect(r.stderr, contains('OI-3'));
     });
 
     test('PASSES when the branch mints an uncontested number', () {

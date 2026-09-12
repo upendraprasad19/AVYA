@@ -75,6 +75,20 @@ String? _run(String exe, List<String> args) {
 /// open one -- so an absent path yields '' via the caller, not null.
 String? _showAtRev(String rev, String path) => _run('git', ['show', '$rev:$path']);
 
+/// True when either board differs between the WORKING TREE and HEAD — staged
+/// or unstaged. That difference IS the mint in progress (OI-176): it is the only
+/// place a brand-new number exists before the first commit, and it must be
+/// compared against origin/main no matter what shape HEAD has.
+bool _boardDirty() {
+  try {
+    final r = Process.runSync(
+        'git', ['diff', '--quiet', 'HEAD', '--', _openBoard, _closedBoard]);
+    return r.exitCode == 1; // 0 identical, 1 differs, anything else = could not tell
+  } on ProcessException {
+    return false;
+  }
+}
+
 /// Parses a board and distinguishes "genuinely no entries" from "could not read
 /// this at all", which look identical to every caller that returns a bare map.
 ///
@@ -117,7 +131,7 @@ void _warnPass(String why) {
       'a current origin/main.');
 }
 
-void main(List<String> args) {
+Future<void> main(List<String> args) async {
   final warnOnly = args.contains('--warn-only');
 
   final root = _run('git', ['rev-parse', '--show-toplevel'])?.trim();
@@ -131,6 +145,11 @@ void main(List<String> args) {
   // Working tree, not the index. At pre-commit the working tree is what is
   // about to be committed; at CI it IS the checkout; and build_oi_index.dart
   // (the sibling gate) reads the working tree too, so the two agree on input.
+  // Consequence, with Check C below (reservation required): a hand-typed
+  // UNSTAGED number in the worktree blocks EVERY commit from that worktree
+  // until it is reserved (scripts/mint_oi.sh --reserve N) or removed. By
+  // design -- the number is the mint in progress whether or not it is staged
+  // -- at the cost of one bounded `ls-remote` per attempt.
   final openFile = File(_openBoard);
   if (!openFile.existsSync()) {
     _warnPass('$_openBoard not found.');
@@ -289,6 +308,18 @@ void main(List<String> args) {
       otherSideRev = mergeHead;
       baseRev = _run('git', ['merge-base', 'HEAD', mergeHead])?.trim();
       shapeNote = 'mid-merge (HEAD vs MERGE_HEAD)';
+    } else if (_boardDirty()) {
+      // OI-176 (f3a9c1). An UNCOMMITTED board edit is the mint in progress. In
+      // a fresh worktree HEAD is routinely a merge commit on main, and the arm
+      // below would compare HEAD^1 vs HEAD^2 -- two ancestors of the branch
+      // point -- then print PASS about trees that do not contain the edit.
+      // Dispatch on "is the board being changed", not on HEAD's shape. The
+      // mid-merge arm above keeps precedence: mid-merge the working tree holds
+      // BOTH sides' entries and would make every number look contested.
+      thisSideRev = 'origin/main';
+      otherSideRev = 'HEAD'; // resolves to the WORKING TREE via useWorkingTree below
+      baseRev = _run('git', ['merge-base', 'HEAD', 'origin/main'])?.trim();
+      shapeNote = 'working tree (uncommitted board vs origin/main)';
     } else if (parents.length >= 3) {
       // HEAD is a merge commit (>=2 parents after the commit's own sha): CI on
       // a push to main, after the merge landed. Compare its parents.
@@ -442,8 +473,9 @@ void main(List<String> args) {
                   '${c.id} against a base that did not have it, and '
                   '$thisSideRev minted it independently.\n'
                   '    FIX: renumber the $otherSideRev side\'s entry '
-                  '($thisSideRev is published; its number is fixed). Next free '
-                  'is OI-$next.\n'
+                  '($thisSideRev is published; its number is fixed). Mint the '
+                  'replacement with:  sh scripts/mint_oi.sh "<title>"  (never by '
+                  'eyeballing; next free was OI-$next at the time of this check).\n'
                   '    Add a provenance bullet to the renumbered entry -- any '
                   'already-pushed commit message still cites the old number and '
                   'is not rewritten. Precedent: commit 0cb4120a.');
