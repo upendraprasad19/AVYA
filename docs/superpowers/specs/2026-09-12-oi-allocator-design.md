@@ -123,9 +123,10 @@ Algorithm (`<title>` form):
 6. **Success ⇒** make the reservation visible locally so sibling laptop worktrees see it without their
    own fetch: git transport → `git update-ref refs/remotes/origin/oi/N <sha>` (the object is local);
    API transport → `git fetch --quiet origin +refs/heads/oi/N:refs/remotes/origin/oi/N` (the commit was
-   created server-side and does NOT exist locally — `update-ref` would refuse an unknown object). Then
-   append the stub unless `--no-append`, print `OI-N`, then best-effort `--prune` when `gh` is present
-   (never affects the exit code).
+   created server-side and does NOT exist locally — `update-ref` would refuse an unknown object). Both
+   are BEST-EFFORT: the reservation already exists on the remote, so a transient ref-lock must not abort
+   before the stub — that is exactly how an orphan is made. Then append the stub unless `--no-append`,
+   print `OI-N`, then best-effort `--prune` when `gh` is present (never affects the exit code).
 
 Board parsing inside the script is `grep -oE '^## OI-[0-9]+'` over `git show origin/main:<board>` for
 both boards — the ASCII prefix only, which is immune to the em-dash mis-decoding that once blanked the
@@ -174,11 +175,16 @@ is VACUOUS by construction: `origin/main` == `HEAD`, so every number is "publish
 (below). That is correct — after publication `--prune` may already have deleted the reservation, so
 checking there would produce false reds. For each n not already on origin/main's current boards:
 1. local `refs/remotes/origin/oi/n` present ⇒ reserved;
-2. else, **only if `mintedHere` is non-empty**, one `git ls-remote --exit-code origin refs/heads/oi/n`
-   with a 5 s wall-clock timeout (Dart `Process.start` + timer) ⇒ reserved / not reserved;
-3. network failure or timeout ⇒ **UNDETERMINED → SKIPPED** (exit 0, the existing `_warnPass` wording),
-   never PASS. CI is authoritative: `actions/checkout` with `fetch-depth: 0` (`test.yml:219`, already
-   load-bearing for this gate) fetches every branch, so step 1 answers without network there.
+2. else, **only if some minted number lacks a local ref**, ONE `git ls-remote --refs origin
+   'refs/heads/oi/*'` for the whole namespace (no `--exit-code` — with it an empty namespace is
+   indistinguishable from a failure), bounded at 10 s (a bare `ls-remote` over this SSH remote measures
+   2.9–3.2 s; a cold handshake crossing 5 s would skip the one check no later placement repeats) ⇒
+   reserved / not reserved;
+3. network failure or timeout ⇒ **UNDETERMINED → SKIPPED (reservation check)**, exit 0, never PASS —
+   and the message says plainly that NOTHING re-checks this number once it is published (the exemption
+   makes every later placement vacuous), so the repair is `--reserve N` now. At CI on a PR,
+   `actions/checkout` with `fetch-depth: 0` (`test.yml:219`) fetches every branch, so step 1 answers
+   without network there.
 
 When the check cannot complete, the final line says **`SKIPPED (reservation check)`** and states that
 the collision check ran — the two facts are tracked separately, and the vacuous collision `PASS` line
@@ -230,8 +236,15 @@ be resolved. The hook performs **no remote reads or writes**; every mint, `sync_
   absence of this).
 - `docs/diagnoses/2026-09-12-oi-gate-vacuous-pass-<id>.md` for the OI-176 fix (rule 22).
 - `docs/handbook/` process page: one paragraph, since this is a durable working rule.
-- `.claude/skills/debugging/SKILL.md`: no new bug-class — OI-167 already records the "sequential
-  numbers minted by eyeballing" class; add this batch as its resolution pointer.
+- `.claude/skills/debugging/SKILL.md`: **no change.** The "sequential numbers minted by eyeballing"
+  class is OI-167's (the skill's own section numbering); this batch resolves the OI-board instance,
+  not the skill-numbering one, and a pointer from a skill to a board entry it does not fix would mislead.
+- `CLAUDE.md` §4.3: one clause cross-referencing the §7 row's exemption for the ref-CREATE push inside
+  `mint_oi.sh` (a §4.3 reader never reaches §7).
+- `scripts/build_oi_index.dart:110-111`, `scripts/oi_numbering_lib.dart:7-8`: the "There is no
+  allocator" comments become "until 2026-09-12 there was none; mint_oi.sh now allocates".
+- `vercel.json`: `ignoreCommand` skipping `oi/*` (see §7.3). `scripts/new-worktree.sh`: fetch
+  `oi/*` alongside `main` (same round trip).
 
 ## 4. Data flow — the six scenarios
 
@@ -298,7 +311,9 @@ All new/extended files under `test/scripts/` carry `@Timeout(Duration(minutes: 6
   5. title-only edit of an existing OI on the branch → PASS (the base leg still protects against false
      positives).
   **Mutations:** revert B′ dispatch to HEAD-shape → test 1 reddens; make Check C treat a failed
-  `ls-remote` as reserved → tests 3 and 4 redden; drop the base leg from B′ → test 5 reddens.
+  `ls-remote` as reserved → test 3 (offline) reddens — NOT test 4, whose remote is reachable; drop
+  `failures.add` → tests 4 and the mid-merge test redden; empty the base boards → test 5 reddens
+  (and the lib file's own title-edit test, `:348`, with it).
 - **Fixture-vs-history check** (rule 21): test 1's fixture is produced by `sh scripts/new-worktree.sh`
   semantics (branch cut from `main` whose tip is a merge), verified against `git log --merges -1 main`
   in the real repo — the shape the founder's sessions actually start in.
@@ -314,7 +329,11 @@ All new/extended files under `test/scripts/` carry `@Timeout(Duration(minutes: 6
 2. **A cloud session has no pre-commit hooks**, so for it the mint script is the prevention and CI is
    the backstop. A cloud session that hand-types a number learns in CI, not at commit.
 3. **Branch-list growth**: +1 head per OI until pruned; 41 heads today. Prune runs after every laptop
-   mint, so steady state is "in-flight OIs only". CI does not trigger on `oi/*` (`test.yml:5-7`).
+   mint, so steady state is "in-flight OIs plus orphans". CI does not trigger on `oi/*` (`test.yml:5-7`).
+   **Vercel DOES build every pushed branch** (a preview for `regen-wave-unit2` exists; `vercel.json`
+   had no `ignoreCommand`), and a reservation is a new commit carrying main's full tree — so without the
+   `ignoreCommand` added in this batch every mint would cost a full Flutter-web build. Confirmed after
+   the first real mint.
 4. **The SessionStart line reads LOCAL refs only** — this residue's original text ("adds one
    `git fetch`; if it exceeds 2 s median it becomes read-local-only") resolved itself in review round
    1: 2.9–3.2 s measured, so the fetch was never built. The cost is that a reservation made elsewhere
@@ -326,6 +345,11 @@ All new/extended files under `test/scripts/` carry `@Timeout(Duration(minutes: 6
 6. **Orphan reservations** (a session died between the CAS and the stub) are never auto-deleted —
    `--prune` touches only PUBLISHED numbers, by design. They are listed at every SessionStart with
    the two ways out: adopt by filing `## OI-N` by hand, or `sh scripts/mint_oi.sh --release N`.
+   ⚠ **From worktree B, sibling worktree A's in-flight number looks exactly like an orphan** (review
+   round 2). Both the SessionStart list and `--release` therefore exclude any number filed on ANY
+   local branch, and `--release` prints the ledger line (branch + time) before deleting. What remains
+   invisible to a laptop clone is a CLOUD branch's in-flight number: the ledger line names the branch,
+   and the operator reads it before releasing. The cloud never prunes (no `gh`).
 7. **`POST /git/commits` without `parents` creating a ROOT commit** is documented by GitHub but was
    not proven live (the spike proved the refs 422 and the cloud 403). The first real laptop mint
    proves it; the fallback is an explicit `"parents": []` JSON body.

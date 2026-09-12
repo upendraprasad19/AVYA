@@ -70,11 +70,12 @@
 // unscrubbed child git operates on the REAL repo
 // (memory/feedback_mistake_git_hook_env_leak).
 //
-// LINE ENDINGS: the fixture copies scripts/mint_oi.sh BYTE-FOR-BYTE (copySync),
-// so it carries the LF the repo's .gitattributes forces (`*.sh text eol=lf`).
-// A fixture that CHECKED THE SCRIPT OUT under core.autocrlf=true would hand
-// dash a CRLF file and fail on `\r` — Git Bash's sh tolerates CR, dash does
-// not (review round 1, 2026-09-12).
+// LINE ENDINGS: the SEED copy of scripts/mint_oi.sh is byte-for-byte (copySync,
+// LF), but clone0/clone1 CHECK IT OUT — under this machine's global
+// core.autocrlf=true that would be CRLF, which Git Bash's sh tolerates and dash
+// rejects (`set: Illegal option -`). So the seed commits a `.gitattributes` with
+// `*.sh text eol=lf`, exactly as the real repo does, and the clones get LF.
+// Review round 1 found the CR trap; round 2 found the fixture still had it.
 
 @Timeout(Duration(minutes: 6))
 library;
@@ -147,6 +148,7 @@ class _Fixture {
     File('$seed/$_closedBoard').writeAsStringSync('# Closed issues\n');
     Directory('$seed/scripts').createSync();
     File('$_src/scripts/mint_oi.sh').copySync('$seed/scripts/mint_oi.sh');
+    File('$seed/.gitattributes').writeAsStringSync('*.sh text eol=lf\n');
     _must(_run('git', ['add', '-A'], seed), 'seed add');
     _must(_run('git', ['commit', '-q', '-m', 'seed'], seed), 'seed commit');
     _must(_run('git', ['push', '-q', '-u', 'origin', 'main'], seed), 'seed push');
@@ -373,6 +375,28 @@ void main() {
     final absent = f.mint(c, ['--release', '12']);
     expect(absent.exitCode, 3);
   });
+
+  test('--release refuses a number filed on a SIBLING local branch (a worktree in flight), naming the ledger line',
+      () {
+    final f = _Fixture.create('sibling');
+    addTearDown(f.dispose);
+    final c = f.clones[0];
+    // Branch `sib` mints 14 and commits its stub; we return to main, whose
+    // board lacks 14 and whose origin/main lacks 14 -- the state a SECOND
+    // worktree sees when it is told "reserved-but-unfiled".
+    _run('git', ['checkout', '-q', '-b', 'sib'], c);
+    expect(f.mint(c, ['sibling fourteen']).exitCode, 0);
+    _run('git', ['add', '-A'], c);
+    _run('git', ['commit', '-q', '-m', 'sib files 14'], c);
+    _run('git', ['checkout', '-q', 'main'], c);
+    final r = f.mint(c, ['--release', '14']);
+    expect(r.exitCode, 3, reason: '${r.stdout}\n${r.stderr}');
+    expect(r.stderr as String, contains('LOCAL BRANCH'));
+    expect(f.remoteReservations(), {14});
+    // And --next does not list it as unfiled either.
+    final n = f.mint(c, ['--next']);
+    expect((n.stdout as String), contains('UNFILED=\n'));
+  });
 }
 ```
 
@@ -440,7 +464,9 @@ BOARD_OPEN=docs/audit/open_issues.md
 BOARD_CLOSED=docs/audit/closed_issues.md
 REMOTE=${MINT_OI_REMOTE:-origin}
 TRANSPORT=${MINT_OI_TRANSPORT:-auto}
-TRANSPORT_EXPLICIT=${MINT_OI_TRANSPORT:+1}
+# "explicit" means the caller ASKED for the git transport (tests, a cloud user
+# who accepts the cost) -- an explicit `auto` is not a request for git.
+case "${MINT_OI_TRANSPORT:-}" in git) TRANSPORT_EXPLICIT=1 ;; *) TRANSPORT_EXPLICIT='' ;; esac
 GH=${MINT_OI_GH_BIN:-gh}
 MAX_ATTEMPTS=10
 
@@ -463,12 +489,12 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --no-append) APPEND=0 ;;
     --reserve)
-      [ $# -ge 2 ] || usage
+      [ $# -ge 2 ] && [ -n "$2" ] || usage   # an EMPTY value would vanish from the validator's word list below
       RESERVE_N=$2
       APPEND=0
       shift ;;
     --release)
-      [ $# -ge 2 ] || usage
+      [ $# -ge 2 ] && [ -n "$2" ] || usage
       RELEASE_N=$2
       MODE=release
       shift ;;
@@ -512,10 +538,14 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)
 bounded() {
   if command -v timeout >/dev/null 2>&1; then timeout 30 "$@"; else "$@"; fi
 }
+# Captures stderr into SYNC_ERR so "offline" is never the only diagnosis: a
+# shared-.git fetch lock held by a sibling worktree, a hook rejection, or a
+# missing SSH key all fail here too, and each says so in git's own words.
+SYNC_ERR=''
 sync_refs() {
-  bounded git fetch --quiet --prune "$REMOTE" \
+  SYNC_ERR=$(bounded git fetch --quiet --prune "$REMOTE" \
     "+refs/heads/oi/*:refs/remotes/$REMOTE/oi/*" \
-    "+refs/heads/main:refs/remotes/$REMOTE/main" >/dev/null 2>&1
+    "+refs/heads/main:refs/remotes/$REMOTE/main" 2>&1 >/dev/null)
 }
 
 # ---- readers -----------------------------------------------------------------
@@ -619,25 +649,47 @@ append_stub() { # $1 = N
     "$1" "$TITLE" "$today" "$BRANCH" >> "$BOARD_OPEN"
 }
 
-delete_reservation() { # $1 = N ; 0 on success
+# The REMOTE delete is the operation; the local tracking-ref delete is
+# bookkeeping and must not turn a successful remote delete into "could not
+# delete" (the next sync prunes it anyway).
+delete_reservation() { # $1 = N ; 0 iff the remote ref is gone
   case "$TRANSPORT" in
     api) repo=$(owner_repo); $GH api -X DELETE "repos/$repo/git/refs/heads/oi/$1" >/dev/null 2>&1 ;;
     git) git push --quiet "$REMOTE" ":refs/heads/oi/$1" >/dev/null 2>&1 ;;
-  esac && git update-ref -d "refs/remotes/$REMOTE/oi/$1" 2>/dev/null
+  esac && { git update-ref -d "refs/remotes/$REMOTE/oi/$1" 2>/dev/null || true; }
 }
+
+# Every OI number on the boards of EVERY local branch -- a number in flight on
+# a sibling worktree's branch is filed, not orphaned, even though this
+# worktree's board and origin/main both lack it.
+all_local_branch_numbers() {
+  for b in $(git for-each-ref --format='%(refname)' refs/heads/); do board_numbers "$b"; done
+}
+
+ledger_subject() { git log -1 --format=%s "refs/remotes/$REMOTE/oi/$1" 2>/dev/null || echo '(no ledger line)'; }
 
 do_release() {
   published=$(board_numbers "refs/remotes/$REMOTE/main")
-  local_nums=$(board_numbers '')
-  if contains_line "$published" "$RELEASE_N" || contains_line "$local_nums" "$RELEASE_N"; then
-    echo "$TAG OI-$RELEASE_N is FILED (on $REMOTE/main or this board) — a filed number's reservation is pruned, never released." >&2
+  if contains_line "$published" "$RELEASE_N"; then
+    echo "$TAG OI-$RELEASE_N is PUBLISHED on $REMOTE/main — its reservation is pruned, never released." >&2
+    exit 3
+  fi
+  if contains_line "$(board_numbers '')" "$RELEASE_N"; then
+    echo "$TAG OI-$RELEASE_N is FILED on THIS board (uncommitted or committed) — remove the entry first if you really mean to release it." >&2
+    exit 3
+  fi
+  if contains_line "$(all_local_branch_numbers)" "$RELEASE_N"; then
+    echo "$TAG OI-$RELEASE_N is FILED on a LOCAL BRANCH (a sibling worktree's work in flight) — releasing it would strand that branch at its next commit. Refused." >&2
     exit 3
   fi
   if ! contains_line "$(reserved_numbers)" "$RELEASE_N"; then
     echo "$TAG oi/$RELEASE_N is not reserved on $REMOTE; nothing to release." >&2
     exit 3
   fi
-  delete_reservation "$RELEASE_N" || { echo "$TAG could not delete oi/$RELEASE_N" >&2; exit 2; }
+  # A CLOUD branch's in-flight number is invisible here (no local branch for
+  # it). The ledger line names who reserved it and when; the operator decides.
+  echo "$TAG releasing oi/$RELEASE_N — reserved by: $(ledger_subject "$RELEASE_N")" >&2
+  delete_reservation "$RELEASE_N" || { echo "$TAG could not delete oi/$RELEASE_N on $REMOTE" >&2; exit 2; }
   echo "$TAG released oi/$RELEASE_N (it was reserved and never filed)."
 }
 
@@ -658,7 +710,7 @@ do_prune() {
 
 do_next() {
   published=$(board_numbers "refs/remotes/$REMOTE/main")
-  local_nums=$(board_numbers '')
+  local_nums=$( { board_numbers ''; all_local_branch_numbers; } )
   unfiled=''
   for r in $(reserved_numbers); do
     contains_line "$published" "$r" && continue
@@ -727,6 +779,7 @@ sync_refs || {
     mint) echo "$TAG cannot reach $REMOTE — an OI number cannot be reserved offline. Nothing was written." >&2 ;;
     *)    echo "$TAG cannot reach $REMOTE — --$MODE needs the remote's current reservations and board." >&2 ;;
   esac
+  [ -z "$SYNC_ERR" ] || printf '%s\n' "$SYNC_ERR" | sed 's/^/    git: /' >&2
   exit 2
 }
 case "$MODE" in
@@ -740,7 +793,7 @@ esac
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `flutter test test/scripts/mint_oi_e2e_test.dart`
-Expected: 9 tests PASS. If the race test fails with `OI-4`, the CAS did not fire — check the `--force-with-lease=refs/heads/oi/$1:` spelling (the trailing colon is the empty `<expect>`).
+Expected: 10 tests PASS. If the race test fails with `OI-4`, the CAS did not fire — check the `--force-with-lease=refs/heads/oi/$1:` spelling (the trailing colon is the empty `<expect>`).
 
 - [ ] **Step 5: Mutations — apply, confirm applied, run, revert**
 
@@ -749,7 +802,10 @@ Expected: 9 tests PASS. If the race test fails with `OI-4`, the CAS did not fire
 3. Remove `reserved_numbers;` from the `next_free` line → the "already exists on origin is skipped" test reddens: the max over the boards alone is 3, so the script mints `OI-4` (4 is genuinely free, the CAS accepts it) where the test asserts `OI-7`. Revert. This is the named reddening mutation for that test.
 4. Remove `local_main_numbers;` from `next_free` → the local-main test reddens (`OI-4` instead of `OI-21`). Revert.
 5. Change the ledger message to drop `| $TITLE` → the sequential test reddens on `contains('| alpha issue')`. Revert. This is the named reddening mutation for the sequential test; the CAS mutation in (1) does NOT redden it (spec §6), and nobody should cite it as if it did.
-6. Sanity: `sh -n scripts/mint_oi.sh` exits 0, and `dash -n scripts/mint_oi.sh` where dash exists (it does on this machine at `/usr/bin/dash`).
+6. Drop `0*|` from the `--reserve/--release` validator → the `0`/`007` test reddens. Revert.
+7. Drop the `all_local_branch_numbers` clause from `do_release` → the sibling test reddens (`LOCAL BRANCH` refusal gone; the reservation is deleted). Revert.
+8. **The `offline` test has NO mutation that only it catches** — every mutation that makes an unreachable remote look reachable also breaks the CAS tests. It is kept as the guard for the fail-closed contract, and this sentence exists so nobody goes looking for a mutation the plan never claimed.
+9. Sanity: `sh -n scripts/mint_oi.sh` exits 0, and `dash -n scripts/mint_oi.sh` (dash is at `/usr/bin/dash` on this machine); run the whole file once under dash too (`MINT_OI_SH=dash` is not a knob — just run `dash scripts/mint_oi.sh --next` by hand in a clone).
 
 - [ ] **Step 6: Commit**
 
@@ -763,10 +819,12 @@ Offline refuses (exit 2, nothing written). --reserve N for numbers
 filed before the allocator. Test seam MINT_OI_TEST_HOOK_BEFORE_PUSH
 makes the race reachable in the e2e test.
 
-Tests: test/scripts/mint_oi_e2e_test.dart (9). Mutations: --force in
+Tests: test/scripts/mint_oi_e2e_test.dart (10). Mutations: --force in
 place of --force-with-lease reddens the race + reserve tests; dropping
 each term of next_free reddens its own test; dropping the title from
-the ledger reddens the sequential test.
+the ledger reddens the sequential test; dropping the leading-zero
+reject reddens the 0/007 test; dropping the sibling-branch clause
+reddens the release-sibling test. offline has no exclusive mutation.
 Spec: docs/superpowers/specs/2026-09-12-oi-allocator-design.md"
 ```
 
@@ -1294,7 +1352,7 @@ Expected: all PASS (2 new + the lib's existing 23, with `:334` repointed). Also 
 
 1. Delete the whole `else if (_boardDirty()) {...}` arm → confirm with `grep -c 'else if (_boardDirty())' scripts/check_oi_numbering_unique.dart` → `0` (a bare `grep -c '_boardDirty()'` still reads `1` from the definition line — do not read that as "did not apply"). Run. Expected: test 1 reddens with the vacuous PASS line. Revert.
 2. In the new arm, replace `baseRev = _run('git', ['merge-base', 'HEAD', 'origin/main'])?.trim();` with `baseRev = 'origin/main';` → base == mainline → degenerate. Run. Expected: test 1 reddens (vacuous PASS). Test 2 stays green. Revert.
-3. Replace `final baseMerged = mergeBoards(baseOpen, baseClosed);` with `final baseMerged = <int, String>{};` → every number looks minted-here → the title-edit test reddens (`OI-2 names two different issues`). Revert. This is the named reddening mutation for test 2; without it that test has none.
+3. Replace `final baseMerged = mergeBoards(baseOpen, baseClosed);` with `final baseMerged = <int, String>{};` → every number looks minted-here → TWO tests redden when Step 5's command runs both files: the gate e2e title-edit test (`OI-2 names two different issues`) AND `oi_numbering_lib_test.dart:348` `'PASSES when the branch only edits a pre-existing title'` (verified by review round 2). A "2 red" run is the CORRECT reading, not a broken mutation. Revert. This is the named reddening mutation for test 2; without it that test has none.
 4. Confirm every mutation compiled (a `loading … [E]` line means it did not — pick another mutation, per rule 21).
 
 Then flip OI-176 on the board (`docs/audit/open_issues.md:3314`): `- **Status**: OPEN` → `- **Status**: CLOSED · 2026-09-12 · diagnose f3a9c1 · branch oi-allocator — working-tree arm in check_oi_numbering_unique.dart; allocator in scripts/mint_oi.sh`. Leave the entry in place (archiving to `closed_issues.md` is a separate board-hygiene action).
@@ -1411,6 +1469,8 @@ closes-oi: OI-176"
         reason: 'the vacuous collision PASS must not co-print with a skipped reservation check');
     expect(r.stdout as String, contains('SKIPPED (reservation check)'));
     expect(r.stdout as String, contains('collision check ran'));
+    expect('${r.stdout}${r.stderr}', isNot(contains('CI re-runs')),
+        reason: 'no later placement re-checks a reservation once the number is published');
   });
 
   test('Check C: a number already PUBLISHED on origin/main (same title) is exempt — no reservation needed, no collision', () {
@@ -1448,14 +1508,20 @@ Set<int> _numbersFromRefLines(String lines) {
 Set<int> _localReservations() => _numbersFromRefLines(
     _run('git', ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/oi/']) ?? '');
 
-/// ONE `ls-remote` for the whole namespace, bounded to 5 s. null = could not
-/// answer (offline, timeout, no remote) -- UNDETERMINED, never "not reserved".
+/// ONE `ls-remote` for the whole namespace (no `--exit-code`: with it an EMPTY
+/// namespace is indistinguishable from a failure), bounded to 10 s. null =
+/// could not answer (offline, timeout, no remote) -- UNDETERMINED, never
+/// "not reserved".
 Future<Set<int>?> _remoteReservations() async {
   try {
     final p = await Process.start('git', ['ls-remote', '--refs', 'origin', 'refs/heads/oi/*']);
     final out = p.stdout.transform(utf8.decoder).join();
     unawaited(p.stderr.drain<void>()); // bare drain() is an unawaited_futures WARNING -> fails pre-push analyze
-    final code = await p.exitCode.timeout(const Duration(seconds: 5), onTimeout: () {
+    // 10 s, not 5: a bare ls-remote over this SSH remote measures 2.9-3.2 s
+    // (both review rounds); a cold handshake crossing 5 s would SKIP the one
+    // check that no later placement repeats once the number is published.
+    // The renamed-fixture "offline" path fails in ~1 s either way.
+    final code = await p.exitCode.timeout(const Duration(seconds: 10), onTimeout: () {
       p.kill();
       return -1;
     });
@@ -1509,8 +1575,13 @@ Then, in `main`, immediately after the three merged maps are built (after `final
                 if (local.contains(n) || (remote?.contains(n) ?? false)) continue;
                 if (remote == null) {
                   reservationSkipped = true;
-                  _warnPass('OI-$n has no local reservation ref and origin could not be '
-                      'reached to check refs/heads/oi/$n. Reservation check skipped for it.');
+                  // NOT _warnPass: its tail promises "CI re-runs it", which is
+                  // false for THIS check -- once the number is published the
+                  // exemption makes every later placement vacuous (spec §3.3).
+                  stderr.writeln('[check_oi_numbering_unique] UNDETERMINED (passing): OI-$n has '
+                      'no local reservation ref and origin could not be reached to check '
+                      'refs/heads/oi/$n. NO LATER PLACEMENT RE-CHECKS THIS once the number is '
+                      'published -- reserve it now: sh scripts/mint_oi.sh --reserve $n "<title>"');
                   continue;
                 }
                 failures.add('OI-$n is on this board but has NO reservation '
@@ -1559,8 +1630,9 @@ Then TWO edits to the existing output paths, without which the plan's own offlin
       // would be false about the half that did.
       stdout.writeln('[check_oi_numbering_unique] SKIPPED (reservation check): '
           'collision check ran and found nothing; one or more minted numbers '
-          'could not be verified against origin (offline -- see UNDETERMINED '
-          'above). CI re-runs the reservation check with the remote in reach.');
+          'could not be verified against origin (see UNDETERMINED above). '
+          'Nothing re-checks this once the number is published -- reserve it '
+          'now with: sh scripts/mint_oi.sh --reserve <N> "<title>"');
       exit(0);
     }
     // ...existing PASS line unchanged...
@@ -1576,12 +1648,15 @@ Expected: 6 + 23 PASS. Then run the gate once in the real worktree — `dart run
 1. `(remote?.contains(n) ?? false)` → `(remote?.contains(n) ?? true)` → confirm with `grep -c '?? true' scripts/check_oi_numbering_unique.dart` → `1`. Run. Expected: the offline test reddens (no UNDETERMINED). Revert.
 2. Delete the `failures.add(...)` statement inside Check C (leave the loop). Run. Expected: the unreserved AND the midmerge tests redden. Revert.
 3. Delete `.where((n) => !published.contains(n))` (check published numbers too). Run. Expected: the published test reddens (the reservation lookup finds nothing, remote reachable → FAIL). Revert.
-4. Make `_localReservations()` return `<int>{}` → confirm with `grep -c 'return <int>{};' …` → `1`. Run. Expected: the localref test reddens (it falls through to `ls-remote`, which finds nothing → FAIL); the remoteref test stays green. Revert. This is the named mutation for localref; without it that test has none.
-5. Restore the vacuous PASS print to unconditional (drop `failures.isEmpty && !reservationSkipped`). Run. Expected: the offline test reddens on `isNot(contains('PASS'))`. Revert.
+4. Make `_localReservations()` return `<int>{}` → confirm with `grep -c 'return <int>{};' …` → `1`. Run. Expected: the localref test reddens (it falls through to `ls-remote`, which finds nothing → FAIL); the remoteref test stays green. Revert. This is the named mutation for localref.
+5. Make `_remoteReservations()` return `<int>{}` (reachable-but-empty) instead of the parsed set. Run. Expected: the remoteref test reddens; localref stays green — which proves the two lookups are independently load-bearing. Revert. This is the named mutation for remoteref.
+6. Restore the vacuous PASS print to unconditional (drop `failures.isEmpty && !reservationSkipped`). Run. Expected: the offline test reddens on `isNot(contains('PASS'))`. Revert.
 
 - [ ] **Step 6: The existing lib e2e fixture, and the ledger**
 
-`test/scripts/oi_numbering_lib_test.dart:336` `'PASSES when the branch mints an uncontested number'` mints OI-3 with no reservation against a REACHABLE bare origin, and asserts exit 0 + `PASS`. Check C now (correctly) fails it — §4.9 "repairing a broken ENFORCEMENT breaks every test that was silently relying on it not enforcing". Strengthen, do not loosen: inside that test, after `_scenario(...)` returns `work`, reserve the number the way the allocator does and fetch it:
+TWO existing fixtures in `test/scripts/oi_numbering_lib_test.dart` mint an unreserved number against a REACHABLE bare origin and assert exit 0 — round 1 named the first, round 2 found the second (the file has **24** tests; every "23" in the ledger's evidence is stale). Check C now (correctly) fails both — §4.9 "repairing a broken ENFORCEMENT breaks every test that was silently relying on it not enforcing", and `feedback_mistake_guard_without_its_mirror` #26: a finding names a SITE, grep the file for the CLASS. `grep -n "branchOpen\|branchClosed" test/scripts/oi_numbering_lib_test.dart` lists every scenario that mints on the branch side; the two that mint a number absent from `mainOpen` are `:336` and `:577`. Strengthen, do not loosen:
+
+(a) `:336` `'PASSES when the branch mints an uncontested number'` — inside that test, after `_scenario(...)` returns `work`, reserve the number the way the allocator does and fetch it:
 ```dart
       // The number the branch mints must be RESERVED (allocator, 2026-09-12);
       // an unreserved mint is now a FAIL, pinned by
@@ -1589,9 +1664,17 @@ Expected: 6 + 23 PASS. Then run the gate once in the real worktree — `dart run
       expect(_run('git', ['push', '-q', 'origin', 'HEAD:refs/heads/oi/3'], work).exitCode, 0);
       expect(_run('git', ['fetch', '-q', 'origin', '+refs/heads/oi/*:refs/remotes/origin/oi/*'], work).exitCode, 0);
 ```
-(Use that file's own `_run` helper and its `work` path variable; confirm the scenario's origin is a bare repo reachable by `git push` — it is, the round-1 reviewer ran it.) Re-run the file: 23 green.
+(Use that file's own `_git(work, [...])` helper — `_scenario` (`:227-280`) returns `work` checked out on `feature` with `origin` a bare path added by `git remote add`, so a push also updates the tracking ref; verified by both review rounds.)
 
-Then `docs/audit/gate_test_ledger.yaml:436-438`: add `test/scripts/oi_numbering_gate_e2e_test.dart` to `test_path:` and append to `evidence:` one sentence per mutation above and per Task 3 mutation, with counts, dated 2026-09-12. Run `dart run scripts/check_gate_test_ledger.dart` → PASS.
+(b) `:577` `'e2e — a clean merge with NO collision still passes at the merge commit'` — the branch mints OI-3 on its CLOSED board, then main merges it `--no-ff`; the merge-commit arm finds `mintedHere = {3}`, origin/main lacks 3, nothing reserves it → `FAIL … OI-3 … NO reservation`. That is the CI-on-a-PR shape working as designed. Before the `_git(work, ['checkout', 'main']);` line add:
+```dart
+      // The branch's number must be RESERVED (allocator, 2026-09-12) -- at the
+      // merge commit Check C is meaningful because origin/main lacks 3.
+      expect(_git(work, ['push', '-q', 'origin', 'HEAD:refs/heads/oi/3']).exitCode, 0);
+```
+(`work` is still on `feature` there; the push updates `refs/remotes/origin/oi/3` locally, so no fetch is needed.) Re-run the file: **24 green**.
+
+Then `docs/audit/gate_test_ledger.yaml:436-438`: add `test/scripts/oi_numbering_gate_e2e_test.dart` to `test_path:`, correct the baseline to **24/24**, and append to `evidence:` one sentence per mutation above and per Task 3 mutation, with counts, dated 2026-09-12. Run `dart run scripts/check_gate_test_ledger.dart` → PASS.
 
 - [ ] **Step 7: Commit**
 
@@ -1610,12 +1693,13 @@ and CI-on-a-PR; vacuous by design at CI-on-main. The vacuous collision
 PASS no longer co-prints with a reservation FAIL/SKIP, and SKIPPED
 names which check was skipped.
 
-Tests: +6 in test/scripts/oi_numbering_gate_e2e_test.dart; the lib
-e2e 'uncontested' fixture now reserves its number (the enforcement it
-silently relied on not existing). Mutations: null-as-reserved reddens
-offline; dropping failures.add reddens unreserved + midmerge; dropping
-the published exemption reddens published; empty local refs reddens
-localref; unguarding the vacuous print reddens offline."
+Tests: +6 in test/scripts/oi_numbering_gate_e2e_test.dart; TWO lib
+e2e fixtures (:336 'uncontested', :577 'clean merge') now reserve their
+number (the enforcement they silently relied on not existing; 24/24).
+Mutations: null-as-reserved reddens offline; dropping failures.add
+reddens unreserved + midmerge; dropping the published exemption
+reddens published; empty local refs reddens localref; empty remote
+set reddens remoteref; unguarding the vacuous print reddens offline."
 ```
 
 ---
@@ -1745,12 +1829,28 @@ void main() {
         reason: 'fixture: the push must have updated the local tracking ref');
     final out = await _hookOutput(dart, src, clone, startup);
     expect(out, contains('OI board: next free number is at least 6'));
-    expect(out, contains('Reserved-but-unfiled: oi/5'));
+    expect(out, contains('Reserved-but-unfiled: oi/5 ['));
     expect(out, contains('sh scripts/mint_oi.sh'));
   });
 
+  test('a reservation filed on a SIBLING local branch is not listed as unfiled', () async {
+    expect(_git(['checkout', '-q', '-b', 'sib'], clone).exitCode, 0);
+    expect(_git(['push', '-q', 'origin', 'HEAD:refs/heads/oi/9'], clone).exitCode, 0);
+    File('$clone/docs/audit/open_issues.md')
+        .writeAsStringSync(File('$clone/docs/audit/open_issues.md').readAsStringSync() + _entry(9, 'sib nine'));
+    expect(_git(['add', '-A'], clone).exitCode, 0);
+    expect(_git(['commit', '-q', '-m', 'sib files 9'], clone).exitCode, 0);
+    expect(_git(['checkout', '-q', 'main'], clone).exitCode, 0);
+    final out = await _hookOutput(dart, src, clone, startup);
+    expect(out, contains('Reserved-but-unfiled: none'));
+    expect(out, contains('next free number is at least 10'));
+  });
+
   test('does NOT fetch: a reservation made from ANOTHER clone is invisible until the next sync (and the line says so)', () async {
-    expect(_git(['push', '-q', 'origin', 'HEAD:refs/heads/oi/7'], other).exitCode, 0);
+    // `other` was cloned from the still-EMPTY remote, so its HEAD is unborn;
+    // fetch main first and reserve from the fetched ref (review round 2).
+    expect(_git(['fetch', '-q', 'origin'], other).exitCode, 0);
+    expect(_git(['push', '-q', 'origin', 'refs/remotes/origin/main:refs/heads/oi/7'], other).exitCode, 0);
     final out = await _hookOutput(dart, src, clone, startup);
     expect(out, contains('next free number is at least 5'),
         reason: 'local-only read: oi/7 on the remote is not consulted');
@@ -1826,18 +1926,39 @@ String _oiBoardLine() {
       final m = RegExp(r'/oi/(\d+)$').firstMatch(l.trim());
       if (m != null) reserved.add(int.parse(m.group(1)!));
     }
+    // A number filed on ANY local branch (a sibling worktree's work in flight)
+    // is filed, not orphaned -- otherwise this line would tell worktree B to
+    // release worktree A's number (review round 2, finding 3).
+    final onLocalBranches = <int>{};
+    final heads = Process.runSync('git', ['for-each-ref', '--format=%(refname)', 'refs/heads/'],
+        workingDirectory: root, stdoutEncoding: utf8);
+    for (final b in (heads.stdout as String).split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty)) {
+      for (final path in const [open, closed]) {
+        final r = Process.runSync('git', ['show', '$b:$path'],
+            workingDirectory: root, stdoutEncoding: utf8);
+        if (r.exitCode == 0) onLocalBranches.addAll(parseBoard(r.stdout as String).keys);
+      }
+    }
 
     final next = nextFreeNumber([published, working, {for (final r in reserved) r: ''}]);
     final unfiled = reserved
-        .where((n) => !published.containsKey(n) && !working.containsKey(n))
+        .where((n) => !published.containsKey(n) && !working.containsKey(n) && !onLocalBranches.contains(n))
         .toList()
       ..sort();
+    String subject(int n) {
+      final r = Process.runSync('git', ['log', '-1', '--format=%s', 'refs/remotes/origin/oi/$n'],
+          workingDirectory: root, stdoutEncoding: utf8);
+      return r.exitCode == 0 ? (r.stdout as String).trim() : '(no ledger line)';
+    }
+    final unfiledText = unfiled.isEmpty
+        ? 'none'
+        : unfiled.map((n) => 'oi/$n [${subject(n)}]').join('; ') +
+            ' — may belong to a CLOUD branch this clone cannot see; adopt by filing `## OI-N` by '
+            'hand, or `sh scripts/mint_oi.sh --release N` ONLY if the reserving branch is dead';
     return 'OI board: next free number is at least $next (as of the last sync; '
-        'mint_oi.sh re-syncs before reserving). Reserved-but-unfiled: '
-        '${unfiled.isEmpty ? 'none' : unfiled.map((n) => 'oi/$n').join(', ')}'
-        '${unfiled.isEmpty ? '' : ' — adopt by filing `## OI-N` by hand, or `sh scripts/mint_oi.sh --release N`'}.\n'
-        'File new OIs ONLY with:  sh scripts/mint_oi.sh "<title>"  — an UNRESERVED number fails '
-        'the commit (CLAUDE.md §7, OI allocator row).';
+        'mint_oi.sh re-syncs before reserving). Reserved-but-unfiled: $unfiledText.\n'
+        'File new OIs ONLY with:  sh scripts/mint_oi.sh "<title>"  from YOUR worktree — an '
+        'UNRESERVED number fails the commit (CLAUDE.md §7, OI allocator row).';
   } catch (_) {
     return '';
   }
@@ -1847,7 +1968,7 @@ String _oiBoardLine() {
 - [ ] **Step 4: Run; mutate; revert**
 
 Run: `flutter test test/scripts/discipline_hook_oi_line_e2e_test.dart test/scripts/batch_close_hook_e2e_test.dart` → PASS.
-Mutations: (1) `nextFreeNumber([published, working, {…}])` → `nextFreeNumber([published, working])` (drop reservations) → test 1 reddens (`5` not `6`); (2) `if (hasMain.exitCode != 0) return '';` → `if (false) return '';` → test 3 reddens (a line prints with no origin/main); (3) add a `git fetch origin` call before the reads → test 2 reddens (`7` becomes visible). Confirm each applied by grep; revert.
+Mutations: (1) `nextFreeNumber([published, working, {…}])` → `nextFreeNumber([published, working])` (drop reservations) → test 1 reddens (`5` not `6`); (2) `if (hasMain.exitCode != 0) return '';` → `if (false) return '';` → the no-origin/main test reddens (a line prints); (3) add a `git fetch origin` call before the reads → test 2 reddens (`7` becomes visible); (4) drop `&& !onLocalBranches.contains(n)` → the sibling test reddens (`oi/9` listed). Confirm each applied by grep; revert.
 Also `dart analyze scripts/discipline_hook.dart` → no issues (no bare `drain()` anywhere).
 
 - [ ] **Step 5: Commit**
@@ -1862,9 +1983,10 @@ board via oi_numbering_lib; lists reserved-but-unfiled with the adopt /
 this fires on every SessionStart source, so spec §7.4's 2 s rule made
 it read-local-only. Silent when origin/main is absent.
 
-Tests: test/scripts/discipline_hook_oi_line_e2e_test.dart (3).
+Tests: test/scripts/discipline_hook_oi_line_e2e_test.dart (4).
 Mutations: dropping reservations from the max reddens 1; ignoring the
-missing-origin/main guard reddens 1; adding a fetch reddens 1."
+missing-origin/main guard reddens 1; adding a fetch reddens 1;
+dropping the sibling-branch exclusion reddens 1."
 ```
 
 ---
@@ -1876,7 +1998,11 @@ missing-origin/main guard reddens 1; adding a fetch reddens 1."
 - Modify: `CLAUDE.md` §7 row beginning `| **OI number uniqueness across branches**`
 - Modify: `docs/blast_radius.yaml` (next to the existing `scripts/check_oi_numbering_unique.dart` pin at `:199`): add `- { glob: "scripts/mint_oi.sh", tier: platform }` and `- { glob: "scripts/discipline_hook.dart", tier: platform }` with a one-line comment each — today both fall through `scripts/**` to `feature` (`:315`), so a later edit to the allocator alone would get no B-pass and no full suite (review round 1, finding 10; verified with `blast_radius_from_diff.dart`). `scripts/check_blast_radius_coverage.dart` runs at pre-commit.
 - Create: `docs/handbook/process/oi-allocator.md`
-- (Considered, no change: `.claude/skills/debugging/SKILL.md` — no new bug class; the eyeball-minted-sequence class is OI-167's and this batch resolves the OI-board instance of it, not the skill-numbering instance.)
+- Modify: `CLAUDE.md` §4.3, the bullet beginning `**Commits and pushes go through \`scripts/safe_commit.sh\` / \`scripts/safe_push.sh\`, never raw`: append one clause — *"One documented exemption: the ref-CREATE push inside \`scripts/mint_oi.sh\` (§7, OI allocator row) — it creates a ref that must not exist, so its exit code is the verification and there is no range to gate."* A §4.3 reader never sees the §7 row otherwise (review round 2).
+- Modify: `scripts/build_oi_index.dart:110-111` and `scripts/oi_numbering_lib.dart:7-8` — both still say *"There is no allocator"*. Change to *"Until 2026-09-12 there was no allocator; \`scripts/mint_oi.sh\` now reserves numbers as \`oi/N\` branches. This check remains the LANDING backstop."* Comment-only edits; `dart analyze` both.
+- Modify: `vercel.json` — add `"ignoreCommand": "case \"$VERCEL_GIT_COMMIT_REF\" in oi/*) exit 0;; esac; exit 1"`. Vercel builds every pushed branch of this repo (a preview deployment exists for `regen-wave-unit2`, verified read-only in review round 2), and a reservation is a NEW commit carrying main's full tree, so without this every mint — and every retry-loser — would trigger a full Flutter-web build. Vercel semantics: `ignoreCommand` exit **0 = skip the build**, 1 = build. Confirm after the first real mint (Task 7 Step 7).
+- Modify: `scripts/new-worktree.sh:69,73` — the two `git fetch origin main --quiet` calls become `git fetch origin main '+refs/heads/oi/*:refs/remotes/origin/oi/*' --quiet`: same round trip, and every new worktree starts with current reservations so the SessionStart line is fresh at the moment a session most often mints. `test/scripts/new_worktree_base_test.dart` pins the base-choice BEHAVIOUR, not the fetch string (checked); run it.
+- (Considered, no change: `.claude/skills/debugging/SKILL.md` — no new bug class; the eyeball-minted-sequence class is OI-167's and this batch resolves the OI-board instance of it, not the skill-numbering instance. Spec §3.5 is amended to say the same.)
 
 - [ ] **Step 1: Board header** — after the `Append-only at the bottom.` bullet add:
 
@@ -1886,9 +2012,11 @@ missing-origin/main guard reddens 1; adding a fetch reddens 1."
   remote branch `oi/N` (an atomic create on GitHub, so two sessions cannot both
   get N, laptop or cloud) and appends the stub. An UNRESERVED number FAILS the
   commit (`check_oi_numbering_unique.dart`, Check C) at pre-commit and at
-  pre-merge-commit — adopting an orphan reservation by hand is fine. A number
-  filed before the allocator existed: `sh scripts/mint_oi.sh --reserve N
-  "<title>"`. Never mint offline — the script refuses, by design. Spec:
+  pre-merge-commit — adopting an orphan reservation by hand is fine. Run it in
+  YOUR worktree (§4.13) — it edits this file. A number filed before the
+  allocator existed: `sh scripts/mint_oi.sh --reserve N "<title>"`. Never mint
+  offline — the script refuses, by design. The cloud never prunes (no `gh`);
+  the next laptop mint prunes for it. Spec:
   `docs/superpowers/specs/2026-09-12-oi-allocator-design.md`.
 ```
 
@@ -1896,7 +2024,7 @@ missing-origin/main guard reddens 1; adding a fetch reddens 1."
 
 Left: `**OI number uniqueness across branches** — numbers are ALLOCATED by \`scripts/mint_oi.sh\` (2026-09-12), never eyeballed. Before it: no allocator, the ceiling split across two files, six manual renumbers by 2026-09-12 (the last, 177/178→186/187, landed while the allocator was being specified). The detector alone was structurally late — two of its three placements run after the number is committed, and the early one was vacuous in the zero-commit worktree state (OI-176).`
 
-Right: `\`scripts/mint_oi.sh\` reserves \`refs/heads/oi/N\` as a server-side compare-and-swap: \`gh api\` on the laptop (NOT a \`git push\`, so pre-push never runs), \`git push --force-with-lease=<ref>:\` in the cloud (no \`gh\`, no hooks, and its credential writes \`refs/heads/**\` only — \`refs/oi/*\` is a 403). **That push is a documented exemption from §4.3's \`safe_push.sh\` rule:** it creates a ref that must not exist, so the exit code IS the landing verification, there is no range to gate, and \`git_safety_hook.dart\` cannot see it (it runs inside a script). Sync is \`git fetch\` into the SHARED \`.git/\`, so every laptop worktree sees a reservation instantly. Offline ⇒ the mint REFUSES (exit 2, nothing written) — the one deliberately fail-closed step; gates stay fail-open. Gate \`scripts/check_oi_numbering_unique.dart\`: Check B′ compares the UNCOMMITTED board against origin/main whatever shape HEAD has (closes OI-176, diagnose \`f3a9c1\`); Check C fails a commit whose new number has no \`oi/N\` — meaningful at pre-commit, pre-merge-commit (the backstop for hookless cloud branches) and CI-on-a-PR; VACUOUS by design at CI-on-main (published numbers are exempt because prune may already have removed their reservation); offline ⇒ SKIPPED naming which check. SessionStart prints \`next free number is at least N\` from LOCAL refs (no fetch — ~3 s over SSH, on every source incl. compact). Orphan reservations: adopt by hand or \`--release N\`. GitHub Issues as the allocator was REJECTED: issues+PRs share one sequence, max #23 < OI-185. Residue: a hookless environment pushing straight to \`main\` is checked for collisions but not reservations. Tests: \`test/scripts/mint_oi_e2e_test.dart\`, \`oi_numbering_gate_e2e_test.dart\`, \`discipline_hook_oi_line_e2e_test.dart\` — counts deliberately omitted; run them. Spec: \`docs/superpowers/specs/2026-09-12-oi-allocator-design.md\`.`
+Right: `\`scripts/mint_oi.sh\` reserves \`refs/heads/oi/N\` as a server-side compare-and-swap: \`gh api\` on the laptop (NOT a \`git push\`, so pre-push never runs), \`git push --force-with-lease=<ref>:\` in the cloud (no \`gh\`, no hooks, and its credential writes \`refs/heads/**\` only — \`refs/oi/*\` is a 403). **That push is a documented exemption from §4.3's \`safe_push.sh\` rule:** it creates a ref that must not exist, so the exit code IS the landing verification, there is no range to gate, and \`git_safety_hook.dart\` cannot see it (it runs inside a script). Sync is \`git fetch\` into the SHARED \`.git/\`, so every laptop worktree sees a reservation instantly. Offline ⇒ the mint REFUSES (exit 2, nothing written) — the one deliberately fail-closed step; gates stay fail-open. Gate \`scripts/check_oi_numbering_unique.dart\`: Check B′ compares the UNCOMMITTED board against origin/main whatever shape HEAD has (closes OI-176, diagnose \`f3a9c1\`); Check C fails a commit whose new number has no \`oi/N\` — meaningful at pre-commit, pre-merge-commit (the backstop for hookless cloud branches) and CI-on-a-PR; VACUOUS by design at CI-on-main (published numbers are exempt because prune may already have removed their reservation); offline ⇒ SKIPPED naming which check. SessionStart prints \`next free number is at least N\` from LOCAL refs (no fetch — ~3 s over SSH, on every source incl. compact). Orphan reservations: adopt by hand or \`--release N\` — which refuses any number filed on ANY local branch and prints the ledger line (branch + time) before deleting, because from worktree B a sibling A's in-flight number looks unfiled. The cloud never prunes (no \`gh\`); the next laptop mint prunes for it. \`vercel.json\` skips \`oi/*\` builds (\`ignoreCommand\`). GitHub Issues as the allocator was REJECTED: issues+PRs share one sequence, max #23 < OI-185. Residue: a hookless environment pushing straight to \`main\` is checked for collisions but not reservations. Tests: \`test/scripts/mint_oi_e2e_test.dart\`, \`oi_numbering_gate_e2e_test.dart\`, \`discipline_hook_oi_line_e2e_test.dart\` — counts deliberately omitted; run them. Spec: \`docs/superpowers/specs/2026-09-12-oi-allocator-design.md\`.`
 
 - [ ] **Step 3: Handbook page** `docs/handbook/process/oi-allocator.md`:
 
@@ -1931,6 +2059,15 @@ GitHub, so the second session to ask for N is told no and takes N+1. The laptop 
 `git push --force-with-lease=refs/heads/oi/N:`. `git fetch` is the sync. The board remains the only
 source of truth for content; `git log -1 origin/oi/N` shows who reserved it and when.
 
+## Orphans and siblings
+
+A reservation nobody filed (a session died between the reservation and the stub) is listed at every
+SessionStart as reserved-but-unfiled, with its ledger line. Adopt it by filing `## OI-N` by hand, or
+`sh scripts/mint_oi.sh --release N`. `--release` refuses a number filed on any local branch — from
+your worktree a sibling worktree's in-flight number looks exactly like an orphan. A cloud branch's
+in-flight number is invisible to your clone; read the ledger line before releasing. The cloud never
+prunes; the next laptop mint prunes for it.
+
 ## Offline
 
 `mint_oi.sh` refuses to mint offline. That is the point: a local-only number is a promise the
@@ -1947,8 +2084,8 @@ SessionStart line — fails open to SKIPPED or silence.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add docs/audit/open_issues.md CLAUDE.md docs/blast_radius.yaml docs/handbook/process/oi-allocator.md docs/handbook/INDEX.md
-sh scripts/safe_commit.sh "docs(board): filing rule, CLAUDE.md §7 allocator row, blast-radius pins, handbook page — OI numbers are allocated, never eyeballed"
+git add docs/audit/open_issues.md CLAUDE.md docs/blast_radius.yaml docs/handbook/process/oi-allocator.md docs/handbook/INDEX.md scripts/build_oi_index.dart scripts/oi_numbering_lib.dart vercel.json scripts/new-worktree.sh
+sh scripts/safe_commit.sh "docs(board): filing rule, CLAUDE.md §4.3 exemption + §7 allocator row, blast-radius pins, handbook page, Vercel skip for oi/*, new-worktree fetches reservations — OI numbers are allocated, never eyeballed"
 ```
 
 (If the pre-commit regen leaves `docs/handbook/INDEX.md` modified, add it and re-run the commit.)
@@ -1984,7 +2121,7 @@ trailing comment — or the merge gate hard-fails in CI.)
 Commit it: `sh scripts/safe_commit.sh "docs(plan-review): keystone record for oi-allocator (platform)"`.
 
 - [ ] **Step 6: Land** — from the PRIMARY worktree: `sh scripts/safe_merge.sh oi-allocator` then `sh scripts/safe_push.sh origin main`. Read `safe_push.sh`'s THREE outcomes (0 landed / 1 failed / 2 unverified) — not two.
-- [ ] **Step 7: First real mint** — from the primary worktree after the push: `sh scripts/mint_oi.sh --next` → expect `NEXT=` = 1 + main's board max (re-derive; do not trust any number in this plan). Do NOT mint a real number without an issue to file. ⚠ The API transport's `POST /git/commits` WITHOUT `parents` creating a ROOT commit is documented by GitHub but was NOT proven live (the spike proved the refs 422 and the cloud 403; the shim's `commit-tree` cannot prove GitHub's behaviour). The first real laptop mint proves it; if it 422s on the commit call, the fallback is `--input` with an explicit `"parents": []` JSON body — one line in `cas_write`.
+- [ ] **Step 7: First real mint** — from the primary worktree after the push: `sh scripts/mint_oi.sh --next` → expect `NEXT=` = 1 + main's board max (re-derive; do not trust any number in this plan). Do NOT mint a real number without an issue to file. ⚠ The API transport's `POST /git/commits` WITHOUT `parents` creating a ROOT commit is documented by GitHub but was NOT proven live (the spike proved the refs 422 and the cloud 403; the shim's `commit-tree` cannot prove GitHub's behaviour). The first real laptop mint proves it; if it 422s on the commit call, the fallback is `--input` with an explicit `"parents": []` JSON body — one line in `cas_write`. After that first mint ALSO confirm on the Vercel dashboard (or `vercel ls`) that NO deployment was created for `oi/N` — the `ignoreCommand` from Task 6 is what prevents a full Flutter-web build per mint.
 - [ ] **Step 8: §5 batch-close rows** — retrospective `memory/project_oi_allocator_shipped_<date>.md`; retire the `IN-FLIGHT` index line to `MEMORY_ARCHIVED.md`; correct `project_regen_alignment_brainstorm_inflight.md`'s "177/178" to "186/187"; `dart run scripts/retire_worktree.dart` (dry-run) then `--execute oi-allocator`; `dart run scripts/check_context_artifact_budget.dart`.
 
 ---
@@ -1998,6 +2135,7 @@ Commit it: `sh scripts/safe_commit.sh "docs(plan-review): keystone record for oi
 - §3.5 docs → Tasks 3 (diagnose-doc, OI-176 CLOSED), 6 (board, CLAUDE.md, handbook). ✓
 - §6 tests and mutations → each task's mutation step; the "tests 1–2 do NOT redden under `--force`" caveat is carried into Task 1 Step 5. ✓
 - §7 residues: +orphan reservations (adopt or `--release`), +CI-on-main vacuity / hookless direct-to-main, +API root-commit unproven until the first live mint — spec amended in the plan-hardening commit. §8 rollout → Task 7 Steps 6–8. ✓
+- Review round 2 (2026-09-12, on the hardened plan `57643ee8`): 1 P1 + 4 P2 + 5 P3, verdict harden, no split — folded: F1 the SECOND lib fixture (`:577`, the class had two members — `feedback_mistake_guard_without_its_mirror` #26), F2 hook test-2 unborn HEAD, F3 `--release`/unfiled blind to live siblings (refuse any local branch's numbers; print the ledger line), F4 ls-remote bound 10 s + the false "CI re-runs" sentence, F5 named mutations for remoteref / 0-007 / release + "offline has none" stated, F6 Vercel `ignoreCommand` for `oi/*`, F7 mutation 3 reddens two, F8 fixture `.gitattributes`, F9 spec/plan drift (a–e), F10 script edges (`TRANSPORT_EXPLICIT` only for `git`, empty `--reserve`, sync stderr, local-delete best-effort, "your worktree", `new-worktree.sh` refspec), Q10 §4.3 cross-reference. Convergence declared after the fold per this repo's record convention (see `docs/plan-reviews/workout-progression-resolver.md`: round 2 "harden (2 P2, surgical), both folded in-place" → `verdict: converged`).
 - Review round 1 (2026-09-12): 4 P1 + 13 P2, verdict harden — every finding folded above (F1 output guards, F2 `unawaited`, F3 lib-fixture reservation, F4 local-only hook, F5 mutation greps, F6 placements, F7 local-main term, F8 `0`/leading-zero, F9 best-effort bookkeeping + `--release`, F10 pins, F11 FIX text, F12 citations, F13 fixtures, F14 prune guard, F15 §4.3 exemption sentence, F16 mode-keyed message, F17 numeric sort).
 - Type consistency: `_boardDirty`, `_localReservations`, `_remoteReservations`, `_publishedOnOriginMain`, `_numbersFromRefLines` are defined in Task 3/4 and used only there; `_oiBoardLine`/`_runBounded` only in Task 5; `MINT_OI_*` env names identical across Tasks 1, 2, 5. ✓
 - Placeholders: none (`<title>` and `<sha>` are literal usage text, not plan gaps).
