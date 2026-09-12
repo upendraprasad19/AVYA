@@ -965,6 +965,17 @@ And inside `main()`:
     final lines = (r.stdout as String).trim().split('\n').map((l) => l.trim()).toList();
     expect(lines[0], 'NEXT=8');
     expect(lines[1], 'UNFILED=7');
+
+    // Phase 2: the reserved number is then ADOPTED by hand on the local board
+    // (uncommitted). It is filed now, so it must drop out of UNFILED while
+    // NEXT stays 8 -- this is the assertion the local-board exclusion exists for.
+    File('$c/$_openBoard').writeAsStringSync(
+        '${f.board(c)}\n## OI-7 — adopted by hand\n\n- **Status**: OPEN\n- **Blocked on**: none\n- **Verified**: never\n');
+    final r2 = f.mint(c, ['--next']);
+    expect(r2.exitCode, 0, reason: '${r2.stdout}\n${r2.stderr}');
+    final lines2 = (r2.stdout as String).trim().split('\n').map((l) => l.trim()).toList();
+    expect(lines2[0], 'NEXT=8');
+    expect(lines2[1], 'UNFILED=');
   });
 ```
 
@@ -977,7 +988,7 @@ Expected: the three new tests exercise code Task 1 already shipped, so they may 
 
 1. In the shim (test file), delete the `else` branch that prints `Reference already exists` so a duplicate create silently succeeds → the API race test must redden (B reports `OI-5`, overwriting). This proves the script's `*"already exists"*` match is what drives the retry. Revert.
 2. In the script, change `contains_line "$published" "$n" || continue` in `do_prune` to `true || continue` → `--prune` test reddens (5 deleted too). Confirm with `grep -c 'true || continue' scripts/mint_oi.sh` → `1`. Revert.
-3. In `do_next`, delete the `contains_line "$local_nums" "$r" && continue` line → the `--next` test still passes (7 is not on the local board) — expected, so ALSO add to that test: append a hand-typed `## OI-7 — typed` stub to the local board before `--next` and assert `UNFILED=` is empty. Then the mutation reddens it. Keep the strengthened test.
+3. In `do_next`, delete the `contains_line "$local_nums" "$r" && continue` line → the `--next` test's PHASE 2 (the reserved number adopted by hand on the local board must drop out of `UNFILED`) reddens. Phase 1 alone would not — 7 is not on the local board there — which is why the test has two phases.
 
 - [ ] **Step 4: Commit**
 

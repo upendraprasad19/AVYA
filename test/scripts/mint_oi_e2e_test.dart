@@ -148,6 +148,56 @@ class _Fixture {
   }
 }
 
+/// A `gh` stand-in that emulates the three GitHub API calls mint_oi.sh makes,
+/// ON TOP OF THE BARE REMOTE, so the "server" state is real git state and the
+/// post-success fetch in the script works exactly as it does against GitHub.
+///   POST   repos/X/git/commits  -> git commit-tree in the bare repo, prints sha
+///   POST   repos/X/git/refs     -> `update-ref --stdin create` (fails if exists) => 422 text
+///   DELETE repos/X/git/refs/... -> update-ref -d
+const _ghShim = r'''#!/bin/sh
+set -eu
+[ "${1:-}" = api ] || { echo "shim: unsupported: $*" >&2; exit 1; }
+shift
+method=GET; path=''; tree=''; ref=''; sha=''; msg=''
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -X) method=$2; shift ;;
+    -f) kv=$2; shift; k=${kv%%=*}; v=${kv#*=}
+        case "$k" in tree) tree=$v ;; ref) ref=$v ;; sha) sha=$v ;; message) msg=$v ;; esac ;;
+    --jq) shift ;;
+    repos/*) path=$1 ;;
+  esac
+  shift
+done
+case "$method:$path" in
+  POST:*/git/commits)
+    GIT_AUTHOR_NAME=shim GIT_AUTHOR_EMAIL=s@x GIT_COMMITTER_NAME=shim GIT_COMMITTER_EMAIL=s@x \
+      git --git-dir="$GH_SHIM_REMOTE" commit-tree "$tree" -m "$msg" ;;
+  POST:*/git/refs)
+    if printf 'create %s %s\n' "$ref" "$sha" | git --git-dir="$GH_SHIM_REMOTE" update-ref --stdin 2>/dev/null; then
+      printf '{"ref":"%s"}\n' "$ref"
+    else
+      echo 'gh: Reference already exists (HTTP 422)' >&2; exit 1
+    fi ;;
+  DELETE:*/git/refs/*)
+    r=${path#*/git/refs/}; git --git-dir="$GH_SHIM_REMOTE" update-ref -d "refs/$r" ;;
+  *) echo "shim: unsupported $method $path" >&2; exit 1 ;;
+esac
+''';
+
+/// Writes the shim into the fixture and returns the env that routes the
+/// script's `gh` calls to it.
+Map<String, String> _apiEnv(_Fixture f) {
+  final shim = File('${f.tmp.path}/gh');
+  shim.writeAsStringSync(_ghShim);
+  return {
+    'MINT_OI_TRANSPORT': 'api',
+    'MINT_OI_GH_BIN': 'sh ${_fwd(shim.path)}',
+    'MINT_OI_OWNER_REPO': 'fixture/repo',
+    'GH_SHIM_REMOTE': _fwd(f.remote),
+  };
+}
+
 void main() {
   test('two clones minting in turn get consecutive numbers, both reserved on origin, ledger lines parse',
       () {
@@ -348,5 +398,72 @@ void main() {
     // And --next does not list it as unfiled either.
     final next = f.mint(c, ['--next']);
     expect((next.stdout as String), contains('UNFILED=\n'));
+  });
+
+  test('API transport: create-commit + create-ref via gh; duplicate create is refused (422) and the mint retries',
+      () {
+    final f = _Fixture.create('api');
+    addTearDown(f.dispose);
+    final env = _apiEnv(f);
+    final a = _run('sh', ['scripts/mint_oi.sh', 'via api'], f.clones[0], extra: env);
+    expect(a.exitCode, 0, reason: '${a.stdout}\n${a.stderr}');
+    expect((a.stdout as String).trim(), 'OI-4');
+    expect(f.remoteReservations(), {4});
+    expect(f.remoteRefMessage('refs/heads/oi/4'), contains('| via api'));
+    // The API path must ALSO leave the local tracking ref behind (fetched,
+    // since the object was created server-side).
+    expect(_run('git', ['rev-parse', '--verify', 'refs/remotes/origin/oi/4'], f.clones[0]).exitCode, 0);
+
+    // Race through the API: reserve 5 by hand inside B's window; B must take 6.
+    final hook = 'git -C ${_fwd(f.clones[0])} push -q origin HEAD:refs/heads/oi/5';
+    final b = _run('sh', ['scripts/mint_oi.sh', 'b via api'], f.clones[1],
+        extra: {...env, 'MINT_OI_TEST_HOOK_BEFORE_PUSH': hook});
+    expect(b.exitCode, 0, reason: '${b.stdout}\n${b.stderr}');
+    expect((b.stdout as String).trim(), 'OI-6');
+  });
+
+  test('--prune deletes only reservations whose number is on origin/main, and drops the local tracking ref',
+      () {
+    final f = _Fixture.create('prune');
+    addTearDown(f.dispose);
+    final c = f.clones[0];
+    // 4: minted AND then published (stub committed + pushed to main).
+    expect(f.mint(c, ['published one']).exitCode, 0);
+    _run('git', ['add', '-A'], c);
+    _run('git', ['commit', '-q', '-m', 'file OI-4'], c);
+    expect(_run('git', ['push', '-q', 'origin', 'main'], c).exitCode, 0);
+    // 5: reserved, not published.
+    expect(f.mint(c, ['--reserve', '5', 'in flight']).exitCode, 0);
+    expect(f.remoteReservations(), {4, 5});
+
+    final p = f.mint(c, ['--prune']);
+    expect(p.exitCode, 0, reason: '${p.stdout}\n${p.stderr}');
+    expect(f.remoteReservations(), {5});
+    expect(_run('git', ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/oi/4'], c).exitCode,
+        isNot(0), reason: 'local tracking ref for the pruned reservation must be gone');
+    expect(_run('git', ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/oi/5'], c).exitCode, 0);
+  });
+
+  test('--next reports the next free number and the reserved-but-unfiled list', () {
+    final f = _Fixture.create('next');
+    addTearDown(f.dispose);
+    final c = f.clones[0];
+    expect(f.mint(c, ['--reserve', '7', 'unfiled seven']).exitCode, 0);
+    final r = f.mint(c, ['--next']);
+    expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+    final lines = (r.stdout as String).trim().split('\n').map((l) => l.trim()).toList();
+    expect(lines[0], 'NEXT=8');
+    expect(lines[1], 'UNFILED=7');
+
+    // Phase 2: the reserved number is then ADOPTED by hand on the local board
+    // (uncommitted). It is filed now, so it must drop out of UNFILED while
+    // NEXT stays 8 -- this is the assertion the local-board exclusion exists for.
+    File('$c/$_openBoard').writeAsStringSync(
+        '${f.board(c)}\n## OI-7 — adopted by hand\n\n- **Status**: OPEN\n- **Blocked on**: none\n- **Verified**: never\n');
+    final r2 = f.mint(c, ['--next']);
+    expect(r2.exitCode, 0, reason: '${r2.stdout}\n${r2.stderr}');
+    final lines2 = (r2.stdout as String).trim().split('\n').map((l) => l.trim()).toList();
+    expect(lines2[0], 'NEXT=8');
+    expect(lines2[1], 'UNFILED=');
   });
 }
