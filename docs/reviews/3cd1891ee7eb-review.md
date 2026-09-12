@@ -5,7 +5,8 @@ blast_radius: catastrophic
 reviewer: claude-sonnet-via-skill
 lens_set: [writer_reader_drift, function_exception_swallow, blast_radius_mismatch, secrets_in_tree, unawaited_no_error_sink, guard_without_its_mirror, missing_input, asserted_fixture_value]
 findings_count: 4
-verdict: accepted  # all 4 findings triaged accepted and fixed in this same batch — see per-finding status + "Post-dispatch remediation" below
+verdict: accepted
+# ^ all 4 findings triaged accepted and fixed in this same batch — see per-finding status + "Post-dispatch remediation" below. Kept on its own line: check_plan_review_record_exists.dart's anti-fabrication check matches `^verdict:\s*accepted\s*$` LINE-ANCHORED, so a trailing comment on the verdict line itself would fail the merge-to-main gate in CI.
 ---
 
 # Code Review — 12408db06b47 (OI-162 slice 4, diagnose f2c8d5)
