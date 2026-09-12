@@ -41,7 +41,8 @@ enum ScheduleRowExemption {
   /// Structurally not a phase layout — will never adopt the shared builder.
   permanent,
 
-  /// A pre-existing implementation the OI-166 Unit 2 de-duplication converts.
+  /// A pre-existing implementation the OI-190 de-duplication converts (was
+  /// "OI-166 Unit 2" — that unit shipped without doing it; see OI-190).
   /// Every entry here must be GONE before the gate is flipped to hard-fail.
   pendingUnit2,
 }
@@ -57,7 +58,8 @@ enum ScheduleRowExemption {
 /// that states why, in a diff a reviewer sees. It is deliberately not a config
 /// file, not a glob, and not a directory exemption.
 const Map<String, ScheduleRowExemption> scheduleRowAllowlist = {
-  // The shared builder itself (created by OI-166 Unit 2).
+  // The shared builder itself — NOT YET CREATED: Unit 2 shipped without it;
+  // OI-190 owns building it and flipping the gate (see the gate's header).
   'lib/core/services/schedule_row_builder.dart': ScheduleRowExemption.permanent,
 
   // A hotel workout is a single ad-hoc replacement day, not a phase layout.
