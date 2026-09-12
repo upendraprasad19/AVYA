@@ -39,6 +39,7 @@
 // No `// Gate: N` line, per CLAUDE.md rule 24: a new gate takes NO number; the
 // filename is the identity that pre-commit.sh, test.yml and Gate 33 key on.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -87,6 +88,56 @@ bool _boardDirty() {
   } on ProcessException {
     return false;
   }
+}
+
+Set<int> _numbersFromRefLines(String lines) {
+  final out = <int>{};
+  for (final l in lines.split('\n')) {
+    final m = RegExp(r'/oi/(\d+)$').firstMatch(l.trim());
+    if (m != null) out.add(int.parse(m.group(1)!));
+  }
+  return out;
+}
+
+/// Reservations already fetched into the shared .git (SessionStart sync, or a
+/// mint in any sibling worktree). Empty is an answer here: absence of a local
+/// ref is what triggers the one network call below.
+Set<int> _localReservations() => _numbersFromRefLines(
+    _run('git', ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/oi/']) ?? '');
+
+/// ONE `ls-remote` for the whole namespace (no `--exit-code`: with it an EMPTY
+/// namespace is indistinguishable from a failure), bounded to 10 s. null =
+/// could not answer (offline, timeout, no remote) -- UNDETERMINED, never
+/// "not reserved".
+Future<Set<int>?> _remoteReservations() async {
+  try {
+    final p = await Process.start('git', ['ls-remote', '--refs', 'origin', 'refs/heads/oi/*']);
+    final out = p.stdout.transform(utf8.decoder).join();
+    unawaited(p.stderr.drain<void>()); // bare drain() is an unawaited_futures WARNING -> fails pre-push analyze
+    // 10 s, not 5: a bare ls-remote over this SSH remote measures 2.9-3.2 s
+    // (both review rounds); a cold handshake crossing 5 s would SKIP the one
+    // check that no later placement repeats once the number is published.
+    // The renamed-fixture "offline" path fails in ~1 s either way.
+    final code = await p.exitCode.timeout(const Duration(seconds: 10), onTimeout: () {
+      p.kill();
+      return -1;
+    });
+    if (code != 0) return null;
+    return _numbersFromRefLines(await out);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Every number on origin/main's CURRENT boards. A published number is exempt
+/// from the reservation check: it is permanent, and `mint_oi.sh --prune` may
+/// legitimately have deleted its reservation already.
+Set<int>? _publishedOnOriginMain() {
+  final open = _parseStrict(_showAtRev('origin/main', _openBoard), 'origin/main open board');
+  final closed =
+      _parseStrict(_showAtRev('origin/main', _closedBoard) ?? '', 'origin/main closed board');
+  if (open == null || closed == null) return null;
+  return mergeBoards(open, closed).keys.toSet();
 }
 
 /// Parses a board and distinguishes "genuinely no entries" from "could not read
@@ -166,6 +217,11 @@ Future<void> main(List<String> args) async {
   // things and the reassuring one is the lie -- it did not check. Tracked so
   // the final verdict can say SKIPPED instead.
   var undetermined = false;
+  // DIFFERENT fact from `undetermined`: that one means the collision check
+  // did not run; this one means the RESERVATION check (Check C) could not be
+  // completed. Folding them together prints a SKIPPED line that is false
+  // about one of them.
+  var reservationSkipped = false;
 
   // ---- Check A: one number on BOTH boards ----------------------------------
   final dupes = crossFileDuplicates(headOpen, headClosed);
@@ -391,6 +447,55 @@ Future<void> main(List<String> args) async {
         final mainMerged = mergeBoards(mainOpen, mainClosed);
         final otherMerged = mergeBoards(otherOpen, otherClosed);
 
+        // ---- Check C: every number this side minted is RESERVED ---------------
+        // (allocator, 2026-09-12; spec §3.3). Numbers are allocated by
+        // scripts/mint_oi.sh as refs/heads/oi/N; a hand-typed UNRESERVED number
+        // must not commit (adopting an existing orphan reservation by hand is
+        // fine and passes here). Network only when there is something
+        // unreserved locally to ask about; offline => UNDETERMINED, never PASS.
+        // Numbers already on origin/main's CURRENT board are exempt: they are
+        // permanent, and `mint_oi.sh --prune` may already have deleted their
+        // reservation -- which is why this check is vacuous at CI-on-main and
+        // meaningful at pre-commit, pre-merge-commit and CI-on-a-PR.
+        final mintedHere = otherMerged.keys.where((n) => !baseMerged.containsKey(n)).toList()
+          ..sort();
+        if (mintedHere.isNotEmpty) {
+          final published = _publishedOnOriginMain();
+          if (published == null) {
+            reservationSkipped = true;
+            _warnPass('origin/main boards unreadable; reservation check skipped.');
+          } else {
+            final toCheck = mintedHere.where((n) => !published.contains(n)).toList();
+            if (toCheck.isNotEmpty) {
+              final local = _localReservations();
+              Set<int>? remote;
+              if (toCheck.any((n) => !local.contains(n))) {
+                remote = await _remoteReservations();
+              }
+              for (final n in toCheck) {
+                if (local.contains(n) || (remote?.contains(n) ?? false)) continue;
+                if (remote == null) {
+                  reservationSkipped = true;
+                  // NOT _warnPass: its tail promises "CI re-runs it", which is
+                  // false for THIS check -- once the number is published the
+                  // exemption makes every later placement vacuous (spec §3.3).
+                  stderr.writeln('[check_oi_numbering_unique] UNDETERMINED (passing): OI-$n has '
+                      'no local reservation ref and origin could not be reached to check '
+                      'refs/heads/oi/$n. NO LATER PLACEMENT RE-CHECKS THIS once the number is '
+                      'published -- reserve it now: sh scripts/mint_oi.sh --reserve $n "<title>"');
+                  continue;
+                }
+                failures.add('OI-$n is on this board but has NO reservation '
+                    '(no refs/heads/oi/$n on origin).\n'
+                    '    Numbers are allocated, not eyeballed:  '
+                    'sh scripts/mint_oi.sh --reserve $n "<title>"\n'
+                    '    If that reports TAKEN, someone else holds $n -- renumber with:  '
+                    'sh scripts/mint_oi.sh "<title>"');
+              }
+            }
+          }
+        }
+
         // VACUOUS vs UNDETERMINED -- these look identical in the output of a
         // careless gate and mean opposite things.
         //
@@ -451,12 +556,17 @@ Future<void> main(List<String> args) async {
                 'truncated, so "nothing was minted" may simply be "the mint is '
                 'not in this clone". NOT reported as clean. Fix for CI: set '
                 '`fetch-depth: 0` on the checkout step.');
-          } else {
+          } else if (failures.isEmpty && !reservationSkipped) {
             stdout.writeln('[check_oi_numbering_unique] PASS (vacuous): $shapeNote -- the '
                 '$thisSideRev side minted no OI number that the merge-base '
                 'lacked, so no cross-branch collision is expressible. '
                 '${otherMerged.length} entries on the $otherSideRev side were '
                 'read and compared; this is a checked answer, not a skipped one.');
+          } else {
+            // A reservation FAIL or SKIP is the verdict of this run; printing a
+            // PASS about the collision half first would be read as the whole.
+            stdout.writeln('[check_oi_numbering_unique] collision check ran clean '
+                '($shapeNote, vacuous: the $thisSideRev side minted nothing the merge-base lacked).');
           }
         } else {
           final collisions = findCollisions(
@@ -497,6 +607,17 @@ Future<void> main(List<String> args) async {
           'no cross-board duplicates. Cross-branch collision check did NOT '
           'run (see UNDETERMINED above) -- CI re-runs it against a current '
           'origin/main.');
+      exit(0);
+    }
+    if (reservationSkipped) {
+      // The collision check RAN (and found nothing); only the reservation
+      // check could not complete. Say exactly that -- "did NOT run" here
+      // would be false about the half that did.
+      stdout.writeln('[check_oi_numbering_unique] SKIPPED (reservation check): '
+          'collision check ran and found nothing; one or more minted numbers '
+          'could not be verified against origin (see UNDETERMINED above). '
+          'Nothing re-checks this once the number is published -- reserve it '
+          'now with: sh scripts/mint_oi.sh --reserve <N> "<title>"');
       exit(0);
     }
     // Says "entries in <file>", never "open" / "closed". These are SECTION

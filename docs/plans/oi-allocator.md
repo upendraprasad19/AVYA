@@ -1707,7 +1707,7 @@ sh scripts/safe_commit.sh "feat(gates): check_oi_numbering_unique requires a ref
 
 Check C: numbers new vs the merge-base and not yet on origin/main's
 board must have a reservation -- local refs/remotes/origin/oi/N first,
-then ONE bounded (5 s) ls-remote; unreachable => UNDETERMINED/SKIPPED,
+then ONE bounded (10 s) ls-remote; unreachable => UNDETERMINED/SKIPPED,
 never PASS. Published numbers are exempt (prune may have removed their
 reservation). main is now async for the bounded spawn.
 

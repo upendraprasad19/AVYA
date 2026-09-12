@@ -170,4 +170,89 @@ void main() {
     final r = f.gate();
     expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
   });
+
+  test('Check C: a LOCAL-ONLY tracking ref refs/remotes/origin/oi/N satisfies the check with no network', () {
+    final f = _Fx.create('localref');
+    addTearDown(f.dispose);
+    f.sessionTypes(4, 'reserved four');
+    // Only the local tracking ref -- nothing on the remote. Pins the
+    // no-network short-circuit: step 1 answers, step 2 (ls-remote) never runs.
+    expect(_run('git', ['update-ref', 'refs/remotes/origin/oi/4', 'HEAD'], f.session).exitCode, 0);
+    final r = f.gate();
+    expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+    expect('${r.stdout}${r.stderr}', isNot(contains('NO reservation')));
+  });
+
+  test('Check C: a reservation that exists ONLY on the remote (another clone made it) is found by ls-remote', () {
+    final f = _Fx.create('remoteref');
+    addTearDown(f.dispose);
+    f.sessionTypes(4, 'reserved elsewhere');
+    // Reserved from the OTHER clone; the session has NOT fetched oi/*.
+    expect(_run('git', ['push', '-q', 'origin', 'HEAD:refs/heads/oi/4'], f.integration).exitCode, 0);
+    expect(_run('git', ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/oi/4'], f.session).exitCode,
+        isNot(0), reason: 'fixture: the session must not already hold the ref locally');
+    final r = f.gate();
+    expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+  });
+
+  test('Check C at pre-merge-commit (mid-merge, MERGE_HEAD set): an unreserved number on the branch being merged FAILS', () {
+    final f = _Fx.create('midmerge');
+    addTearDown(f.dispose);
+    // The cloud-branch backstop: the branch commits an unreserved number and is
+    // merged on the "laptop" (the integration clone) with --no-commit, which is
+    // exactly the state the pre-merge-commit hook sees.
+    f.sessionTypes(4, 'cloud typed four');
+    _run('git', ['add', '-A'], f.session);
+    expect(_run('git', ['commit', '-q', '-m', 'file OI-4 unreserved'], f.session).exitCode, 0);
+    expect(_run('git', ['push', '-q', 'origin', 'session'], f.session).exitCode, 0);
+    expect(_run('git', ['fetch', '-q', 'origin'], f.integration).exitCode, 0);
+    expect(_run('git', ['merge', '--no-ff', '--no-commit', 'origin/session'], f.integration).exitCode, 0);
+    expect(File('${f.integration}/.git/MERGE_HEAD').existsSync(), isTrue, reason: 'fixture: must be mid-merge');
+    final r = _run(_Fx._dart, ['run', '${_Fx._src}/scripts/check_oi_numbering_unique.dart'], f.integration);
+    final all = '${r.stdout}\n${r.stderr}';
+    expect(r.exitCode, isNot(0), reason: all);
+    expect(all, contains('OI-4 is on this board but has NO reservation'));
+  });
+
+  test('Check C: a number new on the branch with NO reservation fails, naming the --reserve repair', () {
+    final f = _Fx.create('unreserved');
+    addTearDown(f.dispose);
+    f.sessionTypes(4, 'typed by hand');
+    final r = f.gate();
+    final all = '${r.stdout}\n${r.stderr}';
+    expect(r.exitCode, isNot(0), reason: all);
+    expect(all, contains('OI-4 is on this board but has NO reservation'));
+    expect(all, contains('mint_oi.sh --reserve 4'));
+  });
+
+  test('Check C: no local reservation ref AND remote unreachable -> SKIPPED naming the reservation check (exit 0, UNDETERMINED, no PASS anywhere on stdout)', () {
+    final f = _Fx.create('offline');
+    addTearDown(f.dispose);
+    f.sessionTypes(4, 'cannot be checked');
+    Directory(f.remote).renameSync('${f.remote}.gone');
+    addTearDown(() {
+      try {
+        Directory('${f.remote}.gone').renameSync(f.remote);
+      } catch (_) {}
+    });
+    final r = f.gate();
+    expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+    expect(r.stderr as String, contains('UNDETERMINED'));
+    expect(r.stdout as String, isNot(contains('PASS')),
+        reason: 'the vacuous collision PASS must not co-print with a skipped reservation check');
+    expect(r.stdout as String, contains('SKIPPED (reservation check)'));
+    expect(r.stdout as String, contains('collision check ran'));
+    expect('${r.stdout}${r.stderr}', isNot(contains('CI re-runs')),
+        reason: 'no later placement re-checks a reservation once the number is published');
+  });
+
+  test('Check C: a number already PUBLISHED on origin/main (same title) is exempt — no reservation needed, no collision', () {
+    final f = _Fx.create('published');
+    addTearDown(f.dispose);
+    f.mainFiles(4, 'shared four');
+    f.sessionTypes(4, 'shared four'); // same title: the branch carries main's entry
+    final r = f.gate();
+    expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+    expect('${r.stdout}${r.stderr}', isNot(contains('NO reservation')));
+  });
 }

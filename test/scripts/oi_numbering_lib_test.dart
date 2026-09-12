@@ -343,6 +343,11 @@ Some prose mentioning OI-5 — not a heading.
         mainOpen: {1: 'one', 2: 'mainline two'},
         branchOpen: {1: 'one', 3: 'branch three'},
       );
+      // The number the branch mints must be RESERVED (allocator, 2026-09-12);
+      // an unreserved mint is now a FAIL, pinned by
+      // oi_numbering_gate_e2e_test.dart 'unreserved'.
+      _git(work, ['push', '-q', 'origin', 'HEAD:refs/heads/oi/3']);
+      _git(work, ['fetch', '-q', 'origin', '+refs/heads/oi/*:refs/remotes/origin/oi/*']);
       final r = _runGate(work);
       expect(r.exitCode, 0, reason: 'stderr:${r.stderr}');
       expect(r.stdout, contains('PASS'));
@@ -588,6 +593,9 @@ Some prose mentioning OI-5 — not a heading.
         branchOpen: {1: 'one'},
         branchClosed: {3: 'branch three'},
       );
+      // The branch's number must be RESERVED (allocator, 2026-09-12) -- at the
+      // merge commit Check C is meaningful because origin/main lacks 3.
+      _git(work, ['push', '-q', 'origin', 'HEAD:refs/heads/oi/3']);
       _git(work, ['checkout', 'main']);
       _git(work, ['merge', '--no-ff', '--no-edit', 'feature']);
       final r = _runGate(work);
