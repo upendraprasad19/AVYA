@@ -272,14 +272,29 @@ String _oiBoardLine() {
     // A number filed on ANY local branch (a sibling worktree's work in flight)
     // is filed, not orphaned -- otherwise this line would tell worktree B to
     // release worktree A's number (review round 2, finding 3).
+    // ONE `git grep` per 150 branches over both boards -- 0.2 s for the 205
+    // local branches this repo carried on 2026-09-12 -- instead of one
+    // `git show` per branch per board, which measured 15.7 s per SessionStart
+    // in the same repo (spec §7.4's rule is 2 s). Chunked so the argument list
+    // stays under Windows' 32 KB limit. `^## OI-N` is the same heading grep
+    // mint_oi.sh uses (a heading without the em-dash counts as filed here,
+    // which errs towards NOT calling a number an orphan).
     final onLocalBranches = <int>{};
     final heads = Process.runSync('git', ['for-each-ref', '--format=%(refname)', 'refs/heads/'],
         workingDirectory: root, stdoutEncoding: utf8);
-    for (final b in (heads.stdout as String).split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty)) {
-      for (final path in const [open, closed]) {
-        final r = Process.runSync('git', ['show', '$b:$path'],
-            workingDirectory: root, stdoutEncoding: utf8);
-        if (r.exitCode == 0) onLocalBranches.addAll(parseBoard(r.stdout as String).keys);
+    final headRefs = (heads.stdout as String)
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    for (var i = 0; i < headRefs.length; i += 150) {
+      final chunk = headRefs.sublist(i, i + 150 > headRefs.length ? headRefs.length : i + 150);
+      final g = Process.runSync(
+          'git', ['grep', '-h', '-o', '-E', r'^## OI-[0-9]+', ...chunk, '--', open, closed],
+          workingDirectory: root, stdoutEncoding: utf8);
+      for (final l in (g.stdout as String).split('\n')) {
+        final m = RegExp(r'OI-(\d+)$').firstMatch(l.trim());
+        if (m != null) onLocalBranches.add(int.parse(m.group(1)!));
       }
     }
 

@@ -253,7 +253,18 @@ delete_reservation() { # $1 = N ; 0 iff the remote ref is gone
 # a sibling worktree's branch is filed, not orphaned, even though this
 # worktree's board and origin/main both lack it.
 all_local_branch_numbers() {
-  for b in $(git for-each-ref --format='%(refname)' refs/heads/); do board_numbers "$b"; done
+  # ONE `git grep` per 150 branches over both boards -- 0.2 s for the 205 local
+  # branches this repo carried on 2026-09-12 -- instead of one `git show` per
+  # branch per board, which measured 24.6 s for `--next` in the same repo.
+  # Chunked so the argument list stays under Windows' 32 KB limit.
+  git for-each-ref --format='%(refname)' refs/heads/ | while :; do
+    chunk=''; n=0
+    while [ "$n" -lt 150 ] && IFS= read -r ref; do chunk="$chunk $ref"; n=$((n + 1)); done
+    [ -n "$chunk" ] || break
+    # shellcheck disable=SC2086
+    git grep -h -o -E '^## OI-[0-9]+' $chunk -- "$BOARD_OPEN" "$BOARD_CLOSED" 2>/dev/null || true
+    [ "$n" -lt 150 ] && break
+  done | grep -oE '[0-9]+$' | sort -un || true
 }
 
 ledger_subject() { git log -1 --format=%s "refs/remotes/$REMOTE/oi/$1" 2>/dev/null || echo '(no ledger line)'; }

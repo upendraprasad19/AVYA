@@ -338,6 +338,13 @@ All new/extended files under `test/scripts/` carry `@Timeout(Duration(minutes: 6
    `git fetch`; if it exceeds 2 s median it becomes read-local-only") resolved itself in review round
    1: 2.9–3.2 s measured, so the fetch was never built. The cost is that a reservation made elsewhere
    is invisible to the line until the next sync; the line says "at least N" and the mint re-syncs.
+   ⚠ The 2 s rule bit a SECOND time, locally: the first implementation's sibling-branch scan ran
+   `git show` once per local branch per board — **15.7 s** per SessionStart and **24.6 s** per
+   `--next` against this repo's 205 local branches (measured 2026-09-12 before the B-pass; every
+   e2e fixture has 1–2 branches, so no test could see it). Both now run ONE `git grep` over all
+   branches' boards per 150-branch chunk: 1.3 s / 4.1 s (the latter is mostly the real SSH fetch).
+   Rule of the class: a per-ref git spawn in a hook must be measured against the REAL repo's ref
+   count, never a fixture's.
 5. **Check C is vacuous at CI on a push straight to `main`** (§3.3). A hookless environment pushing
    directly to `main` is checked for collisions but not for reservations. Not a live path: the cloud
    pushes `claude/*` branches and every merge to `main` runs on the laptop through `safe_merge.sh`,
