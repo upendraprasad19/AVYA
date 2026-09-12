@@ -250,6 +250,28 @@ backticks, the opener and the closer. CI's `deno-edge-functions` type-check is t
 never merge a `_shared/*.ts` prompt edit without it going green — and note it runs on the PUSH,
 which is after the point where a local `--no-verify` would have let it through.
 
+### 6.9 "Byte-identical to git" cannot be proven from the default `/body` response — it is an ESZIP whose stored module is whitespace-transformed (NEW 2026-09-12)
+
+**Telltale:** you `GET /v1/projects/<ref>/functions/<fn>/body`, hash what comes back (or search it
+for the git blob), and it never matches — while the deployed code is in fact exactly what you shipped.
+**Root cause:** the default response (`application/octet-stream`, 600 KB+) is the ESZIP2 bundle:
+the entrypoint PLUS every `deno.land`/`esm.sh` dependency, and the module inside it is stored
+after a whitespace transform (blank lines dropped, multi-line expressions joined). Measured on
+`delete-account` v9: git blob 23,387 B vs. 21,986 B for the same module inside the eszip, first
+divergence at byte 1,591 on a blank line. A hash of that container answers nothing, and reading
+"not found" as "wrong code deployed" would trigger a needless rollback.
+**Fix:** ask for the decoded files — `-H "Accept: multipart/form-data"` on the same endpoint returns
+a `metadata` part (`deployment_id`, `module_count`, `deno2_entrypoint_path`) plus one `file` part
+per source file with the ORIGINAL bytes. Extract the part body (strip the trailing CRLF before the
+boundary) and compare its SHA-256 to `git show HEAD:supabase/functions/<fn>/index.ts`. Proven
+2026-09-12: `delete-account` v9 `63f08f97…` and `verify-payment` v18 `bc6c3925…`, both equal to
+`main` `f95cae45`. The MCP `get_edge_function` tool returns the same decoded content, but into the
+chat — use the multipart fetch when you need a mechanical hash rather than a read-through.
+**Prior:** OI-162 slice 4 deploys (retrospective `project_oi162_slice4_windowed_counters`). The
+older "decoded-bundle hash" verifications (streak-guardian v23, ai-media-proxy v22) used this same
+decoded path; this entry exists because the default body looked like the obvious input and cost a
+detour.
+
 ## 7. Verification gates
 
 After every deploy:

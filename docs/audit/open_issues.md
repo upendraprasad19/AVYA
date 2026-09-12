@@ -3044,9 +3044,42 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 ## OI-162 — the delete-account rate limit is INERT in production; its counter has never written a row (P1)
 
-- **Status**: OPEN
-- **Blocked on**: needs OI-153's channel-reader enumeration
-- **Verified**: 2026-09-03 — schema + DDL + repo grep + prod
+- **Status**: CLOSED (2026-09-12, `oi162-slice4-windowed-counters`) — diagnose `f2c8d5`
+- **Blocked on**: none
+- **Verified**: 2026-09-12 — LIVE, post-deploy: `delete-account` v9 and `verify-payment` v18 read back
+  byte-identical to `main` `f95cae45` (SHA-256 of the decoded `index.ts` via the Management API,
+  `Accept: multipart/form-data`); `has_function_privilege(anon|authenticated, consume_quota)` = false
+  (migration 130 intact); anon-Bearer boot probes reached both modules (their own sanitized 401).
+- **CLOSED BY slice 4 of 4** (`0c13a144` + `ed4d5f05`, merge `f95cae45`, catastrophic — B-pass
+  `docs/reviews/3cd1891ee7eb-review.md`, Hermes `docs/audit/2026-09-11-hermes-oi162-slice4-windowed-counters.md`,
+  record `docs/plan-reviews/oi162-slice4-windowed-counters.md`). Each claim above, in order:
+  - **The title defect**: `delete-account` now enforces 5/hour via `consume_quota('delete_account',
+    <UTC hourly bucket>, 5)` at the top of the handler; `-1` → 429 + true `Retry-After`. The malformed
+    attempt insert is GONE, not corrected. `verify-payment` (instance B) enforces 20/10min the same way,
+    reads `{ error }` and now fails CLOSED by design; the un-awaited `.then()` and the inline `20`/`600`
+    are gone (named constants).
+  - **The TRAP** (a new channel value falling into rolling-context's denylist): avoided by construction —
+    NO attempt row is written to `ai_coach_interactions` any more; both `*_attempt` channel literals
+    are removed repo-wide and `test/contracts/usage_quota_ledger_writer_to_reader_test.dart` pins that
+    neither file touches that table in code. The channel enumeration this entry was blocked on was
+    still run to empty (`docs/audit/oi162-slice4-channel-enumeration.md`), which is what dissolved the
+    OI-153 blocker: slice 4 mints no channel, so OI-153's reader work is independent of it.
+  - **DPDP**: `usage_counters.user_id` is `REFERENCES users(id) ON DELETE CASCADE` (migration 128), so
+    the attempt counters still erase with the user — the no-FK regression this entry warned about did
+    not happen.
+  - **Hardening the fix exposed** (diagnose `f2c8d5` part C): `consume_quota` is SECURITY INVOKER with
+    no `p_user_id` ownership check and was EXECUTE-granted to PUBLIC/anon/authenticated (direct grants,
+    not PUBLIC-inherited); migration 130 revoked all three, live-verified 42501 for `authenticated`.
+    The raw table grants under the RLS-zero-policy default-deny are a separate, pre-existing gap → OI-184.
+  - **Paired gate finding INFRA-14** (`check_schema_column_refs.dart` validates only the first line of a
+    multi-line insert map — how the phantom columns shipped undetected): NOT touched by slice 4; carried
+    as its own entry, **OI-185**, so this closure drops nothing.
+  - **Not runtime-exercised yet**: `usage_counters` holds 0 rows for `delete_account`/`verify_payment`
+    as of closing — the chain is source-, SQL- (`test/sql/oi162_slice4_quota_boundary_and_acl_live_verify.sql`,
+    27/27 in a rolled-back txn) and deploy-verified. The first real attempt writes the row.
+  - **Cost of landing**: the pre-push full suite refused the first merge on the slice-1 ledger census
+    (2 assertions this slice deliberately falsified and had not repointed) — third slice that file has
+    caught; repointed in `ed4d5f05`, mutation-proven.
 - **PROGRESS 2026-09-06 (does NOT close this)**: slice 3a moved the `weekly-report` first-free
   lifetime gate onto the ledger — the first EDGE FUNCTION reader to migrate, where slices 1-2 were
   database-side only. It proves the EF-side pattern this issue's own fix will use: an advisory
@@ -3654,3 +3687,29 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
   this batch just shipped).
 - **Related**: OI-162 (parent), diagnose a9d3f1 (the function-EXECUTE
   sibling of this same class), `feedback_revoke_from_public_not_role.md`.
+
+## OI-185 — `check_schema_column_refs.dart` validates only the FIRST line of a multi-line insert/update map (P2, gate gap, pre-existing)
+
+- **Status**: OPEN
+- **Blocked on**: none — carried out of OI-162 (closed 2026-09-12), where it rode as the
+  "paired gate finding INFRA-14" of the 2026-09-02 tech-debt audit and was never in any slice's scope.
+- **Verified**: 2026-09-03 — by the audit (a prototype run) and by the gate's own header; NOT re-run
+  since. Re-measure before designing.
+- **What**: the gate's SCOPE/LIMITS header says it validates insert()/update()/upsert() map-literal keys
+  for "single-line + first line of multi-line maps". `.insert({` puts every key from line 2 onward, so
+  most of every multi-line insert map is unchecked. It ran clean (`840 references validated; 0 drift`)
+  while `delete-account` inserted two columns that do not exist (`prompt_snippet`, `response_snippet`,
+  OI-162) — the gate's own header calls this class "invisible BY CONSTRUCTION" and it closed only the
+  single-line half.
+- **Why not a one-liner**: a naive balanced-brace extension measured **12** violations of which **10**
+  were keys of nested JSONB value objects (`ai-proxy` `metadata: { date, channel, model, is_pro }`,
+  `rolling-context`, `daily-snapshot`, `proactive-coach-promotion`). The fix needs brace-depth-1-only key
+  validation, plus ES6 **shorthand** keys (`.insert({ user_id, embedding, content })` currently
+  contributes zero checked refs). It can never see the NOT NULL half (the snapshot stores column
+  names only) — a Deno test asserting `error === null` is the acceptance evidence for that half.
+- **Proposed repair**: extend `scripts/check_schema_column_refs.dart` key extraction to depth-1 keys of
+  multi-line maps + shorthand keys; ship `--warn-only` first per §4.11, baseline, then hard-fail;
+  mutation-proven per rule 24 (a planted phantom key on line 3 of a multi-line insert must redden).
+- **Blast radius**: `scripts/check_*.dart` — platform tier (an enforcement script); no runtime code.
+- **Related**: OI-162 (parent, closed), audit `docs/audit/2026-09-02/slice-a-plan.md` §0,
+  `backups/live_schema_columns.json` (the snapshot), diagnose `f2c8d5`.
