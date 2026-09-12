@@ -229,6 +229,18 @@ each review round that had a diff to gate. Final run pending as the next
 step after this record lands (per the standing "post commit" authorization
 already given).
 
+**Post-record (2026-09-12):** both commits landed (`0c13a144`, `7aaf343c`),
+gate loop green at each. The FIRST merge to main (`0d9a040f`, local only) was
+pushed and the pre-push FULL SUITE failed 2 of 5,555 — both in
+`test/contracts/usage_quota_ledger_writer_to_reader_test.dart`, the slice-1
+ledger census this slice deliberately falsified and never repointed. Zero
+code defect; third recurrence of the class in that file (slice 3a via
+pre-push, slice 3b via review round 2). Repointed and mutation-proven
+(5 runs incl. one positive control) in the follow-on fix commit on this
+branch, diagnose `f2c8d5` addendum; the unpushed merge was rewound with
+`git reset --keep` and redone so main carries ONE merge of this branch.
+Push #2 is the one whose pre-push + CI results count.
+
 ## Not done, and why — carried openly rather than silently
 
 - **OI-182** (verify-payment grace-window/retry-schedule mismatch) — filed,

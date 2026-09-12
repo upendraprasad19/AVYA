@@ -41,7 +41,7 @@ sync_methods: []
 restore_methods: []
 cloud_table: usage_counters
 cloud_columns: [user_id, quota_key, window_start, used, updated_at]
-contract_test_path: test/contracts/delete_account_rate_limit_writer_to_reader_test.dart, test/contracts/verify_payment_rate_limit_writer_to_reader_test.dart
+contract_test_path: test/contracts/delete_account_rate_limit_writer_to_reader_test.dart, test/contracts/verify_payment_rate_limit_writer_to_reader_test.dart, test/contracts/usage_quota_ledger_writer_to_reader_test.dart
 ist_handling: >
   Deliberately UTC epoch-floor, not IST, and stated rather than deviated
   silently. §4.5 mandates IST for date keys + counter RESETS because those
@@ -230,6 +230,47 @@ delete-account's `if (rateErr)` branch (flipping fail-open to fail-closed) —
 reddened exactly `..._test.dart:151` ("fails OPEN... deliberately") and
 nothing else. All mutated files restored and re-diffed clean against their
 pre-mutation backups before the next mutation and before this commit.
+
+### Addendum 2026-09-12 — the slice-1 ledger census was left stale, caught by the pre-push suite
+
+The first merge of this branch (`0d9a040f`, local only) was pushed and the
+pre-push FULL SUITE failed **2 of 5,555** — both in
+`test/contracts/usage_quota_ledger_writer_to_reader_test.dart`, a file this
+batch never opened: (a) `only the named call sites invoke consume_quota
+directly` — both limiter EFs now call the RPC and were not on its allowlist;
+(b) `the THREE remaining legacy quota readers are still on the old table` —
+verify-payment no longer contains the table name at all, and delete-account
+only passed because a raw-file `contains()` was satisfied by a COMMENT. Zero
+code defect; a contract this slice deliberately falsified and did not repoint.
+**Third recurrence of the same class in the same file** (slice 3a `f4a2d8`
+via the pre-push suite; slice 3b `c4f9e2` via plan-review round 2), after a
+B-pass, a 9-lens Hermes pass and every targeted run stayed green —
+`feedback_green_check_input_set_width` #44. The push did not land; the
+unpushed merge was rewound with `git reset --keep` and redone after this fix.
+
+Repointed (never loosened): the allowlist gains both EFs with the
+no-INSERT-to-hang-a-trigger-off reason; the census is now ONE (OI-153's
+dormant PRO cap) with the count asserted from the map; the legacy
+`contains()` now reads comment-STRIPPED source; and a slice-4 MIRROR pins, per
+file, that the attempt-row channel count and any `.from("ai_coach_interactions")`
+never return while `consume_quota` and the file's own `quota_key` literal stay.
+
+Mutation-proven the same way, 2026-09-12, each applied (verified by
+`grep -c`), each restored via `git checkout --`:
+
+| # | mutation | result |
+|---|---|---|
+| R0 | comment-only `// .eq("channel", "delete_account_attempt")` appended to delete-account | **0 red, by design** — positive control that the strip is in effect |
+| R1 | the same line appended as CODE | 1 red (slice-4 mirror, channel count) |
+| R2 | every `consume_quota` in verify-payment renamed (substring broken) | 2 red (allowlist mirror + slice-4 mirror) |
+| R3 | `const _q = "consume_quota";` appended to `ai-proxy/index.ts` (not allowlisted) | 1 red (direct-caller allowlist) |
+| R4 | every `ai_coach_interactions` in ai-media-proxy renamed (substring broken) | 1 red (census) |
+
+Two earlier attempts at R2/R4 appended an `X` (`consume_quotaX`) and stayed
+GREEN — the assertion is a substring `contains()`, so the mutated token still
+matched. Recorded because it is rule 21's "confirm the mutation actually
+APPLIED" trap in a new costume: `grep -c` of the OLD literal reported 0 while
+the assertion's input still contained it. Break the substring, not the token.
 
 **Mutation 5's evidence, in detail (no DDL run against prod — read-only):**
 live query 2026-09-11 against `pg_proc.proacl` for `consume_quota` returned
