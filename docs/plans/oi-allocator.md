@@ -1895,7 +1895,7 @@ void main() {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `flutter test test/scripts/discipline_hook_oi_line_e2e_test.dart`
-Expected: tests 1 and 2 FAIL (no `OI board` text in the hook's output). Test 3 passes vacuously — it is the guard for the failure mode, and Step 4's mutation 2 exercises it.
+Expected: tests 1, 2 and 3 FAIL (no `OI board` / `as of the last sync` text in the hook's output yet). Test 4 passes vacuously — it is the guard for the failure mode, and Step 4's mutation 2 exercises it.
 
 - [ ] **Step 3: Implement**
 
@@ -1975,7 +1975,7 @@ String _oiBoardLine() {
     }
     final unfiledText = unfiled.isEmpty
         ? 'none'
-        : unfiled.map((n) => 'oi/$n [${subject(n)}]').join('; ') +
+        : '${unfiled.map((n) => 'oi/$n [${subject(n)}]').join('; ')}'
             ' — may belong to a CLOUD branch this clone cannot see; adopt by filing `## OI-N` by '
             'hand, or `sh scripts/mint_oi.sh --release N` ONLY if the reserving branch is dead';
     return 'OI board: next free number is at least $next (as of the last sync; '
