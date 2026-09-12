@@ -96,14 +96,16 @@ sh scripts/mint_oi.sh "<title>"            # reserve next free N, append a board
 sh scripts/mint_oi.sh --no-append "<title>" # reserve + print only
 sh scripts/mint_oi.sh --reserve N "<title>" # claim EXACTLY N (migration of in-flight numbers); fails if taken
 sh scripts/mint_oi.sh --prune               # delete oi/N branches whose N is on origin/main's boards (laptop only)
-sh scripts/mint_oi.sh --next                # read-only: print next free N after a sync (used by SessionStart)
+sh scripts/mint_oi.sh --release N           # delete an UNFILED reservation (an orphan) — never a filed one
+sh scripts/mint_oi.sh --next                # read-only: print next free N after a sync (humans + cloud)
 ```
 
 Algorithm (`<title>` form):
 1. **Sync.** `git fetch --quiet origin '+refs/heads/oi/*:refs/remotes/origin/oi/*' --prune` and
-   `git fetch --quiet origin main`. Failure ⇒ **exit 2 "cannot reach origin — an OI number cannot be
-   reserved offline; nothing was written."** No fallback.
+   `git fetch --quiet origin main`, bounded by coreutils `timeout 30` where present. Failure ⇒ **exit 2
+   "cannot reach origin — an OI number cannot be reserved offline; nothing was written."** No fallback.
 2. **Candidate.** `N = 1 + max( highest origin/oi/* , highest OI on origin/main's open+closed boards ,
+   highest OI on LOCAL main's boards when that ref exists (§4.13's merged-but-unpushed state) ,
    highest OI on the current working board )`. The board terms are the bootstrap (185 today) and the
    guard against any hand-typed number that landed before this shipped; once reservations are universal
    the branch term dominates.
@@ -163,9 +165,14 @@ origin/main` boards. Dispatch on *"is the board being changed"*, not on `HEAD`'s
 proposed repair in OI-176's own entry. Runs in addition to (not instead of) the HEAD-shape arm, so the
 pre-merge-commit and CI placements keep their current behaviour.
 
-**Check C — every minted number is reserved.** `mintedHere = working keys − base keys` (falls back to
-`HEAD keys − base keys` when the working tree is clean, so CI on a merge also checks the merged
-branch's mints). For each n:
+**Check C — every minted number is reserved.** `mintedHere = other-side keys − base keys`, where the
+other side is the working tree in the working-tree/branch arms and the merged-in branch in the merge
+arms. **Where it is meaningful, per shape (review round 1):** pre-commit (working-tree and branch
+arms — the mint moment), `pre-merge-commit` (mid-merge arm — the backstop for every cloud branch,
+which has no hooks), and CI on a **PR** (`origin/main` ≠ the PR head). At CI on a push to **main** it
+is VACUOUS by construction: `origin/main` == `HEAD`, so every number is "published" and exempt
+(below). That is correct — after publication `--prune` may already have deleted the reservation, so
+checking there would produce false reds. For each n not already on origin/main's current boards:
 1. local `refs/remotes/origin/oi/n` present ⇒ reserved;
 2. else, **only if `mintedHere` is non-empty**, one `git ls-remote --exit-code origin refs/heads/oi/n`
    with a 5 s wall-clock timeout (Dart `Process.start` + timer) ⇒ reserved / not reserved;
@@ -173,30 +180,46 @@ branch's mints). For each n:
    never PASS. CI is authoritative: `actions/checkout` with `fetch-depth: 0` (`test.yml:219`, already
    load-bearing for this gate) fetches every branch, so step 1 answers without network there.
 
+When the check cannot complete, the final line says **`SKIPPED (reservation check)`** and states that
+the collision check ran — the two facts are tracked separately, and the vacuous collision `PASS` line
+is suppressed whenever a reservation FAIL or SKIP is the verdict of the run, so no run prints `PASS`
+and `SKIPPED` together.
+
 Not reserved ⇒ **FAIL** with the repair spelled out:
 ```
 OI-186 is on this board but has no reservation (no origin/oi/186).
   Numbers are allocated, not eyeballed: sh scripts/mint_oi.sh --reserve 186 "<title>"
   If that reports TAKEN, someone else holds 186 — renumber with: sh scripts/mint_oi.sh "<title>"
 ```
-Ownership (the ledger's `branch …` field) is **reported, not enforced** — see §7 residue 1.
+Ownership (the ledger's `branch …` field) is **reported, not enforced** — see §7 residue 1. Adopting an
+ORPHAN reservation by hand-typing `## OI-N` passes — the gate bans unreserved numbers, not hand-typing.
+The collision FIX text no longer says "next free is OI-N" (an eyeballed number); it prescribes
+`mint_oi.sh`.
 
 Ledger: `docs/audit/gate_test_ledger.yaml:434` entry gets its `evidence:` extended with the new
 mutations (§6); no new gate file, so rule 24's "new gate" clause does not apply, but rule 21's
 mutate-and-run clause does.
 
-### 3.4 SessionStart sync — `scripts/discipline_hook.dart:105-118`
+### 3.4 SessionStart line — `scripts/discipline_hook.dart:105-118`
 
-On every SessionStart source, best-effort and fail-open (5 s timeout, any error ⇒ silent):
-`sh scripts/mint_oi.sh --next`, and emit one line into the session's context:
+On every SessionStart source, best-effort and fail-open (any error ⇒ silent), computed **in Dart from
+LOCAL refs only** — `refs/remotes/origin/oi/*`, `refs/remotes/origin/main`'s boards, the working board —
+via the shared `oi_numbering_lib.dart`. **No fetch.** §7.4 below set the rule at 2 s; review round 1
+measured a bare `ls-remote` over the SSH remote at 2.9–3.2 s, on every SessionStart source including
+`compact`, so the rule fired before the code was written. (Not `sh scripts/mint_oi.sh --next` either:
+`sh` is not guaranteed on the PATH of a Dart process the harness starts on Windows; `--next` stays in
+the script for humans and the cloud.) The line:
 
 ```
-OI board: next free number is 186 (synced with GitHub 11:58 IST). Reserved-but-unfiled: none.
-File new OIs ONLY with: sh scripts/mint_oi.sh "<title>"   — never type a number by hand.
+OI board: next free number is at least 186 (as of the last sync; mint_oi.sh re-syncs before reserving).
+Reserved-but-unfiled: none.
+File new OIs ONLY with:  sh scripts/mint_oi.sh "<title>"  — an UNRESERVED number fails the commit.
 ```
 "Reserved-but-unfiled" lists `oi/N` branches whose N is on neither `origin/main` board nor the local
-working board, with the ledger's branch + age — informational, so a dead session's burnt number is
-visible rather than mysterious. The hook performs **no remote writes**; pruning stays inside the mint.
+working board — informational, so a dead session's burnt number is visible rather than mysterious,
+with the two ways out (adopt by hand, or `--release N`). Silent when `refs/remotes/origin/main` cannot
+be resolved. The hook performs **no remote reads or writes**; every mint, `sync_refs`, and any plain
+`git fetch origin` (default refspec covers `oi/*`) refreshes what it reads.
 
 ### 3.5 Documents touched
 
@@ -221,7 +244,9 @@ visible rather than mysterious. The hook performs **no remote writes**; pruning 
    422 / `[rejected]`, re-syncs, takes 187. No renumber, no human.
 4. **Hand-typed number.** A session types `## OI-190` without minting. Pre-commit Check C: no
    `origin/oi/190` locally → one `ls-remote` → absent → **FAIL** with the `--reserve` line. Cloud
-   session (no hooks) → caught in CI on the PR/merge.
+   session (no hooks) → caught at `pre-merge-commit` on the laptop when its branch is merged, or in CI
+   on a PR. NOT caught by CI on a push straight to `main` (Check C is vacuous there — §3.3); that path
+   is a process residue (§7.5), not a live one: merges happen on the laptop via `safe_merge.sh`.
 5. **Offline laptop.** `mint_oi.sh` exits 2 and writes nothing. The gate on an unrelated commit stays
    fail-open; the gate on a board-touching commit with an unreserved number says SKIPPED, and CI fails it.
 6. **In-flight branches at rollout.** `regen-wave-unit2` holds 177/178 (real collisions) → renumber via
@@ -235,7 +260,7 @@ visible rather than mysterious. The hook performs **no remote writes**; pruning 
 | `mint_oi.sh` sync / write | **fail closed** (exit 2/3, nothing written) | the only step where proceeding creates the defect |
 | Check B′ / C, network unavailable | fail open → **SKIPPED**, never PASS | existing convention; CI is authoritative |
 | Check C, reservation provably absent | **FAIL** | a checked answer, with the repair in the message |
-| SessionStart `--next` | silent | a session must never fail to start over a hygiene line |
+| SessionStart line (local read, no fetch) | silent | a session must never fail to start over a hygiene line; no network ⇒ no 3 s stall |
 | `--prune` after a mint | silent, exit code unaffected | hygiene, not correctness |
 
 ## 6. Testing and mutation plan
@@ -290,9 +315,20 @@ All new/extended files under `test/scripts/` carry `@Timeout(Duration(minutes: 6
    the backstop. A cloud session that hand-types a number learns in CI, not at commit.
 3. **Branch-list growth**: +1 head per OI until pruned; 41 heads today. Prune runs after every laptop
    mint, so steady state is "in-flight OIs only". CI does not trigger on `oi/*` (`test.yml:5-7`).
-4. **`--next` at SessionStart adds one `git fetch`** (~0.3–1 s online, 5 s cap offline) to every
-   session start. Measured before merge and recorded in the plan-review record; if it exceeds 2 s
-   median it becomes read-local-only with the fetch moved into `mint_oi.sh` alone.
+4. **The SessionStart line reads LOCAL refs only** — this residue's original text ("adds one
+   `git fetch`; if it exceeds 2 s median it becomes read-local-only") resolved itself in review round
+   1: 2.9–3.2 s measured, so the fetch was never built. The cost is that a reservation made elsewhere
+   is invisible to the line until the next sync; the line says "at least N" and the mint re-syncs.
+5. **Check C is vacuous at CI on a push straight to `main`** (§3.3). A hookless environment pushing
+   directly to `main` is checked for collisions but not for reservations. Not a live path: the cloud
+   pushes `claude/*` branches and every merge to `main` runs on the laptop through `safe_merge.sh`,
+   whose `pre-merge-commit` hook runs Check C.
+6. **Orphan reservations** (a session died between the CAS and the stub) are never auto-deleted —
+   `--prune` touches only PUBLISHED numbers, by design. They are listed at every SessionStart with
+   the two ways out: adopt by filing `## OI-N` by hand, or `sh scripts/mint_oi.sh --release N`.
+7. **`POST /git/commits` without `parents` creating a ROOT commit** is documented by GitHub but was
+   not proven live (the spike proved the refs 422 and the cloud 403). The first real laptop mint
+   proves it; the fallback is an explicit `"parents": []` JSON body.
 
 ## 8. Rollout
 
