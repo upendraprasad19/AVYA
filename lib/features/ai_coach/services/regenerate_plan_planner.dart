@@ -4,6 +4,7 @@ import '../../../core/utils/ist_date.dart';
 import '../../../core/services/seed_service.dart';
 import '../../../shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 
 /// One day in a regenerated plan block (display-only).
 class RegeneratePlanDay {
@@ -110,6 +111,8 @@ class RegeneratePlanPlanner {
 
   final Map<String, RegeneratePlanResult> _cache = {};
   final Map<String, List<Map<String, dynamic>>> _rawScheduleCache = {};
+  final Map<String, Phase> _phaseCache = {};
+  final Map<String, int?> _regenStartWeekCache = {};
 
   /// Day-of-week → workout-day mapping. Mirrors
   /// [WorkoutScheduleService._getDayPattern] — keep these in sync.
@@ -132,8 +135,12 @@ class RegeneratePlanPlanner {
   /// Returns a `(plan, rawSchedules)` record. The diff widget caches both
   /// via [cache] keyed on `intent.id`, and the dispatcher reads the raw
   /// schedules from [getCachedRawSchedules] when applying the change.
-  Future<({RegeneratePlanResult plan, List<Map<String, dynamic>> rawSchedules})>
-      plan({
+  Future<({
+    RegeneratePlanResult plan,
+    List<Map<String, dynamic>> rawSchedules,
+    Phase phase,
+    int? regenStartWeek,
+  })> plan({
     required int weeks,
     String? goal,
     int? daysPerWeek,
@@ -208,13 +215,38 @@ class RegeneratePlanPlanner {
     final rawSchedules = <Map<String, dynamic>>[];
     int additionalWorkoutDayCount = 0;
 
+    // OI-166 Unit 2: real week number this regen starts at, relative to the
+    // phase's own planStart — hoisted OUTSIDE the loop below (round 8's exact
+    // bug class: placing this inside the loop). Stays 1 for an explicit
+    // startDate call (unchanged pre-fix behaviour — out of scope for this
+    // fix) and for a plan-less/first-ever-generation user (planStart==null).
+    final planStart = WorkoutScheduleReadService.instance.getPlanStartDate();
+    final regenStartWeek = (startDate == null && planStart != null)
+        ? WorkoutScheduleReadService.rawWeekNumberFor(_today(), planStart)
+        : 1;
+
     for (var weekIdx = 0; weekIdx < n; weekIdx++) {
-      // PlanGenerator returns 4 weekPlans per phase. For weeks beyond the
-      // 4th, repeat the last week (matches [generateAndScheduleFromDate]
-      // behaviour for the 4-week block).
-      final weekPlan = weekIdx < phase.weekPlans.length
-          ? phase.weekPlans[weekIdx]
-          : phase.weekPlans.last;
+      // Real week number relative to planStart (not the 0-based
+      // request-local weekIdx) — lets contentFlavorIndex cycle
+      // baseline/overreach/peak/deload correctly for a regen that starts
+      // deep into an existing phase, instead of freezing on the last week.
+      // GUARDED independently of effectiveWeek's own guard, on purpose: an
+      // explicit startDate (or no planStart) must keep the OLD repeat-last
+      // content selection for weekIdx>=4 (out of scope for this fix — v10's
+      // "explicitly out of scope" list), not silently start cycling via
+      // contentFlavorIndex just because effectiveWeek degrades to weekIdx+1
+      // in that branch. Caught in post-implementation verification — the
+      // existing byte-identical test only exercises weeks:2, too narrow to
+      // reach weekIdx>=4 and see the two forms diverge.
+      final effectiveWeek = (startDate == null && planStart != null)
+          ? regenStartWeek + weekIdx
+          : weekIdx + 1;
+      final weekPlan = (startDate == null && planStart != null)
+          ? phase.weekPlans[
+              WorkoutScheduleReadService.contentFlavorIndex(effectiveWeek)]
+          : (weekIdx < phase.weekPlans.length
+              ? phase.weekPlans[weekIdx]
+              : phase.weekPlans.last);
 
       // weekStart is the Monday of week N relative to the start date's
       // week. We don't normalise to Monday here — the start day defines
@@ -275,7 +307,7 @@ class RegeneratePlanPlanner {
             rawSchedules.add({
               'date': dateStr,
               'phase': resolvedPhase,
-              'week': weekIdx + 1,
+              'week': effectiveWeek,
               'day_of_week': dayOfWeek,
               'type': 'workout',
               'workout_day_index': workoutDayIndex - 1,
@@ -307,7 +339,7 @@ class RegeneratePlanPlanner {
             rawSchedules.add(_restEntry(
               dateStr,
               resolvedPhase,
-              weekIdx + 1,
+              effectiveWeek,
               dayOfWeek,
               weekPlan.weekCharacter,
             ));
@@ -318,7 +350,7 @@ class RegeneratePlanPlanner {
             rawSchedules.add(_restEntry(
               dateStr,
               resolvedPhase,
-              weekIdx + 1,
+              effectiveWeek,
               dayOfWeek,
               weekPlan.weekCharacter,
             ));
@@ -336,7 +368,19 @@ class RegeneratePlanPlanner {
       resolvedDaysPerWeek: resolvedDays,
     );
 
-    return (plan: result, rawSchedules: rawSchedules);
+    return (
+      plan: result,
+      rawSchedules: rawSchedules,
+      phase: phase,
+      // Nullable at this boundary ON PURPOSE — null tells the tool_dispatcher
+      // commit sites to skip the current_plan blob-splice entirely, which is
+      // the pre-existing (correct) behaviour for an explicit startDate call
+      // or a plan-less user. The internal regenStartWeek local above stays
+      // non-null (defaults to 1) purely so effectiveWeek's stamping math
+      // reduces to the old weekIdx+1 in that same case.
+      regenStartWeek:
+          (startDate == null && planStart != null) ? regenStartWeek : null,
+    );
   }
 
   Map<String, dynamic> _restEntry(
@@ -369,9 +413,13 @@ class RegeneratePlanPlanner {
     String intentId,
     RegeneratePlanResult plan,
     List<Map<String, dynamic>> rawSchedules,
+    Phase phase,
+    int? regenStartWeek,
   ) {
     _cache[intentId] = plan;
     _rawScheduleCache[intentId] = rawSchedules;
+    _phaseCache[intentId] = phase;
+    _regenStartWeekCache[intentId] = regenStartWeek;
   }
 
   RegeneratePlanResult? getCachedPlan(String intentId) => _cache[intentId];
@@ -379,9 +427,16 @@ class RegeneratePlanPlanner {
   List<Map<String, dynamic>>? getCachedRawSchedules(String intentId) =>
       _rawScheduleCache[intentId];
 
+  Phase? getCachedPhase(String intentId) => _phaseCache[intentId];
+
+  int? getCachedRegenStartWeek(String intentId) =>
+      _regenStartWeekCache[intentId];
+
   void clearCache(String intentId) {
     _cache.remove(intentId);
     _rawScheduleCache.remove(intentId);
+    _phaseCache.remove(intentId);
+    _regenStartWeekCache.remove(intentId);
   }
 
   DateTime _today() {

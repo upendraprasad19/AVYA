@@ -212,6 +212,60 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-11** — blast-radius **account** — branch `regen-wave-unit2` (OI-166
+  Unit 2: the AI-coach regen path never wrote `current_plan`, so the phase-arc
+  strip rendered stale content past week 4). **6 findings (1 P0, 2 P1, 1 P2,
+  2 P3); 0 false_alarm.** All fixed/disclosed in-batch. Review:
+  `docs/reviews/9c7cbabe4d3d-review.md`. Run as ONE fresh agent (12 files, the
+  batch's own guideline threshold for the two-agent split).
+  **Tuning 1 — a NEW question for lens 10 (`self_attesting_artifact`), and this
+  pass's headline finding: a claim that code was FIXED must be checked against
+  the STAGED BLOB, never the working tree, even when the working tree is what
+  every other tool in the session (`Read`, `flutter test`) was reading all
+  along.** The author had genuinely fixed a real bug, mutation-proven it, and
+  written a diagnose-doc describing the fix in detail — and never `git add`ed
+  either the fix or its test. Every `Read` call, every `flutter test` run, and
+  every plain-English description of "the staged diff" in the same session
+  reflected the working tree, which happened to agree with the working tree's
+  own edits and therefore never surfaced the gap. The reviewer caught it only
+  by explicitly resetting to `git show :<path>` content before testing — the
+  session's own default read path (`Read`, disk-backed test runs) cannot see
+  this class at all, because both sides of the comparison it needs to make
+  collapse to the same value from inside that path. **Add to lens 10's method:**
+  for any diagnose-doc / commit-message / review-response CLAIM that a specific
+  bug was fixed in a specific file, diff `git show :<path>` against the
+  described fix — not the file on disk. Sibling of the existing "does the
+  referenced artifact exist" check, one level deeper: does the referenced FIX
+  match what would actually be committed.
+  **Tuning 2 — lens 6 (`guard_without_its_mirror`) gains a SAME-DIFF sibling-writer
+  form, distinct from its usual old-code-vs-new-code framing.** Finding 3: two
+  writers performing the SAME kind of `current_plan` write, BOTH introduced or
+  touched in this one diff, and only one of them inherited the zero-rows guard
+  the other one exists specifically to demonstrate is necessary (the diff's own
+  diagnose-doc names the guarded writer's omission as a closed P0). When a diff
+  adds two writers of the same shape, diff them against EACH OTHER, not just
+  each against history — a guard present in one and absent in its twin is
+  invisible to a review that reads forward through the diff file-by-file rather
+  than comparing siblings directly.
+  **Tuning 3 — small, folded into lens 7's existing habit rather than a new
+  lens: a file's OWN established defensive posture is evidence a sibling
+  write-path should share it.** Finding 4: three new write-side casts threw on
+  malformed input while the SAME file's pre-existing read-side reader for the
+  SAME blob was explicitly documented as crash-safe. Not a new check — the
+  existing "does this diff match an established pattern" instinct just needs to
+  include READER-SIDE precedent as a source of the pattern, not only prior
+  writer-side code.
+  **A NEGATIVE result worth keeping, per this history's convention:** the
+  reviewer explicitly declined to extend its own P0 finding into a claim that
+  the diagnose-doc's OTHER mutation-proof claims (against a file it had not
+  touched) were also false — it flagged them as merely UNVERIFIED-BY-IT rather
+  than asserting a defect, and named the exact budget reason it stopped there.
+  That distinction was preserved rather than collapsed: the two flagged
+  mutations were independently re-run post-fix (by the author, per Finding 1's
+  updated status) and reproduced cleanly — the reviewer's restraint was
+  correct, not merely cautious.
+  False-alarm rate 0/6 → no lens removed; lenses 6, 7, 10 extended per above.
+
 - **2026-09-08** — blast-radius **platform** — branch `regen-wave-alignment`
   (OI-166 Unit 1: the schedule-row gate + `rawWeekNumber` extraction + the hotel
   planner's stamps, plus OI-170/171 folded in). **5 findings (2 P0, 1 P1, 2 P2);

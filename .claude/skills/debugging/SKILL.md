@@ -1241,7 +1241,7 @@ added, false of the flip being performed.
   handler caught, so every *well-handled* error — precisely the ones with named,
   greppable codes — is the set it can never see. Better error handling produces
   worse observability, which is why nobody suspects it.
-- **Worked instance (OI-178, `swapExercise`):** `tool_dispatcher.dart:281-282`
+- **Worked instance (OI-187 — filed as OI-178, renumbered twice after `origin/main` collisions; see its board provenance bullet — `swapExercise`):** `tool_dispatcher.dart:281-282`
   catches `SwapExerciseException` → `ToolExecutionResult.failure(msg)`, no
   telemetry. The multi-swap site `:598-599` only appends to a local `errors`
   list. The generic `logEvent('tool_dispatch_..._unexpected_failure')` at
@@ -1263,6 +1263,6 @@ added, false of the flip being performed.
   evidence of absence.* Same family as §2.13 (sink drops past rate limit) but
   strictly worse: 2.13 loses rows under load, this one never had a row to lose.
   Memory: `feedback_bad_news_vs_no_news.md`, `feedback_observability_silent_drop.md`.
-- **Prior incidents:** OI-178 (2026-09-10) — caught **before** the query ran, only
+- **Prior incidents:** OI-187 (2026-09-10; filed as OI-178) — caught **before** the query ran, only
   because the sink was traced first; the board entry had already been committed
   telling a future reader to run it, and needed correcting in `5f8d6930`.

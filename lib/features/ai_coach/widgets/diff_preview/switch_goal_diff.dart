@@ -65,6 +65,8 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
         widget.intent.id,
         result.plan,
         result.rawSchedules,
+        result.phase,
+        result.regenStartWeek,
       );
       if (mounted) setState(() => _plan = result.plan);
     } catch (e) {

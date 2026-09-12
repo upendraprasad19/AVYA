@@ -13,6 +13,7 @@ import '../../../core/services/nutrition_write_source.dart';
 import '../../../core/services/subscription_service.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../core/services/usage_counter_service.dart';
+import '../../../core/services/workout_schedule_read_service.dart';
 import '../../../core/services/workout_schedule_service.dart';
 import '../../../core/services/workout_write_service.dart';
 import '../../../core/services/write_result.dart';
@@ -879,6 +880,53 @@ class ToolDispatcher {
       }
     }
 
+    // OI-166 Unit 2: keep the current_plan display blob in step with the
+    // schedule rows just written above — mirrors generateAndScheduleFromDate's
+    // splice exactly (same preserveBefore cutover), using this call's own
+    // cached Phase + regenStartWeek. `box` above is already
+    // HiveService.instance.workoutBox — reused, not redeclared. null
+    // regenStartWeek means an explicit-startDate/plan-less call, where this
+    // write is correctly skipped (pre-existing behaviour, unchanged).
+    // `results.isNotEmpty` mirrors generateAndScheduleFromDate's own
+    // writeRangeIsNotEmpty gate: the write loop above can skip EVERY row (the
+    // "Concurrent-edit safety net" continue, if every row in this window was
+    // independently completed between diff-preview and confirm), and without
+    // this check the blob would be rewritten with fresh cycled content backed
+    // by zero actual schedule writes — B-pass finding 3, the exact defect
+    // class round 5 already closed for the sibling writer.
+    final splicePhase = RegeneratePlanPlanner.instance.getCachedPhase(intent.id);
+    final spliceRegenStartWeek =
+        RegeneratePlanPlanner.instance.getCachedRegenStartWeek(intent.id);
+    if (splicePhase != null &&
+        spliceRegenStartWeek != null &&
+        results.isNotEmpty) {
+      final existingBlob = box.get('current_plan');
+      // Crash-safe casts (B-pass finding 4) — mirror currentWaveCharacters'
+      // own defensive posture for this exact blob rather than letting a
+      // malformed week_plans shape throw through the splice.
+      final rawWeekPlans =
+          existingBlob is Map ? existingBlob['week_plans'] : null;
+      final existingWeekPlans = rawWeekPlans is List ? rawWeekPlans : null;
+      final preserveBefore = spliceRegenStartWeek > 4
+          ? 0
+          : (spliceRegenStartWeek - 1).clamp(0, 3);
+      final splicedWeekPlans = [
+        for (var i = 0; i < 4; i++)
+          i < preserveBefore &&
+                  existingWeekPlans != null &&
+                  i < existingWeekPlans.length &&
+                  existingWeekPlans[i] is Map
+              ? Map<String, dynamic>.from(existingWeekPlans[i] as Map)
+              : splicePhase
+                  .weekPlans[
+                      WorkoutScheduleReadService.contentFlavorIndex(i + 1)]
+                  .toMap(),
+      ];
+      final splicedBlob = Map<String, dynamic>.from(splicePhase.toMap())
+        ..['week_plans'] = splicedWeekPlans;
+      await box.put('current_plan', splicedBlob);
+    }
+
     RegeneratePlanPlanner.instance.clearCache(intent.id);
 
     if (errors.isEmpty) {
@@ -1033,6 +1081,43 @@ class ToolDispatcher {
       } catch (e) {
         errors.add('$date: $e');
       }
+    }
+
+    // OI-166 Unit 2: same current_plan splice as _executeRegeneratePlanBlock
+    // above — `wbox` here is already HiveService.instance.workoutBox.
+    // `results.isNotEmpty` mirrors generateAndScheduleFromDate's own
+    // writeRangeIsNotEmpty gate — see the sibling comment in
+    // _executeRegeneratePlanBlock (B-pass finding 3).
+    final splicePhase = RegeneratePlanPlanner.instance.getCachedPhase(intent.id);
+    final spliceRegenStartWeek =
+        RegeneratePlanPlanner.instance.getCachedRegenStartWeek(intent.id);
+    if (splicePhase != null &&
+        spliceRegenStartWeek != null &&
+        results.isNotEmpty) {
+      final existingBlob = wbox.get('current_plan');
+      // Crash-safe casts (B-pass finding 4) — see the sibling comment in
+      // _executeRegeneratePlanBlock.
+      final rawWeekPlans =
+          existingBlob is Map ? existingBlob['week_plans'] : null;
+      final existingWeekPlans = rawWeekPlans is List ? rawWeekPlans : null;
+      final preserveBefore = spliceRegenStartWeek > 4
+          ? 0
+          : (spliceRegenStartWeek - 1).clamp(0, 3);
+      final splicedWeekPlans = [
+        for (var i = 0; i < 4; i++)
+          i < preserveBefore &&
+                  existingWeekPlans != null &&
+                  i < existingWeekPlans.length &&
+                  existingWeekPlans[i] is Map
+              ? Map<String, dynamic>.from(existingWeekPlans[i] as Map)
+              : splicePhase
+                  .weekPlans[
+                      WorkoutScheduleReadService.contentFlavorIndex(i + 1)]
+                  .toMap(),
+      ];
+      final splicedBlob = Map<String, dynamic>.from(splicePhase.toMap())
+        ..['week_plans'] = splicedWeekPlans;
+      await wbox.put('current_plan', splicedBlob);
     }
 
     RegeneratePlanPlanner.instance.clearCache(intent.id);

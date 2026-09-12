@@ -1,3 +1,41 @@
+> ✅ **SUPERSEDED 2026-09-12 — the banner below is HISTORY, not the current state.** It was written
+> on 2026-09-10 after v3 failed round 3, and its forward-looking recommendation ("stop Unit 2") was
+> NOT taken: the unit was re-planned from the window model up as **v4** (`oi166-unit2-plan-v4.md`,
+> the exact first step this banner asks for), survived rounds 4-9 (`docs/plan-reviews/
+> regen-wave-unit2-round{4..9}.md`), converged as **v10** (`oi166-unit2-plan-v10.md`), was
+> implemented on 2026-09-11, B-pass-reviewed (`docs/reviews/9c7cbabe4d3d-review.md`) and is
+> recorded in the keystone `docs/plan-reviews/regen-wave-unit2.md` (diagnose `d7f3b2`). This file is
+> kept as-is below because the v2/v3 failure account — and the reason v3's text is gone — is real
+> history the later versions build on. Do not implement THIS text; do read it before re-deriving
+> why the window model came first.
+
+> ⛔ **OI-166 UNIT 2 IS REJECTED — DO NOT IMPLEMENT ANY VERSION OF THIS PLAN.** *(2026-09-10 — see
+> the superseding note above.)*
+> Status: **NOT CONVERGED**, 2026-09-10, after three versions and three review rounds
+> (six independent context-blind reviewers, all negative).
+>
+> **What the text below is.** This is **v2**, the last COMMITTED version, itself rejected in
+> round 2 (`docs/plan-reviews/regen-wave-unit2-round2.md`). Its load-bearing claim — *"the window
+> is always exactly four weeks"* — is **false**: `redoWeek4` extends `plan_end` without moving
+> `plan_start`.
+>
+> **A v3 existed and is GONE.** It was written on 2026-09-10, reviewed in round 3, rejected, and
+> then **destroyed by my own tooling error while I was adding this banner** — a Python
+> `open(path, 'w')` truncated the file before an encoding error aborted the write, and v3 had never
+> been committed. That is my mistake, not a process gap. Nothing else was lost.
+>
+> **Nothing of v3's substance is missing from the record.** Its design (anchor `plan_start`,
+> explicit `weekCount = 4`, `nominalEnd = planStart + 27d`), every round-3 finding, and the reason
+> it failed are all in `docs/plan-reviews/regen-wave-unit2-round3.md` — including the P0 it
+> introduced: writes bounded at `planStart + 27d` against a delete loop bounded by `plan_end`
+> (`workout_schedule_read_service.dart:358-377`), leaving **7 days of workouts deleted and never
+> rewritten**, a regression `main` does not have.
+>
+> **Recommendation on the board: stop Unit 2, take the APK on what is already merged.** When
+> OI-166 is re-opened, the FIRST step is what no version has done — model what the plan window
+> actually IS (`plan_start`, `plan_end`, the delete range, every extension path) with the
+> reachable states enumerated. All three failures are downstream of that document not existing.
+
 # OI-166 Unit 2 — one schedule-row builder, used by all three writers
 
 **Branch:** `regen-wave-unit2` · **Blast radius: MEASURE BEFORE DISPATCHING REVIEW.**

@@ -1,5 +1,18 @@
 # Inventory — how the regeneration implementations differ
 
+> ⚠ **Point-in-time document — read the dates. Unit 2 LANDED after this was written** (2026-09-11,
+> diagnose `d7f3b2`, keystone `docs/plan-reviews/regen-wave-unit2.md`). It closed the `'week'` /
+> `week_character` / `current_plan` rows for BOTH B and C and inserted its splice + `effectivePlanEnd`
+> block into `workout_schedule_read_service.dart` immediately after the old `:386`, so **every B
+> citation in this file at or below old `:388` is pre-Unit-2 and no longer resolves as written**
+> (the shift is +42 to +49 depending on region — measured, e.g. old `:392` is now `:436`; the
+> `:357`-`:386` citations above the insertion still resolve). Re-grep the symbol, do not cite the
+> number. The founder's 2026-09-07 "one implementation" decision is NOT closed by
+> Unit 2: B and C were fixed in place, deliberately unconverged (Unit 2's explicit scope boundary);
+> the shared `schedule_row_builder.dart` de-duplication this inventory was written to feed is still
+> owed, and `scripts/check_single_schedule_row_builder.dart` (Unit 1's §4.11 gate) still stands
+> guard so a THIRD implementation cannot appear before it happens.
+
 **Purpose.** Three plan-review rounds each discovered *new* ways the AI-coach planner diverges from
 the canonical scheduler, one or two at a time. Non-convergence was never the design; it was that
 **nobody had a list**. This is the list. Founder decision 2026-09-07: the two paths must become
@@ -35,10 +48,16 @@ lib/features/ai_coach/services/hotel_workout_planner.dart     (D)  <-- unlisted
 lib/features/ai_coach/services/regenerate_plan_planner.dart   (C)
 ```
 
-D is worse than C on the exact dimensions this batch fixes, and its defects are permanent rather
-than conditional: `'week': 1` hardcoded (`:182`), `'week_character': 'baseline'` hardcoded
-(`:192` — the row can sit inside a `deload` week 4), and `'day_of_week': d.weekday` (`:183`),
-which is **1..7 where every reader expects 0..6**. See the separate off-by-one section below.
+⚠ **CORRECTED 2026-09-10 — Unit 1 FIXED all three of D's defects; OI-170 is CLOSED.** Verified
+live: `hotel_workout_planner.dart:193` `'week': planWeek.week` · `:201` `'day_of_week': d.weekday - 1`
+· `:215` `'week_character': planWeek.character ?? 'baseline'`. The paragraph below records the
+PRE-Unit-1 state and is kept because the reasoning is the live lesson — but do not cite its line
+numbers or its "permanent rather than conditional" verdict as current:
+
+> D was worse than C on the exact dimensions this batch fixes, and its defects were permanent
+> rather than conditional: `'week': 1` hardcoded (then `:182`), `'week_character': 'baseline'`
+> hardcoded (then `:192` — the row can sit inside a `deload` week 4), and
+> `'day_of_week': d.weekday` (then `:183`), which is **1..7 where every reader expects 0..6**.
 
 The founder's scope is **B vs C** (the two regeneration paths). A and D are included where they
 were verified, because it turns out **A and B also disagree** (row 14) — the drift is not simply
@@ -64,7 +83,7 @@ be differences at all** (6 and 7, struck below).
 | ~~7~~ | ~~Completed-row handling~~ | — | — | **NOT A DIFFERENCE** — withdrawn (round 4) |
 | 8 | **Clock** | `istMidnight(fromDate)` `:357` | `_today()` = raw `DateTime.now()` truncated `:387-389` — **not seam-aware** | **DRIFT** (breaks dev time-travel / year-sim) |
 | 9 | **`finisher` on the row** | **absent** | present `:286-293` | **DRIFT — latent** (see A-vs-B below) |
-| 10 | **`workout_name` fallback** | `workoutDay.name` raw `:478` | `name.isEmpty ? 'Workout $i' : name` `:243-245` | DRIFT — cosmetic |
+| 10 | **`workout_name` fallback** | `workoutDay.name` raw `:477` | `name.isEmpty ? 'Workout $i' : name` `:243-245` | DRIFT — cosmetic |
 | 11 | **Deletes stale rows** | yes, `today..planEnd` + `displaced_*` `:362-376` | none (upsert-only) | SEAM — C previews, so it must not delete at plan time |
 | 12 | **Writes `plan_start` / `plan_end`** | first generation only `:382-386` | no | SEAM |
 | 13 | **Writes `preferred_training_days` / `phase_started_at`** | `:392`, `:395-399` | no | SEAM |
@@ -103,6 +122,15 @@ Separately from anything OI-166 touches, `day_of_week` is written in two incompa
 renders as the `D2` / `D8` badges in `week_rows.dart:54`, `day_card.dart:54` and
 `expandable_day_card.dart:196`, and is match-keyed by `preview_plan_provider.dart:117`.
 
+⚠ **CORRECTED 2026-09-10 — THIS ENTIRE SECTION IS CLOSED. All three citations below are dead.**
+(1) `hotel_workout_planner.dart:183` — fixed by Unit 1, now `:201` `d.weekday - 1`.
+(2) `sync/sync_workout.dart:1620` — the code is **DELETED**; `:1594-1597` records that `parsedDate`
+*"lived here solely to feed `'day_of_week': parsedDate?.weekday` … With that gone it had no other
+reader, so it is deleted."*
+(3) `sync_workout.dart:1977` — now the derive-on-restore FIX (`:1982-1984`), i.e. the repair this
+section recommends **has shipped**, behind `SyncFlags.deriveDayOfWeekOnRestore`.
+OI-170 is CLOSED (`closed_issues.md`). Retained as the diagnosis record, NOT as open work:
+
 **Two writers emit 1..7 instead:**
 
 1. `hotel_workout_planner.dart:183` — `'day_of_week': d.weekday`. Local, affects hotel workouts only.
@@ -123,10 +151,18 @@ app is the only consumer, and the app's canon is 0..6. The value is also a pure 
 `scheduled_date`, so the cleanest repair is for the RESTORE to derive it from the date rather than
 trust the transmitted value — that self-heals every already-corrupted cloud row with no migration.
 
-Tracked as **OI-170**. Not folded into this batch: it is a different field, its writers sit in
-`sync/**` (blast radius `platform`, against this batch's `account`), and the restore-side repair
-needs its own behavioural test against already-corrupt cloud state. D's local half is handled here,
-because D is a schedule-row implementation and the §8 gate matches it.
+⚠️ **Corrected 2026-09-10 (round 3, F6) — this paragraph was stale on BOTH facts.**
+**OI-170 is CLOSED** (2026-09-08, `regen-wave-alignment`, diagnose `c4e8b2`; `closed_issues.md:3460`),
+so it is not "tracked" pending anything. And the tier contrast was **inverted**: this batch is
+`platform`, not `account` — `supabase/functions/_shared/** → platform` (`blast_radius.yaml:61`)
+wins on first-match, which round 2's ground-truth reviewer confirmed by re-running the classifier.
+Reading it as `account` under-declares the requirements (`platform` `requires:` is **four** items,
+`blast_radius.yaml:23-25`). The original wording follows, struck, so the rot is legible:
+
+> ~~Tracked as **OI-170**. Not folded into this batch: it is a different field, its writers sit in
+> `sync/**` (blast radius `platform`, against this batch's `account`), and the restore-side repair
+> needs its own behavioural test against already-corrupt cloud state.~~ D's local half is handled
+> here, because D is a schedule-row implementation and the §8 gate matches it.
 
 ### A vs B — the drift is not only the coach's
 
@@ -135,15 +171,16 @@ laid down at onboarding and **absent** from rows rewritten by an Edit-Profile re
 
 ⚠ **Not a live bug, and this was checked rather than assumed.** `grep -rn "\['finisher'\]" lib/`
 returns **0** readers, with `['warmup']` as a positive control returning 3
-(`template_service.dart:189`, `train_provider.dart:629`, `:792`). Nothing reads a row's finisher
+(`template_service.dart:193`, `train_provider.dart:629`, `:792`). Nothing reads a row's finisher
 back today. It is dead weight and a trap for whoever adds the first reader — a field that silently
 exists or not depending on which code path last touched the row.
 
 ### An eleventh writer the gate cannot see
 
-`template_service.dart:115-120` re-derives the week number inline —
-`weekNum = (diff ~/ 7 + 1).clamp(1, 4)` — an independent copy of `getCurrentWeekNumber()`'s
-arithmetic (`read_service.dart:1260-1263`). It is invisible to a `getCurrentWeekNumber()` caller
+⚠ **CORRECTED 2026-09-10 — Unit 1 already closed this.** `template_service.dart:113-125`
+now calls the SHARED `WorkoutScheduleReadService.rawWeekNumberFor(date, planStart).clamp(1, 4)`
+and carries a comment recording that it replaced the inline copy. The paragraph below
+describes the PRE-Unit-1 state and is kept because its *reasoning* is still the live lesson. It is invisible to a `getCurrentWeekNumber()` caller
 census (it is not a caller) and invisible to the §8 gate (its row carries neither literal). It
 happens to agree with the new semantics, but it is one more place the `'week'` contract lives
 unpinned. Named in the SoT entry this batch mints.

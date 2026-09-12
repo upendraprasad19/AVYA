@@ -394,4 +394,14 @@ const _alwaysOk = <String>{
   // also walks those prefixes elsewhere for restore/sync — same mechanism as
   // `current_streak_days`/`current_phase` above.
   'streak_progress_version',
+  // OI-166 Unit 2 (d7f3b2) — `week_plans` is a field of the LOCAL `current_plan`
+  // Hive blob (workoutBox['current_plan']['week_plans']), read/written by both
+  // WorkoutScheduleReadService.generateAndScheduleFromDate's blob splice and
+  // tool_dispatcher.dart's two commit-site splices (_executeRegeneratePlanBlock
+  // / _executeSwitchGoal). NOT a `schedule_*` row field (no `schedule_*` emit
+  // set carries it — schedule_* rows are per-day, current_plan is the whole-
+  // phase summary blob); the prefix heuristic mis-attributes it in
+  // tool_dispatcher.dart because the same file also reads `schedule_<date>`
+  // keys in the write loop immediately above each splice.
+  'week_plans',
 };
