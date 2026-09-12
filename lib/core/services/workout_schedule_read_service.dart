@@ -385,7 +385,51 @@ class WorkoutScheduleReadService {
       await MigratedKey.write(_planStartKey, monday.toIso8601String());
       await MigratedKey.write(_planEndKey, endDate.toIso8601String());
     }
-    await workoutBox.put(_planKey, plan.toMap());
+
+    // OI-166 Unit 2: anchor to the phase's real start, not this regen's save
+    // date — existingStart/monday are both already in scope above, no new
+    // Hive read needed.
+    final planStart = existingStart != null ? DateTime.parse(existingStart) : monday;
+    // `planEnd` above was read from Hive BEFORE endDate existed, so on first
+    // generation it's the today+28 fallback (unaligned to Monday) rather than
+    // the endDate=monday+27 value this same call is about to store as
+    // _planEndKey — using it here would write a bogus wrapped-around extra
+    // week (repro: today=Wed → planEnd fallback=today+28=30, but the real
+    // endDate=27, so lastWeek comes out 5 instead of 4). endDate IS the real
+    // horizon on first generation; planEnd IS the real (previously-stored)
+    // horizon on every later regeneration.
+    final effectivePlanEnd = isFirstGeneration ? endDate : planEnd;
+    final regenStartWeek = rawWeekNumberFor(today, planStart);
+    final lastWeek = rawWeekNumberFor(effectivePlanEnd, planStart);
+    // Literal date comparison, matching the delete loop's own `!d.isAfter(planEnd)` above —
+    // NOT `regenStartWeek <= lastWeek`, which is a WEEK-BUCKET comparison and diverges from
+    // the date comparison whenever planEnd is mid-week-misaligned (redoWeek4 on a non-Monday):
+    // `today` can be genuinely past `planEnd` while still landing in the same raw-week bucket.
+    final writeRangeIsNotEmpty = !today.isAfter(effectivePlanEnd);
+
+    if (writeRangeIsNotEmpty) {
+      final existingBlob = workoutBox.get(_planKey);
+      // Crash-safe casts (B-pass finding 4) — mirror currentWaveCharacters'
+      // own defensive posture for this exact blob rather than letting a
+      // malformed week_plans shape throw through the splice.
+      final rawWeekPlans =
+          existingBlob is Map ? existingBlob['week_plans'] : null;
+      final existingWeekPlans = rawWeekPlans is List ? rawWeekPlans : null;
+      final preserveBefore =
+          regenStartWeek > 4 ? 0 : (regenStartWeek - 1).clamp(0, 3);
+      final splicedWeekPlans = [
+        for (var i = 0; i < 4; i++)
+          i < preserveBefore &&
+                  existingWeekPlans != null &&
+                  i < existingWeekPlans.length &&
+                  existingWeekPlans[i] is Map
+              ? Map<String, dynamic>.from(existingWeekPlans[i] as Map)
+              : plan.weekPlans[contentFlavorIndex(i + 1)].toMap(),
+      ];
+      final splicedBlob = Map<String, dynamic>.from(plan.toMap())
+        ..['week_plans'] = splicedWeekPlans;
+      await workoutBox.put(_planKey, splicedBlob);
+    }
     unawaited(SyncService.instance.syncWorkoutData());
     unawaited(SyncService.instance.pushSnapshot());
     if (preferredDays != null) {
@@ -432,11 +476,9 @@ class WorkoutScheduleReadService {
 
     final dayPattern = preferredDays ?? _getDayPattern(daysPerWeek);
 
-    for (int week = 0; week < 4; week++) {
-      final weekPlan = week < plan.weekPlans.length
-          ? plan.weekPlans[week]
-          : plan.weekPlans.last;
-      final weekStart = monday.add(Duration(days: week * 7));
+    for (int week = regenStartWeek - 1; week < lastWeek; week++) {
+      final weekPlan = plan.weekPlans[contentFlavorIndex(week + 1)];
+      final weekStart = planStart.add(Duration(days: week * 7));
       int workoutDayIndex = 0;
 
       for (int dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
@@ -444,7 +486,7 @@ class WorkoutScheduleReadService {
         final dateKey = _dateKey(date);
         final scheduleKey = '$_schedulePrefix$dateKey';
 
-        if (date.isBefore(today)) {
+        if (date.isBefore(today) || date.isAfter(effectivePlanEnd)) {
           if (dayPattern.contains(dayOfWeek) && workoutDayIndex < weekPlan.workoutDays.length) {
             workoutDayIndex++;
           }
@@ -1268,6 +1310,13 @@ class WorkoutScheduleReadService {
   /// without moving `plan_start`) that clamping silently hides.
   static int rawWeekNumberFor(DateTime date, DateTime planStart) =>
       date.difference(planStart).inDays ~/ 7 + 1;
+
+  /// Content-flavor index for a 1-based real week number [w] into a freshly
+  /// generated [Phase]'s 4 [WeekPlan]s (baseline/overreach/peak/deload at
+  /// indices 0-3 by construction — [PeriodizationEngine]). Cycles past week 4
+  /// (OI-166 Unit 2) — a regen 8+ weeks into an extended plan repeats the full
+  /// progressive wave from its own start rather than freezing at the deload.
+  static int contentFlavorIndex(int w) => (w - 1) % 4;
 
   /// TODAY's plan week, **unclamped**. Returns 1 when no plan start is stored.
   ///

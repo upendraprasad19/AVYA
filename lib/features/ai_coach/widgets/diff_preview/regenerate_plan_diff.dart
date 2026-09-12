@@ -52,6 +52,8 @@ class _RegeneratePlanDiffState extends State<RegeneratePlanDiff> {
         widget.intent.id,
         result.plan,
         result.rawSchedules,
+        result.phase,
+        result.regenStartWeek,
       );
 
       if (mounted) setState(() => _plan = result.plan);

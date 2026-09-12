@@ -3307,34 +3307,8 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
   3. Treat it as a phase boundary — hand off to phase advance / the paywall
 - ⚠ **Whatever is chosen must not stamp `'week': 5`**: `hold_week_labels.dart:133` renders `row['week']` straight to the Home card, and that file's own header (`:93`) calls `copy['week'] = 4 + n` "the dishonest number, persisted" — it exists to suppress exactly that string
 - **Invariant that holds regardless**: a regeneration never deletes a row it does not replace. ⚠ Note this is already violated in a narrow way — `workout_schedule_read_service.dart:373-376` deletes `displaced_*` keys unconditionally with no `completed` check and no replacement (pre-existing, round 2 P3-N)
-
-## OI-170 — `day_of_week` round-trips through the cloud as 1..7 where every reader expects 0..6, shifting every `D<n>` badge (P1)
-
-- **Status**: CLOSED (2026-09-08, `regen-wave-alignment`) — diagnose `c4e8b2`
-- **Blocked on**: none
-- ⚠ **CLOSED BY BEING FOLDED IN, reversing this entry's own "not folded into the OI-166 batch" reasoning below.** Both stated reasons were wrong in the same direction. (1) The repair needs NO already-corrupt-cloud fixture: deriving from `scheduled_date` makes the transmitted value **unread**, so there is nothing to fixture. (2) "Different layer" did not hold either — the LOCAL half of the identical off-by-one was already being fixed in that batch, so filing this separately would have shipped one off-by-one fixed on one side and live on the other, which is precisely the writer/reader drift class the batch attacks. The `platform` tier note below is the one part that survived: folding it in DID raise the batch from `account` to `platform`, which pulled in a `feature_flag` requirement the batch initially missed and a B-pass caught
-- **Shipped**: restore derives `dayOfWeekFromDate(scheduled_date)` (self-healing, no migration); push sends the stored value with the derivation only as fallback; canon given ONE definition in `lib/core/utils/date_utils.dart:50`. Kill-switch `disable_day_of_week_derive` (opt-OUT — the fix is live by default; default-OFF would have preserved the known-broken path). 13 assertions in `test/contracts/day_of_week_canon_writer_to_reader_test.dart`, mutation-proven on 3 legs (4/4/1 red)
-- **Verified**: 2026-09-07 — canon is 0..6: `tool_dispatcher.dart:695` writes `destDate.weekday - 1` with the explicit comment `// 0=Mon..6=Sun`, `workout_schedule_read_service.dart:415` writes `d.weekday - 1`, and both readers assume it (`train_provider.dart:619` `(row['day_of_week'] as int?) ?? 0`; `:816` and `:622` compute `dayNumber = (week-1)*7 + day_of_week + 1`). Two writers emit 1..7: `sync/sync_workout.dart:1620` (`'day_of_week': parsedDate?.weekday ?? entry['day_of_week']`) and `hotel_workout_planner.dart:183` (`'day_of_week': d.weekday`). Cloud column is a bare `int`, no CHECK, no comment (`supabase/migrations/002_create_fitness_tables.sql:104`); **no Edge Function reads it** (`grep -rn "day_of_week" supabase/functions/` → 0, positive control `scheduled_workouts` → 5 files)
-- **Identified**: 2026-09-07 · surfaced by round 4 of the OI-166 plan review (P1-4), while verifying a *different* claim about `hotel_workout_planner.dart`. Three earlier rounds and two versions of the regen inventory had read the same files and missed it
-- **The mechanism, end to end**: the local write is correct (0..6) → the **push** at `:1620` discards it and re-derives 1..7 from the row's own date (`parsedDate` comes from `:1595`, so it is effectively never null and the `??` fallback never fires) → the **restore** at `:1977` writes `if (map['day_of_week'] != null) 'day_of_week': map['day_of_week']` **after** the `existingMap` spread, so the cloud's 1..7 OVERWRITES a correct local 0..6 → readers add 1 → every day number is one too high
-- **User-visible symptom**: after any cloud round-trip (reinstall, new device, and the background restore that runs on most cold starts for returning users), Monday of week 1 renders **`D2`** and Sunday of week 1 renders **`D8`** inside a seven-day week. Rendered at `week_rows.dart:54` (`'D${day.dayNumber}'`), `day_card.dart:54` and `expandable_day_card.dart:196`. `preview_plan_provider.dart:117` also *matches* on `dayNumber`, so a shifted value silently falls through to its positional-index fallback at `:122`
-- ⚠ **The PUSH is the wrong side, not the restore.** There is no server-side contract to honour — no constraint, no comment, no EF reader — so the app is the only consumer and 0..6 is its canon. The `??` ordering is also backwards: it prefers a re-derivation over the stored canonical value
-- **Proposed repair, not yet reviewed**: (1) the restore DERIVES `day_of_week` from `scheduled_date` (`parsed.weekday - 1`) instead of trusting the transmitted value — it is a pure function of the date, so it never needed to round-trip, and deriving it **self-heals every already-corrupted cloud row with no migration**; (2) the push sends `entry['day_of_week']` rather than re-deriving. (1) alone is sufficient; (2) is correctness hygiene
-- **Blast radius**: `sync/**` is `platform` (`docs/blast_radius.yaml:63`), which is why this is not folded into the `account`-tier OI-166 batch
-- **The local half of the same off-by-one IS fixed in the OI-166 batch** — `hotel_workout_planner.dart:183` — because that file is a schedule-row implementation matched by that batch's new `check_single_schedule_row_builder.dart` gate. This issue owns only the cloud round-trip
-
-## OI-171 — the deload lift writes the `current_plan` blob AFTER the fan-outs that would push it, so the lifted week 4 can sit un-pushed until an unrelated write (P2)
-
-- **Status**: CLOSED (2026-09-08, `regen-wave-alignment`) — diagnose `b6d1f4`
-- **Blocked on**: none
-- **Shipped**: `unawaited(SyncService.instance.pushWorkoutPlanForSyncDomain())` immediately after the blob write — the narrow plan push, kept UNAWAITED exactly as the warning below demands, so cold-launch home navigation is not blocked. ⚠ It first shipped with **zero** regression coverage, self-disclosed in its own diagnose-doc as acceptable "fixture cost" — which is a §4.2 deferral wearing a confession. A B-pass caught it by DELETING the line and watching 60 tests across four suites stay green. Now pinned by a 3-assertion ordering group in `test/contracts/deload_eval_behavioral_test.dart` (`indexOf(push) > indexOf(blobWrite)`), mutation-proven 2 legs: MOVING the push above the blob write reddens exactly the ordering assertion (1), deleting it reddens 3
-- **Verified**: 2026-09-07 — `_liftWeekFour` writes rows via `upsertScheduled` (`deload_evaluator.dart:207-223`), each of which fires `unawaited(SyncService.instance.syncWorkoutData())` (`workout_write_service.dart:566`); it then writes the blob at `deload_evaluator.dart:264` and fires only `unawaited(SyncService.instance.pushSnapshot())` at `:273`. `pushSnapshot` does **not** reach `_syncWorkoutPlan` — the only two call sites of that method are `weeklyFullSync()` (`sync_service.dart:1143` → `:1169`) and `pushWorkoutPlanForSyncDomain()` (`sync_workout.dart:2053-2057`, invoked from `sync_domains/workouts_sync_domain.dart:55`). `_syncWorkoutPlan` (`sync_workout.dart:1024-1057`) is what builds `plan_json` from the blob (`:1045-1056`)
-- **Identified**: 2026-09-07 · round 5 of the OI-166 plan review (P2-9) flagged `deload_evaluator.dart:264` as the one blob writer not paired with `syncWorkoutData()`. ⚠ **Its stated conclusion — that the lifted blob "never reaches `plan_json`" — is WRONG and was corrected on verification**: the row writes' own fan-out does reach it. The real defect is narrower and is an ORDERING one
-- **The actual gap**: the row fan-outs fire **before** the blob is written, so the `plan_json` they push carries the PRE-lift blob. Nothing after `:264` pushes the post-lift blob. It therefore reaches the cloud only on the next unrelated `syncWorkoutData()` (any later workout write) or the weekly `weeklyFullSync()`
-- **Who is exposed**: a user whose week 4 deload is lifted and who then logs nothing before reinstalling or moving device. On restore, `_restoreWorkoutPlan` applies the stale blob and the phase-arc strip shows `deload` for a week whose rows say `working` — the rows-vs-blob disagreement Unit B shipped 2026-09-06 to eliminate, arriving through the sync layer instead of the writer
-- ⚠ **Do NOT "fix" this by appending `syncWorkoutData()` at `:273`.** The comment at `:269-272` is deliberate: *"Durability — UNAWAITED (offline-first) … Awaiting here would block cold-launch home navigation (`runRolloverNow` is awaited before `context.go`)"*. The lift runs on the cold-launch rollover path. The fix must preserve that non-blocking property — most likely `unawaited(SyncService.instance.pushWorkoutPlanForSyncDomain())` after the blob write, which is the narrow push rather than the whole domain
-- **Blast radius**: `lib/core/services/**` → `account` (`docs/blast_radius.yaml:326`); the fix did not touch `sync/**`. The BATCH that shipped it is `platform`, but for OI-170's sake, not this one's
-- ~~**Not folded into the OI-166 batch**~~ — **superseded 2026-09-08: it WAS folded in.** The bullet read *"it is a defect in the deload lift's own durability sequencing, not in either regeneration path"*. That is still an accurate description of the defect and a poor reason to file it separately: it was one line, it was discovered while verifying an OI-166 review finding, and the batch was already re-testing the deload lift's dual write. §4.2 makes the same point structurally — a bug surfaced by a batch is fixed by that batch
+- **PARTIALLY RESOLVED 2026-09-11 — a FOURTH candidate behaviour was chosen and shipped, none of the three above**: OI-166 Unit 2 (`docs/audit/oi166-unit2-plan-v10.md`, diagnose `d7f3b2`) implements CYCLING — `contentFlavorIndex((w-1)%4)` repeats the baseline→overreach→peak→deload wave past week 4 rather than freezing on week 4's character (candidate 1), refusing (candidate 2), or handing off to phase advance (candidate 3). This closes the "no well-defined behaviour" complaint for the CONTENT/LABELING half: `rawWeek > 4` now stamps its real week number and picks well-defined content, verbatim, for any `rawWeek`. It does NOT close the WINDOW-ALIGNMENT half this entry also raises — whether `redoWeek4`'s own extension window is week-grid-aligned is untouched (`redoWeek4`/`holdWeek` themselves were explicit out-of-scope for Unit 2). Leaving this OPEN rather than closing it: the founder-blocked question above was "what should a regen DO", and cycling answers it for content but the sequencing-after-OI-174 note and the `redoWeek4` non-alignment concern (candidate 1's own rejection reason) still stand.
+- ⚠ **A THIRD residual surfaced the same day by the Unit 2 B-pass (Finding 2, P1), distinct from window-alignment: the phase-arc strip's "NOW" highlight does not cycle even though content now does.** `getCurrentWeekNumber()` (`workout_schedule_read_service.dart:1334`, unchanged by Unit 2) clamps to `[1,4]`, so past real week 4 the strip permanently highlights index 3 — "deload" per Unit 2's own splice — regardless of which of baseline/overreach/peak/deload the real current week actually cycles to. Reachable TODAY via the live `redoWeek4`, no flag required. Not strictly a NEW regression (pre-fix, `current_plan` was also unconditionally rewritten to the same canonical order every regen, so the clamp already existed against different, frozen content) — but Unit 2 makes the mismatch visible and variable for the first time. A real fix means routing the highlight through a cycle-aware index or otherwise making `hold_week_identity`'s clamp itself past-week-4-aware, which is a redesign of a DIFFERENT SoT concept (`hold_week_identity`, own tests, own explicit "do NOT branch inputs where the clamped 4 is HONEST" warning for its other consumers) — correctly out of scope for the already-9-round-converged Unit 2, tracked here instead of left implied-fixed.
 
 ## OI-176 — the OI-collision gate answers `PASS (vacuous)` for a branch with no commits, which is the exact state in which numbers are minted (P2)
 
@@ -3713,3 +3687,142 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Blast radius**: `scripts/check_*.dart` — platform tier (an enforcement script); no runtime code.
 - **Related**: OI-162 (parent, closed), audit `docs/audit/2026-09-02/slice-a-plan.md` §0,
   `backups/live_schema_columns.json` (the snapshot), diagnose `f2c8d5`.
+
+## OI-186 — the AI coach cannot replace ONE day with a different workout: the only route is a 2-step template chain that pollutes the saved-templates library, and it cannot name an exercise outside today's snapshot (P2)
+
+- **Status**: OPEN
+- ⚠ **Provenance — renumbered TWICE.** Minted as OI-177 in this branch's working tree (2026-09-10) while `origin/main` independently minted OI-177 for the live-cron/Gate-31 snapshot trigger → renumbered to OI-182; then, before this branch merged, `origin/main` independently minted OI-182 again ("the payment grace window closes before the last verify-payment retry fires", OI-162 slice 4, `0c13a144` in merge `f95cae45`) → renumbered to **OI-186** (2026-09-12). Renumbered per `check_oi_numbering_unique.dart` (gate precedent `0cb4120a`). Mapping: 177→182→186, 178→183→187, 179→184→188 — **OI-185 deliberately skipped**: the unmerged branch `oi162-close` (`3267b992`, checked out in another worktree) had already minted OI-185 for a different issue (`check_schema_column_refs.dart` multi-line map gap), so taking 185 here would have forced a third collision at THAT branch's merge; the board already tolerates gaps (OI-19/20/22). Neither renumber rewrites a pushed commit message: `20302f30` (pushed 2026-09-10, on `origin/regen-wave-unit2`) files this entry as **OI-177** — an earlier version of this bullet claimed "no pushed commit cites the old number", which was wrong for 177 and 178 (`git ls-remote --heads origin regen-wave-unit2` = `8e343151`; verified 2026-09-12) and is corrected here rather than deleted.
+- **Blocked on**: founder product decision on tier (see the FREE-tier note below) — the engineering is unblocked
+- **Verified**: 2026-09-10 — full census of `supabase/functions/_shared/tools/registry.ts:32-65`, **20 registered tools**, read individually. No tool takes "a date + a desired focus" and rewrites that one day. Denominator stated deliberately: an earlier pass in the same session claimed the only route was `regeneratePlanBlock(weeks:1)` and that was WRONG — it had read two of the five tool directories
+- **Identified**: 2026-09-10 · founder scenario: *"today, when he woke up, he asks the coach — I'm not in the mood, so let's do a rest workout today"*, one day only, without touching a completed workout
+
+### What DOES exist for a single day (all verified against the tool files)
+
+| User intent | Tool | Tier | Confirmation |
+|---|---|---|---|
+| rest / skip today | `pausePlan(startDate, days:1)` → `status='paused'`, row preserved | **PRO** | destructive |
+| shorten today | `shortenWorkout(minutes)` — keeps compounds, drops accessories | **FREE** | trivial |
+| move today elsewhere | `rescheduleWeek(daysAvailable)` — non-fitting workouts DROPPED | PRO | destructive |
+| bodyweight/no-gym today | `generateHotelWorkout(days:1)` | PRO | destructive |
+| put a SAVED template on today | `scheduleTemplate(templateId, dates:[today])` | PRO | destructive |
+
+All honour the completed guard already — `pausePlan` *"Already-completed workouts are NOT paused (skipped silently)"*; `scheduleTemplate` *"Already-completed dates are silently skipped — history is never overwritten"*; `generateHotelWorkout` *"completed workouts are preserved"*.
+
+### The actual gap, precisely
+
+"Do legs instead of push today" has exactly one route: `createCustomTemplate` → `scheduleTemplate(dates:[today])`. Three problems with it, none cosmetic:
+
+1. **It permanently pollutes the user's library.** `createCustomTemplate` saves to `snapshot.saved_templates[]` with no ephemeral mode — a one-off mood change leaves "Legs Day" in their saved templates forever.
+2. **Two `destructive` confirmation cards** for a one-day change, versus `shortenWorkout`'s single `trivial` one.
+3. ⚠ **The coach cannot name an exercise it cannot already see.** `createCustomTemplate`'s `exerciseId` says *"Use the exact `exercise_id` from `snapshot.today_workout.exercises[]` OR `snapshot.custom_exercises[]`. Never invent IDs."* — and `swapExercise.ts:8-10` carries the identical constraint for `newExerciseId`. **There is no tool that searches the exercise library.** So when today is a push day, the coach structurally cannot compose a leg session: the leg exercise IDs are not in its context.
+
+Point 3 is the load-bearing one — it means this is not merely an ergonomics gap that a new tool closes on its own. Any `replaceWorkoutDay` tool needs an ID source, so either a `searchExercises` read tool ships with it, or the replacement is generated app-side by `PlanGenerator` from a focus string (`'legs'`) rather than composed by the model. **That half is now tracked as OI-187** (which also found the write path already accepts any library ID — this is a missing READ tool, not a missing capability). **OI-186 cannot be closed without OI-187 or its option 3.**
+
+### Tier question for the founder
+
+`pausePlan` is **PRO**. So a FREE user saying *"I'm not in the mood, rest today"* is refused by the tier gate, while *"I only have 20 minutes"* (`shortenWorkout`, FREE) is honoured. Rule 6 says Phase 1 is always free; whether a free user may take a rest day through the coach is a product call, not a bug. Surfaced, not decided.
+
+### Sequencing note
+
+This gets MORE visible once OI-166 Unit 2 caps `regeneratePlanBlock` at the 4-week phase block (founder locked 2026-09-10). Today a user can abuse `regeneratePlanBlock(weeks:1)` — 7 days from today — as a blunt substitute. After the cap it is still 7 days and still wrong, so the workaround does not improve; it just stops being reachable for longer horizons.
+
+- **Blast radius**: `supabase/functions/**` is `account`; a new tool also touches `registry.ts`, the coach prompt, and `tool_dispatcher.dart`. Needs its own live-deploy authorization per §4.3
+- **Class**: not a writer/reader drift — a genuine capability gap. Related: OI-166 (regen scope), OI-175 (`rawWeek > 4` semantics)
+
+## OI-187 — the AI coach has no read path to the 292-exercise library: the WRITE path already accepts any library ID, the model can never learn one (P2)
+
+- **Status**: OPEN
+- ⚠ **Provenance — renumbered TWICE.** Minted as OI-178 in this branch's working tree (2026-09-10) while `origin/main` independently minted OI-178 for pg_cron/alerting visibility → renumbered to OI-183; then, before this branch merged, `origin/main` independently minted OI-183 again ("`enforce_vision_analysis_daily_limit`'s channel guard is NULL-unsafe", OI-162 slice 4, `0c13a144` in merge `f95cae45`) → renumbered to **OI-187** (2026-09-12). Renumbered per `check_oi_numbering_unique.dart` (gate precedent `0cb4120a`). Mapping: 177→182→186, 178→183→187, 179→184→188 — **OI-185 deliberately skipped**: the unmerged branch `oi162-close` (`3267b992`, checked out in another worktree) had already minted OI-185 for a different issue (`check_schema_column_refs.dart` multi-line map gap), so taking 185 here would have forced a third collision at THAT branch's merge; the board already tolerates gaps (OI-19/20/22). Neither renumber rewrites a pushed commit message: `20302f30` (pushed 2026-09-10, on `origin/regen-wave-unit2`) files this entry as **OI-178**, and `5f8d6930` / `8e343151` correct it under that number — an earlier version of this bullet claimed "no pushed commit cites the old number", which was wrong for 177 and 178 (`git ls-remote --heads origin regen-wave-unit2` = `8e343151`; verified 2026-09-12) and is corrected here rather than deleted.
+- **Blocked on**: nothing technical — needs a design choice between a `searchExercises` read tool and a snapshot digest (options below). Founder directed 2026-09-10: *"ai coach should have the tools whatever necessary"*
+- **Verified**: 2026-09-10 — every claim below re-read against source in-session
+- **Identified**: 2026-09-10 · surfaced while filing OI-186; it is the reason OI-186 cannot be closed by a `replaceWorkoutDay` tool alone
+
+### The asymmetry, which is the whole issue
+
+**The write path is ALREADY fully capable.** `swap_service.dart:221` — `_hive.exerciseBox.get(toExerciseId)` is a direct key lookup into the **complete** library; any of the 292 exercises resolves. (`:225-236` then falls back to `customBox`, matching on id **or name**.)
+
+**The model can never produce a valid ID.** Verified chain:
+- `assets/data/exercise_library.json` holds **292** exercises, keyed by opaque IDs — `E001` = "Barbell Bench Press"
+- `seed_service.dart:185-192` — *"writes every exercise into exerciseBox keyed by its `id`"*. So the Hive key IS `E001`; a NAME does not resolve on the library branch (only on the custom branch)
+- `ai_snapshot_builder.dart` — `grep -c "exercise_library"` → **0**. No library key in the snapshot at all
+- its `custom_exercises` key reads `_hive.customBox` (`_readCustomExercises`) — **user-created only**, not the built-in 292
+- `getFormCues` (the only library-touching read tool) resolves a NAME → cues/mistakes/muscles/difficulty/logging_type and **returns no `id`** (`getFormCues.ts:74-86`, `:101-113`). So there is no name→id recovery hop either
+
+⇒ The tool descriptions are honest about the cage: `createCustomTemplate.ts:5-6` *"Use the exact `exercise_id` from `snapshot.today_workout.exercises[]` OR `snapshot.custom_exercises[]`. **Never invent IDs.**"*; `swapExercise.ts:8-10` identical for `newExerciseId`.
+
+**This is a missing READ tool, not a missing capability.** Nothing in the write path needs to change.
+
+### What it silently costs today, in production
+
+- **`swapExercise` (live, PRO)** — its entire purpose is "swap X for something else", yet the model's only legal `newExerciseId` values are exercises **already in today's workout** (a no-op or a duplicate) or the user's own customs. For a user with no custom exercises the tool cannot make a single meaningful swap the model chose. Its `reason` field advertises *"Equipment substitute for home"*, *"Easier on the shoulder"* — neither is reachable
+- **`createCustomTemplate` (live, PRO)** — can only compose from exercises visible in today's snapshot, so "build me a leg day" on a push day is structurally impossible
+- **OI-186's `replaceWorkoutDay`** — blocked on this for the same reason
+
+⚠ **UNMEASURABLE TODAY — corrected 2026-09-10, same day this entry was filed.** This row first said *"check `ai_coach_interactions` for `exercise_not_found` before designing the fix"*. **That query returns zero for a reason that has nothing to do with how often it happens**, so acting on it would have been the `bad_news_vs_no_news` collapse:
+  - `tool_dispatcher.dart:281-282` catches `SwapExerciseException` and returns `ToolExecutionResult.failure(_swapExerciseErrorMessage(e))` — **no `logEvent`, no `recordNonFatal`**. The multi-swap site `:598-599` likewise only appends to a local `errors` list.
+  - The generic `logEvent('tool_dispatch_..._unexpected_failure')` at `:227-235` lives in `dispatch()`'s defensive catch and fires ONLY for errors no handler caught — a HANDLED `SwapExerciseException` never reaches it.
+  - `ai_coach_interactions` is chat history + `channel='app_event'` rows (`app_events_service.dart:60`), not tool outcomes.
+  ⇒ `exercise_not_found` reaches **no telemetry sink at all**. Its frequency is currently unknowable, and **"no reports" must not be read as "not happening"**. Any fix for this OI should add telemetry to the swap failure path in the same commit, or the prevalence question stays permanently unanswerable. Related class: `feedback_observability_silent_drop`.
+
+### Options
+
+1. **`searchExercises` read tool** — `(query|muscle_group|equipment) → [{id, name, equipment, muscles}]`, capped ~20 rows. Mirrors `getFormCues`'s existing `exercise_library` Postgres query, so the seam is proven. FREE tier (a read). Composes with every write tool above, including OI-186's.
+2. **Library digest in the snapshot** — all 292 as `id|name|equipment` costs real tokens on EVERY message, for a need that arises rarely. Rejected on cost unless filtered by the user's equipment.
+3. **App-side generation from a focus string** — `replaceWorkoutDay(date, focus:'legs')` hands off to `PlanGenerator`, which already queries the library (rule 8). Solves OI-186 without giving the model IDs, but does NOT fix `swapExercise` or `createCustomTemplate`.
+
+**Recommendation: option 1**, because it is the only one that fixes all three call sites. Option 3 remains worth doing for OI-186's generate-a-day case — they are complementary, not alternatives.
+
+- **Blast radius**: `supabase/functions/**` = `account`. New tool = `registry.ts` + the tool file + coach prompt + `zodToGemini` shape; a read tool needs no `tool_dispatcher.dart` write branch. Live deploy needs its own authorization per §4.3
+- **Class**: capability gap + **`feedback_bad_news_vs_no_news`** — a tool that cannot express the request and one that expresses it badly are indistinguishable from the transcript, which is why this survived 20 shipped tools unnoticed
+- **Related**: OI-186 (blocked on this), OI-166 (regen scope)
+
+## OI-188 — no re-entry path for a returning user: the free path hands them a DELOAD at their full pre-absence load, and the PRO ramp-back is an order of magnitude too slow (P1)
+
+- **Status**: OPEN
+- ⚠ **Provenance — renumbered TWICE.** Minted as OI-179 in this branch's working tree (2026-09-10) while `origin/main` independently minted OI-179 for the `alert_cron_function_dead` coverage gap → renumbered to OI-184; then, before this branch merged, `origin/main` independently minted OI-184 again ("4 tables rely on RLS-zero-policy default-deny alone", OI-162 slice 4, `0c13a144` in merge `f95cae45`) → renumbered to **OI-188** (2026-09-12). Renumbered per `check_oi_numbering_unique.dart` (gate precedent `0cb4120a`). Mapping: 177→182→186, 178→183→187, 179→184→188 — **OI-185 deliberately skipped**: the unmerged branch `oi162-close` (`3267b992`, checked out in another worktree) had already minted OI-185 for a different issue (`check_schema_column_refs.dart` multi-line map gap), so taking 185 here would have forced a third collision at THAT branch's merge; the board already tolerates gaps (OI-19/20/22). Unlike its two siblings, no commit message on this branch ever cited OI-179 — it was filed in the working tree only (`git log main..HEAD` grep, verified 2026-09-12).
+- **Blocked on**: founder product decision on the absence-length branch table (§ "Recommended shape" in the research doc). The engineering is unblocked once that is picked
+- **Verified**: 2026-09-10 — app behaviour read from source by the main thread; external research graded and recorded at `docs/research/returning-user-reentry.md`. ⚠️ Defects 2, 3 and 4 were **corrected the same day** by plan-review round 3 (F4): defect 3 cited default-OFF code and pointed the wrong way, and the decay turns out to be unreachable for free users. Read the per-defect correction notes, not the original wording
+- **Identified**: 2026-09-10 · founder brainstorm: *"a pro user completes phase one, then he's missing for six weeks, then he comes back"*
+
+### Why this is P1 and not a nice-to-have
+
+The evidence-backed risk on return is **injury, not lost gains** — CSCCa/NSCA cite NCCSIR data that *"almost 60% of non-contact injuries occur during these periods in which the athlete is transitioning back into training following a period of inactivity."* We currently have no re-entry concept at all.
+
+**And the market is empty.** Of 21 apps checked, exactly ONE (StrongLifts) has a documented automatic return-after-absence adjustment; two ask the user; the rest do nothing. This is an open goal, not catch-up.
+
+### Four defects in what ships today (all main-thread verified)
+
+1. ⚠️ **The LIVE free-user return path prescribes a DELOAD — but the fix is already WRITTEN and sitting behind a flag.** *(Corrected 2026-09-10 after founder caught the original wording: "we were repeating week 3 and not week 4, check". They were right.)*
+   - **LIVE:** `holdWeeksEnabled` defaults **false** (`plan_engine_flags.dart:63-69`), so a returning free user gets **`redoWeek4`**, which sources `week4Start = planEnd - 6d` (`workout_schedule_write_service.dart:183`) — the TRAILING week of the window, i.e. the deload week on a clean 28-day phase. Coleman et al. 2024: an *unnecessary* deload in trained lifters *"appears to negatively influence measures of lower body muscle strength."* They have already had a forced deload; we give them another.
+   - **ALREADY BUILT, ship-dark:** `holdWeek` (`:266-270`) sources `planStart + 14..20` = **week 3 (PEAK)**, dropping to `+21..27` (deload) only on **every 4th hold** — so a long-term holder keeps the wave rhythm peak/peak/peak/deload instead of deloading forever. Its own comment names the live behaviour as the defect: *"NEVER plan_end-derived (redoWeek4's bug was copying the trailing deload week every time)"*.
+   - ⇒ **This defect's remedy is OI-60's flag flip, NOT new engineering.** Scope this OI to the three defects below, and treat item 1 as one more argument for OI-60. Anyone planning work here should read `holdWeek` before designing anything — the smarter rule already exists.
+2. **The decay cuts the quality they RETAINED — and for a FREE user it never fires at all.** `lib/core/utils/detraining.dart` scales **weight** (≤7d 1.0 · 8-21d 0.925 · 22-35d 0.825 · >35d **0.50**). But Bosquet 2013 (103 studies) puts work capacity worst (SMD −0.62) and peak power best-retained (−0.20); Bjørnsen 2019 finds ~60% of strength gain retained at 20 weeks. **What they lost is volume tolerance, not load.** Points at cutting sets/frequency rather than weight.
+   - ⚠️ **Scope, corrected 2026-09-10 (round 3):** `detrainingDecayEnabled` is default ON, but **both** call sites are closed to a free user. ⑦(a) lives inside `ProgressionResolver.resolve()`, which returns `{}` for `phase <= 1` (`progression_resolver.dart:55`); ⑦(b) (`train_provider.dart:1312`) is behind `sessionDetrainingCutEnabled`, default OFF. A free user is on phase 1 by definition (rule 6 / rule 19 gate `phases_2_to_12`).
+   - ⇒ **The returning FREE user is prescribed their exact pre-absence load, undecayed** — on top of the deload-week copy `redoWeek4` hands them (defect 1). Two independently wrong things in the one path most returning users are on. The decay debate above is a **PRO-only** question until ⑦(b) flips.
+3. ⚠️ **The ramp-back is far too SLOW, and the plan-suggested weight is constant within a phase.** *(Corrected 2026-09-10 by plan-review round 3 finding F4. The original entry claimed the ramp was performance-gated and returned users to full load in 3-4 weeks, citing `progression_resolver.dart:307`/`:318`. **Both citations are inside `_gradedSuggestion`, called only under `gradedProgressionEnabled` (`:61`, `:189`), which is default FALSE** — so "beginners are on the unconditional ramp" was false in production, and the arithmetic assumed a per-session ramp that does not exist. The hazard is the opposite of the one filed.)*
+   - **What ships** is the fixed rule at `progression_resolver.dart:203-215`: reps ≥10 → `base + 5.0` (lower) / `+2.5` (upper); ≥5 → hold; <5 → back off.
+   - **It runs once per PHASE, not per session.** `resolve()` has exactly one caller (`plan_generator.dart:235`) and returns `{}` for `phase <= 1`. Its output becomes `suggestedWeight`, applied **identically to every week** of the phase (`periodization_engine.dart:112-115`); the wave varies sets and reps, never weight (`_waveReps`, `:262`).
+   - ⇒ From a −50% cut, the plan's suggested weight recovers at **+2.5–5 kg per 4-week phase** — roughly **10 phases** to undo a 100 kg → 50 kg cut. A returning user is left with a suggestion far below what they can lift, for months, so they override it manually and the prescription becomes noise.
+   - The time-gating argument still holds on the evidence (Kubo 2012: tendon stiffness ~3 months to build, **1 month to lose**, so a strong first session is not readiness — ⚠️ n=9, one tendon, isometric, the only direct human time-course data found). But it argues for a **deliberate, bounded re-entry ramp**, not for slowing down a ramp that is already an order of magnitude too slow.
+4. **Half the feature is switched off, so for a PRO user the two halves disagree in production.** `sessionDetrainingCutEnabled` defaults **false** (`plan_engine_flags.dart:110-120`). On phase ≥2 generation prescribes −50%; the active-workout screen then prefills the **old undecayed** last-logged weight, with no welcome-back banner and no explanation. The user sees two different numbers and no reason for either. ⚠️ Per defect 2's scope correction this disagreement is **PRO-only** — on phase 1 neither half decays, so they agree, wrongly.
+
+### The unsettled part, stated so nobody re-litigates it
+
+**Do NOT pick a load-reduction percentage.** Published guidance spans **10% to 60%** for overlapping scenarios with no experiment adjudicating — the single most confident "not settled" finding in the research. The recommendation is to **re-baseline from what the user actually logs** in the first sessions back. Our flat −50% sits at the aggressive end of a range nobody has validated.
+
+### Constraints to honour
+
+- **Never gate the re-entry ramp behind PRO.** It is a safety feature; no app was found paywalling one. Gate depth (AI re-planning, analytics), never the lighter first week.
+- **Forgive, don't reset, and say so BEFORE they lapse.** Silverman & Barasch 2023 (*JCR* 49(6), seven studies): a broken streak's demotivating effect is **amplified when users blame themselves** and **attenuated when the streak can be repaired**.
+- **Calibrate the ceremony down.** ~5% of lapsed users resurrect after 30+ days and retain ~20% worse than new users (Duolingo, published). A warm card and a good first session beats an elaborate re-onboarding flow.
+- **Copy should name work capacity, not strength** — it is what they will actually feel, and it pre-empts the "I lost everything" misread that causes the second quit.
+- **Never diagnose without prescribing** (Garmin's anti-pattern: labels *"your fitness level is decreasing"*, offers no action).
+- ⚠️ **Do not cite the "88% of lapsed users feel shame — UCL 2025" statistic.** The press release was read directly; **the figure is not in the study**.
+
+### Relationship to OI-166 Unit 2
+
+Unit 2's blocked question — what a regeneration does when the plan window is EXTENDED (`redoWeek4`/hold) or EXPIRED — is really this issue wearing a different hat. Unit 2 now bounds its writes at `plan_start + 27d` and **leaves out-of-phase state on its current behaviour**, so it introduces no regression and this OI owns the improvement. Neither blocks the other.
+
+- **Blast radius**: `lib/shared/repositories/plan_engine/**` is `platform` (`docs/blast_radius.yaml:67`); touching `progression_resolver.dart` or the decay bands lands there ⇒ `feature_flag` + `bpass: accepted`
+- **Full research record**: `docs/research/returning-user-reentry.md` — 21-app table with per-row evidence grading, detraining timelines, UX patterns with verbatim copy, and an explicit list of what the evidence does NOT settle
+- **Related**: OI-166 (regen scope), OI-60 (hold-weeks flip — hold weeks are the *other* answer to the same moment and are still OFF), OI-53 (ship-dark flag flips, incl. `sessionDetrainingCutEnabled`)

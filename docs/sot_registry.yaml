@@ -7671,7 +7671,7 @@ concepts:
       that says LESS the more the user has logged, while still looking present.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 939-974
+        line_range: 988-1023
         method: holdSnapshotBlock
         notes: |
           Returns null off a hold day. Reads activeHoldOrdinalFor/activeHoldWeeks
@@ -7984,6 +7984,16 @@ concepts:
       vocabulary is FIVE tokens (baseline|overreach|peak|deload plus `working`,
       written by deload_evaluator.dart:245) and the reader synthesises a sixth,
       the empty string, for a malformed entry.
+
+      OI-166 Unit 2 (2026-09-11): the schedule-row `'week'` field gains a SECOND
+      guarded derivation path on both writers below — real week number relative
+      to the phase's own plan_start (rawWeekNumberFor), NOT a loop-relative
+      counter frozen at 1..4 or a hardcoded weekIdx+1 — so a regen that starts
+      past week 4 stamps the row's TRUE week and cycles content via
+      contentFlavorIndex((w-1)%4) instead of freezing on the last week or
+      mislabeling week 6+ as week 1-4. This concept ALSO gains its first two
+      current_plan WRITERS (previously read-only, "NO writer added" above
+      describes the 7-A batch only).
     writers:
       - file: lib/shared/repositories/plan_engine/periodization_engine.dart
         method: apply (stamps weekCharacter per week — EXISTING)
@@ -7992,6 +8002,35 @@ concepts:
           `weekCharacter: _waveNames[weekIdx]` — serialized as snake_case
           `week_character` via WeekPlan.toMap (models.dart:79). 7-A adds NO writer;
           it only READS this stamped field.
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: "generateAndScheduleFromDate — current_plan blob splice (OI-166 Unit 2)"
+        line: 410
+        notes: >
+          Replaces the pre-existing unconditional current_plan write. Splices
+          contentFlavorIndex-cycled content into week_plans starting at
+          regenStartWeek (preserveBefore = regenStartWeek>4 ? 0 :
+          (regenStartWeek-1).clamp(0,3), preserving earlier weeks verbatim);
+          skipped entirely when the write range [today, effectivePlanEnd] is
+          empty (round-5 P0 — a blob rewrite backed by zero rows must not
+          happen). effectivePlanEnd is endDate on first generation (the
+          pre-existing `planEnd` local is read before endDate exists and is a
+          stale today+28 fallback there) and the stored planEnd on every later
+          regen. Behavioral:
+          test/contracts/oi166_unit2_regen_content_cycling_behavioral_test.dart.
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        method: "_executeRegeneratePlanBlock / _executeSwitchGoal — current_plan splice (OI-166 Unit 2, NEW writer)"
+        line: 890
+        notes: >
+          The AI-coach regen path (RegeneratePlanPlanner.plan()) never wrote
+          current_plan before this — the exact gap this concept's own
+          deload_decision_reason entry below had already documented and filed
+          as OI-166. Both commit sites splice the SAME formula as
+          generateAndScheduleFromDate, gated on getCachedPhase(intent.id) AND
+          getCachedRegenStartWeek(intent.id) both non-null (a null
+          regenStartWeek signals an explicit-startDate or plan-less call,
+          where this write is correctly skipped — pre-existing behaviour,
+          unchanged). Behavioral:
+          test/contracts/oi166_unit2_regen_content_cycling_behavioral_test.dart.
     readers:
       - file: lib/core/services/workout_schedule_read_service.dart
         method: currentWaveCharacters
@@ -8132,6 +8171,13 @@ concepts:
       rather than in contradiction. That is a pre-existing phase-arc defect, filed as OI-166.
       The guard detects an OUTCOME change, not "was this decision re-made": a KEEP reason
       surviving a regen that produces another deload week still renders, and correctly so.
+
+      CORRECTED 2026-09-11 (OI-166 Unit 2): the AI-coach regen path now DOES write current_plan —
+      see this concept's own writers list above (tool_dispatcher.dart's two commit sites). The
+      "writes NO blob" gap this paragraph documents is CLOSED for the current_plan blob itself;
+      this guard's own stale-reason risk (a deload_reason_phase_<P> key outliving the blob state it
+      describes) is unrelated and untouched by Unit 2 — Unit 2 did not add or remove any writer of
+      deload_reason_phase_<P>, only of current_plan.
     writers:
       - file: lib/core/services/deload_evaluator.dart
         method: DeloadEvaluator.maybeEvaluate (stamps deload_reason_phase_<P>)
@@ -9199,7 +9245,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1381-1396
+        line_range: 1430-1445
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -9596,15 +9642,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1505-1522
+        line_range: 1554-1571
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1498-1499
+        line_range: 1547-1548
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1550-1575
+        line_range: 1599-1624
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
