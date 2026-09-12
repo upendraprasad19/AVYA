@@ -339,9 +339,17 @@ void main() {
         '${f.board(c)}\n## OI-20 — merged locally, unpushed\n\n- **Status**: OPEN\n- **Blocked on**: none\n- **Verified**: never\n');
     _run('git', ['add', '-A'], c);
     _run('git', ['commit', '-q', '-m', 'local twenty'], c);
+    // Then mint from a WORKTREE BRANCH cut from origin/main -- whose board lacks
+    // 20, as does origin/main's. Only the local-main term can see 20 here.
+    // (Minting from main itself would let the working-board term absorb the
+    // case: the first version of this test did exactly that and its mutation
+    // reddened nothing -- rule 21, "green for the wrong reason".)
+    _run('git', ['checkout', '-q', '-b', 'feature', 'origin/main'], c);
+    expect(f.board(c), isNot(contains('OI-20')), reason: 'fixture: the branch board must lack 20');
     final r = f.mint(c, ['after local main']);
     expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
-    expect((r.stdout as String).trim(), 'OI-21');
+    expect((r.stdout as String).trim(), 'OI-21',
+        reason: 'local main holds 20 (merged, unpushed); re-issuing it is the collision this term prevents');
   });
 
   test('--reserve rejects 0 and leading zeros with exit 64 and reserves nothing', () {
@@ -381,21 +389,25 @@ void main() {
     final f = _Fixture.create('sibling');
     addTearDown(f.dispose);
     final c = f.clones[0];
-    // Branch `sib` mints 14 and commits its stub; we return to main, whose
-    // board lacks 14 and whose origin/main lacks 14 -- the state a SECOND
+    // Branch `sib` mints N and commits its stub; we return to main, whose
+    // board lacks N and whose origin/main lacks N -- the state a SECOND
     // worktree sees when it is told "reserved-but-unfiled".
     _run('git', ['checkout', '-q', '-b', 'sib'], c);
-    expect(f.mint(c, ['sibling fourteen']).exitCode, 0);
+    final minted = f.mint(c, ['sibling issue']);
+    expect(minted.exitCode, 0, reason: '${minted.stdout}\n${minted.stderr}');
+    // Derive N from the mint itself (the seeded boards hold OI-1..3, so this
+    // is 4 today -- but the test must not depend on that).
+    final n = int.parse(RegExp(r'OI-(\d+)').firstMatch(minted.stdout as String)!.group(1)!);
     _run('git', ['add', '-A'], c);
-    _run('git', ['commit', '-q', '-m', 'sib files 14'], c);
+    _run('git', ['commit', '-q', '-m', 'sib files OI-$n'], c);
     _run('git', ['checkout', '-q', 'main'], c);
-    final r = f.mint(c, ['--release', '14']);
+    final r = f.mint(c, ['--release', '$n']);
     expect(r.exitCode, 3, reason: '${r.stdout}\n${r.stderr}');
     expect(r.stderr as String, contains('LOCAL BRANCH'));
-    expect(f.remoteReservations(), {14});
+    expect(f.remoteReservations(), {n});
     // And --next does not list it as unfiled either.
-    final n = f.mint(c, ['--next']);
-    expect((n.stdout as String), contains('UNFILED=\n'));
+    final next = f.mint(c, ['--next']);
+    expect((next.stdout as String), contains('UNFILED=\n'));
   });
 }
 ```
