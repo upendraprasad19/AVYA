@@ -276,9 +276,12 @@ class CoachInteractionRepository {
   /// Coach-CHAT channels. A locally-written coach row has no `channel`; a
   /// restored row carries its cloud `channel` (see `_restoreCoachInteractions`),
   /// so a non-chat interaction (`food_text_analysis` / `scan_meal` /
-  /// `cart_auditor` / `verify_payment_attempt` / `weekly_report`) is excluded
-  /// from the replayed history (Hermes P2 — restored non-chat rows must not
-  /// masquerade as prior coach turns).
+  /// `cart_auditor` / `weekly_report`) is excluded from the replayed history
+  /// (Hermes P2 — restored non-chat rows must not masquerade as prior coach
+  /// turns). `verify_payment_attempt` was dropped from this example list
+  /// (OI-162 slice 4, f2c8d5) — that channel is retired and no row carries
+  /// it any more; this is illustrative example-list drift only, since the
+  /// exclusion below is allowlist-based, not a check against this comment.
   static const Set<String> _coachChatChannels = {'app', 'chat', 'in_app_orphan'};
 
   List<Map<String, dynamic>> recentHistoryExchanges(

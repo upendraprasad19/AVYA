@@ -66,11 +66,18 @@ if (
   throw new Error("[delete-account] required env vars not set");
 }
 
-// Rate-limit config (Hermes-R2 #9): 5 attempts per user per hour. Counted via
-// `ai_coach_interactions` rows with channel='delete_account_attempt'. Mirrors
-// the verify-payment rate-limit pattern.
+// Rate-limit config (Hermes-R2 #9, 7ad009; moved onto usage_counters OI-162
+// slice 4, f2c8d5): 5 attempts per user per hour, enforced atomically via
+// `consume_quota()` against `usage_counters` (quota_key `delete_account`).
+// ⚠ The PRIOR mechanism (count(*) on ai_coach_interactions rows with
+// channel='delete_account_attempt') NEVER WORKED — that table has no
+// `prompt_snippet`/`response_snippet` columns and `user_message` is NOT NULL
+// with no default, so the fire-and-forget insert failed every time into a
+// handler that only logged a warning. `attemptCount` was structurally always
+// 0 and this limit has never fired in production. See f2c8d5.
 const RATE_LIMIT_MAX = 5;
-const RATE_LIMIT_WINDOW_MINUTES = 60;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour, FIXED bucket (not rolling)
+const RATE_LIMIT_QUOTA_KEY = "delete_account";
 
 // ── Helper: sanitized error response (no PII, no stack traces) ───────────────
 function jsonError(
@@ -135,59 +142,65 @@ serve(async (req: Request) => {
     // Admin client for all privileged operations below
     const admin = createClient(SUPABASE_URL as string, SERVICE_ROLE as string);
 
-    // ── 2. RATE LIMIT (Hermes-R2 #9, 7ad009) ─────────────────────────────────
-    // 5 attempts per user per hour. Counted via ai_coach_interactions rows
-    // with channel='delete_account_attempt'. Prevents DoS where a malicious
-    // actor knowing a target's 8-char user_id prefix repeatedly attempts
-    // deletion (each attempt fires Razorpay + DB queries before the 400 reject).
-    const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000).toISOString();
-    const { count: attemptCount, error: rateErr } = await admin
-      .from("ai_coach_interactions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("channel", "delete_account_attempt")
-      .gte("created_at", windowStart);
+    // ── 2. RATE LIMIT (Hermes-R2 #9, 7ad009; OI-162 slice 4, f2c8d5) ─────────
+    // 5 attempts per user per hour. Prevents DoS where a malicious actor
+    // knowing a target's 8-char user_id prefix repeatedly attempts deletion
+    // (each attempt fires Razorpay + DB queries before the 400 reject).
+    // `consume_quota()` both CHECKS and INCREMENTS atomically — one call
+    // replaces the old count-then-insert pair, which was never atomic and
+    // (per the header note above) never actually wrote anything either.
+    // FIXED bucket, not rolling: consume_quota's PK includes window_start, so
+    // this permits a burst of up to 2x the limit across a bucket boundary
+    // (5 near :59, 5 more at :00). Accepted — the confirmation-token check
+    // below (caller's own 8-char user-id prefix) is the primary control; this
+    // limit is secondary defense-in-depth, not a cross-account guard (a
+    // caller can only ever rate-limit their OWN account, since userId comes
+    // from their own validated JWT).
+    // Hermes L21 F3 (2026-09-11): deliberately UTC epoch-floor, not IST,
+    // and stated rather than left to look like an oversight against
+    // CLAUDE.md §4.5's IST rule — that rule governs user-visible DAILY
+    // reset moments, and this is a sub-day rate-limit bucket with no
+    // user-visible reset; only bucket DURATION is observable (via
+    // Retry-After), and duration is timezone-invariant. Full reasoning:
+    // diagnose f2c8d5's `ist_handling` field.
+    const bucketStartMs =
+      Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS) * RATE_LIMIT_WINDOW_MS;
+    const bucketStart = new Date(bucketStartMs).toISOString();
+    const { data: usedCount, error: rateErr } = await admin.rpc(
+      "consume_quota",
+      {
+        p_user_id: userId,
+        p_quota_key: RATE_LIMIT_QUOTA_KEY,
+        p_window_start: bucketStart,
+        p_limit: RATE_LIMIT_MAX,
+      },
+    );
 
     if (rateErr) {
-      // Fail-open: log + continue. We don't want a counter-query failure to
-      // block account deletion. (Diff from verify-payment which fail-closes;
-      // here the user is exercising a right, not making a payment.)
+      // Fail-open: log + continue. A DPDP §17 erasure is a legal right and
+      // must not be blocked by a counter outage. (Deliberately DIFFERENT from
+      // verify-payment below, which now fails CLOSED — see that file's
+      // comment for why the two differ.)
       console.warn(
-        `[delete-account] request_id=${requestId} rate-limit query failed (fail-open):`,
+        `[delete-account] request_id=${requestId} consume_quota failed (fail-open):`,
         rateErr.message,
       );
-    } else if ((attemptCount ?? 0) >= RATE_LIMIT_MAX) {
+    } else if (usedCount === -1) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((bucketStartMs + RATE_LIMIT_WINDOW_MS - Date.now()) / 1000),
+      );
       console.warn(
-        `[delete-account] request_id=${requestId} user=${userId} rate-limited:` +
-          ` ${attemptCount}/${RATE_LIMIT_MAX} attempts in last ${RATE_LIMIT_WINDOW_MINUTES}min`,
+        `[delete-account] request_id=${requestId} user=${userId} rate-limited ` +
+          `(quota_key=${RATE_LIMIT_QUOTA_KEY}, limit=${RATE_LIMIT_MAX})`,
       );
       return jsonError(
         429,
         "rate_limited",
         requestId,
-        { "Retry-After": String(RATE_LIMIT_WINDOW_MINUTES * 60) },
+        { "Retry-After": String(retryAfterSeconds) },
       );
     }
-
-    // Record this attempt (whether it succeeds or fails downstream). Fire-and-
-    // forget; counter accuracy is best-effort.
-    admin
-      .from("ai_coach_interactions")
-      .insert({
-        user_id: userId,
-        channel: "delete_account_attempt",
-        prompt_snippet: `request_id=${requestId}`,
-        response_snippet: null,
-        model_used: "none",
-      })
-      .then(({ error }) => {
-        if (error) {
-          console.warn(
-            `[delete-account] request_id=${requestId} attempt-counter insert failed (non-fatal):`,
-            error.message,
-          );
-        }
-      });
 
     // ── 3. CONFIRMATION TOKEN ────────────────────────────────────────────────
     // Prevents a stolen JWT replay from triggering deletion without also knowing

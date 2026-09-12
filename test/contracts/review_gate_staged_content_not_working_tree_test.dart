@@ -278,9 +278,13 @@ void main() {
           // check_code_review_pass_exists.dart, or this computes a different
           // oracle and the test passes by coincidence (round-2 review P2-C
           // caught exactly that: the pre-P3-2 form here happened to agree at
-          // the repo root and diverged from a subdirectory).
+          // the repo root and diverged from a subdirectory). The SKILL.md
+          // exclude (OI-162 slice 4 B-pass addendum) is inert for THIS
+          // fixture — it stages no such path — but is kept here for the same
+          // byte-identical-argv reason, not because this fixture exercises it.
           'git', ['-C', tmp.path, 'diff', '--cached', '--', ':(top)',
-              ':(top,exclude)docs/reviews'],
+              ':(top,exclude)docs/reviews',
+              ':(top,exclude).claude/skills/code-review/SKILL.md'],
           stdoutEncoding: null,
           environment: Map<String, String>.from(Platform.environment)
             ..removeWhere((k, _) => _gitEnvKeysToStrip.contains(k.toUpperCase())),
@@ -342,6 +346,42 @@ void main() {
               'covered docs/reviews/, adding the file would move the hash and '
               'the gate would now demand a differently-named file, making the '
               'requirement unsatisfiable');
+      expect('${r.stdout}${r.stderr}', contains(rel));
+    });
+
+    test(
+        'staging the §5.1-required SKILL.md tuning entry alongside the '
+        'review does not move the demanded hash', () async {
+      // Reproduces the live failure this addendum fixes: §5.1's own gate
+      // (check_skill_tuning_history.dart) requires a same-dated Tuning-
+      // history entry in .claude/skills/code-review/SKILL.md in the SAME
+      // commit as any new docs/reviews/**.md. Before the exclusion, staging
+      // that required entry moved stagedDiffHash()'s result, so the gate
+      // demanded a DIFFERENT filename than the one the review was actually
+      // written to — unsatisfiable without either a manual rename loop or
+      // this exclusion.
+      final s = await setUpCatastrophicRepo('oi162s4_skillmd_test');
+      addTearDown(() => s.tmp.delete(recursive: true));
+
+      final rel = 'docs/reviews/${s.hash}-review.md';
+      await File('${s.tmp.path}/$rel').writeAsString('---\nverdict: accepted\n---\n');
+      await _git(s.tmp.path, ['add', rel]);
+
+      // Stage an edit to the exact path the exclusion names — content is
+      // irrelevant; only its presence in the staged diff matters here.
+      final skillDir = Directory('${s.tmp.path}/.claude/skills/code-review');
+      await skillDir.create(recursive: true);
+      final skillFile = File('${skillDir.path}/SKILL.md');
+      await skillFile.writeAsString('# code-review\n\n## Tuning history\n');
+      await _git(s.tmp.path, ['add', '.claude/skills/code-review/SKILL.md']);
+
+      final r = await runGate(s.tmp);
+      expect(r.exitCode, 0,
+          reason: 'staging the REQUIRED SKILL.md tuning entry must not move '
+              'the hash away from the review file that was actually written '
+              '— if it does, the gate demands a filename nothing on disk '
+              'carries, and no rename can catch up (editing SKILL.md to fix '
+              'the filename reference moves the hash again)');
       expect('${r.stdout}${r.stderr}', contains(rel));
     });
 

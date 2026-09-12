@@ -208,6 +208,43 @@ void main() {
       expect(src, contains('support@icanbefitter.com'));
     });
 
+    // ── 429 rate-limit handling (OI-162 slice 4, f2c8d5) ─────────────────
+    // The delete-account rate limit (5/hour, consume_quota) was structurally
+    // inert before this batch, so a 429 branch was previously unreachable —
+    // Hermes L29 F1. Membership alone ("rate_limited" appears somewhere) is
+    // not enough (see feedback_mistake_guard_without_its_mirror.md #26):
+    // pin that the STATUS-429 CHECK itself leads to the rate_limited code,
+    // not that the string exists anywhere in the file.
+    test('FunctionException status 429 maps to rate_limited, not a sibling branch', () {
+      final checkIdx = src.indexOf('e.status == 429');
+      expect(checkIdx, isNot(-1),
+          reason: 'catch block must check FunctionException.status == 429');
+      final nextBranchIdx = src.indexOf("msg.contains('razorpay_cancel_failed')");
+      expect(nextBranchIdx, greaterThan(checkIdx),
+          reason: 'razorpay_cancel_failed branch must come after the 429 check');
+      final window = src.substring(checkIdx, nextBranchIdx);
+      expect(
+        window,
+        contains("_showError('rate_limited')"),
+        reason: 'the 429 status check must lead to _showError(\'rate_limited\'), '
+            'not fall through to a sibling branch',
+      );
+    });
+
+    test('rate_limited switch case has its own distinct message', () {
+      expect(src, contains("case 'rate_limited':"));
+      final caseIdx = src.indexOf("case 'rate_limited':");
+      final defaultIdx = src.indexOf('default:');
+      expect(defaultIdx, greaterThan(caseIdx));
+      final window = src.substring(caseIdx, defaultIdx);
+      expect(
+        window,
+        isNot(contains("Couldn't delete account. Try again or contact support.")),
+        reason: 'rate_limited must not silently reuse the generic message — '
+            'a transient rate-limit reads as a hard failure otherwise',
+      );
+    });
+
     // ── Hive + signOut on success ─────────────────────────────────────────
     test('Calls clearAllData on success path', () {
       expect(

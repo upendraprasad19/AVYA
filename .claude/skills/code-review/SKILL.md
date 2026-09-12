@@ -212,6 +212,103 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-11** — blast-radius **catastrophic** — branch
+  `oi162-slice4-windowed-counters`, OI-162 slice 4 (diagnose `f2c8d5`).
+  **4 findings (0 P0, 1 P1, 1 P2, 2 P3); 0 false_alarm — all 4 triaged
+  accepted and fixed.** Review, as of THIS episode:
+  `docs/reviews/1486254681fb-review.md` (renamed from `12408db06b47-review.md`
+  — the batch grew after dispatch; see that file's own "Post-dispatch
+  remediation" section). ⚠ Renamed twice more after the second entry below —
+  its FINAL location is `docs/reviews/3cd1891ee7eb-review.md`; this bullet is
+  left naming the intermediate hash deliberately, as an accurate record of
+  what THIS episode produced, not a live pointer.
+  **The P1 is the SAME shape this file already recorded for slice 1 of this
+  exact series six days earlier, and it recurred anyway.** The 2026-09-05
+  `oi162-delete-account-counter` entry below says outright: "the keystone
+  plan-review record for the branch simply did not exist yet." Slice 4 hit
+  the identical gap — no `docs/plan-reviews/oi162-slice4-windowed-counters.md`
+  exists, staged or committed, despite two real review rounds having run
+  (`docs/audit/oi162-slice4-plan.md`, `oi162-slice4-review-continuity.md`,
+  neither of which opens with the `---` frontmatter the gate parses) — and,
+  being catastrophic this time (slice 1 was platform), it is missing not
+  just `bpass: accepted` but `hermes: accepted` too, with zero evidence a
+  Hermes pass was ever run against this branch. **Recording a lesson in this
+  file does not, by itself, stop the SAME multi-slice project from repeating
+  it a few slices later** — the fix that would is structural (a check keyed
+  on branch name, run the moment a diagnose-doc citing that branch is
+  staged), not another sentence here.
+  **Second — a new nuance for the self-attesting-artifact family: a batch
+  can file SOME of its own tangential discoveries as OIs and not others, and
+  the asymmetry itself is the tell.** This batch's review round 2 surfaced
+  two out-of-scope defects — a payment-grace-window mismatch and a dormant
+  NULL-channel guard gap in an untouched trigger (`enforce_vision_analysis_
+  daily_limit`'s `NOT IN` is not NULL-safe, unlike its two siblings' `IS
+  DISTINCT FROM`). The first got a full `OI-182` entry with every required
+  field; the second lives only in prose inside
+  `docs/audit/oi162-slice4-channel-enumeration.md` with no board entry at
+  all, despite the same document explicitly labelling it a
+  `guard_without_its_mirror`-class defect. Nothing about the second was less
+  real or less findable — it was simply the SECOND finding of the same kind
+  in the same round, and the batch's own filing discipline visibly ran out
+  between the two. Ask, of any batch that files ONE out-of-scope discovery
+  as an OI: did it find others, and did they all get the same treatment?
+  **A negative result worth keeping.** The two new contract tests were run
+  live (13/13 green), and the diagnose-doc's own 6-mutation proof table was
+  spot-checked byte-for-byte against the real files (4 line citations, all
+  exact) rather than trusted, then independently extended with a 5th
+  mutation not in their table (`RATE_LIMIT_MAX` 5→6), which reddened exactly
+  the one expected assertion. The fail-open-vs-fail-closed asymmetry the
+  dispatch prompt asked to confirm was traced in both files' actual control
+  flow and matches the claim exactly.
+  False-alarm rate 0/4 → no change to lenses 1-8.
+
+- **2026-09-11 (second entry today)** — blast-radius **catastrophic** — same
+  branch `oi162-slice4-windowed-counters`, OI-162 slice 4, second remediation
+  round. Review file renamed a SECOND time (`1486254681fb-review.md` →
+  `016af81ca391-review.md`), a THIRD (→ `42ed72d24303`), and a FOURTH (→
+  final `docs/reviews/3cd1891ee7eb-review.md`) — not a new dispatch, but the
+  `/hermes-pass` remediation this same review's own Finding 1 demanded moved
+  the staged-diff hash again, and `check_code_review_pass_exists.dart`
+  correctly re-blocked the commit on the STALE filename until the rename
+  landed. **Tuning — the self-attesting-artifact family (this file's own
+  `2026-09-08`/`2026-09-05` entries) has a THIRD member: a review file's
+  identity is pinned to a MOVING TARGET (the staged-diff hash), and any
+  substantive work landing after `verdict: accepted` — even work the review
+  itself explicitly called for — re-opens that pin.** This is not a defect
+  in the gate; re-blocking on a stale hash is exactly what stops an accepted
+  review from silently certifying content it never saw.
+  **The sharper half, learned by hitting it: a PROSE CITATION of the
+  review's hash-named path, in any file the hash covers, can never be made
+  correct — fixing the citation moves the hash the citation names.** Three
+  such citations (the OI-183 board entry, the diagnose-doc, the migrations
+  CLAUDE.md pitfall row) each cost one rename cycle before this was seen
+  for what it is: a fixed-point problem on a cryptographic hash, with no
+  solution. The fix is structural, and it is what every catastrophic
+  batch since OI-72 has done, checked against `git log` on
+  `docs/plan-reviews/*.md` (six of the last seven landed the record in a
+  SEPARATE docs-tier commit): prose cites the plan-review record — keyed
+  on the BRANCH NAME, stable — whose `bpass_review:` field is the one
+  authoritative, gate-validated pointer; and that record lands in its own
+  follow-on commit, where the blast radius is `feature` and the hash gate
+  does not fire. **And the FOURTH rename had a different cause worth its
+  own sentence: a direct `dart run check_code_review_pass_exists.dart`
+  reports the hash of the index AS IT IS, but `pre-commit.sh` first
+  REGENERATES and re-stages `OPEN_INDEX.md` / `INDEX.md` / `GATE_INDEX.md`
+  from the board and diagnose-docs — so an `open_issues.md` edit moves the
+  hash a SECOND time, only when the hook runs.** Read the expected hash
+  from the hook's own failure output (or run the hook once, THEN the
+  direct gate), never from a direct run on a stale index.
+  `check_skill_tuning_history.dart` also fired on the
+  renamed file as if newly added (it is, from git's perspective, unless the
+  rename is staged as a pure rename with zero content change — this one
+  carried a substantive addendum, so it is not) — a second same-day bullet
+  was required here for exactly that reason; a bullet is owed per LANDED
+  review file, not per calendar day or per distinct review episode.
+  16 further findings from the Hermes pass (3 P1, 4 P2, 5 P3, 4
+  verified_clean/false_alarm) — full detail in
+  `docs/audit/2026-09-11-hermes-oi162-slice4-windowed-counters.md`, not
+  duplicated here. All 16 reached a terminal state in this same batch.
+
 - **2026-09-10 (second entry today)** — blast-radius **platform** — branch
   `realtime-pro-gate` (the e4a7c9 realtime PRO gate, cherry-picked onto a main 25
   days newer). **6 findings (0 P0, 2 P1, 3 P2, 1 P3); 0 false_alarm.** Review:

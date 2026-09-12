@@ -31,6 +31,18 @@
 // and still fails on an UNEXPECTED one — which is the thing actually worth
 // catching. Add a slice's new call site here in the SAME commit that migrates
 // it, with the reason; never widen it to make a red run green.
+//
+// ⚠ AND IT HAPPENED A THIRD TIME IN SLICE 4 (2026-09-12, f2c8d5): the slice
+// moved delete-account and verify-payment onto consume_quota, passed a B-pass,
+// a 9-lens Hermes pass and every targeted run, and was merged — and the
+// pre-push FULL SUITE failed exactly two assertions, both in this file, which
+// the batch never opened. Same class as slice 3a (#34) and the slice 3b review
+// finding (#26). This file is the CENSUS of the migration: every slice that
+// moves a reader owes it an edit in the SAME commit. The grep that finds it is
+// `grep -rln '<changed-file-basename>' test/` — run it, do not recall it.
+// Slice 4 also exposed that the `stillLegacy` contains() read the RAW file and
+// was satisfied by a COMMENT in delete-account; it now reads comment-stripped
+// source like the two allowlist tests above it.
 
 import 'dart:io';
 
@@ -180,9 +192,20 @@ void main() {
       // it RAISES on exhaustion, which would make the unconditional
       // conversation-log insert throw and force the refusal path to be
       // restructured around an exception.
+      //
+      // delete-account and verify-payment (OI-162 slice 4, f2c8d5) are the
+      // weekly-report shape exactly: the thing being limited is an HTTP
+      // ATTEMPT (a deletion request / a verification request), and nothing is
+      // INSERTed at the moment the limit is decided — the old design's
+      // attempt-row insert was the bug (never written; delete-account's never
+      // ran at all), so there is no row for a trigger to hang off. Each EF
+      // calls the RPC itself, with a FIXED UTC bucket as p_window_start
+      // (5/hour and 20/10min respectively).
       const allowed = {
         'supabase/functions/weekly-report/index.ts',
         'supabase/functions/ai-media-proxy/index.ts',
+        'supabase/functions/delete-account/index.ts',
+        'supabase/functions/verify-payment/index.ts',
       };
       final offenders = <String>[];
       for (final e in _appSources()) {
@@ -202,15 +225,17 @@ void main() {
       }
     });
 
-    test('the THREE remaining legacy quota readers are still on the old table',
-        () {
+    test('the ONE remaining legacy quota reader is still on the old table', () {
       // Stated as an invariant so no batch can be misread as having fixed the
       // whole bug. Nine quota readers existed; slice 2 moved THREE (the chat /
       // vision / food_text cap triggers), slice 3a moved ONE (weekly-report),
-      // and slice 3b moved TWO (ai-media-proxy's free-image lifetime meter and
+      // slice 3b moved TWO (ai-media-proxy's free-image lifetime meter and
       // its dead client twin, which was DELETED rather than repointed —
-      // repointing a method with zero callers would be inventing a reader).
-      // THREE remain, across three files.
+      // repointing a method with zero callers would be inventing a reader),
+      // and slice 4 moved TWO (the delete-account and verify-payment attempt
+      // limiters, f2c8d5). ONE remains: OI-153's dormant PRO image cap, which
+      // is a PRODUCT decision (migrating it would ACTIVATE a cap that has
+      // never fired), not a pending code slice.
       //
       // ⚠ THIS TEST WAS GREEN WHILE ITS OWN TITLE WAS FALSE. It said SIX and
       // checked exactly ONE representative file (ai-media-proxy), so slice 3a
@@ -230,22 +255,58 @@ void main() {
         'supabase/functions/ai-media-proxy/index.ts':
             'countProImageAnalysesToday only — the dormant PRO image cap '
                 '(OI-153). Its free-image sibling moved in slice 3b.',
-        'supabase/functions/delete-account/index.ts':
-            'delete-attempt rate limit (slice 4, catastrophic)',
-        'supabase/functions/verify-payment/index.ts':
-            'payment-verify rate limit (slice 4, catastrophic)',
       };
-      expect(stillLegacy, hasLength(3),
-          reason: 'The title says THREE. If a slice migrated one, move it out '
+      expect(stillLegacy, hasLength(1),
+          reason: 'The title says ONE. If a slice migrated it, move it out '
               'of the map AND update the title in the same commit -- a count '
               'in prose that no assertion reads is exactly how this test went '
               'stale before.');
       for (final e in stillLegacy.entries) {
-        expect(File(e.key).readAsStringSync(), contains('ai_coach_interactions'),
+        // Comment-STRIPPED, deliberately: in slice 4 the raw-file contains()
+        // stayed green for delete-account on the strength of a COMMENT that
+        // named the old table while the code had already left it. A presence
+        // grep that a comment can satisfy is not a presence grep.
+        expect(_stripDartLikeComments(File(e.key).readAsStringSync()),
+            contains('ai_coach_interactions'),
             reason: '${e.key} was expected to STILL derive a quota from '
-                'ai_coach_interactions (${e.value}). If a slice migrated it, '
-                'update this map and the count in the title -- do not delete '
-                'the entry.');
+                'ai_coach_interactions in CODE (${e.value}). If a slice '
+                'migrated it, update this map and the count in the title -- '
+                'do not delete the entry.');
+      }
+
+      // MIRROR for slice 4 (f2c8d5), one per file, same reason as the two
+      // below: what must never return is the attempt-row COUNT feeding the
+      // limiter. Both files legitimately may mention the old table in prose,
+      // so every check here is over comment-stripped source. The full
+      // write->read chain (p_user_id / p_window_start wiring, the UTC bucket,
+      // the -1 refusal mapping) is pinned in the two dedicated contracts:
+      //   test/contracts/delete_account_rate_limit_writer_to_reader_test.dart
+      //   test/contracts/verify_payment_rate_limit_writer_to_reader_test.dart
+      const slice4 = <String, ({String channel, String quotaKey})>{
+        'supabase/functions/delete-account/index.ts':
+            (channel: 'delete_account_attempt', quotaKey: 'delete_account'),
+        'supabase/functions/verify-payment/index.ts':
+            (channel: 'verify_payment_attempt', quotaKey: 'verify_payment'),
+      };
+      for (final e in slice4.entries) {
+        final src = _stripDartLikeComments(File(e.key).readAsStringSync());
+        expect(src.contains('.eq("channel", "${e.value.channel}")'), isFalse,
+            reason: '${e.key} is counting ${e.value.channel} rows again -- '
+                'slice 4 reverted, and the limiter is back on a log that '
+                'rolling-context prunes (and that this EF never wrote to).');
+        expect(src.contains('.from("ai_coach_interactions")'), isFalse,
+            reason: '${e.key} touches ai_coach_interactions in code again. '
+                'After slice 4 neither limiter file has any business with '
+                'that table; a revert restores the old count-then-insert '
+                'pair, so pin the table access as well as the channel.');
+        expect(src, contains('consume_quota'),
+            reason: '${e.key} must still WRITE the ledger. Losing the RPC '
+                'while the old count stays gone leaves NO limiter at all.');
+        expect(src, contains('"${e.value.quotaKey}"'),
+            reason: '${e.key} must still name its own quota_key '
+                '("${e.value.quotaKey}"). ONE quota_key => ONE call site => '
+                'ONE limit is a convention SQL does not enforce, so the '
+                'literal is pinned here.');
       }
 
       // MIRROR, and the half whose absence let this test go stale: weekly-report

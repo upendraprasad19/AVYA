@@ -216,48 +216,89 @@ serve(async (req: Request) => {
     //
     // Protects Razorpay API quota from a runaway client that keeps
     // polling verify-payment on every tick. Added 2026-04-18 (audit
-    // C4b). Counter lives in `ai_coach_interactions` with
-    // channel='verify_payment_attempt' — reusing the existing table
-    // so no schema change.
-    const cutoff10Min = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const { count: recentAttempts } = await supabase
-      .from("ai_coach_interactions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("channel", "verify_payment_attempt")
-      .gte("created_at", cutoff10Min);
+    // C4b); moved onto usage_counters OI-162 slice 4 (f2c8d5).
+    // `consume_quota()` CHECKS and INCREMENTS atomically — one call
+    // replaces the old count-then-insert pair, which was non-atomic AND
+    // (before this fix) read `{ count }` only, never `{ error }`, so a
+    // counter-query failure silently proceeded as if under the limit
+    // (fail-open BY OMISSION, not by design — unlike delete-account's
+    // documented fail-open above, which IS deliberate).
+    //
+    // FAILS CLOSED here, unlike delete-account: this endpoint is a
+    // background confirmation step, not the primary activation path — PRO
+    // unlocks OPTIMISTICALLY in Hive the instant Razorpay reports success
+    // (razorpay_service.dart, "Fix 2 · OPTIMISTIC LOCAL ACTIVATION"), the
+    // webhook is an independent authoritative path, and the client retries
+    // this call at 60s/5m/15m regardless. A refused call here costs almost
+    // nothing user-visible; a fail-open call under a correlated Postgres
+    // hiccup releases the exact brake this limit exists to protect, at the
+    // exact moment a retry storm is most dangerous to the Razorpay quota.
+    const RATE_LIMIT_MAX = 20;
+    const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes, FIXED bucket
+    const RATE_LIMIT_QUOTA_KEY = "verify_payment";
+    // Hermes L21 F3 (2026-09-11): deliberately UTC epoch-floor, not IST —
+    // see delete-account/index.ts's identical note for the full reasoning
+    // (also diagnose f2c8d5's `ist_handling` field). Same shape here: a
+    // sub-day bucket with no user-visible reset, so duration (timezone-
+    // invariant) is the only observable property, not a calendar boundary.
+    const bucketStartMs =
+      Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS) * RATE_LIMIT_WINDOW_MS;
+    const bucketStart = new Date(bucketStartMs).toISOString();
+    const { data: usedCount, error: rateErr } = await supabase.rpc(
+      "consume_quota",
+      {
+        p_user_id: userId,
+        p_quota_key: RATE_LIMIT_QUOTA_KEY,
+        p_window_start: bucketStart,
+        p_limit: RATE_LIMIT_MAX,
+      },
+    );
 
-    if ((recentAttempts ?? 0) >= 20) {
+    if (rateErr) {
+      console.error(
+        `[verify-payment] consume_quota FAILED for user=${userId} (fail-closed):`,
+        rateErr.message,
+      );
+      return new Response(
+        JSON.stringify({ error: "Rate limit check failed. Try again shortly." }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    if (usedCount === -1) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((bucketStartMs + RATE_LIMIT_WINDOW_MS - Date.now()) / 1000),
+      );
+      // Hermes L29 F2 (2026-09-11): this refusal had NO server-side log —
+      // an operator watching prod has zero visibility into how often the
+      // 20/10min limit actually fires, which matters for tuning it and for
+      // spotting abuse. Mirrors delete-account's equivalent warn (this
+      // file's own fail-closed branch above already logs `user=${userId}`
+      // in the same style — no request_id is computed this early in this
+      // file, unlike delete-account, so this matches the LOCAL convention).
+      console.warn(
+        `[verify-payment] user=${userId} rate-limited ` +
+          `(quota_key=${RATE_LIMIT_QUOTA_KEY}, limit=${RATE_LIMIT_MAX})`,
+      );
       return new Response(
         JSON.stringify({
           error: "Too many verification attempts. Try again in a few minutes.",
-          retry_after_seconds: 600,
+          retry_after_seconds: retryAfterSeconds,
         }),
         {
           status: 429,
           headers: {
             ...corsHeaders,
             "Content-Type": "application/json",
-            "Retry-After": "600",
+            "Retry-After": String(retryAfterSeconds),
           },
         },
       );
     }
-
-    // Record this attempt (fire-and-forget — never block on telemetry).
-    supabase
-      .from("ai_coach_interactions")
-      .insert({
-        user_id: userId,
-        channel: "verify_payment_attempt",
-        user_message: "[verify-payment]",
-        ai_response: "",
-        model_used: "n/a",
-        tokens_used: 0,
-      })
-      .then((r: { error: unknown }) => {
-        if (r.error) console.error("[verify-payment] attempt log failed:", r.error);
-      });
 
     // ── Parse body ─────────────────────────────────────────────
     const body = await req.json();
@@ -490,10 +531,17 @@ serve(async (req: Request) => {
     // NB: a different `existingSub` (active-only, early-return) is declared near
     // the top of this handler — this idempotency pre-SELECT MUST use a distinct
     // name or the duplicate `const` is a module-load SyntaxError (Hermes L21/L36).
+    // Hermes L23 (2026-09-11, PARTIAL — not independently exploitable: by
+    // this point `payment.notes.user_id === userId` is already enforced
+    // above, so `paymentId` is already proven to belong to this caller).
+    // `.eq("user_id", userId)` added anyway as defense-in-depth — cheap, and
+    // guards this read even if a future refactor ever reordered the checks
+    // above or reached this line by a path that skipped them.
     const { data: paymentSubRow, error: preSelectError } = await supabase
       .from("subscriptions")
       .select("id, end_date")
       .eq("razorpay_payment_id", paymentId)
+      .eq("user_id", userId)
       .maybeSingle();
     if (preSelectError) {
       console.warn(
@@ -559,6 +607,7 @@ serve(async (req: Request) => {
           .from("subscriptions")
           .select("end_date")
           .eq("razorpay_payment_id", paymentId)
+          .eq("user_id", userId)
           .maybeSingle();
         const raceEnd = (raceRow as { end_date?: string } | null)?.end_date;
         if (raceEnd) canonicalEndDateIso = raceEnd;

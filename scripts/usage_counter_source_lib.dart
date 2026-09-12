@@ -161,8 +161,15 @@ const Map<String, int> allowedEdgeFunctionSites = {
   // prod data), so migrating it would ACTIVATE a cap that has never fired.
   // That is a product decision, deliberately not made here.
   'supabase/functions/ai-media-proxy/index.ts': 1, // pro-image IST day (OI-153)
-  'supabase/functions/delete-account/index.ts': 1, // 5 attempts / 60 min
-  'supabase/functions/verify-payment/index.ts': 1, // 20 attempts / 10 min
+  // OI-162 slice 4 (f2c8d5): RATCHETED both 1 -> 0. Both rate limits now
+  // enforce via consume_quota() against usage_counters (quota_key
+  // 'delete_account' / 'verify_payment') — no read of ai_coach_interactions
+  // remains in either file. Same reasoning as weekly-report's 1 -> 0 below:
+  // `sweep()` only flags `count > allowed`, so leaving these at 1 would let a
+  // REVERT back to the old count-then-insert pattern pass silently. Dropping
+  // to 0 converts each entry from permissive to proof-of-landing.
+  'supabase/functions/delete-account/index.ts': 0, // was: 5 attempts / 60 min
+  'supabase/functions/verify-payment/index.ts': 0, // was: 20 attempts / 10 min
   // OI-162 slice 3a: RATCHETED 1 -> 0. weekly-report's first-free gate now
   // reads usage_counters, so it holds ZERO quota counters on the old table.
   // A 0 is not decoration: `sweep()` only flags `count > allowed`, so leaving

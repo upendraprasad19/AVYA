@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### delete_account_rate_limit, verify_payment_rate_limit (1 bugs)
+- 2026-09-11 f2c8d5 — TWO independent rate limits, plus a privilege gap the fix for both exposes. (A) delete-account's 5/60min limit NEVER FUNCTIONED: its fire-and-forget insert targeted two columns (prompt_snippet,…
+
 ### safe_push_terminal_result_record (1 bugs)
 - 2026-09-10 a7f3c1 — `safe_push.sh` distinguishes THREE outcomes — 0 LANDED, 1 FAILED, 2 UNVERIFIED — and nothing recorded WHICH one happened. The only in-flight evidence was the lock's `holder` file, and…
 
@@ -1156,6 +1159,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-11 | f2c8d5 | TWO independent rate limits, plus a privilege gap the fix for both exposes. (A) delete-account's 5/60min limit NEVER FUNCTIONED: its fire-and-forget insert targeted two columns (prompt_snippet,… | delete_account_rate_limit, verify_payment_rate_limit | test/contracts/delete_account_rate_limit_writer_to_reader_test.dart, test/contracts/verify_payment_rate_limit_writer_to_reader_test.dart, test/contracts/usage_quota_ledger_writer_to_reader_test.dart |
 | 2026-09-10 | a7f3c1 | `safe_push.sh` distinguishes THREE outcomes — 0 LANDED, 1 FAILED, 2 UNVERIFIED — and nothing recorded WHICH one happened. The only in-flight evidence was the lock's `holder` file, and… | safe_push_terminal_result_record | test/scripts/push_result_lib_test.dart |
 | 2026-09-08 | c4e8b2 | After any cloud restore — reinstall, new device, or the background restore most returning users get on cold start — every Train-screen day badge read one too high. Monday of week 1 rendered `D2`;… | `day_of_week` has one meaning in the app — 0=Mon..6=Sun — asserted at `tool_dispatcher.dart:695` in a comment and relied on by every reader (`train_provider.dart:619` and `:816` compute `(week - 1) * 7 + day_of_week + 1`). Dart's `DateTime.weekday` is 1..7, so every writer has to remember to subtract one. Most did. The sync push did not: it discarded the correct stored value and re-derived `parsedDate.weekday`.
 What made it durable rather than transient is the ORDER of the restore's merge. The cloud value was written AFTER the `...existingMap` spread, so it overwrote a correct local 0..6 with a wrong 1..7 on every restore. A field that is a pure function of the row's own date was being round-tripped through the network and coming back worse.

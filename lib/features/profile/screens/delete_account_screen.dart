@@ -135,6 +135,13 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
           // the Hermes E-pass flagged — a plain Exception, not a
           // FunctionException). Obs#9: used to fall through to the opaque generic.
           _showError('session_expired');
+        } else if (e is FunctionException && e.status == 429) {
+          // OI-162 slice 4 (f2c8d5): the delete_account rate limit (5/hour)
+          // is now live via consume_quota — previously always inert, so this
+          // branch was unreachable until this batch. Without it, a genuine
+          // 429 fell through to the generic "try again" message, which reads
+          // as a real failure rather than a wait-and-retry.
+          _showError('rate_limited');
         } else if (msg.contains('razorpay_cancel_failed')) {
           _showError('razorpay_cancel_failed');
         } else if (msg.contains('confirmation_token_mismatch')) {
@@ -159,6 +166,9 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
         break;
       case 'confirmation_token_mismatch':
         message = "Confirmation didn't match. Please try again.";
+        break;
+      case 'rate_limited':
+        message = "Too many attempts. Please wait a while and try again.";
         break;
       default:
         message =

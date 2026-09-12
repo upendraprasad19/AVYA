@@ -82,6 +82,47 @@ void main() {
       );
     });
 
+    test('both idempotency subscriptions reads by razorpay_payment_id are '
+        'ALSO scoped to user_id (Hermes L23, 2026-09-11 — defense-in-depth)',
+        () {
+      // Not independently exploitable — payment.notes.user_id is already
+      // proven == the caller's userId by the guard pinned above, before
+      // either read below runs. Added anyway: a bare .eq("razorpay_payment_id",
+      // paymentId) with no .eq("user_id", ...) is a "non-local" read (L23's
+      // term) that would matter if a future refactor ever reordered the
+      // ownership check above this line or reached it by a path that skips
+      // it. ASSOCIATION, not membership: pin that user_id is queried in the
+      // SAME statement as razorpay_payment_id, for BOTH read sites — one
+      // fixed instance is not proof the sibling site got the same treatment.
+      final src = File(_path).readAsStringSync();
+
+      final subscriptionsReadBlocks = RegExp(
+        r'\.from\("subscriptions"\)[\s\S]{0,200}?\.eq\("razorpay_payment_id",\s*paymentId\)[\s\S]{0,200}?\.maybeSingle\(\)',
+      ).allMatches(src).toList();
+
+      expect(
+        subscriptionsReadBlocks.length,
+        greaterThanOrEqualTo(2),
+        reason: 'expected at least 2 subscriptions reads keyed on '
+            'razorpay_payment_id (the idempotency pre-SELECT and the '
+            '23505-race recovery read) — found '
+            '${subscriptionsReadBlocks.length}. If this count changed, '
+            're-verify every site below still carries the user_id filter, '
+            'not just the ones this test happened to find.',
+      );
+
+      for (final m in subscriptionsReadBlocks) {
+        final block = m.group(0)!;
+        expect(
+          RegExp(r'\.eq\("user_id",\s*userId\)').hasMatch(block),
+          isTrue,
+          reason: 'a subscriptions read scoped to razorpay_payment_id must '
+              'ALSO carry .eq("user_id", userId) in the same statement — '
+              'found a read missing it:\n$block',
+        );
+      }
+    });
+
     test('400 body says "Missing user_id in payment notes"', () {
       // Pins the error string so client-side error mapping
       // (`AiService._extractError`) can match it deterministically.

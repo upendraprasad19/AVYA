@@ -913,5 +913,14 @@
     "slug": "cap_triggers_use_usage_counters",
     "cloud_version": "20260905071759",
     "note": "OI-162 slice 2. Moves the three Postgres cap triggers (enforce_chat_app_daily_limit / enforce_vision_analysis_daily_limit / enforce_food_text_daily_limit) off count(*) over ai_coach_interactions and onto consume_quota() against usage_counters. Backfill runs FIRST, before the three CREATE OR REPLACEs; a migration applies in one transaction so no session sees the new logic before the seed lands. Verified live post-apply: all three prosecdef=false (INVOKER), all three call consume_quota, none still references ai_coach_interactions, all three carry the Asia/Kolkata boundary. Backfill landed chat_app used=3 at window 2026-09-04T18:30Z (= midnight IST); vision_analysis and food_text had zero rows today so correctly produced none. The three P0001 base identifiers ai-proxy greps at index.ts:338/:524/:765 are preserved verbatim. No Edge Function or client change; no deploy. Six of nine legacy quota readers REMAIN on the old table (slices 3-4). Closes-diagnose e7c4b2."
+  },
+  {
+    "migration": "130",
+    "applied_at": "2026-09-11T17:32:05+05:30",
+    "hash": "sha256:c47a303d70f96d3c4560b2ba47afa63b4363a16b4b04f875591f09651d2daa55",
+    "applier": "founder-via-management-api",
+    "diagnose": "f2c8d5",
+    "slug": "consume_quota_revoke_public_execute",
+    "note": "OI-162 slice 4. Revokes PUBLIC/anon/authenticated EXECUTE on consume_quota() and confirms service_role retains it. Founder-applied via the Supabase Management API (the raw-curl DDL path was correctly blocked by the auto-mode classifier when the agent tried it; the founder ran the exact reviewed SQL directly). Live-verified before and after: pre-apply proacl was {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres} (four independent grant entries — anon/authenticated were NOT PUBLIC-inherited, so a PUBLIC-only revoke as migration 091 used would have been a no-op for them); post-apply proacl is {postgres=X/postgres,service_role=X/postgres} and has_function_privilege confirms anon=false, authenticated=false, service_role=true. No client or Edge Function change; both consumers (delete-account, verify-payment) already used a service_role client, unaffected. Closes-diagnose f2c8d5."
   }
 ]
