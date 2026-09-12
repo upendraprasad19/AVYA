@@ -198,6 +198,11 @@ paths:
   - { glob: "scripts/_dart_bin.sh", tier: platform }
   - { glob: "scripts/check_oi_numbering_unique.dart", tier: platform }
   - { glob: "scripts/oi_numbering_lib.dart", tier: platform }
+  # OI allocator (2026-09-12): the mint script and the SessionStart hook both fell
+  # through `scripts/**` to feature, so an edit to either alone would get no B-pass
+  # and no full suite (plan-review round 1, finding 10).
+  - { glob: "scripts/mint_oi.sh", tier: platform }
+  - { glob: "scripts/discipline_hook.dart", tier: platform }
   - { glob: "scripts/check_hooks_installed.dart", tier: platform }
   - { glob: "scripts/commit-msg.sh", tier: platform }
   - { glob: "scripts/safe_commit.sh", tier: platform }

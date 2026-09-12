@@ -8,6 +8,17 @@ diagnose pass that hasn't yet been closed by a shipped commit lives here.
 - **Append-only at the bottom.** Never re-number a closed issue; the OI
   number is its permanent identifier (referenced from diagnose-docs +
   commit messages).
+- **Numbers are ALLOCATED, never eyeballed (2026-09-12).** File a new issue with
+  `sh scripts/mint_oi.sh "<title>"` — it reserves the next free number as the
+  remote branch `oi/N` (an atomic create on GitHub, so two sessions cannot both
+  get N, laptop or cloud) and appends the stub. An UNRESERVED number FAILS the
+  commit (`check_oi_numbering_unique.dart`, Check C) at pre-commit and at
+  pre-merge-commit — adopting an orphan reservation by hand is fine. Run it in
+  YOUR worktree (§4.13) — it edits this file. A number filed before the
+  allocator existed: `sh scripts/mint_oi.sh --reserve N "<title>"`. Never mint
+  offline — the script refuses, by design. The cloud never prunes (no `gh`);
+  the next laptop mint prunes for it. Spec:
+  `docs/superpowers/specs/2026-09-12-oi-allocator-design.md`.
 - **Status transitions:**
   - `OPEN` — identified, not started
   - `IN_PROGRESS` — being worked this session
