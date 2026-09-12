@@ -31,9 +31,11 @@ shape and compares `HEAD^1` vs `HEAD^2` — two ancestors of the branch point �
 `PASS … this is a checked answer, not a skipped one`. The staged board is never compared.
 
 Collision history (board + `git log`): OI-100..105 (six at once, 2026-08-13), 106-108 → 125-127,
-128 → 130, 167-169 (three-way, 2026-09-08), and **177/178 live today** (`regen-wave-unit2` vs `main`,
-different titles). During this design's own spike another session merged `a50f260a` filing OI-185 while
-this session held "next free = 185" in context. Board max on `main` is now **185**.
+128 → 130, 167-169 (three-way, 2026-09-08), and 177/178 (`regen-wave-unit2` vs `main`, different
+titles — found by hand and renumbered to 186/187 in `de52f1e8` on 2026-09-12, **the sixth manual
+renumber**, while this spec was being written). During this design's own spike another session merged
+`a50f260a` filing OI-185 while this session held "next free = 185" in context. Board max on `main` at
+spec-commit time is **188**; the first mint will therefore be 189.
 
 **The fix has to be an allocator, not a third detector.** Sequential integers require a single
 allocation point; every tracker that has them (GitHub, Jira, Linear, Rust RFC = PR number) has one.
@@ -295,9 +297,11 @@ All new/extended files under `test/scripts/` carry `@Timeout(Duration(minutes: 6
 ## 8. Rollout
 
 1. Merge this batch (gate + script + hook + docs) via `safe_merge.sh`, push.
-2. From the laptop: `sh scripts/mint_oi.sh --next` → expect 186; no reservations yet.
-3. `regen-wave-unit2`: two fresh mints replace 177/178; sweep that branch's citations (`git grep
-   'OI-17[78]'` on the branch) — the diagnose-doc/plan-review files, and the harness memory
-   `project_regen_alignment_brainstorm_inflight.md`, which currently says "Board: OI-166/177/178/179".
-4. Every other unmerged branch holding board additions: `--reserve N` per number, at its next commit.
+2. From the laptop: `sh scripts/mint_oi.sh --next` → expect `1 + max(origin/main board)` (189 at
+   spec-commit time; re-derive, do not trust this number); no reservations yet.
+3. No in-flight collision is known at spec time (177/178 were renumbered before this landed). Every
+   unmerged branch holding board additions: `--reserve N` per number, at its next board-touching commit
+   — Check C makes this self-enforcing, with the exact command in the failure text.
+4. The harness memory `project_regen_alignment_brainstorm_inflight.md` still says "Board:
+   OI-166/177/178/179"; correct it to 186/187 when that memory is next touched.
 5. `MEMORY.md`: retire the in-flight line; write `project_oi_allocator_shipped_<ship-date>.md`.
