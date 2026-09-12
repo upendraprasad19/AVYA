@@ -1,0 +1,170 @@
+# Closure ledger — regen-wave-unit2 (OI-166 Unit 2)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key.
+#
+# WHAT PRODUCED THESE: nine plan-review rounds on prose (none returned the
+# word "converged" — rounds 7-9 found only compile-level symbol slips, which
+# is the signal the record cites for starting implementation), then the
+# implementer's own three sub-defects, a post-implementation self-verification
+# that found a fourth, and a self-initiated B-pass (one context-blind agent, 12
+# files) that found two more plus a P0 PROCESS failure.
+#
+# ⚠ Written 2026-09-12, AFTER the batch merged (`de52f1e8`) — a §4.2 gap
+# caught by the founder's post-ship audit question, not by any gate: Gate 40
+# validates ledgers that exist and nothing detects a ≥4-item batch that never
+# wrote one (Unit 1 did; Unit 2 did not). The shape worth reading: of the 15
+# entries below, two are things the batch DROPPED without recording that it
+# had (F2, F3) — an open question the board explicitly assigned to this unit,
+# and a gate whose flip this unit's predecessor said it would perform.
+
+batch: regen-wave-unit2
+plan_review_record: docs/plan-reviews/regen-wave-unit2.md
+bpass_review: docs/reviews/9c7cbabe4d3d-review.md
+merge_commit: de52f1e8
+diagnose_docs:
+  - docs/diagnoses/2026-09-11-oi166-unit2-regen-content-cycling-d7f3b2.md
+
+findings:
+  # ── Sub-defects 1-6 (diagnose d7f3b2 `concept:` items) ─────────────
+  - id: S1
+    title: "Week-bucket vs date-range divergence on a mid-week-misaligned plan_end (B's splice gate)"
+    terminal_state: closed_in_commit
+    commit: cecda187
+    verification: >
+      Gate is a literal DATE comparison (`writeRangeIsNotEmpty =
+      !today.isAfter(effectivePlanEnd)`), not a week-bucket one. Mutation C
+      (gate forced `true`) reddens exactly the expired-plan test; re-run
+      independently after the B-pass.
+
+  - id: S2
+    title: "First-generation planEnd read from Hive before the horizon it will overwrite exists"
+    terminal_state: closed_in_commit
+    commit: cecda187
+    verification: >
+      `effectivePlanEnd = isFirstGeneration ? endDate : planEnd`; behavioural
+      test through the real generate path.
+
+  - id: S3
+    title: "Commit-site qualifier / redeclaration discipline (C's two tool_dispatcher sites)"
+    terminal_state: closed_in_commit
+    commit: cecda187
+    verification: >
+      `flutter analyze lib/` 0 errors / 0 warnings on the final tree; both
+      sites read `splicePhase` / `spliceRegenStartWeek` from the planner's
+      cache getters, nothing shadowed.
+
+  - id: S4
+    title: "C's content-selection guard collapsed — an explicit-startDate call would have cycled instead of repeating the last week"
+    terminal_state: closed_in_commit
+    commit: cecda187
+    verification: >
+      Two independently-guarded ternaries on `(startDate == null && planStart
+      != null)`; test widened `weeks: 2 → 6` with a week-5 `'deload'` assertion.
+      ⚠ This fix's staging is B1 below — it was verified in the working tree
+      and not `git add`-ed until the B-pass caught it.
+
+  - id: S5
+    title: "Writer C's splice lacked writer B's zero-rows gate (the round-5 P0, reopened for the sibling writer) — B-pass F3"
+    terminal_state: closed_in_commit
+    commit: cecda187
+    verification: >
+      `results.isNotEmpty` guards both commit-site splices; race test marks every
+      row already-completed and asserts the stale blob is untouched. Mutation
+      (`+10 -1`) reddens exactly that test.
+
+  - id: S6
+    title: "Three throw-prone casts on the current_plan blob, inconsistent with currentWaveCharacters()'s documented crash-safety — B-pass F4"
+    terminal_state: closed_in_commit
+    commit: cecda187
+    verification: >
+      `is List` / `is Map` guards at all three splice sites; two malformed-blob
+      tests; each guard's removal reddens exactly its own test (orthogonal
+      mutations recorded in d7f3b2).
+
+  # ── B-pass findings not already covered above ───────────────────────
+  - id: B1
+    title: "P0 (process) — sub-defect 4's fix and its widened test were never staged; the index held the buggy form while every Read and flutter test verified the working tree"
+    terminal_state: closed_in_commit
+    commit: cecda187
+    verification: >
+      Staged; verified via `git show :<path>` that the committed blobs carry the
+      two-ternary fix and the 11-test file. Lesson recorded in the skill's
+      tuning history (lens 10, reviewer side) and — by the 2026-09-12 post-ship
+      audit — as an author-side pre-dispatch check in the code-review skill's
+      dispatch protocol (this ledger's commit).
+
+  - id: B2
+    title: "P1 — the phase-arc 'now' highlight (getCurrentWeekNumber clamped 1..4) does not cycle even though content now does"
+    terminal_state: upstream_blocked
+    blocker: >
+      Pre-existing; belongs to the `hold_week_identity` concept whose own tests
+      pin "clamped 4 is honest for some consumers". Changing the clamp is the
+      window-alignment half of OI-166, explicitly out of this unit's scope and
+      owned by OI-175, which now carries this as a third residual.
+    reopen_when: >
+      OI-175 is picked up. The record's "Residual" section and d7f3b2's
+      `impact_analysis` both disclose it rather than imply it fixed.
+
+  - id: B5
+    title: "P3 — wrong citation train_provider.dart:619 for phaseArcProvider"
+    terminal_state: closed_in_commit
+    commit: cecda187
+    verification: "Corrected to :906 in d7f3b2; verified by reading the file."
+
+  - id: B6
+    title: "P3 — naming/style note on the splice locals"
+    terminal_state: verified_clean
+    evidence: >
+      Reviewed and marked `no_change_needed` in the review file; the names
+      mirror the existing `currentWaveCharacters()` reader's vocabulary.
+
+  # ── Things the batch DROPPED, found by the post-ship audit ──────────
+  - id: F1
+    title: "OI-166's board entry still read 'Unit 2 is being re-planned' after Unit 2 merged"
+    terminal_state: closed_in_commit
+    commit: "oi166-unit2-close (this ledger's own commit — the docs commit after de52f1e8)"
+    verification: >
+      Blocked-on rewritten to name OI-175/189/190; a dated UNIT 2 SHIPPED bullet
+      states exactly what closed and what did not. Status stays OPEN on the
+      OI-175 half (no `closes-oi` was ever claimed).
+
+  - id: F2
+    title: "Q7 — the switch_goal/plan_end refresh question the OI-166 entry assigned to the Unit 2 re-plan — was never picked up: zero mentions across v4→v10, nine rounds and the B-pass"
+    terminal_state: blocked_on_user
+    reason: >
+      Filed as OI-189 with the mechanism re-verified against `de52f1e8` (B's
+      delete loop :362 and write skip :489 both stop at plan_end; C is
+      unbounded). The founder must choose (a) accept until OI-174's prune or
+      (b) extend B's delete range past plan_end (board lean: b). Not decidable
+      by the agent — it changes what an Edit-Profile goal change does to rows
+      the user can still see.
+
+  - id: F3
+    title: "Unit 1's §4.11 gate never got the flip Unit 2 was named to perform; the shared builder it allowlists does not exist; the 'one implementation' decision lived only in a prose banner"
+    terminal_state: upstream_blocked
+    blocker: >
+      The de-duplication is a planned unit of its own (account tier, both
+      writers, needs its own ×2 review) — filed as OI-190 with the gate's
+      current output, the missing file and the two pendingUnit2 exemptions
+      verified. This ledger's commit corrects the gate's header and allowlist
+      comment so they stop describing a Unit 2 that did not happen.
+    reopen_when: >
+      OI-190 is planned. Its review must re-read OI-189 and OI-190 as inputs —
+      the same omission that lost Q7.
+
+  - id: F4
+    title: "This ledger did not exist at merge time (§4.2: ≥4 findings/units MUST produce one)"
+    terminal_state: closed_in_commit
+    commit: "oi166-unit2-close (this ledger's own commit — the docs commit after de52f1e8)"
+    verification: >
+      This file. Detector gap (nothing notices a MISSING ledger) is proposed
+      as a §5 checklist row in the post-ship audit report, not assumed fixed.
+
+  - id: F5
+    title: "The analyzer WARNING in the new test file (unused local) was invisible to every gate and would have failed the push"
+    terminal_state: closed_in_commit
+    commit: cecda187
+    verification: >
+      Removed before the commit; pre-push analyze reported 0 warnings / 275
+      infos and the push LANDED. Found only because the final tree was analyzed
+      by choice — the mechanism gap is recorded in the retrospective memory.
