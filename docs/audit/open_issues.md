@@ -3497,3 +3497,160 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Blast radius**: `scripts/**` is individually pinned `platform`; needs its own test (`test/scripts/safe_merge_test.dart` already exists and its fixture commits the record ON THE BRANCH deliberately — extend it with an absent-record leg) plus mutation proof.
 - **Class**: `feedback_gates_unsatisfiable_at_merge` + `feedback_green_check_input_set_width` — two guards whose union looks total and whose intersection with "record absent, before the merge" is empty.
 
+
+## OI-182 — the payment grace window closes before the last verify-payment retry fires (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none — needs a founder call on the widened value, then a 1-line change
+- **Verified**: 2026-09-11 — read both constants directly, no live query needed
+- **What**: `SubscriptionService._paymentGraceWindow` is **10 minutes**
+  (`lib/core/services/subscription_service.dart:162`). `RazorpayService`'s
+  verification-retry schedule is **`[60s, 5m, 15m]`**
+  (`lib/core/services/razorpay_service.dart:734-738`). The grace window closes
+  **5 minutes before the final retry even fires**.
+- **Consequence**: if a `verifyFromServer()` check lands in that 10–15 minute gap
+  while the webhook is also delayed, `isPaymentInFlight` already reads `false` and
+  the code runs `_downgradeLocally()` (`subscription_service.dart:1087-1089`) for a
+  user who genuinely paid. Requires the webhook AND the first two retries to all be
+  late — rare, but the two constants disagreeing is a plain authoring gap, not a
+  designed tradeoff; nothing suggests 10 minutes was chosen deliberately against a
+  15-minute retry tail.
+- **Surfaced by**: OI-162 slice 4's review round 2, while checking whether
+  switching `verify-payment`'s rate limit to fail-closed removes user-visible
+  safety margin. It does, marginally — one of the four attempts that could still
+  land inside the grace window is now refused if the 20/10min cap is exhausted.
+  That interaction is real but secondary; the mismatch itself pre-exists slice 4
+  and is unrelated to its scope (an EF-side rate-limit fix has no coupling to a
+  client-side Dart timing constant), so it is filed separately rather than folded
+  in. Per CLAUDE.md §4.2 this is a genuinely different bug, not a re-wrapped
+  deferral of slice 4's own scope.
+- **Proposed repair**: widen `_paymentGraceWindow` to comfortably exceed 15
+  minutes (e.g. 20) so it never closes before the retry schedule completes.
+  Mechanically trivial — one constant — but touches the subscription-downgrade
+  path, so treat it as its own reviewed unit rather than a drive-by edit.
+- **Blast radius**: `lib/core/services/subscription_service.dart` — account tier
+  (payment/subscription path).
+- **Related**: OI-162 (slice 4 plan, `docs/audit/oi162-slice4-plan.md`).
+
+
+## OI-183 — `enforce_vision_analysis_daily_limit`'s channel guard is NULL-unsafe, unlike its two siblings (P3, dormant)
+
+- **Status**: OPEN
+- **Blocked on**: none — one-line NULL-safe rewrite
+- **Verified**: 2026-09-11 — read the live trigger body directly; confirmed
+  `ai_coach_interactions.channel` is nullable (`information_schema.columns`)
+  and holds 0 NULL rows today (live count query)
+- **What**: `enforce_vision_analysis_daily_limit`
+  (`supabase/migrations/129_cap_triggers_use_usage_counters.sql:149`) guards
+  its early-return with `IF NEW.channel NOT IN ('scan_meal', 'cart_auditor')
+  THEN RETURN NEW; END IF;`. Its two siblings in the same migration use the
+  NULL-safe form instead: `IF NEW.channel IS DISTINCT FROM 'app' THEN` (chat,
+  line 99) and `IF NEW.channel IS DISTINCT FROM 'food_text_analysis' THEN`
+  (food_text, line 183). In Postgres, `NULL NOT IN (...)` evaluates to NULL,
+  and PL/pgSQL treats a NULL `IF` condition as false (the branch is NOT
+  taken) — so a row with `channel IS NULL` does not take the early return and
+  falls through to `consume_quota('vision_analysis', ...)`, unlike the other
+  two triggers, which correctly early-return for any non-matching value
+  including NULL.
+- **Consequence**: dormant today (0 NULL-channel rows exist, and nothing in
+  `lib/` or any Edge Function writes a NULL channel deliberately), but any
+  future write path that omits `channel` would silently consume a vision-
+  analysis quota unit for a row that was never a vision request, and could
+  eventually raise `vision_analysis_daily_limit_reached` for an unrelated
+  insert.
+- **Surfaced by**: `docs/audit/oi162-slice4-channel-enumeration.md:66-73`
+  (OI-162 slice 4's own channel census), which correctly identified and
+  labelled the class (`guard_without_its_mirror`) and correctly assessed it
+  as dormant and out of scope — but never minted an OI for it, unlike the
+  sibling out-of-scope discovery from the same review round (OI-182), which
+  was filed properly. Caught by slice 4's own B-pass review (Finding 2 —
+  the file is hash-named and was renamed three times as the batch grew;
+  `docs/plan-reviews/oi162-slice4-windowed-counters.md`'s `bpass_review:`
+  field is the stable pointer to it), which is the correct
+  outcome but should not have been necessary — a dormant defect found during
+  a batch's own investigation should not depend on a later reviewer
+  re-reading prose to be rediscovered.
+- **Proposed repair**: `IF NEW.channel IS DISTINCT FROM 'scan_meal' AND
+  NEW.channel IS DISTINCT FROM 'cart_auditor' THEN RETURN NEW; END IF;` (or
+  equivalent NULL-safe rewrite) via `CREATE OR REPLACE FUNCTION`, same shape
+  as migration 129's own two correct siblings. Mechanically trivial; treat
+  as its own reviewed unit since it touches a live cap trigger, not a
+  drive-by edit.
+- **Blast radius**: `supabase/migrations/**` — platform tier (live Postgres
+  trigger function).
+- **Related**: OI-162 (parent), OI-182 (sibling out-of-scope finding from the
+  same review round, filed correctly the first time).
+
+## OI-184 — 4 tables rely on RLS-zero-policy default-deny alone; the raw grants under it were never narrowed (P2, systemic, pre-existing)
+
+- **Status**: OPEN
+- **Blocked on**: none — mechanically straightforward (a `REVOKE` batch), but
+  sized as its own reviewed unit (4 live tables, needs the same live
+  before/after ACL diff discipline this batch used for migration 130), not a
+  drive-by edit inside slice 4.
+- **Verified**: 2026-09-11 — LIVE, via the Management API (read-only queries,
+  no DDL): for all 4 tables, `pg_class.relrowsecurity = true`,
+  `count(*) from pg_policies = 0`, and `has_table_privilege('anon'|
+  'authenticated', <table>, 'SELECT'|'INSERT'|'UPDATE'|'DELETE'|'TRUNCATE')`
+  all return `true`. Re-derive with the query in "Proposed repair" below
+  rather than trusting this snapshot.
+- **What**: `usage_counters`, `account_deletion_log`, `admin_metrics_daily`,
+  and `cron_call_log` each have RLS ENABLED with ZERO policies — Postgres's
+  implicit default-deny is CURRENTLY the only thing stopping `anon`/
+  `authenticated` from reading/writing them, because all 4 ALSO hold full
+  raw table-level grants (SELECT/INSERT/UPDATE/DELETE/TRUNCATE) for both
+  roles. Two of the four are more precisely wrong than "pre-existing since
+  128": `admin_metrics_daily`'s OWN creating migration
+  (`102_admin_metrics_daily_snapshot.sql:54-55`) explicitly ran
+  `revoke all on public.admin_metrics_daily from public; grant select,
+  insert, update on public.admin_metrics_daily to service_role;` — but live
+  state shows the narrowing did not take: `anon`/`authenticated` hold full
+  CRUD anyway. This is the exact class `feedback_revoke_from_public_not_role.md`
+  names: revoking from the PUBLIC pseudo-role does not touch a privilege a
+  named role (`anon`/`authenticated`) holds directly (Supabase's platform
+  provisioning grants broadly to those roles at schema level, not through
+  PUBLIC) — the same trap diagnose a9d3f1 documents for function EXECUTE,
+  here on tables. That same migration's comment (`102:45-48`) also called
+  `account_deletion_log` "the documented exception" with RLS NOT enabled —
+  but live state shows RLS IS enabled on it. No migration file anywhere runs
+  `ENABLE ROW LEVEL SECURITY` on either `account_deletion_log` or
+  `cron_call_log` (checked: `grep -rin "row level security"
+  supabase/migrations/*.sql` returns zero hits naming either) — RLS on both
+  was turned on by an action this repo's migration history does not trace,
+  which is itself worth noting independent of the grants question.
+- **Consequence**: SAFE TODAY (RLS's default-deny blocks SELECT/INSERT/
+  UPDATE/DELETE for any non-`rolbypassrls` role) but fragile on two axes:
+  (1) it would weaken the instant any future policy is added to any of
+  these 4 tables for an unrelated reason — a narrow, well-intentioned
+  own-row policy for one command opens exactly that command up to the FULL
+  breadth the un-narrowed grant allows, with no narrower backstop behind it,
+  because the raw grant was never reduced to match the intended access
+  pattern; (2) RLS does not cover `TRUNCATE` at all in Postgres, and all 4
+  tables grant it to `anon`/`authenticated` directly. (2) is NOT reachable
+  through the app's actual client surface today — PostgREST's REST API
+  exposes only SELECT/INSERT/UPDATE/DELETE verbs, never TRUNCATE — so this
+  requires a direct Postgres wire-protocol connection under one of these
+  roles, which the app's clients do not have; noted as excess privilege
+  worth closing, not as a live exploit path.
+- **Surfaced by**: Hermes L2 (findings 2 + 6), OI-162 slice 4 hermes-pass,
+  2026-09-11 — while investigating `usage_counters`' own RLS-zero-policy
+  posture for migration 130's B-pass. The compacted summary this session
+  inherited named these same 4 tables and this same shape from EARLIER
+  session work; re-verified live rather than trusted, because the earlier
+  claim turned out to need correction on exactly the two points above
+  (migration 102's own narrowing attempt, and account_deletion_log's RLS
+  provenance) that a memory-only citation would have missed.
+- **Proposed repair**: mirror migration 130's own pattern — for each table,
+  `REVOKE ALL ON <table> FROM anon, authenticated;` (naming the ROLES
+  directly, not `PUBLIC` — the exact fix `feedback_revoke_from_public_not_role.md`
+  prescribes), keeping `service_role`'s grant. Re-verify live before/after
+  via the query in "Verified" above (same discipline as this batch's
+  `test/sql/oi162_slice4_quota_boundary_and_acl_live_verify.sql` Part B).
+  Not done here: 4 tables × before/after ACL diff × its own B-pass is a
+  properly separable unit, not a drive-by inside slice 4's delete-account/
+  verify-payment scope.
+- **Blast radius**: `supabase/migrations/**` — platform tier (live grants on
+  4 tables, one of them, `usage_counters`, load-bearing for two rate limits
+  this batch just shipped).
+- **Related**: OI-162 (parent), diagnose a9d3f1 (the function-EXECUTE
+  sibling of this same class), `feedback_revoke_from_public_not_role.md`.

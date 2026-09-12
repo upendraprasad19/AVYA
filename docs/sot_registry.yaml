@@ -4285,9 +4285,35 @@ concepts:
     description: |
       Chat interaction rows stored as coach_<ms> Hive keys in coachBox.
       Synced to ai_coach_interactions cloud table with deterministic
-      uuid_v5 id keyed on (user_id, created_at). Rate-limit counters
-      also live in ai_coach_interactions (channel field: 'chat', 'food_text_analysis',
-      'scan_meal', 'cart_auditor', 'verify_payment_attempt').
+      uuid_v5 id keyed on (user_id, created_at). channel field values in
+      use: 'app', 'food_text_analysis', 'scan_meal', 'cart_auditor',
+      'app_event', 'in_app_orphan', 'in_app', 'promotion_ceremony',
+      'weekly_report', 'free_image_analysis', 'video_paywall',
+      'image_paywall', 'proactive_i_see_you'.
+      ⚠ Corrected (Hermes L1 F4, OI-162 slice 4, 2026-09-11): this list was
+      missing the last four — verified by grepping every EF write site
+      (`channel: "..."` literals in ai-media-proxy/index.ts +
+      i-see-you-callout/index.ts) rather than re-deriving from memory.
+      `coach_interaction_repository.dart`'s `_coachChatChannels` allowlist
+      also treats 'chat' as a valid coach-chat channel on a RESTORED row —
+      nothing writes it today (no write site produces the literal 'chat'),
+      but a restored row from before some historical rename could still
+      carry it, so the reader defends against it even though it is absent
+      from "in use" above. OI-153's `pro_image_analysis`/`image_analysis`
+      (read-only, dormant, never written — see
+      scripts/usage_counter_source_lib.dart:159-161) are deliberately NOT
+      listed here either, for the same reason: this field enumerates values
+      actually IN USE, not every string a defensive read or allowlist checks
+      for.
+      ⚠ Rate-limit counters do NOT live in this table's row counts — this
+      line was stale since migration 129 (2026-09-05) moved the chat/food/
+      vision caps onto usage_counters via consume_quota(), and stayed stale
+      through OI-162 slice 4 (f2c8d5, 2026-09-11), which did the same for
+      delete_account/verify_payment (retiring the 'delete_account_attempt'
+      and 'verify_payment_attempt' channel values entirely — they never
+      appear in this table now). The channel field above is descriptive
+      history/telemetry only; every quota lives in usage_counters
+      (quota_key), never derived from a count(*) here.
       Unit 8 (coach-media-consent, OI-25, 2026-07-30) added two LOCAL-ONLY
       fields to the same row: media_storage_path (raw chat-media Storage
       path, stable beyond media_url's 600s signed-URL TTL) and
@@ -10269,6 +10295,122 @@ concepts:
           The pre-fix code ran a full re-count here on every request — a second
           reader of the pruned log, and a wasted round trip. On an RPC error the
           counter line is OMITTED rather than filled with a fabricated number.
+    hive:
+      box: "n/a — server-side gate, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: usage_counters
+      columns: [user_id, quota_key, window_start, used, updated_at]
+    sync_methods: []
+
+  # OI-162 slice 4 (2026-09-11, diagnose f2c8d5) — the DPDP §17 erasure
+  # endpoint's 5/60min rate limit. Registered as its own concept, same
+  # precedent as media_free_image_lifetime_gate above: one concept per gate,
+  # not folded into usage_quota_ledger's readers.
+  - concept: delete_account_rate_limit
+    domain: auth_profile
+    behavioral_test_path: test/contracts/delete_account_rate_limit_writer_to_reader_test.dart
+    presence_only: true  # Deno Edge Function — serve(async (req) => {…}) with no exports and no Deno on the dev machine, so no importable surface exists to round-trip. CI `deno check` is the compile proof (rule 21 honesty).
+    description: |
+      "Has this user attempted account deletion 5+ times in the current
+      fixed hourly bucket?" — a defense-in-depth DoS guard on the DPDP §17
+      erasure endpoint, secondary to the confirmation-token check (the
+      caller's own 8-char user-id prefix, which is the actual cross-account
+      guard).
+
+      ⚠ REWIRED by OI-162 slice 4 (f2c8d5). It used to fire-and-forget INSERT
+      into `ai_coach_interactions` targeting two columns
+      (`prompt_snippet`/`response_snippet`) that DO NOT EXIST on that table,
+      and left `user_message` (NOT NULL, no default) unset — every insert
+      failed on both PGRST204 and 23502 into a handler that only
+      `console.warn`'d. The subsequent count(*) read was therefore
+      structurally always 0 and this limit NEVER FIRED in production.
+
+      NOW: a single atomic `consume_quota('delete_account', <hourly bucket>)`
+      call both checks and increments; there is no separate advisory read —
+      the RPC's own -1 return IS the refusal.
+
+      FAILS OPEN on a consume_quota error, DELIBERATELY — a legally-required
+      erasure must not be blocked by a counter outage. This is the opposite
+      of verify_payment_rate_limit below; see that entry for why.
+
+      FIXED bucket (`Math.floor(Date.now()/WINDOW_MS)*WINDOW_MS`), not
+      rolling — `consume_quota`'s PK includes `window_start`, so a rolling
+      subtraction would make every call its own bucket of one. Accepted
+      cost: a caller can burst up to 2x the limit across a bucket boundary.
+    writers:
+      - file: supabase/functions/delete-account/index.ts
+        method: serve handler — consume_quota('delete_account', <hourly bucket>)
+        semantic: cloud-write
+        notes: |
+          Called at the TOP of the handler, BEFORE the confirmation-token
+          check. Replaces the dead count-then-insert pair described above.
+    readers:
+      - file: supabase/functions/delete-account/index.ts
+        method: serve handler — usedCount === -1 refusal
+        semantic: cloud-read
+        notes: |
+          No separate advisory read — the RPC's check-and-increment IS the
+          enforcement. Retry-After computed as the bucket's exact remaining
+          time, not the old fixed 3600-second constant.
+    hive:
+      box: "n/a — server-side gate, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: usage_counters
+      columns: [user_id, quota_key, window_start, used, updated_at]
+    sync_methods: []
+
+  # OI-162 slice 4 (2026-09-11, diagnose f2c8d5) — verify-payment's
+  # 20/10min rate limit. Sibling of delete_account_rate_limit above; the two
+  # differ ONLY in fail-open-vs-closed posture, which is why they are two
+  # concepts rather than one.
+  - concept: verify_payment_rate_limit
+    domain: subscription
+    behavioral_test_path: test/contracts/verify_payment_rate_limit_writer_to_reader_test.dart
+    presence_only: true  # Deno Edge Function — serve(async (req) => {…}) with no exports and no Deno on the dev machine, so no importable surface exists to round-trip. CI `deno check` is the compile proof (rule 21 honesty).
+    description: |
+      "Has this user attempted payment verification 20+ times in the current
+      fixed 10-minute bucket?" — a defense-in-depth guard against a retry
+      storm hitting the Razorpay verification API at the exact moment it is
+      most expensive to do so.
+
+      ⚠ REWIRED by OI-162 slice 4 (f2c8d5). It used to destructure ONLY
+      `{ count }` from its counter query, never `{ error }` — a counter-query
+      failure silently proceeded as if under the limit (fail-open BY
+      OMISSION, not by design; delete-account's own comment incorrectly
+      claimed this endpoint "fail-closes" before this fix made that true).
+
+      NOW: a single atomic `consume_quota('verify_payment', <10-min bucket>)`
+      call both checks and increments, destructuring BOTH `data` and `error`.
+
+      FAILS CLOSED on a consume_quota error, DELIBERATELY — the opposite of
+      delete_account_rate_limit above. This endpoint is background
+      confirmation only: PRO already activated optimistically in Hive on the
+      Razorpay success callback, the webhook is an independent authoritative
+      path, and the client retries at 60s/5m/15m regardless — so a false
+      refusal here costs almost nothing, while fail-open under a correlated
+      outage would release the exact brake this limit exists to be.
+
+      FIXED bucket, not rolling — same rationale and same PK-shape dependency
+      as delete_account_rate_limit above.
+    writers:
+      - file: supabase/functions/verify-payment/index.ts
+        method: serve handler — consume_quota('verify_payment', <10-min bucket>)
+        semantic: cloud-write
+        notes: |
+          Called at the TOP of the handler, BEFORE body parsing. Replaces the
+          non-atomic count-then-insert pair and its dropped-error defect.
+    readers:
+      - file: supabase/functions/verify-payment/index.ts
+        method: serve handler — usedCount === -1 refusal / rateErr fail-closed
+        semantic: cloud-read
+        notes: |
+          No separate advisory read. A populated `error` refuses with 429
+          (fail-CLOSED, logged at console.error since this is now an
+          unexpected state); `usedCount === -1` refuses with 429 and an exact
+          Retry-After computed from the bucket boundary, not the old fixed
+          600-second constant.
     hive:
       box: "n/a — server-side gate, no Hive surface"
       key_prefix: "n/a"

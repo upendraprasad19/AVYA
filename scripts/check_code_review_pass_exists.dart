@@ -120,6 +120,21 @@ Future<String> stagedDiffHash() async {
   // Excluding the directory breaks that circularity, and is what lets the
   // existence check below read the STAGED blob instead of the working tree.
   //
+  // OI-162 slice 4 B-pass, Addendum (2026-09-11): `.claude/skills/code-review/
+  // SKILL.md` is ALSO excluded, for the identical self-reference reason.
+  // §5.1's own gate (`check_skill_tuning_history.dart`) REQUIRES a same-dated
+  // Tuning-history entry in that file in the SAME commit as any new
+  // `docs/reviews/**.md` — so staging the required entry moved this gate's
+  // hash exactly the way staging the review itself would have, and there is
+  // no clean iterative fix (renaming the review to match then re-editing the
+  // SKILL.md entry to cite the new name moves the hash again, indefinitely).
+  // Discovered live: a real B-pass dispatch on this exact batch staged its
+  // required tuning entry and the gate demanded a DIFFERENT filename
+  // (`0c077bc09fa2` vs the `12408db06b47` it was dispatched against) with no
+  // indication why. Excluding the one file every catastrophic review is
+  // mechanically required to edit closes the loop the same way OI-72 closed
+  // it for the review file itself.
+  //
   // f4d1b7: capture the diff as RAW BYTES (`stdoutEncoding: null`) and feed them
   // verbatim. Pre-fix it decoded stdout to a String (via SystemEncoding — the
   // system code page, cp1252 on Windows) then hashed `.codeUnits` (UTF-16);
@@ -137,7 +152,14 @@ Future<String> stagedDiffHash() async {
   // reading as if it had fixed a real defect.
   final diff = await Process.run(
       'git',
-      ['diff', '--cached', '--', ':(top)', ':(top,exclude)$_reviewsDir'],
+      [
+        'diff',
+        '--cached',
+        '--',
+        ':(top)',
+        ':(top,exclude)$_reviewsDir',
+        ':(top,exclude).claude/skills/code-review/SKILL.md',
+      ],
       stdoutEncoding: null);
   if (diff.exitCode != 0) return '';
   final bytes = (diff.stdout as List<int>);
