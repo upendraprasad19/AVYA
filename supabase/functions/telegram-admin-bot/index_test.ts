@@ -215,8 +215,7 @@ Deno.test("cmdUsers with no page arg fetches page 1 (offset 0, limit 10)", async
   };
   const text = await cmdUsers(fake, []);
   assertEquals(capturedRange, [0, 9]);
-  assertStringIncludes(text, "a@example.com");
-  assertStringIncludes(text, "page 1");
+  assertEquals(text, "<b>Users — page 1</b>\na@example.com — u1\n\n/users 2 for more");
 });
 
 Deno.test("cmdUsers with page 2 offsets by 10", async () => {
@@ -261,7 +260,7 @@ Deno.test("cmdFind searches both email and full_name", async () => {
   };
   const text = await cmdFind(fake, ["match"]);
   assertStringIncludes(capturedFilter!, "match");
-  assertStringIncludes(text, "match@example.com");
+  assertEquals(text, '<b>Matches for "match"</b>\nMatch Name — match@example.com — u1');
 });
 
 Deno.test("cmdUser with no args returns a usage hint", async () => {
@@ -297,4 +296,113 @@ Deno.test("cmdUser reports 'not found' rather than a raw null/error for a missin
   };
   const text = await cmdUser(fake, ["nobody@example.com"]);
   assertStringIncludes(text.toLowerCase(), "not found");
+});
+
+Deno.test("cmdUser with an active subscription renders the plan line with end date, reading from `subscriptions` (never users.subscription_status)", async () => {
+  const queriedTables: string[] = [];
+  const subEqCalls: [string, unknown][] = [];
+  const fake = {
+    from: (table: string) => {
+      queriedTables.push(table);
+      if (table === "users") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({
+                data: {
+                  id: "u42",
+                  email: "vip@example.com",
+                  full_name: "VIP User",
+                  created_at: "2026-01-15T10:30:00Z",
+                  last_active_at: "2026-09-12T08:00:00Z",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "subscriptions") {
+        return {
+          select: () => ({
+            eq: (col: string, val: unknown) => {
+              subEqCalls.push([col, val]);
+              return {
+                eq: (col2: string, val2: unknown) => {
+                  subEqCalls.push([col2, val2]);
+                  return {
+                    maybeSingle: () => Promise.resolve({
+                      data: { plan: "yearly", status: "active", end_date: "2027-01-15T00:00:00Z" },
+                      error: null,
+                    }),
+                  };
+                },
+              };
+            },
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    },
+  };
+  const text = await cmdUser(fake, ["vip@example.com"]);
+  assertEquals(queriedTables, ["users", "subscriptions"]);
+  assertEquals(subEqCalls, [["user_id", "u42"], ["status", "active"]]);
+  assertEquals(
+    text,
+    "<b>VIP User</b>\nvip@example.com\nid: u42\nsigned up: 2026-01-15\nlast active: 2026-09-12\nplan: yearly (ends 2027-01-15)",
+  );
+});
+
+Deno.test("cmdUser without an active subscription renders 'plan: free', reading from `subscriptions` (never users.subscription_status)", async () => {
+  const queriedTables: string[] = [];
+  const subEqCalls: [string, unknown][] = [];
+  const fake = {
+    from: (table: string) => {
+      queriedTables.push(table);
+      if (table === "users") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({
+                data: {
+                  id: "u43",
+                  email: "free@example.com",
+                  full_name: "Free User",
+                  created_at: "2026-02-20T00:00:00Z",
+                  last_active_at: "2026-09-01T00:00:00Z",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "subscriptions") {
+        return {
+          select: () => ({
+            eq: (col: string, val: unknown) => {
+              subEqCalls.push([col, val]);
+              return {
+                eq: (col2: string, val2: unknown) => {
+                  subEqCalls.push([col2, val2]);
+                  return {
+                    maybeSingle: () => Promise.resolve({ data: null, error: null }),
+                  };
+                },
+              };
+            },
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    },
+  };
+  const text = await cmdUser(fake, ["free@example.com"]);
+  assertEquals(queriedTables, ["users", "subscriptions"]);
+  assertEquals(subEqCalls, [["user_id", "u43"], ["status", "active"]]);
+  assertEquals(
+    text,
+    "<b>Free User</b>\nfree@example.com\nid: u43\nsigned up: 2026-02-20\nlast active: 2026-09-01\nplan: free",
+  );
 });
