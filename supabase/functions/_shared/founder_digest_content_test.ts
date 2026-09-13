@@ -36,6 +36,8 @@ Deno.test("buildDigestText renders 'none' for an empty-but-readable section, nev
     windowed: { rows: [] },
     lifetime: { rows: [] },
     alerts: { rows: [] },
+    subscriptions: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
   };
   const text = buildDigestText(input);
   assertStringIncludes(text, "none");
@@ -47,8 +49,65 @@ Deno.test("buildDigestText renders an explicit unreadable marker, never renders 
     windowed: { unreadable: "connection reset" },
     lifetime: { rows: [] },
     alerts: { rows: [] },
+    subscriptions: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
   };
   const text = buildDigestText(input);
   assertStringIncludes(text, "unreadable");
   assertStringIncludes(text, "connection reset");
+});
+
+// --- Task 5: Subscriptions (new, yesterday) + Expiring soon sections ---
+//
+// The plan brief's illustrative fixtures use the sketch shape `{ dayLabel,
+// usage, alerts }`; the real `DigestInput` (Task 4) is `{ dayLabel, windowed,
+// lifetime, alerts, subscriptions, expiringSoon }`, so every fixture below
+// carries `windowed`/`lifetime`/`alerts` too even though these tests don't
+// exercise those sections.
+
+Deno.test("buildDigestText renders a per-plan breakdown of yesterday's new subscriptions", () => {
+  const input: DigestInput = {
+    dayLabel: "2026-09-12",
+    windowed: { rows: [] },
+    lifetime: { rows: [] },
+    alerts: { rows: [] },
+    subscriptions: {
+      rows: [
+        { plan: "monthly", created_at: "2026-09-12T10:00:00Z" },
+        { plan: "monthly", created_at: "2026-09-12T11:00:00Z" },
+        { plan: "yearly", created_at: "2026-09-12T12:00:00Z" },
+      ],
+    },
+    expiringSoon: { count7d: 3, count30d: 9 },
+  };
+  const text = buildDigestText(input);
+  assertStringIncludes(text, "monthly: 2");
+  assertStringIncludes(text, "yearly: 1");
+  assertStringIncludes(text, "7d: 3");
+  assertStringIncludes(text, "30d: 9");
+});
+
+Deno.test("buildDigestText renders 'none' for a quiet day with zero new subscriptions", () => {
+  const input: DigestInput = {
+    dayLabel: "2026-09-12",
+    windowed: { rows: [] },
+    lifetime: { rows: [] },
+    alerts: { rows: [] },
+    subscriptions: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
+  };
+  assertStringIncludes(buildDigestText(input), "none");
+});
+
+Deno.test("buildDigestText renders an unreadable marker for a failed subscriptions read, never zeros", () => {
+  const input: DigestInput = {
+    dayLabel: "2026-09-12",
+    windowed: { rows: [] },
+    lifetime: { rows: [] },
+    alerts: { rows: [] },
+    subscriptions: { unreadable: "timeout" },
+    expiringSoon: { unreadable: "timeout" },
+  };
+  const text = buildDigestText(input);
+  assertStringIncludes(text, "unreadable");
 });

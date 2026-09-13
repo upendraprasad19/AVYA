@@ -96,6 +96,12 @@ export interface AlertRow {
   summary: string;
 }
 
+/** One `subscriptions` row created yesterday (IST), for the per-plan breakdown. */
+export interface SubscriptionRow {
+  plan: string;
+  created_at: string;
+}
+
 /**
  * A section's read result: rows, or the reason it could not be read.
  * `total` is the exact server-side count when the read was CAPPED (alerts
@@ -113,6 +119,10 @@ export interface DigestInput {
   lifetime: SectionRead<UsageRow>;
   /** Alerts detected inside yesterday's IST day. */
   alerts: SectionRead<AlertRow>;
+  /** `subscriptions` rows created inside yesterday's IST day (status='active'). */
+  subscriptions: SectionRead<SubscriptionRow>;
+  /** Users whose `subscription_expires_at` falls within 7d / 30d of `now`. */
+  expiringSoon: { count7d: number; count30d: number } | { unreadable: string };
 }
 
 /** 8-char prefix of a user id — enough to correlate, never a whole uuid. */
@@ -286,6 +296,30 @@ export function buildDigestText(input: DigestInput): string {
     }
   }
 
+  lines.push("");
+  lines.push("<b>Subscriptions (new, yesterday)</b>");
+  if ("unreadable" in input.subscriptions) {
+    lines.push(unreadableLine("subscriptions", input.subscriptions.unreadable));
+  } else if (input.subscriptions.rows.length === 0) {
+    lines.push("none");
+  } else {
+    const byPlan = new Map<string, number>();
+    for (const r of input.subscriptions.rows) {
+      byPlan.set(r.plan, (byPlan.get(r.plan) ?? 0) + 1);
+    }
+    for (const [plan, n] of byPlan) {
+      lines.push(`${escapeHtml(plan)}: ${n}`);
+    }
+  }
+
+  lines.push("");
+  lines.push("<b>Expiring soon</b>");
+  if ("unreadable" in input.expiringSoon) {
+    lines.push(unreadableLine("expiring-soon", input.expiringSoon.unreadable));
+  } else {
+    lines.push(`7d: ${input.expiringSoon.count7d} · 30d: ${input.expiringSoon.count30d}`);
+  }
+
   let text = lines.join("\n");
   if (text.length > TELEGRAM_MAX_CHARS) {
     const marker = "\n… (truncated)";
@@ -416,6 +450,65 @@ export async function gatherDigestInput(
   now: Date = new Date(),
 ): Promise<DigestInput> {
   const window = istYesterdayWindow(now);
+  const { yStart, tStart } = window;
   const { windowed, lifetime, alerts } = await readDigestSections(supabase, window);
-  return { dayLabel: window.label, windowed, lifetime, alerts };
+
+  // New paid subscriptions created inside yesterday's IST day, for the
+  // per-plan breakdown. Independent read, same three-state contract as the
+  // other sections above. Routed through fetchAllPages (OI-79,
+  // check_unbounded_cron_reads.dart): an un-paged `.from()` read in a
+  // cron-dispatched function silently truncates at PostgREST's 1000-row
+  // db-max-rows cap with HTTP 200 and error===null, exactly the failure
+  // paged_fetch.ts exists to prevent. `id` is the primary key — unique and
+  // immutable — so it is a safe page-ordering tiebreaker.
+  const subscriptionsRead = readSection<SubscriptionRow>(async () => ({
+    rows: await fetchAllPages<SubscriptionRow>(
+      () =>
+        supabase
+          .from("subscriptions")
+          .select("id, plan, created_at")
+          .eq("status", "active")
+          .gte("created_at", yStart)
+          .lt("created_at", tStart),
+      {
+        orderBy: [{ column: "id" }],
+        label: "founder-digest subscriptions",
+        maxPages: MAX_PAGES,
+      },
+    ),
+  }));
+
+  // Users whose subscription expires within 7 / 30 days of `now` — a
+  // point-in-time snapshot (not windowed to yesterday), so it uses `now`
+  // directly rather than the yesterday-window instants above.
+  const expiringSoonRead: Promise<DigestInput["expiringSoon"]> = (async () => {
+    try {
+      const in7dIso = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const in30dIso = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const [r7, r30] = await Promise.all([
+        supabase
+          .from("users")
+          .select("id", { count: "exact", head: true })
+          .not("subscription_expires_at", "is", null)
+          .gte("subscription_expires_at", now.toISOString())
+          .lte("subscription_expires_at", in7dIso),
+        supabase
+          .from("users")
+          .select("id", { count: "exact", head: true })
+          .not("subscription_expires_at", "is", null)
+          .gte("subscription_expires_at", now.toISOString())
+          .lte("subscription_expires_at", in30dIso),
+      ]);
+      if (r7.error) throw new Error(r7.error.message);
+      if (r30.error) throw new Error(r30.error.message);
+      return { count7d: r7.count ?? 0, count30d: r30.count ?? 0 };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error("[founder-digest] section read failed:", reason.slice(0, 300));
+      return { unreadable: reason };
+    }
+  })();
+
+  const [subscriptions, expiringSoon] = await Promise.all([subscriptionsRead, expiringSoonRead]);
+  return { dayLabel: window.label, windowed, lifetime, alerts, subscriptions, expiringSoon };
 }
