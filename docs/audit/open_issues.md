@@ -8,6 +8,17 @@ diagnose pass that hasn't yet been closed by a shipped commit lives here.
 - **Append-only at the bottom.** Never re-number a closed issue; the OI
   number is its permanent identifier (referenced from diagnose-docs +
   commit messages).
+- **Numbers are ALLOCATED, never eyeballed (2026-09-12).** File a new issue with
+  `sh scripts/mint_oi.sh "<title>"` — it reserves the next free number as the
+  remote branch `oi/N` (an atomic create on GitHub, so two sessions cannot both
+  get N, laptop or cloud) and appends the stub. An UNRESERVED number FAILS the
+  commit (`check_oi_numbering_unique.dart`, Check C) at pre-commit and at
+  pre-merge-commit — adopting an orphan reservation by hand is fine. Run it in
+  YOUR worktree (§4.13) — it edits this file. A number filed before the
+  allocator existed: `sh scripts/mint_oi.sh --reserve N "<title>"`. Never mint
+  offline — the script refuses, by design. The cloud never prunes (no `gh`);
+  the next laptop mint prunes for it. Spec:
+  `docs/superpowers/specs/2026-09-12-oi-allocator-design.md`.
 - **Status transitions:**
   - `OPEN` — identified, not started
   - `IN_PROGRESS` — being worked this session
@@ -3313,7 +3324,7 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 ## OI-176 — the OI-collision gate answers `PASS (vacuous)` for a branch with no commits, which is the exact state in which numbers are minted (P2)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-12 · diagnose f3a9c1 · branch oi-allocator — working-tree arm in check_oi_numbering_unique.dart (dispatch on `git diff --quiet HEAD -- <boards>` before HEAD's shape); allocator in scripts/mint_oi.sh
 - **Blocked on**: none
 - **Verified**: 2026-09-08 — observed live, not reasoned about. On branch `regen-wave-alignment` with **zero commits** and a real three-way collision sitting in the index, `dart run scripts/check_oi_numbering_unique.dart` printed: *"PASS (vacuous): merge commit (HEAD^1 vs HEAD^2) — the … side minted no OI number that the merge-base lacked, so no cross-branch collision is expressible. 163 entries … were read and compared; **this is a checked answer, not a skipped one**."* Meanwhile `git show main:docs/audit/open_issues.md` and the staged board each carried `## OI-167`, `## OI-168`, `## OI-169` under completely different titles
 - **Identified**: 2026-09-08 · B-pass finding 1 on the OI-166 Unit 1 batch (`docs/reviews/df96a61cf598-bpass.md`). The collision was found BY HAND; the gate that exists for it was green throughout

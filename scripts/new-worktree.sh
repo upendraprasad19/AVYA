@@ -66,11 +66,11 @@ BASE="main"
 if ! git rev-parse --verify --quiet main >/dev/null; then
   # No local main. Fall back to origin/main if we can reach it, else let
   # `git worktree add` produce its own clear error rather than crashing here.
-  if git fetch origin main --quiet 2>/dev/null &&
+  if git fetch origin main '+refs/heads/oi/*:refs/remotes/origin/oi/*' --quiet 2>/dev/null &&
      git rev-parse --verify --quiet origin/main >/dev/null; then
     BASE="origin/main"
   fi
-elif git fetch origin main --quiet 2>/dev/null &&
+elif git fetch origin main '+refs/heads/oi/*:refs/remotes/origin/oi/*' --quiet 2>/dev/null &&
    git rev-parse --verify --quiet origin/main >/dev/null; then
   LOCAL_SHA="$(git rev-parse main)"
   REMOTE_SHA="$(git rev-parse origin/main)"

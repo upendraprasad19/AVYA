@@ -220,6 +220,64 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-13** — blast-radius **platform** — branch `oi-allocator` (the OI-number
+  allocator: `scripts/mint_oi.sh` reserving `refs/heads/oi/N` as a remote CAS, Check
+  B′/C in `check_oi_numbering_unique.dart`, the SessionStart next-free line; diagnose
+  `f3a9c1`, closes OI-176). **4 findings (0 P0, 0 P1, 2 P2, 2 P3); 0 false_alarm — all
+  four accepted and fixed in-batch, each with a regression test and a mutation.**
+  Review: `docs/reviews/oi-allocator-bpass.md` (branch-named — the plan-review record
+  is the one pointer, per the 2026-09-11 (second) entry's fixed-point lesson).
+  **Tuning 1 — lens 8 gains a CARDINALITY question, and it is this batch's headline
+  even though the B-pass did not find it: a per-element subprocess loop measured
+  against a FIXTURE is not measured at all.** The sibling-branch exclusion ran one
+  `git show` per local branch per board. Every e2e fixture has 1–2 branches; 17/17
+  green, four mutations reddening exactly the named tests, two context-blind
+  plan-review rounds read the loop and passed it. The real repo has **205** local
+  branches: **15.7 s** per SessionStart, **24.6 s** per `--next`, against the spec's own
+  2 s rule. Found by the author running the shipped hook in the primary worktree BEFORE
+  dispatch (§4.12.5's "run the cheap checks first"), rewritten as one `git grep` per
+  150-ref chunk (1.3 s / 4.1 s), `050e70ab`. **Add to lens 8: for any loop over a
+  repo-derived set (refs, files, rows), ask `| wc -l` on the REAL repo and multiply by
+  the per-iteration spawn cost; a fixture's n is never the repo's n.** Sibling of the
+  input-set-width family (`feedback_green_check_input_set_width` #45).
+  **Tuning 2 — lens 6 gains: "the file exists" and "the ref resolves" are DIFFERENT
+  predicates, and a dispatch keyed on the second silently falls through on the first.**
+  F3: `MERGE_HEAD` present but unparseable ⇒ `rev-parse --verify` null ⇒ the mid-merge
+  arm never fired ⇒ the NEW working-tree arm pronounced on a tree holding both sides.
+  Fixing it exposed a pre-existing blind spot on the same line: the octopus count read
+  the literal `.git/MERGE_HEAD`, which does not exist in a LINKED WORKTREE (`.git` is a
+  one-line file there) — so it had read 0 in every §4.13 session since 2026-08-17.
+  `git rev-parse --git-path` is the answer, and the mutation that restores the literal
+  path reddens exactly the worktree test. **Any gate that opens a path under `.git/`
+  by name is wrong in a worktree; grep the repo's scripts for `'.git/` before trusting
+  one.**
+  **Tuning 3 — lens 6e: a "taken" classifier over `git push` stderr must be confirmed
+  by the ref's EXISTENCE, not widened.** F4: `*"rejected"*` also matches a pre-receive
+  hook or branch-protection refusal, which would have been retried as N+1 ten times
+  and reported as "gave up after 10 lost races" with the real reason never shown. The
+  fix is not a narrower substring — it is `git ls-remote --exit-code` on the ref, which
+  IS the definition of a lost race; pinned by a fixture whose bare remote carries a
+  refusing `pre-receive` hook and asserts the hook's line appears exactly ONCE. Same
+  lesson as the 2026-08-11 entry (tightening a matcher never converges).
+  **A NEGATIVE result worth keeping:** the reviewer verified the Vercel `ignoreCommand`
+  exit-code contract against Vercel's live documentation rather than the diff's comment,
+  confirmed `ls-remote` exits 0 on an empty-but-reachable namespace against a real bare
+  remote, and captured REAL DNS-failure stderr for both HTTPS and SSH to prove the
+  offline path does not collide with the "taken" shapes — three claims the author had
+  reasoned about and not measured. It also attributed one verified claim to the wrong
+  document (a spec sentence credited to CLAUDE.md) and cited a symbol name the author
+  first took for an invention until `grep` found it at `oi_numbering_lib.dart:85` —
+  **verify a reviewer's ATTRIBUTIONS as well as its numerics, in both directions.**
+  ⚠ Process: a first dispatch of the identical brief was killed by a Sonnet
+  session-limit (HTTP 429) mid-run — worktree verified clean, re-dispatched after the
+  reset. The second run disclosed a stray `git push -u origin main` from a scratch
+  script's variable-persistence bug, killed during the pre-push analyze; the author
+  verified local `main` = `origin/main` = remote (`39111d1e`, nothing to push) and zero
+  `oi/*` refs on origin. Third recorded instance of a reviewer's own shell slip
+  (2026-08-25, 2026-08-30); the disclosure is the behaviour to keep, and a review
+  subagent should hold no push-capable escape hatch at all.
+  False-alarm rate 0/4 → no lens removed; lenses 6 and 8 extended per above.
+
 - **2026-09-11** — blast-radius **catastrophic** — branch
   `oi162-slice4-windowed-counters`, OI-162 slice 4 (diagnose `f2c8d5`).
   **4 findings (0 P0, 1 P1, 1 P2, 2 P3); 0 false_alarm — all 4 triaged
