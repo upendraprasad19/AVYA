@@ -407,7 +407,7 @@ Deno.test("cmdUser without an active subscription renders 'plan: free', reading 
   );
 });
 
-Deno.test("cmdAlerts lists open alerts most-recent-first, capped at 10 with a +N more line", async () => {
+Deno.test("cmdAlerts lists open alerts most-recent-first, capped at 10", async () => {
   const rows = Array.from({ length: 12 }, (_, i) => ({
     source: `check_${i}`,
     severity: "warn",
@@ -428,6 +428,36 @@ Deno.test("cmdAlerts lists open alerts most-recent-first, capped at 10 with a +N
   const text = await cmdAlerts(fake);
   assertStringIncludes(text, "row 0");
   assertStringIncludes(text, "row 9");
+  // Verify cap: exactly 10 rows shown (rows 0-9), NOT row 10 or 11
+  assertEquals(text.includes("row 10"), false);
+  assertEquals(text.includes("row 11"), false);
+});
+
+Deno.test("cmdAlerts escapes HTML in alert fields", async () => {
+  const rows = [
+    {
+      source: "check<script>",
+      severity: "warn&danger",
+      summary: "alert&test",
+      detected_at: "2026-09-13T01:00:00Z",
+    },
+  ];
+  const fake = {
+    from: () => ({
+      select: () => ({
+        is: () => ({
+          order: () => ({
+            limit: () => Promise.resolve({ data: rows, error: null }),
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdAlerts(fake);
+  // Verify HTML is escaped
+  assertEquals(text.includes("<script>"), false);
+  assertStringIncludes(text, "&lt;script&gt;");
+  assertStringIncludes(text, "&amp;");
 });
 
 Deno.test("cmdAlerts reports 'none' when there are no open alerts", async () => {
@@ -443,18 +473,22 @@ Deno.test("cmdAlerts reports 'none' when there are no open alerts", async () => 
   assertStringIncludes(await cmdAlerts(fake), "none");
 });
 
-Deno.test("cmdErrors groups yesterday's real errors by op_type", async () => {
+Deno.test("cmdErrors groups yesterday's real errors by op_type and excludes event/info codes", async () => {
   const fake = {
     from: () => ({
       select: () => ({
         gte: () => ({
-          lt: () => Promise.resolve({
-            data: [
-              { op_type: "sync_service_restore_op_timeout", error_code: "minified:a0Z" },
-              { op_type: "sync_service_restore_op_timeout", error_code: "minified:a0Z" },
-              { op_type: "realtime_stream_weight_logs", error_code: "minified:aQC" },
-            ],
-            error: null,
+          lt: () => ({
+            limit: () => Promise.resolve({
+              data: [
+                { op_type: "sync_service_restore_op_timeout", error_code: "minified:a0Z" },
+                { op_type: "sync_service_restore_op_timeout", error_code: "minified:a0Z" },
+                { op_type: "realtime_stream_weight_logs", error_code: "minified:aQC" },
+                { op_type: "excluded_op", error_code: "event" },
+                { op_type: "also_excluded_op", error_code: "info" },
+              ],
+              error: null,
+            }),
           }),
         }),
       }),
@@ -463,16 +497,51 @@ Deno.test("cmdErrors groups yesterday's real errors by op_type", async () => {
   const text = await cmdErrors(fake);
   assertStringIncludes(text, "sync_service_restore_op_timeout: 2");
   assertStringIncludes(text, "realtime_stream_weight_logs: 1");
+  // Verify event and info codes are filtered out
+  assertEquals(text.includes("excluded_op"), false);
+  assertEquals(text.includes("also_excluded_op"), false);
 });
 
-Deno.test("cmdCron reports the most recently-run functions first, flags how long ago", async () => {
+Deno.test("cmdErrors escapes HTML in op_type field", async () => {
+  const fake = {
+    from: () => ({
+      select: () => ({
+        gte: () => ({
+          lt: () => ({
+            limit: () => Promise.resolve({
+              data: [
+                { op_type: "sync<script>", error_code: "test" },
+              ],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdErrors(fake);
+  assertEquals(text.includes("<script>"), false);
+  assertStringIncludes(text, "&lt;script&gt;");
+});
+
+Deno.test("cmdCron deduplicates by function name and sorts by age (most stale first)", async () => {
+  const now = new Date();
+  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+  const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+  const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+
   const fake = {
     from: () => ({
       select: () => ({
         order: () => ({
           limit: () => Promise.resolve({
             data: [
-              { function_name: "morning-alert", status: "success", started_at: new Date().toISOString() },
+              // Most recent of morning-alert (should be used)
+              { function_name: "morning-alert", status: "success", started_at: fiveMinutesAgo },
+              // Older of morning-alert (should be ignored)
+              { function_name: "morning-alert", status: "failed", started_at: fifteenMinutesAgo },
+              // Most recent of evening-alert
+              { function_name: "evening-alert", status: "success", started_at: tenMinutesAgo },
             ],
             error: null,
           }),
@@ -481,5 +550,33 @@ Deno.test("cmdCron reports the most recently-run functions first, flags how long
     }),
   };
   const text = await cmdCron(fake);
-  assertStringIncludes(text, "morning-alert");
+  // Should show evening-alert first (15 min ago - most stale), then morning-alert (5 min ago)
+  const eveningIndex = text.indexOf("evening-alert");
+  const morningIndex = text.indexOf("morning-alert");
+  assertEquals(eveningIndex > 0 && morningIndex > eveningIndex, true);
+  // Should NOT show the failed duplicate morning-alert
+  assertEquals(text.match(/morning-alert/g)?.length, 1);
+  assertStringIncludes(text, "success");
+});
+
+Deno.test("cmdCron escapes HTML in function name and status", async () => {
+  const now = new Date();
+  const fake = {
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          limit: () => Promise.resolve({
+            data: [
+              { function_name: "alert<script>", status: "fail&success", started_at: now.toISOString() },
+            ],
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdCron(fake);
+  assertEquals(text.includes("<script>"), false);
+  assertStringIncludes(text, "&lt;script&gt;");
+  assertStringIncludes(text, "&amp;");
 });

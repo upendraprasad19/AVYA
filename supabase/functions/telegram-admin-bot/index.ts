@@ -333,7 +333,8 @@ export async function cmdErrors(supabase: any): Promise<string> {
     .from("client_errors")
     .select("op_type, error_code")
     .gte("created_at", yStart)
-    .lt("created_at", tStart);
+    .lt("created_at", tStart)
+    .limit(2000);
   if (error) throw error;
   const rows = (data ?? []).filter((r: { error_code: string }) =>
     r.error_code !== "event" && r.error_code !== "info"
@@ -374,7 +375,7 @@ export async function cmdCron(supabase: any): Promise<string> {
   const lines = ["<b>Cron (most stale first)</b>"];
   for (const [fn, info] of entries.slice(0, 15)) {
     const ageMin = Math.round((now - new Date(info.started_at).getTime()) / 60000);
-    lines.push(`${escapeHtml(fn)}: ${info.status}, ${ageMin}m ago`);
+    lines.push(`${escapeHtml(fn)}: ${escapeHtml(info.status)}, ${ageMin}m ago`);
   }
   return lines.join("\n");
 }
