@@ -6,7 +6,7 @@ Deno.env.set("FOUNDER_TELEGRAM_CHAT_ID", "12345");
 Deno.env.set("TELEGRAM_BOT_TOKEN", "dummy-telegram-token");
 
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { handler, isAuthorizedTelegramSender, parseCommand } from "./index.ts";
+import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand } from "./index.ts";
 
 Deno.test("isAuthorizedTelegramSender requires BOTH the secret token and the chat id to match", () => {
   const base = { expectedSecretToken: "s3cr3t", expectedChatId: "12345" };
@@ -83,4 +83,31 @@ Deno.test("handler replies to /help from the authorized founder chat", async () 
   // sendTelegram will attempt a real network call here and fail in the test
   // sandbox (no real token) — that's fine, it's caught and logged, never
   // thrown; the assertion is on the HTTP response shape, not on delivery.
+});
+
+Deno.test("handler stays a silent 200 for a request body that is the JSON literal null", async () => {
+  // `req.json()` resolves `null` without throwing for a body of literal
+  // `null` — the existing JSON-parse try/catch never fires. The very next
+  // line used to read `update.message?.chat?.id`, which threw an uncaught
+  // TypeError off a null `update` and broke the endpoint's silent-200
+  // invariant (a non-200 is a reconnaissance signal an attacker must never
+  // get). Regression for that fix.
+  const secret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET") ?? "";
+  const req = new Request("https://example.com/telegram-admin-bot", {
+    method: "POST",
+    headers: { "X-Telegram-Bot-Api-Secret-Token": secret },
+    body: "null",
+  });
+  const res = await handler(req);
+  assertEquals(res.status, 200);
+  assertEquals(await res.text(), "");
+});
+
+Deno.test("routeCommand('help', ...) returns HELP_TEXT exactly", async () => {
+  // The HTTP-level /help test above only asserts status===200, which every
+  // failure branch (wrong token, wrong chat id, unknown command) also
+  // returns — it can't distinguish a working auth check from a silently
+  // broken one. This asserts the routed command's actual return value.
+  const reply = await routeCommand("help", [], null);
+  assertEquals(reply, HELP_TEXT);
 });

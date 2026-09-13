@@ -17,7 +17,7 @@ import { corsHeaders } from "../_shared/error.ts";
 import { sendTelegram, truncateForTelegram } from "../_shared/telegram.ts";
 
 
-const HELP_TEXT = [
+export const HELP_TEXT = [
   "<b>Admin commands</b>",
   "/status — open alerts, today's signups, cron health",
   "/revenue — MRR, active subs by plan",
@@ -69,15 +69,20 @@ export const handler = async (req: Request): Promise<Response> => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-  let update: { message?: { chat?: { id?: number | string }; text?: string } };
+  let update: { message?: { chat?: { id?: number | string }; text?: string } } | null;
   try {
     update = await req.json();
   } catch {
     return new Response("", { status: 200 });
   }
 
-  const chatId = update.message?.chat?.id;
-  const text = update.message?.text;
+  // `update` can be `null` here — a request body of the JSON literal `null`
+  // parses successfully (no throw above), so this chain MUST start from the
+  // root `update`, not from `.message`. `update.message?.chat?.id` protects
+  // `.chat`/`.id` but not `.message` itself off a null `update`, which threw
+  // an uncaught TypeError and broke the silent-200 invariant (see index_test.ts).
+  const chatId = update?.message?.chat?.id;
+  const text = update?.message?.text;
   if (chatId == null || !text) {
     return new Response("", { status: 200 });
   }
@@ -120,7 +125,7 @@ export const handler = async (req: Request): Promise<Response> => {
   return new Response("", { status: 200 });
 };
 
-async function routeCommand(
+export async function routeCommand(
   cmd: string,
   args: string[],
   // deno-lint-ignore no-explicit-any
