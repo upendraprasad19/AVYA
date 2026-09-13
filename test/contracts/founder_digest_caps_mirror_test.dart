@@ -38,7 +38,10 @@ import 'package:test/test.dart';
 
 import '../helpers/migration_cap_reader.dart';
 
-const _digestPath = 'supabase/functions/founder-digest/index.ts';
+// DIGEST_KEYS moved to the shared content module (telegram-admin-bot Task 4,
+// 2026-09-13) so /digest can build the same message the daily cron does.
+// `founder-digest/index.ts` now only re-exports it.
+const _digestPath = 'supabase/functions/_shared/founder_digest_content.ts';
 const _functionsDir = 'supabase/functions';
 
 /// Comment-stripped TS source. `//` is a comment only when not preceded by
