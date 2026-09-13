@@ -137,12 +137,12 @@ List<_Site> _efSites() {
             'a one-level `c ? A : B` ternary. Add the shape here rather than '
             'letting a caller go unmirrored.');
       }
-      if (keys!.length != caps!.length) {
+      if (keys.length != caps.length) {
         fail('$rel: key and cap ternaries have different arity — the '
             'branch-pairing below would mis-associate a cap with a key.');
       }
       for (var i = 0; i < keys.length; i++) {
-        sites.add(_Site(rel, keys[i], caps[i], kind!));
+        sites.add(_Site(rel, keys[i], caps[i], kind));
       }
     }
     // Any `p_quota_key:` the full-object regex did NOT consume is a shape
