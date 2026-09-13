@@ -14,7 +14,8 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { corsHeaders } from "../_shared/error.ts";
-import { sendTelegram, truncateForTelegram } from "../_shared/telegram.ts";
+import { sendTelegram, truncateForTelegram, escapeHtml } from "../_shared/telegram.ts";
+import { istDateStr, istYesterdayWindow } from "../_shared/ist_date.ts";
 
 
 export const HELP_TEXT = [
@@ -125,6 +126,93 @@ export const handler = async (req: Request): Promise<Response> => {
   return new Response("", { status: 200 });
 };
 
+const MONTHLY_PRICE_INR = 349;
+const YEARLY_PRICE_INR = 2999;
+
+// deno-lint-ignore no-explicit-any
+export async function cmdStatus(supabase: any): Promise<string> {
+  const [growth, ops] = await Promise.all([
+    supabase.rpc("founder_metrics_for_admin_api").single(),
+    supabase.rpc("founder_metrics_ops").single(),
+  ]);
+  if (growth.error) throw growth.error;
+  if (ops.error) throw ops.error;
+  return [
+    "<b>Status</b>",
+    `Signups today: ${growth.data.signups_today_ist}`,
+    `PRO active: ${growth.data.pro_active}`,
+    `Open alerts: ${ops.data.open_alerts_count}`,
+    `Cron failures (24h): ${ops.data.cron_failures_24h}`,
+    `Client errors today: ${ops.data.client_errors_today}`,
+  ].join("\n");
+}
+
+// deno-lint-ignore no-explicit-any
+export async function cmdRevenue(supabase: any): Promise<string> {
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("plan")
+    .eq("status", "active");
+  if (error) throw error;
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) {
+    counts.set(row.plan, (counts.get(row.plan) ?? 0) + 1);
+  }
+  const monthly = counts.get("monthly") ?? 0;
+  const yearly = counts.get("yearly") ?? 0;
+  const mrr = monthly * MONTHLY_PRICE_INR + yearly * (YEARLY_PRICE_INR / 12);
+  const lines = ["<b>Revenue</b>", `MRR: ₹${Math.round(mrr)}`];
+  for (const [plan, n] of counts) {
+    lines.push(`${escapeHtml(plan)}: ${n}`);
+  }
+  return lines.join("\n");
+}
+
+// deno-lint-ignore no-explicit-any
+export async function cmdSubs(supabase: any): Promise<string> {
+  const { yStart, tStart } = istYesterdayWindow();
+  const todayStart = istDateStr(new Date()); // used only for the label below
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("plan, created_at")
+    .eq("status", "active")
+    .gte("created_at", yStart)
+    .lt("created_at", tStart);
+  if (error) throw error;
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) {
+    counts.set(row.plan, (counts.get(row.plan) ?? 0) + 1);
+  }
+  if (counts.size === 0) {
+    return `<b>New subscriptions (yesterday)</b>\nnone`;
+  }
+  const lines = ["<b>New subscriptions (yesterday)</b>"];
+  for (const [plan, n] of counts) {
+    lines.push(`${escapeHtml(plan)}: ${n}`);
+  }
+  return lines.join("\n");
+}
+
+// deno-lint-ignore no-explicit-any
+export async function cmdExpiring(supabase: any): Promise<string> {
+  const now = new Date();
+  const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const in30d = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const [r7, r30] = await Promise.all([
+    supabase.from("users").select("id", { count: "exact", head: true })
+      .not("subscription_expires_at", "is", null)
+      .gte("subscription_expires_at", now.toISOString())
+      .lte("subscription_expires_at", in7d),
+    supabase.from("users").select("id", { count: "exact", head: true })
+      .not("subscription_expires_at", "is", null)
+      .gte("subscription_expires_at", now.toISOString())
+      .lte("subscription_expires_at", in30d),
+  ]);
+  if (r7.error) throw r7.error;
+  if (r30.error) throw r30.error;
+  return `<b>Expiring soon</b>\n7d: ${r7.count ?? 0}\n30d: ${r30.count ?? 0}`;
+}
+
 export async function routeCommand(
   cmd: string,
   args: string[],
@@ -134,6 +222,14 @@ export async function routeCommand(
   switch (cmd) {
     case "help":
       return HELP_TEXT;
+    case "status":
+      return cmdStatus(supabase);
+    case "revenue":
+      return cmdRevenue(supabase);
+    case "subs":
+      return cmdSubs(supabase);
+    case "expiring":
+      return cmdExpiring(supabase);
     default:
       return `Unknown command: /${cmd}. Try /help.`;
   }

@@ -5,8 +5,8 @@ Deno.env.set("TELEGRAM_WEBHOOK_SECRET", "test-webhook-secret-12345");
 Deno.env.set("FOUNDER_TELEGRAM_CHAT_ID", "12345");
 Deno.env.set("TELEGRAM_BOT_TOKEN", "dummy-telegram-token");
 
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand } from "./index.ts";
+import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, cmdExpiring } from "./index.ts";
 
 Deno.test("isAuthorizedTelegramSender requires BOTH the secret token and the chat id to match", () => {
   const base = { expectedSecretToken: "s3cr3t", expectedChatId: "12345" };
@@ -110,4 +110,74 @@ Deno.test("routeCommand('help', ...) returns HELP_TEXT exactly", async () => {
   // broken one. This asserts the routed command's actual return value.
   const reply = await routeCommand("help", [], null);
   assertEquals(reply, HELP_TEXT);
+});
+
+Deno.test("cmdStatus formats alert count, signups, and reports the ops RPC's cron_failures_24h", async () => {
+  const fake = {
+    rpc: (name: string) => ({
+      single: async () => {
+        if (name === "founder_metrics_for_admin_api") {
+          return { data: { signups_today_ist: 2, pro_active: 5 }, error: null };
+        }
+        if (name === "founder_metrics_ops") {
+          return { data: { open_alerts_count: 1, cron_failures_24h: 0 }, error: null };
+        }
+        throw new Error(`unexpected rpc ${name}`);
+      },
+    }),
+  };
+  const text = await cmdStatus(fake);
+  assertStringIncludes(text, "Signups today: 2");
+  assertStringIncludes(text, "Open alerts: 1");
+  assertStringIncludes(text, "PRO active: 5");
+});
+
+Deno.test("cmdRevenue reports active subscription counts by plan and MRR", async () => {
+  const fake = {
+    from: (table: string) => ({
+      select: () => ({
+        eq: () => Promise.resolve({
+          data: [{ plan: "monthly" }, { plan: "monthly" }, { plan: "yearly" }],
+          error: null,
+        }),
+      }),
+    }),
+  };
+  const text = await cmdRevenue(fake);
+  assertStringIncludes(text, "monthly: 2");
+  assertStringIncludes(text, "yearly: 1");
+  assertStringIncludes(text, "MRR");
+});
+
+Deno.test("cmdSubs reports today's and yesterday's new subscriptions by plan", async () => {
+  const fake = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          gte: () => ({
+            lt: () => Promise.resolve({ data: [{ plan: "monthly", created_at: "2026-09-13T01:00:00Z" }], error: null }),
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdSubs(fake);
+  assertStringIncludes(text, "monthly");
+});
+
+Deno.test("cmdExpiring reports 7d and 30d counts", async () => {
+  const fake = {
+    from: () => ({
+      select: () => ({
+        not: () => ({
+          gte: () => ({
+            lte: () => Promise.resolve({ count: 4, data: null, error: null }),
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdExpiring(fake);
+  assertStringIncludes(text, "7d:");
+  assertStringIncludes(text, "30d:");
 });
