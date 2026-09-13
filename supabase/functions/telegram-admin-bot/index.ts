@@ -16,6 +16,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { corsHeaders } from "../_shared/error.ts";
 import { sendTelegram, truncateForTelegram, escapeHtml } from "../_shared/telegram.ts";
 import { istDateStr, istYesterdayWindow } from "../_shared/ist_date.ts";
+import { buildDigestText, gatherDigestInput } from "../_shared/founder_digest_content.ts";
 
 
 export const HELP_TEXT = [
@@ -380,6 +381,12 @@ export async function cmdCron(supabase: any): Promise<string> {
   return lines.join("\n");
 }
 
+// deno-lint-ignore no-explicit-any
+export async function cmdDigest(supabase: any): Promise<string> {
+  const input = await gatherDigestInput(supabase, new Date());
+  return buildDigestText(input);
+}
+
 export async function routeCommand(
   cmd: string,
   args: string[],
@@ -409,6 +416,8 @@ export async function routeCommand(
       return cmdErrors(supabase);
     case "cron":
       return cmdCron(supabase);
+    case "digest":
+      return cmdDigest(supabase);
     default:
       return `Unknown command: /${cmd}. Try /help.`;
   }

@@ -6,7 +6,7 @@ Deno.env.set("FOUNDER_TELEGRAM_CHAT_ID", "12345");
 Deno.env.set("TELEGRAM_BOT_TOKEN", "dummy-telegram-token");
 
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, cmdExpiring, cmdUsers, cmdFind, cmdUser, cmdAlerts, cmdErrors, cmdCron, looksLikeUuid } from "./index.ts";
+import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, cmdExpiring, cmdUsers, cmdFind, cmdUser, cmdAlerts, cmdErrors, cmdCron, cmdDigest, looksLikeUuid } from "./index.ts";
 
 Deno.test("isAuthorizedTelegramSender requires BOTH the secret token and the chat id to match", () => {
   const base = { expectedSecretToken: "s3cr3t", expectedChatId: "12345" };
@@ -582,4 +582,62 @@ Deno.test("cmdCron escapes HTML in function name and status", async () => {
   assertEquals(text.includes("<script>"), false);
   assertStringIncludes(text, "&lt;script&gt;");
   assertStringIncludes(text, "&amp;");
+});
+
+/**
+ * Minimal fake supabase client that satisfies gatherDigestInput's query chain.
+ * Resolves all reads to empty data + 0 counts, so every section renders "none".
+ */
+function makeEmptyDigestFake() {
+  return {
+    from: (_table: string) => ({
+      select: () => ({
+        eq: () => ({
+          gte: () => ({
+            lt: () => Promise.resolve({
+              rows: [],
+              data: [],
+              count: 0,
+              error: null,
+            }),
+          }),
+          lt: () => Promise.resolve({
+            rows: [],
+            data: [],
+            count: 0,
+            error: null,
+          }),
+        }),
+        gte: () => ({
+          lt: () => Promise.resolve({
+            rows: [],
+            data: [],
+            count: 0,
+            error: null,
+          }),
+        }),
+        not: () => ({
+          gte: () => ({
+            lte: () => Promise.resolve({
+              count: 0,
+              error: null,
+            }),
+          }),
+        }),
+        order: () => ({
+          limit: () => Promise.resolve({
+            rows: [],
+            data: [],
+            count: 0,
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  };
+}
+
+Deno.test("cmdDigest builds text via the shared founder_digest_content module, not a re-implementation", async () => {
+  const text = await cmdDigest(makeEmptyDigestFake());
+  assertStringIncludes(text, "none"); // every section empty -> every section says "none"
 });
