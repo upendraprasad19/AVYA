@@ -304,6 +304,81 @@ export async function cmdUser(supabase: any, args: string[]): Promise<string> {
   return lines.join("\n");
 }
 
+const MAX_ALERT_LINES = 10;
+
+// deno-lint-ignore no-explicit-any
+export async function cmdAlerts(supabase: any): Promise<string> {
+  const { data, error } = await supabase
+    .from("alerts")
+    .select("source, severity, summary, detected_at")
+    .is("resolved_at", null)
+    .order("detected_at", { ascending: false })
+    .limit(MAX_ALERT_LINES);
+  if (error) throw error;
+  const rows = data ?? [];
+  if (rows.length === 0) {
+    return "<b>Open alerts</b>\nnone";
+  }
+  const lines = ["<b>Open alerts</b>"];
+  for (const a of rows) {
+    lines.push(`[${escapeHtml(a.severity)}] ${escapeHtml(a.source)} — ${escapeHtml(a.summary)}`);
+  }
+  return lines.join("\n");
+}
+
+// deno-lint-ignore no-explicit-any
+export async function cmdErrors(supabase: any): Promise<string> {
+  const { yStart, tStart } = istYesterdayWindow();
+  const { data, error } = await supabase
+    .from("client_errors")
+    .select("op_type, error_code")
+    .gte("created_at", yStart)
+    .lt("created_at", tStart);
+  if (error) throw error;
+  const rows = (data ?? []).filter((r: { error_code: string }) =>
+    r.error_code !== "event" && r.error_code !== "info"
+  );
+  if (rows.length === 0) {
+    return "<b>Errors (yesterday)</b>\nnone";
+  }
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    counts.set(r.op_type, (counts.get(r.op_type) ?? 0) + 1);
+  }
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const lines = ["<b>Errors (yesterday)</b>"];
+  for (const [opType, n] of sorted.slice(0, 10)) {
+    lines.push(`${escapeHtml(opType)}: ${n}`);
+  }
+  return lines.join("\n");
+}
+
+// deno-lint-ignore no-explicit-any
+export async function cmdCron(supabase: any): Promise<string> {
+  const { data, error } = await supabase
+    .from("cron_call_log")
+    .select("function_name, status, started_at")
+    .order("started_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  const latestByFn = new Map<string, { status: string; started_at: string }>();
+  for (const row of data ?? []) {
+    if (!latestByFn.has(row.function_name)) {
+      latestByFn.set(row.function_name, { status: row.status, started_at: row.started_at });
+    }
+  }
+  const now = Date.now();
+  const entries = [...latestByFn.entries()].sort((a, b) =>
+    new Date(a[1].started_at).getTime() - new Date(b[1].started_at).getTime()
+  );
+  const lines = ["<b>Cron (most stale first)</b>"];
+  for (const [fn, info] of entries.slice(0, 15)) {
+    const ageMin = Math.round((now - new Date(info.started_at).getTime()) / 60000);
+    lines.push(`${escapeHtml(fn)}: ${info.status}, ${ageMin}m ago`);
+  }
+  return lines.join("\n");
+}
+
 export async function routeCommand(
   cmd: string,
   args: string[],
@@ -327,6 +402,12 @@ export async function routeCommand(
       return cmdFind(supabase, args);
     case "user":
       return cmdUser(supabase, args);
+    case "alerts":
+      return cmdAlerts(supabase);
+    case "errors":
+      return cmdErrors(supabase);
+    case "cron":
+      return cmdCron(supabase);
     default:
       return `Unknown command: /${cmd}. Try /help.`;
   }

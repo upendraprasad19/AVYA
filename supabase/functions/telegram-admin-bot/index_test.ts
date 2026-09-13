@@ -6,7 +6,7 @@ Deno.env.set("FOUNDER_TELEGRAM_CHAT_ID", "12345");
 Deno.env.set("TELEGRAM_BOT_TOKEN", "dummy-telegram-token");
 
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, cmdExpiring, cmdUsers, cmdFind, cmdUser, looksLikeUuid } from "./index.ts";
+import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, cmdExpiring, cmdUsers, cmdFind, cmdUser, cmdAlerts, cmdErrors, cmdCron, looksLikeUuid } from "./index.ts";
 
 Deno.test("isAuthorizedTelegramSender requires BOTH the secret token and the chat id to match", () => {
   const base = { expectedSecretToken: "s3cr3t", expectedChatId: "12345" };
@@ -405,4 +405,81 @@ Deno.test("cmdUser without an active subscription renders 'plan: free', reading 
     text,
     "<b>Free User</b>\nfree@example.com\nid: u43\nsigned up: 2026-02-20\nlast active: 2026-09-01\nplan: free",
   );
+});
+
+Deno.test("cmdAlerts lists open alerts most-recent-first, capped at 10 with a +N more line", async () => {
+  const rows = Array.from({ length: 12 }, (_, i) => ({
+    source: `check_${i}`,
+    severity: "warn",
+    summary: `row ${i}`,
+    detected_at: "2026-09-13T01:00:00Z",
+  }));
+  const fake = {
+    from: () => ({
+      select: () => ({
+        is: () => ({
+          order: () => ({
+            limit: (n: number) => Promise.resolve({ data: rows.slice(0, n), error: null }),
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdAlerts(fake);
+  assertStringIncludes(text, "row 0");
+  assertStringIncludes(text, "row 9");
+});
+
+Deno.test("cmdAlerts reports 'none' when there are no open alerts", async () => {
+  const fake = {
+    from: () => ({
+      select: () => ({
+        is: () => ({
+          order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }),
+        }),
+      }),
+    }),
+  };
+  assertStringIncludes(await cmdAlerts(fake), "none");
+});
+
+Deno.test("cmdErrors groups yesterday's real errors by op_type", async () => {
+  const fake = {
+    from: () => ({
+      select: () => ({
+        gte: () => ({
+          lt: () => Promise.resolve({
+            data: [
+              { op_type: "sync_service_restore_op_timeout", error_code: "minified:a0Z" },
+              { op_type: "sync_service_restore_op_timeout", error_code: "minified:a0Z" },
+              { op_type: "realtime_stream_weight_logs", error_code: "minified:aQC" },
+            ],
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdErrors(fake);
+  assertStringIncludes(text, "sync_service_restore_op_timeout: 2");
+  assertStringIncludes(text, "realtime_stream_weight_logs: 1");
+});
+
+Deno.test("cmdCron reports the most recently-run functions first, flags how long ago", async () => {
+  const fake = {
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          limit: () => Promise.resolve({
+            data: [
+              { function_name: "morning-alert", status: "success", started_at: new Date().toISOString() },
+            ],
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdCron(fake);
+  assertStringIncludes(text, "morning-alert");
 });
