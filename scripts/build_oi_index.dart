@@ -107,8 +107,9 @@ List<String> unrecognisedStatuses(String content) {
 /// one is the same corruption. Filtering to OPEN first would make this check
 /// narrower than the claim it makes.
 ///
-/// THE SCAR THIS EXISTS FOR — OI numbers are minted by eyeballing the board's
-/// tail. There is no allocator, and until this check NOTHING detected a clash.
+/// THE SCAR THIS EXISTS FOR — OI numbers were minted by eyeballing the board's
+/// tail. Until 2026-09-12 there was no allocator; `scripts/mint_oi.sh` now
+/// reserves numbers as `oi/N` branches. This check remains the LANDING backstop.
 /// On 2026-08-13 six ids (OI-100..105) existed twice — once on `main`, once on a
 /// branch — naming entirely different issues. The two boards **merged cleanly**:
 /// git saw additions in different regions of one file, so there was no conflict

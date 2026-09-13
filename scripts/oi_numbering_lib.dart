@@ -4,9 +4,10 @@
 // the predicate can be tested without building repos.
 //
 // THE PROBLEM (OI-112, diagnose b7e3d1, and six live instances).
-// `build_oi_index.dart:114-115` states it plainly: "OI numbers are minted by
-// eyeballing the board's tail. There is no allocator, and until this check
-// NOTHING detected a clash." The ceiling is split across open_issues.md and
+// `build_oi_index.dart` states it plainly: OI numbers were minted by eyeballing
+// the board's tail. Until 2026-09-12 there was no allocator; `scripts/mint_oi.sh`
+// now reserves numbers as `oi/N` branches, and this check remains the LANDING
+// backstop. The ceiling is split across open_issues.md and
 // closed_issues.md, and a session sees only its own branch — so two branches
 // routinely mint the same number for different issues. On 2026-08-13 a branch
 // minted OI-106/107/108 against a base whose ceiling was OI-105 while `main`

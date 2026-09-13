@@ -173,9 +173,16 @@ void main() {
       // files deliberately (a test that queried the ledger for real would
       // be a reader), so the test is allowlisted by name with its reason
       // rather than the scan narrowed.
+      //
+      // ai-media-proxy/index_test.ts is the SAME shape, added the same day
+      // (B-pass 2026-09-13, BP-2): its `fakeUsageCountersClient` helper
+      // dispatches `from(table)` on `table === "usage_counters"` to route to
+      // a fake read builder for the `checkFreeImageQuota` tests — a literal
+      // table-name check in test scaffolding, not a real query.
       const allowed = {
         'supabase/functions/weekly-report/index.ts',
         'supabase/functions/ai-media-proxy/index.ts',
+        'supabase/functions/ai-media-proxy/index_test.ts',
         'supabase/functions/founder-digest/index.ts',
         'supabase/functions/founder-digest/index_test.ts',
       };

@@ -39,6 +39,7 @@
 // No `// Gate: N` line, per CLAUDE.md rule 24: a new gate takes NO number; the
 // filename is the identity that pre-commit.sh, test.yml and Gate 33 key on.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -74,6 +75,70 @@ String? _run(String exe, List<String> args) {
 /// exist at that rev is legitimately empty -- the closed board postdates the
 /// open one -- so an absent path yields '' via the caller, not null.
 String? _showAtRev(String rev, String path) => _run('git', ['show', '$rev:$path']);
+
+/// True when either board differs between the WORKING TREE and HEAD — staged
+/// or unstaged. That difference IS the mint in progress (OI-176): it is the only
+/// place a brand-new number exists before the first commit, and it must be
+/// compared against origin/main no matter what shape HEAD has.
+bool _boardDirty() {
+  try {
+    final r = Process.runSync(
+        'git', ['diff', '--quiet', 'HEAD', '--', _openBoard, _closedBoard]);
+    return r.exitCode == 1; // 0 identical, 1 differs, anything else = could not tell
+  } on ProcessException {
+    return false;
+  }
+}
+
+Set<int> _numbersFromRefLines(String lines) {
+  final out = <int>{};
+  for (final l in lines.split('\n')) {
+    final m = RegExp(r'/oi/(\d+)$').firstMatch(l.trim());
+    if (m != null) out.add(int.parse(m.group(1)!));
+  }
+  return out;
+}
+
+/// Reservations already fetched into the shared .git (SessionStart sync, or a
+/// mint in any sibling worktree). Empty is an answer here: absence of a local
+/// ref is what triggers the one network call below.
+Set<int> _localReservations() => _numbersFromRefLines(
+    _run('git', ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/oi/']) ?? '');
+
+/// ONE `ls-remote` for the whole namespace (no `--exit-code`: with it an EMPTY
+/// namespace is indistinguishable from a failure), bounded to 10 s. null =
+/// could not answer (offline, timeout, no remote) -- UNDETERMINED, never
+/// "not reserved".
+Future<Set<int>?> _remoteReservations() async {
+  try {
+    final p = await Process.start('git', ['ls-remote', '--refs', 'origin', 'refs/heads/oi/*']);
+    final out = p.stdout.transform(utf8.decoder).join();
+    unawaited(p.stderr.drain<void>()); // bare drain() is an unawaited_futures WARNING -> fails pre-push analyze
+    // 10 s, not 5: a bare ls-remote over this SSH remote measures 2.9-3.2 s
+    // (both review rounds); a cold handshake crossing 5 s would SKIP the one
+    // check that no later placement repeats once the number is published.
+    // The renamed-fixture "offline" path fails in ~1 s either way.
+    final code = await p.exitCode.timeout(const Duration(seconds: 10), onTimeout: () {
+      p.kill();
+      return -1;
+    });
+    if (code != 0) return null;
+    return _numbersFromRefLines(await out);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Every number on origin/main's CURRENT boards. A published number is exempt
+/// from the reservation check: it is permanent, and `mint_oi.sh --prune` may
+/// legitimately have deleted its reservation already.
+Set<int>? _publishedOnOriginMain() {
+  final open = _parseStrict(_showAtRev('origin/main', _openBoard), 'origin/main open board');
+  final closed =
+      _parseStrict(_showAtRev('origin/main', _closedBoard) ?? '', 'origin/main closed board');
+  if (open == null || closed == null) return null;
+  return mergeBoards(open, closed).keys.toSet();
+}
 
 /// Parses a board and distinguishes "genuinely no entries" from "could not read
 /// this at all", which look identical to every caller that returns a bare map.
@@ -117,7 +182,7 @@ void _warnPass(String why) {
       'a current origin/main.');
 }
 
-void main(List<String> args) {
+Future<void> main(List<String> args) async {
   final warnOnly = args.contains('--warn-only');
 
   final root = _run('git', ['rev-parse', '--show-toplevel'])?.trim();
@@ -131,6 +196,11 @@ void main(List<String> args) {
   // Working tree, not the index. At pre-commit the working tree is what is
   // about to be committed; at CI it IS the checkout; and build_oi_index.dart
   // (the sibling gate) reads the working tree too, so the two agree on input.
+  // Consequence, with Check C below (reservation required): a hand-typed
+  // UNSTAGED number in the worktree blocks EVERY commit from that worktree
+  // until it is reserved (scripts/mint_oi.sh --reserve N) or removed. By
+  // design -- the number is the mint in progress whether or not it is staged
+  // -- at the cost of one bounded `ls-remote` per attempt.
   final openFile = File(_openBoard);
   if (!openFile.existsSync()) {
     _warnPass('$_openBoard not found.');
@@ -147,6 +217,11 @@ void main(List<String> args) {
   // things and the reassuring one is the lie -- it did not check. Tracked so
   // the final verdict can say SKIPPED instead.
   var undetermined = false;
+  // DIFFERENT fact from `undetermined`: that one means the collision check
+  // did not run; this one means the RESERVATION check (Check C) could not be
+  // completed. Folding them together prints a SKIPPED line that is false
+  // about one of them.
+  var reservationSkipped = false;
 
   // ---- Check A: one number on BOTH boards ----------------------------------
   final dupes = crossFileDuplicates(headOpen, headClosed);
@@ -259,7 +334,21 @@ void main(List<String> args) {
     // this repo produces octopus merges NOWHERE: safe_merge.sh takes a single
     // branch. Refusing to answer is honest, matches this file's convention
     // everywhere else, and cannot be mistaken for a clean bill.
-    final mergeHeadFile = File('.git/MERGE_HEAD');
+    // `--git-path`, never the literal `.git/MERGE_HEAD`: in a LINKED worktree
+    // (§4.13 makes that every session) `.git` is a one-line FILE pointing at
+    // the real gitdir, so the literal path never exists and the octopus count
+    // below read 0 there (B-pass 2026-09-13, F3, found while fixing the
+    // unreadable-MERGE_HEAD case).
+    final mergeHeadPath =
+        _run('git', ['rev-parse', '--git-path', 'MERGE_HEAD'])?.trim() ?? '.git/MERGE_HEAD';
+    final mergeHeadFile = File(mergeHeadPath);
+    // MERGE_HEAD is PRESENT but does not resolve to a commit (corrupt or
+    // truncated file). Without this arm the dispatch fell through to the
+    // working-tree arm -- which is exactly the arm the mid-merge comment below
+    // says must NOT run mid-merge (the tree holds BOTH sides' entries). Say
+    // UNDETERMINED instead (B-pass 2026-09-13, F3).
+    final mergeHeadUnreadable =
+        mergeHeadFile.existsSync() && (mergeHead == null || mergeHead.isEmpty);
     final mergeHeadLines = mergeHeadFile.existsSync()
         ? mergeHeadFile
             .readAsLinesSync()
@@ -281,6 +370,17 @@ void main(List<String> args) {
       otherSideRev = 'HEAD';
       baseRev = null;
       shapeNote = 'octopus (not compared)';
+    } else if (mergeHeadUnreadable) {
+      undetermined = true;
+      _warnPass('MERGE_HEAD exists at $mergeHeadPath but does not resolve to a '
+          'commit, so this is mid-merge with an unreadable merge head. NOT '
+          'compared: the working tree holds both sides\' entries and any '
+          'other arm would report them as contested. Finish or abort the merge '
+          '(git merge --abort) and re-run.');
+      thisSideRev = 'origin/main';
+      otherSideRev = 'HEAD';
+      baseRev = null;
+      shapeNote = 'mid-merge, MERGE_HEAD unreadable (not compared)';
     } else if (mergeHead != null && mergeHead.isNotEmpty) {
       // Mid-merge: the pre-merge-commit hook. The merge commit does not exist
       // yet, but both sides do -- HEAD is the branch being merged INTO and
@@ -289,6 +389,18 @@ void main(List<String> args) {
       otherSideRev = mergeHead;
       baseRev = _run('git', ['merge-base', 'HEAD', mergeHead])?.trim();
       shapeNote = 'mid-merge (HEAD vs MERGE_HEAD)';
+    } else if (_boardDirty()) {
+      // OI-176 (f3a9c1). An UNCOMMITTED board edit is the mint in progress. In
+      // a fresh worktree HEAD is routinely a merge commit on main, and the arm
+      // below would compare HEAD^1 vs HEAD^2 -- two ancestors of the branch
+      // point -- then print PASS about trees that do not contain the edit.
+      // Dispatch on "is the board being changed", not on HEAD's shape. The
+      // mid-merge arm above keeps precedence: mid-merge the working tree holds
+      // BOTH sides' entries and would make every number look contested.
+      thisSideRev = 'origin/main';
+      otherSideRev = 'HEAD'; // resolves to the WORKING TREE via useWorkingTree below
+      baseRev = _run('git', ['merge-base', 'HEAD', 'origin/main'])?.trim();
+      shapeNote = 'working tree (uncommitted board vs origin/main)';
     } else if (parents.length >= 3) {
       // HEAD is a merge commit (>=2 parents after the commit's own sha): CI on
       // a push to main, after the merge landed. Compare its parents.
@@ -305,7 +417,7 @@ void main(List<String> args) {
       shapeNote = 'branch (HEAD vs origin/main)';
     }
 
-    if (isOctopus) {
+    if (isOctopus || mergeHeadUnreadable) {
       // Already reported above as UNDETERMINED. Deliberately no comparison:
       // running the two-side predicate here would produce a real-looking
       // verdict about two of the three-or-more sides.
@@ -359,6 +471,55 @@ void main(List<String> args) {
         final baseMerged = mergeBoards(baseOpen, baseClosed);
         final mainMerged = mergeBoards(mainOpen, mainClosed);
         final otherMerged = mergeBoards(otherOpen, otherClosed);
+
+        // ---- Check C: every number this side minted is RESERVED ---------------
+        // (allocator, 2026-09-12; spec §3.3). Numbers are allocated by
+        // scripts/mint_oi.sh as refs/heads/oi/N; a hand-typed UNRESERVED number
+        // must not commit (adopting an existing orphan reservation by hand is
+        // fine and passes here). Network only when there is something
+        // unreserved locally to ask about; offline => UNDETERMINED, never PASS.
+        // Numbers already on origin/main's CURRENT board are exempt: they are
+        // permanent, and `mint_oi.sh --prune` may already have deleted their
+        // reservation -- which is why this check is vacuous at CI-on-main and
+        // meaningful at pre-commit, pre-merge-commit and CI-on-a-PR.
+        final mintedHere = otherMerged.keys.where((n) => !baseMerged.containsKey(n)).toList()
+          ..sort();
+        if (mintedHere.isNotEmpty) {
+          final published = _publishedOnOriginMain();
+          if (published == null) {
+            reservationSkipped = true;
+            _warnPass('origin/main boards unreadable; reservation check skipped.');
+          } else {
+            final toCheck = mintedHere.where((n) => !published.contains(n)).toList();
+            if (toCheck.isNotEmpty) {
+              final local = _localReservations();
+              Set<int>? remote;
+              if (toCheck.any((n) => !local.contains(n))) {
+                remote = await _remoteReservations();
+              }
+              for (final n in toCheck) {
+                if (local.contains(n) || (remote?.contains(n) ?? false)) continue;
+                if (remote == null) {
+                  reservationSkipped = true;
+                  // NOT _warnPass: its tail promises "CI re-runs it", which is
+                  // false for THIS check -- once the number is published the
+                  // exemption makes every later placement vacuous (spec §3.3).
+                  stderr.writeln('[check_oi_numbering_unique] UNDETERMINED (passing): OI-$n has '
+                      'no local reservation ref and origin could not be reached to check '
+                      'refs/heads/oi/$n. NO LATER PLACEMENT RE-CHECKS THIS once the number is '
+                      'published -- reserve it now: sh scripts/mint_oi.sh --reserve $n "<title>"');
+                  continue;
+                }
+                failures.add('OI-$n is on this board but has NO reservation '
+                    '(no refs/heads/oi/$n on origin).\n'
+                    '    Numbers are allocated, not eyeballed:  '
+                    'sh scripts/mint_oi.sh --reserve $n "<title>"\n'
+                    '    If that reports TAKEN, someone else holds $n -- renumber with:  '
+                    'sh scripts/mint_oi.sh "<title>"');
+              }
+            }
+          }
+        }
 
         // VACUOUS vs UNDETERMINED -- these look identical in the output of a
         // careless gate and mean opposite things.
@@ -420,12 +581,17 @@ void main(List<String> args) {
                 'truncated, so "nothing was minted" may simply be "the mint is '
                 'not in this clone". NOT reported as clean. Fix for CI: set '
                 '`fetch-depth: 0` on the checkout step.');
-          } else {
+          } else if (failures.isEmpty && !reservationSkipped) {
             stdout.writeln('[check_oi_numbering_unique] PASS (vacuous): $shapeNote -- the '
                 '$thisSideRev side minted no OI number that the merge-base '
                 'lacked, so no cross-branch collision is expressible. '
                 '${otherMerged.length} entries on the $otherSideRev side were '
                 'read and compared; this is a checked answer, not a skipped one.');
+          } else {
+            // A reservation FAIL or SKIP is the verdict of this run; printing a
+            // PASS about the collision half first would be read as the whole.
+            stdout.writeln('[check_oi_numbering_unique] collision check ran clean '
+                '($shapeNote, vacuous: the $thisSideRev side minted nothing the merge-base lacked).');
           }
         } else {
           final collisions = findCollisions(
@@ -442,8 +608,9 @@ void main(List<String> args) {
                   '${c.id} against a base that did not have it, and '
                   '$thisSideRev minted it independently.\n'
                   '    FIX: renumber the $otherSideRev side\'s entry '
-                  '($thisSideRev is published; its number is fixed). Next free '
-                  'is OI-$next.\n'
+                  '($thisSideRev is published; its number is fixed). Mint the '
+                  'replacement with:  sh scripts/mint_oi.sh "<title>"  (never by '
+                  'eyeballing; next free was OI-$next at the time of this check).\n'
                   '    Add a provenance bullet to the renumbered entry -- any '
                   'already-pushed commit message still cites the old number and '
                   'is not rewritten. Precedent: commit 0cb4120a.');
@@ -465,6 +632,17 @@ void main(List<String> args) {
           'no cross-board duplicates. Cross-branch collision check did NOT '
           'run (see UNDETERMINED above) -- CI re-runs it against a current '
           'origin/main.');
+      exit(0);
+    }
+    if (reservationSkipped) {
+      // The collision check RAN (and found nothing); only the reservation
+      // check could not complete. Say exactly that -- "did NOT run" here
+      // would be false about the half that did.
+      stdout.writeln('[check_oi_numbering_unique] SKIPPED (reservation check): '
+          'collision check ran and found nothing; one or more minted numbers '
+          'could not be verified against origin (see UNDETERMINED above). '
+          'Nothing re-checks this once the number is published -- reserve it '
+          'now with: sh scripts/mint_oi.sh --reserve <N> "<title>"');
       exit(0);
     }
     // Says "entries in <file>", never "open" / "closed". These are SECTION

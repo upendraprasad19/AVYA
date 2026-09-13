@@ -331,7 +331,10 @@ Some prose mentioning OI-5 — not a heading.
       expect(r.stderr, contains('OI-2'));
       expect(r.stderr, contains('branch two'));
       expect(r.stderr, contains('mainline two'));
-      expect(r.stderr, contains('Next free is OI-3'));
+      // Repointed 2026-09-12 (f3a9c1): the FIX text prescribes mint_oi.sh
+      // instead of an eyeballed number; the number is still reported.
+      expect(r.stderr, contains('mint_oi.sh'));
+      expect(r.stderr, contains('OI-3'));
     });
 
     test('PASSES when the branch mints an uncontested number', () {
@@ -340,6 +343,11 @@ Some prose mentioning OI-5 — not a heading.
         mainOpen: {1: 'one', 2: 'mainline two'},
         branchOpen: {1: 'one', 3: 'branch three'},
       );
+      // The number the branch mints must be RESERVED (allocator, 2026-09-12);
+      // an unreserved mint is now a FAIL, pinned by
+      // oi_numbering_gate_e2e_test.dart 'unreserved'.
+      _git(work, ['push', '-q', 'origin', 'HEAD:refs/heads/oi/3']);
+      _git(work, ['fetch', '-q', 'origin', '+refs/heads/oi/*:refs/remotes/origin/oi/*']);
       final r = _runGate(work);
       expect(r.exitCode, 0, reason: 'stderr:${r.stderr}');
       expect(r.stdout, contains('PASS'));
@@ -585,6 +593,9 @@ Some prose mentioning OI-5 — not a heading.
         branchOpen: {1: 'one'},
         branchClosed: {3: 'branch three'},
       );
+      // The branch's number must be RESERVED (allocator, 2026-09-12) -- at the
+      // merge commit Check C is meaningful because origin/main lacks 3.
+      _git(work, ['push', '-q', 'origin', 'HEAD:refs/heads/oi/3']);
       _git(work, ['checkout', 'main']);
       _git(work, ['merge', '--no-ff', '--no-edit', 'feature']);
       final r = _runGate(work);

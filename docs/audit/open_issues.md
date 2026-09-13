@@ -8,6 +8,17 @@ diagnose pass that hasn't yet been closed by a shipped commit lives here.
 - **Append-only at the bottom.** Never re-number a closed issue; the OI
   number is its permanent identifier (referenced from diagnose-docs +
   commit messages).
+- **Numbers are ALLOCATED, never eyeballed (2026-09-12).** File a new issue with
+  `sh scripts/mint_oi.sh "<title>"` — it reserves the next free number as the
+  remote branch `oi/N` (an atomic create on GitHub, so two sessions cannot both
+  get N, laptop or cloud) and appends the stub. An UNRESERVED number FAILS the
+  commit (`check_oi_numbering_unique.dart`, Check C) at pre-commit and at
+  pre-merge-commit — adopting an orphan reservation by hand is fine. Run it in
+  YOUR worktree (§4.13) — it edits this file. A number filed before the
+  allocator existed: `sh scripts/mint_oi.sh --reserve N "<title>"`. Never mint
+  offline — the script refuses, by design. The cloud never prunes (no `gh`);
+  the next laptop mint prunes for it. Spec:
+  `docs/superpowers/specs/2026-09-12-oi-allocator-design.md`.
 - **Status transitions:**
   - `OPEN` — identified, not started
   - `IN_PROGRESS` — being worked this session
@@ -3370,7 +3381,7 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 ## OI-176 — the OI-collision gate answers `PASS (vacuous)` for a branch with no commits, which is the exact state in which numbers are minted (P2)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-12 · diagnose f3a9c1 · branch oi-allocator — working-tree arm in check_oi_numbering_unique.dart (dispatch on `git diff --quiet HEAD -- <boards>` before HEAD's shape); allocator in scripts/mint_oi.sh
 - **Blocked on**: none
 - **Verified**: 2026-09-08 — observed live, not reasoned about. On branch `regen-wave-alignment` with **zero commits** and a real three-way collision sitting in the index, `dart run scripts/check_oi_numbering_unique.dart` printed: *"PASS (vacuous): merge commit (HEAD^1 vs HEAD^2) — the … side minted no OI number that the merge-base lacked, so no cross-branch collision is expressible. 163 entries … were read and compared; **this is a checked answer, not a skipped one**."* Meanwhile `git show main:docs/audit/open_issues.md` and the staged board each carried `## OI-167`, `## OI-168`, `## OI-169` under completely different titles
 - **Identified**: 2026-09-08 · B-pass finding 1 on the OI-166 Unit 1 batch (`docs/reviews/df96a61cf598-bpass.md`). The collision was found BY HAND; the gate that exists for it was green throughout
@@ -3932,6 +3943,65 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Rule this should leave behind** (proposed for §4.11, not yet written into CLAUDE.md): a WARN-only gate is born with an OI naming its flip condition and owner, so the flip cannot be dropped by a re-plan that changes scope.
 - **Blast radius**: the de-dup touches `lib/core/services/**` (account) and `lib/features/ai_coach/**` (account); the gate script is feature-tier by path.
 - **Related**: OI-166 (parent), OI-189 (the horizon decision that the unified builder would make once), OI-174, OI-176 (the other OI-166-batch gate with a known blind spot).
+
+## OI-191 — target_weight_kg can contradict the chosen goal's direction, making the reach-your-goal projection false (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none — bounded, no schema/migration/payment/auth involvement
+- **Verified**: 2026-09-13 — reproduced live on the newly-created Play Store review account
+  (`googleplay-review@icanbefitter.com`, `public.user_profile`: `current_weight_kg=75`,
+  `target_weight_kg=71`, `primary_goal='build_muscle'`) and confirmed by reading all 4 files
+  below directly, not from a subagent summary.
+- **Identified**: 2026-09-13 · founder noticed the account's own goal/target combo looked
+  backwards while spot-checking the onboarding flow, asked "goal is also to reduce weight
+  right? check."
+- **What**: two writers save `target_weight_kg` with zero cross-field validation against
+  `primary_goal`:
+  - `lib/features/onboarding/screens/stats_screen.dart` `_onCalibrate` (~line 387-424) —
+    seeds the field goal-aware (`build_muscle` → current+3kg, `lose_fat` → current-5kg,
+    `recomp` → current-2kg; the comment at line 42-46 spells this out), but it's a free
+    `TextEditingController` and the submit handler validates only that weight/height parse
+    as numbers. A user can overwrite the sensible seed with anything.
+  - `lib/features/profile/screens/edit_profile_screen.dart` (`target_weight_kg` write at
+    line 1825) — same gap, second door: a user can set a sensible target during onboarding,
+    then contradict it later via Edit Profile with no warning either.
+
+  Three independent render sites then trust the raw, unvalidated pair and produce an actively
+  false projection when goal-direction and target-direction disagree:
+  `lib/features/profile/screens/profile/nutrition_targets.dart:15-31`,
+  `lib/features/nutrition/screens/nutrition_screen.dart:520-548` (`_projectionLine`),
+  `lib/features/profile/screens/profile/pace_detail_sheet.dart:5-13` — all three gate on
+  `goal ∈ {lose_fat, build_muscle}` + both weights present + gap > 0.1kg, then call
+  `BmrCalculator.projectGoalDate` (`lib/core/utils/bmr_calculator.dart:258-288`), which computes
+  `gap = (currentKg - targetKg).abs()` — an **unsigned magnitude**, blind to which direction the
+  diet is actually pushing the user.
+- **What this does NOT affect**: the calorie/macro numbers themselves. Checked
+  `BmrCalculator.calculateTargets` specifically — for `goal == 'build_muscle'`,
+  `target_weight_kg` is never read at all; it's consulted only inside the `goal == 'lose_fat'`
+  branch, to pick the protein baseline. So a contradictory target doesn't corrupt the diet
+  prescription, only the projection text describing it.
+- **Consequence**: a user on a `build_muscle` surplus (weight trending up) with a target below
+  current sees "At this pace, you'll reach 71 kg on \<date\>" — a promise the prescribed diet
+  cannot keep, since the diet is moving them the opposite direction. Symmetric failure exists
+  for `lose_fat` + a target set above current. Not hypothetical to this one test account: any
+  real user who mistypes or misunderstands the target-weight field the same way hits the
+  identical wrong message.
+- **Bug-history check**: grepped `docs/diagnoses/INDEX.md` + `open_issues.md` +
+  `closed_issues.md` for `projectGoalDate` / target-goal direction conflicts — no hits. Not a
+  recurrence of the existing onboarding-calc-drift class (c3f2d8/f1b6d4/f19a7c/c7a1f5), which are
+  all preview-vs-commit or missing-input bugs, not a direction contradiction.
+- **Fix shape (not decided, sketched for whoever picks it up)**: (a) validate at both writers —
+  block or auto-correct a contradictory target before save; needs enforcing at TWO sites, and a
+  third if any other writer of this field is found; or (b) make `projectGoalDate` (or its 3
+  call sites) direction-aware — suppress or reword the projection when direction disagrees with
+  goal, so a bad input degrades gracefully instead of lying. (b) is a single-point fix versus
+  (a)'s multi-writer enforcement, but is a genuine design call, not decided here.
+- **Blast radius**: `feature` — UI/calc-only, no schema/migration/payment/auth/sync path
+  touched (per `docs/blast_radius.yaml`'s account-tier trigger list, none apply).
+- **Related**: none of the existing calorie-drift diagnoses; found while investigating a
+  founder observation on the same test account that also produced
+  [[feedback_mistake_subscription_status_vs_subscriptions_table]] (unrelated mechanism, same
+  investigation session).
 
 ## OI-192 — the orphan-sync dedupe can never match a photo turn: client writes `[Photo] …`, server writes `[Photo: image] …`, so every media exchange upserts a phantom `in_app_orphan` duplicate (P2)
 

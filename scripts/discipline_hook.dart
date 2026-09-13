@@ -30,6 +30,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'oi_numbering_lib.dart';
+
 // Bug / fix / observation triggers for UserPromptSubmit. Word-bounded where a
 // short token would over-match (e.g. "fix" inside "prefix").
 final RegExp _trigger = RegExp(
@@ -115,6 +117,8 @@ void main() async {
         if (wtWarn.isNotEmpty) parts.add(wtWarn);
         final memNudge = _memoryIndexNudge();
         if (memNudge.isNotEmpty) parts.add(memNudge);
+        final oiLine = _oiBoardLine();
+        if (oiLine.isNotEmpty) parts.add(oiLine);
         if (parts.isNotEmpty) _emit('SessionStart', parts.join('\n\n'));
         break;
 
@@ -220,4 +224,100 @@ void _emit(String eventName, String context) {
 Future<String> _readStdin() async {
   if (stdin.hasTerminal) return '';
   return utf8.decoder.bind(stdin).join();
+}
+
+/// OI allocator (spec docs/superpowers/specs/2026-09-12-oi-allocator-design.md
+/// §3.4): tell the session the next free number and the ONE way to mint.
+///
+/// LOCAL READ ONLY -- no fetch. A `git ls-remote` over the SSH remote measured
+/// 2.9-3.2 s here (review round 1, 2026-09-12) and this fires on every
+/// SessionStart source including `compact`; spec §7.4 set the rule at 2 s.
+/// The number is therefore "at least N as of the last sync"; mint_oi.sh syncs
+/// before it reserves, so a stale N here can never cause a collision. Every
+/// mint, every `sync_refs`, and any plain `git fetch origin` (default refspec
+/// covers oi/*) refreshes the refs this reads. Fail-open: any error => ''.
+String _oiBoardLine() {
+  try {
+    final top = Process.runSync('git', ['rev-parse', '--show-toplevel'], stdoutEncoding: utf8);
+    if (top.exitCode != 0) return '';
+    final root = (top.stdout as String).trim();
+    // No origin/main => nothing to say. A wrong number is worse than none.
+    final hasMain = Process.runSync(
+        'git', ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
+        workingDirectory: root);
+    if (hasMain.exitCode != 0) return '';
+
+    String show(String path) {
+      final r = Process.runSync('git', ['show', 'refs/remotes/origin/main:$path'],
+          workingDirectory: root, stdoutEncoding: utf8); // utf8: the em-dash separator
+      return r.exitCode == 0 ? r.stdout as String : '';
+    }
+    String local(String path) {
+      final f = File('$root/$path');
+      return f.existsSync() ? f.readAsStringSync() : '';
+    }
+    const open = 'docs/audit/open_issues.md';
+    const closed = 'docs/audit/closed_issues.md';
+    final published = mergeBoards(parseBoard(show(open)), parseBoard(show(closed)));
+    final working = mergeBoards(parseBoard(local(open)), parseBoard(local(closed)));
+
+    final refs = Process.runSync(
+        'git', ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin/oi/'],
+        workingDirectory: root, stdoutEncoding: utf8);
+    final reserved = <int>{};
+    for (final l in (refs.stdout as String).split('\n')) {
+      final m = RegExp(r'/oi/(\d+)$').firstMatch(l.trim());
+      if (m != null) reserved.add(int.parse(m.group(1)!));
+    }
+    // A number filed on ANY local branch (a sibling worktree's work in flight)
+    // is filed, not orphaned -- otherwise this line would tell worktree B to
+    // release worktree A's number (review round 2, finding 3).
+    // ONE `git grep` per 150 branches over both boards -- 0.2 s for the 205
+    // local branches this repo carried on 2026-09-12 -- instead of one
+    // `git show` per branch per board, which measured 15.7 s per SessionStart
+    // in the same repo (spec §7.4's rule is 2 s). Chunked so the argument list
+    // stays under Windows' 32 KB limit. `^## OI-N` is the same heading grep
+    // mint_oi.sh uses (a heading without the em-dash counts as filed here,
+    // which errs towards NOT calling a number an orphan).
+    final onLocalBranches = <int>{};
+    final heads = Process.runSync('git', ['for-each-ref', '--format=%(refname)', 'refs/heads/'],
+        workingDirectory: root, stdoutEncoding: utf8);
+    final headRefs = (heads.stdout as String)
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    for (var i = 0; i < headRefs.length; i += 150) {
+      final chunk = headRefs.sublist(i, i + 150 > headRefs.length ? headRefs.length : i + 150);
+      final g = Process.runSync(
+          'git', ['grep', '-h', '-o', '-E', r'^## OI-[0-9]+', ...chunk, '--', open, closed],
+          workingDirectory: root, stdoutEncoding: utf8);
+      for (final l in (g.stdout as String).split('\n')) {
+        final m = RegExp(r'OI-(\d+)$').firstMatch(l.trim());
+        if (m != null) onLocalBranches.add(int.parse(m.group(1)!));
+      }
+    }
+
+    final next = nextFreeNumber([published, working, {for (final r in reserved) r: ''}]);
+    final unfiled = reserved
+        .where((n) => !published.containsKey(n) && !working.containsKey(n) && !onLocalBranches.contains(n))
+        .toList()
+      ..sort();
+    String subject(int n) {
+      final r = Process.runSync('git', ['log', '-1', '--format=%s', 'refs/remotes/origin/oi/$n'],
+          workingDirectory: root, stdoutEncoding: utf8);
+      return r.exitCode == 0 ? (r.stdout as String).trim() : '(no ledger line)';
+    }
+    final unfiledText = unfiled.isEmpty
+        ? 'none'
+        : '${unfiled.map((n) => 'oi/$n [${subject(n)}]').join('; ')}'
+            ' — may belong to a CLOUD branch this clone cannot see; adopt by filing `## OI-N` by '
+            'hand, or `sh scripts/mint_oi.sh --release N` ONLY if the reserving branch is dead';
+    return 'OI board: next free number is at least $next (as of the last sync; '
+        'mint_oi.sh re-syncs before reserving). Reserved-but-unfiled: $unfiledText.\n'
+        'File new OIs ONLY with:  sh scripts/mint_oi.sh "<title>"  from YOUR worktree — an '
+        'UNRESERVED number fails the commit (CLAUDE.md §7, OI allocator row).';
+  } catch (_) {
+    return '';
+  }
 }
