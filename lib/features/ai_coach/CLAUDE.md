@@ -55,7 +55,12 @@ When the agent emits a `tool_call`, the dispatcher MUST:
    `modifyWorkoutForInjury`, plus the read tools). The 4 derive-violating tools
    (`logPR`, `markWorkoutComplete`, `adjustCaloricTarget`, `prelog`) were
    **removed 2026-05-31** — the dispatcher has no case for them (defense-in-depth
-   against a stale/replayed intent). See ADR-0012.
+   against a stale/replayed intent). See ADR-0012. `switchGoal` / `regeneratePlanBlock` never
+   write past the stored `plan_end` (OI-189, `b9e4d1`): `RegeneratePlanResult.totalWeeks` is the
+   bounded count, `requestedWeeks` what was asked, `clearsPastPhaseEnd` what the commit will sweep;
+   both commit sites sweep then push `plan_json`; an empty regen whose sweep removed rows returns
+   SUCCESS with `count: 0, cleared: N` (so the invalidate tail runs), and is refused — cache kept,
+   Retry repeats the message — only when the sweep removed nothing.
 2. Call the corresponding **canonical WriteService** — never raw Hive,
    never bypass `wrapUserScopedBox`. Bypassing surfaced as APK Test #16.2 / E
    (the now-removed `logPR` path) — the dispatcher is a *router*, not a writer.

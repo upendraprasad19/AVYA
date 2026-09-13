@@ -212,6 +212,21 @@ class WorkoutScheduleWriteService {
 
     final newEnd = rollStart.add(const Duration(days: 6));
     await MigratedKey.write(_planEndKey, newEnd.toIso8601String());
+
+    // OI-189 durability: this is the LIVE free-tier repeat path
+    // (runFreeTierRepeatWrite → redoWeek4 while enable_hold_weeks is OFF) and
+    // it MOVES plan_end (line above) — the same shape holdWeek carries its own
+    // push for (below). Without it a reinstall in the ≤24h gap before
+    // weeklyFullSync takes the stale cloud window verbatim (PlanWindowReanchor
+    // fresh-install branch), the restore brings the redo rows back PAST it,
+    // and the next regen's sweep deletes the week. Awaited; self-catching
+    // inside; the try/catch guards the _ensureSessionOpen await.
+    try {
+      await SyncService.instance.pushWorkoutPlanForSyncDomain();
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'redo_week4_durability_push'));
+    }
   }
 
   // ── Free-tier "Hold the Line" (holdWeek — ship-dark replacement for redoWeek4) ──
