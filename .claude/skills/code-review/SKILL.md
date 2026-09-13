@@ -163,6 +163,14 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
 
 When invoked, this skill should:
 
+0. **Refuse to dispatch while the index and the working tree disagree.** Run
+   `git status --porcelain | grep -E '^(MM|AM|MD|AD) '` — any hit means a file has edits on
+   top of what is staged, and the reviewer reads the STAGED blob while every `Read` and
+   `flutter test` the author ran saw the working tree. Stage or discard first, then dispatch.
+   Added 2026-09-12 (author side of the 2026-09-11 `regen-wave-unit2` F1, a P0): the fix for
+   a sub-defect and its widened test were verified working-tree-only and never `git add`-ed;
+   the reviewer caught it by resetting to `git show :<path>` content. Lens 10 is the
+   reviewer-side half; this is the check that makes the author's "done" mean the index.
 1. Run `git diff --cached --name-only` and `git diff --cached` to assemble the diff.
 2. Compute blast-radius via `dart run scripts/blast_radius_from_diff.dart`.
 3. Generate the staging hash **exactly the way the gate does**, or the file you write

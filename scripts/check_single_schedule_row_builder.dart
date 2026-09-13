@@ -17,9 +17,16 @@
 // .github/workflows/test.yml auto-wire every scripts/check_*.dart BY GLOB with
 // NO arguments, so this gate is live from the commit it lands in and nothing
 // can pass it `--warn-only`. §4.11's baseline window therefore has to be
-// expressed as the default of `_hardFail` below. OI-166 Unit 2's final commit
-// flips it to `true`, at which point every `pendingUnit2` allowlist entry must
-// already be gone.
+// expressed as the default of `_hardFail` below.
+// ⚠ CORRECTED 2026-09-12 (OI-190): this header used to say "OI-166 Unit 2's final
+// commit flips it to `true`". Unit 2 shipped (`de52f1e8`) WITHOUT the shared
+// builder — its round-1 review found the builder as specified could not express
+// what caller C already does, and the re-plan fixed B and C in place. So the
+// flip did not happen, both `pendingUnit2` entries still stand, and
+// `lib/core/services/schedule_row_builder.dart` does not exist yet. The flip is
+// owned by OI-190: the same commit that lands the builder and empties the
+// `pendingUnit2` list sets `_hardFail = true`. Until then this gate's value is
+// that no THIRD implementation can appear in lib/ unlisted.
 //
 // ⚠ SCOPE IS `lib/` ONLY. Run repo-wide the same heuristic matches two
 // existing test fixtures plus every behavioural test Unit 2 adds — the
