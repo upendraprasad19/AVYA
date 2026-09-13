@@ -437,8 +437,8 @@ Deno.test("cmdAlerts escapes HTML in alert fields", async () => {
   const rows = [
     {
       source: "check<script>",
-      severity: "warn&danger",
-      summary: "alert&test",
+      severity: "warn<severity>",
+      summary: "info&summary",
       detected_at: "2026-09-13T01:00:00Z",
     },
   ];
@@ -454,10 +454,13 @@ Deno.test("cmdAlerts escapes HTML in alert fields", async () => {
     }),
   };
   const text = await cmdAlerts(fake);
-  // Verify HTML is escaped
+  // Verify each field is independently escaped (not just one field hiding for another)
+  // Each field uses a DISTINCT special character to ensure mutations catch field-specific escaping
   assertEquals(text.includes("<script>"), false);
-  assertStringIncludes(text, "&lt;script&gt;");
-  assertStringIncludes(text, "&amp;");
+  assertStringIncludes(text, "&lt;script&gt;"); // source: <> must be escaped
+  assertEquals(text.includes("<severity>"), false);
+  assertStringIncludes(text, "warn&lt;severity&gt;"); // severity: <> must be escaped
+  assertStringIncludes(text, "info&amp;summary"); // summary: & must be escaped
 });
 
 Deno.test("cmdAlerts reports 'none' when there are no open alerts", async () => {

@@ -48,8 +48,8 @@ touched_layers_checked:
 
 Fixed six code review findings from Task 11 commit 789254d2 in the telegram-admin-bot Edge Function:
 
-1. **HTML-escaping in cmdCron:** Added `escapeHtml(info.status)` wrapper (line 377)
-2. **Unbounded cmdErrors query:** Added `.limit(2000)` defensive cap (line 337)
+1. **HTML-escaping in cmdCron:** Added `escapeHtml(info.status)` wrapper (line 378)
+2. **Unbounded cmdErrors query:** Added `.limit(2000)` defensive cap (line 324)
 3. **HTML-escaping test coverage:** Added new tests for cmdAlerts, cmdErrors, and cmdCron
 4. **cmdAlerts row cap verification:** Strengthened assertions to verify exactly 10 rows shown, rows 11+ absent
 5. **cmdErrors filter test:** Added verification that "event" and "info" error codes are excluded
@@ -66,9 +66,9 @@ Initial implementation and review identified six distinct issues:
 
 ### File: `supabase/functions/telegram-admin-bot/index.ts`
 
-**Line 337 (cmdErrors):** Added `.limit(2000)` to query chain to prevent unbounded queries.
+**Line 324 (cmdErrors):** Added `.limit(2000)` to query chain to prevent unbounded queries.
 
-**Line 377 (cmdCron):** Added HTML escaping to status field to prevent XSS via Telegram message rendering.
+**Line 378 (cmdCron):** Added HTML escaping to status field to prevent XSS via Telegram message rendering.
 
 ### File: `supabase/functions/telegram-admin-bot/index_test.ts`
 
