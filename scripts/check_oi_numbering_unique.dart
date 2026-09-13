@@ -334,7 +334,21 @@ Future<void> main(List<String> args) async {
     // this repo produces octopus merges NOWHERE: safe_merge.sh takes a single
     // branch. Refusing to answer is honest, matches this file's convention
     // everywhere else, and cannot be mistaken for a clean bill.
-    final mergeHeadFile = File('.git/MERGE_HEAD');
+    // `--git-path`, never the literal `.git/MERGE_HEAD`: in a LINKED worktree
+    // (§4.13 makes that every session) `.git` is a one-line FILE pointing at
+    // the real gitdir, so the literal path never exists and the octopus count
+    // below read 0 there (B-pass 2026-09-13, F3, found while fixing the
+    // unreadable-MERGE_HEAD case).
+    final mergeHeadPath =
+        _run('git', ['rev-parse', '--git-path', 'MERGE_HEAD'])?.trim() ?? '.git/MERGE_HEAD';
+    final mergeHeadFile = File(mergeHeadPath);
+    // MERGE_HEAD is PRESENT but does not resolve to a commit (corrupt or
+    // truncated file). Without this arm the dispatch fell through to the
+    // working-tree arm -- which is exactly the arm the mid-merge comment below
+    // says must NOT run mid-merge (the tree holds BOTH sides' entries). Say
+    // UNDETERMINED instead (B-pass 2026-09-13, F3).
+    final mergeHeadUnreadable =
+        mergeHeadFile.existsSync() && (mergeHead == null || mergeHead.isEmpty);
     final mergeHeadLines = mergeHeadFile.existsSync()
         ? mergeHeadFile
             .readAsLinesSync()
@@ -356,6 +370,17 @@ Future<void> main(List<String> args) async {
       otherSideRev = 'HEAD';
       baseRev = null;
       shapeNote = 'octopus (not compared)';
+    } else if (mergeHeadUnreadable) {
+      undetermined = true;
+      _warnPass('MERGE_HEAD exists at $mergeHeadPath but does not resolve to a '
+          'commit, so this is mid-merge with an unreadable merge head. NOT '
+          'compared: the working tree holds both sides\' entries and any '
+          'other arm would report them as contested. Finish or abort the merge '
+          '(git merge --abort) and re-run.');
+      thisSideRev = 'origin/main';
+      otherSideRev = 'HEAD';
+      baseRev = null;
+      shapeNote = 'mid-merge, MERGE_HEAD unreadable (not compared)';
     } else if (mergeHead != null && mergeHead.isNotEmpty) {
       // Mid-merge: the pre-merge-commit hook. The merge commit does not exist
       // yet, but both sides do -- HEAD is the branch being merged INTO and
@@ -392,7 +417,7 @@ Future<void> main(List<String> args) async {
       shapeNote = 'branch (HEAD vs origin/main)';
     }
 
-    if (isOctopus) {
+    if (isOctopus || mergeHeadUnreadable) {
       // Already reported above as UNDETERMINED. Deliberately no comparison:
       // running the two-side predicate here would produce a real-looking
       // verdict about two of the three-or-more sides.

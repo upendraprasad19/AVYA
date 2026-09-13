@@ -466,4 +466,47 @@ void main() {
     expect(lines2[0], 'NEXT=8');
     expect(lines2[1], 'UNFILED=');
   });
+
+  test('a title beginning with "-" mints after the "--" end-of-options marker (B-pass F1)', () {
+    final f = _Fixture.create('dashtitle', clones: 1);
+    addTearDown(f.dispose);
+    final c = f.clones[0];
+    // Without `--` the parser reads the title as an unknown flag: exit 64,
+    // nothing written. That contract is pinned too, so the two paths cannot
+    // silently swap.
+    final bare = f.mint(c, ['-leading dash title']);
+    expect(bare.exitCode, 64, reason: '${bare.stdout}\n${bare.stderr}');
+    expect(bare.stderr as String, contains("goes after '--'"));
+    expect(f.remoteReservations(), isEmpty);
+    final r = f.mint(c, ['--', '-leading dash title']);
+    expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
+    expect((r.stdout as String).trim(), 'OI-4');
+    expect(f.board(c), contains('\n## OI-4 — -leading dash title\n'));
+    expect(f.remoteReservations(), {4});
+  });
+
+  test('a push REJECTED by the remote for a reason other than a lost race exits 2, is not retried, and names the reason (B-pass F4)',
+      () {
+    final f = _Fixture.create('policyreject', clones: 1);
+    addTearDown(f.dispose);
+    final c = f.clones[0];
+    // A pre-receive hook on the bare remote refuses every push, the way a
+    // branch-protection rule or a server policy would. git prints
+    // `! [remote rejected]` for this exactly as it does for a lost lease, so a
+    // stderr-substring classifier alone cannot tell them apart -- the ref's
+    // EXISTENCE on the remote can.
+    final hook = File('${f.remote}/hooks/pre-receive');
+    hook.writeAsStringSync('#!/bin/sh\necho "policy: oi/* pushes are refused here" >&2\nexit 1\n');
+    if (!Platform.isWindows) _run('chmod', ['+x', hook.path], f.remote);
+    final r = f.mint(c, ['policy rejected']);
+    final all = '${r.stdout}\n${r.stderr}';
+    expect(r.exitCode, 2, reason: all);
+    expect(r.stderr as String, contains('policy: oi/* pushes are refused here'));
+    expect(r.stderr as String, contains('not a lost race'));
+    // ONE attempt, not ten: the hook's line appears once.
+    expect('policy: oi/* pushes are refused here'.allMatches(r.stderr as String).length, 1,
+        reason: 'a policy rejection must not be retried as if N were taken');
+    expect(f.remoteReservations(), isEmpty);
+    expect(f.board(c), isNot(contains('OI-4')), reason: 'nothing may be written on a refused reservation');
+  });
 }

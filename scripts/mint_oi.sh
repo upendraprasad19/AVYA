@@ -62,8 +62,8 @@ MAX_ATTEMPTS=10
 
 usage() {
   cat >&2 <<'USAGE'
-usage: sh scripts/mint_oi.sh [--no-append] "<title>"
-       sh scripts/mint_oi.sh --reserve N "<title>"
+usage: sh scripts/mint_oi.sh [--no-append] [--] "<title>"
+       sh scripts/mint_oi.sh --reserve N [--] "<title>"
        sh scripts/mint_oi.sh --release N
        sh scripts/mint_oi.sh --prune | --next
 USAGE
@@ -91,7 +91,13 @@ while [ $# -gt 0 ]; do
     --prune) MODE=prune ;;
     --next) MODE=next ;;
     -h|--help) usage ;;
-    -*) echo "$TAG unknown flag: $1" >&2; usage ;;
+    --)
+      # End of options (B-pass 2026-09-13, F1): a title that begins with `-`
+      # would otherwise be read as an unknown flag and be unmintable.
+      shift
+      [ $# -gt 0 ] && TITLE=$1
+      break ;;
+    -*) echo "$TAG unknown flag: $1 (a title starting with '-' goes after '--')" >&2; usage ;;
     *) TITLE=$1 ;;
   esac
   shift
@@ -207,7 +213,18 @@ cas_write() {
         RESULT_SHA=$2; return 0
       fi
       case "$err" in
-        *"stale info"*|*"already exists"*|*"rejected"*|*"failed to lock"*) return 3 ;;
+        *"stale info"*|*"already exists"*|*"rejected"*|*"failed to lock"*|*"cannot lock"*)
+          # A rejection is a LOST RACE only if the ref now exists on the remote
+          # (B-pass 2026-09-13, F4). `[rejected]` is also what a pre-receive
+          # hook or a branch-protection rule prints; treating that as "taken"
+          # would retry N+1 up to ten times and exit 3 with the real reason
+          # never shown. `--exit-code`: 0 = ref present, 2 = absent, else the
+          # remote could not be asked -- which is not a race either.
+          if bounded git ls-remote --exit-code "$REMOTE" "refs/heads/oi/$1" >/dev/null 2>&1; then
+            return 3
+          fi
+          echo "$TAG push REJECTED but refs/heads/oi/$1 does not exist on $REMOTE -- not a lost race, not retried: $err" >&2
+          return 2 ;;
         *) echo "$TAG push failed: $err" >&2; return 2 ;;
       esac ;;
     api)

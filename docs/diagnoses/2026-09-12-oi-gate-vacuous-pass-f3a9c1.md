@@ -39,8 +39,8 @@ sot_registry_entry: |
 writers:
   - { file: docs/audit/open_issues.md, method_or_widget: "any session appending `## OI-N — title` (until this batch: by eyeballing the tail; after: scripts/mint_oi.sh reserves refs/heads/oi/N on origin first)", line: 9 }
 readers:
-  - { file: scripts/check_oi_numbering_unique.dart, method_or_widget: "shape dispatch — the `parents.length >= 3` arm (post-fix position; pre-fix it sat at :292 and fired on a zero-commit worktree, reading HEAD^1/HEAD^2 instead of the working tree). The new `_boardDirty()` arm now precedes it at :311", line: 323 }
-  - { file: scripts/check_oi_numbering_unique.dart, method_or_widget: "useWorkingTree = otherSideRev == 'HEAD' — false in the merge arm, so headOpen/headClosed (the working tree) were never compared (post-fix position; pre-fix :331)", line: 362 }
+  - { file: scripts/check_oi_numbering_unique.dart, method_or_widget: "shape dispatch — the `parents.length >= 3` arm (post-fix position; pre-fix it sat at :292 and fired on a zero-commit worktree, reading HEAD^1/HEAD^2 instead of the working tree). The new `else if (_boardDirty())` arm precedes it; grep the symbol, not the number -- the line drifted twice inside this batch (B-pass F2)", line: 404 }
+  - { file: scripts/check_oi_numbering_unique.dart, method_or_widget: "useWorkingTree = otherSideRev == 'HEAD' — false in the merge arm, so headOpen/headClosed (the working tree) were never compared (post-fix position; pre-fix :331; grep `final bool useWorkingTree`)", line: 443 }
   - { file: scripts/oi_numbering_lib.dart, method_or_widget: "findCollisions — correct; it was handed the wrong three boards", line: 152 }
 hive_key_prefix: null
 hive_key_formula: null

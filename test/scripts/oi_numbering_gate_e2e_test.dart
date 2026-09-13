@@ -255,4 +255,57 @@ void main() {
     expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
     expect('${r.stdout}${r.stderr}', isNot(contains('NO reservation')));
   });
+
+  test('mid-merge with a MERGE_HEAD that does not resolve -> UNDETERMINED (exit 0), never a verdict from another arm (B-pass F3)',
+      () {
+    final f = _Fx.create('badmergehead');
+    addTearDown(f.dispose);
+    f.sessionTypes(4, 'cloud typed four');
+    _run('git', ['add', '-A'], f.session);
+    expect(_run('git', ['commit', '-q', '-m', 'file OI-4 unreserved'], f.session).exitCode, 0);
+    expect(_run('git', ['push', '-q', 'origin', 'session'], f.session).exitCode, 0);
+    expect(_run('git', ['fetch', '-q', 'origin'], f.integration).exitCode, 0);
+    expect(_run('git', ['merge', '--no-ff', '--no-commit', 'origin/session'], f.integration).exitCode, 0);
+    // Corrupt the merge head: present, unreadable. Before the fix the dispatch
+    // fell through to the working-tree arm and FAILED on the unreserved 4
+    // (exit 1) -- a verdict about a tree that holds both sides' entries.
+    final mh = File('${f.integration}/.git/MERGE_HEAD');
+    expect(mh.existsSync(), isTrue, reason: 'fixture: must be mid-merge');
+    mh.writeAsStringSync('not-a-sha\n');
+    final r = _run(_Fx._dart, ['run', '${_Fx._src}/scripts/check_oi_numbering_unique.dart'], f.integration);
+    final all = '${r.stdout}\n${r.stderr}';
+    expect(r.exitCode, 0, reason: all);
+    expect(r.stderr as String, contains('UNDETERMINED'));
+    expect(r.stderr as String, contains('MERGE_HEAD'));
+    expect(r.stdout as String, isNot(contains('PASS')));
+    expect(all, isNot(contains('NO reservation')),
+        reason: 'no other arm may pronounce on a mid-merge tree');
+  });
+
+  test('the same unreadable MERGE_HEAD inside a LINKED WORKTREE is found via --git-path (the literal .git/MERGE_HEAD does not exist there)',
+      () {
+    final f = _Fx.create('wtmergehead');
+    addTearDown(f.dispose);
+    f.sessionTypes(4, 'cloud typed four');
+    _run('git', ['add', '-A'], f.session);
+    expect(_run('git', ['commit', '-q', '-m', 'file OI-4 unreserved'], f.session).exitCode, 0);
+    expect(_run('git', ['push', '-q', 'origin', 'session'], f.session).exitCode, 0);
+    expect(_run('git', ['fetch', '-q', 'origin'], f.integration).exitCode, 0);
+    // A linked worktree on a branch cut from main -- the §4.13 shape.
+    final wt = '${f.tmp.path}/wt';
+    expect(_run('git', ['worktree', 'add', '-q', '-b', 'integ-wt', wt, 'main'], f.integration).exitCode, 0);
+    expect(File('$wt/.git').existsSync() && File('$wt/.git').statSync().type == FileSystemEntityType.file, isTrue,
+        reason: 'fixture: in a linked worktree .git is a FILE');
+    expect(_run('git', ['merge', '--no-ff', '--no-commit', 'origin/session'], wt).exitCode, 0);
+    final mhPath = (_run('git', ['rev-parse', '--git-path', 'MERGE_HEAD'], wt).stdout as String).trim();
+    final mh = File(mhPath.startsWith('/') || RegExp(r'^[A-Za-z]:').hasMatch(mhPath) ? mhPath : '$wt/$mhPath');
+    expect(mh.existsSync(), isTrue, reason: 'fixture: must be mid-merge in the worktree ($mhPath)');
+    mh.writeAsStringSync('not-a-sha\n');
+    final r = _run(_Fx._dart, ['run', '${_Fx._src}/scripts/check_oi_numbering_unique.dart'], wt);
+    final all = '${r.stdout}\n${r.stderr}';
+    expect(r.exitCode, 0, reason: all);
+    expect(r.stderr as String, contains('UNDETERMINED'));
+    expect(r.stderr as String, contains('MERGE_HEAD'));
+    expect(all, isNot(contains('NO reservation')));
+  });
 }
