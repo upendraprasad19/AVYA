@@ -5,9 +5,11 @@
  *   deno test --no-check --allow-all --node-modules-dir=none supabase/functions/founder-digest/
  *
  * Scope: `buildDigestText`, `istYesterdayWindow`, `escapeHtml`, `idPrefix`,
- * `istClock`, `telegramErrorSummary`, `DIGEST_KEYS` — the serve handler is NOT
- * exercised here (needs live env + a bot). End-to-end verification is the
- * manual `net.http_post` in the plan's T9.
+ * `istClock`, `telegramErrorSummary`, `sendTelegram` (through an injected
+ * fetch), `readDigestSections` (through a recording fake client),
+ * `DIGEST_KEYS` — the serve handler is NOT exercised here (needs live env +
+ * a bot). End-to-end verification is the manual `net.http_post` in the
+ * plan's T9 and the cron's own 02:30Z fire.
  *
  * ⚠ test/contracts/usage_quota_ledger_writer_to_reader_test.dart walks every
  * .ts under supabase/functions/ (comment-stripped) and allowlists direct
@@ -33,7 +35,9 @@ import {
   istYesterdayWindow,
   LIFETIME_WINDOW,
   MAX_ALERT_LINES,
+  MAX_PAGES,
   readDigestSections,
+  sendTelegram,
   TELEGRAM_MAX_CHARS,
   telegramErrorSummary,
   type UsageRow,
@@ -153,8 +157,12 @@ Deno.test("lifetime rows are reported as users MOVED and at-ceiling, never as a 
       ],
     },
   }));
-  assertStringIncludes(text, "Free image reads (lifetime): 2 users moved · at 5/5: 1");
-  assertStringIncludes(text, "Weekly report (free) (lifetime): 1 user moved · at 1/1: 1");
+  // "reached … yesterday", not "at": the rows are yesterday's MOVERS, and a
+  // refusal past the cap never touches updated_at, so a mover at the ceiling
+  // reached it yesterday — the users already parked there are not in view.
+  assertStringIncludes(text, "Free image reads (lifetime): 2 users moved · reached 5/5 yesterday: 1");
+  assertStringIncludes(text, "Weekly report (free) (lifetime): 1 user moved · reached 1/1 yesterday: 1");
+  assertNotIncludes(text, "at 5/5");
   // A lifetime row handed to the WINDOWED section would be a windowing bug in
   // the handler; the renderer keeps the two families apart by kind, so a
   // lifetime key never appears in the windowed block even if rows carry it.
@@ -165,10 +173,46 @@ Deno.test("lifetime rows are reported as users MOVED and at-ceiling, never as a 
   assertNotIncludes(crossed, "Free image reads: 5");
 });
 
-Deno.test("an unknown quota_key in the rows is ignored, not rendered", () => {
-  const text = buildDigestText(input({ windowed: { rows: [row(U1, "not_a_key", 99)] } }));
-  assertNotIncludes(text, "not_a_key");
-  assertNotIncludes(text, "99");
+Deno.test("a quota_key DIGEST_KEYS does not list is SURFACED with its total, never silently dropped (L1)", () => {
+  // "Ignored" and "none" are indistinguishable on the message; a new
+  // consumer (or a misspelt key) is exactly what the founder must see.
+  const text = buildDigestText(input({
+    windowed: { rows: [row(U1, "not_a_key", 99), row(U2, "not_a_key", 1), row(U1, "b_key<", 2)] },
+  }));
+  assertStringIncludes(text, "⚠ unlisted keys: b_key&lt; 2 · not_a_key 100 — add to DIGEST_KEYS");
+  // And the unlisted usage still ranks the user.
+  assertStringIncludes(text, `${U1.slice(0, 8)} ×101`);
+  // No unlisted line at all when every key is known.
+  const clean = buildDigestText(input({ windowed: { rows: [row(U1, "chat_app", 3)] } }));
+  assertNotIncludes(clean, "unlisted");
+  // The lifetime section has its own line.
+  const life = buildDigestText(input({ lifetime: { rows: [row(U1, "ghost_lifetime", 4, LIFETIME_WINDOW)] } }));
+  assertStringIncludes(life, "⚠ unlisted lifetime keys: ghost_lifetime 1 user moved — add to DIGEST_KEYS");
+});
+
+Deno.test("an unlisted LIFETIME key reports MOVERS, never a summed cumulative counter (B-pass 2026-09-13)", () => {
+  // Two DIFFERENT users, each with their own cumulative lifetime `used` —
+  // summing those counters (the windowed-section behaviour) would print a
+  // number that reads as "yesterday's activity" but is actually two
+  // different point-in-time totals added together. The listed lifetime
+  // branch is already hardened against exactly this; the unlisted fallback
+  // must be too.
+  const text = buildDigestText(input({
+    lifetime: {
+      rows: [
+        row(U1, "ghost_lifetime", 100, LIFETIME_WINDOW),
+        row(U2, "ghost_lifetime", 5, LIFETIME_WINDOW),
+      ],
+    },
+  }));
+  assertStringIncludes(text, "⚠ unlisted lifetime keys: ghost_lifetime 2 users moved — add to DIGEST_KEYS");
+  assertNotIncludes(text, "105");
+  // The WINDOWED section, by contrast, still sums — that total IS a bounded
+  // day's activity, not a running counter.
+  const windowed = buildDigestText(input({
+    windowed: { rows: [row(U1, "not_a_key", 99), row(U2, "not_a_key", 1)] },
+  }));
+  assertStringIncludes(windowed, "⚠ unlisted keys: not_a_key 100 — add to DIGEST_KEYS");
 });
 
 // ---------------------------------------------------------------------------
@@ -213,13 +257,13 @@ Deno.test("alert fields are HTML-escaped and stamped in IST", () => {
       rows: [{
         detected_at: "2026-09-11T18:45:00+00:00",
         source: "alert_<cron>",
-        severity: "P1",
+        severity: "warn",
         summary: "a & b > c",
       }],
     },
   }));
   assertStringIncludes(text, "<b>Alerts yesterday</b> (1):");
-  assertStringIncludes(text, "00:15 [P1] alert_&lt;cron&gt; — a &amp; b &gt; c");
+  assertStringIncludes(text, "00:15 [warn] alert_&lt;cron&gt; — a &amp; b &gt; c");
   assertNotIncludes(text, "alert_<cron>");
 });
 
@@ -227,12 +271,12 @@ Deno.test("more than 10 alerts collapses to 10 lines plus a '+N more' tail", () 
   const rows = Array.from({ length: 14 }, (_, i) => ({
     detected_at: `2026-09-11T${String(19 + Math.floor(i / 10)).padStart(2, "0")}:${String(i % 10).padStart(2, "0")}:00+00:00`,
     source: `src${i}`,
-    severity: "P2",
+    severity: "info",
     summary: `s${i}`,
   }));
   const text = buildDigestText(input({ alerts: { rows } }));
   assertStringIncludes(text, "<b>Alerts yesterday</b> (14):");
-  assertEquals(text.split("\n").filter((l) => /^\d\d:\d\d \[P2\]/.test(l)).length, MAX_ALERT_LINES);
+  assertEquals(text.split("\n").filter((l) => /^\d\d:\d\d \[info\]/.test(l)).length, MAX_ALERT_LINES);
   assertStringIncludes(text, "… +4 more");
   assertNotIncludes(text, "src13");
 });
@@ -241,12 +285,60 @@ Deno.test("the message never exceeds Telegram's 4096-char ceiling", () => {
   const rows = Array.from({ length: 10 }, (_, i) => ({
     detected_at: "2026-09-11T19:00:00+00:00",
     source: `src${i}`,
-    severity: "P0",
+    severity: "critical",
     summary: "y".repeat(900),
   }));
   const text = buildDigestText(input({ alerts: { rows } }));
   assert(text.length <= TELEGRAM_MAX_CHARS, `got ${text.length}`);
   assertStringIncludes(text, "… (truncated)");
+});
+
+Deno.test("the alerts header carries the SERVER count, and the tail counts against it (L22)", () => {
+  // The read is capped at the lines rendered, so a 73-alert day arrives as
+  // 10 rows + total 73. A header that counted the page would say "(10)".
+  const rows = Array.from({ length: MAX_ALERT_LINES }, (_, i) => ({
+    detected_at: "2026-09-11T19:00:00+00:00",
+    source: `src${i}`,
+    severity: "warn",
+    summary: `s${i}`,
+  }));
+  const text = buildDigestText(input({ alerts: { rows, total: 73 } }));
+  assertStringIncludes(text, "<b>Alerts yesterday</b> (73):");
+  assertStringIncludes(text, "… +63 more");
+  // A total equal to the page length has no tail; an absent total falls
+  // back to the page (the pre-count contract, so a fake without counts
+  // still renders).
+  const exact = buildDigestText(input({ alerts: { rows: rows.slice(0, 3), total: 3 } }));
+  assertStringIncludes(exact, "<b>Alerts yesterday</b> (3):");
+  assertNotIncludes(exact, "more");
+  const noCount = buildDigestText(input({ alerts: { rows: rows.slice(0, 3) } }));
+  assertStringIncludes(noCount, "<b>Alerts yesterday</b> (3):");
+});
+
+Deno.test("truncation cuts on a LINE boundary — every surviving line is a whole line, tags balanced (L21)", () => {
+  const rows = Array.from({ length: MAX_ALERT_LINES }, (_, i) => ({
+    detected_at: "2026-09-11T19:00:00+00:00",
+    source: `src${i}`,
+    severity: "critical",
+    // Odd lengths so no line ends exactly at the limit by accident; entities
+    // and angle brackets so a mid-line cut would leave `&am` or `&lt;b` dangling.
+    summary: `<b>${"y & z".repeat(150 + i)}</b>`,
+  }));
+  const full = buildDigestText(input({ alerts: { rows } }));
+  assert(full.length <= TELEGRAM_MAX_CHARS);
+  const marker = "\n… (truncated)";
+  assert(full.endsWith(marker), "the marker must be the last line");
+  const kept = full.slice(0, full.length - marker.length);
+  // Every kept alert line must be one of the renderer's whole lines
+  // verbatim, so nothing was cut mid-line.
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const wholeLines = new Set(rows.map((a) => `00:30 [critical] ${a.source} — ${esc(a.summary)}`));
+  const alertLines = kept.split("\n").filter((l) => l.startsWith("00:30 ["));
+  assert(alertLines.length >= 1, "at least one alert line must survive");
+  for (const l of alertLines) assert(wholeLines.has(l), `cut mid-line: …${l.slice(-40)}`);
+  // No dangling entity at the cut.
+  const last = kept.split("\n").at(-1) ?? "";
+  assert(!/&[a-z]*$/.test(last), `dangling entity: …${last.slice(-20)}`);
 });
 
 Deno.test("istClock converts a UTC stamp to IST and is empty for garbage", () => {
@@ -300,6 +392,47 @@ Deno.test("telegramErrorSummary carries the error NAME only — never the URL-be
   assertEquals(telegramErrorSummary("string thrown"), "telegram send threw string");
 });
 
+Deno.test("sendTelegram: a fetch that THROWS a URL-bearing error yields a summary with no token, no host (L40)", async () => {
+  const token = "123456789:AAHfakeTOKENvalue";
+  const throwing = ((input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : (input as URL).href ?? (input as Request).url;
+    return Promise.reject(new TypeError(`error sending request for url (${url})`));
+  }) as typeof fetch;
+  const res = await sendTelegram(token, "4242", "hi", throwing);
+  assert(!res.ok);
+  assertEquals(res.summary, "telegram send threw TypeError");
+  assertNotIncludes(res.summary, token);
+  assertNotIncludes(res.summary, "api.telegram.org");
+  assertNotIncludes(res.summary, "4242");
+});
+
+Deno.test("sendTelegram: a non-2xx reply surfaces the status and Telegram's description, bounded", async () => {
+  const seen: { url: string; body: string }[] = [];
+  const rejecting = ((input: RequestInfo | URL, init?: RequestInit) => {
+    seen.push({ url: String(input), body: String(init?.body ?? "") });
+    return Promise.resolve(
+      new Response(JSON.stringify({ ok: false, description: "Bad Request: can't parse entities " + "x".repeat(300) }), { status: 400 }),
+    );
+  }) as typeof fetch;
+  const res = await sendTelegram("tok", "4242", "<b>hi", rejecting);
+  assert(!res.ok);
+  assertStringIncludes(res.summary, "telegram HTTP 400: ");
+  assertStringIncludes(res.summary, "can't parse entities");
+  assert(res.summary.length <= "telegram HTTP 400: ".length + 200, `bounded: ${res.summary.length}`);
+  // The request itself: HTML parse mode, previews off, the chat id in the body.
+  assertEquals(seen.length, 1);
+  assertStringIncludes(seen[0].url, "/bottok/sendMessage");
+  const sent = JSON.parse(seen[0].body);
+  assertEquals(sent.parse_mode, "HTML");
+  assertEquals(sent.disable_web_page_preview, true);
+  assertEquals(sent.chat_id, "4242");
+  assertEquals(sent.text, "<b>hi");
+});
+
+Deno.test("MAX_PAGES bounds every ledger read at 200 pages (L31)", () => {
+  assertEquals(MAX_PAGES, 200);
+});
+
 Deno.test("escapeHtml covers exactly the three Telegram-HTML metacharacters", () => {
   assertEquals(escapeHtml("<a & b>"), "&lt;a &amp; b&gt;");
   assertEquals(escapeHtml("plain"), "plain");
@@ -330,6 +463,8 @@ type Call = [string, ...unknown[]];
 function fakeClient(opts: {
   rows?: Record<string, unknown[]>;
   failTables?: string[];
+  /** Exact server-side count a table reports (the `{ count: "exact" }` reply). */
+  counts?: Record<string, number>;
 }) {
   const calls: Record<string, Call[][]> = {};
   const served: Record<string, number> = {};
@@ -350,8 +485,13 @@ function fakeClient(opts: {
           return builder;
         };
       }
+      const count = opts.counts?.[table] ?? null;
       builder.then = (resolve: (v: unknown) => void) =>
-        resolve(failing ? { data: null, error: { message: `${table} unreadable` } } : { data, error: null });
+        resolve(
+          failing
+            ? { data: null, error: { message: `${table} unreadable` }, count: null }
+            : { data, error: null, count },
+        );
       return builder;
     },
   };
@@ -391,7 +531,7 @@ Deno.test("lifetime rows are pinned to the epoch window_start and filtered by up
   ]);
 });
 
-Deno.test("alerts are filtered by detected_at, ordered ascending, capped at 50", async () => {
+Deno.test("alerts are filtered by detected_at, ordered ascending, capped at the lines RENDERED with an exact count", async () => {
   const { client, calls } = fakeClient({});
   await readDigestSections(client, WINDOW);
   const chain = calls["alerts"][0];
@@ -400,7 +540,26 @@ Deno.test("alerts are filtered by detected_at, ordered ascending, capped at 50",
     ["lt", "detected_at", WINDOW.tStart],
   ]);
   assertEquals(chain.find(([m]) => m === "order"), ["order", "detected_at", { ascending: true }]);
-  assertEquals(chain.find(([m]) => m === "limit"), ["limit", 50]);
+  assertEquals(chain.find(([m]) => m === "limit"), ["limit", MAX_ALERT_LINES]);
+  assertEquals(chain[0], ["select", "detected_at, source, severity, summary", { count: "exact" }]);
+});
+
+Deno.test("the alerts section carries the server count as `total`, and omits it when the server sends none", async () => {
+  const rows = Array.from({ length: 3 }, (_, i) => ({
+    detected_at: "2026-09-11T19:00:00+00:00",
+    source: `s${i}`,
+    severity: "warn",
+    summary: "x",
+  }));
+  const counted = fakeClient({ rows: { alerts: rows }, counts: { alerts: 73 } });
+  const a = (await readDigestSections(counted.client, WINDOW)).alerts;
+  assert("rows" in a);
+  assertEquals(a.rows.length, 3);
+  assertEquals(a.total, 73);
+  const uncounted = fakeClient({ rows: { alerts: rows } });
+  const b = (await readDigestSections(uncounted.client, WINDOW)).alerts;
+  assert("rows" in b);
+  assertEquals(b.total, undefined);
 });
 
 Deno.test("every section selects exactly the columns the renderer reads", async () => {
@@ -409,7 +568,7 @@ Deno.test("every section selects exactly the columns the renderer reads", async 
   for (const chain of calls["usage_counters"]) {
     assertEquals(chain[0], ["select", "user_id, quota_key, window_start, used, updated_at"]);
   }
-  assertEquals(calls["alerts"][0][0], ["select", "detected_at, source, severity, summary"]);
+  assertEquals(calls["alerts"][0][0], ["select", "detected_at, source, severity, summary", { count: "exact" }]);
 });
 
 Deno.test("a failing table makes ONLY its section unreadable; the others still carry rows", async () => {

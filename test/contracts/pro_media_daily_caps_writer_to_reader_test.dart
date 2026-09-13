@@ -197,6 +197,81 @@ void main() {
     });
   });
 
+  group('Hermes L23 F2 (2026-09-13) — the SERVED MIME, not the client claim, selects the cap', () {
+    // The key, the cap and the free-tier video paywall were selected by the
+    // client's `media_type` while the bytes are typed by Storage's
+    // content-type — the MIME Gemini is told. A PRO caller labelling a video
+    // "image" drew from the 50/day bucket; a free caller did the same to walk
+    // a video past the PRO-only paywall for one lifetime image unit.
+    test('isVideo is re-derived from the served content-type AFTER the fetch, BEFORE the key/cap are derived', () {
+      final fetchCall = src.indexOf('await fetchImageAsBase64(');
+      final served = RegExp(r'const servedAsVideo\s*=\s*mimeType\.startsWith\("video/"\)')
+          .firstMatch(src);
+      expect(served, isNotNull, reason: 'the served type must come from mimeType');
+      final reconcile = src.indexOf('isVideo = servedAsVideo');
+      expect(reconcile, greaterThan(served!.start), reason: 'isVideo must be REASSIGNED to the served answer');
+      expect(served.start, greaterThan(fetchCall), reason: 'only the fetch knows the served type');
+      expect(RegExp(r'let isVideo\s*=').hasMatch(src), isTrue,
+          reason: 'a `const isVideo` cannot be reconciled');
+      final keyDerive = RegExp(r'const proQuotaKey\s*=\s*isVideo').firstMatch(src);
+      final capDerive = RegExp(r'const proCap\s*=\s*isVideo').firstMatch(src);
+      expect(keyDerive, isNotNull);
+      expect(capDerive, isNotNull);
+      expect(keyDerive!.start, greaterThan(reconcile),
+          reason: 'a key derived above the reconciliation is the client\'s key');
+      expect(capDerive!.start, greaterThan(reconcile));
+      expect(src.indexOf('p_quota_key: proQuotaKey'), greaterThan(capDerive.start));
+      // Exactly one derivation each — a pre-fetch copy left behind would be
+      // the one the ternary regexes above happily match.
+      expect(_count(src, 'const proQuotaKey ='), 1);
+      expect(_count(src, 'const proCap ='), 1);
+    });
+
+    test('the video paywall has EXACTLY ONE site — post-fetch, on the RECONCILED type', () {
+      // B-pass finding (2026-09-13): a pre-fetch video paywall gated on the
+      // CLIENT's claim used to exist here too, and it was the asymmetric
+      // half of the same trust-the-claim bug this whole group is about — a
+      // free user who mislabelled a real IMAGE as "video" was paywalled
+      // before the bytes were ever inspected, denying a legitimate free
+      // analysis. There must be exactly ONE site now, after the fetch, on
+      // the reconciled isVideo.
+      final fetchCall = src.indexOf('await fetchImageAsBase64(');
+      final sites = 'if (isVideo && !isPro)'.allMatches(src).map((m) => m.start).toList();
+      expect(sites.length, 1,
+          reason: 'a pre-fetch site trusts the unverified client claim — '
+              'exactly the bug this fix removes');
+      expect(sites[0], greaterThan(fetchCall),
+          reason: 'the one remaining site must be POST-fetch, on the server-verified type');
+      expect(sites[0], lessThan(RegExp(r'const proQuotaKey\s*=').firstMatch(src)!.start),
+          reason: 'the paywall precedes the key derivation and the consume');
+      expect(_count(src, 'return await videoPaywallReply(supabaseClient, userId, message, media_url);'), 1);
+      expect(_count(src, 'gate_reason: "video_pro_only"'), 1);
+      expect(_count(src, 'channel: "video_paywall"'), 1);
+    });
+
+    test('the free-image cap check has EXACTLY TWO sites, sharing ONE helper — pre-fetch fast path AND post-fetch mirror', () {
+      // The mirror of the finding above: a free caller whose claim says
+      // "video" skips the PRE-fetch free-image check (isVideo is still true
+      // at that point), so without a SECOND, post-fetch call the free-image
+      // lifetime cap would never be checked at all for that caller —
+      // reconciliation alone finds the truth, it does not enforce anything.
+      final fetchCall = src.indexOf('await fetchImageAsBase64(');
+      final sites = 'if (!isVideo && !isPro)'
+          .allMatches(src)
+          .map((m) => m.start)
+          .where((i) => i < src.indexOf('geminiChat({'))
+          .toList();
+      expect(sites.length, 2,
+          reason: 'one fast-path site (honest claim=image) and one mirror '
+              'site (claim=video, served=image) are both required');
+      expect(sites[0], lessThan(fetchCall), reason: 'the fast path runs before the Storage fetch');
+      expect(sites[1], greaterThan(fetchCall), reason: 'the mirror runs after reconciliation');
+      expect(_count(src, 'await checkFreeImageQuota(supabaseClient, userId, media_url, media_type, message)'), 2,
+          reason: 'both sites delegate to the ONE helper, so the reply, the log row and the '
+              'gate_reasons cannot drift between them');
+    });
+  });
+
   group('OI-153 — every refusal is a distinguishable 200/gated reply', () {
     const newReasons = [
       'pro_quota_unavailable',
@@ -225,9 +300,20 @@ void main() {
       }
     });
 
-    test('ledger error → pro_quota_unavailable, honest copy, no cap claim (fail CLOSED)', () {
-      final branch = _span(src, 'if (proConsumeError)', '} else if (proCount === -1)');
+    test('ledger error OR a non-numeric result → pro_quota_unavailable, honest copy, no cap claim (fail CLOSED)', () {
+      // Hermes L23 F3 (2026-09-13): the refusal condition is the ERROR **or**
+      // a result that is not a number. `consume_quota` returns int / -1;
+      // `null` here is a shape drift, and the old `proCount as number` read
+      // it as GRANTED. The anchor pins both halves of the condition.
+      final branch = _span(
+        src,
+        'if (proConsumeError || typeof proCount !== "number")',
+        '} else if (proCount === -1)',
+      );
       expect(branch, contains('gate_reason: "pro_quota_unavailable"'));
+      expect(branch, contains('expected an int'),
+          reason: 'the non-numeric arm must say what shape arrived, so a '
+              'drift is diagnosable from the log line alone');
       expect(_count(branch, 'gate_reason:'), 1,
           reason: 'the error branch must not also carry a cap reason');
       expect(branch, contains('imageLedgerUnavailable'));
@@ -269,6 +355,10 @@ void main() {
 
     test('the success body reports the PRO counter (null for non-PRO)', () {
       expect(src, contains('pro_daily_used: proDailyUsed'));
+      expect(src.contains('proCount as number'), isFalse,
+          reason: 'a cast is how a null result was read as a granted unit '
+              '(L23 F3) — the value reaches proDailyUsed only past the '
+              'typeof guard above');
       expect(RegExp(r'pro_daily_limit:\s*isPro\s*\?\s*proCap\s*:\s*null').hasMatch(src),
           isTrue);
     });

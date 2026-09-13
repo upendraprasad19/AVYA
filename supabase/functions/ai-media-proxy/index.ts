@@ -83,7 +83,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000; // IST has no DST; an IST day is always 
  * the same timeout returns 502 and benefits from the ~20s warm-start
  * budget added in Bug c01d57 (2026-05-15).
  */
-class HttpError extends Error {
+export class HttpError extends Error {
   readonly status: number;
   readonly errorType: "validation" | "upstream" | "internal" | "storage" | "authorization";
 
@@ -224,33 +224,187 @@ const ALLOWED_BUCKETS = new Set<string>([
  *   ${SUPABASE_URL}/storage/v1/object/public/<bucket>/<path>
  *   ${SUPABASE_URL}/storage/v1/object/sign/<bucket>/<path>?token=...
  *   ${SUPABASE_URL}/storage/v1/object/authenticated/<bucket>/<path>
+ *
+ * Hermes L23 F1 (2026-09-13, diagnose `c7e2a4`) — the components come from
+ * the URL as `fetch` will REQUEST it, not from the string the caller SENT.
+ * The first version split the raw string on "/" and prefix-compared, so
+ * `<own>/../<victim>/x.jpg` read as the caller's own path while the runtime
+ * — which resolves dot-segments per the WHATWG URL parser before any bytes
+ * leave — fetched the victim's object with the service role; six `..`
+ * reached `/rest/v1/users`. `%2e%2e` and `.%2e` are the same segment to that
+ * parser. `href` is the normalised URL and is what `fetchImageAsBase64`
+ * fetches, so the guard and the request can no longer see two paths.
  */
 export function parseStorageUrl(
   imageUrl: string,
-): { bucket: string; path: string } | null {
-  if (!imageUrl.startsWith(STORAGE_PREFIX)) return null;
-  const tail = imageUrl.substring(STORAGE_PREFIX.length); // e.g. "public/chat-media/<uid>/file.jpg?token=..."
-  // Strip query string before parsing path components.
-  const cleanTail = tail.split("?")[0];
-  const parts = cleanTail.split("/");
+): { bucket: string; path: string; href: string } | null {
+  let url: URL;
+  try {
+    url = new URL(imageUrl);
+  } catch (_) {
+    return null;
+  }
+  // On the NORMALISED href: after dot-segment resolution the object must
+  // still sit under /storage/v1/object/ on this project's origin.
+  if (!url.href.startsWith(STORAGE_PREFIX)) return null;
+  const tail = url.pathname.substring(new URL(STORAGE_PREFIX).pathname.length); // e.g. "public/chat-media/<uid>/file.jpg"
+  const parts = tail.split("/");
   if (parts.length < 3) return null;
   const access = parts[0]; // public | sign | authenticated
   if (!["public", "sign", "authenticated"].includes(access)) return null;
   const bucket = parts[1];
   const path = parts.slice(2).join("/");
   if (!bucket || !path) return null;
-  return { bucket, path };
+  return { bucket, path, href: url.href };
 }
 
-async function fetchImageAsBase64(
-  imageUrl: string,
-  authUserId: string,
-): Promise<{ base64: string; mimeType: string }> {
-  // Security: only allow Supabase Storage URLs to prevent SSRF
-  if (!imageUrl.startsWith(STORAGE_PREFIX)) {
-    throw new HttpError(400, "validation", "Only Supabase Storage URLs are allowed");
+/**
+ * F14 · Test #9 — the free-tier LIFETIME image cap: read the ledger, refuse
+ * on an unreadable read (fail CLOSED, `quota_unavailable`) or on reaching
+ * FREE_IMAGE_ANALYSIS_LIMIT (`free_image_limit_reached`). Returns `null` to
+ * let the caller proceed. Two call sites (B-pass F2, 2026-09-13): pre-fetch,
+ * as a fast path for the honest common case; and post-fetch, for a caller
+ * whose CLAIM said "video" but whose SERVED bytes reconciled to an image —
+ * see the call sites for why both are needed.
+ */
+export async function checkFreeImageQuota(
+  supabaseClient: SupabaseClient,
+  userId: string,
+  mediaUrl: string,
+  mediaType: unknown,
+  message: string,
+): Promise<Response | null> {
+  const usedSoFar = await readFreeImageQuota(supabaseClient, userId);
+
+  // OI-162 slice 3b — FAIL CLOSED on an unreadable ledger, and say so
+  // HONESTLY. `null` means "we do not know", NOT "you are at the limit":
+  // this user may have spent nothing at all. Reusing
+  // `imagePaywallExhausted` + `free_image_limit_reached` here would tell
+  // them they had used all 5 — a lie on a transient DB error — and would
+  // be indistinguishable from the real paywall in the response body.
+  //
+  // ⚠ Deliberately NO `ai_coach_interactions` row for this path. The
+  // paywall branch below logs one because a paywall hit is a real product
+  // event; an infrastructure refusal is not, and logging it under
+  // `image_paywall` would corrupt that signal.
+  // ⚠ `free_image_used` is OMITTED rather than defaulted — §4.3's rule:
+  // never print a fabricated number for a count we could not read.
+  if (usedSoFar === null) {
+    console.error(
+      `[ai-media-proxy] free-image quota UNREADABLE for user=${userId}` +
+        ` — refusing this analysis rather than granting it. The previous` +
+        ` behaviour returned 0 here, which granted unbounded free Gemini` +
+        ` image analyses on any transient PostgREST failure (CODE-3).`,
+    );
+    return new Response(
+      JSON.stringify({
+        reply: COACH_REPLIES.imageQuotaUnavailable,
+        model_used: "gated",
+        tokens_used: 0,
+        actions: [],
+        gated: true,
+        gate_reason: "quota_unavailable",
+        free_image_limit: FREE_IMAGE_ANALYSIS_LIMIT,
+        stored_url: mediaUrl,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 
+  if (usedSoFar >= FREE_IMAGE_ANALYSIS_LIMIT) {
+    const reply = COACH_REPLIES.imagePaywallExhausted;
+    await supabaseClient.from("ai_coach_interactions").insert({
+      user_id: userId,
+      snapshot_id: null,
+      channel: "image_paywall",
+      user_message: `[Photo: ${mediaType ?? "image"}] ${message}`,
+      ai_response: reply,
+      model_used: "paywall",
+      tokens_used: 0,
+      created_at: new Date().toISOString(),
+    });
+    return new Response(
+      JSON.stringify({
+        reply,
+        model_used: "paywall",
+        tokens_used: 0,
+        actions: [],
+        gated: true,
+        gate_reason: "free_image_limit_reached",
+        free_image_used: usedSoFar,
+        free_image_limit: FREE_IMAGE_ANALYSIS_LIMIT,
+        stored_url: mediaUrl,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  return null;
+}
+
+/**
+ * F14/F15 · Test #9 — video for a free user: the paywall reply, NO Gemini
+ * call, one conversation-log row. Two call sites: before the Storage fetch,
+ * on the caller's own `media_type`; and after it, when Storage's content-type
+ * says the "image" was a video (Hermes L23 F2, 2026-09-13).
+ */
+async function videoPaywallReply(
+  supabaseClient: SupabaseClient,
+  userId: string,
+  message: string,
+  mediaUrl: string,
+): Promise<Response> {
+  const reply = COACH_REPLIES.videoPaywall;
+  await supabaseClient.from("ai_coach_interactions").insert({
+    user_id: userId,
+    snapshot_id: null,
+    channel: "video_paywall",
+    user_message: `[Video] ${message}`,
+    ai_response: reply,
+    model_used: "paywall",
+    tokens_used: 0,
+    created_at: new Date().toISOString(),
+  });
+  return new Response(
+    JSON.stringify({
+      reply,
+      model_used: "paywall",
+      tokens_used: 0,
+      actions: [],
+      gated: true,
+      gate_reason: "video_pro_only",
+      stored_url: mediaUrl,
+    }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
+}
+
+export async function fetchImageAsBase64(
+  imageUrl: string,
+  authUserId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ base64: string; mimeType: string }> {
+  // Security: only allow Supabase Storage URLs to prevent SSRF. Checked
+  // through parseStorageUrl — which parses with `new URL()` and compares
+  // the NORMALISED origin/case/port — rather than a second, separate raw
+  // prefix compare. A raw `imageUrl.startsWith(STORAGE_PREFIX)` check used
+  // to run here FIRST and was strictly more restrictive than parseStorageUrl
+  // (an uppercase host or an explicit default port `:443` both fail a raw
+  // compare but resolve to the identical, correct object) — a real request
+  // shaped either way was rejected before parseStorageUrl ever ran (B-pass
+  // finding, 2026-09-13; never a security gap, only a false rejection: the
+  // extra check was strictly narrower, never wider, than the one that
+  // replaces it).
+  //
   // OI-28 (audit-2026-05-17 Hermes F3) — user-scope assertion. Pre-fix
   // any authenticated user could supply ANOTHER user's private Storage
   // URL and the service-role fetch would happily fetch the bytes + send
@@ -258,13 +412,11 @@ async function fetchImageAsBase64(
   // code is the only guard. We now parse the URL into bucket+path and
   // assert path starts with the authenticated userId, matching the
   // Storage RLS policy shape `(storage.foldername(name))[1] = (auth.uid())::text`.
+  // The path is taken from the NORMALISED URL and the fetch below uses that
+  // same normalised `href` — see parseStorageUrl (Hermes L23 F1).
   const parsed = parseStorageUrl(imageUrl);
   if (!parsed) {
-    throw new HttpError(
-      400,
-      "validation",
-      "Storage URL does not match expected shape (object/{public|sign|authenticated}/<bucket>/<path>)",
-    );
+    throw new HttpError(400, "validation", "Only Supabase Storage URLs are allowed");
   }
   if (!ALLOWED_BUCKETS.has(parsed.bucket)) {
     throw new HttpError(
@@ -289,7 +441,7 @@ async function fetchImageAsBase64(
 
   let response: Response;
   try {
-    response = await fetch(imageUrl, { headers });
+    response = await fetchImpl(parsed.href, { headers });
   } catch (err) {
     // DNS / network unreachable while fetching Storage — treat as transient
     // upstream so the client retry layer kicks in (502 is in the cold-start
@@ -354,7 +506,12 @@ async function fetchImageAsBase64(
   return { base64, mimeType };
 }
 
-serve(async (req: Request) => {
+/**
+ * The request handler, exported so `index_test.ts` can import this module
+ * without starting a server; `serve` runs only when Deno executes the file
+ * as the entrypoint (the same guard founder-digest boots through).
+ */
+export async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -468,17 +625,19 @@ serve(async (req: Request) => {
       );
     }
 
-    const isVideo = (typeof media_type === "string" ? media_type : "")
+    // The caller's claim. Re-derived from Storage's content-type after the
+    // fetch (Hermes L23 F2) — the paywall and the tier copy below the tier
+    // read use the claim; the cap key does not.
+    let isVideo = (typeof media_type === "string" ? media_type : "")
       .toLowerCase()
       .startsWith("video");
 
     // OI-153 — PRO daily-cap inputs, declared at FUNCTION scope so both the
     // gate (below the Storage fetch) and the success response can see them.
     // A block-scoped `const` inside `if (isPro) {` would be TS2304 at
-    // `deno check`, which only CI runs.
+    // `deno check`, which only CI runs. The key and the cap are derived
+    // below the fetch, once `isVideo` is the server's answer.
     const proWindowStart = istDayStartIso();
-    const proQuotaKey = isVideo ? PRO_VIDEO_QUOTA_KEY : PRO_IMAGE_QUOTA_KEY;
-    const proCap = isVideo ? PRO_VIDEO_DAILY_CAP : PRO_IMAGE_DAILY_CAP;
     let proDailyUsed: number | null = null;
 
     // OI-153 — tier UNKNOWN: refuse honestly, for either tier, with copy that
@@ -515,110 +674,29 @@ serve(async (req: Request) => {
     // probing duration would require shipping an ffmpeg WASM build (~10 MB) or
     // round-tripping to an external service. Revisit if abuse pattern emerges.
 
-    // F14/F15 · Test #9 — Video for free users: paywall reply, NO Gemini call.
-    // (Server-side 30s cap + actual PRO video analysis ship in F15.)
-    if (isVideo && !isPro) {
-      const reply = COACH_REPLIES.videoPaywall;
-      await supabaseClient.from("ai_coach_interactions").insert({
-        user_id: userId,
-        snapshot_id: null,
-        channel: "video_paywall",
-        user_message: `[Video] ${message}`,
-        ai_response: reply,
-        model_used: "paywall",
-        tokens_used: 0,
-        created_at: new Date().toISOString(),
-      });
-      return new Response(
-        JSON.stringify({
-          reply,
-          model_used: "paywall",
-          tokens_used: 0,
-          actions: [],
-          gated: true,
-          gate_reason: "video_pro_only",
-          stored_url: media_url,
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
+    // B-pass F2 (2026-09-13) — the video paywall used to run HERE, pre-fetch,
+    // gated on the CLIENT's claim. That was the asymmetric half of the same
+    // trust-the-claim bug the served-MIME reconciliation below exists to
+    // close: a FREE user who mislabelled a real IMAGE as "video" was
+    // paywalled on the false claim before the bytes were ever inspected —
+    // denying a legitimate free analysis. Removing it does not remove the
+    // video-PRO-only rule: the reconciled check below (`isVideo && !isPro`,
+    // now the ONLY video-paywall site) enforces it once the SERVED type is
+    // known, symmetrically with the image-mislabelled-as-video direction.
+    //
     // F14 · Test #9 — Free image analysis: 5 LIFETIME cap. After that,
-    // paywall reply with NO Gemini call. PRO users skip this branch.
+    // paywall reply with NO Gemini call. PRO users skip this branch. Run
+    // here as a fast path for the honest, common case (media_type already
+    // says "image") — an already-capped free user is refused before the
+    // Storage fetch, at zero cost. It runs a SECOND time, below, for the
+    // caller whose claim said "video": this site is skipped for them
+    // (isVideo is still the claim, true), and without the second call a
+    // free user could mislabel every image as "video" and bypass the cap
+    // entirely — reconciliation would correctly find it wasn't a video, but
+    // nothing downstream would have checked the free-image ceiling at all.
     if (!isVideo && !isPro) {
-      const usedSoFar = await readFreeImageQuota(supabaseClient, userId);
-
-      // OI-162 slice 3b — FAIL CLOSED on an unreadable ledger, and say so
-      // HONESTLY. `null` means "we do not know", NOT "you are at the limit":
-      // this user may have spent nothing at all. Reusing
-      // `imagePaywallExhausted` + `free_image_limit_reached` here would tell
-      // them they had used all 5 — a lie on a transient DB error — and would
-      // be indistinguishable from the real paywall in the response body.
-      //
-      // ⚠ Deliberately NO `ai_coach_interactions` row for this path. The
-      // paywall branch below logs one because a paywall hit is a real product
-      // event; an infrastructure refusal is not, and logging it under
-      // `image_paywall` would corrupt that signal.
-      // ⚠ `free_image_used` is OMITTED rather than defaulted — §4.3's rule:
-      // never print a fabricated number for a count we could not read.
-      if (usedSoFar === null) {
-        console.error(
-          `[ai-media-proxy] free-image quota UNREADABLE for user=${userId}` +
-            ` — refusing this analysis rather than granting it. The previous` +
-            ` behaviour returned 0 here, which granted unbounded free Gemini` +
-            ` image analyses on any transient PostgREST failure (CODE-3).`,
-        );
-        return new Response(
-          JSON.stringify({
-            reply: COACH_REPLIES.imageQuotaUnavailable,
-            model_used: "gated",
-            tokens_used: 0,
-            actions: [],
-            gated: true,
-            gate_reason: "quota_unavailable",
-            free_image_limit: FREE_IMAGE_ANALYSIS_LIMIT,
-            stored_url: media_url,
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
-
-      if (usedSoFar >= FREE_IMAGE_ANALYSIS_LIMIT) {
-        const reply = COACH_REPLIES.imagePaywallExhausted;
-        await supabaseClient.from("ai_coach_interactions").insert({
-          user_id: userId,
-          snapshot_id: null,
-          channel: "image_paywall",
-          user_message: `[Photo: ${media_type ?? "image"}] ${message}`,
-          ai_response: reply,
-          model_used: "paywall",
-          tokens_used: 0,
-          created_at: new Date().toISOString(),
-        });
-        return new Response(
-          JSON.stringify({
-            reply,
-            model_used: "paywall",
-            tokens_used: 0,
-            actions: [],
-            gated: true,
-            gate_reason: "free_image_limit_reached",
-            free_image_used: usedSoFar,
-            free_image_limit: FREE_IMAGE_ANALYSIS_LIMIT,
-            stored_url: media_url,
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
+      const refusal = await checkFreeImageQuota(supabaseClient, userId, media_url, media_type, message);
+      if (refusal) return refusal;
     }
 
     // OI-153 — the PRO daily cap is enforced BELOW, after the Storage fetch
@@ -708,6 +786,39 @@ serve(async (req: Request) => {
       userId,
     );
 
+    // Hermes L23 F2 (2026-09-13) — the cap key, the cap and the free-tier
+    // video paywall were selected by the CLIENT's `media_type`, while the
+    // bytes are typed by Storage's content-type: the `mimeType` Gemini is
+    // told. A PRO caller labelling a video "image" drew from the 50/day
+    // image bucket; a free caller did the same to walk a video past the
+    // PRO-only paywall for one lifetime image unit. From here the server's
+    // type wins — the cap is derived from the same MIME the model receives,
+    // so the two cannot disagree. (A caller who labels an image "video" is
+    // re-typed too: charged against the image bucket, as the bytes are.)
+    const servedAsVideo = mimeType.startsWith("video/");
+    if (servedAsVideo !== isVideo) {
+      console.warn(
+        `[ai-media-proxy] media_type disagreed with Storage user=${userId}` +
+          ` claimed=${isVideo ? "video" : "image"} served=${mimeType}`,
+      );
+      isVideo = servedAsVideo;
+    }
+    if (isVideo && !isPro) {
+      return await videoPaywallReply(supabaseClient, userId, message, media_url);
+    }
+    // Mirror of the pre-fetch fast path above, for the caller whose CLAIM
+    // said "video": that check never ran for them (isVideo was still true),
+    // so if it turns out to be an image, the free-image cap has not been
+    // checked at all yet. Run it now, before Gemini. (For the honest
+    // claim=image case this repeats the pre-fetch read — an extra advisory
+    // SELECT, same day, same result; correctness over one saved round trip.)
+    if (!isVideo && !isPro) {
+      const refusal = await checkFreeImageQuota(supabaseClient, userId, media_url, media_type, message);
+      if (refusal) return refusal;
+    }
+    const proQuotaKey = isVideo ? PRO_VIDEO_QUOTA_KEY : PRO_IMAGE_QUOTA_KEY;
+    const proCap = isVideo ? PRO_VIDEO_DAILY_CAP : PRO_IMAGE_DAILY_CAP;
+
     // OI-153 — PRO daily cap: ONE atomic check-and-increment on the ledger.
     //
     // Placement is load-bearing in both directions. AFTER the fetch, so a
@@ -734,11 +845,18 @@ serve(async (req: Request) => {
           p_window_start: proWindowStart,
           p_limit: proCap,
         });
-      if (proConsumeError) {
+      // Hermes L23 F3 (2026-09-13) — a result that is not a number is refused
+      // exactly like an error. `consume_quota` returns an int, `-1` past the
+      // cap (migration 128); `null` or a string here is a shape drift (a
+      // signature change, a PostgREST envelope change), and the old
+      // `proCount as number` read it as GRANTED — unmetered, unreported.
+      if (proConsumeError || typeof proCount !== "number") {
         console.error(
           `[ai-media-proxy] PRO quota ledger UNREADABLE for user=${userId}` +
             ` key=${proQuotaKey} — refusing rather than running unmetered:`,
-          proConsumeError.message,
+          proConsumeError
+            ? proConsumeError.message
+            : `consume_quota returned ${JSON.stringify(proCount)}, expected an int`,
         );
         return new Response(
           JSON.stringify({
@@ -789,7 +907,7 @@ serve(async (req: Request) => {
           },
         );
       } else {
-        proDailyUsed = proCount as number;
+        proDailyUsed = proCount;
       }
     }
 
@@ -995,4 +1113,8 @@ serve(async (req: Request) => {
       },
     );
   }
-});
+}
+
+if (import.meta.main) {
+  serve(handleRequest);
+}

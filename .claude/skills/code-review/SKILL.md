@@ -265,6 +265,49 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   send's error containment was traced to the outer `catch` and confirmed unreachable by a
   URL-bearing error; live ACL on `consume_quota` re-queried. 0/6 false alarms → no lens removed.
 
+- **2026-09-13 (second entry today)** — blast-radius **catastrophic** — branch
+  `oi153-pro-media-caps`, the SAME apply commit as the entry above, one deploy cycle later (v25 →
+  v26/v3). **5 findings (0 P0, 2 P1, 2 P2, 1 P3); 0 false_alarm — 4 fixed in-batch, 1
+  verified_clean.** Review: `docs/reviews/1214f9bbb700-review.md`. Run as two agents on the
+  same 1-5+10 / 6-8 split.
+  **Tuning 1 — lens 6 (`guard_without_its_mirror`) on a fix landed EARLIER THE SAME DAY, by
+  THIS SAME batch, still found a real asymmetry.** Finding 1 (P1): the served-MIME
+  reconciliation the entry above had JUST added closed one direction of a mislabel (video served
+  as image); the pre-fetch video paywall, unchanged by that fix, still ran on the raw claim and
+  paywalled a free user whose real VIDEO was mislabelled "image" — denying a legitimate free
+  analysis, and making the naive fix (delete that paywall) a WORSE bug (a free-cap bypass via
+  mislabel, since the sibling free-image-cap check shares the same claim gate). **The lesson: a
+  same-day fix for one direction of an asymmetry is not evidence the mirror was checked — it is
+  often evidence it was NOT, because the fix's own diff draws attention away from the branch it
+  didn't touch.** Ask "what did NOT change in this diff that the thing which DID change assumes
+  is still true?"
+  **Tuning 2 — lens 2 (`function_exception_swallow`'s sibling, staged-vs-working drift) belongs
+  in the standard set, not just as an ad hoc catch.** Finding 2 (P1): an on-disk gate-literal fix
+  (`.limit(MAX_ALERT_LINES)` → `.limit(10)`, required because `check_unbounded_cron_reads.dart`
+  reads only literals) was made and never re-staged — the INDEX still carried the defect the gate
+  exists to catch. `git diff --cached <file>` catches this in one command; add it to lens 6's
+  checklist as a zero-cost first step on any file the diff claims to have "already fixed".
+  **Tuning 3 — a review dispatched on a batch that JUST passed its own prior B-pass still found
+  2 P1s, both real.** Neither Hermes (19 findings, same day) nor the first B-pass (6 findings,
+  same day, same branch) had surfaced either — both fixes they DID land (F2's reconciliation, the
+  digest's own literal fix) were the exact site each new finding sits beside. **Corroborates
+  §4.12's "successive reviews keep surfacing NEW material issues" signal, but for one commit
+  across two consecutive B-passes rather than across plan-review rounds** — worth watching for a
+  third recurrence before concluding the unit needs splitting; one instance is not yet the
+  pattern.
+  Finding 5 (P3, `unlistedTotals`'s sibling call sites, verified_clean): independently re-traced
+  all 6 other call sites of the same count-fallback pattern and confirmed each is windowed, not
+  lifetime — not a recurrence of Finding 3's bug. 0/5 false alarms → no lens removed.
+  **Self-reference note, worth recording once rather than re-discovering it:** `docs/reviews/
+  bc593ef17136-review.md` is a byte-identical copy of the file above, named after the STAGED
+  hash as it stood after the plan-review record's own citation of this review was added — citing
+  a review's filename inside the plan-review record changes the very diff the hash is computed
+  over, so the name that satisfies `check_code_review_pass_exists.dart`'s exact-match rule at
+  commit time cannot, in general, be the same name `bpass_review:` settled on earlier without
+  solving a hash fixed-point. `bpass_review:` (checked only for EXISTENCE + `verdict: accepted`
+  by `check_plan_review_record_exists.dart`) points at `1214f9bbb700-review.md`; the duplicate
+  exists solely to satisfy the exact-hash gate. Two files, one review.
+
 - **2026-09-11** — blast-radius **catastrophic** — branch
   `oi162-slice4-windowed-counters`, OI-162 slice 4 (diagnose `f2c8d5`).
   **4 findings (0 P0, 1 P1, 1 P2, 2 P3); 0 false_alarm — all 4 triaged

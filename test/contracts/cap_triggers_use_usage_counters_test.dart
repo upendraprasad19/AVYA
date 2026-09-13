@@ -149,6 +149,41 @@ void main() {
       }
     });
 
+    test('every channel guard is NULL-safe — OI-153 Unit F / OI-183', () {
+      // `NULL NOT IN (...)` evaluates to NULL, so an `IF NEW.channel NOT IN
+      // (...)` does not fire on a NULL channel and the row falls through to
+      // consume_quota — it spends a unit on a row that is not a vision
+      // analysis at all. `IS DISTINCT FROM` treats NULL as a value, so the
+      // chat and food guards were already safe. Migration 132 made the
+      // vision guard match them with an explicit `IS NULL OR` arm.
+      //
+      // Dormant today (0 NULL-channel rows, every writer passes a literal,
+      // and an authenticated NULL insert dies on RLS before the body runs)
+      // — which is exactly why a pin is the only thing that keeps it fixed.
+      // Behavioural twin: `test/sql/oi153_pro_media_caps_live_verify.sql`
+      // Part B (a NULL-channel probe that is RED under the 129 body).
+      final nullSafeNotIn =
+          RegExp(r'NEW\.channel\s+IS\s+NULL\s+OR\s+NEW\.channel\s+NOT\s+IN\s*\(');
+      for (final name in _triggers.keys) {
+        final guardLine = blocks[name]!
+            .split('\n')
+            .firstWhere((l) => l.contains('NEW.channel'), orElse: () => '');
+        expect(guardLine, isNotEmpty, reason: '$name has no channel guard');
+        final distinct = guardLine.contains('NEW.channel IS DISTINCT FROM');
+        final guardedNotIn = nullSafeNotIn.hasMatch(guardLine);
+        expect(distinct || guardedNotIn, isTrue,
+            reason: '$name guard is NULL-blind: "$guardLine" — a NULL channel '
+                'falls through to consume_quota. Use IS DISTINCT FROM, or '
+                'prefix the NOT IN with `NEW.channel IS NULL OR`.');
+        // The mirror: a NOT IN that lost its NULL arm must not pass on the
+        // strength of a DISTINCT FROM elsewhere on the same line.
+        if (guardLine.contains('NOT IN')) {
+          expect(guardedNotIn, isTrue,
+              reason: '$name uses NOT IN without the IS NULL arm');
+        }
+      }
+    });
+
     test('chat exempts PRO before it consumes anything', () {
       final block = blocks['enforce_chat_app_daily_limit']!;
       final proReturn = block.indexOf('IF is_pro THEN');

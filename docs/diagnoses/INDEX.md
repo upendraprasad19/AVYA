@@ -6,7 +6,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
-### pro_media_daily_caps (1 bugs)
+### pro_media_daily_caps (2 bugs)
+- 2026-09-13 c7e2a4 — ai-media-proxy's OI-28 user-scope guard inspected the Storage URL as the caller SENT it while `fetch` requests it as the WHATWG URL parser RESOLVES it.…
 - 2026-09-12 a9d4e7 — ai-media-proxy's PRO daily image cap (H-23, 50/day) had NEVER FIRED: the gate counted ai_coach_interactions rows on channels pro_image_analysis / image_analysis, which nothing has ever written — 0…
 
 ### The design is: `rawWeekNumberFor(date, planStart) := (date - planStart).days ~/ 7 + 1` (Unit 1, unclamped) gives the row's REAL week number; `contentFlavorIndex(w) := (w-1) % 4` (NEW, this batch) picks which of the phase's 4 generated `weekPlans` supplies that week's CONTENT, cycling baseline/overreach/peak/deload past week 4 instead of freezing or indexing out of bounds. Both writers derive `effectiveWeek`/`week` from the row's real position and pick content through `contentFlavorIndex`; the `current_plan` blob is spliced (not fully rewritten) so weeks before `regenStartWeek` are preserved verbatim.
@@ -1168,6 +1169,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-13 | c7e2a4 | ai-media-proxy's OI-28 user-scope guard inspected the Storage URL as the caller SENT it while `fetch` requests it as the WHATWG URL parser RESOLVES it.… | pro_media_daily_caps | supabase/functions/ai-media-proxy/index_test.ts, test/contracts/ai_media_proxy_user_scope_test.dart, test/contracts/ai_media_proxy_ssrf_allowlist_test.dart, test/contracts/ai_media_proxy_status_code_classification_test.dart, test/contracts/pro_media_daily_caps_writer_to_reader_test.dart |
 | 2026-09-12 | a9d4e7 | ai-media-proxy's PRO daily image cap (H-23, 50/day) had NEVER FIRED: the gate counted ai_coach_interactions rows on channels pro_image_analysis / image_analysis, which nothing has ever written — 0… | pro_media_daily_caps | test/contracts/pro_media_daily_caps_writer_to_reader_test.dart, test/contracts/usage_quota_ledger_writer_to_reader_test.dart, test/contracts/media_free_image_lifetime_gate_writer_to_reader_test.dart, test/contracts/coach_replies_test.dart, test/scripts/usage_counter_source_lib_test.dart, test/contracts/cap_triggers_use_usage_counters_test.dart |
 | 2026-09-11 | d7f3b2 | Two related pre-fix defects, both reachable by any user regenerating a plan past week 4 of an existing phase (extended via redoWeek4, or simply time passing): (B) `generateAndScheduleFromDate` always… | The design is: `rawWeekNumberFor(date, planStart) := (date - planStart).days ~/ 7 + 1` (Unit 1, unclamped) gives the row's REAL week number; `contentFlavorIndex(w) := (w-1) % 4` (NEW, this batch) picks which of the phase's 4 generated `weekPlans` supplies that week's CONTENT, cycling baseline/overreach/peak/deload past week 4 instead of freezing or indexing out of bounds. Both writers derive `effectiveWeek`/`week` from the row's real position and pick content through `contentFlavorIndex`; the `current_plan` blob is spliced (not fully rewritten) so weeks before `regenStartWeek` are preserved verbatim.
 Three sub-defects were found and fixed WITHIN this same implementation, before any external review — worth recording because two of them are new failure shapes this document's own 9 rounds of PLAN review never had cause to reach (the plan was reviewed as prose; these are runtime-arithmetic divergences only visible once real Hive state is involved):

@@ -1,25 +1,34 @@
 ---
 branch: oi153-pro-media-caps
 date: 2026-09-13
-blast_radius: platform
+blast_radius: catastrophic
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
-bpass_review: docs/reviews/88cfc8594fcc-review.md
+bpass_review: docs/reviews/1214f9bbb700-review.md
+hermes: accepted
+hermes_report: docs/audit/2026-09-13-hermes-oi153-pro-media-caps.md
 ---
 
-# Plan-review record — OI-153: PRO media caps on the ledger + the founder's daily digest (platform)
+# Plan-review record — OI-153: PRO media caps on the ledger + the founder's daily digest (catastrophic)
 
 Keystone record for the §4.12 merge gate (`check_plan_review_record_exists.dart`).
 
-**Tier `platform`, COMPUTED** — `git diff main...HEAD --name-only | dart run
-scripts/blast_radius_from_diff.dart -` → `platform` on the branch diff (28 files at the B-pass, the
-same answer for the staged set of every commit). The two migrations this batch applies (131 cron
-row, 132 a `CREATE OR REPLACE` of one trigger) were classified from SCRATCH COPIES before being
-written into the tree (§4.9's fail-open row): neither contains `SECURITY DEFINER` — 131 uses a
-literal function URL rather than a `private.<fn>_function_url()` definer helper for exactly that
-reason — so the content rule does not lift either to catastrophic. No Hermes pass is owed.
+**Tier `catastrophic`, COMPUTED — and this paragraph is a correction.** Through the B-pass the
+branch diff classified `platform` (28 files; `git diff main...HEAD --name-only | dart run
+scripts/blast_radius_from_diff.dart -`), and the two migrations were classified from scratch copies
+before being written (§4.9's fail-open row) as `platform` because neither USES `SECURITY DEFINER`.
+That reading was wrong by one word: migration 131's COMMENT says "SECURITY DEFINER" — it explains
+why the file uses a literal function URL instead of a `private.<fn>_function_url()` definer
+helper — and `scripts/blast_radius_content_rules_lib.dart` matches the phrase case-insensitively
+with NO comment stripping. Classifying the STAGED apply set (`git diff --cached --name-only | dart
+run scripts/blast_radius_from_diff.dart -`) answers `catastrophic`, and so will the merge commit's
+`HEAD^1..HEAD^2`. The migration was applied live before the tier was noticed and is immutable, so
+the tier stands. Catastrophic requires `hermes: accepted` (`check_plan_review_record_exists.dart`)
+and a per-commit review for the apply commit (`check_code_review_pass_exists.dart`) — both
+satisfied below. Lesson, recorded in the code-review skill's tuning history: classify a
+migration's CONTENT, comments included, and re-classify after every edit to it.
 
 ## Rounds
 
@@ -82,22 +91,56 @@ The deploy is the last step of this batch, after the merge, pre-authorized by th
 
 ## B-pass (platform → required)
 
-`docs/reviews/88cfc8594fcc-review.md` — two context-blind agents over the branch diff at
-`f15fad75`, 15 mutations run and restored. **6 findings (0 P0, 2 P1, 2 P2, 2 P3), 0 false alarms,
-all accepted.** The mechanism finding: the digest's reads lived inside the handler where NO test
-could reach them, so mutating the lifetime filter to a column that can never match reddened
+TWO rounds, because the first round's own fixes (the Hermes L23 P0 fix among them) were a
+redeploy this same batch had to re-review before it could stand as final.
+
+**Round 1: `docs/reviews/88cfc8594fcc-review.md`** — two context-blind agents over the branch diff
+at `f15fad75`, 15 mutations run and restored. **6 findings (0 P0, 2 P1, 2 P2, 2 P3), 0 false
+alarms, all accepted.** The mechanism finding: the digest's reads lived inside the handler where NO
+test could reach them, so mutating the lifetime filter to a column that can never match reddened
 nothing → reads extracted into `readDigestSections`, driven by a recording fake client (7 new Deno
 tests; mutations n/n2/n3/n4 redden 1 each). The two P1s were documentation-truth defects (a deploy
 claimed before it happened; a cited SQL file that did not yet exist) — both fixed in the same docs
 commit, the SQL file written and landed with this record.
 
+**Round 2: `docs/reviews/1214f9bbb700-review.md`** — dispatched AFTER round 1's fixes (and the
+Hermes pass below, run on the same day) had already landed as ai-media-proxy v25 / founder-digest
+v2, to review that redeploy itself rather than re-trust it. **5 findings (0 P0, 2 P1, 2 P2, 1 P3), 0
+false alarms, 4 fixed + 1 verified_clean.** Two real defects in the Hermes L23 F2 fix itself: the
+served-MIME reconciliation only closed ONE mislabel direction, so a free user's real video labelled
+"image" still walked past the free-image cap on the unverified claim (fixed via a shared
+`checkFreeImageQuota` helper, called pre- AND post-fetch); and a vestigial raw-string SSRF
+pre-check, strictly MORE restrictive than `parseStorageUrl`, was a false-rejection bug surviving
+from before OI-28 (deleted). One more real defect, unrelated to ai-media-proxy: an on-disk gate-
+literal fix to founder-digest's alerts read had never been re-staged, so the committed content
+still carried the defect `check_unbounded_cron_reads.dart` exists to catch. `bpass_review:` above
+points here — the FINAL diff, not the intermediate one round 1 reviewed — per the same "check the
+live/final state, not a promise" lesson this batch's own Hermes tuning entry records.
+
+## Hermes pass (catastrophic → required)
+
+`docs/audit/2026-09-13-hermes-oi153-pro-media-caps.md` — 8 context-blind Opus lens agents (L1,
+L14, L21, L22, L23, L31, L35, L40) over the branch diff AND the staged apply set. **19 findings
+(1 P0, 2 P1, 16 P2), 0 false alarms, 3 PARTIAL; verdict accepted.** The P0 (L23) was
+pre-existing, not of this batch: the OI-28 user-scope guard read the Storage URL as SENT while
+`fetch` requests it as RESOLVED, so `<own>/../<victim>/x.jpg` passed and six `..` reached
+`/rest/v1/users` with the service role. Reproduced, fixed and deployed in this batch, first as ai-media-proxy **v25** (diagnose `c7e2a4`,
+16 Deno tests, real-user traversal probe → 403), then — after the B-pass round 2 above found two
+more real defects in that same fix — as **v26** (21 Deno tests). The digest findings shipped as
+founder-digest **v2**, then **v3** after round 2's own staged-vs-working-tree finding. One P1
+(fleet-wide `cron_call_log` start-insert loss) is filed as OI-194 with the fleet-redeploy decision
+for the founder; it recurred a SECOND time live, during v3's own manual verification, delivering
+the digest (confirmed via the 200 response) while again losing that one run's `cron_call_log` row
+— the same measured mechanism, not a v3 regression. Every finding's terminal state is in the
+closure ledger (entries H1–H19, plus BP1/BP2 for round 2's findings).
+
 ## What this record does NOT claim
 
-- The ai-media-proxy deploy: post-merge, recorded in `docs/audit/oi153-pro-media-caps.closure.yaml`
-  and the project memory, not here.
-- Migrations 131/132 and the `founder-digest` deploy: the apply commit that follows this one
-  carries the files, `backups/applied_migrations.json`, the regenerated cron snapshot and the
-  CRON_REGISTRY row; each applied on the founder's already-given go.
-- Runtime behaviour of the Edge Functions: source-greps + `deno check` (local, whole tree) +
-  the Deno unit tests + the deploy-time smokes. The live ledger behaviour is
-  `test/sql/oi153_pro_media_caps_live_verify.sql` (Part A runnable now; B/C after the apply).
+- The deploys are recorded in `docs/audit/oi153-pro-media-caps.closure.yaml` (OI153-DEPLOY-1/2/3),
+  written after the fact from the Management API and the decoded multipart `/body` — not here.
+- Migrations 131/132: the apply commit carries the files, `backups/applied_migrations.json`, the
+  regenerated cron snapshot and the CRON_REGISTRY row; each applied on the founder's already-given
+  go.
+- Runtime behaviour of the Edge Functions beyond what the Deno tests, the deploy-time smokes and
+  the live probes recorded in the ledger cover. The live ledger behaviour is
+  `test/sql/oi153_pro_media_caps_live_verify.sql` (Parts A–C, run after the apply).

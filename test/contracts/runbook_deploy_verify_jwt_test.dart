@@ -56,7 +56,7 @@ const expectedVerifyJwt = <String, bool>{
   'delete-account': true,
   'evaluate-rank-promotions': false,
   'expiry-reminder': false,
-  'founder-digest': false, // OI-153 cron caller (isAuthorizedCronCall). Value = the flag the apply commit deploys with; that commit stamps the live version here.
+  'founder-digest': false, // OI-153 cron caller (isAuthorizedCronCall). v1, v2 and v3 deployed 2026-09-13 with verify_jwt=false (the gateway must let the opaque cron bearer reach the module — CRON_REGISTRY.md step 2).
   'future-prediction': true,
   'get-community-review-items': true,
   'i-see-you-callout': false,
