@@ -10293,11 +10293,12 @@ concepts:
       ⚠ ONE quota_key => ONE call site => ONE limit. `consume_quota`'s `p_limit`
       is a per-CALL argument, so two callers naming this key with different
       limits would silently disagree and nothing in SQL holds it. This key has
-      exactly one call site. Note ai-media-proxy has TWO quotas and therefore
-      needs TWO keys — the PRO per-day cap is NOT this key and is NOT migrated
-      (OI-153, dormant: nothing writes 'pro_image_analysis'/'image_analysis',
-      verified in code and in prod data, so migrating it would ACTIVATE a cap
-      that has never fired — a product decision).
+      exactly one call site. Note ai-media-proxy has THREE quotas and therefore
+      THREE keys — the PRO per-day caps are NOT this key: they are
+      `pro_image_daily` / `pro_video_daily`, registered as their own concept
+      `pro_media_daily_caps` below (OI-153, 2026-09-12 — the founder decided
+      to activate the cap that had never fired, at 50/day, and to add a 10/day
+      video cap).
     writers:
       - file: supabase/functions/ai-media-proxy/index.ts
         method: serve handler — conversation-log insert
@@ -10333,6 +10334,20 @@ concepts:
           must GRANT. Uses `.maybeSingle()`, never `.single()` — the latter
           throws PGRST116 on an absent row, which would arrive as an error and
           refuse EVERY free user, since zero rows exist for this key at cutover.
+
+          ⚠ Since v26 (2026-09-13, B-pass BP-2) this read runs behind the
+          exported `checkFreeImageQuota(supabaseClient, userId, mediaUrl,
+          mediaType, message)`, called from TWO sites: pre-fetch (the honest
+          claim=image fast path, unchanged trigger) and a NEW post-fetch
+          mirror (a claim=video caller whose served bytes reconcile to an
+          image — the F2 reconciliation's other direction, which the pre-fetch
+          site alone could never see, since it never runs when the claim says
+          "video"). An honestly-labelled request therefore reads this counter
+          TWICE per call (pre- and post-fetch, same result) — an accepted
+          extra advisory SELECT, not a correctness issue; the alternative
+          (deleting the pre-fetch video paywall without the mirror) would have
+          let a free user bypass this very cap by mislabelling every image as
+          video. See docs/diagnoses/2026-09-13-ai-media-proxy-storage-path-traversal-c7e2a4.md.
       - file: supabase/functions/ai-media-proxy/index.ts
         method: serve handler — "X of 5 free analyses left" display
         semantic: cloud-read
@@ -10341,6 +10356,110 @@ concepts:
           The pre-fix code ran a full re-count here on every request — a second
           reader of the pruned log, and a wasted round trip. On an RPC error the
           counter line is OMITTED rather than filled with a fabricated number.
+    hive:
+      box: "n/a — server-side gate, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: usage_counters
+      columns: [user_id, quota_key, window_start, used, updated_at]
+    sync_methods: []
+
+  # OI-153 (2026-09-12) — the PRO tier's per-IST-day media caps: 50 image
+  # reads, 10 video reads. Registered as its own concept, one concept per
+  # gate, like media_free_image_lifetime_gate above. The LAST of the ten
+  # quota readers that derived their count from the pruned `ai_coach_
+  # interactions` log (OI-162 slices 1-4 moved the other nine).
+  - concept: pro_media_daily_caps
+    domain: ai_coach
+    behavioral_test_path: test/contracts/pro_media_daily_caps_writer_to_reader_test.dart
+    presence_only: true  # Deno Edge Function; the CAP GATE sits inside `handleRequest` behind a module-level `createClient(...)`, so no Dart or Deno test can round-trip it without a live client. (Since v25, 2026-09-13, the module IS importable — `serve` runs under `import.meta.main` and `handleRequest` / `fetchImageAsBase64` / `parseStorageUrl` / `HttpError` are exported — and supabase/functions/ai-media-proxy/index_test.ts drives the Storage user-scope guard behaviourally through an injected fetch; the gate itself remains presence-only.) CI `deno check` (and, since 2026-09-12, a local Deno) is the compile proof; the live-ledger behaviour is proven by test/sql/oi153_pro_media_caps_live_verify.sql inside BEGIN…ROLLBACK (rule 21 honesty).
+    description: |
+      "Has this PRO user spent today's 50 image reads (or 10 video reads)?" —
+      the per-IST-day ceiling on Gemini Vision fan-out from a PRO token. Reset
+      at midnight IST; a reached cap returns an in-app coach reply (HTTP 200,
+      `gated: true`), never the paywall — the reader already pays.
+
+      ⚠ REWIRED by OI-153 (2026-09-12). The H-23 gate (audit 2026-05-11)
+      counted `ai_coach_interactions` rows on channels `pro_image_analysis` /
+      `image_analysis`, which NOTHING has ever written — 0 rows in the table's
+      whole history — so `used >= 50` was structurally false and the cap had
+      never fired. PRO+video matched neither tier branch (`isVideo && !isPro`
+      paywall, `!isVideo && isPro` cap) and was uncapped.
+
+      NOW: ONE atomic `consume_quota` call per request, quota_key
+      `pro_image_daily` or `pro_video_daily` (selected by `isVideo`, as is the
+      cap), `p_window_start` = `istDayStartIso()` — the SAME instant migration
+      129's triggers use. `-1` is the refusal. ⚠ Since v25 (2026-09-13, Hermes
+      L23 F2) `isVideo` is the SERVER's answer at the point the key is derived:
+      after the Storage fetch it is re-derived from the object's content-type
+      (the MIME Gemini is told) whenever the client's `media_type` disagrees,
+      the free-tier video paywall is re-checked, and only then are
+      `proQuotaKey`/`proCap` derived. A caller can no longer pick the cheaper
+      bucket, or walk a video past the paywall, by labelling.
+
+      ⚠ CONSUME-FIRST, deliberately the OPPOSITE ordering of
+      media_free_image_lifetime_gate above. Placed AFTER the Storage fetch (a
+      5 MB reject, an SSRF reject or a Storage-404 propagation race never
+      spends a unit) and BEFORE the Gemini call, because only the atomic
+      check-and-increment bounds spend under concurrency: N in-flight requests
+      past an advisory read would ALL reach Gemini. Cost stated: a Gemini
+      timeout/5xx after a successful consume spends a daily unit (the client
+      retries a 502 up to 3×, so one photo in an outage can spend 4). No
+      decrement RPC exists or is added. The free path keeps consume-AFTER-
+      delivery because its unit is LIFETIME — an undelivered lifetime unit is
+      unrecoverable; an undelivered daily one is not.
+
+      ⚠ Fails CLOSED on an RPC error (`gate_reason: "pro_quota_unavailable"`,
+      distinct from the free path's `quota_unavailable`), like verify-payment
+      and unlike delete-account. A `subscriptions` read error ALSO fails closed
+      now (`gate_reason: "tier_unavailable"`) — it used to be discarded, so a
+      PostgREST fault on that table alone routed a PAYING user down the free
+      path, spent a lifetime free unit they did not own, and ended the reply
+      in an upgrade CTA.
+
+      ⚠ ONE quota_key => ONE call site => ONE limit — both keys have exactly one
+      call site. `-1` neither increments nor touches `updated_at` (128), so the
+      ledger row cannot count refusals; the `console.warn` on that branch is
+      the only refusal telemetry, and the founder digest reports users AT the
+      ceiling (`used >= cap`), not how often they were refused.
+    writers:
+      - file: supabase/functions/ai-media-proxy/index.ts
+        method: serve handler — consume_quota(proQuotaKey)
+        semantic: cloud-write
+        notes: |
+          The single quota writer for both keys. `p_quota_key: proQuotaKey`,
+          `p_limit: proCap`, `p_window_start: proWindowStart`. The window is
+          computed once at function scope; the key and the cap are derived
+          BELOW the Storage fetch, after `isVideo` has been reconciled with the
+          served content-type (v25). Pinned by the behavioral_test_path (both
+          ternaries by ORDER, exactly once each, after the reconciliation; the
+          call's position between `await fetchImageAsBase64(` and
+          `await geminiChat(`; every gate_reason literal's uniqueness; the
+          refusal condition `proConsumeError || typeof proCount !== "number"`).
+    readers:
+      - file: supabase/functions/ai-media-proxy/index.ts
+        method: serve handler — the -1 branch
+        semantic: cloud-read
+        notes: |
+          The RPC's own return value IS the read: `-1` → 200/gated with
+          `COACH_REPLIES.proImageDailyCapReached(proCap)` /
+          `proVideoDailyCapReached(proCap)` (functions — the number is the
+          constant, never typed in the copy), `resets_at` = tomorrow's IST
+          midnight, `pro_daily_used` = `pro_daily_limit` = the cap. A number
+          → `pro_daily_used` on the success body (`pro_daily_limit` = the cap;
+          both null for non-PRO). No separate advisory read exists.
+      - file: supabase/functions/founder-digest/index.ts
+        method: buildDigestText
+        semantic: cloud-read
+        notes: |
+          The founder's 08:00-IST Telegram digest (cron `founder_digest_daily`,
+          migration 131): yesterday's `pro_image_daily` / `pro_video_daily`
+          rows summed per key, distinct users, and users AT the ceiling
+          (`used >= cap`, the cap typed in `DIGEST_KEYS` and pinned equal to
+          `PRO_IMAGE_DAILY_CAP` / `PRO_VIDEO_DAILY_CAP` by
+          test/contracts/founder_digest_caps_mirror_test.dart). READ-ONLY:
+          decides no quota. Cannot count refusals — `-1` leaves the row
+          untouched — so "at cap" is the signal, not "was refused".
     hive:
       box: "n/a — server-side gate, no Hive surface"
       key_prefix: "n/a"
@@ -10720,6 +10839,22 @@ concepts:
           quota_key `food_text`. The only reader whose limit varies by tier
           (200 PRO / 10 free) from a SINGLE call site — permitted, see the
           "ONE quota_key => ONE call site" note.
+      - file: supabase/functions/founder-digest/index.ts
+        method: buildDigestText
+        semantic: cloud-read
+        notes: |
+          OI-153 (2026-09-12). The ONE aggregate reader: a direct
+          `.from("usage_counters")` SELECT of yesterday's IST-day rows (every
+          key; windowed rows by `window_start`, the two lifetime keys by
+          `updated_at` with `window_start = epoch`), paged by `fetchAllPages`,
+          rendered into the founder's daily Telegram digest. Decides NO quota
+          — it has no `consume_quota` call, and the ledger census in
+          usage_quota_ledger_writer_to_reader_test.dart allowlists it as a
+          direct reader for exactly that reason. `DIGEST_KEYS` enumerates
+          every key the ledger carries and founder_digest_caps_mirror_test.dart
+          pins that set equal to the union of every `p_quota_key` constant and
+          every trigger literal — both directions, caps and kinds included —
+          so a tenth caller cannot appear without a digest section.
     reader_manifest_complete: true
     hive:
       box: "n/a — cloud-only ledger, no Hive surface"

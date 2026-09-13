@@ -160,7 +160,7 @@ const Map<String, int> allowedEdgeFunctionSites = {
   // writes 'pro_image_analysis' or 'image_analysis' (verified in code and in
   // prod data), so migrating it would ACTIVATE a cap that has never fired.
   // That is a product decision, deliberately not made here.
-  'supabase/functions/ai-media-proxy/index.ts': 1, // pro-image IST day (OI-153)
+  'supabase/functions/ai-media-proxy/index.ts': 0, // was: pro-image IST day; OI-153 moved it to usage_counters (2026-09-12)
   // OI-162 slice 4 (f2c8d5): RATCHETED both 1 -> 0. Both rate limits now
   // enforce via consume_quota() against usage_counters (quota_key
   // 'delete_account' / 'verify_payment') — no read of ai_coach_interactions

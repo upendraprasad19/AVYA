@@ -200,10 +200,16 @@ void main() {
       // Anchor the test to the helper boundaries to avoid spurious matches
       // elsewhere in the file. fetchImageAsBase64 must throw HttpError
       // exclusively — any raw Error would skip the typed-status dispatch.
+      // The region ends at the request handler, which is a named export
+      // since v25 (2026-09-13): `serve` now runs only under
+      // `import.meta.main`, so `index_test.ts` can import the module.
       final start = src.indexOf('async function fetchImageAsBase64');
-      final end = src.indexOf('serve(async (req: Request)');
+      final end = src.indexOf('export async function handleRequest(');
       expect(start, greaterThan(0));
-      expect(end, greaterThan(start));
+      expect(end, greaterThan(start),
+          reason: 'the handler must be the named export `handleRequest` — '
+              'it is the anchor that bounds this scan AND the seam the Deno '
+              'tests import through');
       final body = src.substring(start, end);
       // We expect zero `throw new Error(` calls — only `throw new HttpError(`.
       expect(

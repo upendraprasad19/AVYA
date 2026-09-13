@@ -67,7 +67,7 @@ Cron registrations live in `supabase/migrations/031_proactive_triggers_cron.sql`
 |---|---|---|
 | `ai-proxy` (chat + food text + prediction) | `gemini-2.5-flash` | Free + PRO coach, food text analysis, prediction card |
 | `ai-proxy` (scan_meal, cart_auditor) | `gemini-2.5-flash-lite` | Vision: nutrition JSON from photos |
-| `ai-media-proxy` | `gemini-2.5-flash-lite` | PRO photo-upload chat |
+| `ai-media-proxy` | `gemini-2.5-flash-lite` | Photo-upload chat — 5 free LIFETIME image reads (`usage_counters` key `free_image_analysis`), then PRO; PRO is capped **50 images / 10 videos per IST day** (keys `pro_image_daily` / `pro_video_daily`, OI-153, 2026-09-12) via ONE atomic `consume_quota` after the Storage fetch and before Gemini; a reached cap is an HTTP 200 `gated: true` coach reply (`gate_reason: pro_image_daily_limit_reached` / `pro_video_daily_limit_reached`, `resets_at` = next IST midnight), never the paywall and never a 429. Fails CLOSED on a ledger error (`pro_quota_unavailable`) or a tier-read error (`tier_unavailable`). Video has no client picker today — the cap protects the API surface |
 | `assess-body-composition` | `gemini-2.5-flash-lite` | Body-fat % from photo |
 | `daily-snapshot` (coaching notes) | `gemini-2.5-flash` | Extract facts from daily conversations |
 | `morning-alert` | `gemini-2.5-flash` | Personalised morning push |

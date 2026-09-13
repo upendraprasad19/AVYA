@@ -43,6 +43,15 @@
 // Slice 4 also exposed that the `stillLegacy` contains() read the RAW file and
 // was satisfied by a COMMENT in delete-account; it now reads comment-stripped
 // source like the two allowlist tests above it.
+//
+// OI-153 (2026-09-12) is the FIFTH and LAST slice: ai-media-proxy's dormant PRO
+// image cap — and the PRO video path, which matched no tier branch and was
+// uncapped — moved onto `consume_quota` (keys `pro_image_daily` /
+// `pro_video_daily`, IST-day window). The census below is now ZERO. This batch
+// edited this file in the SAME commit as the code, on purpose, having read the
+// three notes above. The ai-media-proxy mirror block ALSO switched to
+// comment-stripped source here — it read the raw file, so a history comment
+// naming the deleted `countProImageAnalysesToday` would have reddened it.
 
 import 'dart:io';
 
@@ -149,9 +158,33 @@ void main() {
       // consume_quota that question would burn a lifetime unit on every model
       // outage with no refund path. Advisory .maybeSingle() read; authoritative
       // consume_quota after the insert.
+      //
+      // founder-digest (OI-153) is a DIFFERENT shape and the only one of its
+      // kind: a read-only AGGREGATE reader. It sums yesterday's rows for the
+      // founder's Telegram digest and decides NO quota from what it reads --
+      // there is no consume_quota anywhere in it, which the sibling test
+      // below pins by its absence from that allowlist. The atomicity concern
+      // is moot for a reader that never gates anything.
+      //
+      // founder-digest/index_test.ts is NOT a reader either: it drives the
+      // digest's reads with a recording fake client (B-pass 2026-09-13
+      // finding 3) and ASSERTS the table name each section queries, which
+      // is why the literal appears there. `_appSources()` scans `_test.ts`
+      // files deliberately (a test that queried the ledger for real would
+      // be a reader), so the test is allowlisted by name with its reason
+      // rather than the scan narrowed.
+      //
+      // ai-media-proxy/index_test.ts is the SAME shape, added the same day
+      // (B-pass 2026-09-13, BP-2): its `fakeUsageCountersClient` helper
+      // dispatches `from(table)` on `table === "usage_counters"` to route to
+      // a fake read builder for the `checkFreeImageQuota` tests — a literal
+      // table-name check in test scaffolding, not a real query.
       const allowed = {
         'supabase/functions/weekly-report/index.ts',
         'supabase/functions/ai-media-proxy/index.ts',
+        'supabase/functions/ai-media-proxy/index_test.ts',
+        'supabase/functions/founder-digest/index.ts',
+        'supabase/functions/founder-digest/index_test.ts',
       };
       final offenders = <String>[];
       for (final e in _appSources()) {
@@ -225,17 +258,18 @@ void main() {
       }
     });
 
-    test('the ONE remaining legacy quota reader is still on the old table', () {
+    test('ZERO remaining legacy quota readers — every one is on the ledger', () {
       // Stated as an invariant so no batch can be misread as having fixed the
       // whole bug. Nine quota readers existed; slice 2 moved THREE (the chat /
       // vision / food_text cap triggers), slice 3a moved ONE (weekly-report),
       // slice 3b moved TWO (ai-media-proxy's free-image lifetime meter and
       // its dead client twin, which was DELETED rather than repointed —
       // repointing a method with zero callers would be inventing a reader),
-      // and slice 4 moved TWO (the delete-account and verify-payment attempt
-      // limiters, f2c8d5). ONE remains: OI-153's dormant PRO image cap, which
-      // is a PRODUCT decision (migrating it would ACTIVATE a cap that has
-      // never fired), not a pending code slice.
+      // slice 4 moved TWO (the delete-account and verify-payment attempt
+      // limiters, f2c8d5), and OI-153 (2026-09-12) moved the LAST: the PRO
+      // image cap that had never fired, plus the PRO video cap that had never
+      // existed. The map below is EMPTY and must stay empty; the mirrors
+      // further down pin, per file, what must never come back.
       //
       // ⚠ THIS TEST WAS GREEN WHILE ITS OWN TITLE WAS FALSE. It said SIX and
       // checked exactly ONE representative file (ai-media-proxy), so slice 3a
@@ -251,16 +285,10 @@ void main() {
       // true (see the length expectation below). A comment describing a
       // protection that does not exist is worse than no comment: it stops the
       // next reader from adding the protection.
-      const stillLegacy = <String, String>{
-        'supabase/functions/ai-media-proxy/index.ts':
-            'countProImageAnalysesToday only — the dormant PRO image cap '
-                '(OI-153). Its free-image sibling moved in slice 3b.',
-      };
-      expect(stillLegacy, hasLength(1),
-          reason: 'The title says ONE. If a slice migrated it, move it out '
-              'of the map AND update the title in the same commit -- a count '
-              'in prose that no assertion reads is exactly how this test went '
-              'stale before.');
+      const stillLegacy = <String, String>{};
+      expect(stillLegacy, hasLength(0),
+          reason: 'The title says ZERO. A NEW legacy reader is a regression, '
+              'not a slice — fix it, do not add it here.');
       for (final e in stillLegacy.entries) {
         // Comment-STRIPPED, deliberately: in slice 4 the raw-file contains()
         // stayed green for delete-account on the strength of a COMMENT that
@@ -322,14 +350,15 @@ void main() {
       expect(weekly, contains('usage_counters'),
           reason: 'weekly-report must still read the ledger.');
 
-      // MIRROR for slice 3b, and it is REQUIRED for the same reason the
-      // weekly-report one is. ai-media-proxy legitimately still contains
-      // 'ai_coach_interactions' -- the unconditional conversation-log insert
-      // AND the OI-153 PRO counter -- so the stillLegacy contains() above
-      // cannot distinguish "the free meter came back" from "the file still
-      // has its other two legitimate uses". Pin what must never return.
-      final media =
-          File('supabase/functions/ai-media-proxy/index.ts').readAsStringSync();
+      // MIRROR for slice 3b AND OI-153, and it is REQUIRED for the same
+      // reason the weekly-report one is. ai-media-proxy legitimately still
+      // contains 'ai_coach_interactions' -- the unconditional conversation-log
+      // insert -- so a bare contains() cannot distinguish "a meter came back"
+      // from "the file still has its legitimate use". Pin what must never
+      // return, over COMMENT-STRIPPED source (OI-153 review round 2: the raw
+      // read would be reddened by a history comment naming the old function).
+      final media = _stripDartLikeComments(
+          File('supabase/functions/ai-media-proxy/index.ts').readAsStringSync());
       expect(media.contains('.eq("channel", "free_image_analysis")'), isFalse,
           reason: 'ai-media-proxy is counting the free-image channel again -- '
               'slice 3b reverted, and the 5 lifetime free analyses will reset '
@@ -344,6 +373,19 @@ void main() {
           reason: 'ai-media-proxy must still WRITE the ledger. Losing this '
               'while keeping the read leaves a gate that can never fire: '
               'used stays 0 forever and every analysis is granted.');
+      // OI-153 — the PRO half. The dormant cap counted channels nothing
+      // writes; both symbol and query shape are pinned absent, like the
+      // free-image pair above.
+      expect(media.contains('countProImageAnalysesToday'), isFalse,
+          reason: 'the dormant PRO channel-counting gate is back by name '
+              '(OI-153). It counted 0 rows, forever.');
+      expect(media.contains('.in("channel"'), isFalse,
+          reason: 'ai-media-proxy is counting interaction channels again -- '
+              'the PRO cap is back on a log that has no such rows.');
+      for (final key in const ['"pro_image_daily"', '"pro_video_daily"']) {
+        expect(media, contains(key),
+            reason: 'ai-media-proxy must still name quota_key $key (OI-153).');
+      }
     });
   });
 }
