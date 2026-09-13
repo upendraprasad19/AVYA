@@ -204,10 +204,24 @@ file is valid TypeScript / Dart, semantically wrong.
 | M10c | add a server key with no Dart twin | T10: 1 |
 | M10d | drift a server METHOD return (the image cap copy) by one word | T10: 1 |
 | M11 | `return defs.last;` → `return defs.first;` in `latestMigrationDefining` (earliest definer) | T11 + parity/food consumers: 5 |
-| M14 | `count > allowed` → `count > allowed + 1` in `usage_counter_source_lib.dart:253` | T4: see the founder-digest commit's doc (run there with M6/M7/M13) |
+| M14 | `count > allowed` → `count > allowed + 1` in `usage_counter_source_lib.dart` (the `else if` under the allowlist lookup) | T4: 2 |
+| M6 | `founder-digest`: the windowed loop no longer skips `kind: "lifetime"` keys (a lifetime key rendered as a day total) | T6: 1 |
+| M7 | `founder-digest`: the alert line drops `escapeHtml` on `severity`/`source` | T6: 1 |
+| M7b | `founder-digest`: at-cap uses `used > cap` instead of `>=` | T6: 1 |
+| M7c | `founder-digest`: the 4096-char truncation removed | T6: 1 |
+| M13 | `founder-digest`: `if (!await isAuthorizedCronCall(req))` → `if (false)` (the auth gate gone) | T5 cron_auth_adoption: 1 |
+| M13b | `founder-digest`: `logCronStart("founder-digest")` → `null` (telemetry gone) | T5 cron_telemetry_adoption: 1 |
+| M7-T7a | misspell a `DIGEST_KEYS` key (`pro_vidio_daily`) | T7: 4 |
+| M7-T7b | drift a `DIGEST_KEYS` cap (50 → 40) | T7: 2 |
+| M7-T7c | file `free_image_analysis` as `kind: "daily"` | T7: 1 |
+| M7-T7d | swap the arms of ai-media-proxy's KEY ternary only (association: video key now paired with the image cap) | T7: 1 |
 
-M9 and M14 are recorded from the sibling commit's run where noted; the table is
-the batch's single ledger of what was mutated.
+M9, M14 and the founder-digest rows (M6, M7*, M13*, M7-T7*) were run in the
+sibling `feat(founder-digest)` commit of the same branch; the table is the
+batch's single ledger of what was mutated. T6 is the Deno file
+`supabase/functions/founder-digest/index_test.ts` (19 tests, run with the
+local Deno 2.9.6 — `--node-modules-dir=none`, see the EF CLAUDE.md); T7 is
+`test/contracts/founder_digest_caps_mirror_test.dart` (6).
 
 ## What is NOT proven here
 

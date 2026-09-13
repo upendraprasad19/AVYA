@@ -10425,6 +10425,18 @@ concepts:
           midnight, `pro_daily_used` = `pro_daily_limit` = the cap. A number
           → `pro_daily_used` on the success body (`pro_daily_limit` = the cap;
           both null for non-PRO). No separate advisory read exists.
+      - file: supabase/functions/founder-digest/index.ts
+        method: buildDigestText
+        semantic: cloud-read
+        notes: |
+          The founder's 08:00-IST Telegram digest (cron `founder_digest_daily`,
+          migration 131): yesterday's `pro_image_daily` / `pro_video_daily`
+          rows summed per key, distinct users, and users AT the ceiling
+          (`used >= cap`, the cap typed in `DIGEST_KEYS` and pinned equal to
+          `PRO_IMAGE_DAILY_CAP` / `PRO_VIDEO_DAILY_CAP` by
+          test/contracts/founder_digest_caps_mirror_test.dart). READ-ONLY:
+          decides no quota. Cannot count refusals — `-1` leaves the row
+          untouched — so "at cap" is the signal, not "was refused".
     hive:
       box: "n/a — server-side gate, no Hive surface"
       key_prefix: "n/a"
@@ -10804,6 +10816,22 @@ concepts:
           quota_key `food_text`. The only reader whose limit varies by tier
           (200 PRO / 10 free) from a SINGLE call site — permitted, see the
           "ONE quota_key => ONE call site" note.
+      - file: supabase/functions/founder-digest/index.ts
+        method: buildDigestText
+        semantic: cloud-read
+        notes: |
+          OI-153 (2026-09-12). The ONE aggregate reader: a direct
+          `.from("usage_counters")` SELECT of yesterday's IST-day rows (every
+          key; windowed rows by `window_start`, the two lifetime keys by
+          `updated_at` with `window_start = epoch`), paged by `fetchAllPages`,
+          rendered into the founder's daily Telegram digest. Decides NO quota
+          — it has no `consume_quota` call, and the ledger census in
+          usage_quota_ledger_writer_to_reader_test.dart allowlists it as a
+          direct reader for exactly that reason. `DIGEST_KEYS` enumerates
+          every key the ledger carries and founder_digest_caps_mirror_test.dart
+          pins that set equal to the union of every `p_quota_key` constant and
+          every trigger literal — both directions, caps and kinds included —
+          so a tenth caller cannot appear without a digest section.
     reader_manifest_complete: true
     hive:
       box: "n/a — cloud-only ledger, no Hive surface"

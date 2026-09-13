@@ -34,6 +34,9 @@ Project `dedsavbjuwgarrhphgnl` → Edge Functions → Secrets.
 | `CEREBRAS_API_KEY_1`, `_2`, `_3` | Legacy fallback (now disused; safe to retain) | 2026-05-20 |
 | `RAZORPAY_KEY_SECRET` | `verify-payment`, `razorpay-webhook` | 2026-05-20 |
 | `service_role_key` (Vault row, NOT env var) | All cron-dispatched functions via `private.morning_alert_get_service_key()` | 2026-05-20 (drift-fixed 2026-05-15 — see `supabase/functions/CLAUDE.md`) |
+| `CRON_SECRET` | Every cron-dispatched function, through `_shared/cron_auth.ts` `isAuthorizedCronCall` (the `Authorization: Bearer` a pg_cron job sends via `private.cron_get_secret()`) | 2026-09-11 — 27 cron calls logged through this gate that day (`cron_call_log`). **Retroactive addition** (live since the 2026-07-26 CRON_SECRET migration, never inventoried). |
+| `TELEGRAM_BOT_TOKEN` | `morning-alert` (per-user Telegram delivery), `founder-digest` (the founder's daily digest, OI-153). ⚠ A Deno fetch error's `.message` embeds the request URL, which carries this token — `founder-digest` logs `err.name` only; never log or `String()` a Telegram fetch error. | 2026-09-12 — a test message delivered to the founder via the bot. |
+| `FOUNDER_TELEGRAM_CHAT_ID` | `founder-digest` only — the chat the digest is sent to. Not a credential on its own, but paired with the token it addresses the founder, so it stays a secret rather than a constant. | 2026-09-12 — same delivered message. |
 | `ADMIN_USER_IDS` | `promote-community-item` (since 2026-05-11), `admin-dashboard-data` (2026-07) | Comma-separated Supabase `auth.users.id` UUIDs. Was live in production for `promote-community-item` since diagnose `7ad0c5` but never inventoried until the admin-dashboard batch found it during reuse — **retroactive addition, not a new secret.** Fail-secure: unset or caller not listed → 403 on every request. |
 
 ## Firebase / OneSignal / Razorpay credentials

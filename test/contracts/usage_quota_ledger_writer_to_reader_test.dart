@@ -158,9 +158,17 @@ void main() {
       // consume_quota that question would burn a lifetime unit on every model
       // outage with no refund path. Advisory .maybeSingle() read; authoritative
       // consume_quota after the insert.
+      //
+      // founder-digest (OI-153) is a DIFFERENT shape and the only one of its
+      // kind: a read-only AGGREGATE reader. It sums yesterday's rows for the
+      // founder's Telegram digest and decides NO quota from what it reads --
+      // there is no consume_quota anywhere in it, which the sibling test
+      // below pins by its absence from that allowlist. The atomicity concern
+      // is moot for a reader that never gates anything.
       const allowed = {
         'supabase/functions/weekly-report/index.ts',
         'supabase/functions/ai-media-proxy/index.ts',
+        'supabase/functions/founder-digest/index.ts',
       };
       final offenders = <String>[];
       for (final e in _appSources()) {
