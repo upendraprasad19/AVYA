@@ -298,6 +298,15 @@ class SimulationService {
       // awaited pass; the plain syncWorkoutData()/syncNutritionData() coalesce
       // and could return after merely marking dirty.
       await flush('workout', sync.syncWorkoutDataNow);
+      // OI-189: syncWorkoutDataNow's fan-out (templates/logs/exercise-logs/
+      // schedule-completions/scheduled-workouts/streaks) does NOT include
+      // plan_json. Every in-loop phase advance ran with pausedForSimulation
+      // == true, so pushWorkoutPlanForSyncDomain() no-op'd on every one —
+      // without this line the cloud plan_json window is left stale for the
+      // whole run, and the "cloud catches up at the next weeklyFullSync"
+      // comment on that guard is false for the sim harness specifically
+      // (nothing here ever calls weeklyFullSync).
+      await flush('workout plan window', sync.pushWorkoutPlanForSyncDomain);
       await flush('nutrition+water', sync.syncNutritionDataNow);
       await flush('weight', sync.syncWeightNow);
       await flush('sleep', sync.syncSleepNow);

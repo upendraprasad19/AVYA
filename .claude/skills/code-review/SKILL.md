@@ -220,6 +220,94 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-13** — blast-radius **platform** — branch `oi153-pro-media-caps` (OI-153: the
+  ai-media-proxy PRO caps moved onto the ledger + the new `founder-digest` cron EF; diagnose
+  `a9d4e7`). **6 findings (0 P0, 2 P1, 2 P2, 2 P3); 0 false_alarm — all accepted, 5 fixed
+  in-batch, 1 resolved by an existing pin with the refactor declined and the reason recorded.**
+  Review: `docs/reviews/88cfc8594fcc-review.md`. Run as TWO context-blind agents (1-5+9/10 and
+  6-8) per the 2026-09-08 split rule — 28 files.
+  **Tuning 1 — lens 6's method gains a REACHABILITY question, and it produced the pass's only
+  mechanism finding.** Mutation (n) — the founder-digest lifetime read filtered by
+  `window_start` instead of `updated_at`, a filter that can never match, so a section renders
+  "none" forever with no error — reddened **0 of 19** tests. Not because the assertion was
+  wrong: because the reads sat inside the handler behind `createClient(...)` and NO test could
+  reach them at all. Before mutating a guard, ask *what test can even see this line?* — if the
+  answer is "none", the mutation result is known in advance and the finding is structural: pull
+  the code out to where a fake can drive it. The fix here (an exported `readDigestSections`
+  driven by a recording fake client) then exposed a SECOND gap in its own first version: the
+  alerts read's error path was swallowed (`if (error) return []`) and only usage_counters had ever
+  been failed in the test — the mirror of the fixture, not of the code. ⚠ Corollary for the
+  extraction: keep every `.from("<table>")` chain literal and inline. `check_schema_column_refs`
+  validates columns only inside a `.from(...)` statement window, so extracting the FILTERS into
+  table-less helpers would have moved them out of that gate's input set while looking like a
+  pure improvement (`feedback_green_check_input_set_width`, yet again).
+  **Tuning 2 — lens 10 (`self_attesting_artifact`): the deploy-state claim in a diagnose-doc's
+  `touched_layers_checked` is the highest-yield line to check live, and it should be checked
+  with the Management API, not the file.** Both P1s were this shape: tier 6 said ai-media-proxy
+  was "deployed, byte-identity verified" while live was v23, the PRE-fix bundle (verified by
+  `list_edge_functions` + a source grep of `get_edge_function`); and three files cited a
+  `test/sql/…live_verify.sql` that existed nowhere. Neither was a lie about code — both were
+  template prose written before the event. **Add to lens 10's method:** for every
+  `touched_layers_checked` row with `status: fixed_in_this_batch` on tiers 5/6/7 (migrations,
+  EF deploy, cron), pull the live version/migration list and compare; for every path a
+  `presence_only:` comment or a test header cites, `test -f` it. Gate 42 checks that
+  `behavioral_test_path:` is non-empty text and never that the file exists — filed as its own
+  OI in this batch's close-out (134 of 134 cited paths exist today, so it is a gap, not a live
+  violation).
+  **Tuning 3 — lens 6 (mutation a) — an "anchor not found" red is not a guard assertion.** The
+  pre-fix shape `if (isPro && !isVideo)` reddened the T1 file only because a `_span` anchor
+  vanished. The repair reads the condition of the nearest `if (` above the RPC and pins it —
+  and its second mutation (a nested `if (isVideo)` inside the block, which leaves every anchor
+  intact) is the one to keep running: it reddens ONLY the new assertion.
+  **A negative result worth keeping.** Every literal in the new Deno test file and the mirror
+  test was recomputed by hand (the author's own first draft had asserted 2026-09-11 was a
+  Thursday — it is a Friday — and had already corrected it before dispatch); the Telegram
+  send's error containment was traced to the outer `catch` and confirmed unreachable by a
+  URL-bearing error; live ACL on `consume_quota` re-queried. 0/6 false alarms → no lens removed.
+
+- **2026-09-13 (second entry today)** — blast-radius **catastrophic** — branch
+  `oi153-pro-media-caps`, the SAME apply commit as the entry above, one deploy cycle later (v25 →
+  v26/v3). **5 findings (0 P0, 2 P1, 2 P2, 1 P3); 0 false_alarm — 4 fixed in-batch, 1
+  verified_clean.** Review: `docs/reviews/1214f9bbb700-review.md`. Run as two agents on the
+  same 1-5+10 / 6-8 split.
+  **Tuning 1 — lens 6 (`guard_without_its_mirror`) on a fix landed EARLIER THE SAME DAY, by
+  THIS SAME batch, still found a real asymmetry.** Finding 1 (P1): the served-MIME
+  reconciliation the entry above had JUST added closed one direction of a mislabel (video served
+  as image); the pre-fetch video paywall, unchanged by that fix, still ran on the raw claim and
+  paywalled a free user whose real VIDEO was mislabelled "image" — denying a legitimate free
+  analysis, and making the naive fix (delete that paywall) a WORSE bug (a free-cap bypass via
+  mislabel, since the sibling free-image-cap check shares the same claim gate). **The lesson: a
+  same-day fix for one direction of an asymmetry is not evidence the mirror was checked — it is
+  often evidence it was NOT, because the fix's own diff draws attention away from the branch it
+  didn't touch.** Ask "what did NOT change in this diff that the thing which DID change assumes
+  is still true?"
+  **Tuning 2 — lens 2 (`function_exception_swallow`'s sibling, staged-vs-working drift) belongs
+  in the standard set, not just as an ad hoc catch.** Finding 2 (P1): an on-disk gate-literal fix
+  (`.limit(MAX_ALERT_LINES)` → `.limit(10)`, required because `check_unbounded_cron_reads.dart`
+  reads only literals) was made and never re-staged — the INDEX still carried the defect the gate
+  exists to catch. `git diff --cached <file>` catches this in one command; add it to lens 6's
+  checklist as a zero-cost first step on any file the diff claims to have "already fixed".
+  **Tuning 3 — a review dispatched on a batch that JUST passed its own prior B-pass still found
+  2 P1s, both real.** Neither Hermes (19 findings, same day) nor the first B-pass (6 findings,
+  same day, same branch) had surfaced either — both fixes they DID land (F2's reconciliation, the
+  digest's own literal fix) were the exact site each new finding sits beside. **Corroborates
+  §4.12's "successive reviews keep surfacing NEW material issues" signal, but for one commit
+  across two consecutive B-passes rather than across plan-review rounds** — worth watching for a
+  third recurrence before concluding the unit needs splitting; one instance is not yet the
+  pattern.
+  Finding 5 (P3, `unlistedTotals`'s sibling call sites, verified_clean): independently re-traced
+  all 6 other call sites of the same count-fallback pattern and confirmed each is windowed, not
+  lifetime — not a recurrence of Finding 3's bug. 0/5 false alarms → no lens removed.
+  **Self-reference note, worth recording once rather than re-discovering it:** `docs/reviews/
+  bc593ef17136-review.md` is a byte-identical copy of the file above, named after the STAGED
+  hash as it stood after the plan-review record's own citation of this review was added — citing
+  a review's filename inside the plan-review record changes the very diff the hash is computed
+  over, so the name that satisfies `check_code_review_pass_exists.dart`'s exact-match rule at
+  commit time cannot, in general, be the same name `bpass_review:` settled on earlier without
+  solving a hash fixed-point. `bpass_review:` (checked only for EXISTENCE + `verdict: accepted`
+  by `check_plan_review_record_exists.dart`) points at `1214f9bbb700-review.md`; the duplicate
+  exists solely to satisfy the exact-hash gate. Two files, one review.
+
 - **2026-09-13** — blast-radius **platform** — branch `oi-allocator` (the OI-number
   allocator: `scripts/mint_oi.sh` reserving `refs/heads/oi/N` as a remote CAS, Check
   B′/C in `check_oi_numbering_unique.dart`, the SessionStart next-free line; diagnose
@@ -1342,3 +1430,53 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   latch means "I have already reported that THIS user is unentitled", so the only
   thing that may clear it is the user changing.
   False-alarm rate 0/1 → no change to the lens set.
+
+- **2026-09-13** — blast-radius **platform** — branch `oi189-plan-end-bound` (OI-189: every
+  phase-layout writer stops at `plan_end`, every regen sweeps rows already past it, every window
+  move pushes `plan_json` immediately; diagnose `b9e4d1`). **11 findings (1 P1, 6 P2, 4 P3); 1
+  false_alarm (9%).** 7 fixed in-batch (3 mutation-proven: M20/M21/M22), 2 correctly scoped OUT as
+  already-tracked residuals (OI-190, a new OI-174 bullet), 1 escalated to the founder (unresolved
+  as of this entry), 1 false_alarm (informational, no defect). Review:
+  `docs/reviews/oi189-plan-end-bound-bpass.md`. Run as TWO agents — reviewer A the 8 read-only
+  lenses, reviewer B the 2 mutation lenses (6, 8) dispatched only AFTER A returned, so no mutating
+  tree was ever shared between them (this skill's own dispatch-protocol step 0 concern, applied to
+  the REVIEWERS this time rather than to author/reviewer handoff).
+  **Tuning 1 — lens 8 (`asserted_fixture_value`) gains: a census that "gets a smaller number" on
+  independent reproduction is not automatically the ORIGINAL claim being wrong.** Reviewer B
+  reproduced the diagnose-doc's "92 files, 849 tests" census with its OWN best-effort basename
+  guess (the 8 touched `lib/` files + the test file = 9 terms) and got 87/784 — smaller, still
+  green, and reported as a discrepancy. The original 92 was in fact CORRECT; the missing tenth
+  basename was `workout_schedule_service.dart`, the FACADE the batch deliberately does NOT edit
+  **A "smaller but still
+  green" reproduction of a census claim is not proof the claim was inflated — it can just as
+  easily mean the reproducer's input set was narrower than the original's.** Same family as this
+  history's repeated input-set-width lessons, one direction further: here it was not the ORIGINAL
+  claim that undercounted, it was the VERIFICATION attempting to check it. Fix: name every
+  basename a census claim used, in the claim itself, not just the resulting numbers.
+  **Tuning 2 — lens 6 (`guard_without_its_mirror`) gains: a guard's own justifying COMMENT is a
+  checkable claim, and "the mirror is out of scope" is not the same as "the mirror doesn't
+  exist."** Two separate P2 findings in this pass (B-1, B-2) were guards whose own doc-comment
+  asserted safety for a case the guard's author had not actually traced: `pausedForSimulation`'s
+  comment claimed "cloud catches up at the next weeklyFullSync, as before" for a code path
+  (`simulation_service.dart`'s year-sim) that NEVER calls `weeklyFullSync` at all — the comment
+  was true for the app's real users and silently false for the one caller class this unit's own
+  guard was written to protect. **When a guard's comment names WHY the mirror case is safe, verify
+  that reasoning against the mirror caller specifically — a comment can be accurate for the common
+  case and false for an edge case the guard itself newly created.**
+  **Tuning 3 — a NEW instance for the "extract to a pure function" pattern this history has used
+  before (2026-08-20's label-ternary entry): TWO widgets carrying a BYTE-IDENTICAL private method
+  is itself the tell that neither was ever testable, and it is cheap to check BEFORE trusting
+  "the diff duplicates X, but both copies are correct" as a clean lens-9 result.** Reviewer A's
+  lens 9 check (`diff <(...) <(...)` on both widgets' `_phaseNote`/`_dayLabel`) correctly found
+  them identical and reported it as CLEAN — technically accurate, but it stopped one question
+  short: identical AND untestable is worse than either alone, since a future edit to one copy and
+  not the other would drift silently with nothing to catch it. Lens 9's method note now adds: when
+  a "modelled on X" check finds true byte-identity between two PRIVATE, per-class copies, that is
+  itself a finding (extract + test), not merely a clean result.
+  **A NEGATIVE result worth keeping, per this history's convention:** reviewer A independently
+  re-derived the plan's "review_rounds: 5" claim by counting the dated round headers in the Review
+  log itself, rather than trusting the plan-review record's frontmatter number — and it matched.
+  Both prod censuses were also re-run live, read-only, and matched exactly. Recording a confirmed
+  claim is as much the lens's job as catching a wrong one.
+  False-alarm rate 1/11 ≈ 9% → well under the 30% threshold; no lens removed. Lenses 6, 8, 9
+  extended per above.

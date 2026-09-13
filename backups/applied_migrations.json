@@ -922,5 +922,25 @@
     "diagnose": "f2c8d5",
     "slug": "consume_quota_revoke_public_execute",
     "note": "OI-162 slice 4. Revokes PUBLIC/anon/authenticated EXECUTE on consume_quota() and confirms service_role retains it. Founder-applied via the Supabase Management API (the raw-curl DDL path was correctly blocked by the auto-mode classifier when the agent tried it; the founder ran the exact reviewed SQL directly). Live-verified before and after: pre-apply proacl was {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres} (four independent grant entries — anon/authenticated were NOT PUBLIC-inherited, so a PUBLIC-only revoke as migration 091 used would have been a no-op for them); post-apply proacl is {postgres=X/postgres,service_role=X/postgres} and has_function_privilege confirms anon=false, authenticated=false, service_role=true. No client or Edge Function change; both consumers (delete-account, verify-payment) already used a service_role client, unaffected. Closes-diagnose f2c8d5."
+  },
+  {
+    "migration": "131",
+    "applied_at": "2026-09-13T07:28:25+05:30",
+    "hash": "sha256:e579f8c16f2b2a8a7dbf26ec1ab9286f07d3988b338e44871b4f8a403cf6b350",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "a9d4e7",
+    "slug": "founder_digest_cron",
+    "cloud_version": "20260913015825",
+    "note": "OI-153 Unit D (the migration header says Unit E — a mislabel frozen by immutability; the plan, board, registry and closure ledger all say D). Schedules pg_cron job founder_digest_daily (jobid 38, '30 2 * * *' = 08:00 IST) POSTing to the founder-digest Edge Function (deployed v1 the same hour, verify_jwt=false, gated by isAuthorizedCronCall) with 'Bearer ' || private.cron_get_secret(). Literal function URL on purpose: a private.<fn>_function_url() helper is SECURITY DEFINER and the blast-radius content rule would lift the file to catastrophic. Verified live post-apply: cron.job row present, active, command targets /functions/v1/founder-digest, uses cron_get_secret, no service-key helper; 30 jobs total (snapshot regenerated in the same commit). T9: one manual net.http_post of the exact job command -> cron_call_log founder-digest status=success http_status=200 at 02:00:25Z, function_edge_logs POST 200 in 7570 ms; pg_net's own 5000 ms client timeout recorded a timeout on its side while the function completed (the same fire-and-forget shape every other cron job has; cron_call_log is the record). No schema change. Founder go given 2026-09-12 for merge + deploys + migrations together."
+  },
+  {
+    "migration": "132",
+    "applied_at": "2026-09-13T07:28:48+05:30",
+    "hash": "sha256:e857fb2d0662580c9656dd541ffe2eff43f72abc7819c41c3d146edebee3eaf3",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "a9d4e7",
+    "slug": "vision_trigger_null_channel_guard",
+    "cloud_version": "20260913015848",
+    "note": "OI-153 Unit F = OI-183. CREATE OR REPLACE of enforce_vision_analysis_daily_limit with migration 129's body verbatim except the guard: IF NEW.channel IS NULL OR NEW.channel NOT IN ('scan_meal','cart_auditor') THEN RETURN NEW. Dormant defect (0 NULL-channel rows, every writer passes a guarded literal, authenticated NULL inserts fail 42501 first) closed for sibling parity. Verified live post-apply inside a rolled-back transaction (test/sql/oi153_pro_media_caps_live_verify.sql Part B): pg_get_functiondef carries the guard; a NULL-channel insert as postgres consumed NO vision unit; a scan_meal insert still consumed exactly one. DISCRIMINATION proven the same way: with 129's pre-132 body restored inside a rolled-back transaction, the identical NULL-channel insert DID create a vision_analysis row (used=1) - the probe is red before 132 and green after. Trigger binding untouched."
   }
 ]

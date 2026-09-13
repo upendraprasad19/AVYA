@@ -186,6 +186,29 @@ canonical multi-failure-mode this contract prevents. `weeklyFullSync()`
 remains the safety net but is no longer the only path for workout-domain
 or nutrition-domain rows reaching cloud.
 
+### `plan_json` push is NOT part of the workout fan-out (OI-189, 2026-09-13)
+
+`user_progress.plan_json` (the whole-blob mirror of the workout box's
+`plan_start_date`/`plan_end_date`/`schedule_*`/`displaced_*` keys, restored
+verbatim by `_restoreWorkoutPlan`) is pushed by a SEPARATE, targeted method —
+`SyncService.pushWorkoutPlanForSyncDomain()` (`sync/sync_workout.dart`) — that
+is **not** one of `syncWorkoutData()`'s fan-out targets above. A caller that
+only fires `syncWorkoutData()`/`syncWorkoutDataNow()` after touching the plan
+window does NOT push `plan_json`; `weeklyFullSync()` is the only other caller.
+
+**Invariant established by OI-189 (diagnose `b9e4d1`):** every writer that
+SWEEPS non-completed rows past `plan_end` or MOVES the window
+(`plan_start_date`/`plan_end_date`) must call `pushWorkoutPlanForSyncDomain()`
+immediately after, or the swept/moved state is invisible to the cloud copy
+and `_restoreWorkoutPlan`/`PlanWindowReanchor` can resurrect it on the next
+restore. Two exceptions, both deliberate: (1) `generateAndSchedule` (writer A)
+pushes only when explicitly told to (`pushPlanWindow: true`, passed only at
+the two live phase-advance sites) — its reinstall/repair callers generate a
+plan on a fresh Hive BEFORE the cloud restore runs, and a push there would
+overwrite the only real copy; (2) the push guards on
+`SyncService.pausedForSimulation` first, so the dev year-sim harness's
+in-loop advances no-op it (its own end-of-run flush pushes once instead).
+
 ### Restore-completeness sync (Theme A — Test #11, 2026-05-04)
 
 Three additional ad-hoc sync methods exist outside the workout/nutrition

@@ -2686,9 +2686,66 @@ change.
 
 ## OI-153 — PRO media caps read a `channel` value nothing writes (P1)
 
-- **Status**: OPEN
-- **Blocked on**: enumerate every `channel` reader first
-- **Verified**: 2026-09-03 — source + live prod
+- **Status**: CLOSED (2026-09-13, `oi153-pro-media-caps`) — diagnose `a9d4e7`
+- **Blocked on**: none
+- **Verified**: 2026-09-13 — source (`67ba6ba4`, `f15fad75` + the review-remediation commit),
+  4 context-blind plan rounds, a 2-agent B-pass (6 findings, 0 false alarms, all fixed), 13 + 15
+  mutations restored byte-identically; LIVE: `ai-media-proxy` **v24** deployed 2026-09-13
+  02:17Z (verify_jwt=true unchanged) from the branch bytes that the merge carries to `main`
+  unchanged — decoded multipart `/body` SHA-256 of `index.ts` (`48549aa1…`) and
+  `_shared/coach_replies.ts` (`0fea2a5a…`) equal the git blobs; anon-Bearer probe → the module's
+  own 401; a real-user-token smoke (QA account, `{}` body, session revoked after) → the module's
+  own 400 `Missing 'message'`, never 401. `founder-digest` v1 deployed the same morning
+  (verify_jwt=false), first digest delivered 02:00Z. THEN, after the Hermes E-pass
+  (`docs/audit/2026-09-13-hermes-oi153-pro-media-caps.md`, catastrophic tier — migration 131's
+  COMMENT carries "SECURITY DEFINER"): `ai-media-proxy` **v25** (~06:39Z; the L23 P0 path
+  traversal through the OI-28 guard, diagnose `c7e2a4`, plus the served-MIME cap key and the
+  non-numeric RPC refusal; real-user traversal probes → 403) and `founder-digest` **v2** (~06:47Z;
+  exact alert count, line-boundary truncation, parallel bounded reads, unlisted keys surfaced,
+  the reached-yesterday label; manual re-run 200 with a `cron_call_log` row). Both byte-identical
+  to the committed blobs by decoded `/body`. THEN, after a B-pass on this same apply commit found
+  2 more real defects in `ai-media-proxy` (BP-1: a vestigial raw-string SSRF pre-check, strictly
+  MORE restrictive than `parseStorageUrl`, deleted; BP-2: the served-MIME paywall reconciliation
+  only ran one direction — the mirror extracted as `checkFreeImageQuota`, called pre- AND
+  post-fetch): `ai-media-proxy` **v26** (~13:04Z; anon/real-user/traversal probes unchanged, byte-
+  identical). Separately, `founder-digest` **v3** (~13:08Z; the alerts `.limit()` literal fixed for
+  `check_unbounded_cron_reads.dart`; `unlistedTotals` made mode-aware — a lifetime key now reports
+  movers, never a summed cumulative counter) — delivered live (200, reachable only post-send) but
+  this ONE run's own `cron_call_log` row was lost to a live PostgREST 504 on the start-insert, a
+  fresh recurrence of OI-194 during the batch's own verification. Both v26/v3 byte-identical to the
+  committed blobs by decoded `/body`. Ledger: `docs/audit/oi153-pro-media-caps.closure.yaml`.
+- **CLOSED BY** the OI-153 batch (plan `docs/audit/oi153-plan.md`, record
+  `docs/plan-reviews/oi153-pro-media-caps.md` whose `bpass_review:` is the one pointer to the
+  review). What changed, per defect in this entry:
+  - **CODE-1/CODE-3 (the dormant 50/day image cap, fail-open)**: the channel-counting gate and
+    `countProImageAnalysesToday` are DELETED. PRO callers now hit ONE atomic
+    `consume_quota(pro_image_daily | pro_video_daily, istDayStartIso(), 50 | 10)` placed after the
+    Storage fetch (a rejected upload never spends a unit) and before the Gemini call (the spend is
+    bounded under concurrency — an advisory read is not). `-1` → HTTP 200 `gated: true` with a
+    rank-free Bridge reply naming the midnight-IST reset; every installed APK renders it as an
+    ordinary coach bubble. A ledger error fails CLOSED (`pro_quota_unavailable`), as does the
+    `subscriptions` read error that the old code DISCARDED (`tier_unavailable` — it used to route a
+    paying user down the free path). Founder decisions 2026-09-12: 50 images / 10 videos per IST
+    day, in-app reply not the paywall, midnight-IST reset.
+  - **CODE-2 (PRO video uncapped)**: the same guard — `if (isPro)`, image and video alike; the key
+    AND the cap are selected by `isVideo`, association pinned by two regexes and a
+    literal-independent guard assertion (B-pass finding 5).
+  - **CODE-4 / the enumeration this entry demanded**: the `pro_image_analysis` /
+    `image_analysis` channel literals are gone from the repo (the "dead reader" test greps for
+    them); `founder_metrics_engagement()` (migration 120) never needed a change because nothing
+    writes those channels — the enumeration ran to empty in the plan's ground truth (0 rows, ever).
+  - **The last of the ten**: the ledger census (`usage_quota_ledger_writer_to_reader_test.dart`)
+    reads ZERO legacy quota readers; `usage_counter_source_lib.dart`'s ai-media-proxy entry is 0.
+  - **The founder digest** (Unit D, `founder-digest` cron EF, migration 131 in the apply commit):
+    one Telegram message at 08:00 IST with yesterday's ledger per key, users at a ceiling, top id
+    prefixes, and the day's alerts — three states per section, never zeros for a failed read. The
+    OI-183 trigger asymmetry closes in the same apply commit (migration 132).
+- **Filed from this batch, not fixed here**: OI-196 (morning-alert's sender can log the bot
+  token), OI-192 (orphan-sync dedupe never matches a photo turn), OI-193 (Gate 31 blind to a
+  commented `cron.unschedule`), OI-194 (`compute_admin_metrics_daily` silent-skip class),
+  OI-195 (Gate 42 never checks a cited test path exists).
+- **Was** (retained for provenance):
+- **Verified (at filing)**: 2026-09-03 — source + live prod
 - **What**: tech-debt audit 2026-09-02 findings CODE-1, CODE-2, CODE-3, CODE-4 (Slice B). The PRO
   50/day image cap counts `channel IN ('pro_image_analysis','image_analysis')`
   (`ai-media-proxy/index.ts:98`) but the only insert writes `'free_image_analysis'` or `'app'`
@@ -3231,7 +3288,7 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 ## OI-166 — regeneration RESTARTS the periodization wave instead of continuing it, so the wave index and the week counter disagree (P2)
 
 - **Status**: OPEN
-- **Blocked on**: OI-175 (the window-alignment half — `redoWeek4`/`holdWeek` + the strip's `isCurrent` clamp). Unit 1 (`7f6cf74b`) and Unit 2 (`de52f1e8`) have both SHIPPED; what is left of this issue lives in OI-175, OI-189 and OI-190. Stays OPEN until OI-175 lands, because the filed symptom's "now" highlight still points at `week_plans[3]` past real week 4.
+- **Blocked on**: OI-175 (the window-alignment half — `redoWeek4`/`holdWeek` + the strip's `isCurrent` clamp). Unit 1 (`7f6cf74b`) and Unit 2 (`de52f1e8`) have both SHIPPED; what is left of this issue lives in OI-175 and OI-190 (OI-189 CLOSED 2026-09-13, `b9e4d1`). Stays OPEN until OI-175 lands, because the filed symptom's "now" highlight still points at `week_plans[3]` past real week 4.
 - ⚠ **Blast radius is `account`, NOT `≥platform`** — corrected 2026-09-07 by running the classifier over the actual de-duplication file set (`lib/core/services/**` → `docs/blast_radius.yaml:326`; `lib/features/ai_coach/**` → `:235`; positive control `sync_workout.dart` → `platform`, so the classifier discriminates). `bpass: accepted` is still required and still planned — `account` mandates the ×2 review and a self-initiated B-pass (§4.3). This line previously asserted `≥platform` on no measurement
 - ⚠ **SPLIT 2026-09-07 after FIVE non-converging review rounds** (§4.12.1: *"successive reviews keep surfacing new material issues ⇒ the unit is too large"*). Round 5 found 7 P1s, **four of them inside round 4's own remediations**, and independently recommended the same split point. **Unit 1 (converged, ships)**: the `check_single_schedule_row_builder.dart` gate scoped to `lib/` and defaulting to warn · `rawWeekNumber()` extracted from `getCurrentWeekNumber()` · implementation D's (`hotel_workout_planner.dart`) three wrong stamps corrected per-row-date. **Unit 2 (re-planned from scratch)**: the pure `buildScheduleRows`, callers A/B/C, the deload dual write, the coach's `current_plan` write, and the preview-cache staleness rule. Plan + all five rounds' findings of record: `docs/audit/oi166-regen-wave-alignment-plan.md`
 - ⚠ **OPEN DESIGN QUESTION owned by the Unit 2 re-plan — Q7, the `switch_goal` refresh regression** (raised round 3, unclosed through rounds 4 and 5): bounding a regen's writes at `plan_end` means a `switch_goal` no longer refreshes orphan rows past it, so those keep **old-goal** workouts where today they are rewritten. Options: (a) accept until OI-174's prune, leaving stale forward workouts after an explicit goal change; (b) extend the regen's delete range past `plan_end` to cover existing forward rows — OI-174's prune scoped to a single regen. Lean is (b): a regeneration leaving stale forward workouts contradicts what the user asked for, and "rows this regen is replacing" is a smaller claim than a global prune. **Recorded here rather than in the plan doc because that doc is being rewritten and an open question inside a document under rewrite has no owner**
@@ -3296,14 +3353,27 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 ## OI-174 — schedule rows written past `plan_end` are never pruned, and they delay the PRO phase advance (P2)
 
 - **Status**: OPEN
-- **Blocked on**: none — but it is a DESTRUCTIVE migration over user data and needs its own design (see the `completed`-orphan question below) before it is specced
-- **Verified**: 2026-09-06 — the only schedule deletions in `lib/` are `workout_schedule_read_service.dart:371`/`:375`, both bounded by the `today..planEnd` loop at `:362`, and `template_service.dart:227-242`. **Nothing anywhere deletes a row dated after `plan_end`.** The coach path never deletes at all (`tool_dispatcher.dart:849-880`, `:1004-1035` are upsert-only)
+- **Blocked on**: none — NARROWED 2026-09-13 by OI-189 (see the last bullet): the local half is closed; what remains is the cloud `scheduled_workouts` prune + a freshness guard on `PlanWindowReanchor`, platform tier, needs its own plan
+- **Verified**: 2026-09-13 — re-derived while closing OI-189: `_syncScheduledWorkouts` is upsert-only (never deletes a cloud row); `_restoreWorkoutPlan` (`sync/sync_workout.dart:1131`, every returning launch), `_restoreScheduledWorkouts` (since 2020-01-01) and `plan_integrity_reconciler.dart:288-306` are all unbounded by `plan_end`; `PlanWindowReanchor.resolve` (`plan_window_reanchor.dart:45-60`) treats a differing cloud window as authoritative. Both prod censuses 2026-09-13 → 0 rows past `plan_end` (10 users, 369 rows each copy)
 - **Identified**: 2026-09-06 · surfaced by round 1 of the OI-166 plan review (finding P1-3), which caught the OI-166 plan claiming these rows were "fixed" when the fix only stops NEW ones being created
 - **How they get there**: a mid-phase regen lays out 4 fresh weeks from the current week's Monday, so a week-2 regen writes through `plan_start+34` and a week-3 regen through `plan_start+41` — i.e. week 5 and week 6 rows inside a 4-week phase. `workout_schedule_read_service.dart:1182`'s own comment already warns about "a `current_phase==1` plan with week-5/6 rows". **OI-166 stops the creation; it does not clean what is already there**
 - **They are durable, not transient**: `sync/sync_workout.dart:1036-1043` snapshots **every** `schedule_*` key with no date filter into `plan_json.schedules`, and `_restoreWorkoutPlan` (`:1131+`) / `plan_integrity_reconciler.dart:290-300` re-apply them across reinstall and across devices. `test/contracts/phase_adherence_rate_test.dart:191-208` already encodes the week-5/6 state as live reality
 - **Consequence beyond tidiness**: `isPhaseExpiredFrom` returns false while any workout row exists on-or-after today (`:1376-1379`), so orphan rows keep a finished phase looking un-expired for up to 7 days. `autoGenerateNextPhaseIfNeeded` early-returns on `!isPhaseExpired()` (`:546`) and `deload_evaluator.dart:61,63` read the same pair — so **the PRO phase advance is delayed** for exactly the users who regenerated mid-phase
 - **Why it is NOT folded into OI-166**: pruning is a destructive one-time migration over user data with its own blast radius, and cleaning it CHANGES phase-advance timing (it starts firing on schedule) — a real behaviour change on a PRO path needing its own test. OI-166 is a layout fix. Keeping them separate is a scope split, **not** a §4.2 deferral: OI-166 ships complete and correct without this, and this is filed with a terminal owner rather than left as an intention
 - ⚠ **The design question that must be answered first**: what happens to a **`completed`** orphan — a workout the user genuinely performed, logged, and earned a streak for, that happens to sit past `plan_end`? Deleting it destroys real history and could move streaks/PRs/adherence. A prune almost certainly must keep `completed` rows and remove only `planned`/`rest` ones, but that needs stating and testing, not assuming
+- **NARROWED 2026-09-13 by OI-189 (`b9e4d1`, branch `oi189-plan-end-bound`)** — what is now TRUE on the device: (i) no phase-layout writer creates a row past `plan_end` any more (A by construction, B since `d7f3b2`, C since `b9e4d1`); (ii) every regen — Edit Profile, coach `regeneratePlanBlock`, coach `switchGoal` — sweeps non-completed rows past `plan_end` locally (`sweepNonCompletedRowsPastPlanEnd`) and pushes `plan_json` right after, so the `plan_json` cloud copy no longer resurrects them; (iii) the `completed`-orphan question above is ANSWERED: completed rows are history and are KEPT by the sweep (the same rule the in-window delete loop applies); (iv) founder decision D2: user-placed rows past `plan_end` (assignTemplateToDate, coach hotel workout, coach reschedule destination) are swept too. **What remains, owned here**: (a) the cloud `scheduled_workouts` table is never pruned — `_syncScheduledWorkouts` is upsert-only — and the three restore writers are unbounded, so a row swept locally can RETURN on a restore (reinstall / new device) until the next regen sweeps it again; (b) an OFFLINE phase advance (writer A with `pushPlanWindow: true`, or `redoWeek4`) cannot push, so `PlanWindowReanchor` can mirror the STALE cloud window back on the next launch and the sweep would then delete the live phase's rows — mitigated by the immediate pushes (online case closed), not eliminated. **Fix design**: a cloud delete issued by the sweep for the same keys (check the RLS delete policy on `scheduled_workouts` first) + a freshness guard on the reanchor (a cloud window older than the local one is not authoritative). Platform tier. A restore-side date filter was REJECTED (hides the stale rows, does not remove them).
+- ⚠ **A FOURTH residual, found 2026-09-13 by OI-189's own B-pass (finding B-3), distinct from all
+  three above:** `isPhaseExpiredFrom`'s own predicate `_scheduledWorkoutDays()`
+  (`workout_schedule_read_service.dart:1642`, pre-existing, untouched by OI-189) filters rows by
+  `type` only, never by `status` — so a FUTURE-dated `completed` row past `plan_end` (correctly
+  preserved by OI-189's sweep as history) still keeps `isPhaseExpired()` false, reproducing this
+  entry's own "orphan rows delay the PRO phase advance" symptom for that one row shape. Verified
+  by a probe test (seed a future-dated completed row 3 days out, plan_end 5 days past: sweep
+  removes 0 as it should, `isPhaseExpired()` stays false before AND after). Not fixed by OI-189 —
+  scoped out as touching a different, pre-existing function with its own blast radius. Fix design:
+  `_scheduledWorkoutDays()` (or `isPhaseExpiredFrom` itself) needs a "not completed" filter to
+  match the sweep's own rule, symmetric with how the sweep already treats completed rows as
+  history that should not block anything.
 
 ## OI-175 — a regeneration past the phase's 4th week (`rawWeek > 4`) has no well-defined behaviour (P2)
 
@@ -3488,6 +3558,7 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - ⚠ **The prior diagnose-doc records this as "cannot fire past day 7", which reads like a partial blind spot.** It is not partial: the alert is inert across its entire range. A threshold above its own data-retention ceiling is not a tuning problem, it is a dead alert that reads as coverage — which is worse than having no alert, because it occupies the slot.
 - **Proposed repair**: set the threshold below the retention ceiling (or lengthen retention for the alert's own read), **and** add a test asserting `threshold < retention_window` for every alert that reads a pruned table — the class, not the instance. A one-line fix with no such test leaves the next alert free to repeat it.
 - **Blast radius**: `alerts/_thresholds.yaml` + the alert's SQL; classify the written file.
+- **Cited as a live backstop while inert (2026-09-13, Hermes L31 on OI-153)**: migration 131's header (immutable) and the first version of `founder-digest/index.ts`'s header both named `alert_cron_function_dead` as the fallback that "would otherwise take a week to notice" a dead digest. It would notice nothing. The digest header was corrected (v2); the registry row 131 says so; the migration comment cannot be.
 - **Class**: `feedback_green_check_input_set_width` — the alert's input set is bounded by a pruner it does not know about. Also `feedback_bad_news_vs_no_news`: zero firings had two explanations (all healthy / cannot fire) and nobody asked which.
 
 ## OI-180 — `check_sot_registry_parity` silently skips every single-number `line_range:`, so 30 citations are validated by nothing (P2)
@@ -3554,9 +3625,28 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 ## OI-183 — `enforce_vision_analysis_daily_limit`'s channel guard is NULL-unsafe, unlike its two siblings (P3, dormant)
 
-- **Status**: OPEN
-- **Blocked on**: none — one-line NULL-safe rewrite
-- **Verified**: 2026-09-11 — read the live trigger body directly; confirmed
+- **Status**: CLOSED (2026-09-13, `oi153-pro-media-caps`, migration 132) — OI-153 Unit F
+- **Blocked on**: none
+- **Verified**: 2026-09-13 — LIVE: `pg_get_functiondef` shows the guard as
+  `IF NEW.channel IS NULL OR NEW.channel NOT IN ('scan_meal', 'cart_auditor') THEN`
+  (migration 132 applied 07:28:48 IST, cloud version `20260913015848`);
+  `test/sql/oi153_pro_media_caps_live_verify.sql` Part B ran green inside a
+  rolled-back transaction — a NULL-channel insert leaves the `vision_analysis`
+  ledger row untouched while a `scan_meal` control consumes one unit — and
+  the DISCRIMINATION run (migration 129's body restored in the same rolled-back
+  transaction) turned that probe RED, so the probe measures 132 and not
+  nothing. SOURCE: `cap_triggers_use_usage_counters_test.dart` "every channel
+  guard is NULL-safe" pins the `IS NULL OR` arm on the vision trigger and
+  `IS DISTINCT FROM` on the two siblings; mutation M12 (the arm removed from
+  132) reddens exactly that test, 1/11.
+- **CLOSED BY**: migration 132 (`132_vision_trigger_null_channel_guard.sql`)
+  — migration 129's vision body verbatim with the one guard line made
+  NULL-safe. Shipped as OI-153 Unit F on the founder's 2026-09-12 apply-go,
+  in the same apply commit as migration 131. Still dormant at closure (0
+  NULL-channel rows), which is the point: the sibling asymmetry was the
+  shape a future writer copies.
+- **Was** (retained for provenance):
+- **Verified (at filing)**: 2026-09-11 — read the live trigger body directly; confirmed
   `ai_coach_interactions.channel` is nullable (`information_schema.columns`)
   and holds 0 NULL rows today (live count query)
 - **What**: `enforce_vision_analysis_daily_limit`
@@ -3840,9 +3930,9 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Related**: OI-166 (regen scope), OI-60 (hold-weeks flip — hold weeks are the *other* answer to the same moment and are still OFF), OI-53 (ship-dark flag flips, incl. `sessionDetrainingCutEnabled`)
 ## OI-189 — Edit-Profile regen now stops at `plan_end`, so orphan rows past it keep OLD-GOAL workouts after a goal change (Q7 from the OI-166 review, dropped by the Unit 2 re-plan) (P2)
 
-- **Status**: OPEN
-- **Blocked on**: FOUNDER — a design decision between the two options below; the board's own lean (round 3) is (b). Not a code-blocked item: either option is a small, reviewable change to writer B.
-- **Verified**: 2026-09-12 — mechanism re-derived against `main` @ `de52f1e8` by the filing session (both loops read; the pre-Unit-2 loop read at `7f6cf74b`)
+- **Status**: CLOSED (2026-09-13, `oi189-plan-end-bound`) — diagnose `b9e4d1`
+- **Blocked on**: none — founder decided 2026-09-12: option (b), widened to a sweep on BOTH regen paths (D2: user-placed rows past `plan_end` are swept too); the restore residual stays on OI-174 (D1)
+- **Verified**: 2026-09-13 — closed by `oi189-plan-end-bound`: `test/contracts/oi189_plan_end_bound_behavioral_test.dart` 27/27 (12 behavioural through the real plan()→cache()→execute() path + 9 source pins incl. B-pass B-1's sim push pin + 6 unit tests on the extracted phaseNote()/phaseDayLabel()), 22 mutation legs each reddened; both prod censuses (plan_json + scheduled_workouts, 10 users, 369 rows each) → 0 rows past `plan_end`
 - **Identified**: 2026-09-06 as **Q7** in OI-166's plan review (round 3), parked on the OI-166 entry *"because an open question inside a document under rewrite has no owner"* — and then lost anyway: the Unit 2 re-plan (v4→v10), nine review rounds and the B-pass contain **zero** mentions of it (`grep -c 'Q7\|orphan rows\|refresh regression'` over the plan, diagnose `d7f3b2`, the record and rounds 5-9 → 0). Filed as its own number 2026-09-12 by the post-ship audit.
 - **Mechanism (verified)**: writer B (`WorkoutScheduleReadService.generateAndScheduleFromDate`, called from `edit_profile_screen.dart:2029` via `workout_schedule_service.dart:118`) has ALWAYS deleted only `today..planEnd` (`workout_schedule_read_service.dart:362`, unchanged since before Unit 2). Before Unit 2 its WRITE loop laid out 4 weeks from the regen date regardless of `plan_end` (`for (int week = 0; week < 4; week++)` at old `:435`) — which is exactly how OI-174's orphan rows past `plan_end` were CREATED, and which also meant a goal change REWROTE any orphans that already existed. Unit 2 bounded the write loop at the stored `plan_end` (`:489 … date.isAfter(effectivePlanEnd) → skip`). Net effect: B no longer manufactures orphans (good), but orphans manufactured earlier are now neither deleted nor rewritten by an Edit-Profile regen, so after a goal change they keep the OLD goal's workouts. They stay user-visible for as long as OI-174 says orphans live (`isPhaseExpiredFrom` keeps the phase looking un-expired while any row exists on-or-after today).
 - **Scope, so it is not over-read**: writer C (`RegeneratePlanPlanner.plan`, the coach's `switchGoal` / `regeneratePlanBlock`) is NOT bounded at `plan_end` — it still writes its requested `weeks` from today (no `plan_end` reference in `regenerate_plan_planner.dart`), so the coach's switch-goal refreshes the same rows it always did. C therefore also still CREATES orphans past `plan_end`; that half belongs to OI-174, not here.
@@ -3853,6 +3943,7 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Regression test owed with the fix**: seed orphan rows dated `plan_end+1..plan_end+7` carrying goal X, run an Edit-Profile regen with goal Y, assert the rows are (b) deleted or (a) explicitly still X and documented as such — the behavioural file for Unit 2 (`oi166_unit2_regen_content_cycling_behavioral_test.dart`) seeds the same Hive boxes and is the natural home.
 - **Blast radius**: `lib/core/services/**` default → `account` (`docs/blast_radius.yaml:326`); no schema, no EF.
 - **Related**: OI-166 (parent, still OPEN on OI-175), OI-174 (the orphans' existence + prune design — this is the *content* of those rows, that is their *lifetime*), OI-175, OI-190.
+- **CLOSED 2026-09-13 by `oi189-plan-end-bound` (diagnose `b9e4d1`)**: (1) writer C (`RegeneratePlanPlanner.plan()`) now bounds every day at the stored `plan_end` by the same literal-date comparison B uses, and reports `totalWeeks` (bounded) / `requestedWeeks` / `phaseEndsOn` / `clearsPastPhaseEnd`; (2) one shared sweep `WorkoutScheduleReadService.sweepNonCompletedRowsPastPlanEnd` runs on B and on both coach commit sites — removes non-completed `schedule_*` rows of any type and `displaced_*` shadows past `plan_end`, keeps completed history, no-op unless BOTH window keys are stored; (3) every writer that sweeps or MOVES the window pushes `plan_json` immediately (B, both coach commits incl. the "nothing to write" branch, `redoWeek4`, and A only at its two phase-advance sites via `pushPlanWindow: true` — the reinstall/repair callers must NOT push, they would replace the cloud copy); `pushWorkoutPlanForSyncDomain` gained the `pausedForSimulation` guard. Five context-blind review rounds (plan v5) + a two-reviewer B-pass (`docs/reviews/oi189-plan-end-bound-bpass.md`) that fixed 3 more findings in-batch: the sweep now also honours `completed` on `displaced_*` shadows (not just `schedule_*` rows), the dev year-sim harness's end-of-run flush now pushes `plan_json` too (it never did — every in-loop push had been no-op'd by the very `pausedForSimulation` guard this unit added), and `_phaseNote`/`_dayLabel` were extracted from both diff-preview widgets into a shared `phase_note.dart` with 6 new unit tests (the two widgets' private copies had zero coverage). Residuals: OI-174 (cloud `scheduled_workouts` never pruned; restore writers unbounded; offline-advance revert window; a NEW fourth residual from the B-pass — a future-dated completed row keeps `isPhaseExpiredFrom` false), OI-190 (coach-card copy for the bounded case: EF `previewSummary` + `_executedMessage`).
 
 ## OI-190 — Unit 1's §4.11 gate `check_single_schedule_row_builder.dart` is WARN-only past its window because the shared builder it guards was never built: the 2026-09-07 "one implementation" decision has no owner (P2, process/gate)
 
@@ -3865,7 +3956,8 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Fix, in order**: (1) this batch corrects the gate's header + allowlist comment to say the truth and point here (`docs`-tier edit, no logic change); (2) a planned unit builds `schedule_row_builder.dart` from the inventory, migrates A/B/C onto it, removes both `pendingUnit2` entries, flips `_hardFail = true` in the SAME commit (the gate's own header describes this sequence), and decides OI-189's horizon once for both writers; (3) that unit's ×2 review must re-read THIS entry and OI-189 as inputs — the way Q7 was lost is the way this would be lost.
 - **Rule this should leave behind** (proposed for §4.11, not yet written into CLAUDE.md): a WARN-only gate is born with an OI naming its flip condition and owner, so the flip cannot be dropped by a re-plan that changes scope.
 - **Blast radius**: the de-dup touches `lib/core/services/**` (account) and `lib/features/ai_coach/**` (account); the gate script is feature-tier by path.
-- **Related**: OI-166 (parent), OI-189 (the horizon decision that the unified builder would make once), OI-174, OI-176 (the other OI-166-batch gate with a known blind spot).
+- **Related**: OI-166 (parent), OI-189 (CLOSED 2026-09-13 — the horizon rule is decided: every writer stops at the stored `plan_end` and every regen sweeps past it; the unified builder must carry the same bound AND the same sweep), OI-174, OI-176 (the other OI-166-batch gate with a known blind spot).
+- **Input added 2026-09-13 by OI-189's review (round 2 F12 + round 4 F7)** — the coach card's copy for the BOUNDED regen case is authored outside the diff preview and is wrong in two places, to be decided ONCE here: (1) the confirm card's summary line is EF-authored — `supabase/functions/_shared/tools/plan/regeneratePlanBlock.ts:54` `previewSummary` says "Regenerate next N weeks" and `:5-6,42` tells the model "1-12 weeks … start a new phase", both contradicting a block the client bounds at `plan_end` (catastrophic-tier deploy; a client-side substitution would not rebuild when the planner cache fills, because `tool_confirm_card.dart:307` renders before the diff widget's async `plan()`); (2) `tool_confirm_card.dart:409-410` `_executedMessage` says "Plan regenerated" for a sweep-only success (`count: 0, cleared: N`) — it keys on the intent TYPE and never sees `data`; carrying the result to the card needs a `ToolIntent` field.
 
 ## OI-191 — target_weight_kg can contradict the chosen goal's direction, making the reach-your-goal projection false (P2)
 
@@ -3925,6 +4017,80 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   founder observation on the same test account that also produced
   [[feedback_mistake_subscription_status_vs_subscriptions_table]] (unrelated mechanism, same
   investigation session).
+
+## OI-192 — the orphan-sync dedupe can never match a photo turn: client writes `[Photo] …`, server writes `[Photo: image] …`, so every media exchange upserts a phantom `in_app_orphan` duplicate (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none — pick ONE placeholder shape (or skip `mode == 'media'` rows in the orphan path, which is what `recentHistoryExchanges` already does for replay)
+- **Verified**: 2026-09-13 — source only: `lib/features/ai_coach/providers/ai_coach_provider.dart` `sendWithMedia` writes `userMessage: '[Photo] $captionForLog'` (`:625`) with a `coach_<ms>` id (NOT a uuid — `coach_interaction_repository.dart` `saveUserMessagePending`, `'id': id` where `id = mintCoachKey()`); `supabase/functions/ai-media-proxy/index.ts` writes the server row as `` `[Photo: ${media_type ?? "image"}] ${message}` `` (`:598`, `:868`). The live count of `in_app_orphan` rows starting `[Photo` was measured 2026-09-13 (after the 06:54–07:10 IST DB-starvation episode that had timed out the first three attempts): **0** orphan photo rows AND **0** server-authored `[Photo:` rows exist in `ai_coach_interactions` — and 0 rows of ANY `[Photo`-prefixed shape, in a table whose oldest retained row is 2026-05-11 — so the defect is LATENT: no photo turn has left a row in this table's retained history (`rolling-context` prunes it nightly, so absence is not proof none was ever made), and the phantom appears on the first PRO photo turn that survives to a sync. Re-run `select count(*) from ai_coach_interactions where channel = 'in_app_orphan' and user_message like '[Photo%'` before fixing; a non-zero count means the double-count is already in `founder_metrics_engagement()`.
+- **Mechanism**: `lib/core/services/sync/sync_coach.dart` `_syncCoachInteractions` skips a row only when its `id` looks like a uuid (the server-authored case) or when a server row with the SAME `user_message` exists within 5 minutes (`.eq('user_message', userMsg)`, the audit-2026-05-16 F6-4 cross-channel dedupe). A media row fails both: its id is `coach_<ms>`, and its `user_message` differs from the server's by the `: image` infix — so the dedupe SELECT returns nothing and the row is upserted under `channel: 'in_app_orphan'` with the analysis as `ai_response`. That is the P2-B "phantom duplicate" class (audit 2026-05-12, 81 phantom rows) re-opened for exactly one message shape. Consequence: interaction analytics (`founder_metrics_engagement()`, migration 120, counts `in_app_orphan` as chat) double-count every photo turn; `recentHistoryExchanges` is NOT affected (it drops `mode == 'media'` rows locally, and the restored orphan carries channel `in_app_orphan`, which is in `_coachChatChannels`, so a RESTORED phantom WOULD be replayed as a prior chat turn — a second-order effect worth checking on a fresh install).
+- **Repair options**: (a) make the client write the server's exact shape (`[Photo: image] …`) — one literal, but couples two writers on a format string; (b) skip `mode == 'media'` rows in `_syncCoachInteractions` outright — the server row already exists for every media turn (the media proxy inserts BEFORE Gemini), so the orphan path has nothing to add; **lean (b)**, mirroring the replay filter. Regression test: extend `test/contracts/` sync-coach coverage with a media row fixture asserting no upsert.
+- **Blast radius**: `lib/core/services/sync/**` — account (sync); no schema, no EF.
+- **Related**: OI-153 (found while tracing every writer of `[Photo`-shaped rows for the PRO cap work), the audit-2026-05-12 P2-B entry (same class).
+
+## OI-193 — Gate 31 treats a COMMENTED `cron.unschedule('X')` as a real unschedule, so nine migrations' rollback blocks silently drop their own job from the registry check (P2, gate gap)
+
+- **Status**: OPEN
+- **Blocked on**: none — strip `--` comments before the unschedule scan (the same `stripSqlComments` `test/helpers/migration_cap_reader.dart` already has), then re-baseline
+- **Verified**: 2026-09-12 — `scripts/check_cron_registry.dart` `unschedulePattern` (`cron\.unschedule\s*\(\s*['"]([^'"]+)['"]`) runs over the RAW file content with no comment stripping; `grep -ln "^--.*cron\.unschedule('" supabase/migrations/*.sql` → **9** files whose inline-rollback comment names a job (076, 077, 086, 087, 102, 109, 110, 121, 128 — the OI-153 plan's "ten" was a miscount, corrected here by re-running the grep); and the SECOND shape, measured the same way: **16** migrations mention `cron.unschedule('…')` at all, **11** of them UNCOMMENTED (015, 028, 031, 040, 046, 061, 069, 077, 086, 087, 102) — genuine unschedule-then-re-schedule sequences (102's `perform cron.unschedule(...)` DO-block guard before its `cron.schedule` is the clearest). The gate computes `scheduled − unscheduled` as SETS with no ordering, so every job that was ever re-scheduled under its own name (`morning_alert_generate`, `compute_coach_signals`, the alert crons, …) is ALSO absent from input A today. Comment-stripping closes the 9-file shape; "last-wins by POSITION" (a `cron.schedule` after a `cron.unschedule` of the same name, in file order across the numbered sequence, re-activates the job) closes the 11-file shape. Input B is the only thing covering either right now
+- **What**: input A of Gate 31 is "scheduled − unscheduled (last-wins)". A migration that schedules `X` and, per the migration-header convention, carries `-- SELECT cron.unschedule('X');` in its commented rollback block therefore contributes `X` to BOTH sets, and `X` drops out of `activeJobs`. The registry row for `X` is then never demanded by input A. Input B (the live-cron snapshot, `backups/live_cron_jobs.json`) still catches it — as long as the snapshot is fresh, which OI-177 says it is not guaranteed to be. So the two inputs currently cover each other's blind spot by accident: A is blind to every job whose migration documents its own rollback, B is blind to everything scheduled since the last regeneration.
+- **Why it matters now**: the convention that CAUSES it is the one every migration is told to follow (`supabase/migrations/CLAUDE.md`: inline rollback = commented reverse DDL). Migration 131 (OI-153) deliberately writes its rollback as `cron.unschedule(<the job name scheduled above>)` — an unquoted placeholder — to stay visible to input A, and says so in a comment. That is a workaround, not a fix; the gate should strip comments.
+- **Repair**: comment-strip before both patterns (schedule AND unschedule), add a red-path test to the gate's test file (a fixture migration with a commented unschedule must still demand a registry row), ledger entry per rule 24. Then 131's placeholder comment can become a normal quoted rollback line.
+- **Blast radius**: `scripts/**` pinned platform (gate script).
+- **Related**: OI-177 (input B freshness — the other half of the same coverage story), OI-132 (why input B exists).
+
+## OI-194 — `compute_admin_metrics_daily` (jobid 30) skipped its 2026-09-11 18:15Z tick with no `cron_call_log` row while 27 other cron calls logged that day — a silent-skip class no alert covers (P2, observability)
+
+- **Status**: OPEN
+- **Blocked on**: none for the code (repair (d) below is a `_shared/cron_telemetry.ts` unit); the FLEET redeploy that makes it live in every cron function needs the founder's per-deploy go (§4.3)
+- **Verified**: 2026-09-12 — `select function_name, started_at from cron_call_log where started_at >= '2026-09-11'` returned 27 rows across the other cron functions and none for `compute-admin-metrics-daily`; `cron.job_run_details` had no retained row for jobid 30 at 18:15Z and `net._http_response` retention was too short to recover the request (measured during the OI-153 plan's ground-truth pass)
+- **What**: a cron tick that never reaches the Edge Function leaves no `cron_call_log` row — `logCronStart` runs INSIDE the function. `alert_edge_function_health` and `alert_cron_function_dead` (8-day window) read that table, so a job that fails to dispatch (pg_net failure, gateway timeout before the module boots, a 401 at the gateway) is invisible to both until 8 days pass. One tick was observed missing; whether it recurs is unknown because nothing records the absence.
+- **SECOND INSTANCE, MECHANISM NOW MEASURED (2026-09-13, `founder_digest_daily`'s first natural
+  fire)**: at 02:30:00Z three cron EFs booted together (morning-alert, pr-detection,
+  founder-digest). The Supabase logs show three `POST /rest/v1/cron_call_log?select=id` at
+  02:30:01 — two `201`, ONE **`504`** — and the digest's own log line at 02:30:08:
+  `[cron_telemetry] start insert failed for founder-digest { message: "Gateway Timeout" }`. The
+  function then ran to completion: `POST | 200 | …/founder-digest` at 02:30:20 (the message was
+  delivered), yet `cron_call_log` holds NO row for that run, because `logCronStart` returned
+  `null` and `logCronEnd(null, …)` is a no-op by design (`_shared/cron_telemetry.ts`: "Failures
+  inside the telemetry call itself are SWALLOWED"). So the class is wider than "a tick that never
+  reaches the function": **a tick whose START insert loses a race with the rest of the 02:30Z
+  burst is invisible too, and the function may have succeeded.** `cron.job_run_details` for
+  jobid 38 says `succeeded / 1 row` (pg_cron's view of the enqueue), `net._http_response` says
+  `timed_out` at 5000 ms (pg_net's view), the function said 200 (the truth) — three records, and
+  the one every alert reads is the one that is empty. The 2026-09-11 18:15Z compute-admin-metrics
+  miss has the same shape available to it (18:15Z is a `*/15` slot shared with pr-detection and
+  alert_edge_function_health).
+- **Repair candidate (d), now the strongest**: make `logCronEnd(null, …)` INSERT a terminal row
+  (`function_name, status, http_status, error_summary: 'start insert failed'`) instead of
+  returning, and/or retry the start insert once after a short backoff — a run must never be
+  erased by its own telemetry losing a race. `_shared/cron_telemetry.ts` is bundled into every
+  cron function, so the fix reaches each one only on its next redeploy; state that in the unit.
+- **Repair candidates (a)–(c), now SECONDARY** — every one of them reads `cron_call_log`, which (d) shows is lossy at the very ticks that matter: (a) the founder digest reads `cron_call_log` for yesterday and lists functions with ZERO rows against `CRON_REGISTRY.md`'s expected daily set — the digest already exists and is the cheapest place; (b) a `pg_cron`-side check joining `cron.job_run_details` (status/return_message) per job per day — needs longer `job_run_details` retention than `jrd_retention_daily` (jobid 33) keeps today; (c) the pg_net response table with a longer retention. Decide, then file the chosen one as a unit.
+- **Blast radius**: `supabase/functions/founder-digest/**` (platform) for (a); `supabase/migrations/**` (platform) for (b)/(c).
+- **Related**: OI-153 (the digest), OI-177 (cron snapshot freshness), the backend-CPU-starvation in-flight batch (a starved DB is one plausible cause of a missed dispatch).
+
+## OI-195 — Gate 42 accepts any non-empty `behavioral_test_path:` / `presence_only:` text and never checks the cited file EXISTS (P3, gate gap, zero live violations)
+
+- **Status**: OPEN
+- **Blocked on**: none — one `File(path).existsSync()` per cited path in `check_sot_behavioral_test_paths.dart`, plus a red-path test and a rule-24 ledger entry
+- **Verified**: 2026-09-13 — `grep -n "existsSync\|File(" scripts/check_sot_behavioral_test_paths.dart` → only `docs/sot_registry.yaml` itself is opened; a census of the registry's 134 distinct `behavioral_test_path:` values found **0 missing** today (`test -e` over each), so this is a gap, not a live breach
+- **What**: rule 21 says every SoT concept MUST have a `behavioral_test_path:` (or `presence_only: true` with a justification). Gate 42 enforces the FIELD is present and non-empty; it never resolves the value. A concept can cite a test that was never written — or, the case the OI-153 B-pass caught (its finding 2), a `presence_only:` justification can cite a live-verify SQL file that did not exist yet — and the gate is green. `check_sot_registry_parity.dart` DOES resolve writer/reader `file:` citations, so the asymmetry is within one registry: the writer/reader half is checked, the test half is not.
+- **Why it is cheap and worth doing**: the fix is the same `existsSync` the parity gate already runs; the `presence_only:` prose is free text and should be scanned for repo-shaped paths (`test/…`, `docs/…`) the same way `check_sot_registry_citations.dart` scans diagnose-docs for identifier-shaped citations.
+- **Blast radius**: `scripts/**` pinned platform (gate script); rule 24 applies (mutation-proven test + ledger entry).
+- **Related**: OI-153 (found by its B-pass), OI-180 (the same registry's other silently-skipped field), `feedback_mistake_unverified_done_claims` (a path is a claim).
+
+## OI-196 — `morning-alert`'s Telegram sender logs the raw fetch error, whose message embeds the bot token (P2, latent)
+
+- **Status**: OPEN
+- **Blocked on**: none — one-line change in one function; ships with the next `morning-alert` redeploy
+- **Verified**: 2026-09-13 — read `supabase/functions/morning-alert/index.ts` `sendTelegramMessage` (the `catch (err) { console.error(\`Telegram error for ${chatId}:\`, err); }` arm); confirmed the URL shape at the `fetch(\`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage\`` call two lines above it
+- **What**: Deno's `fetch` rejects a network-level failure with `TypeError: error sending request for url (https://api.telegram.org/bot<TOKEN>/sendMessage): …` — the request URL, token included, is INSIDE `.message`. `sendTelegramMessage` logs the error object whole, so on any DNS/TLS/connection failure the bot token lands in the Edge Function logs (retained by the platform, visible to anyone with dashboard access). A `console.error(err)` is not a leak on a 4xx/5xx (`response.ok` false takes the OTHER branch and logs Telegram's body, which never echoes the token) — only the thrown path leaks, which is why it has stayed invisible: it fires only when Telegram is unreachable.
+- **Why P2 and not P0**: the token has not been observed in a log (no unreachable-Telegram incident is recorded); the audience of function logs is the founder's dashboard; and the fix is trivial. It is filed rather than fixed in OI-153 because `morning-alert` is a different function with a different blast radius (per-user PRO delivery) and OI-153 did not touch it.
+- **Widened 2026-09-13 (Hermes L40)**: the SAME two lines (`:382` `console.error(\`Telegram send failed for ${chatId}:\`, errorBody)` and `:388`) also print a USER's Telegram `chatId` — a persistent identifier from `telegram_connections` — on every failure, and `:382`'s `errorBody` is unbounded. The repair must cover all three: token (never log `err`), chat id (log a user-id prefix or nothing), body (slice to 200 chars as the digest does). Fixing only the `err.name` line would fix the instance, not the class (`feedback_mistake_guard_without_its_mirror`).
+- **Repair**: log `err instanceof Error ? err.name : typeof err` only — `founder-digest/index.ts` `telegramErrorSummary` is the working twin (`supabase/functions/founder-digest/index.ts`, pinned by its `index_test.ts` "carries the error NAME only" test). Redeploy `morning-alert`. Consider hoisting the guarded sender into `_shared/telegram.ts` so a third Telegram caller cannot re-introduce the shape; `supabase/functions/CLAUDE.md` carries the pitfall row.
+- **Blast radius**: `supabase/functions/morning-alert/**` — platform (cron EF; PRO push + Telegram delivery).
+- **Related**: OI-153 (where the class was found while writing the digest's sender).
 
 ## OI-197 — Founder observability gaps: payment-flow alerting dormant, EF auth-outage blind spot, no native-crash summary, no server-side error-rate view
 

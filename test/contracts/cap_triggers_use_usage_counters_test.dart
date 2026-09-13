@@ -14,6 +14,16 @@
 // `dart run scripts/check_onconflict_live_arbiter.dart --sql <file>`.
 // Saying so explicitly because rule 21 is emphatic that a source-grep counts
 // for PRESENCE only, and this file would otherwise read as more than it is.
+//
+// OI-153 (2026-09-12) REPOINT: this file used to assert that all three
+// triggers resolve to the SAME migration (129) — a proxy for "none was left
+// behind on a pre-129 count(*) body". Migration 132 redefines ONLY the vision
+// trigger (a NULL-channel guard), so "same file" stopped being true while the
+// property it stood for still holds. Each trigger is now resolved to its OWN
+// latest definer and required to be ≥ 129; the backfill assertion is pinned
+// to 129 BY NAME, because the backfill is a one-time event that lives there
+// whatever is redefined later. Review round 2 found this; without it every
+// test in this file would have errored in `setUpAll` the moment 132 existed.
 
 import 'dart:io';
 
@@ -51,26 +61,31 @@ const _gatedChannels = <String>[
 
 void main() {
   group('OI-162 slice 2 — cap triggers consume usage_counters', () {
-    late File migration;
+    /// The migration that carried the one-time backfill of the current IST
+    /// window. Pinned by NAME (see the header): later migrations may redefine
+    /// a trigger, but the backfill happened exactly once, here.
+    final backfillMigration =
+        File('supabase/migrations/129_cap_triggers_use_usage_counters.sql');
+    late Map<String, File> definerOf;
     late Map<String, String> blocks;
 
     setUpAll(() {
-      final resolved = <String, String>{};
+      definerOf = {};
       for (final name in _triggers.keys) {
         final f = latestMigrationDefining(name);
         expect(f, isNotNull, reason: 'no migration defines $name');
-        // Every trigger's LIVE definition must now be the same migration —
-        // otherwise one of them was left behind on its old count(*) body.
-        resolved[name] = f!.path;
+        // Every trigger's LIVE definition must be 129 or LATER — none may be
+        // left behind on its old count(*) body. `latestMigrationDefining`
+        // returns the highest-numbered definer, so a trigger whose last
+        // definition predates 129 is exactly the regression this catches.
+        final n = migrationNumber(f!.uri.pathSegments.last);
+        expect(n, greaterThanOrEqualTo(129),
+            reason: '$name resolves to migration $n — a pre-ledger body');
+        definerOf[name] = f;
       }
-      final distinct = resolved.values.toSet();
-      expect(distinct, hasLength(1),
-          reason: 'all three triggers must be redefined together; got $resolved');
-      migration = File(distinct.single);
-
       blocks = {
         for (final name in _triggers.keys)
-          name: functionBlock(migration.readAsStringSync(), name)!,
+          name: functionBlock(definerOf[name]!.readAsStringSync(), name)!,
       };
     });
 
@@ -134,6 +149,41 @@ void main() {
       }
     });
 
+    test('every channel guard is NULL-safe — OI-153 Unit F / OI-183', () {
+      // `NULL NOT IN (...)` evaluates to NULL, so an `IF NEW.channel NOT IN
+      // (...)` does not fire on a NULL channel and the row falls through to
+      // consume_quota — it spends a unit on a row that is not a vision
+      // analysis at all. `IS DISTINCT FROM` treats NULL as a value, so the
+      // chat and food guards were already safe. Migration 132 made the
+      // vision guard match them with an explicit `IS NULL OR` arm.
+      //
+      // Dormant today (0 NULL-channel rows, every writer passes a literal,
+      // and an authenticated NULL insert dies on RLS before the body runs)
+      // — which is exactly why a pin is the only thing that keeps it fixed.
+      // Behavioural twin: `test/sql/oi153_pro_media_caps_live_verify.sql`
+      // Part B (a NULL-channel probe that is RED under the 129 body).
+      final nullSafeNotIn =
+          RegExp(r'NEW\.channel\s+IS\s+NULL\s+OR\s+NEW\.channel\s+NOT\s+IN\s*\(');
+      for (final name in _triggers.keys) {
+        final guardLine = blocks[name]!
+            .split('\n')
+            .firstWhere((l) => l.contains('NEW.channel'), orElse: () => '');
+        expect(guardLine, isNotEmpty, reason: '$name has no channel guard');
+        final distinct = guardLine.contains('NEW.channel IS DISTINCT FROM');
+        final guardedNotIn = nullSafeNotIn.hasMatch(guardLine);
+        expect(distinct || guardedNotIn, isTrue,
+            reason: '$name guard is NULL-blind: "$guardLine" — a NULL channel '
+                'falls through to consume_quota. Use IS DISTINCT FROM, or '
+                'prefix the NOT IN with `NEW.channel IS NULL OR`.');
+        // The mirror: a NOT IN that lost its NULL arm must not pass on the
+        // strength of a DISTINCT FROM elsewhere on the same line.
+        if (guardLine.contains('NOT IN')) {
+          expect(guardedNotIn, isTrue,
+              reason: '$name uses NOT IN without the IS NULL arm');
+        }
+      }
+    });
+
     test('chat exempts PRO before it consumes anything', () {
       final block = blocks['enforce_chat_app_daily_limit']!;
       final proReturn = block.indexOf('IF is_pro THEN');
@@ -147,7 +197,7 @@ void main() {
     test('the current IST window is backfilled before the triggers switch', () {
       // Without this, swapping the source hands every user a fresh allowance
       // for the current window.
-      final sql = migration.readAsStringSync();
+      final sql = backfillMigration.readAsStringSync();
       final backfill = sql.indexOf('INSERT INTO public.usage_counters');
       final firstReplace = sql.indexOf('CREATE OR REPLACE FUNCTION');
       expect(backfill, greaterThanOrEqualTo(0), reason: 'no backfill present');

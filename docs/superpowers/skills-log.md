@@ -366,3 +366,16 @@
   → Logged from the `unitb-deload-reason` worktree, riding with Unit B so the entry and the
     work it describes land in ONE push rather than two CI cycles — same rationale as the
     2026-08-06 and 2026-08-30 entries.
+- **2026-09-12 ~13:15 IST — `regen-wave-unit2` + its close-out both merged (`de52f1e8`,
+  `39111d1e`), ACCEPTED (founder ran `/compact` with the offered preserve list) · trigger:
+  BATCH SHIPPED, explicit founder invocation.**
+  Boundary stated as CLEAN and measured before saying so: `main == origin/main`, CI green on
+  both merges, push record `LANDED`, 0 tracked changes, both session worktrees retired,
+  branches deleted local+remote. Two non-blocking caveats named in the same breath (MEMORY.md
+  over its soft cap; this very log line not yet written — file is tracked, primary is
+  integration-only). Preserve list led with the pending FOUNDER decisions (OI-189 a/b,
+  OI-190 timing, a proposed CLAUDE.md process commit) rather than with state, because the
+  state was fully in git and the decisions were the only thing a fresh context could not
+  re-derive. → Logged from the `oi189-plan-end-bound` worktree, riding with that batch (the
+  founder's next instruction after the compact was to brainstorm OI-189, which became this
+  branch) — same one-push rationale as the 2026-08-06 / 08-30 / 09-06 entries.

@@ -67,6 +67,11 @@ const _cronInvokedFunctions = <String>[
   // disagreeing about whether it is a cron function is precisely what let it
   // sit ungated. Listing it here makes the gate a real contract for it.
   'weekly-recalc',
+  // Added 2026-09-12 (OI-153). founder-digest ships verify_jwt=false (cron
+  // caller, migration 131) and reads the WHOLE usage ledger with a
+  // service-role client — an unauthenticated POST would also fire a Telegram
+  // message at the founder. Gated by isAuthorizedCronCall like its siblings.
+  'founder-digest',
 ];
 
 // Postgres-TRIGGER-dispatched verify_jwt=false Edge Functions (invoked via

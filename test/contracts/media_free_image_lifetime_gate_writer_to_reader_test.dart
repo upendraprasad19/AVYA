@@ -37,6 +37,22 @@ import 'package:flutter_test/flutter_test.dart';
 /// is comment-heavy by design, which makes the stripping load-bearing rather
 /// than cosmetic: nearly every literal asserted below also appears in a
 /// comment explaining it.
+/// The index of the FREE lifetime consume — found by its quota KEY, then the
+/// nearest preceding `consume_quota`. OI-153 placed a SECOND `consume_quota`
+/// (the PRO daily cap) ~70 lines ABOVE this one, so `indexOf('consume_quota')`
+/// would have returned the wrong call and both ordering assertions below would
+/// have read the PRO gate. Pinning by identity is STRONGER than by position:
+/// it says "the call that names the free key", not "the first call".
+int _freeConsumeIdx(String src) {
+  final keyIdx = src.indexOf('p_quota_key: FREE_IMAGE_ANALYSIS_QUOTA_KEY');
+  expect(keyIdx, greaterThanOrEqualTo(0),
+      reason: 'no consume_quota call names FREE_IMAGE_ANALYSIS_QUOTA_KEY');
+  final callIdx = src.lastIndexOf('consume_quota', keyIdx);
+  expect(callIdx, greaterThanOrEqualTo(0),
+      reason: 'the free key is not inside a consume_quota call');
+  return callIdx;
+}
+
 String _ef() {
   final raw =
       File('supabase/functions/ai-media-proxy/index.ts').readAsStringSync();
@@ -181,7 +197,7 @@ void main() {
       // copy of the analysis that unit paid for. Insert-then-consume-fails
       // merely under-counts — the recoverable direction.
       final insertIdx = src.indexOf('channel: interactionChannel');
-      final consumeIdx = src.indexOf('consume_quota');
+      final consumeIdx = _freeConsumeIdx(src);
       expect(insertIdx, greaterThanOrEqualTo(0));
       expect(consumeIdx, greaterThan(insertIdx),
           reason: 'consume_quota must run AFTER the conversation-log insert');
@@ -195,7 +211,7 @@ void main() {
       // working form: between the guard and the RPC there must be NO other
       // `if (`. Anything intervening means the guard matched is not the one
       // wrapping the call.
-      final consumeIdx = src.indexOf('consume_quota');
+      final consumeIdx = _freeConsumeIdx(src);
       expect(consumeIdx, greaterThanOrEqualTo(0));
 
       final guard =
@@ -249,18 +265,20 @@ void main() {
       );
     });
 
-    test('the source-counter allowlist is ratcheted to 1', () {
+    test('the source-counter allowlist is ratcheted to 0', () {
       // `sweep()` flags `count > allowed`, so an allowlist left at its old
       // value would let a REVERT to the row-counting gate pass silently.
       // Ratcheting converts the entry from permissive to proof-of-landing.
+      // 1 → 0 in OI-153 (2026-09-12): the dormant PRO cap was the last
+      // legacy counter in this file.
       final lib =
           File('scripts/usage_counter_source_lib.dart').readAsStringSync();
       expect(
-        RegExp(r"'supabase/functions/ai-media-proxy/index\.ts':\s*1")
+        RegExp(r"'supabase/functions/ai-media-proxy/index\.ts':\s*0")
             .hasMatch(lib),
         isTrue,
-        reason: 'ai-media-proxy must hold exactly ONE legacy counter now — '
-            'countProImageAnalysesToday, the dormant PRO cap (OI-153)',
+        reason: 'ai-media-proxy must hold ZERO legacy counters now — the '
+            'PRO cap moved onto usage_counters in OI-153',
       );
     });
   });

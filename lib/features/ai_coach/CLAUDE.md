@@ -23,8 +23,9 @@ calorie targets are *computed* by the app, never AI-asserted. 20 tools total
 
 Pieces:
 
-- `screens/ai_coach_screen.dart` — chat UI + reasoning tab (PRO) + photo / video upload (PRO) + suggested-actions sidebar + Telegram toggle.
-- `widgets/` — chat bubble, ai breakdown card (logs meals from text/photo via tool call), photo/video uploaders, quick-prompt chips, voice button (`SpeechListenOptions`).
+- `screens/ai_coach_screen.dart` — chat UI + reasoning tab (PRO) + photo upload (5 free lifetime reads, then PRO; PRO capped 50/IST-day, OI-153) + suggested-actions sidebar + Telegram toggle. ⚠ There is NO video uploader: `media_picker.dart` is the only `sendWithMedia` call site and always sends `mediaType: 'image'` (`grep -rn "pickVideo\|'video'" lib/` is empty). The server's PRO video cap (10/IST-day) protects the API surface, not a UI path — this line said "photo / video upload" until 2026-09-12.
+- `widgets/` — chat bubble, ai breakdown card (logs meals from text/photo via tool call), the photo uploader, quick-prompt chips, voice button (`SpeechListenOptions`).
+- `copy/coach_replies.dart` — the CLIENT MIRROR of `supabase/functions/_shared/coach_replies.ts`. Every server key must have a byte-identical Dart twin and neither file may say "unlimited" (`test/contracts/coach_replies_test.dart` derives the key set from the `.ts` object — a drifted, missing or unmirrored key fails). Nothing on the client reads the new OI-153 keys today; the refusal reaches the user as the server's 200 `reply`, which `sendWithMedia` already renders as a coach bubble.
 - `services/tool_dispatcher.dart` — receives the agent's `tool_call` and routes to the canonical WriteService (NEVER calls Hive directly — `coach_derived_completion` SoT). After a coach `logSet` on a scheduled day `_maybeCompleteScheduledDay` derives completion: auto-`markCompleted` ONLY when EVERY planned exercise is now logged (the all-logged backstop, Unit 1 / 280c4d), else it writes a `completion_prompt_<date>` tap-card row — one coach `logSet` no longer completes the whole day.
 - `services/ai_snapshot_builder.dart` — builds the snapshot payload (recent logs + today's targets + plan day + coach memory excerpt). Read-only.
 - `repositories/ai_coach_repository.dart` — Hive read for chat history + snapshot inputs; cloud upward sync for `coach_interactions` + `coach_memory.coach_notes`.
@@ -55,7 +56,12 @@ When the agent emits a `tool_call`, the dispatcher MUST:
    `modifyWorkoutForInjury`, plus the read tools). The 4 derive-violating tools
    (`logPR`, `markWorkoutComplete`, `adjustCaloricTarget`, `prelog`) were
    **removed 2026-05-31** — the dispatcher has no case for them (defense-in-depth
-   against a stale/replayed intent). See ADR-0012.
+   against a stale/replayed intent). See ADR-0012. `switchGoal` / `regeneratePlanBlock` never
+   write past the stored `plan_end` (OI-189, `b9e4d1`): `RegeneratePlanResult.totalWeeks` is the
+   bounded count, `requestedWeeks` what was asked, `clearsPastPhaseEnd` what the commit will sweep;
+   both commit sites sweep then push `plan_json`; an empty regen whose sweep removed rows returns
+   SUCCESS with `count: 0, cleared: N` (so the invalidate tail runs), and is refused — cache kept,
+   Retry repeats the message — only when the sweep removed nothing.
 2. Call the corresponding **canonical WriteService** — never raw Hive,
    never bypass `wrapUserScopedBox`. Bypassing surfaced as APK Test #16.2 / E
    (the now-removed `logPR` path) — the dispatcher is a *router*, not a writer.

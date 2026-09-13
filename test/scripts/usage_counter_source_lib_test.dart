@@ -95,38 +95,59 @@ void main() {
       expect(r.violations.single, contains('brand-new'));
     });
 
-    // ⚠ BOTH TESTS BELOW DERIVE THEIR NUMBERS FROM THE ALLOWLIST. They used to
-    // hardcode `weekly-report` at 1, and OI-162 slice 3a ratcheted that entry to
-    // 0 — so "exactly the allowlisted count" became one MORE than allowed and
-    // the file went red in the full suite, in a test the batch never opened.
-    // A fixture that encodes a number the production map owns will go stale
-    // every time that map is ratcheted, which is the whole point of ratcheting.
+    // ⚠ BOTH TESTS BELOW USE AN INJECTED ALLOWLIST. They used to hardcode
+    // `weekly-report` at 1, and OI-162 slice 3a ratcheted that entry to 0 — so
+    // "exactly the allowlisted count" became one MORE than allowed and the
+    // file went red in the full suite, in a test the batch never opened. The
+    // repair derived the number from the PRODUCTION map with
+    // `firstWhere((e) => e.value >= 1)` — and OI-153 (2026-09-12) ratcheted
+    // the LAST non-zero entry (ai-media-proxy) to 0, so that `firstWhere`
+    // threw StateError on an all-zero map: the §4.9 "repairing enforcement
+    // breaks tests relying on it not enforcing" class, found by reading. A
+    // fixture allowlist via `sweep(allowedEf:)` is immune to every future
+    // ratchet; the production map is covered by the ZERO-allowance test below.
+    const fixtureEf = <String, int>{
+      'supabase/functions/fixture-with-one-legacy-counter/index.ts': 1,
+    };
+
     test('one more than the allowlisted count is a violation', () {
       // "This file already had one" is exactly how a tenth counter gets added.
-      final entry =
-          allowedEdgeFunctionSites.entries.firstWhere((e) => e.value >= 1);
+      final entry = fixtureEf.entries.single;
       final over = entry.value + 1;
       final r = sweep(
         efSources: {
           entry.key: List.filled(over, _quotaCounter).join(),
         },
         migrationSources: const {},
+        allowedEf: fixtureEf,
       );
       expect(r.violations, isNotEmpty);
       expect(r.violations.single, contains('holds $over'));
     });
 
     test('the allowlisted count exactly is clean', () {
-      final entry =
-          allowedEdgeFunctionSites.entries.firstWhere((e) => e.value >= 1);
+      final entry = fixtureEf.entries.single;
       final r = sweep(
         efSources: {
           entry.key: List.filled(entry.value, _quotaCounter).join(),
         },
         migrationSources: const {},
+        allowedEf: fixtureEf,
       );
       expect(r.violations, isEmpty);
       expect(r.isClean, isTrue);
+    });
+
+    test('the PRODUCTION allowlist holds no non-zero Edge Function entry (OI-153)', () {
+      // The five OI-162 slices + OI-153 moved every quota reader onto
+      // usage_counters. A non-zero entry reappearing here means a legacy
+      // counter was allowlisted back in rather than fixed.
+      final nonZero = allowedEdgeFunctionSites.entries
+          .where((e) => e.value > 0)
+          .map((e) => '${e.key}: ${e.value}')
+          .toList();
+      expect(nonZero, isEmpty,
+          reason: 'every Edge Function allowance must be 0 now: $nonZero');
     });
 
     test('a ZERO-allowance entry rejects even one counter', () {

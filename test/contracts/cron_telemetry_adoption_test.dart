@@ -51,6 +51,10 @@ const _wiredCronFunctions = <String>[
   // makes that a guarded contract rather than an accident.
   'compute-coach-signals',
   'compute-admin-metrics-daily',
+  // Added 2026-09-12 (OI-153). founder-digest is the daily Telegram digest;
+  // its cron_call_log row is the ONLY server-side record that it ran, and the
+  // message's arrival is the founder-side one.
+  'founder-digest',
 ];
 
 const _functionsDir = 'supabase/functions';

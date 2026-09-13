@@ -581,6 +581,8 @@ Future<GraduationAdvanceResult> runGraduationPhaseAdvance({
 
       await scheduleSvc.generateAndSchedule(
         goal: goal,
+        // OI-189: an advance moves the window — push it now.
+        pushPlanWindow: true,
         equipment: equipment,
         daysPerWeek: daysPerWeek,
         startDate: startDate,

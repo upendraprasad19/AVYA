@@ -7,6 +7,7 @@ import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/regenerate_plan_planner.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'phase_note.dart';
 
 /// Diff preview for a `regenerate_plan_block` intent (Phase D.3).
 ///
@@ -92,6 +93,20 @@ class _RegeneratePlanDiffState extends State<RegeneratePlanDiff> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // OI-189: a block bounded to ZERO weeks (the requested start is past
+        // the stored plan_end) has no header, no week, no day cards — only the
+        // phase note, which is non-null here by construction (totalWeeks == 0
+        // implies a stored plan_end and 0 < requestedWeeks).
+        if (plan.totalWeeks == 0) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: Text(
+              _phaseNote(plan)!,
+              style: AppTypography.bodySm.copyWith(
+                  color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+            ),
+          ),
+        ] else ...[
         // Header summary card — gold-tinted to signal a major change.
         Container(
           padding: const EdgeInsets.all(12),
@@ -143,9 +158,28 @@ class _RegeneratePlanDiffState extends State<RegeneratePlanDiff> {
             ),
           ),
         ],
+        // OI-189: say when the block was shortened to fit the phase and/or
+        // when the commit will clear rows already past plan_end.
+        if (_phaseNote(plan) != null) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              _phaseNote(plan)!,
+              style: AppTypography.bodySm.copyWith(
+                  color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+            ),
+          ),
+        ],
+        ],
       ],
     );
   }
+
+  /// OI-189: the phase-window note — null when the block fits the phase AND
+  /// nothing past plan_end will be cleared (nothing to say). Delegates to
+  /// the shared pure function (review B-4) so it is unit-testable.
+  String? _phaseNote(RegeneratePlanResult plan) => phaseNote(plan);
 
   Widget _buildDayCard(RegeneratePlanDay day) {
     return Container(
@@ -222,11 +256,7 @@ class _RegeneratePlanDiffState extends State<RegeneratePlanDiff> {
     );
   }
 
-  String _dayLabel(String date) {
-    final d = DateTime.parse(date);
-    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return '${names[d.weekday - 1]} ${d.month}/${d.day}';
-  }
+  String _dayLabel(String date) => phaseDayLabel(date);
 
   String _humanGoal(String raw) {
     switch (raw) {

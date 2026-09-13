@@ -164,12 +164,20 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   full `flutter test` + all gates + a debug-APK compile + **the `deno-edge-functions` job**
   (`test.yml:120`), which runs `deno test` AND a `deno check` type-check over the WHOLE
   `supabase/functions/` tree.
-  ⚠ **That job was missing from this list until 2026-08-26, and the omission has teeth: there is
-  no Deno on the dev machine, so NOTHING type-checks an Edge Function locally** — not
-  `flutter analyze`, not the pre-commit gates (which are Dart source-greps), not pre-push. An EF
-  type error is invisible until CI. It cost a red `main` that day: a removed `user_daily_snapshots`
-  query orphaned two reads 60 lines below the edit, and `deno check` reported `TS2304 Cannot find
-  name 'snapshot'` only after the push had landed. Also note CI's analyze step is named
+  ⚠ **That job was missing from this list until 2026-08-26, and the omission has teeth: until
+  2026-09-12 there was no Deno on the dev machine, so NOTHING type-checked an Edge Function
+  locally** — not `flutter analyze`, not the pre-commit gates (which are Dart source-greps), not
+  pre-push. An EF type error was invisible until CI. It cost a red `main` that day: a removed
+  `user_daily_snapshots` query orphaned two reads 60 lines below the edit, and `deno check`
+  reported `TS2304 Cannot find name 'snapshot'` only after the push had landed. **Deno 2.9.6 is
+  installed locally since 2026-09-12 (winget; `%LOCALAPPDATA%/Microsoft/WinGet/Links/deno.exe`)
+  — run `deno check --node-modules-dir=none supabase/functions/<fn>/index.ts` on every EF you
+  touch BEFORE the commit. ⚠ `--node-modules-dir=none` is load-bearing: the default `auto`
+  mode replaced the TRACKED `node_modules/pg` with a symlink into `node_modules/.deno/` on its
+  first run (22 files "deleted" in `git status`). Recovery: `rm -f node_modules/pg && rm -rf
+  node_modules/.deno && git checkout -- node_modules/`. See `supabase/functions/CLAUDE.md`.**
+  Nothing in the hooks runs it yet — it is a habit, not a gate; the pre-commit gates remain
+  Dart source-greps. Also note CI's analyze step is named
   *"Flutter analyze (zero warnings allowed)"* (`test.yml:61`) — stricter than a casual reading of
   the pre-push row suggests. ⚠ It triggers on `push: [main, develop]`
   **and `pull_request` targeting them** — **not on every push**. Counted live 2026-08-11:
