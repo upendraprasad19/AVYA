@@ -587,57 +587,57 @@ Deno.test("cmdCron escapes HTML in function name and status", async () => {
 /**
  * Minimal fake supabase client that satisfies gatherDigestInput's query chain.
  * Resolves all reads to empty data + 0 counts, so every section renders "none".
+ *
+ * Pattern: intermediate chainable methods (.select(), .gte(), .lt(), .eq(), .order(),
+ * .not(), .lte()) return the builder itself so .order().range() or .limit() can be
+ * chained on top. Only terminal methods (.range(), .limit()) return Promises.
+ * Follows the exact chainable pattern from _shared/paged_fetch_test.ts makeFake().
  */
 function makeEmptyDigestFake() {
-  return {
-    from: (_table: string) => ({
-      select: () => ({
-        eq: () => ({
-          gte: () => ({
-            lt: () => Promise.resolve({
-              rows: [],
-              data: [],
-              count: 0,
-              error: null,
-            }),
-          }),
-          lt: () => Promise.resolve({
-            rows: [],
-            data: [],
-            count: 0,
-            error: null,
-          }),
-        }),
-        gte: () => ({
-          lt: () => Promise.resolve({
-            rows: [],
-            data: [],
-            count: 0,
-            error: null,
-          }),
-        }),
-        not: () => ({
-          gte: () => ({
-            lte: () => Promise.resolve({
-              count: 0,
-              error: null,
-            }),
-          }),
-        }),
-        order: () => ({
-          limit: () => Promise.resolve({
-            rows: [],
-            data: [],
-            count: 0,
-            error: null,
-          }),
-        }),
+  // Shared builder that can chain any intermediate method and any terminal method
+  function makeBuilder() {
+    const builder = {
+      select: (_cols: string, _opts?: Record<string, unknown>) => builder,
+      eq: (_col: string, _val?: unknown) => builder,
+      gte: (_col: string, _val?: unknown) => builder,
+      lt: (_col: string, _val?: unknown) => builder,
+      lte: (_col: string, _val?: unknown) => builder,
+      not: (_col: string, _op?: string, _val?: unknown) => builder,
+      order: (_col: string, _opts?: Record<string, unknown>) => builder,
+      // Terminal methods that return Promises
+      range: (_from: number, _to: number) => Promise.resolve({
+        rows: [],
+        data: [],
+        error: null,
       }),
-    }),
+      limit: (_n: number) => Promise.resolve({
+        rows: [],
+        data: [],
+        count: 0,
+        error: null,
+      }),
+      maybeSingle: () => Promise.resolve({
+        data: null,
+        error: null,
+      }),
+    };
+    return builder;
+  }
+
+  return {
+    from: (_table: string) => makeBuilder(),
   };
 }
 
 Deno.test("cmdDigest builds text via the shared founder_digest_content module, not a re-implementation", async () => {
   const text = await cmdDigest(makeEmptyDigestFake());
-  assertStringIncludes(text, "none"); // every section empty -> every section says "none"
+  // Every section should render as empty ("none"), never as "unreadable" due to chain failures
+  assertStringIncludes(text, "Chat (free, 10/day): none");
+  assertStringIncludes(text, "Free image reads (lifetime): none");
+  assertStringIncludes(text, "Weekly report (free) (lifetime): none");
+  assertStringIncludes(text, "<b>Top users</b>: none");
+  assertStringIncludes(text, "<b>Alerts yesterday</b>: none");
+  assertStringIncludes(text, "<b>Subscriptions (new, yesterday)</b>\nnone");
+  // Ensure "unreadable" marker never appears — which would indicate a chain failure
+  assertEquals(text.includes("unreadable"), false);
 });
