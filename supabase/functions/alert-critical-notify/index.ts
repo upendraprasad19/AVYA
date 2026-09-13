@@ -63,6 +63,10 @@ export const handler = async (req: Request): Promise<Response> => {
       await logCronEnd(logId, "failed", { httpStatus: 400, errorSummary: "missing alert_id" });
       return clientError("Missing alert_id", 400);
     }
+    if (typeof alertId !== "number") {
+      await logCronEnd(logId, "failed", { httpStatus: 400, errorSummary: "alert_id must be a number" });
+      return clientError("alert_id must be a number", 400);
+    }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data, error } = await supabase
