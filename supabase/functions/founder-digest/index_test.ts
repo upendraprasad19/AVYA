@@ -9,10 +9,13 @@
  * exercised here (needs live env + a bot). End-to-end verification is the
  * manual `net.http_post` in the plan's T9.
  *
- * ⚠ This file deliberately never spells the ledger table's name or the RPC's
- * name: test/contracts/usage_quota_ledger_writer_to_reader_test.dart walks
- * every .ts under supabase/functions/ (comment-stripped) and allowlists direct
- * readers BY FILE, and this file is not a reader.
+ * ⚠ test/contracts/usage_quota_ledger_writer_to_reader_test.dart walks every
+ * .ts under supabase/functions/ (comment-stripped) and allowlists direct
+ * ledger readers BY FILE. This file is allowlisted there — not because it
+ * reads the ledger (it never does) but because the read-shape tests at the
+ * bottom assert the TABLE NAME each section queries through a recording fake.
+ * It must never spell the consume RPC's name: the digest has no such call and
+ * the sibling census assertion pins that by the file's absence from that list.
  */
 
 import {
@@ -30,6 +33,7 @@ import {
   istYesterdayWindow,
   LIFETIME_WINDOW,
   MAX_ALERT_LINES,
+  readDigestSections,
   TELEGRAM_MAX_CHARS,
   telegramErrorSummary,
   type UsageRow,
@@ -308,4 +312,141 @@ Deno.test("DIGEST_KEYS has no duplicate keys and every lifetime key has a cap", 
     if (k.kind === "lifetime") assert(k.cap !== undefined, `${k.key} needs a cap`);
     if (k.kind === "subday") assert(k.cap === undefined, `${k.key} must not carry a cap`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// The READ SHAPES — which table and which columns each section filters on.
+// B-pass 2026-09-13 finding 2: with the reads inlined in the handler, mutating
+// the lifetime filter's `updated_at` to `window_start` (a filter that can
+// never match — every lifetime row's window_start is the epoch sentinel)
+// reddened NOTHING. The lifetime section would have read "none" forever with
+// no error. A recording fake client now drives `readDigestSections` and pins
+// every filter call per section.
+// ---------------------------------------------------------------------------
+
+type Call = [string, ...unknown[]];
+
+/** A recording stand-in for the supabase-js query builder + client. */
+function fakeClient(opts: {
+  rows?: Record<string, unknown[]>;
+  failTables?: string[];
+}) {
+  const calls: Record<string, Call[][]> = {};
+  const served: Record<string, number> = {};
+  const client = {
+    from(table: string) {
+      const chain: Call[] = [];
+      (calls[table] ??= []).push(chain);
+      // First builder for a table serves its rows; later ones serve [] so
+      // fetchAllPages sees the empty page that ends its loop.
+      const n = served[table] ?? 0;
+      served[table] = n + 1;
+      const failing = (opts.failTables ?? []).includes(table);
+      const data = n === 0 ? (opts.rows?.[table] ?? []) : [];
+      const builder: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "gte", "lt", "order", "limit", "range"]) {
+        builder[m] = (...args: unknown[]) => {
+          chain.push([m, ...args]);
+          return builder;
+        };
+      }
+      builder.then = (resolve: (v: unknown) => void) =>
+        resolve(failing ? { data: null, error: { message: `${table} unreadable` } } : { data, error: null });
+      return builder;
+    },
+  };
+  return { client, calls };
+}
+
+const WINDOW = { yStart: "2026-09-10T18:30:00.000Z", tStart: "2026-09-11T18:30:00.000Z" };
+
+/** The filter calls (eq/gte/lt) of the FIRST builder for a table. */
+function filtersOf(calls: Record<string, Call[][]>, table: string, nth = 0): Call[] {
+  return calls[table][nth].filter(([m]) => m === "eq" || m === "gte" || m === "lt");
+}
+
+Deno.test("windowed rows are filtered by window_start on [yStart, tStart)", async () => {
+  const { client, calls } = fakeClient({});
+  await readDigestSections(client, WINDOW);
+  const usage = calls["usage_counters"];
+  assert(usage.length >= 2, "expected a windowed AND a lifetime read");
+  assertEquals(filtersOf(calls, "usage_counters", 0), [
+    ["gte", "window_start", WINDOW.yStart],
+    ["lt", "window_start", WINDOW.tStart],
+  ]);
+});
+
+Deno.test("lifetime rows are pinned to the epoch window_start and filtered by updated_at", async () => {
+  const { client, calls } = fakeClient({});
+  await readDigestSections(client, WINDOW);
+  // The lifetime read is the second usage_counters builder (its first page).
+  const lifetimeIdx = calls["usage_counters"].findIndex((c) =>
+    c.some(([m, col]) => m === "eq" && col === "window_start")
+  );
+  assert(lifetimeIdx >= 0, "no lifetime read found");
+  assertEquals(filtersOf(calls, "usage_counters", lifetimeIdx), [
+    ["eq", "window_start", LIFETIME_WINDOW],
+    ["gte", "updated_at", WINDOW.yStart],
+    ["lt", "updated_at", WINDOW.tStart],
+  ]);
+});
+
+Deno.test("alerts are filtered by detected_at, ordered ascending, capped at 50", async () => {
+  const { client, calls } = fakeClient({});
+  await readDigestSections(client, WINDOW);
+  const chain = calls["alerts"][0];
+  assertEquals(filtersOf(calls, "alerts", 0), [
+    ["gte", "detected_at", WINDOW.yStart],
+    ["lt", "detected_at", WINDOW.tStart],
+  ]);
+  assertEquals(chain.find(([m]) => m === "order"), ["order", "detected_at", { ascending: true }]);
+  assertEquals(chain.find(([m]) => m === "limit"), ["limit", 50]);
+});
+
+Deno.test("every section selects exactly the columns the renderer reads", async () => {
+  const { client, calls } = fakeClient({});
+  await readDigestSections(client, WINDOW);
+  for (const chain of calls["usage_counters"]) {
+    assertEquals(chain[0], ["select", "user_id, quota_key, window_start, used, updated_at"]);
+  }
+  assertEquals(calls["alerts"][0][0], ["select", "detected_at, source, severity, summary"]);
+});
+
+Deno.test("a failing table makes ONLY its section unreadable; the others still carry rows", async () => {
+  const { client } = fakeClient({
+    rows: { alerts: [{ detected_at: "2026-09-11T00:00:00+00:00", source: "s", severity: "P2", summary: "x" }] },
+    failTables: ["usage_counters"],
+  });
+  const out = await readDigestSections(client, WINDOW);
+  assert("unreadable" in out.windowed, "windowed must be unreadable");
+  assert("unreadable" in out.lifetime, "lifetime must be unreadable");
+  assert("rows" in out.alerts && out.alerts.rows.length === 1, "alerts must still read");
+  assertStringIncludes((out.windowed as { unreadable: string }).unreadable, "usage_counters unreadable");
+});
+
+Deno.test("a failing alerts table makes the alerts section unreadable — never 'none'", async () => {
+  // Mutation n4 (B-pass follow-up): `if (error) return []` in the alerts read
+  // reddened nothing while only usage_counters was ever failed. The mirror.
+  const { client } = fakeClient({
+    rows: { usage_counters: [row(U1, "chat_app", 2)] },
+    failTables: ["alerts"],
+  });
+  const out = await readDigestSections(client, WINDOW);
+  assert("unreadable" in out.alerts, "alerts must be unreadable, not an empty list");
+  assertStringIncludes((out.alerts as { unreadable: string }).unreadable, "alerts unreadable");
+  assert("rows" in out.windowed && out.windowed.rows.length === 1, "usage must still read");
+  // And the rendered message carries the marker, not "Alerts yesterday: none".
+  const text = buildDigestText({ dayLabel: DAY, ...out });
+  assertStringIncludes(text, "⚠ alerts unreadable");
+  assertNotIncludes(text, "<b>Alerts yesterday</b>: none");
+});
+
+Deno.test("rows served by the client reach the sections unchanged", async () => {
+  const r = row(U1, "pro_image_daily", 3);
+  const { client } = fakeClient({ rows: { usage_counters: [r] } });
+  const out = await readDigestSections(client, WINDOW);
+  // The fake serves the same first page to whichever usage_counters builder
+  // comes first — the windowed read — and [] to the lifetime one.
+  assertEquals(out.windowed, { rows: [r] });
+  assertEquals(out.lifetime, { rows: [] });
 });

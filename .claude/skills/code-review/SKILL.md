@@ -220,6 +220,51 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-13** — blast-radius **platform** — branch `oi153-pro-media-caps` (OI-153: the
+  ai-media-proxy PRO caps moved onto the ledger + the new `founder-digest` cron EF; diagnose
+  `a9d4e7`). **6 findings (0 P0, 2 P1, 2 P2, 2 P3); 0 false_alarm — all accepted, 5 fixed
+  in-batch, 1 resolved by an existing pin with the refactor declined and the reason recorded.**
+  Review: `docs/reviews/88cfc8594fcc-review.md`. Run as TWO context-blind agents (1-5+9/10 and
+  6-8) per the 2026-09-08 split rule — 28 files.
+  **Tuning 1 — lens 6's method gains a REACHABILITY question, and it produced the pass's only
+  mechanism finding.** Mutation (n) — the founder-digest lifetime read filtered by
+  `window_start` instead of `updated_at`, a filter that can never match, so a section renders
+  "none" forever with no error — reddened **0 of 19** tests. Not because the assertion was
+  wrong: because the reads sat inside the handler behind `createClient(...)` and NO test could
+  reach them at all. Before mutating a guard, ask *what test can even see this line?* — if the
+  answer is "none", the mutation result is known in advance and the finding is structural: pull
+  the code out to where a fake can drive it. The fix here (an exported `readDigestSections`
+  driven by a recording fake client) then exposed a SECOND gap in its own first version: the
+  alerts read's error path was swallowed (`if (error) return []`) and only usage_counters had ever
+  been failed in the test — the mirror of the fixture, not of the code. ⚠ Corollary for the
+  extraction: keep every `.from("<table>")` chain literal and inline. `check_schema_column_refs`
+  validates columns only inside a `.from(...)` statement window, so extracting the FILTERS into
+  table-less helpers would have moved them out of that gate's input set while looking like a
+  pure improvement (`feedback_green_check_input_set_width`, yet again).
+  **Tuning 2 — lens 10 (`self_attesting_artifact`): the deploy-state claim in a diagnose-doc's
+  `touched_layers_checked` is the highest-yield line to check live, and it should be checked
+  with the Management API, not the file.** Both P1s were this shape: tier 6 said ai-media-proxy
+  was "deployed, byte-identity verified" while live was v23, the PRE-fix bundle (verified by
+  `list_edge_functions` + a source grep of `get_edge_function`); and three files cited a
+  `test/sql/…live_verify.sql` that existed nowhere. Neither was a lie about code — both were
+  template prose written before the event. **Add to lens 10's method:** for every
+  `touched_layers_checked` row with `status: fixed_in_this_batch` on tiers 5/6/7 (migrations,
+  EF deploy, cron), pull the live version/migration list and compare; for every path a
+  `presence_only:` comment or a test header cites, `test -f` it. Gate 42 checks that
+  `behavioral_test_path:` is non-empty text and never that the file exists — filed as its own
+  OI in this batch's close-out (134 of 134 cited paths exist today, so it is a gap, not a live
+  violation).
+  **Tuning 3 — lens 6 (mutation a) — an "anchor not found" red is not a guard assertion.** The
+  pre-fix shape `if (isPro && !isVideo)` reddened the T1 file only because a `_span` anchor
+  vanished. The repair reads the condition of the nearest `if (` above the RPC and pins it —
+  and its second mutation (a nested `if (isVideo)` inside the block, which leaves every anchor
+  intact) is the one to keep running: it reddens ONLY the new assertion.
+  **A negative result worth keeping.** Every literal in the new Deno test file and the mirror
+  test was recomputed by hand (the author's own first draft had asserted 2026-09-11 was a
+  Thursday — it is a Friday — and had already corrected it before dispatch); the Telegram
+  send's error containment was traced to the outer `catch` and confirmed unreachable by a
+  URL-bearing error; live ACL on `consume_quota` re-queried. 0/6 false alarms → no lens removed.
+
 - **2026-09-11** — blast-radius **catastrophic** — branch
   `oi162-slice4-windowed-counters`, OI-162 slice 4 (diagnose `f2c8d5`).
   **4 findings (0 P0, 1 P1, 1 P2, 2 P3); 0 false_alarm — all 4 triaged

@@ -165,10 +165,19 @@ void main() {
       // there is no consume_quota anywhere in it, which the sibling test
       // below pins by its absence from that allowlist. The atomicity concern
       // is moot for a reader that never gates anything.
+      //
+      // founder-digest/index_test.ts is NOT a reader either: it drives the
+      // digest's reads with a recording fake client (B-pass 2026-09-13
+      // finding 3) and ASSERTS the table name each section queries, which
+      // is why the literal appears there. `_appSources()` scans `_test.ts`
+      // files deliberately (a test that queried the ledger for real would
+      // be a reader), so the test is allowlisted by name with its reason
+      // rather than the scan narrowed.
       const allowed = {
         'supabase/functions/weekly-report/index.ts',
         'supabase/functions/ai-media-proxy/index.ts',
         'supabase/functions/founder-digest/index.ts',
+        'supabase/functions/founder-digest/index_test.ts',
       };
       final offenders = <String>[];
       for (final e in _appSources()) {

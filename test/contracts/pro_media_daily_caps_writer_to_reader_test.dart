@@ -133,6 +133,36 @@ void main() {
           reason: 'the free lifetime key must keep exactly one call site too');
     });
 
+    test('the condition guarding the PRO consume is EXACTLY isPro — no isVideo narrowing', () {
+      // B-pass (2026-09-13) mutation (a): `if (isPro)` -> `if (isPro && !isVideo)`
+      // — the exact pre-fix shape (PRO video uncapped) — reddened the test
+      // above only through _span's "anchor not found" guard, i.e. by
+      // accident of the literal, not by an assertion about the GUARD. This
+      // one reads the condition of the nearest `if (` ABOVE the PRO RPC and
+      // pins it, so any narrowing (`&& !isVideo`, `&& mediaType !== "video"`,
+      // a nested `if (isVideo)`) reddens on its own terms.
+      final rpc = src.indexOf('p_quota_key: proQuotaKey');
+      expect(rpc, greaterThanOrEqualTo(0));
+      final before = src.substring(0, rpc);
+      final ifStart = before.lastIndexOf('if (');
+      expect(ifStart, greaterThanOrEqualTo(0));
+      final condEnd = before.indexOf(')', ifStart);
+      final condition = before.substring(ifStart + 'if ('.length, condEnd).trim();
+      expect(condition, 'isPro',
+          reason: 'the PRO consume must be guarded by isPro ALONE — video and '
+              'image alike. A narrowed guard is the H-23 defect re-entering: '
+              'PRO video would skip the ledger and reach Gemini uncapped.');
+      // And between that guard and the RPC there is no second conditional at
+      // all — no `if (isVideo)` / ternary that could route one media type
+      // around the consume.
+      final between = before.substring(condEnd);
+      expect(between.contains('if ('), isFalse,
+          reason: 'no conditional may sit between `if (isPro)` and the RPC');
+      expect(between.contains('isVideo'), isFalse,
+          reason: 'isVideo must not appear between the guard and the RPC — '
+              'the key/cap were derived at function scope, above the guard');
+    });
+
     test('the window is the IST day, computed once at function scope', () {
       expect(RegExp(r'const proWindowStart\s*=\s*istDayStartIso\(\);').hasMatch(src),
           isTrue,

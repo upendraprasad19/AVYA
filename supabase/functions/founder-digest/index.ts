@@ -75,9 +75,14 @@ export const DIGEST_KEYS: readonly DigestKey[] = [
   { key: "vision_analysis", label: "Vision (scan/cart)", kind: "daily", cap: 20 },
   // 10 free / 200 PRO — tier-dependent, so no single "at cap" ceiling.
   { key: "food_text", label: "Food text", kind: "daily" },
-  // Hourly buckets, totals only.
+  // Hourly buckets, totals only. ⚠ Known ≤30-min/day slop (B-pass 2026-09-13
+  // finding 3): delete-account floors its bucket to the UTC hour, and IST
+  // midnight is 18:30Z, so the 18:00Z-19:00Z bucket straddles the day
+  // boundary — attempts in the first 30 min of an IST day are reported on
+  // the PREVIOUS day's digest. Same-magnitude shift, never lost or doubled.
   { key: "delete_account", label: "delete-account", kind: "subday" },
-  // 10-minute buckets, totals only.
+  // 10-minute buckets, totals only. Unaffected by the slop above: 18:30Z is
+  // an exact 10-minute boundary, so its buckets never straddle IST midnight.
   { key: "verify_payment", label: "verify-payment", kind: "subday" },
   { key: "free_image_analysis", label: "Free image reads", kind: "lifetime", cap: 5 },
   { key: "weekly_report_free", label: "Weekly report (free)", kind: "lifetime", cap: 1 },
@@ -324,51 +329,10 @@ export const handler = async (req: Request): Promise<Response> => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { yStart, tStart, label } = istYesterdayWindow();
+    const window = istYesterdayWindow();
 
-    const windowed = await readSection<UsageRow>(() =>
-      fetchAllPages<UsageRow>(
-        () =>
-          supabase
-            .from("usage_counters")
-            .select("user_id, quota_key, window_start, used, updated_at")
-            .gte("window_start", yStart)
-            .lt("window_start", tStart),
-        {
-          orderBy: [{ column: "user_id" }, { column: "quota_key" }, { column: "window_start" }],
-          label: "founder-digest windowed",
-        },
-      )
-    );
-
-    const lifetime = await readSection<UsageRow>(() =>
-      fetchAllPages<UsageRow>(
-        () =>
-          supabase
-            .from("usage_counters")
-            .select("user_id, quota_key, window_start, used, updated_at")
-            .eq("window_start", LIFETIME_WINDOW)
-            .gte("updated_at", yStart)
-            .lt("updated_at", tStart),
-        {
-          orderBy: [{ column: "user_id" }, { column: "quota_key" }, { column: "window_start" }],
-          label: "founder-digest lifetime",
-        },
-      )
-    );
-
-    const alerts = await readSection<AlertRow>(async () => {
-      const { data, error } = await supabase
-        .from("alerts")
-        .select("detected_at, source, severity, summary")
-        .gte("detected_at", yStart)
-        .lt("detected_at", tStart)
-        .order("detected_at", { ascending: true })
-        .limit(50);
-      if (error) throw new Error(error.message);
-      return (data ?? []) as AlertRow[];
-    });
-
+    const { windowed, lifetime, alerts } = await readDigestSections(supabase, window);
+    const label = window.label;
     const text = buildDigestText({ dayLabel: label, windowed, lifetime, alerts });
 
     const sent = await sendTelegram(token, chatId, text);
@@ -402,6 +366,80 @@ async function readSection<T>(read: () => Promise<T[]>): Promise<SectionRead<T>>
     console.error("[founder-digest] section read failed:", reason.slice(0, 300));
     return { unreadable: reason };
   }
+}
+
+/**
+ * The structural slice of a supabase-js client this function uses. Typed
+ * this loosely on purpose: the B-pass (2026-09-13, finding 2) mutated the
+ * lifetime filter's `updated_at` to `window_start` — a filter that can never
+ * match, so the lifetime section would read "none" forever — and NOTHING
+ * reddened, because the reads lived inside the handler behind
+ * `createClient(...)` where no test could reach them. `index_test.ts` now
+ * drives this with a recording fake and asserts every column each section
+ * filters on. The `.from("<table>")` chains stay LITERAL and inline here so
+ * `scripts/check_schema_column_refs.dart` keeps validating their columns
+ * against the live schema snapshot — extracting the filters into
+ * table-less helpers would have moved them out of that gate's input set.
+ */
+// deno-lint-ignore no-explicit-any
+export type DigestClient = { from(table: string): any };
+
+/** Reads the three sections for one window; each independently three-state. */
+export async function readDigestSections(
+  supabase: DigestClient,
+  window: { yStart: string; tStart: string },
+): Promise<Pick<DigestInput, "windowed" | "lifetime" | "alerts">> {
+  const { yStart, tStart } = window;
+
+  const windowed = await readSection<UsageRow>(() =>
+    fetchAllPages<UsageRow>(
+      () =>
+        supabase
+          .from("usage_counters")
+          .select("user_id, quota_key, window_start, used, updated_at")
+          .gte("window_start", yStart)
+          .lt("window_start", tStart),
+      {
+        orderBy: [{ column: "user_id" }, { column: "quota_key" }, { column: "window_start" }],
+        label: "founder-digest windowed",
+      },
+    )
+  );
+
+  // Lifetime rows all share window_start = epoch, so "moved yesterday" is
+  // answered by updated_at — the column consume_quota touches on every
+  // increment (migration 128). Filtering these by window_start would match
+  // nothing, ever, and render "none" with no error: the exact silent shape
+  // the three-state rendering cannot see. Pinned by index_test.ts.
+  const lifetime = await readSection<UsageRow>(() =>
+    fetchAllPages<UsageRow>(
+      () =>
+        supabase
+          .from("usage_counters")
+          .select("user_id, quota_key, window_start, used, updated_at")
+          .eq("window_start", LIFETIME_WINDOW)
+          .gte("updated_at", yStart)
+          .lt("updated_at", tStart),
+      {
+        orderBy: [{ column: "user_id" }, { column: "quota_key" }, { column: "window_start" }],
+        label: "founder-digest lifetime",
+      },
+    )
+  );
+
+  const alerts = await readSection<AlertRow>(async () => {
+    const { data, error } = await supabase
+      .from("alerts")
+      .select("detected_at, source, severity, summary")
+      .gte("detected_at", yStart)
+      .lt("detected_at", tStart)
+      .order("detected_at", { ascending: true })
+      .limit(50);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as AlertRow[];
+  });
+
+  return { windowed, lifetime, alerts };
 }
 
 if (import.meta.main) {

@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**105 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**109 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -79,37 +79,41 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-149 | breathing_cue holds a bare number on 136 of 292 rows; the original text is… | the founder** — 136 replacement cues… | 2026-08-29 — counted, and the recovery… | [:2550](open_issues.md#L2550) |
 | OI-151 | telemetry outweighs user data 1.7:1; `restore_op_done` is 64% of it and… | nothing technical. It is a PRE-LAUNCH… | 2026-08-30 — measured live on… | [:2582](open_issues.md#L2582) |
 | OI-152 | six-plus call sites fire `syncX()` and `pushSnapshot()` back to back,… | nothing technical. Bounded, mechanical… | 2026-08-30 — every call site below read… | [:2634](open_issues.md#L2634) |
-| OI-153 | PRO media caps read a `channel` value nothing writes (P1) | enumerate every `channel` reader first | 2026-09-03 — source + live prod | [:2676](open_issues.md#L2676) |
-| OI-154 | a cleared profile field silently reverts on the next sign-in (P1) | needs a design spec (tombstone +… | 2026-09-03 — source, full chain traced | [:2845](open_issues.md#L2845) |
-| OI-155 | six gates are wired to no runner, and Gate 33 cannot detect it (P1) | re-enumerate the skip block mechanically | 2026-09-03 — greps with positive control | [:2868](open_issues.md#L2868) |
-| OI-156 | CLAUDE.md numeric claims drift because nothing re-derives them (P2) | nothing — mechanical | 2026-09-03 — each count re-measured | [:2892](open_issues.md#L2892) |
-| OI-157 | no SAST and no SCA run anywhere in CI (P1) | founder call on Semgrep scope | 2026-09-03 — grep, 0 hits | [:2917](open_issues.md#L2917) |
-| OI-158 | tests and gates that cannot fail (P2) | TEST-1 needs one device run to establish… | 2026-09-03 — source-verified | [:2937](open_issues.md#L2937) |
-| OI-159 | sync and Edge Function correctness residue (P2) | nothing — but see OI-154 for the ARCH-1… | 2026-09-03 — source-verified | [:2960](open_issues.md#L2960) |
-| OI-160 | dependency + build-toolchain hygiene (P2) | DEP-7 needs a founder unpin decision | 2026-09-03 — versions read from files | [:2980](open_issues.md#L2980) |
-| OI-161 | two blind spots in our own observability and discipline gates (P3) | INFRA-13 is platform-tier, needs its own… | 2026-09-03 — live query + grep | [:3003](open_issues.md#L3003) |
-| OI-163 | the four-tag migration header has NO gate, and two places claimed it did… | nothing — needs a gate written,… | 2026-09-05 — repo-wide grep + the live… | [:3152](open_issues.md#L3152) |
-| OI-164 | the shared QA account caps CI at ~3 runs per IST day (P2) | a founder decision on test-account… | 2026-09-05 — live `usage_counters` + the… | [:3176](open_issues.md#L3176) |
-| OI-165 | `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live… | identifying which token the runner needs… | 2026-09-05 — ran it; and the harness… | [:3198](open_issues.md#L3198) |
-| OI-166 | regeneration RESTARTS the periodization wave instead of continuing it, so… | OI-175 (the window-alignment half —… | 2026-09-06 — every citation below… | [:3220](open_issues.md#L3220) |
-| OI-167 | the debugging skill's bug-class numbers collide 9×, every one is cited by… | nothing technical — needs a per-citation… | 2026-09-07 — `grep -oE '^### 2\.[0-9]+'… | [:3326](open_issues.md#L3326) |
-| OI-168 | nothing fires §4.9's "grep the test tree before you land" rule, so it is… | nothing technical — needs the gate… | 2026-09-07 — the pre-push full suite on… | [:3377](open_issues.md#L3377) |
-| OI-169 | a local run of `test/edge_functions/` reports "All tests passed" having… | nothing — needs a decision on which… | 2026-09-07 — `flutter test… | [:3400](open_issues.md#L3400) |
-| OI-173 | no cold-start weight estimate: a brand-new user, every free user, and any… | none — founder approved 2026-09-06 as… | 2026-09-06 — `plan_generator.dart:234`… | [:3267](open_issues.md#L3267) |
-| OI-174 | schedule rows written past `plan_end` are never pruned, and they delay the… | none — but it is a DESTRUCTIVE migration… | 2026-09-06 — the only schedule deletions… | [:3285](open_issues.md#L3285) |
-| OI-175 | a regeneration past the phase's 4th week (`rawWeek > 4`) has no… | FOUNDER — what a regeneration should DO… | 2026-09-06 — `getCurrentWeekNumber()`… | [:3297](open_issues.md#L3297) |
-| OI-176 | the OI-collision gate answers `PASS (vacuous)` for a branch with no… | none | 2026-09-08 — observed live, not reasoned… | [:3314](open_issues.md#L3314) |
-| OI-177 | the live-cron snapshot that gives Gate 31 its only fileless-migration… | none | 2026-09-10 —… | [:3443](open_issues.md#L3443) |
-| OI-178 | pg_cron SQL jobs are structurally invisible to the alerting stack:… | a design decision — telemetry bridge vs.… | 2026-09-10 — `cron_call_log` holds… | [:3456](open_issues.md#L3456) |
-| OI-179 | `alert_cron_function_dead` cannot fire across 100% of its range, and never… | none — one-line predicate fix; the value… | 2026-09-10 — `min(started_at)` across… | [:3470](open_issues.md#L3470) |
-| OI-180 | `check_sot_registry_parity` silently skips every single-number… | none | 2026-09-10 —… | [:3482](open_issues.md#L3482) |
-| OI-181 | nothing catches a MISSING plan-review record at merge time; both prechecks… | none | 2026-09-10 — live, by causing it. Branch… | [:3493](open_issues.md#L3493) |
-| OI-182 | the payment grace window closes before the last verify-payment retry fires… | none — needs a founder call on the… | 2026-09-11 — read both constants… | [:3509](open_issues.md#L3509) |
-| OI-183 | `enforce_vision_analysis_daily_limit`'s channel guard is NULL-unsafe,… | none — one-line NULL-safe rewrite | 2026-09-11 — read the live trigger body… | [:3544](open_issues.md#L3544) |
-| OI-184 | 4 tables rely on RLS-zero-policy default-deny alone; the raw grants under… | none — mechanically straightforward (a… | 2026-09-11 — LIVE, via the Management… | [:3592](open_issues.md#L3592) |
-| OI-185 | `check_schema_column_refs.dart` validates only the FIRST line of a… | none — carried out of OI-162 (closed… | 2026-09-03 — by the audit (a prototype… | [:3666](open_issues.md#L3666) |
-| OI-186 | the AI coach cannot replace ONE day with a different workout: the only… | founder product decision on tier (see… | 2026-09-10 — full census of… | [:3692](open_issues.md#L3692) |
-| OI-187 | the AI coach has no read path to the 292-exercise library: the WRITE path… | nothing technical — needs a design… | 2026-09-10 — every claim below re-read… | [:3733](open_issues.md#L3733) |
-| OI-188 | no re-entry path for a returning user: the free path hands them a DELOAD… | founder product decision on the… | 2026-09-10 — app behaviour read from… | [:3780](open_issues.md#L3780) |
-| OI-189 | Edit-Profile regen now stops at `plan_end`, so orphan rows past it keep… | FOUNDER — a design decision between the… | 2026-09-12 — mechanism re-derived… | [:3830](open_issues.md#L3830) |
-| OI-190 | Unit 1's §4.11 gate `check_single_schedule_row_builder.dart` is WARN-only… | none — needs a plan. Input is already… | 2026-09-12 — `dart run… | [:3846](open_issues.md#L3846) |
+| OI-154 | a cleared profile field silently reverts on the next sign-in (P1) | needs a design spec (tombstone +… | 2026-09-03 — source, full chain traced | [:2881](open_issues.md#L2881) |
+| OI-155 | six gates are wired to no runner, and Gate 33 cannot detect it (P1) | re-enumerate the skip block mechanically | 2026-09-03 — greps with positive control | [:2904](open_issues.md#L2904) |
+| OI-156 | CLAUDE.md numeric claims drift because nothing re-derives them (P2) | nothing — mechanical | 2026-09-03 — each count re-measured | [:2928](open_issues.md#L2928) |
+| OI-157 | no SAST and no SCA run anywhere in CI (P1) | founder call on Semgrep scope | 2026-09-03 — grep, 0 hits | [:2953](open_issues.md#L2953) |
+| OI-158 | tests and gates that cannot fail (P2) | TEST-1 needs one device run to establish… | 2026-09-03 — source-verified | [:2973](open_issues.md#L2973) |
+| OI-159 | sync and Edge Function correctness residue (P2) | nothing — but see OI-154 for the ARCH-1… | 2026-09-03 — source-verified | [:2996](open_issues.md#L2996) |
+| OI-160 | dependency + build-toolchain hygiene (P2) | DEP-7 needs a founder unpin decision | 2026-09-03 — versions read from files | [:3016](open_issues.md#L3016) |
+| OI-161 | two blind spots in our own observability and discipline gates (P3) | INFRA-13 is platform-tier, needs its own… | 2026-09-03 — live query + grep | [:3039](open_issues.md#L3039) |
+| OI-163 | the four-tag migration header has NO gate, and two places claimed it did… | nothing — needs a gate written,… | 2026-09-05 — repo-wide grep + the live… | [:3188](open_issues.md#L3188) |
+| OI-164 | the shared QA account caps CI at ~3 runs per IST day (P2) | a founder decision on test-account… | 2026-09-05 — live `usage_counters` + the… | [:3212](open_issues.md#L3212) |
+| OI-165 | `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live… | identifying which token the runner needs… | 2026-09-05 — ran it; and the harness… | [:3234](open_issues.md#L3234) |
+| OI-166 | regeneration RESTARTS the periodization wave instead of continuing it, so… | OI-175 (the window-alignment half —… | 2026-09-06 — every citation below… | [:3256](open_issues.md#L3256) |
+| OI-167 | the debugging skill's bug-class numbers collide 9×, every one is cited by… | nothing technical — needs a per-citation… | 2026-09-07 — `grep -oE '^### 2\.[0-9]+'… | [:3362](open_issues.md#L3362) |
+| OI-168 | nothing fires §4.9's "grep the test tree before you land" rule, so it is… | nothing technical — needs the gate… | 2026-09-07 — the pre-push full suite on… | [:3413](open_issues.md#L3413) |
+| OI-169 | a local run of `test/edge_functions/` reports "All tests passed" having… | nothing — needs a decision on which… | 2026-09-07 — `flutter test… | [:3436](open_issues.md#L3436) |
+| OI-173 | no cold-start weight estimate: a brand-new user, every free user, and any… | none — founder approved 2026-09-06 as… | 2026-09-06 — `plan_generator.dart:234`… | [:3303](open_issues.md#L3303) |
+| OI-174 | schedule rows written past `plan_end` are never pruned, and they delay the… | none — but it is a DESTRUCTIVE migration… | 2026-09-06 — the only schedule deletions… | [:3321](open_issues.md#L3321) |
+| OI-175 | a regeneration past the phase's 4th week (`rawWeek > 4`) has no… | FOUNDER — what a regeneration should DO… | 2026-09-06 — `getCurrentWeekNumber()`… | [:3333](open_issues.md#L3333) |
+| OI-176 | the OI-collision gate answers `PASS (vacuous)` for a branch with no… | none | 2026-09-08 — observed live, not reasoned… | [:3350](open_issues.md#L3350) |
+| OI-177 | the live-cron snapshot that gives Gate 31 its only fileless-migration… | none | 2026-09-10 —… | [:3479](open_issues.md#L3479) |
+| OI-178 | pg_cron SQL jobs are structurally invisible to the alerting stack:… | a design decision — telemetry bridge vs.… | 2026-09-10 — `cron_call_log` holds… | [:3492](open_issues.md#L3492) |
+| OI-179 | `alert_cron_function_dead` cannot fire across 100% of its range, and never… | none — one-line predicate fix; the value… | 2026-09-10 — `min(started_at)` across… | [:3506](open_issues.md#L3506) |
+| OI-180 | `check_sot_registry_parity` silently skips every single-number… | none | 2026-09-10 —… | [:3518](open_issues.md#L3518) |
+| OI-181 | nothing catches a MISSING plan-review record at merge time; both prechecks… | none | 2026-09-10 — live, by causing it. Branch… | [:3529](open_issues.md#L3529) |
+| OI-182 | the payment grace window closes before the last verify-payment retry fires… | none — needs a founder call on the… | 2026-09-11 — read both constants… | [:3545](open_issues.md#L3545) |
+| OI-183 | `enforce_vision_analysis_daily_limit`'s channel guard is NULL-unsafe,… | none — one-line NULL-safe rewrite | 2026-09-11 — read the live trigger body… | [:3580](open_issues.md#L3580) |
+| OI-184 | 4 tables rely on RLS-zero-policy default-deny alone; the raw grants under… | none — mechanically straightforward (a… | 2026-09-11 — LIVE, via the Management… | [:3628](open_issues.md#L3628) |
+| OI-185 | `check_schema_column_refs.dart` validates only the FIRST line of a… | none — carried out of OI-162 (closed… | 2026-09-03 — by the audit (a prototype… | [:3702](open_issues.md#L3702) |
+| OI-186 | the AI coach cannot replace ONE day with a different workout: the only… | founder product decision on tier (see… | 2026-09-10 — full census of… | [:3728](open_issues.md#L3728) |
+| OI-187 | the AI coach has no read path to the 292-exercise library: the WRITE path… | nothing technical — needs a design… | 2026-09-10 — every claim below re-read… | [:3769](open_issues.md#L3769) |
+| OI-188 | no re-entry path for a returning user: the free path hands them a DELOAD… | founder product decision on the… | 2026-09-10 — app behaviour read from… | [:3816](open_issues.md#L3816) |
+| OI-189 | Edit-Profile regen now stops at `plan_end`, so orphan rows past it keep… | FOUNDER — a design decision between the… | 2026-09-12 — mechanism re-derived… | [:3866](open_issues.md#L3866) |
+| OI-190 | Unit 1's §4.11 gate `check_single_schedule_row_builder.dart` is WARN-only… | none — needs a plan. Input is already… | 2026-09-12 — `dart run… | [:3882](open_issues.md#L3882) |
+| OI-191 | `morning-alert`'s Telegram sender logs the raw fetch error, whose message… | none — one-line change in one function;… | 2026-09-13 — read… | [:3895](open_issues.md#L3895) |
+| OI-192 | the orphan-sync dedupe can never match a photo turn: client writes… | none — pick ONE placeholder shape (or… | 2026-09-13 — source only:… | [:3906](open_issues.md#L3906) |
+| OI-193 | Gate 31 treats a COMMENTED `cron.unschedule('X')` as a real unschedule, so… | none — strip `--` comments before the… | 2026-09-12 —… | [:3916](open_issues.md#L3916) |
+| OI-194 | `compute_admin_metrics_daily` (jobid 30) skipped its 2026-09-11 18:15Z… | FOUNDER — decide whether… | 2026-09-12 — `select function_name,… | [:3927](open_issues.md#L3927) |
+| OI-195 | Gate 42 accepts any non-empty `behavioral_test_path:` / `presence_only:`… | none — one `File(path).existsSync()` per… | 2026-09-13 — `grep -n… | [:3937](open_issues.md#L3937) |

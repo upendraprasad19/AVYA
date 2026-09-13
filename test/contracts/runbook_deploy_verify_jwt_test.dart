@@ -56,7 +56,7 @@ const expectedVerifyJwt = <String, bool>{
   'delete-account': true,
   'evaluate-rank-promotions': false,
   'expiry-reminder': false,
-  'founder-digest': false, // OI-153, first deployed 2026-09-13; cron caller (isAuthorizedCronCall)
+  'founder-digest': false, // OI-153 cron caller (isAuthorizedCronCall). Value = the flag the apply commit deploys with; that commit stamps the live version here.
   'future-prediction': true,
   'get-community-review-items': true,
   'i-see-you-callout': false,

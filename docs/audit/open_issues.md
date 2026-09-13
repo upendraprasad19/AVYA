@@ -2675,9 +2675,45 @@ change.
 
 ## OI-153 — PRO media caps read a `channel` value nothing writes (P1)
 
-- **Status**: OPEN
-- **Blocked on**: enumerate every `channel` reader first
-- **Verified**: 2026-09-03 — source + live prod
+- **Status**: CLOSED (2026-09-13, `oi153-pro-media-caps`) — diagnose `a9d4e7`
+- **Blocked on**: none
+- **Verified**: 2026-09-13 — source (`67ba6ba4`, `f15fad75` + the review-remediation commit),
+  4 context-blind plan rounds, a 2-agent B-pass (6 findings, 0 false alarms, all fixed), 13 + 15
+  mutations restored byte-identically; LIVE at closure: `ai-media-proxy` is still **v23, the
+  PRE-fix bundle** — the deploy is the batch's last step (pre-authorized 2026-09-12), recorded in
+  `docs/audit/oi153-pro-media-caps.closure.yaml` when done, never claimed here before it is.
+- **CLOSED BY** the OI-153 batch (plan `docs/audit/oi153-plan.md`, record
+  `docs/plan-reviews/oi153-pro-media-caps.md` whose `bpass_review:` is the one pointer to the
+  review). What changed, per defect in this entry:
+  - **CODE-1/CODE-3 (the dormant 50/day image cap, fail-open)**: the channel-counting gate and
+    `countProImageAnalysesToday` are DELETED. PRO callers now hit ONE atomic
+    `consume_quota(pro_image_daily | pro_video_daily, istDayStartIso(), 50 | 10)` placed after the
+    Storage fetch (a rejected upload never spends a unit) and before the Gemini call (the spend is
+    bounded under concurrency — an advisory read is not). `-1` → HTTP 200 `gated: true` with a
+    rank-free Bridge reply naming the midnight-IST reset; every installed APK renders it as an
+    ordinary coach bubble. A ledger error fails CLOSED (`pro_quota_unavailable`), as does the
+    `subscriptions` read error that the old code DISCARDED (`tier_unavailable` — it used to route a
+    paying user down the free path). Founder decisions 2026-09-12: 50 images / 10 videos per IST
+    day, in-app reply not the paywall, midnight-IST reset.
+  - **CODE-2 (PRO video uncapped)**: the same guard — `if (isPro)`, image and video alike; the key
+    AND the cap are selected by `isVideo`, association pinned by two regexes and a
+    literal-independent guard assertion (B-pass finding 5).
+  - **CODE-4 / the enumeration this entry demanded**: the `pro_image_analysis` /
+    `image_analysis` channel literals are gone from the repo (the "dead reader" test greps for
+    them); `founder_metrics_engagement()` (migration 120) never needed a change because nothing
+    writes those channels — the enumeration ran to empty in the plan's ground truth (0 rows, ever).
+  - **The last of the ten**: the ledger census (`usage_quota_ledger_writer_to_reader_test.dart`)
+    reads ZERO legacy quota readers; `usage_counter_source_lib.dart`'s ai-media-proxy entry is 0.
+  - **The founder digest** (Unit D, `founder-digest` cron EF, migration 131 in the apply commit):
+    one Telegram message at 08:00 IST with yesterday's ledger per key, users at a ceiling, top id
+    prefixes, and the day's alerts — three states per section, never zeros for a failed read. The
+    OI-183 trigger asymmetry closes in the same apply commit (migration 132).
+- **Filed from this batch, not fixed here**: OI-191 (morning-alert's sender can log the bot
+  token), OI-192 (orphan-sync dedupe never matches a photo turn), OI-193 (Gate 31 blind to a
+  commented `cron.unschedule`), OI-194 (`compute_admin_metrics_daily` silent-skip class),
+  OI-195 (Gate 42 never checks a cited test path exists).
+- **Was** (retained for provenance):
+- **Verified (at filing)**: 2026-09-03 — source + live prod
 - **What**: tech-debt audit 2026-09-02 findings CODE-1, CODE-2, CODE-3, CODE-4 (Slice B). The PRO
   50/day image cap counts `channel IN ('pro_image_analysis','image_analysis')`
   (`ai-media-proxy/index.ts:98`) but the only insert writes `'free_image_analysis'` or `'app'`
@@ -3855,3 +3891,55 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Rule this should leave behind** (proposed for §4.11, not yet written into CLAUDE.md): a WARN-only gate is born with an OI naming its flip condition and owner, so the flip cannot be dropped by a re-plan that changes scope.
 - **Blast radius**: the de-dup touches `lib/core/services/**` (account) and `lib/features/ai_coach/**` (account); the gate script is feature-tier by path.
 - **Related**: OI-166 (parent), OI-189 (the horizon decision that the unified builder would make once), OI-174, OI-176 (the other OI-166-batch gate with a known blind spot).
+
+## OI-191 — `morning-alert`'s Telegram sender logs the raw fetch error, whose message embeds the bot token (P2, latent)
+
+- **Status**: OPEN
+- **Blocked on**: none — one-line change in one function; ships with the next `morning-alert` redeploy
+- **Verified**: 2026-09-13 — read `supabase/functions/morning-alert/index.ts` `sendTelegramMessage` (the `catch (err) { console.error(\`Telegram error for ${chatId}:\`, err); }` arm); confirmed the URL shape at the `fetch(\`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage\`` call two lines above it
+- **What**: Deno's `fetch` rejects a network-level failure with `TypeError: error sending request for url (https://api.telegram.org/bot<TOKEN>/sendMessage): …` — the request URL, token included, is INSIDE `.message`. `sendTelegramMessage` logs the error object whole, so on any DNS/TLS/connection failure the bot token lands in the Edge Function logs (retained by the platform, visible to anyone with dashboard access). A `console.error(err)` is not a leak on a 4xx/5xx (`response.ok` false takes the OTHER branch and logs Telegram's body, which never echoes the token) — only the thrown path leaks, which is why it has stayed invisible: it fires only when Telegram is unreachable.
+- **Why P2 and not P0**: the token has not been observed in a log (no unreachable-Telegram incident is recorded); the audience of function logs is the founder's dashboard; and the fix is trivial. It is filed rather than fixed in OI-153 because `morning-alert` is a different function with a different blast radius (per-user PRO delivery) and OI-153 did not touch it.
+- **Repair**: log `err instanceof Error ? err.name : typeof err` only — `founder-digest/index.ts` `telegramErrorSummary` is the working twin (`supabase/functions/founder-digest/index.ts`, pinned by its `index_test.ts` "carries the error NAME only" test). Redeploy `morning-alert`. Consider hoisting the guarded sender into `_shared/telegram.ts` so a third Telegram caller cannot re-introduce the shape; `supabase/functions/CLAUDE.md` carries the pitfall row.
+- **Blast radius**: `supabase/functions/morning-alert/**` — platform (cron EF; PRO push + Telegram delivery).
+- **Related**: OI-153 (where the class was found while writing the digest's sender).
+
+## OI-192 — the orphan-sync dedupe can never match a photo turn: client writes `[Photo] …`, server writes `[Photo: image] …`, so every media exchange upserts a phantom `in_app_orphan` duplicate (P2)
+
+- **Status**: OPEN
+- **Blocked on**: none — pick ONE placeholder shape (or skip `mode == 'media'` rows in the orphan path, which is what `recentHistoryExchanges` already does for replay)
+- **Verified**: 2026-09-13 — source only: `lib/features/ai_coach/providers/ai_coach_provider.dart` `sendWithMedia` writes `userMessage: '[Photo] $captionForLog'` (`:625`) with a `coach_<ms>` id (NOT a uuid — `coach_interaction_repository.dart` `saveUserMessagePending`, `'id': id` where `id = mintCoachKey()`); `supabase/functions/ai-media-proxy/index.ts` writes the server row as `` `[Photo: ${media_type ?? "image"}] ${message}` `` (`:598`, `:868`). The live count of `in_app_orphan` rows starting `[Photo` was NOT measured — the Management-API SQL calls timed out three times during filing; **measure it before fixing** (`select count(*) from ai_coach_interactions where channel = 'in_app_orphan' and user_message like '[Photo%'`).
+- **Mechanism**: `lib/core/services/sync/sync_coach.dart` `_syncCoachInteractions` skips a row only when its `id` looks like a uuid (the server-authored case) or when a server row with the SAME `user_message` exists within 5 minutes (`.eq('user_message', userMsg)`, the audit-2026-05-16 F6-4 cross-channel dedupe). A media row fails both: its id is `coach_<ms>`, and its `user_message` differs from the server's by the `: image` infix — so the dedupe SELECT returns nothing and the row is upserted under `channel: 'in_app_orphan'` with the analysis as `ai_response`. That is the P2-B "phantom duplicate" class (audit 2026-05-12, 81 phantom rows) re-opened for exactly one message shape. Consequence: interaction analytics (`founder_metrics_engagement()`, migration 120, counts `in_app_orphan` as chat) double-count every photo turn; `recentHistoryExchanges` is NOT affected (it drops `mode == 'media'` rows locally, and the restored orphan carries channel `in_app_orphan`, which is in `_coachChatChannels`, so a RESTORED phantom WOULD be replayed as a prior chat turn — a second-order effect worth checking on a fresh install).
+- **Repair options**: (a) make the client write the server's exact shape (`[Photo: image] …`) — one literal, but couples two writers on a format string; (b) skip `mode == 'media'` rows in `_syncCoachInteractions` outright — the server row already exists for every media turn (the media proxy inserts BEFORE Gemini), so the orphan path has nothing to add; **lean (b)**, mirroring the replay filter. Regression test: extend `test/contracts/` sync-coach coverage with a media row fixture asserting no upsert.
+- **Blast radius**: `lib/core/services/sync/**` — account (sync); no schema, no EF.
+- **Related**: OI-153 (found while tracing every writer of `[Photo`-shaped rows for the PRO cap work), the audit-2026-05-12 P2-B entry (same class).
+
+## OI-193 — Gate 31 treats a COMMENTED `cron.unschedule('X')` as a real unschedule, so nine migrations' rollback blocks silently drop their own job from the registry check (P2, gate gap)
+
+- **Status**: OPEN
+- **Blocked on**: none — strip `--` comments before the unschedule scan (the same `stripSqlComments` `test/helpers/migration_cap_reader.dart` already has), then re-baseline
+- **Verified**: 2026-09-12 — `scripts/check_cron_registry.dart` `unschedulePattern` (`cron\.unschedule\s*\(\s*['"]([^'"]+)['"]`) runs over the RAW file content with no comment stripping; `grep -ln "^--.*cron\.unschedule('" supabase/migrations/*.sql` → **9** files whose inline-rollback comment names a job (076, 077, 086, 087, 102, 109, 110, 121, 128 — the OI-153 plan's "ten" was a miscount, corrected here by re-running the grep); and the SECOND shape, measured the same way: **16** migrations mention `cron.unschedule('…')` at all, **11** of them UNCOMMENTED (015, 028, 031, 040, 046, 061, 069, 077, 086, 087, 102) — genuine unschedule-then-re-schedule sequences (102's `perform cron.unschedule(...)` DO-block guard before its `cron.schedule` is the clearest). The gate computes `scheduled − unscheduled` as SETS with no ordering, so every job that was ever re-scheduled under its own name (`morning_alert_generate`, `compute_coach_signals`, the alert crons, …) is ALSO absent from input A today. Comment-stripping closes the 9-file shape; "last-wins by POSITION" (a `cron.schedule` after a `cron.unschedule` of the same name, in file order across the numbered sequence, re-activates the job) closes the 11-file shape. Input B is the only thing covering either right now
+- **What**: input A of Gate 31 is "scheduled − unscheduled (last-wins)". A migration that schedules `X` and, per the migration-header convention, carries `-- SELECT cron.unschedule('X');` in its commented rollback block therefore contributes `X` to BOTH sets, and `X` drops out of `activeJobs`. The registry row for `X` is then never demanded by input A. Input B (the live-cron snapshot, `backups/live_cron_jobs.json`) still catches it — as long as the snapshot is fresh, which OI-177 says it is not guaranteed to be. So the two inputs currently cover each other's blind spot by accident: A is blind to every job whose migration documents its own rollback, B is blind to everything scheduled since the last regeneration.
+- **Why it matters now**: the convention that CAUSES it is the one every migration is told to follow (`supabase/migrations/CLAUDE.md`: inline rollback = commented reverse DDL). Migration 131 (OI-153) deliberately writes its rollback as `cron.unschedule(<the job name scheduled above>)` — an unquoted placeholder — to stay visible to input A, and says so in a comment. That is a workaround, not a fix; the gate should strip comments.
+- **Repair**: comment-strip before both patterns (schedule AND unschedule), add a red-path test to the gate's test file (a fixture migration with a commented unschedule must still demand a registry row), ledger entry per rule 24. Then 131's placeholder comment can become a normal quoted rollback line.
+- **Blast radius**: `scripts/**` pinned platform (gate script).
+- **Related**: OI-177 (input B freshness — the other half of the same coverage story), OI-132 (why input B exists).
+
+## OI-194 — `compute_admin_metrics_daily` (jobid 30) skipped its 2026-09-11 18:15Z tick with no `cron_call_log` row while 27 other cron calls logged that day — a silent-skip class no alert covers (P2, observability)
+
+- **Status**: OPEN
+- **Blocked on**: FOUNDER — decide whether `alert_cron_silence` (jobid 31) should be widened to per-job expected-cadence checks, or whether the founder digest's own daily read of `cron_call_log` is the intended detector
+- **Verified**: 2026-09-12 — `select function_name, started_at from cron_call_log where started_at >= '2026-09-11'` returned 27 rows across the other cron functions and none for `compute-admin-metrics-daily`; `cron.job_run_details` had no retained row for jobid 30 at 18:15Z and `net._http_response` retention was too short to recover the request (measured during the OI-153 plan's ground-truth pass)
+- **What**: a cron tick that never reaches the Edge Function leaves no `cron_call_log` row — `logCronStart` runs INSIDE the function. `alert_edge_function_health` and `alert_cron_function_dead` (8-day window) read that table, so a job that fails to dispatch (pg_net failure, gateway timeout before the module boots, a 401 at the gateway) is invisible to both until 8 days pass. One tick was observed missing; whether it recurs is unknown because nothing records the absence.
+- **Repair candidates**: (a) the founder digest reads `cron_call_log` for yesterday and lists functions with ZERO rows against `CRON_REGISTRY.md`'s expected daily set — the digest already exists and is the cheapest place; (b) a `pg_cron`-side check joining `cron.job_run_details` (status/return_message) per job per day — needs longer `job_run_details` retention than `jrd_retention_daily` (jobid 33) keeps today; (c) the pg_net response table with a longer retention. Decide, then file the chosen one as a unit.
+- **Blast radius**: `supabase/functions/founder-digest/**` (platform) for (a); `supabase/migrations/**` (platform) for (b)/(c).
+- **Related**: OI-153 (the digest), OI-177 (cron snapshot freshness), the backend-CPU-starvation in-flight batch (a starved DB is one plausible cause of a missed dispatch).
+
+## OI-195 — Gate 42 accepts any non-empty `behavioral_test_path:` / `presence_only:` text and never checks the cited file EXISTS (P3, gate gap, zero live violations)
+
+- **Status**: OPEN
+- **Blocked on**: none — one `File(path).existsSync()` per cited path in `check_sot_behavioral_test_paths.dart`, plus a red-path test and a rule-24 ledger entry
+- **Verified**: 2026-09-13 — `grep -n "existsSync\|File(" scripts/check_sot_behavioral_test_paths.dart` → only `docs/sot_registry.yaml` itself is opened; a census of the registry's 134 distinct `behavioral_test_path:` values found **0 missing** today (`test -e` over each), so this is a gap, not a live breach
+- **What**: rule 21 says every SoT concept MUST have a `behavioral_test_path:` (or `presence_only: true` with a justification). Gate 42 enforces the FIELD is present and non-empty; it never resolves the value. A concept can cite a test that was never written — or, the case the OI-153 B-pass caught (its finding 2), a `presence_only:` justification can cite a live-verify SQL file that did not exist yet — and the gate is green. `check_sot_registry_parity.dart` DOES resolve writer/reader `file:` citations, so the asymmetry is within one registry: the writer/reader half is checked, the test half is not.
+- **Why it is cheap and worth doing**: the fix is the same `existsSync` the parity gate already runs; the `presence_only:` prose is free text and should be scanned for repo-shaped paths (`test/…`, `docs/…`) the same way `check_sot_registry_citations.dart` scans diagnose-docs for identifier-shaped citations.
+- **Blast radius**: `scripts/**` pinned platform (gate script); rule 24 applies (mutation-proven test + ledger entry).
+- **Related**: OI-153 (found by its B-pass), OI-180 (the same registry's other silently-skipped field), `feedback_mistake_unverified_done_claims` (a path is a claim).
