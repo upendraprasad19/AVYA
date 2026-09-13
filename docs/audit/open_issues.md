@@ -3925,3 +3925,47 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   founder observation on the same test account that also produced
   [[feedback_mistake_subscription_status_vs_subscriptions_table]] (unrelated mechanism, same
   investigation session).
+
+## OI-197 — Founder observability gaps: payment-flow alerting dormant, EF auth-outage blind spot, no native-crash summary, no server-side error-rate view
+
+- **Status**: OPEN
+- **Blocked on**: none — no schema/migration/payment/auth path touched by the filing itself;
+  each of the 4 items below needs its own scoped design before any code lands
+- **Verified**: never — this is a gap analysis surfaced while brainstorming the Telegram
+  admin-bot design (`docs/superpowers/specs/2026-09-13-telegram-admin-bot-design.md`), not a
+  live-reproduced bug. Each sub-item cites where the gap lives; none has been fixed or tested.
+- **Identified**: 2026-09-13 · filed via mint_oi.sh from branch `telegram-admin-bot`, per
+  founder request during that brainstorm ("what are we not logging that we should be")
+- **What**: four separate detection/observability gaps, each requiring new logic (not just a
+  new report surface) to close:
+  1. **Payment-flow alerting is effectively dormant.** The only existing check
+     (`alert_payment_flow_health`, `docs/operations/CRON_REGISTRY.md` row 076) fires on "fewer
+     than 3 new subscriptions in 24h" — a weak proxy for "payments are broken," not a check on
+     actual Razorpay webhook/signature failures — and the registry itself already notes it is
+     "effectively dormant at current scale." No alert exists for a failed/rejected webhook call.
+  2. **A total Edge-Function auth outage is invisible.** `alert_edge_function_health`
+     (CRON_REGISTRY row 076) computes an error RATE from `cron_call_log`, but a 401 (e.g. the
+     Vault service-role-key drift class this repo has hit before) writes no row to that log at
+     all — so the check's own `total >= 5` guard never matches during exactly the outage it
+     exists to catch. Registry note: "Never fired once."
+  3. **Native crashes (Firebase Crashlytics) aren't summarized anywhere day-to-day.** Crashlytics
+     is wired client-side (with a `kIsWeb` guard, per the debugging skill's §2.37) but nothing
+     pulls a daily/weekly crash count into `founder-digest` or any other founder-facing surface —
+     it's fire-and-forget to Firebase's own console, which nobody routinely opens.
+  4. **No server-side error-rate view.** `public.client_errors` covers client-side telemetry
+     well (op_type/error_code breakdown, per the debugging skill's bug-class catalog), but there
+     is no equivalent aggregated "which Edge Function is erroring most, and at what rate" view —
+     only the coarse pass/fail signal `alert_edge_function_health` computes (and gap #2 shows
+     that signal has its own blind spot).
+- **Fix shape (not decided, sketched for whoever picks this up)**: each item needs its own
+  scoped design, likely as 4 independent small batches rather than one — they don't share a
+  root cause. (1) needs a real Razorpay-webhook-failure signal, not a subscription-count proxy.
+  (2) needs `alert_edge_function_health`'s data source widened to see 401s specifically (or a
+  parallel check keyed on gateway-level rejection, not `cron_call_log`). (3) needs a scheduled
+  pull from Crashlytics (via its API, or a summary written by the client on next launch) into
+  the existing digest/alerts pipeline. (4) needs either a `client_errors`-shaped server-side
+  telemetry sink, or extending the alert crons' aggregate queries to break down by function.
+- **Related**: found during — and referenced in — §8 ("Deferred") of
+  `docs/superpowers/specs/2026-09-13-telegram-admin-bot-design.md`. The Telegram admin bot
+  reports on top of what these checks already produce; it does not close any of these 4 gaps
+  itself.
