@@ -847,6 +847,54 @@ class ToolDispatcher {
       );
     }
 
+    // OI-189: sweep non-completed rows past plan_end BEFORE anything else —
+    // including the empty-set branch below — so an expired-phase user whose
+    // orphan rows keep isPhaseExpired() false gets them cleared even when
+    // there is nothing to write (OI-175 P1-A shape). Idempotent. No-op
+    // without a stored window. `removed` = every key deleted; `workouts` =
+    // the number the preview showed as clearsPastPhaseEnd.
+    final swept = await WorkoutScheduleReadService.instance
+        .sweepNonCompletedRowsPastPlanEnd();
+
+    // OI-189: an EMPTY cached set means plan() had nothing to lay out — the
+    // requested start is past plan_end, or every remaining day is completed.
+    // Before this the loop ran zero times and the tool reported success with
+    // count 0. The sweep above may have changed Hive, so the window push runs
+    // HERE too (_restoreWorkoutPlan would otherwise mirror the swept rows back
+    // from cloud on the next launch). Then:
+    //   swept.removed > 0  → SUCCESS with count 0 + cleared N. The sweep WAS
+    //                the work the preview promised, and execute() runs its
+    //                invalidate/sync/marker tail only on success — Home's
+    //                expired-card gate reads the non-autoDispose
+    //                todayWorkoutProvider, so a failure here would leave the
+    //                pre-sweep row on screen (round 3 F2). Keyed on `removed`,
+    //                not `workouts`: a rest-only sweep still changed Hive and
+    //                the calendar strip must re-read (round 4 F4).
+    //   swept.removed == 0 → failure, nothing changed. The cache is
+    //                deliberately NOT cleared on this branch (reject() never
+    //                clears either): the intent stays actionable and Retry
+    //                reproduces this message instead of "Open the diff
+    //                preview first".
+    if (rawSchedules.isEmpty) {
+      try {
+        await SyncService.instance.pushWorkoutPlanForSyncDomain();
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'regenerate_plan_block_refusal_plan_window_push'));
+      }
+      if (swept.removed > 0) {
+        RegeneratePlanPlanner.instance.clearCache(intent.id);
+        return ToolExecutionResult.success(data: {
+          'schedules': const <Map<String, dynamic>>[],
+          'count': 0,
+          'cleared': swept.workouts,
+        });
+      }
+      return const ToolExecutionResult.failure(
+        'Nothing left to regenerate in this phase.',
+      );
+    }
+
     final box = HiveService.instance.workoutBox;
     final results = <Map<String, dynamic>>[];
     final errors = <String>[];
@@ -927,12 +975,25 @@ class ToolDispatcher {
       await box.put('current_plan', splicedBlob);
     }
 
+    // OI-189 durability: execute()'s tail runs syncWorkoutData (rows only) and
+    // pushSnapshot (daily-snapshot EF) — neither carries plan_json, and
+    // _restoreWorkoutPlan mirrors the cloud copy back on every launch. Push
+    // the swept + spliced state now, after the blob write, before every
+    // return. Same block holdWeek carries; self-catching inside.
+    try {
+      await SyncService.instance.pushWorkoutPlanForSyncDomain();
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'regenerate_plan_block_plan_window_push'));
+    }
+
     RegeneratePlanPlanner.instance.clearCache(intent.id);
 
     if (errors.isEmpty) {
       return ToolExecutionResult.success(data: {
         'schedules': results,
         'count': results.length,
+        'cleared': swept.workouts,
       });
     } else if (results.isEmpty) {
       final aggregated = errors.join('; ');
@@ -949,6 +1010,7 @@ class ToolDispatcher {
       return ToolExecutionResult.success(data: {
         'schedules': results,
         'count': results.length,
+        'cleared': swept.workouts,
         'partial_errors': errors,
       });
     }
@@ -1041,6 +1103,15 @@ class ToolDispatcher {
     if (rawProfile is! Map) {
       return const ToolExecutionResult.failure('Profile not found.');
     }
+    // OI-189: same sweep as _executeRegeneratePlanBlock, placed after the
+    // last early return and before the profile write, so a goal change on an
+    // expired phase never leaves old-goal orphan rows behind. No refusal here:
+    // the goal change is the primary effect and zero rows is a legitimate
+    // outcome the preview already explained. A patchProfile throw after this
+    // point escapes to execute()'s catch without a push (round 3 F4) — same
+    // Hive-failure class as above.
+    final swept = await WorkoutScheduleReadService.instance
+        .sweepNonCompletedRowsPastPlanEnd();
     final oldGoal = (rawProfile['primary_goal'])?.toString();
     await ProfileWriteService.instance.patchProfile({
       'primary_goal': newGoal,
@@ -1120,6 +1191,16 @@ class ToolDispatcher {
       await wbox.put('current_plan', splicedBlob);
     }
 
+    // OI-189 durability: see _executeRegeneratePlanBlock — plan_json is not
+    // carried by execute()'s tail, and the sweep above must not be mirrored
+    // back from cloud on the next launch.
+    try {
+      await SyncService.instance.pushWorkoutPlanForSyncDomain();
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'switch_goal_plan_window_push'));
+    }
+
     RegeneratePlanPlanner.instance.clearCache(intent.id);
 
     if (errors.isEmpty) {
@@ -1128,6 +1209,7 @@ class ToolDispatcher {
         'new_goal': newGoal,
         'schedules': results,
         'count': results.length,
+        'cleared': swept.workouts,
       });
     } else if (results.isEmpty) {
       // Profile already changed but plan regen totally failed — surface the
@@ -1142,6 +1224,7 @@ class ToolDispatcher {
         'new_goal': newGoal,
         'schedules': results,
         'count': results.length,
+        'cleared': swept.workouts,
         'partial_errors': errors,
       });
     }

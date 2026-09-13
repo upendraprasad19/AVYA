@@ -194,6 +194,18 @@ class WorkoutScheduleReadService {
     // W3.5 (Batch 12-A): opt-in plateau escalation — the two fresh-advance callers
     // pass `pins == null`; every other caller defaults false → inert.
     bool applyPlateauEscalation = false,
+    // OI-189: push plan_json right after the rows ONLY on a phase advance.
+    // This writer is also reached from three boot/repair paths —
+    // auth_session_bootstrapper.dart:653 (reinstall / new-device sign-in on a
+    // FRESH Hive, which runs BEFORE restoring_screen starts the cloud
+    // restore), train_provider.dart:669 via _autoGeneratePlan (triggered at
+    // :713 with no plan AND at :742 when an EXISTING account's week-1 rows are
+    // lost — a repair, not an advance) and onboarding_provider.dart:554 — and
+    // a push from any of them would REPLACE the cloud plan_json (the only copy
+    // holding exercises + hold rows) with a fresh or repair plan that the
+    // restore then mirrors back. The facade does not forward this flag, so
+    // those callers cannot opt in by accident. Do NOT "fix" :742 by opting in.
+    bool pushPlanWindow = false,
   }) async {
     final exerciseBox = _hive.exerciseBox;
     if (exerciseBox.isEmpty) {
@@ -318,6 +330,26 @@ class WorkoutScheduleReadService {
       }
     }
 
+    // OI-189: a phase advance MOVES plan_start/plan_end (above) and until
+    // now pushed no plan_json — only weeklyFullSync did, ≤24h later. In
+    // between, PlanWindowReanchor treats the CLOUD window as authoritative on
+    // a phase advance (plan_window_reanchor.dart) and _restoreWorkoutPlan
+    // runs on every launch, so a same-day relaunch could revert the window to
+    // the previous phase (diagnose c9e4b7 — the founder account sat in that
+    // state). Harmless while nothing trusted plan_end; now the regen sweep
+    // does, and a reverted window would make this phase's rows look like
+    // orphans. Push the window the moment an ADVANCE moves it. Offline advance
+    // = residual on OI-174. Awaited (holdWeek precedent); _syncWorkoutPlan is
+    // self-catching, the try/catch covers the _ensureSessionOpen await.
+    if (pushPlanWindow) {
+      try {
+        await SyncService.instance.pushWorkoutPlanForSyncDomain();
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'generate_and_schedule_plan_window_push'));
+      }
+    }
+
     return plan;
   }
 
@@ -375,6 +407,12 @@ class WorkoutScheduleReadService {
         await workoutBox.delete(displacedKey);
       }
     }
+
+    // OI-189: the loop above reaches exactly plan_end and so does the write
+    // loop below — a row PAST plan_end is neither deleted nor rewritten by
+    // this regen. Sweep it (completed rows stay). No-op on first generation
+    // (no stored window). See sweepNonCompletedRowsPastPlanEnd for the why.
+    await sweepNonCompletedRowsPastPlanEnd();
 
     final monday = _normalizeToMonday(today);
     final endDate = monday.add(const Duration(days: 27));
@@ -559,6 +597,22 @@ class WorkoutScheduleReadService {
       }
     }
 
+    // OI-189 durability: the coalesced syncWorkoutData fan-out above runs
+    // _syncScheduledWorkouts only, and pushSnapshot is the daily-snapshot EF —
+    // neither carries plan_json. _restoreWorkoutPlan mirrors cloud plan_json
+    // back on EVERY launch (restoreLightweightAlways), so without this the
+    // swept rows come back tomorrow. Same block holdWeek carries
+    // (workout_schedule_write_service.dart:359-367). Self-catching inside;
+    // the try/catch guards the _ensureSessionOpen await outside it so a push
+    // hiccup can never surface a locally-committed regen as a failure.
+    // Silent no-op when current_plan is null (_syncWorkoutPlan).
+    try {
+      await SyncService.instance.pushWorkoutPlanForSyncDomain();
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'regen_from_date_plan_window_push'));
+    }
+
     return plan;
   }
 
@@ -616,6 +670,8 @@ class WorkoutScheduleReadService {
     final startDate = nextPhaseStartDate();
     await generateAndSchedule(
       goal: goal,
+      // OI-189: an advance moves the window — push it now (see the parameter).
+      pushPlanWindow: true,
       equipment: equipment,
       daysPerWeek: daysPerWeek,
       startDate: startDate,
@@ -1484,6 +1540,102 @@ class WorkoutScheduleReadService {
       if (!dD.isBefore(todayD)) return false; // a workout today-or-later
     }
     return true;
+  }
+
+  /// OI-189 (diagnose b9e4d1): remove every NON-completed `schedule_*` row and
+  /// every `displaced_*` shadow dated strictly after the STORED plan_end.
+  /// Returns `removed` — every key deleted (or, when [dryRun], that would be)
+  /// — and `workouts`, the subset of those rows whose type is neither rest
+  /// nor off: the number the coach preview shows ("N workouts … will be
+  /// cleared") and exactly the set [_scheduledWorkoutDays] keys the
+  /// phase-expiry on. Callers that change UI state branch on `removed`
+  /// (a rest-only sweep still changed Hive); copy uses `workouts`.
+  ///
+  /// Why: both regen writers stop their WRITE range at plan_end
+  /// (generateAndScheduleFromDate; RegeneratePlanPlanner.plan()), so a
+  /// row already past plan_end is neither rewritten nor deleted by a regen.
+  /// Such rows exist(ed) from the pre-Unit-2 Edit-Profile write loop, the
+  /// coach path before its own bound, and three user-directed writers that
+  /// accept an arbitrary date (assignTemplateToDate, the coach hotel workout,
+  /// the coach reschedule destination). Left alone they keep the OLD goal's
+  /// workouts after a goal change AND keep [isPhaseExpiredFrom] reporting the
+  /// phase alive, which blocks the next phase from ever generating (OI-174's
+  /// advance-delay half). Founder decision 2026-09-12: user-placed rows past
+  /// plan_end are swept too — the next phase's generation overwrites those
+  /// dates regardless, and while they exist that generation never runs.
+  ///
+  /// Completed rows are history and stay — the same rule the in-window delete
+  /// loop applies. Requires BOTH plan_start_date and plan_end_date: a restore
+  /// writes the keys independently (sync/sync_workout.dart) and that partial
+  /// state is not a window. Key scan, not a date loop: no horizon assumption
+  /// (the coach path could write up to 12 weeks); same shape as
+  /// [_scheduledWorkoutDays]. Local Hive only — every caller pushes plan_json
+  /// right after (SyncService.pushWorkoutPlanForSyncDomain, the holdWeek
+  /// precedent), because _restoreWorkoutPlan mirrors cloud plan_json back on
+  /// EVERY launch. The cloud `scheduled_workouts` copy is NOT pruned here
+  /// (OI-174, open).
+  ///
+  /// ⚠ This makes `plan_end_date` DESTRUCTIVE. It trusts the stored window;
+  /// a window mirrored back from a STALE cloud copy (diagnose c9e4b7 —
+  /// PlanWindowReanchor treats cloud as authoritative on a phase advance,
+  /// plan_window_reanchor.dart) would make the live phase's rows look like
+  /// orphans. That is why the two phase-advance sites now push plan_json the
+  /// moment they move the window (generateAndSchedule with the
+  /// pushPlanWindow flag set — the ONLY callers that set it) — an advance
+  /// that could not push (offline) leaves that revert window open until the
+  /// next successful push; recorded on OI-174.
+  Future<({int workouts, int removed})> sweepNonCompletedRowsPastPlanEnd(
+      {bool dryRun = false}) async {
+    const nothing = (workouts: 0, removed: 0);
+    final startStr = MigratedKey.read<String>(_planStartKey);
+    final endStr = MigratedKey.read<String>(_planEndKey);
+    if (startStr == null || endStr == null) return nothing;
+    final planEnd = DateTime.tryParse(endStr);
+    if (planEnd == null) return nothing;
+    final planEndDay = DateTime(planEnd.year, planEnd.month, planEnd.day);
+    const displacedPrefix = 'displaced_';
+    final box = _hive.workoutBox;
+    final doomed = <dynamic>[];
+    var workoutRows = 0;
+    for (final key in box.keys) {
+      final k = key.toString();
+      final isSchedule = k.startsWith(_schedulePrefix);
+      final isDisplaced = k.startsWith(displacedPrefix);
+      if (!isSchedule && !isDisplaced) continue;
+      final dateStr = isSchedule
+          ? k.substring(_schedulePrefix.length)
+          : k.substring(displacedPrefix.length);
+      final d = DateTime.tryParse(dateStr);
+      if (d == null) continue;
+      if (!DateTime(d.year, d.month, d.day).isAfter(planEndDay)) continue;
+      if (isSchedule) {
+        final v = box.get(key);
+        final status = v is Map ? (v['status'] as String? ?? '') : '';
+        if (status == 'completed') continue;
+        // Same predicate as _scheduledWorkoutDays below, so the count is
+        // exactly the set that keeps isPhaseExpiredFrom false.
+        final type = v is Map ? (v['type'] ?? '').toString() : '';
+        if (type != 'rest' && type != 'off') workoutRows++;
+      } else {
+        // OI-189 review B-2: a displaced_* shadow's own `status` was never
+        // read here, so a completed row backed up into `displaced_*` would
+        // have been swept like any other orphan. Today the only writer
+        // (template_service.dart's assignTemplateToDate) refuses to create
+        // one from a completed row — but that invariant lives in a
+        // different file, not here, so honour "completed rows are history
+        // and stay" for displaced rows too rather than borrow it.
+        final v = box.get(key);
+        final status = v is Map ? (v['status'] as String? ?? '') : '';
+        if (status == 'completed') continue;
+      }
+      doomed.add(key);
+    }
+    if (!dryRun) {
+      for (final key in doomed) {
+        await box.delete(key);
+      }
+    }
+    return (workouts: workoutRows, removed: doomed.length);
   }
 
   /// Dates of real (non-rest/off) scheduled workout days in the local schedule.

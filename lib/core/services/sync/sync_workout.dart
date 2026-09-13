@@ -2094,6 +2094,13 @@ extension SyncServiceWorkout on SyncService {
   }
 
   Future<void> pushWorkoutPlanForSyncDomain() async {
+    // OI-189: guard FIRST, like syncWorkoutData (:31) / pushSnapshot
+    // (sync_service.dart). The dev year-sim drives ~30 phase advances inside
+    // its pausedForSimulation window and each now pushes plan_json via
+    // generateAndSchedule(pushPlanWindow: true) — the exact per-write network
+    // storm that flag exists to prevent. Also covers holdWeek / deload pushes
+    // during a sim. Cloud catches up at the next weeklyFullSync, as before.
+    if (SyncService.pausedForSimulation) return;
     final userId = await _ensureSessionOpen();
     if (userId == null) return;
     await _syncWorkoutPlan(userId);

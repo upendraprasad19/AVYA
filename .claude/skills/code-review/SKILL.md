@@ -1430,3 +1430,53 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   latch means "I have already reported that THIS user is unentitled", so the only
   thing that may clear it is the user changing.
   False-alarm rate 0/1 → no change to the lens set.
+
+- **2026-09-13** — blast-radius **platform** — branch `oi189-plan-end-bound` (OI-189: every
+  phase-layout writer stops at `plan_end`, every regen sweeps rows already past it, every window
+  move pushes `plan_json` immediately; diagnose `b9e4d1`). **11 findings (1 P1, 6 P2, 4 P3); 1
+  false_alarm (9%).** 7 fixed in-batch (3 mutation-proven: M20/M21/M22), 2 correctly scoped OUT as
+  already-tracked residuals (OI-190, a new OI-174 bullet), 1 escalated to the founder (unresolved
+  as of this entry), 1 false_alarm (informational, no defect). Review:
+  `docs/reviews/oi189-plan-end-bound-bpass.md`. Run as TWO agents — reviewer A the 8 read-only
+  lenses, reviewer B the 2 mutation lenses (6, 8) dispatched only AFTER A returned, so no mutating
+  tree was ever shared between them (this skill's own dispatch-protocol step 0 concern, applied to
+  the REVIEWERS this time rather than to author/reviewer handoff).
+  **Tuning 1 — lens 8 (`asserted_fixture_value`) gains: a census that "gets a smaller number" on
+  independent reproduction is not automatically the ORIGINAL claim being wrong.** Reviewer B
+  reproduced the diagnose-doc's "92 files, 849 tests" census with its OWN best-effort basename
+  guess (the 8 touched `lib/` files + the test file = 9 terms) and got 87/784 — smaller, still
+  green, and reported as a discrepancy. The original 92 was in fact CORRECT; the missing tenth
+  basename was `workout_schedule_service.dart`, the FACADE the batch deliberately does NOT edit
+  **A "smaller but still
+  green" reproduction of a census claim is not proof the claim was inflated — it can just as
+  easily mean the reproducer's input set was narrower than the original's.** Same family as this
+  history's repeated input-set-width lessons, one direction further: here it was not the ORIGINAL
+  claim that undercounted, it was the VERIFICATION attempting to check it. Fix: name every
+  basename a census claim used, in the claim itself, not just the resulting numbers.
+  **Tuning 2 — lens 6 (`guard_without_its_mirror`) gains: a guard's own justifying COMMENT is a
+  checkable claim, and "the mirror is out of scope" is not the same as "the mirror doesn't
+  exist."** Two separate P2 findings in this pass (B-1, B-2) were guards whose own doc-comment
+  asserted safety for a case the guard's author had not actually traced: `pausedForSimulation`'s
+  comment claimed "cloud catches up at the next weeklyFullSync, as before" for a code path
+  (`simulation_service.dart`'s year-sim) that NEVER calls `weeklyFullSync` at all — the comment
+  was true for the app's real users and silently false for the one caller class this unit's own
+  guard was written to protect. **When a guard's comment names WHY the mirror case is safe, verify
+  that reasoning against the mirror caller specifically — a comment can be accurate for the common
+  case and false for an edge case the guard itself newly created.**
+  **Tuning 3 — a NEW instance for the "extract to a pure function" pattern this history has used
+  before (2026-08-20's label-ternary entry): TWO widgets carrying a BYTE-IDENTICAL private method
+  is itself the tell that neither was ever testable, and it is cheap to check BEFORE trusting
+  "the diff duplicates X, but both copies are correct" as a clean lens-9 result.** Reviewer A's
+  lens 9 check (`diff <(...) <(...)` on both widgets' `_phaseNote`/`_dayLabel`) correctly found
+  them identical and reported it as CLEAN — technically accurate, but it stopped one question
+  short: identical AND untestable is worse than either alone, since a future edit to one copy and
+  not the other would drift silently with nothing to catch it. Lens 9's method note now adds: when
+  a "modelled on X" check finds true byte-identity between two PRIVATE, per-class copies, that is
+  itself a finding (extract + test), not merely a clean result.
+  **A NEGATIVE result worth keeping, per this history's convention:** reviewer A independently
+  re-derived the plan's "review_rounds: 5" claim by counting the dated round headers in the Review
+  log itself, rather than trusting the plan-review record's frontmatter number — and it matched.
+  Both prod censuses were also re-run live, read-only, and matched exactly. Recording a confirmed
+  claim is as much the lens's job as catching a wrong one.
+  False-alarm rate 1/11 ≈ 9% → well under the 30% threshold; no lens removed. Lenses 6, 8, 9
+  extended per above.

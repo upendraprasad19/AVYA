@@ -59,8 +59,25 @@ class RegeneratePlanResult {
   /// non-completed workout-day rows beyond the first week).
   final int additionalDaysCount;
 
-  /// Total weeks in the regenerated block (1-12, matches the user request).
+  /// Weeks this block actually covers AFTER the phase-window bound
+  /// (0..requestedWeeks). 0 means the requested start is already past the
+  /// stored plan_end — nothing to lay out. OI-189.
   final int totalWeeks;
+
+  /// Weeks the user asked for (1-12) — kept so the preview can say honestly
+  /// when the block was shortened to fit the phase. OI-189.
+  final int requestedWeeks;
+
+  /// `YYYY-MM-DD` of the stored plan_end_date the block was bounded to, or
+  /// null when no window is stored (plan-less user: block is unbounded).
+  final String? phaseEndsOn;
+
+  /// Non-completed WORKOUT rows dated after plan_end that the COMMIT will
+  /// remove (dry-run of
+  /// WorkoutScheduleReadService.sweepNonCompletedRowsPastPlanEnd, `.workouts`
+  /// — rest rows and displaced_ shadows are removed too but not counted).
+  /// Preview-only number; plan() itself never deletes. OI-189.
+  final int clearsPastPhaseEnd;
 
   /// Effective goal used for generation (resolved from arg or profile).
   final String resolvedGoal;
@@ -75,6 +92,9 @@ class RegeneratePlanResult {
     required this.firstWeek,
     required this.additionalDaysCount,
     required this.totalWeeks,
+    required this.requestedWeeks,
+    required this.phaseEndsOn,
+    required this.clearsPastPhaseEnd,
     required this.resolvedGoal,
     required this.resolvedEquipment,
     required this.resolvedDaysPerWeek,
@@ -225,6 +245,29 @@ class RegeneratePlanPlanner {
         ? WorkoutScheduleReadService.rawWeekNumberFor(_today(), planStart)
         : 1;
 
+    // OI-189: the stored phase window is authoritative for EVERY plan() call,
+    // explicit startDate included — the same literal-date bound
+    // generateAndScheduleFromDate applies. A null window (plan-less user)
+    // keeps the old unbounded block. Date-only comparison on local midnights
+    // on BOTH sides (`start` is a local midnight from _today() or a date-only
+    // parse, but normalise anyway so a future caller cannot hand in a
+    // timestamp), never a week-bucket one (diagnose d7f3b2 sub-defect 1).
+    final readSvc = WorkoutScheduleReadService.instance;
+    final startDay = DateTime(start.year, start.month, start.day);
+    final rawPlanEnd = readSvc.getPlanEndDate();
+    final planEndDay = rawPlanEnd == null
+        ? null
+        : DateTime(rawPlanEnd.year, rawPlanEnd.month, rawPlanEnd.day);
+    final boundedWeeks = planEndDay == null
+        ? n
+        : (startDay.isAfter(planEndDay)
+            ? 0
+            : ((planEndDay.difference(startDay).inDays ~/ 7) + 1).clamp(1, n));
+    // Preview number only — the commit sites run the real sweep. `.workouts`
+    // is the user-facing count (rest rows and shadows go too, uncounted).
+    final clearsPastPhaseEnd =
+        (await readSvc.sweepNonCompletedRowsPastPlanEnd(dryRun: true)).workouts;
+
     for (var weekIdx = 0; weekIdx < n; weekIdx++) {
       // Real week number relative to planStart (not the 0-based
       // request-local weekIdx) — lets contentFlavorIndex cycle
@@ -258,6 +301,13 @@ class RegeneratePlanPlanner {
 
       for (var dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
         final d = weekStart.add(Duration(days: dayOfWeek));
+        // OI-189: never lay out a day past the stored plan_end. Normalised on
+        // both sides. Trailing-only by construction, so skipping cannot
+        // desynchronise workoutDayIndex for an earlier day.
+        if (planEndDay != null &&
+            DateTime(d.year, d.month, d.day).isAfter(planEndDay)) {
+          continue;
+        }
         final dateStr = _fmt(d);
         final scheduleKey = 'schedule_$dateStr';
         final existing = box.get(scheduleKey);
@@ -362,7 +412,10 @@ class RegeneratePlanPlanner {
     final result = RegeneratePlanResult(
       firstWeek: firstWeekDisplay,
       additionalDaysCount: additionalWorkoutDayCount,
-      totalWeeks: n,
+      totalWeeks: boundedWeeks,
+      requestedWeeks: n,
+      phaseEndsOn: planEndDay == null ? null : readSvc.dateKey(planEndDay),
+      clearsPastPhaseEnd: clearsPastPhaseEnd,
       resolvedGoal: resolvedGoal,
       resolvedEquipment: resolvedEquipment,
       resolvedDaysPerWeek: resolvedDays,

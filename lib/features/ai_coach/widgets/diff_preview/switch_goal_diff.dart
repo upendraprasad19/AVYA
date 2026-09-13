@@ -8,6 +8,7 @@ import '../../../../core/theme/colors.dart';
 import '../../models/tool_intent.dart';
 import '../../services/regenerate_plan_planner.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'phase_note.dart';
 
 /// Diff preview for a `switch_goal` intent (Phase D.5).
 ///
@@ -151,15 +152,27 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
                 ],
               ),
               const SizedBox(height: 6),
+              // OI-189: honest week count (bounded), and when the block is
+              // empty the phase note replaces the regen sentence.
               Text(
-                'Profile will be updated and the next ${_plan!.totalWeeks} '
-                'week${_plan!.totalWeeks == 1 ? '' : 's'} regenerated.',
+                _plan!.totalWeeks == 0
+                    ? 'Profile will be updated. ${_phaseNote(_plan!)!}'
+                    : 'Profile will be updated and the next ${_plan!.totalWeeks} '
+                        'week${_plan!.totalWeeks == 1 ? '' : 's'} regenerated.',
                 style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
               ),
+              if (_plan!.totalWeeks > 0 && _phaseNote(_plan!) != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _phaseNote(_plan!)!,
+                  style: AppTypography.body.copyWith(fontSize: 11, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+                ),
+              ],
             ],
           ),
         ),
 
+        if (_plan!.totalWeeks > 0) ...[
         // First week eyebrow
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
@@ -182,9 +195,14 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
             ),
           ),
         ],
+        ],
       ],
     );
   }
+
+  /// OI-189: the phase-window note — null when the block fits the phase AND
+  /// nothing past plan_end will be cleared (nothing to say).
+  String? _phaseNote(RegeneratePlanResult plan) => phaseNote(plan);
 
   Widget _buildDayCard(RegeneratePlanDay day) {
     return Container(
@@ -261,11 +279,7 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
     );
   }
 
-  String _dayLabel(String date) {
-    final d = DateTime.parse(date);
-    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return '${names[d.weekday - 1]} ${d.month}/${d.day}';
-  }
+  String _dayLabel(String date) => phaseDayLabel(date);
 
   String _humanGoal(String raw) {
     switch (raw) {
