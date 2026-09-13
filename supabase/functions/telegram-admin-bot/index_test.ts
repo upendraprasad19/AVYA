@@ -130,6 +130,7 @@ Deno.test("cmdStatus formats alert count, signups, and reports the ops RPC's cro
   assertStringIncludes(text, "Signups today: 2");
   assertStringIncludes(text, "Open alerts: 1");
   assertStringIncludes(text, "PRO active: 5");
+  assertStringIncludes(text, "Cron failures (24h): 0");
 });
 
 Deno.test("cmdRevenue reports active subscription counts by plan and MRR", async () => {
@@ -146,7 +147,7 @@ Deno.test("cmdRevenue reports active subscription counts by plan and MRR", async
   const text = await cmdRevenue(fake);
   assertStringIncludes(text, "monthly: 2");
   assertStringIncludes(text, "yearly: 1");
-  assertStringIncludes(text, "MRR");
+  assertStringIncludes(text, "MRR: ₹948");
 });
 
 Deno.test("cmdSubs reports today's and yesterday's new subscriptions by plan", async () => {
@@ -166,18 +167,26 @@ Deno.test("cmdSubs reports today's and yesterday's new subscriptions by plan", a
 });
 
 Deno.test("cmdExpiring reports 7d and 30d counts", async () => {
+  let lteCallCount = 0;
   const fake = {
     from: () => ({
       select: () => ({
         not: () => ({
           gte: () => ({
-            lte: () => Promise.resolve({ count: 4, data: null, error: null }),
+            lte: () => {
+              lteCallCount++;
+              if (lteCallCount === 1) {
+                return Promise.resolve({ count: 3, data: null, error: null }); // 7d: 3
+              } else {
+                return Promise.resolve({ count: 9, data: null, error: null }); // 30d: 9
+              }
+            },
           }),
         }),
       }),
     }),
   };
   const text = await cmdExpiring(fake);
-  assertStringIncludes(text, "7d:");
-  assertStringIncludes(text, "30d:");
+  assertStringIncludes(text, "7d: 3");
+  assertStringIncludes(text, "30d: 9");
 });
