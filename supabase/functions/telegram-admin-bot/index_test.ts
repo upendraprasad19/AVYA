@@ -6,7 +6,7 @@ Deno.env.set("FOUNDER_TELEGRAM_CHAT_ID", "12345");
 Deno.env.set("TELEGRAM_BOT_TOKEN", "dummy-telegram-token");
 
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, cmdExpiring } from "./index.ts";
+import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, cmdExpiring, cmdUsers, cmdFind, cmdUser, looksLikeUuid } from "./index.ts";
 
 Deno.test("isAuthorizedTelegramSender requires BOTH the secret token and the chat id to match", () => {
   const base = { expectedSecretToken: "s3cr3t", expectedChatId: "12345" };
@@ -189,4 +189,112 @@ Deno.test("cmdExpiring reports 7d and 30d counts", async () => {
   const text = await cmdExpiring(fake);
   assertStringIncludes(text, "7d: 3");
   assertStringIncludes(text, "30d: 9");
+});
+
+Deno.test("looksLikeUuid recognizes a v4-shaped uuid and rejects an email", () => {
+  assertEquals(looksLikeUuid("12345678-abcd-4ef0-9234-56789abcdef0"), true);
+  assertEquals(looksLikeUuid("founder@example.com"), false);
+});
+
+Deno.test("cmdUsers with no page arg fetches page 1 (offset 0, limit 10)", async () => {
+  let capturedRange: [number, number] | null = null;
+  const fake = {
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          range: (from: number, to: number) => {
+            capturedRange = [from, to];
+            return Promise.resolve({
+              data: [{ id: "u1", email: "a@example.com", created_at: "2026-09-10T00:00:00Z" }],
+              error: null,
+            });
+          },
+        }),
+      }),
+    }),
+  };
+  const text = await cmdUsers(fake, []);
+  assertEquals(capturedRange, [0, 9]);
+  assertStringIncludes(text, "a@example.com");
+  assertStringIncludes(text, "page 1");
+});
+
+Deno.test("cmdUsers with page 2 offsets by 10", async () => {
+  let capturedRange: [number, number] | null = null;
+  const fake = {
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          range: (from: number, to: number) => {
+            capturedRange = [from, to];
+            return Promise.resolve({ data: [], error: null });
+          },
+        }),
+      }),
+    }),
+  };
+  await cmdUsers(fake, ["2"]);
+  assertEquals(capturedRange, [10, 19]);
+});
+
+Deno.test("cmdFind with no query text returns a usage hint, not an error", async () => {
+  const text = await cmdFind({}, []);
+  assertStringIncludes(text.toLowerCase(), "usage");
+});
+
+Deno.test("cmdFind searches both email and full_name", async () => {
+  let capturedFilter: string | null = null;
+  const fake = {
+    from: () => ({
+      select: () => ({
+        or: (filter: string) => {
+          capturedFilter = filter;
+          return {
+            limit: () => Promise.resolve({
+              data: [{ id: "u1", email: "match@example.com", full_name: "Match Name" }],
+              error: null,
+            }),
+          };
+        },
+      }),
+    }),
+  };
+  const text = await cmdFind(fake, ["match"]);
+  assertStringIncludes(capturedFilter!, "match");
+  assertStringIncludes(text, "match@example.com");
+});
+
+Deno.test("cmdUser with no args returns a usage hint", async () => {
+  const text = await cmdUser({}, []);
+  assertStringIncludes(text.toLowerCase(), "usage");
+});
+
+Deno.test("cmdUser routes a uuid-shaped arg to an id lookup and an email-shaped arg to an email lookup", async () => {
+  let usedColumn: string | null = null;
+  const fake = {
+    from: () => ({
+      select: () => ({
+        eq: (col: string) => {
+          usedColumn = col;
+          return { maybeSingle: () => Promise.resolve({ data: null, error: null }) };
+        },
+      }),
+    }),
+  };
+  await cmdUser(fake, ["12345678-abcd-4ef0-9234-56789abcdef0"]);
+  assertEquals(usedColumn, "id");
+  await cmdUser(fake, ["someone@example.com"]);
+  assertEquals(usedColumn, "email");
+});
+
+Deno.test("cmdUser reports 'not found' rather than a raw null/error for a missing user", async () => {
+  const fake = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+      }),
+    }),
+  };
+  const text = await cmdUser(fake, ["nobody@example.com"]);
+  assertStringIncludes(text.toLowerCase(), "not found");
 });

@@ -213,6 +213,97 @@ export async function cmdExpiring(supabase: any): Promise<string> {
   return `<b>Expiring soon</b>\n7d: ${r7.count ?? 0}\n30d: ${r30.count ?? 0}`;
 }
 
+const USERS_PAGE_SIZE = 10;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Pure. */
+export function looksLikeUuid(s: string): boolean {
+  return UUID_RE.test(s.trim());
+}
+
+// deno-lint-ignore no-explicit-any
+export async function cmdUsers(supabase: any, args: string[]): Promise<string> {
+  const page = Math.max(1, parseInt(args[0] ?? "1", 10) || 1);
+  const from = (page - 1) * USERS_PAGE_SIZE;
+  const to = from + USERS_PAGE_SIZE - 1;
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, created_at")
+    .order("created_at", { ascending: false })
+    .range(from, to);
+  if (error) throw error;
+  const rows = data ?? [];
+  if (rows.length === 0) {
+    return `<b>Users — page ${page}</b>\nnone`;
+  }
+  const lines = [`<b>Users — page ${page}</b>`];
+  for (const u of rows) {
+    lines.push(`${escapeHtml(u.email ?? "(no email)")} — ${u.id.slice(0, 8)}`);
+  }
+  lines.push(`\n/users ${page + 1} for more`);
+  return lines.join("\n");
+}
+
+// deno-lint-ignore no-explicit-any
+export async function cmdFind(supabase: any, args: string[]): Promise<string> {
+  const query = args.join(" ").trim();
+  if (!query) {
+    return "Usage: /find <partial name or email>";
+  }
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, full_name")
+    .or(`email.ilike.%${query}%,full_name.ilike.%${query}%`)
+    .limit(10);
+  if (error) throw error;
+  const rows = data ?? [];
+  if (rows.length === 0) {
+    return `No users match "${escapeHtml(query)}".`;
+  }
+  const lines = [`<b>Matches for "${escapeHtml(query)}"</b>`];
+  for (const u of rows) {
+    lines.push(`${escapeHtml(u.full_name ?? "(no name)")} — ${escapeHtml(u.email ?? "(no email)")} — ${u.id.slice(0, 8)}`);
+  }
+  return lines.join("\n");
+}
+
+// deno-lint-ignore no-explicit-any
+export async function cmdUser(supabase: any, args: string[]): Promise<string> {
+  const query = args[0]?.trim();
+  if (!query) {
+    return "Usage: /user <email-or-id>";
+  }
+  const column = looksLikeUuid(query) ? "id" : "email";
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, full_name, created_at, last_active_at, subscription_expires_at")
+    .eq(column, query)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    return `User not found for "${escapeHtml(query)}".`;
+  }
+  // Entitlement per this batch's Global Constraints: read `subscriptions`
+  // (status='active'), never users.subscription_status.
+  const { data: sub, error: subError } = await supabase
+    .from("subscriptions")
+    .select("plan, status, end_date")
+    .eq("user_id", data.id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (subError) throw subError;
+
+  const lines = [
+    `<b>${escapeHtml(data.full_name ?? "(no name)")}</b>`,
+    escapeHtml(data.email ?? "(no email)"),
+    `id: ${data.id.slice(0, 8)}`,
+    `signed up: ${data.created_at?.slice(0, 10) ?? "unknown"}`,
+    `last active: ${data.last_active_at?.slice(0, 10) ?? "never"}`,
+    sub ? `plan: ${escapeHtml(sub.plan)} (ends ${sub.end_date?.slice(0, 10) ?? "?"})` : "plan: free",
+  ];
+  return lines.join("\n");
+}
+
 export async function routeCommand(
   cmd: string,
   args: string[],
@@ -230,6 +321,12 @@ export async function routeCommand(
       return cmdSubs(supabase);
     case "expiring":
       return cmdExpiring(supabase);
+    case "users":
+      return cmdUsers(supabase, args);
+    case "find":
+      return cmdFind(supabase, args);
+    case "user":
+      return cmdUser(supabase, args);
     default:
       return `Unknown command: /${cmd}. Try /help.`;
   }
