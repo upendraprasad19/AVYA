@@ -601,10 +601,27 @@ function makeEmptyDigestFake() {
       eq: (_col: string, _val?: unknown) => builder,
       gte: (_col: string, _val?: unknown) => builder,
       lt: (_col: string, _val?: unknown) => builder,
-      lte: (_col: string, _val?: unknown) => builder,
       not: (_col: string, _op?: string, _val?: unknown) => builder,
       order: (_col: string, _opts?: Record<string, unknown>) => builder,
       // Terminal methods that return Promises
+      //
+      // `.lte()` is terminal here, not intermediate: readDigestSections'
+      // expiringSoonRead (founder_digest_content.ts:484-510) is the ONLY
+      // caller of `.lte()` in this module and awaits it directly (no
+      // trailing .order()/.range()/.limit()), reading `r7.count`/`r7.error`
+      // off the result directly. Grepped: `.lte(` has exactly 2 call sites
+      // in founder_digest_content.ts, both this one pair, neither chained
+      // further. Matching the real terminal shape here is a structural-
+      // fidelity fix, not a mutation-sensitivity one — a 0-valued count is
+      // indistinguishable whether it comes from this Promise's explicit 0
+      // or from a broken chainable `.lte()`'s `undefined ?? 0` fallback, so
+      // no assertion on THIS fixture's zero counts can catch a regression
+      // here; only a nonzero fixture could, which would conflict with this
+      // test's "empty digest" premise.
+      lte: (_col: string, _val?: unknown) => Promise.resolve({
+        count: 0,
+        error: null,
+      }),
       range: (_from: number, _to: number) => Promise.resolve({
         rows: [],
         data: [],
@@ -638,6 +655,7 @@ Deno.test("cmdDigest builds text via the shared founder_digest_content module, n
   assertStringIncludes(text, "<b>Top users</b>: none");
   assertStringIncludes(text, "<b>Alerts yesterday</b>: none");
   assertStringIncludes(text, "<b>Subscriptions (new, yesterday)</b>\nnone");
+  assertStringIncludes(text, "7d: 0 · 30d: 0");
   // Ensure "unreadable" marker never appears — which would indicate a chain failure
   assertEquals(text.includes("unreadable"), false);
 });

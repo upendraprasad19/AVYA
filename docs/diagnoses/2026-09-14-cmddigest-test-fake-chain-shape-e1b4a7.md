@@ -16,10 +16,10 @@ sot_registry_entry: |
   writer-reader contract change. cmdDigest's own implementation was already correct;
   only its test fake was wrong.
 writers:
-  - { file: supabase/functions/telegram-admin-bot/index_test.ts, method_or_widget: makeEmptyDigestFake, line: 1 }
+  - { file: supabase/functions/telegram-admin-bot/index_test.ts, method_or_widget: makeEmptyDigestFake, line: 596 }
 readers:
   - { file: supabase/functions/_shared/paged_fetch.ts, method_or_widget: fetchAllPages, line: 225 }
-  - { file: supabase/functions/_shared/founder_digest_content.ts, method_or_widget: readDigestSections, line: 420 }
+  - { file: supabase/functions/_shared/founder_digest_content.ts, method_or_widget: readDigestSections, line: 369 }
 hive_key_prefix: null
 hive_key_formula: null
 sync_methods: []
