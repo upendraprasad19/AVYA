@@ -35,12 +35,31 @@ const FREE_IMAGE_ANALYSIS_QUOTA_KEY = "free_image_analysis";
 // conjunct would recreate the original bug inside the new table.
 const LIFETIME_WINDOW = "1970-01-01T00:00:00+00:00";
 
-// H-23 (audit-2026-05-11) — PRO daily image-chat soft cap. Pre-fix
-// PRO image-chat had NO rate limit, so a compromised PRO token =
-// unlimited Gemini-vision fanout. Picked at a level no legitimate
-// PRO user would hit (50/day = ~2 photos/hour over a 24-hour
-// window) while a stolen token can't drain Gemini quota in minutes.
+// H-23 (audit-2026-05-11) — PRO daily image-chat cap. Pre-fix PRO
+// image-chat had NO rate limit, so a compromised PRO token = unlimited
+// Gemini-vision fanout. Picked at a level no legitimate PRO user would hit
+// (50/day = ~2 photos/hour over a 24-hour window) while a stolen token can't
+// drain Gemini quota in minutes.
+//
+// OI-153 (2026-09-12) — the cap now lives on `usage_counters` via
+// `consume_quota`, keyed per IST day. The previous gate counted
+// `ai_coach_interactions` rows on channels NOTHING wrote, so it had never
+// fired (0 rows, ever), and PRO video matched neither tier branch and was
+// uncapped. The check-and-increment is ATOMIC and runs BEFORE the Gemini
+// call, so N concurrent requests cannot each read "under the cap" and all
+// reach Gemini — an advisory read cannot bound spend, which is the one
+// thing this cap exists to do. Founder decision 2026-09-12: 50 images /
+// 10 videos per IST day, reset at midnight IST, an in-app coach reply
+// (not the paywall) when reached.
+//
+// ⚠ ONE quota_key => ONE call site => ONE limit (sot_registry
+// `usage_quota_ledger`), same as the free key above. Both keys have exactly
+// one call site, below.
 const PRO_IMAGE_DAILY_CAP = 50;
+const PRO_VIDEO_DAILY_CAP = 10;
+const PRO_IMAGE_QUOTA_KEY = "pro_image_daily";
+const PRO_VIDEO_QUOTA_KEY = "pro_video_daily";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000; // IST has no DST; an IST day is always 24h
 
 /**
  * Bug 2026-05-16 photo-analysis-500 — typed error class so the catch
@@ -125,28 +144,6 @@ async function readFreeImageQuota(
   }
 }
 
-/**
- * H-23 (audit-2026-05-11) — counts the PRO user's image analyses
- * for the current IST day. Returns 0 on any error (fail-open — the
- * soft cap is a defense-in-depth gate, not a hard accounting one).
- */
-async function countProImageAnalysesToday(
-  client: SupabaseClient,
-  userId: string,
-): Promise<number> {
-  try {
-    const { count, error } = await client
-      .from("ai_coach_interactions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .in("channel", ["pro_image_analysis", "image_analysis"])
-      .gte("created_at", istDayStartIso());
-    if (error) return 0;
-    return count ?? 0;
-  } catch (_) {
-    return 0;
-  }
-}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -404,7 +401,16 @@ serve(async (req: Request) => {
     // F14 · Test #9 — PRO check is now a TIER FLAG, not an early bail.
     // Free users still hit this endpoint; they get 5 lifetime image
     // analyses (counted below) and a paywall for video.
-    const { data: subscription } = await supabaseClient
+    //
+    // OI-153 — the read's `error` is CAPTURED (it was discarded). A PostgREST
+    // fault on this table alone, with the ledger fine, used to yield
+    // `isPro=false`: a paying user's photo then took the FREE path, spent a
+    // lifetime free unit they do not own, and the reply ended in an upgrade
+    // CTA. `.maybeSingle()` returns `data: null, error: null` for a user with
+    // NO row — a free user is never an error here — so `subscriptionError`
+    // means exactly "the tier is unknown", and the request is refused below
+    // with copy that says so, for both tiers.
+    const { data: subscription, error: subscriptionError } = await supabaseClient
       .from("subscriptions")
       .select("status, end_date")
       .eq("user_id", userId)
@@ -465,6 +471,43 @@ serve(async (req: Request) => {
     const isVideo = (typeof media_type === "string" ? media_type : "")
       .toLowerCase()
       .startsWith("video");
+
+    // OI-153 — PRO daily-cap inputs, declared at FUNCTION scope so both the
+    // gate (below the Storage fetch) and the success response can see them.
+    // A block-scoped `const` inside `if (isPro) {` would be TS2304 at
+    // `deno check`, which only CI runs.
+    const proWindowStart = istDayStartIso();
+    const proQuotaKey = isVideo ? PRO_VIDEO_QUOTA_KEY : PRO_IMAGE_QUOTA_KEY;
+    const proCap = isVideo ? PRO_VIDEO_DAILY_CAP : PRO_IMAGE_DAILY_CAP;
+    let proDailyUsed: number | null = null;
+
+    // OI-153 — tier UNKNOWN: refuse honestly, for either tier, with copy that
+    // says "not a limit". The alternative (treat as free) silently mis-serves
+    // every paying user during a partial outage of the `subscriptions` read.
+    if (subscriptionError) {
+      console.error(
+        `[ai-media-proxy] subscription tier UNREADABLE for user=${userId}` +
+          ` — refusing rather than defaulting to the free tier:`,
+        subscriptionError.message,
+      );
+      return new Response(
+        JSON.stringify({
+          reply: isVideo
+            ? COACH_REPLIES.videoLedgerUnavailable
+            : COACH_REPLIES.imageLedgerUnavailable,
+          model_used: "gated",
+          tokens_used: 0,
+          actions: [],
+          gated: true,
+          gate_reason: "tier_unavailable",
+          stored_url: media_url,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
     // F15 · TODO server-side video duration validation deferred — client cap
     // (pickVideo maxDuration: Duration(seconds: 30)) is primary enforcement
@@ -578,37 +621,10 @@ serve(async (req: Request) => {
       }
     }
 
-    // H-23 (audit-2026-05-11) — PRO daily image-chat soft cap.
-    // Pre-fix PRO image-chat had no rate limit at all — a compromised
-    // PRO token could drain Gemini quota. Soft cap of 50/day per
-    // user is well above legitimate use but stops abuse cold.
-    // IST-day window via istDayStartIso() (matches the rest of the
-    // codebase post-H-4..H-10 sweep).
-    if (!isVideo && isPro) {
-      const proUsedToday = await countProImageAnalysesToday(
-        supabaseClient,
-        userId,
-      );
-      if (proUsedToday >= PRO_IMAGE_DAILY_CAP) {
-        return new Response(
-          JSON.stringify({
-            error:
-              "Daily image analysis limit reached. Try again tomorrow.",
-            code: "RATE_LIMITED",
-            limit: PRO_IMAGE_DAILY_CAP,
-            used_today: proUsedToday,
-          }),
-          {
-            status: 429,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-              "Retry-After": "3600",
-            },
-          },
-        );
-      }
-    }
+    // OI-153 — the PRO daily cap is enforced BELOW, after the Storage fetch
+    // and before the Gemini call (see the consume_quota block there). It is
+    // deliberately not a read-then-decide gate at this point: only the atomic
+    // check-and-increment bounds spend under concurrency.
 
     // Build system prompt (same as ai-proxy-pro + image analysis instructions)
     let systemPrompt = asAuthoredPrompt(
@@ -691,6 +707,91 @@ serve(async (req: Request) => {
       media_url,
       userId,
     );
+
+    // OI-153 — PRO daily cap: ONE atomic check-and-increment on the ledger.
+    //
+    // Placement is load-bearing in both directions. AFTER the fetch, so a
+    // 5 MB reject, a Storage 404 propagation race (the client retries those)
+    // or a user-scope 403 never spends a unit. BEFORE Gemini, so the spend is
+    // bounded: `consume_quota` increments only `WHERE used < p_limit`
+    // (migration 128) and returns -1 to everyone past it, so N concurrent
+    // requests cannot all reach Gemini the way they could past an advisory
+    // read. What this charges for, stated: a Gemini timeout/5xx after a
+    // successful consume spends a unit (the client retries a 502 up to 3
+    // times, so one photo during an outage can spend up to 4). There is no
+    // decrement RPC and none is added — a daily unit is cheap, the outage rare.
+    //
+    // Fails CLOSED on an RPC error, like the free path and verify-payment:
+    // in a partial fault (a grant/RLS regression on `usage_counters`)
+    // fail-open would run PRO analyses unmetered with nothing reporting it.
+    // The free path keeps its consume-AFTER-delivery shape because its unit
+    // is LIFETIME — a spent-but-undelivered lifetime unit is unrecoverable.
+    if (isPro) {
+      const { data: proCount, error: proConsumeError } = await supabaseClient
+        .rpc("consume_quota", {
+          p_user_id: userId,
+          p_quota_key: proQuotaKey,
+          p_window_start: proWindowStart,
+          p_limit: proCap,
+        });
+      if (proConsumeError) {
+        console.error(
+          `[ai-media-proxy] PRO quota ledger UNREADABLE for user=${userId}` +
+            ` key=${proQuotaKey} — refusing rather than running unmetered:`,
+          proConsumeError.message,
+        );
+        return new Response(
+          JSON.stringify({
+            reply: isVideo
+              ? COACH_REPLIES.videoLedgerUnavailable
+              : COACH_REPLIES.imageLedgerUnavailable,
+            model_used: "gated",
+            tokens_used: 0,
+            actions: [],
+            gated: true,
+            gate_reason: "pro_quota_unavailable",
+            stored_url: media_url,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      } else if (proCount === -1) {
+        // `-1` neither increments nor touches `updated_at` (128), so the
+        // ledger row cannot distinguish 51 refusals from 5,000 — this warn
+        // is the only refusal telemetry.
+        console.warn(
+          `[ai-media-proxy] PRO daily cap hit user=${userId}` +
+            ` key=${proQuotaKey} cap=${proCap}`,
+        );
+        const resetsAt = istDayStartIso(new Date(Date.now() + ONE_DAY_MS));
+        return new Response(
+          JSON.stringify({
+            reply: isVideo
+              ? COACH_REPLIES.proVideoDailyCapReached(proCap)
+              : COACH_REPLIES.proImageDailyCapReached(proCap),
+            model_used: "gated",
+            tokens_used: 0,
+            actions: [],
+            gated: true,
+            gate_reason: isVideo
+              ? "pro_video_daily_limit_reached"
+              : "pro_image_daily_limit_reached",
+            pro_daily_used: proCap,
+            pro_daily_limit: proCap,
+            resets_at: resetsAt,
+            stored_url: media_url,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      } else {
+        proDailyUsed = proCount as number;
+      }
+    }
 
     // Single Gemini call (Flash Lite is the vision SKU). No fallback —
     // already on the cheapest Gemini SKU; falling back to the same model
@@ -847,6 +948,9 @@ serve(async (req: Request) => {
         free_image_limit: isFreeImageAnalysis
           ? FREE_IMAGE_ANALYSIS_LIMIT
           : null,
+        // OI-153 — null/null for non-PRO. The client ignores unknown keys.
+        pro_daily_used: proDailyUsed,
+        pro_daily_limit: isPro ? proCap : null,
       }),
       {
         status: 200,

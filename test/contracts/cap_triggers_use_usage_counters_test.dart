@@ -14,6 +14,16 @@
 // `dart run scripts/check_onconflict_live_arbiter.dart --sql <file>`.
 // Saying so explicitly because rule 21 is emphatic that a source-grep counts
 // for PRESENCE only, and this file would otherwise read as more than it is.
+//
+// OI-153 (2026-09-12) REPOINT: this file used to assert that all three
+// triggers resolve to the SAME migration (129) — a proxy for "none was left
+// behind on a pre-129 count(*) body". Migration 132 redefines ONLY the vision
+// trigger (a NULL-channel guard), so "same file" stopped being true while the
+// property it stood for still holds. Each trigger is now resolved to its OWN
+// latest definer and required to be ≥ 129; the backfill assertion is pinned
+// to 129 BY NAME, because the backfill is a one-time event that lives there
+// whatever is redefined later. Review round 2 found this; without it every
+// test in this file would have errored in `setUpAll` the moment 132 existed.
 
 import 'dart:io';
 
@@ -51,26 +61,31 @@ const _gatedChannels = <String>[
 
 void main() {
   group('OI-162 slice 2 — cap triggers consume usage_counters', () {
-    late File migration;
+    /// The migration that carried the one-time backfill of the current IST
+    /// window. Pinned by NAME (see the header): later migrations may redefine
+    /// a trigger, but the backfill happened exactly once, here.
+    final backfillMigration =
+        File('supabase/migrations/129_cap_triggers_use_usage_counters.sql');
+    late Map<String, File> definerOf;
     late Map<String, String> blocks;
 
     setUpAll(() {
-      final resolved = <String, String>{};
+      definerOf = {};
       for (final name in _triggers.keys) {
         final f = latestMigrationDefining(name);
         expect(f, isNotNull, reason: 'no migration defines $name');
-        // Every trigger's LIVE definition must now be the same migration —
-        // otherwise one of them was left behind on its old count(*) body.
-        resolved[name] = f!.path;
+        // Every trigger's LIVE definition must be 129 or LATER — none may be
+        // left behind on its old count(*) body. `latestMigrationDefining`
+        // returns the highest-numbered definer, so a trigger whose last
+        // definition predates 129 is exactly the regression this catches.
+        final n = migrationNumber(f!.uri.pathSegments.last);
+        expect(n, greaterThanOrEqualTo(129),
+            reason: '$name resolves to migration $n — a pre-ledger body');
+        definerOf[name] = f;
       }
-      final distinct = resolved.values.toSet();
-      expect(distinct, hasLength(1),
-          reason: 'all three triggers must be redefined together; got $resolved');
-      migration = File(distinct.single);
-
       blocks = {
         for (final name in _triggers.keys)
-          name: functionBlock(migration.readAsStringSync(), name)!,
+          name: functionBlock(definerOf[name]!.readAsStringSync(), name)!,
       };
     });
 
@@ -147,7 +162,7 @@ void main() {
     test('the current IST window is backfilled before the triggers switch', () {
       // Without this, swapping the source hands every user a fresh allowance
       // for the current window.
-      final sql = migration.readAsStringSync();
+      final sql = backfillMigration.readAsStringSync();
       final backfill = sql.indexOf('INSERT INTO public.usage_counters');
       final firstReplace = sql.indexOf('CREATE OR REPLACE FUNCTION');
       expect(backfill, greaterThanOrEqualTo(0), reason: 'no backfill present');

@@ -10293,11 +10293,12 @@ concepts:
       ⚠ ONE quota_key => ONE call site => ONE limit. `consume_quota`'s `p_limit`
       is a per-CALL argument, so two callers naming this key with different
       limits would silently disagree and nothing in SQL holds it. This key has
-      exactly one call site. Note ai-media-proxy has TWO quotas and therefore
-      needs TWO keys — the PRO per-day cap is NOT this key and is NOT migrated
-      (OI-153, dormant: nothing writes 'pro_image_analysis'/'image_analysis',
-      verified in code and in prod data, so migrating it would ACTIVATE a cap
-      that has never fired — a product decision).
+      exactly one call site. Note ai-media-proxy has THREE quotas and therefore
+      THREE keys — the PRO per-day caps are NOT this key: they are
+      `pro_image_daily` / `pro_video_daily`, registered as their own concept
+      `pro_media_daily_caps` below (OI-153, 2026-09-12 — the founder decided
+      to activate the cap that had never fired, at 50/day, and to add a 10/day
+      video cap).
     writers:
       - file: supabase/functions/ai-media-proxy/index.ts
         method: serve handler — conversation-log insert
@@ -10341,6 +10342,89 @@ concepts:
           The pre-fix code ran a full re-count here on every request — a second
           reader of the pruned log, and a wasted round trip. On an RPC error the
           counter line is OMITTED rather than filled with a fabricated number.
+    hive:
+      box: "n/a — server-side gate, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: usage_counters
+      columns: [user_id, quota_key, window_start, used, updated_at]
+    sync_methods: []
+
+  # OI-153 (2026-09-12) — the PRO tier's per-IST-day media caps: 50 image
+  # reads, 10 video reads. Registered as its own concept, one concept per
+  # gate, like media_free_image_lifetime_gate above. The LAST of the ten
+  # quota readers that derived their count from the pruned `ai_coach_
+  # interactions` log (OI-162 slices 1-4 moved the other nine).
+  - concept: pro_media_daily_caps
+    domain: ai_coach
+    behavioral_test_path: test/contracts/pro_media_daily_caps_writer_to_reader_test.dart
+    presence_only: true  # Deno Edge Function — `serve(async (req) => {…})` with no exports, so no importable surface exists to round-trip in Dart. CI `deno check` (and, since 2026-09-12, a local Deno) is the compile proof; the live-ledger behaviour is proven by test/sql/oi153_pro_media_caps_live_verify.sql inside BEGIN…ROLLBACK (rule 21 honesty).
+    description: |
+      "Has this PRO user spent today's 50 image reads (or 10 video reads)?" —
+      the per-IST-day ceiling on Gemini Vision fan-out from a PRO token. Reset
+      at midnight IST; a reached cap returns an in-app coach reply (HTTP 200,
+      `gated: true`), never the paywall — the reader already pays.
+
+      ⚠ REWIRED by OI-153 (2026-09-12). The H-23 gate (audit 2026-05-11)
+      counted `ai_coach_interactions` rows on channels `pro_image_analysis` /
+      `image_analysis`, which NOTHING has ever written — 0 rows in the table's
+      whole history — so `used >= 50` was structurally false and the cap had
+      never fired. PRO+video matched neither tier branch (`isVideo && !isPro`
+      paywall, `!isVideo && isPro` cap) and was uncapped.
+
+      NOW: ONE atomic `consume_quota` call per request, quota_key
+      `pro_image_daily` or `pro_video_daily` (selected by `isVideo`, as is the
+      cap), `p_window_start` = `istDayStartIso()` — the SAME instant migration
+      129's triggers use. `-1` is the refusal.
+
+      ⚠ CONSUME-FIRST, deliberately the OPPOSITE ordering of
+      media_free_image_lifetime_gate above. Placed AFTER the Storage fetch (a
+      5 MB reject, an SSRF reject or a Storage-404 propagation race never
+      spends a unit) and BEFORE the Gemini call, because only the atomic
+      check-and-increment bounds spend under concurrency: N in-flight requests
+      past an advisory read would ALL reach Gemini. Cost stated: a Gemini
+      timeout/5xx after a successful consume spends a daily unit (the client
+      retries a 502 up to 3×, so one photo in an outage can spend 4). No
+      decrement RPC exists or is added. The free path keeps consume-AFTER-
+      delivery because its unit is LIFETIME — an undelivered lifetime unit is
+      unrecoverable; an undelivered daily one is not.
+
+      ⚠ Fails CLOSED on an RPC error (`gate_reason: "pro_quota_unavailable"`,
+      distinct from the free path's `quota_unavailable`), like verify-payment
+      and unlike delete-account. A `subscriptions` read error ALSO fails closed
+      now (`gate_reason: "tier_unavailable"`) — it used to be discarded, so a
+      PostgREST fault on that table alone routed a PAYING user down the free
+      path, spent a lifetime free unit they did not own, and ended the reply
+      in an upgrade CTA.
+
+      ⚠ ONE quota_key => ONE call site => ONE limit — both keys have exactly one
+      call site. `-1` neither increments nor touches `updated_at` (128), so the
+      ledger row cannot count refusals; the `console.warn` on that branch is
+      the only refusal telemetry, and the founder digest reports users AT the
+      ceiling (`used >= cap`), not how often they were refused.
+    writers:
+      - file: supabase/functions/ai-media-proxy/index.ts
+        method: serve handler — consume_quota(proQuotaKey)
+        semantic: cloud-write
+        notes: |
+          The single quota writer for both keys. `p_quota_key: proQuotaKey`,
+          `p_limit: proCap`, `p_window_start: proWindowStart` — all three
+          derived once at function scope next to `isVideo`. Pinned by the
+          behavioral_test_path (both ternaries by ORDER, the call's position
+          between `await fetchImageAsBase64(` and `await geminiChat(`, and
+          every gate_reason literal's uniqueness).
+    readers:
+      - file: supabase/functions/ai-media-proxy/index.ts
+        method: serve handler — the -1 branch
+        semantic: cloud-read
+        notes: |
+          The RPC's own return value IS the read: `-1` → 200/gated with
+          `COACH_REPLIES.proImageDailyCapReached(proCap)` /
+          `proVideoDailyCapReached(proCap)` (functions — the number is the
+          constant, never typed in the copy), `resets_at` = tomorrow's IST
+          midnight, `pro_daily_used` = `pro_daily_limit` = the cap. A number
+          → `pro_daily_used` on the success body (`pro_daily_limit` = the cap;
+          both null for non-PRO). No separate advisory read exists.
     hive:
       box: "n/a — server-side gate, no Hive surface"
       key_prefix: "n/a"
