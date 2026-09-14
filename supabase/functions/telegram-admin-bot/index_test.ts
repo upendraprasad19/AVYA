@@ -5,7 +5,7 @@ Deno.env.set("TELEGRAM_WEBHOOK_SECRET", "test-webhook-secret-12345");
 Deno.env.set("FOUNDER_TELEGRAM_CHAT_ID", "12345");
 Deno.env.set("TELEGRAM_BOT_TOKEN", "dummy-telegram-token");
 
-import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assertRejects, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, bucketSubsByPlan, cmdExpiring, cmdUsers, cmdFind, sanitizeFindQuery, cmdUser, cmdAlerts, cmdErrors, cmdCron, cmdDigest, looksLikeUuid } from "./index.ts";
 
 Deno.test("isAuthorizedTelegramSender requires BOTH the secret token and the chat id to match", async () => {
@@ -49,30 +49,54 @@ Deno.test("parseCommand strips the leading slash and any @BotName suffix, lowerc
   assertEquals(parseCommand(""), null);
 });
 
-Deno.test("handler returns bare 200 with no body detail for a wrong secret token", async () => {
+// R2-05 (review round 2): `handler` ALWAYS returns a bare 200 regardless of
+// auth outcome (index.ts:135 — an unauthorized sender must learn nothing),
+// so `res.status === 200` alone cannot tell a working auth check from a
+// silently broken one — a mutation that disabled the auth check entirely
+// would leave all three tests below green, because an unauthorized request
+// just falls through to `sendFn` (whose failure is silently caught/logged).
+// Each test now injects a counting stand-in for `sendFn` and asserts the
+// SEND COUNT: 0 for a rejected request, exactly 1 for an authorized one.
+// This also closes R2-16 (a live network call to api.telegram.org from the
+// "authorized /help" test) as a side effect — the real `sendTelegram` is
+// never reached once a stand-in is injected.
+function countingSendFn() {
+  let calls = 0;
+  const fn = async (_token: string, _chatId: string, _text: string) => {
+    calls++;
+    return { ok: true as const };
+  };
+  return { fn, calls: () => calls };
+}
+
+Deno.test("handler returns bare 200 with no body detail for a wrong secret token, and never sends", async () => {
   const req = new Request("https://example.com/telegram-admin-bot", {
     method: "POST",
     headers: { "X-Telegram-Bot-Api-Secret-Token": "wrong" },
     body: JSON.stringify({ message: { chat: { id: 12345 }, text: "/help" } }),
   });
-  const res = await handler(req);
+  const { fn, calls } = countingSendFn();
+  const res = await handler(req, fn);
   assertEquals(res.status, 200);
   const body = await res.text();
   assertEquals(body, "");
+  assertEquals(calls(), 0);
 });
 
-Deno.test("handler returns bare 200 for a message from a chat id that isn't the founder's", async () => {
+Deno.test("handler returns bare 200 for a message from a chat id that isn't the founder's, and never sends", async () => {
   const req = new Request("https://example.com/telegram-admin-bot", {
     method: "POST",
     headers: { "X-Telegram-Bot-Api-Secret-Token": Deno.env.get("TELEGRAM_WEBHOOK_SECRET") ?? "" },
     body: JSON.stringify({ message: { chat: { id: 999999 }, text: "/help" } }),
   });
-  const res = await handler(req);
+  const { fn, calls } = countingSendFn();
+  const res = await handler(req, fn);
   assertEquals(res.status, 200);
   assertEquals(await res.text(), "");
+  assertEquals(calls(), 0);
 });
 
-Deno.test("handler replies to /help from the authorized founder chat", async () => {
+Deno.test("handler replies to /help from the authorized founder chat, sending exactly once", async () => {
   const secret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET") ?? "";
   const chatId = Deno.env.get("FOUNDER_TELEGRAM_CHAT_ID") ?? "";
   const req = new Request("https://example.com/telegram-admin-bot", {
@@ -80,11 +104,10 @@ Deno.test("handler replies to /help from the authorized founder chat", async () 
     headers: { "X-Telegram-Bot-Api-Secret-Token": secret },
     body: JSON.stringify({ message: { chat: { id: Number(chatId) }, text: "/help" } }),
   });
-  const res = await handler(req);
+  const { fn, calls } = countingSendFn();
+  const res = await handler(req, fn);
   assertEquals(res.status, 200);
-  // sendTelegram will attempt a real network call here and fail in the test
-  // sandbox (no real token) — that's fine, it's caught and logged, never
-  // thrown; the assertion is on the HTTP response shape, not on delivery.
+  assertEquals(calls(), 1);
 });
 
 Deno.test("handler stays a silent 200 for a request body that is the JSON literal null", async () => {
@@ -206,6 +229,33 @@ Deno.test("cmdRevenue reports active subscription counts by plan and MRR", async
   assertStringIncludes(text, "monthly: 2");
   assertStringIncludes(text, "yearly: 1");
   assertStringIncludes(text, "MRR: ₹948");
+});
+
+Deno.test("cmdRevenue's fetchAllPages call is bounded at maxPages:200 (R2-14) — an unbounded read risks exceeding Telegram's webhook timeout", async () => {
+  // Real `fetchAllPages` (not mocked) driven by a fake that ALWAYS returns a
+  // full page (never an empty one), so the loop can only stop via the
+  // maxPages guard, never via end-of-data. Proves the bound is actually
+  // WIRED into cmdRevenue's real call, not just present in a comment.
+  let rangeCalls = 0;
+  const fake = {
+    from: (_table: string) => ({
+      select: () => ({
+        eq: () => ({
+          order: () => ({
+            range: () => {
+              rangeCalls++;
+              return Promise.resolve({
+                data: Array.from({ length: 1000 }, () => ({ plan: "monthly" })),
+                error: null,
+              });
+            },
+          }),
+        }),
+      }),
+    }),
+  };
+  await assertRejects(() => cmdRevenue(fake), Error, "exceeded maxPages=200");
+  assertEquals(rangeCalls, 200);
 });
 
 Deno.test("bucketSubsByPlan splits rows into today/yesterday by the tStart boundary and counts by plan", () => {
@@ -390,8 +440,18 @@ Deno.test("sanitizeFindQuery strips PostgREST or= structural characters and quer
   assertEquals(sanitizeFindQuery("a,b"), "ab");
   assertEquals(sanitizeFindQuery("O'Brien (VP)"), "O'Brien VP");
   assertEquals(sanitizeFindQuery("100%match"), "100match");
-  assertEquals(sanitizeFindQuery("a.b.c"), "abc");
   assertEquals(sanitizeFindQuery("plain name"), "plain name");
+});
+
+Deno.test("sanitizeFindQuery PRESERVES dots — R2-04, review round 2: stripping them broke every email search", () => {
+  // Round 1's fix stripped `.` alongside `,()%*\`, which destroyed the
+  // documented primary use case: `/find john.doe@x.com` became
+  // "johndoexcom" and could never match. A `.` is not structurally
+  // dangerous inside a PostgREST `or=` filter VALUE — only the FIRST TWO
+  // dots of each `column.operator.value` term are parsed as structure;
+  // everything after that is the value, dots and all.
+  assertEquals(sanitizeFindQuery("john.doe@x.com"), "john.doe@x.com");
+  assertEquals(sanitizeFindQuery("a.b.c"), "a.b.c");
 });
 
 Deno.test("cmdFind sanitizes a comma-bearing query before building the or= filter (does not inject an extra disjunct)", async () => {
@@ -407,10 +467,11 @@ Deno.test("cmdFind sanitizes a comma-bearing query before building the or= filte
     }),
   };
   await cmdFind(fake, ["evil,id.neq.x"]);
-  // The comma AND every period must be stripped before interpolation —
-  // exactly one top-level disjunct pair (email.ilike / full_name.ilike),
-  // not three, and no structural "." survives inside the value either.
-  assertEquals(capturedFilter, "email.ilike.%evilidneqx%,full_name.ilike.%evilidneqx%");
+  // The comma must be stripped before interpolation — exactly one top-level
+  // disjunct pair (email.ilike / full_name.ilike), not three. Dots survive
+  // (R2-04): they are not structural inside a PostgREST `or=` filter VALUE,
+  // only the injected comma is.
+  assertEquals(capturedFilter, "email.ilike.%evilid.neq.x%,full_name.ilike.%evilid.neq.x%");
 });
 
 Deno.test("cmdFind renders a total and an overflow line when matches exceed the page size", async () => {
@@ -773,6 +834,45 @@ Deno.test("cmdErrors groups yesterday's real errors by op_type and excludes even
   assertEquals(text.includes("also_excluded_op"), false);
 });
 
+Deno.test("cmdErrors RE-INCLUDES an 'event'-coded row whose op_type is failure-shaped (R2-02, mirrors migration 087)", async () => {
+  // ErrorTelemetry.logEvent (lib/core/services/error_telemetry.dart:332)
+  // hardcodes error_code:'event' even for genuine failures — a bare
+  // `error_code !== 'event'` exclusion reproduces migration 086's original
+  // blind spot, which 087 fixed on the cron-alert side by re-including any
+  // 'event'-coded row whose op_type matches a failure-shaped regex. `/errors`
+  // must mirror that predicate exactly, or it stays blind to a whole class
+  // of real production failures.
+  const fake = {
+    from: () => ({
+      select: () => ({
+        gte: () => ({
+          lt: () => ({
+            limit: () => Promise.resolve({
+              data: [
+                // Failure-shaped op_type, error_code='event' — MUST appear.
+                { op_type: "sync_failed", error_code: "event" },
+                { op_type: "widget_error_fallback", error_code: "event" },
+                // Benign breadcrumb, error_code='event' — must NOT appear.
+                { op_type: "user_clicked_button", error_code: "event" },
+                { op_type: "restore_op_done", error_code: "event" },
+                // 'info' stays fully excluded regardless of op_type.
+                { op_type: "some_failed_thing", error_code: "info" },
+              ],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdErrors(fake);
+  assertStringIncludes(text, "sync_failed: 1");
+  assertStringIncludes(text, "widget_error_fallback: 1");
+  assertEquals(text.includes("user_clicked_button"), false);
+  assertEquals(text.includes("restore_op_done"), false);
+  assertEquals(text.includes("some_failed_thing"), false);
+});
+
 Deno.test("cmdErrors renders an explicit cap marker when the read hits PostgREST's row limit (review round 1 F6)", async () => {
   // `.limit(2000)` was never a real bound — this project's PostgREST
   // db-max-rows is 1000, and a truncated read returns HTTP 200 with no
@@ -885,10 +985,12 @@ Deno.test("cmdCron queries a 7-day time window (gte on started_at), not a row-co
   // whichever functions were stalest — live evidence showed 3 real
   // functions missing entirely. A 7-day `.gte()` window closes that
   // specific gap (correct bound, never a row count) — though it is not a
-  // COMPLETE fix: `cleanup_cron_call_log()` (migration 109) spares only
-  // ONE row globally, not each function's latest, so true >7-day silence
-  // still goes invisible past the retention cut (B-pass finding, same
-  // day; see the code comment above cmdCron).
+  // COMPLETE fix: `cleanup_cron_call_log()`'s LIVE definition (migration
+  // 110, not the superseded 109 — R2-06/R2-07) spares TWO rows globally
+  // (newest success + newest any-status), still not each function's
+  // latest, so true >7-day silence still goes invisible past the
+  // retention cut (B-pass finding, same day; see the code comment above
+  // cmdCron; deeper fix tracked as OI-199).
   const now = new Date();
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
   let gteCol: string | undefined;

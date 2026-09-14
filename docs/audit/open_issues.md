@@ -3560,6 +3560,23 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Blast radius**: `alerts/_thresholds.yaml` + the alert's SQL; classify the written file.
 - **Cited as a live backstop while inert (2026-09-13, Hermes L31 on OI-153)**: migration 131's header (immutable) and the first version of `founder-digest/index.ts`'s header both named `alert_cron_function_dead` as the fallback that "would otherwise take a week to notice" a dead digest. It would notice nothing. The digest header was corrected (v2); the registry row 131 says so; the migration comment cannot be.
 - **Class**: `feedback_green_check_input_set_width` — the alert's input set is bounded by a pruner it does not know about. Also `feedback_bad_news_vs_no_news`: zero firings had two explanations (all healthy / cannot fire) and nobody asked which.
+- ⚠ **Precondition on this alert's own repair (R2-11, review round 2, 2026-09-14):
+  before lowering this threshold (or lengthening retention for it), the fix
+  MUST exclude non-scheduled, trigger-dispatched functions — today just
+  `alert-critical-notify` — from `alert_cron_function_dead`'s scope,** via
+  an allowlist of real `cron.job` slugs or an explicit denylist of
+  trigger-dispatched function names. Reason: `alert-critical-notify` is
+  event-driven (not `cron.schedule`-dispatched), so it can legitimately go
+  long stretches without running; if this alert's own OPEN threshold-below-
+  retention fix (above) ever makes it fire for `alert-critical-notify`, that
+  CRITICAL alert triggers `alert-critical-notify` itself to run, which
+  writes a fresh success row, which resets its own death-clock — a
+  self-sustaining false-critical loop. Today this is INERT only because
+  this OI's own bug (the threshold sitting above the retention ceiling)
+  keeps the alert from ever firing at all — fixing THIS OI without the
+  exclusion would arm the loop for the first time. Cross-referenced from
+  OI-199, whose fix shape (widening retention to per-function) would
+  independently arm the same loop from the other side.
 
 ## OI-180 — `check_sot_registry_parity` silently skips every single-number `line_range:`, so 30 citations are validated by nothing (P2)
 
@@ -4159,29 +4176,45 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   query itself is timing out rather than an intermittent network blip — worth checking
   the `prs`-source query plan / row count before assuming it's transient.
 
-## OI-199 — cleanup_cron_call_log() spares only ONE global row, not each function's latest — true >7d cron silence still goes invisible to /cron
+## OI-199 — cleanup_cron_call_log() spares only TWO global rows, not each function's latest — true >7d cron silence still goes invisible to /cron
 
 - **Status**: OPEN
 - **Blocked on**: none
-- **Verified**: 2026-09-14, live read of the function body via migration 109's source
+- **Verified**: 2026-09-14, live read of the function body — corrected same
+  day (R2-06/R2-07, review round 2) to cite migration **110**
+  (`110_cron_silence_per_function_and_cleanup_null_guard.sql:30-47`), the
+  LAST `CREATE OR REPLACE` and therefore the LIVE definition — the original
+  filing below quoted the SUPERSEDED migration 109 body (one spared row);
+  110 already widened that to two, and this OI's core finding (still not
+  PER-FUNCTION) survives the correction unchanged.
 - **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
 - **How found**: B-pass review of telegram-admin-bot's F4 fix (`/cron`'s
   `.limit(200)` row-window → `.gte()` 7-day time-window). The fix's own
-  code comment claimed `cleanup_cron_call_log()` (migration 109) "always
-  spares each function's most recent row" — the B-pass read the live
-  function body and found this false:
+  code comment claimed `cleanup_cron_call_log()` "always spares each
+  function's most recent row" — the B-pass read the live function body and
+  found this false. The LIVE (migration 110) definition:
   ```sql
-  DELETE FROM public.cron_call_log
-  WHERE started_at < now() - interval '7 days'
-    AND id IS DISTINCT FROM (
-      SELECT id FROM public.cron_call_log
-      WHERE status = 'success'
-      ORDER BY started_at DESC
-      LIMIT 1
-    );
+  CREATE OR REPLACE FUNCTION public.cleanup_cron_call_log()
+  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
+  AS $fn$
+    DELETE FROM public.cron_call_log
+    WHERE started_at < now() - interval '7 days'
+      AND id NOT IN (
+        SELECT id FROM (
+          (SELECT id FROM public.cron_call_log
+            WHERE status = 'success' ORDER BY started_at DESC LIMIT 1)
+          UNION
+          (SELECT id FROM public.cron_call_log
+            ORDER BY started_at DESC LIMIT 1)
+        ) AS keep_rows
+      );
+  $fn$;
   ```
-  This spares exactly ONE row globally (the single most-recent
-  `status='success'` row table-wide), not one per function.
+  This spares exactly TWO rows globally (the single most-recent
+  `status='success'` row table-wide, AND the single most-recent row of any
+  status table-wide), not one per function. (109's ORIGINAL one-row body,
+  for the record, was `id IS DISTINCT FROM (SELECT id ... WHERE
+  status='success' ORDER BY started_at DESC LIMIT 1)`.)
 - **Consequence**: a cron-dispatched function silent for longer than 7 days
   has ALL its `cron_call_log` rows purged by the next nightly
   `cron_call_log_cleanup_daily` run and becomes invisible to
@@ -4191,13 +4224,19 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   migration 109) is a real absence-backstop for total-fleet silence, but
   doesn't cover a single function going silent while others keep running.
 - **Fix shape (not decided)**: widen `cleanup_cron_call_log()`'s exemption
-  from a single global `ORDER BY started_at DESC LIMIT 1` to a per-
-  `function_name` `DISTINCT ON` — e.g. spare the latest row for EVERY
-  `function_name` present, not just the fleet-wide latest. Needs a new
-  migration (109 is applied and immutable) and its own live-verify pass
-  (confirm the DISTINCT ON exemption doesn't defeat the 7-day retention's
-  original storage-growth purpose for functions that run frequently).
-- **Scope note**: pre-existing production infrastructure (migration 109
+  from two global rows to a per-`function_name` `DISTINCT ON` — e.g. spare
+  the latest row for EVERY `function_name` present, not just the two
+  fleet-wide ones. Needs a new migration (110 is applied and immutable) and
+  its own live-verify pass (confirm the DISTINCT ON exemption doesn't
+  defeat the 7-day retention's original storage-growth purpose for
+  functions that run frequently). **Precondition (R2-11, review round 2):
+  before this fix ships, it MUST exclude non-scheduled, trigger-dispatched
+  functions (`alert-critical-notify` today) from
+  `alert_cron_function_dead`'s scope** — see the cross-reference in that
+  alert's own OI (OI-179) for why: a per-function retention exemption would
+  arm the exact false-critical-alert loop that OI-179's own threshold
+  currently keeps inert by accident.
+- **Scope note**: pre-existing production infrastructure (migration 110
   predates this branch), out of scope for the telegram-admin-bot batch's
   own fix diff — the comment claiming this behavior was corrected in that
   same commit (`diagnose 82b018`), and this OI tracks the deeper fix.

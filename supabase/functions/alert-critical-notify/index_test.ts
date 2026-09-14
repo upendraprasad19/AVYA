@@ -62,10 +62,36 @@ Deno.test("handler rejects a request with non-numeric alert_id", async () => {
     body: JSON.stringify({ alert_id: "not-a-number" }),
   });
 
-  const res = await handler(req);
+  // R2-16 (review round 2): this request passes cron auth, so the handler
+  // reaches `logCronStart` BEFORE validating alert_id — with the module-
+  // level env vars above pointing at the REAL project URL (dummy
+  // service-role key), the un-injected path made a genuine outbound network
+  // request here on every run. Inject no-op telemetry stand-ins so this test
+  // never touches the network. Mirrors telegram-admin-bot's injectable
+  // `sendFn` (R2-05).
+  let startCalls = 0;
+  let endCalls: Array<{ status: string; opts?: unknown }> = [];
+  const res = await handler(
+    req,
+    {
+      logCronStart: async (_fn: string) => {
+        startCalls++;
+        return 1;
+      },
+      logCronEnd: async (_id, status, opts) => {
+        endCalls.push({ status, opts });
+      },
+    },
+    async () => ({ ok: true }),
+  );
 
   // The handler should return 400 when alert_id is not a number
   assertEquals(res.status, 400);
   const body = await res.json();
   assertStringIncludes(body.error, "alert_id must be a number");
+  // And the injected telemetry stand-ins were actually exercised — proves
+  // the injection point is real, not dead code the handler never reaches.
+  assertEquals(startCalls, 1);
+  assertEquals(endCalls.length, 1);
+  assertEquals(endCalls[0].status, "failed");
 });

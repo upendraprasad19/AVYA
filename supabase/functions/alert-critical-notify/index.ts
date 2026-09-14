@@ -39,7 +39,20 @@ export function formatCriticalAlertText(alert: AlertRow): string {
   return lines.join("\n");
 }
 
-export const handler = async (req: Request): Promise<Response> => {
+export const handler = async (
+  req: Request,
+  // Injectable telemetry + send functions for tests only — production calls
+  // never pass these. R2-16 (review round 2): this test file's env vars point
+  // at the REAL project URL (with a dummy service-role key), so a request
+  // that passes cron auth previously made a genuine outbound network request
+  // via `logCronStart`'s supabase-js insert before ever validating alert_id.
+  // Mirrors telegram-admin-bot's injectable `sendFn` (R2-05).
+  telemetry: { logCronStart: typeof logCronStart; logCronEnd: typeof logCronEnd } = {
+    logCronStart,
+    logCronEnd,
+  },
+  sendFn: typeof sendTelegram = sendTelegram,
+): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -48,13 +61,13 @@ export const handler = async (req: Request): Promise<Response> => {
     return clientError("Unauthorized", 401);
   }
 
-  const logId = await logCronStart("alert-critical-notify");
+  const logId = await telemetry.logCronStart("alert-critical-notify");
 
   try {
     const token = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
     const chatId = Deno.env.get("FOUNDER_TELEGRAM_CHAT_ID") ?? "";
     if (!token || !chatId) {
-      await logCronEnd(logId, "failed", {
+      await telemetry.logCronEnd(logId, "failed", {
         httpStatus: 500,
         errorSummary: "TELEGRAM_BOT_TOKEN / FOUNDER_TELEGRAM_CHAT_ID not configured",
       });
@@ -64,11 +77,11 @@ export const handler = async (req: Request): Promise<Response> => {
     const body = await req.json().catch(() => ({}));
     const alertId = body?.alert_id;
     if (alertId == null) {
-      await logCronEnd(logId, "failed", { httpStatus: 400, errorSummary: "missing alert_id" });
+      await telemetry.logCronEnd(logId, "failed", { httpStatus: 400, errorSummary: "missing alert_id" });
       return clientError("Missing alert_id", 400);
     }
     if (typeof alertId !== "number") {
-      await logCronEnd(logId, "failed", { httpStatus: 400, errorSummary: "alert_id must be a number" });
+      await telemetry.logCronEnd(logId, "failed", { httpStatus: 400, errorSummary: "alert_id must be a number" });
       return clientError("alert_id must be a number", 400);
     }
 
@@ -82,28 +95,31 @@ export const handler = async (req: Request): Promise<Response> => {
     if (error) throw error;
     if (!data) {
       // Alert row gone by the time we read it — not an error, just nothing to send.
-      await logCronEnd(logId, "success", { httpStatus: 200 });
+      await telemetry.logCronEnd(logId, "success", { httpStatus: 200 });
       return ok({ sent: false, reason: "alert_not_found" });
     }
 
     const text = formatCriticalAlertText(data as AlertRow);
-    const result = await sendTelegram(token, chatId, text);
+    const result = await sendFn(token, chatId, text);
 
     if (!result.ok) {
-      await logCronEnd(logId, "failed", { httpStatus: 502, errorSummary: result.summary });
+      await telemetry.logCronEnd(logId, "failed", { httpStatus: 502, errorSummary: result.summary });
       return serverError("alert-critical-notify:telegram", new Error(result.summary));
     }
 
-    await logCronEnd(logId, "success", { httpStatus: 200 });
+    await telemetry.logCronEnd(logId, "success", { httpStatus: 200 });
     return ok({ sent: true });
   } catch (err) {
     const requestId = crypto.randomUUID().slice(0, 8);
     console.error(`[alert-critical-notify] request_id=${requestId}`, err);
-    await logCronEnd(logId, "failed", { httpStatus: 500, errorSummary: String(err).slice(0, 200) });
+    await telemetry.logCronEnd(logId, "failed", { httpStatus: 500, errorSummary: String(err).slice(0, 200) });
     return serverError("alert-critical-notify", err);
   }
 };
 
 if (import.meta.main) {
-  serve(handler);
+  // Wrapped, not passed directly: `serve`'s Handler type expects
+  // `(req, connInfo)`, and `handler` now has extra test-only optional
+  // `telemetry`/`sendFn` parameters in those slots (R2-16).
+  serve((req) => handler(req));
 }

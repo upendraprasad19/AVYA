@@ -18,8 +18,14 @@
  *   deno test --no-check --allow-all --node-modules-dir=none supabase/functions/_shared/founder_digest_content_test.ts
  */
 
-import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildDigestText, type DigestInput, idPrefix, istClock } from "./founder_digest_content.ts";
+import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  buildDigestText,
+  type DigestInput,
+  idPrefix,
+  istClock,
+  readDigestSections,
+} from "./founder_digest_content.ts";
 
 Deno.test("idPrefix returns the first 8 chars of a user id, never the whole uuid", () => {
   assertEquals(idPrefix("12345678-abcd-ef01-2345-6789abcdef01"), "12345678");
@@ -97,6 +103,69 @@ Deno.test("buildDigestText renders 'none' for a quiet day with zero new subscrip
     expiringSoon: { count7d: 0, count30d: 0 },
   };
   assertStringIncludes(buildDigestText(input), "none");
+});
+
+// ---------------------------------------------------------------------------
+// R2-15: the module is now called by BOTH founder-digest's daily cron AND
+// telegram-admin-bot's /digest command. A section read-failure log line used
+// to be hardcoded "[founder-digest]" regardless of who called it.
+// ---------------------------------------------------------------------------
+
+/** A fake client whose every builder rejects with `{table} unreadable`. */
+function failingClient() {
+  return {
+    from(table: string) {
+      const builder: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "gte", "lt", "order", "limit"]) {
+        builder[m] = () => builder;
+      }
+      builder.then = (resolve: (v: unknown) => void) =>
+        resolve({ data: null, error: { message: `${table} unreadable` }, count: null });
+      return builder;
+    },
+  };
+}
+
+const WINDOW = { yStart: "2026-09-10T18:30:00.000Z", tStart: "2026-09-11T18:30:00.000Z" };
+
+Deno.test("readDigestSections logs the REAL caller's label on a read failure, not a hardcoded one (R2-15)", async () => {
+  const originalError = console.error;
+  const logs: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    logs.push(args);
+  };
+  try {
+    // deno-lint-ignore no-explicit-any
+    await readDigestSections(failingClient() as any, WINDOW, "telegram-admin-bot");
+  } finally {
+    console.error = originalError;
+  }
+  assert(
+    logs.some((args) => String(args[0]).includes("[telegram-admin-bot] section read failed:")),
+    `expected a "[telegram-admin-bot] section read failed:" log line, got ${JSON.stringify(logs)}`,
+  );
+  assert(
+    !logs.some((args) => String(args[0]).includes("[founder-digest]")),
+    `must never say "[founder-digest]" when the caller is telegram-admin-bot, got ${JSON.stringify(logs)}`,
+  );
+});
+
+Deno.test("readDigestSections defaults the caller label to 'founder-digest' when omitted", async () => {
+  const originalError = console.error;
+  const logs: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    logs.push(args);
+  };
+  try {
+    // deno-lint-ignore no-explicit-any
+    await readDigestSections(failingClient() as any, WINDOW);
+  } finally {
+    console.error = originalError;
+  }
+  assert(
+    logs.some((args) => String(args[0]).includes("[founder-digest] section read failed:")),
+    `expected the default "[founder-digest]" label, got ${JSON.stringify(logs)}`,
+  );
 });
 
 Deno.test("buildDigestText renders an unreadable marker for a failed subscriptions read, never zeros", () => {

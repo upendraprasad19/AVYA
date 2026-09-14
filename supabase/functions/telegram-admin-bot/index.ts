@@ -65,7 +65,20 @@ export function parseCommand(text: string): { cmd: string; args: string[] } | nu
   return { cmd: first, args: tokens.slice(1) };
 }
 
-export const handler = async (req: Request): Promise<Response> => {
+export const handler = async (
+  req: Request,
+  // Injectable send function, default the real `sendTelegram` — production
+  // callers never pass a second argument. R2-05 (review round 2): every
+  // existing HTTP-level test asserted ONLY `res.status === 200`, which the
+  // handler returns unconditionally on EVERY path (success, auth failure,
+  // unknown command) by design (§ header — an unauthorized sender must
+  // learn nothing). That made the three auth-gate tests indistinguishable
+  // by mutation: disabling the auth check entirely left all three green,
+  // because an unauthorized request just fell through to `sendTelegram`
+  // (whose failure is silently caught/logged) instead of being refused.
+  // Mirrors founder-digest's own injectable `sendTelegram` pattern.
+  sendFn: typeof sendTelegram = sendTelegram,
+): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -126,7 +139,7 @@ export const handler = async (req: Request): Promise<Response> => {
     reply = "Something went wrong. Try again.";
   }
 
-  const sendResult = await sendTelegram(token, chatIdStr, truncateForTelegram(reply));
+  const sendResult = await sendFn(token, chatIdStr, truncateForTelegram(reply));
   if (!sendResult.ok) {
     console.error(`[telegram-admin-bot] send failed: ${sendResult.summary}`);
   }
@@ -168,7 +181,13 @@ export async function cmdRevenue(supabase: any): Promise<string> {
   // mirroring _shared/subscription.ts's own `subscriptions` read.
   const data = await fetchAllPages<{ plan: string }>(
     () => supabase.from("subscriptions").select("plan").eq("status", "active"),
-    { orderBy: "id", label: "telegram-admin-bot cmdRevenue" },
+    // maxPages: 200 (R2-14) — `/revenue` runs SYNCHRONOUSLY before the
+    // webhook handler returns 200; an unbounded (DEFAULT_MAX_PAGES=10_000)
+    // read risks exceeding Telegram's webhook timeout and triggering a
+    // duplicate-update retry, exactly the failure mode the "always return
+    // 200 immediately" design exists to avoid. Matches founder-digest's own
+    // MAX_PAGES bound (_shared/founder_digest_content.ts) for the same reason.
+    { orderBy: "id", label: "telegram-admin-bot cmdRevenue", maxPages: 200 },
   );
   const counts = new Map<string, number>();
   for (const row of data ?? []) {
@@ -301,7 +320,7 @@ export async function cmdUsers(supabase: any, args: string[]): Promise<string> {
 
 const MAX_FIND_LINES = 10;
 
-// Pure. PostgREST's `or=` filter grammar treats `,` `.` `(` `)` as structural
+// Pure. PostgREST's `or=` filter grammar treats `,` `(` `)` as structural
 // (a comma injects an extra disjunct, an unbalanced paren 400s), and `%`/`*`
 // are wildcard characters this function already wraps around the query
 // itself — a caller-supplied one would let the search escape the intended
@@ -309,8 +328,20 @@ const MAX_FIND_LINES = 10;
 // founder-only, dual-authed command against a table it may read anyway)
 // AND a real robustness fix: any name/email containing a comma previously
 // broke the command outright (review round 1 F7).
+//
+// `.` is deliberately NOT stripped (R2-04, review round 2) — every email
+// contains one, and the round-1 fix stripping it broke `/find` for its
+// primary use case (`/find john.doe@x.com` became `johndoe@xcom`, which can
+// never match). A `.` inside a value is not structurally dangerous here:
+// PostgREST's `or=` grammar only splits each `column.operator.value` term on
+// its FIRST TWO dots — the value the caller controls (everything after
+// `column.operator.`) can contain as many further dots as it likes without
+// being reinterpreted, and the comma that actually separates the two
+// `email.ilike...`/`full_name.ilike...` disjuncts is emitted by THIS
+// function, not by caller input (the caller's own commas are stripped
+// above).
 export function sanitizeFindQuery(raw: string): string {
-  return raw.replace(/[,.()%*\\]/g, "");
+  return raw.replace(/[,()%*\\]/g, "");
 }
 
 // deno-lint-ignore no-explicit-any
@@ -434,9 +465,22 @@ export async function cmdErrors(supabase: any): Promise<string> {
     .lt("created_at", tStart)
     .limit(1000); // keep in sync with CLIENT_ERRORS_QUERY_CAP — literal digit required by check_unbounded_cron_reads.dart
   if (error) throw error;
-  const rows = (data ?? []).filter((r: { error_code: string }) =>
-    r.error_code !== "event" && r.error_code !== "info"
-  );
+  // R2-02 (review round 2): a bare `error_code !== 'event'` exclusion
+  // reproduces the exact blind spot migration 086 shipped and migration 087
+  // (`087_alert_spike_reinclude_failure_events.sql:23-36`) had to fix on the
+  // cron-alert side — `ErrorTelemetry.logEvent` (lib/core/services/
+  // error_telemetry.dart:332) hardcodes `error_code: 'event'` even for
+  // genuine failures (widget_error_fallback, *_failed, *_returned_null,
+  // *_unknown_error), so op_type — not error_code — carries the real
+  // severity signal for those rows. Mirror 087's regex exactly: re-include
+  // an 'event'-coded row whose op_type is failure-shaped; 'info' stays
+  // fully excluded, same as 087.
+  const FAILURE_SHAPED_OP_TYPE = /(fail|error|crash|fallback|unknown|exception|timeout|denied|_null)/i;
+  const rows = (data ?? []).filter((r: { op_type: string; error_code: string }) => {
+    if (r.error_code === "info") return false;
+    if (r.error_code !== "event") return true;
+    return FAILURE_SHAPED_OP_TYPE.test(r.op_type);
+  });
   if (rows.length === 0) {
     return "<b>Errors (yesterday)</b>\nnone";
   }
@@ -467,18 +511,23 @@ export async function cmdCron(supabase: any): Promise<string> {
   // (not a row count) closes that specific gap: every function that has
   // run in the last 7 days shows up regardless of how many OTHER rows
   // exist, which `.limit(200)` could never guarantee.
-  // ⚠ NOT a complete fix, corrected by the B-pass on this diff (2026-09-14):
-  // `cleanup_cron_call_log()` (migration 109) does NOT spare each
-  // function's most recent row — it spares exactly ONE row globally (the
-  // single latest `status='success'` row table-wide). A function silent
-  // for longer than 7 days has ALL its rows purged by the next nightly
-  // cleanup and becomes invisible here too, past 7 days instead of past
+  // ⚠ NOT a complete fix, corrected by the B-pass on this diff (2026-09-14),
+  // and re-corrected in review round 2 (R2-06/R2-07, 2026-09-14 — the first
+  // correction itself cited the SUPERSEDED migration 109 body instead of the
+  // live one): `cleanup_cron_call_log()`'s LIVE definition is migration
+  // 110 (`110_cron_silence_per_function_and_cleanup_null_guard.sql:30-47`,
+  // the last `CREATE OR REPLACE` — 109's one-row body was replaced by it).
+  // 110 spares TWO rows globally, not each function's latest: the newest
+  // `status='success'` row table-wide AND the newest row of any status
+  // table-wide — still not one per function. A function silent for longer
+  // than 7 days can still have ALL its rows purged by the next nightly
+  // cleanup and become invisible here too, past 7 days instead of past
   // 200 rows — same class of blind spot, smaller window. `.limit(1000)`
   // is a defence-in-depth cap only — PostgREST's own hard max — not the
-  // real bound. See OI (filed same day) for widening the retention
-  // function to a per-function exemption, which is the actual fix for
-  // true beyond-7-day silence; that is separate production infrastructure
-  // (migration 109 predates this branch) and out of this diff's scope.
+  // real bound. See OI-199 for widening the retention function to a
+  // per-function exemption, which is the actual fix for true
+  // beyond-7-day silence; that is separate production infrastructure
+  // (migration 110 predates this branch) and out of this diff's scope.
   const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("cron_call_log")
@@ -507,7 +556,10 @@ export async function cmdCron(supabase: any): Promise<string> {
 
 // deno-lint-ignore no-explicit-any
 export async function cmdDigest(supabase: any): Promise<string> {
-  const input = await gatherDigestInput(supabase, new Date());
+  // R2-15: pass the real caller label so a read-failure log line says
+  // "[telegram-admin-bot]", not the hardcoded "[founder-digest]" every
+  // section's console.error used to carry regardless of who called it.
+  const input = await gatherDigestInput(supabase, new Date(), "telegram-admin-bot");
   return buildDigestText(input);
 }
 
@@ -548,5 +600,8 @@ export async function routeCommand(
 }
 
 if (import.meta.main) {
-  serve(handler);
+  // Wrapped, not passed directly: `serve`'s Handler type expects
+  // `(req, connInfo)`, and `handler` now has an extra test-only optional
+  // `sendFn` parameter in that slot (R2-05).
+  serve((req) => handler(req));
 }

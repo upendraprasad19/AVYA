@@ -138,7 +138,9 @@ export const handler = async (req: Request): Promise<Response> => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const input = await gatherDigestInput(supabase);
+    // R2-15: explicit caller label so a section read-failure log line always
+    // says "[founder-digest]" here, never inferred from the default.
+    const input = await gatherDigestInput(supabase, new Date(), "founder-digest");
     const label = input.dayLabel;
     const text = buildDigestText(input);
 

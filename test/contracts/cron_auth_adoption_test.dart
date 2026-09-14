@@ -84,6 +84,14 @@ const _cronInvokedFunctions = <String>[
 // the regression guard for F44.
 const _triggerDispatchedFunctions = <String>[
   'proactive-coach-promotion', // trg_dispatch_proactive_coach_promotion (migrations 073 → 078)
+  // Added 2026-09-14 (R2-03, telegram-admin-bot review round 2).
+  // alert-critical-notify is invoked ONLY by
+  // private.dispatch_critical_alert_notify() via pg_net.http_post on a
+  // critical alerts INSERT (migration 133) — never by pg_cron, so it was
+  // never in scope of the roster above despite already using
+  // isAuthorizedCronCall correctly. Listing it here makes THIS gate a real
+  // regression guard for it too.
+  'alert-critical-notify',
 ];
 
 const _functionsDir = 'supabase/functions';

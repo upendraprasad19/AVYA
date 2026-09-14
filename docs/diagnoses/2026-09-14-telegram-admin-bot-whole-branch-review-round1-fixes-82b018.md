@@ -77,7 +77,7 @@ impact_analysis: |
   the pre-review deploy) to take effect in prod.
 touched_layers_checked:
   - { tier: 1, name: "Client code", status: not_applicable, evidence: "Server-side Edge Functions only; no Flutter client touched." }
-  - { tier: 3, name: "Postgres schema", status: verified, evidence: "cron_call_log 7-day retention (always spares each function's latest row) confirmed via migrations/109_cron_silence_alert_and_log_cleanup.sql before choosing the 7-day .gte() window for F4." }
+  - { tier: 3, name: "Postgres schema", status: verified, evidence: "cron_call_log 7-day retention confirmed via migrations/110_cron_silence_per_function_and_cleanup_null_guard.sql (the LIVE definition of cleanup_cron_call_log() — supersedes 109's one-row body; corrected 2026-09-14 per R2-06/R2-07, review round 2) before choosing the 7-day .gte() window for F4: cleanup_cron_call_log() spares the newest success row AND the newest row of any status, both TABLE-WIDE, not per-function — see OI-199." }
   - { tier: 6, name: "Edge Function code vs deploy", status: fixed_in_this_batch, evidence: "deno check clean on all touched files; deno test 374/374 across telegram-admin-bot, alert-critical-notify, founder-digest, _shared. Redeploy owed as part of Task 13's operational rollout (v2 of both functions)." }
   - { tier: 12, name: "Client -> server contract", status: verified, evidence: "Telegram's HTML parse_mode tag allowlist confirmed against api.telegram.org docs; F2's fix (bracket placeholders instead of angle brackets) verified via a new exhaustive tag-sweep test (assertOnlySupportedTelegramTags) over HELP_TEXT and every static Usage string." }
 ---
@@ -88,8 +88,15 @@ Whole-branch review round 1 of `telegram-admin-bot` (dispatched on the most
 capable model, context-blind, live-state-verified — per the SDD skill's
 final-review process) found 13 findings. This is the fix-response commit
 for the 12 code-level ones (F2-F13); F1 (no plan-review record for the
-branch, which is catastrophic tier) is a process finding tracked and
-resolved separately via `docs/plan-reviews/telegram-admin-bot.md`.
+branch, which is catastrophic tier) is a process finding tracked
+separately. It is NOT yet resolved as of this commit: `docs/plan-reviews/
+telegram-admin-bot.md` does not exist yet. Resolving F1 requires Review
+Round 2 (dispatched after this commit), a Hermes pass (mandatory at
+catastrophic tier per CLAUDE.md §4.12.3), and then writing that record —
+`scripts/check_plan_review_record_exists.dart` will block the eventual
+merge-to-main commit in CI until it exists with `review_rounds: >=2`,
+`ground_truth_verified: true`, `verdict: converged`, `bpass: accepted`,
+and `hermes: accepted` + a `hermes_report:` pointer.
 
 ## Root cause
 
@@ -173,7 +180,7 @@ gate had never been able to see:
 
 ## B-pass follow-up (same commit, catastrophic tier — touches `_shared/cron_auth.ts`)
 
-A required B-pass (`docs/reviews/8804b0235504-review.md`) on this staged
+A required B-pass (`docs/reviews/014866ecac87-review.md`) on this staged
 diff found one P2 and one P3, both accepted and fixed in this same commit:
 
 - **P2**: `cmdCron`'s new comment claimed `cleanup_cron_call_log()`

@@ -100,21 +100,21 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-177 | the live-cron snapshot that gives Gate 31 its only fileless-migration… | none | 2026-09-10 —… | [:3524](open_issues.md#L3524) |
 | OI-178 | pg_cron SQL jobs are structurally invisible to the alerting stack:… | a design decision — telemetry bridge vs.… | 2026-09-10 — `cron_call_log` holds… | [:3537](open_issues.md#L3537) |
 | OI-179 | `alert_cron_function_dead` cannot fire across 100% of its range, and never… | none — one-line predicate fix; the value… | 2026-09-10 — `min(started_at)` across… | [:3551](open_issues.md#L3551) |
-| OI-180 | `check_sot_registry_parity` silently skips every single-number… | none | 2026-09-10 —… | [:3564](open_issues.md#L3564) |
-| OI-181 | nothing catches a MISSING plan-review record at merge time; both prechecks… | none | 2026-09-10 — live, by causing it. Branch… | [:3575](open_issues.md#L3575) |
-| OI-182 | the payment grace window closes before the last verify-payment retry fires… | none — needs a founder call on the… | 2026-09-11 — read both constants… | [:3591](open_issues.md#L3591) |
-| OI-184 | 4 tables rely on RLS-zero-policy default-deny alone; the raw grants under… | none — mechanically straightforward (a… | 2026-09-11 — LIVE, via the Management… | [:3693](open_issues.md#L3693) |
-| OI-185 | `check_schema_column_refs.dart` validates only the FIRST line of a… | none — carried out of OI-162 (closed… | 2026-09-03 — by the audit (a prototype… | [:3767](open_issues.md#L3767) |
-| OI-186 | the AI coach cannot replace ONE day with a different workout: the only… | founder product decision on tier (see… | 2026-09-10 — full census of… | [:3793](open_issues.md#L3793) |
-| OI-187 | the AI coach has no read path to the 292-exercise library: the WRITE path… | nothing technical — needs a design… | 2026-09-10 — every claim below re-read… | [:3834](open_issues.md#L3834) |
-| OI-188 | no re-entry path for a returning user: the free path hands them a DELOAD… | founder product decision on the… | 2026-09-10 — app behaviour read from… | [:3881](open_issues.md#L3881) |
-| OI-190 | Unit 1's §4.11 gate `check_single_schedule_row_builder.dart` is WARN-only… | none — needs a plan. Input is already… | 2026-09-12 — `dart run… | [:3948](open_issues.md#L3948) |
-| OI-191 | target_weight_kg can contradict the chosen goal's direction, making the… | none — bounded, no… | 2026-09-13 — reproduced live on the… | [:3962](open_issues.md#L3962) |
-| OI-192 | the orphan-sync dedupe can never match a photo turn: client writes… | none — pick ONE placeholder shape (or… | 2026-09-13 — source only:… | [:4021](open_issues.md#L4021) |
-| OI-193 | Gate 31 treats a COMMENTED `cron.unschedule('X')` as a real unschedule, so… | none — strip `--` comments before the… | 2026-09-12 —… | [:4031](open_issues.md#L4031) |
-| OI-194 | `compute_admin_metrics_daily` (jobid 30) skipped its 2026-09-11 18:15Z… | none for the code (repair (d) below is a… | 2026-09-12 — `select function_name,… | [:4042](open_issues.md#L4042) |
-| OI-195 | Gate 42 accepts any non-empty `behavioral_test_path:` / `presence_only:`… | none — one `File(path).existsSync()` per… | 2026-09-13 — `grep -n… | [:4073](open_issues.md#L4073) |
-| OI-196 | `morning-alert`'s Telegram sender logs the raw fetch error, whose message… | none — one-line change in one function;… | 2026-09-13 — read… | [:4083](open_issues.md#L4083) |
-| OI-197 | Founder observability gaps: payment-flow alerting dormant, EF auth-outage… | none — no schema/migration/payment/auth… | never — this is a gap analysis surfaced… | [:4095](open_issues.md#L4095) |
-| OI-198 | pr-detection cron: repeated Gateway Timeout on paged_fetch (4x in 24h,… | none | 2026-09-14, live query against… | [:4139](open_issues.md#L4139) |
-| OI-199 | cleanup_cron_call_log() spares only ONE global row, not each function's… | none | 2026-09-14, live read of the function… | [:4162](open_issues.md#L4162) |
+| OI-180 | `check_sot_registry_parity` silently skips every single-number… | none | 2026-09-10 —… | [:3581](open_issues.md#L3581) |
+| OI-181 | nothing catches a MISSING plan-review record at merge time; both prechecks… | none | 2026-09-10 — live, by causing it. Branch… | [:3592](open_issues.md#L3592) |
+| OI-182 | the payment grace window closes before the last verify-payment retry fires… | none — needs a founder call on the… | 2026-09-11 — read both constants… | [:3608](open_issues.md#L3608) |
+| OI-184 | 4 tables rely on RLS-zero-policy default-deny alone; the raw grants under… | none — mechanically straightforward (a… | 2026-09-11 — LIVE, via the Management… | [:3710](open_issues.md#L3710) |
+| OI-185 | `check_schema_column_refs.dart` validates only the FIRST line of a… | none — carried out of OI-162 (closed… | 2026-09-03 — by the audit (a prototype… | [:3784](open_issues.md#L3784) |
+| OI-186 | the AI coach cannot replace ONE day with a different workout: the only… | founder product decision on tier (see… | 2026-09-10 — full census of… | [:3810](open_issues.md#L3810) |
+| OI-187 | the AI coach has no read path to the 292-exercise library: the WRITE path… | nothing technical — needs a design… | 2026-09-10 — every claim below re-read… | [:3851](open_issues.md#L3851) |
+| OI-188 | no re-entry path for a returning user: the free path hands them a DELOAD… | founder product decision on the… | 2026-09-10 — app behaviour read from… | [:3898](open_issues.md#L3898) |
+| OI-190 | Unit 1's §4.11 gate `check_single_schedule_row_builder.dart` is WARN-only… | none — needs a plan. Input is already… | 2026-09-12 — `dart run… | [:3965](open_issues.md#L3965) |
+| OI-191 | target_weight_kg can contradict the chosen goal's direction, making the… | none — bounded, no… | 2026-09-13 — reproduced live on the… | [:3979](open_issues.md#L3979) |
+| OI-192 | the orphan-sync dedupe can never match a photo turn: client writes… | none — pick ONE placeholder shape (or… | 2026-09-13 — source only:… | [:4038](open_issues.md#L4038) |
+| OI-193 | Gate 31 treats a COMMENTED `cron.unschedule('X')` as a real unschedule, so… | none — strip `--` comments before the… | 2026-09-12 —… | [:4048](open_issues.md#L4048) |
+| OI-194 | `compute_admin_metrics_daily` (jobid 30) skipped its 2026-09-11 18:15Z… | none for the code (repair (d) below is a… | 2026-09-12 — `select function_name,… | [:4059](open_issues.md#L4059) |
+| OI-195 | Gate 42 accepts any non-empty `behavioral_test_path:` / `presence_only:`… | none — one `File(path).existsSync()` per… | 2026-09-13 — `grep -n… | [:4090](open_issues.md#L4090) |
+| OI-196 | `morning-alert`'s Telegram sender logs the raw fetch error, whose message… | none — one-line change in one function;… | 2026-09-13 — read… | [:4100](open_issues.md#L4100) |
+| OI-197 | Founder observability gaps: payment-flow alerting dormant, EF auth-outage… | none — no schema/migration/payment/auth… | never — this is a gap analysis surfaced… | [:4112](open_issues.md#L4112) |
+| OI-198 | pr-detection cron: repeated Gateway Timeout on paged_fetch (4x in 24h,… | none | 2026-09-14, live query against… | [:4156](open_issues.md#L4156) |
+| OI-199 | cleanup_cron_call_log() spares only TWO global rows, not each function's… | none | 2026-09-14, live read of the function… | [:4179](open_issues.md#L4179) |

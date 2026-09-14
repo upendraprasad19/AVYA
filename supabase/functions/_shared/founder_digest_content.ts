@@ -355,12 +355,17 @@ export type DigestClient = { from(table: string): any };
 /** Runs a section read; a failure becomes that section's "unreadable" state. */
 async function readSection<T>(
   read: () => Promise<{ rows: T[]; total?: number }>,
+  // R2-15 (review round 2): this module is now called by BOTH
+  // founder-digest's daily cron AND telegram-admin-bot's `/digest` command
+  // — every read-failure log line used to be hardcoded to "[founder-digest]",
+  // which misnames the caller when it was really telegram-admin-bot.
+  callerLabel: string = "founder-digest",
 ): Promise<SectionRead<T>> {
   try {
     return await read();
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    console.error("[founder-digest] section read failed:", reason.slice(0, 300));
+    console.error(`[${callerLabel}] section read failed:`, reason.slice(0, 300));
     return { unreadable: reason };
   }
 }
@@ -369,6 +374,7 @@ async function readSection<T>(
 export async function readDigestSections(
   supabase: DigestClient,
   window: { yStart: string; tStart: string },
+  callerLabel: string = "founder-digest",
 ): Promise<Pick<DigestInput, "windowed" | "lifetime" | "alerts">> {
   const { yStart, tStart } = window;
 
@@ -391,7 +397,7 @@ export async function readDigestSections(
         maxPages: MAX_PAGES,
       },
     ),
-  }));
+  }), callerLabel);
 
   // Lifetime rows all share window_start = epoch, so "moved yesterday" is
   // answered by updated_at — the column consume_quota touches on every
@@ -413,7 +419,7 @@ export async function readDigestSections(
         maxPages: MAX_PAGES,
       },
     ),
-  }));
+  }), callerLabel);
 
   // Only the rendered lines are fetched; the header's number is the exact
   // server-side count, so a 73-alert day reads "(73) … +63 more", not "(10)".
@@ -433,7 +439,7 @@ export async function readDigestSections(
       rows: (data ?? []) as AlertRow[],
       total: typeof count === "number" ? count : undefined,
     };
-  });
+  }, callerLabel);
 
   const [windowed, lifetime, alerts] = await Promise.all([windowedRead, lifetimeRead, alertsRead]);
   return { windowed, lifetime, alerts };
@@ -448,10 +454,15 @@ export async function readDigestSections(
 export async function gatherDigestInput(
   supabase: DigestClient,
   now: Date = new Date(),
+  // R2-15 (review round 2): threaded through to every section's read-failure
+  // log line so it names the REAL caller — founder-digest's daily cron, or
+  // telegram-admin-bot's `/digest` command — instead of always saying
+  // "[founder-digest]".
+  callerLabel: string = "founder-digest",
 ): Promise<DigestInput> {
   const window = istYesterdayWindow(now);
   const { yStart, tStart } = window;
-  const { windowed, lifetime, alerts } = await readDigestSections(supabase, window);
+  const { windowed, lifetime, alerts } = await readDigestSections(supabase, window, callerLabel);
 
   // New paid subscriptions created inside yesterday's IST day, for the
   // per-plan breakdown. Independent read, same three-state contract as the
@@ -476,7 +487,7 @@ export async function gatherDigestInput(
         maxPages: MAX_PAGES,
       },
     ),
-  }));
+  }), callerLabel);
 
   // Users whose subscription expires within 7 / 30 days of `now` — a
   // point-in-time snapshot (not windowed to yesterday), so it uses `now`
@@ -504,7 +515,7 @@ export async function gatherDigestInput(
       return { count7d: r7.count ?? 0, count30d: r30.count ?? 0 };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      console.error("[founder-digest] section read failed:", reason.slice(0, 300));
+      console.error(`[${callerLabel}] section read failed:`, reason.slice(0, 300));
       return { unreadable: reason };
     }
   })();
