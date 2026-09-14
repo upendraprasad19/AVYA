@@ -13,6 +13,7 @@ import { clientError, corsHeaders, ok, serverError } from "../_shared/error.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
 import { escapeHtml, sendTelegram } from "../_shared/telegram.ts";
+import { istClock } from "../_shared/founder_digest_content.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -25,8 +26,10 @@ interface AlertRow {
 }
 
 export function formatCriticalAlertText(alert: AlertRow): string {
+  // detected_at was selected and typed but never rendered (review round 1
+  // F13) — the founder got a critical alert with no timestamp.
   const lines = [
-    "🔴 <b>CRITICAL</b>",
+    `🔴 <b>CRITICAL</b> ${istClock(alert.detected_at)}IST`,
     `${escapeHtml(alert.source)}`,
     escapeHtml(alert.summary),
   ];

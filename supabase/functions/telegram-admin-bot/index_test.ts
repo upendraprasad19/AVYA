@@ -6,31 +6,33 @@ Deno.env.set("FOUNDER_TELEGRAM_CHAT_ID", "12345");
 Deno.env.set("TELEGRAM_BOT_TOKEN", "dummy-telegram-token");
 
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, cmdExpiring, cmdUsers, cmdFind, cmdUser, cmdAlerts, cmdErrors, cmdCron, cmdDigest, looksLikeUuid } from "./index.ts";
+import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, bucketSubsByPlan, cmdExpiring, cmdUsers, cmdFind, sanitizeFindQuery, cmdUser, cmdAlerts, cmdErrors, cmdCron, cmdDigest, looksLikeUuid } from "./index.ts";
 
-Deno.test("isAuthorizedTelegramSender requires BOTH the secret token and the chat id to match", () => {
+Deno.test("isAuthorizedTelegramSender requires BOTH the secret token and the chat id to match", async () => {
+  // Async since review round 1 F11 — the secret comparison now runs
+  // through _shared/cron_auth.ts's constant-time timingSafeEqual.
   const base = { expectedSecretToken: "s3cr3t", expectedChatId: "12345" };
   assertEquals(
-    isAuthorizedTelegramSender({ ...base, secretTokenHeader: "s3cr3t", chatId: "12345" }),
+    await isAuthorizedTelegramSender({ ...base, secretTokenHeader: "s3cr3t", chatId: "12345" }),
     true,
   );
   assertEquals(
-    isAuthorizedTelegramSender({ ...base, secretTokenHeader: "wrong", chatId: "12345" }),
+    await isAuthorizedTelegramSender({ ...base, secretTokenHeader: "wrong", chatId: "12345" }),
     false,
   );
   assertEquals(
-    isAuthorizedTelegramSender({ ...base, secretTokenHeader: "s3cr3t", chatId: "99999" }),
+    await isAuthorizedTelegramSender({ ...base, secretTokenHeader: "s3cr3t", chatId: "99999" }),
     false,
   );
   assertEquals(
-    isAuthorizedTelegramSender({ ...base, secretTokenHeader: null, chatId: "12345" }),
+    await isAuthorizedTelegramSender({ ...base, secretTokenHeader: null, chatId: "12345" }),
     false,
   );
 });
 
-Deno.test("isAuthorizedTelegramSender coerces a numeric Telegram chat id before comparing", () => {
+Deno.test("isAuthorizedTelegramSender coerces a numeric Telegram chat id before comparing", async () => {
   assertEquals(
-    isAuthorizedTelegramSender({
+    await isAuthorizedTelegramSender({
       secretTokenHeader: "s3cr3t",
       expectedSecretToken: "s3cr3t",
       chatId: 12345,
@@ -112,6 +114,46 @@ Deno.test("routeCommand('help', ...) returns HELP_TEXT exactly", async () => {
   assertEquals(reply, HELP_TEXT);
 });
 
+// Telegram's HTML parse_mode accepts only a closed literal tag list and
+// rejects the WHOLE message with a 400 on anything else — see
+// _shared/telegram.ts's header. HELP_TEXT and every static Usage string are
+// sent with parse_mode: "HTML" but are hand-written, not escapeHtml()'d (the
+// way every DB-sourced field is), so a placeholder like "<text>" reads as an
+// unsupported start tag and silently kills the whole reply (review round 1,
+// F2, diagnose 2fa7c1). This asserts every "<...>" token in each static
+// string is one of Telegram's supported tags.
+const TELEGRAM_SUPPORTED_TAGS = new Set([
+  "b", "/b", "strong", "/strong", "i", "/i", "em", "/em", "u", "/u",
+  "ins", "/ins", "s", "/s", "strike", "/strike", "del", "/del",
+  "code", "/code", "pre", "/pre", "blockquote", "/blockquote",
+  "tg-spoiler", "/tg-spoiler", "/a", "/span",
+]);
+
+function assertOnlySupportedTelegramTags(text: string, label: string) {
+  const tokens = text.match(/<[^>]*>/g) ?? [];
+  for (const token of tokens) {
+    const inner = token.slice(1, -1).trim();
+    const tagName = inner.split(/\s/)[0].toLowerCase();
+    const isAnchorOrSpan = /^a\s+href=/.test(inner) || /^span\s+class=/.test(inner);
+    if (!TELEGRAM_SUPPORTED_TAGS.has(tagName) && !isAnchorOrSpan) {
+      throw new Error(
+        `${label} contains unsupported Telegram HTML tag "${token}" — this will make sendTelegram fail with a 400 and the whole reply silently disappears.`,
+      );
+    }
+  }
+}
+
+Deno.test("HELP_TEXT contains no Telegram-unsupported HTML tags", () => {
+  assertOnlySupportedTelegramTags(HELP_TEXT, "HELP_TEXT");
+});
+
+Deno.test("static Usage strings contain no Telegram-unsupported HTML tags", async () => {
+  const findUsage = await routeCommand("find", [], null);
+  const userUsage = await routeCommand("user", [], null);
+  assertOnlySupportedTelegramTags(findUsage, "/find usage string");
+  assertOnlySupportedTelegramTags(userUsage, "/user usage string");
+});
+
 Deno.test("cmdStatus formats alert count, signups, and reports the ops RPC's cron_failures_24h", async () => {
   const fake = {
     rpc: (name: string) => ({
@@ -134,12 +176,28 @@ Deno.test("cmdStatus formats alert count, signups, and reports the ops RPC's cro
 });
 
 Deno.test("cmdRevenue reports active subscription counts by plan and MRR", async () => {
+  // Routed through fetchAllPages since the gate check_unbounded_cron_reads.dart
+  // newly scans this file (it imports _shared/cron_auth.ts as of F11) and a
+  // hard .limit() would silently undercount MRR — this fake matches
+  // fetchAllPages' real chain shape: .order() then .range(). fetchAllPages
+  // only stops on an EMPTY page (a short page could be a server cap, not
+  // end-of-data — see paged_fetch.ts's own comment), so the fake must
+  // return rows once and an empty page on every call after, or it loops.
+  let rangeCalls = 0;
   const fake = {
-    from: (table: string) => ({
+    from: (_table: string) => ({
       select: () => ({
-        eq: () => Promise.resolve({
-          data: [{ plan: "monthly" }, { plan: "monthly" }, { plan: "yearly" }],
-          error: null,
+        eq: () => ({
+          order: () => ({
+            range: () => {
+              rangeCalls++;
+              return Promise.resolve(
+                rangeCalls === 1
+                  ? { data: [{ plan: "monthly" }, { plan: "monthly" }, { plan: "yearly" }], error: null }
+                  : { data: [], error: null },
+              );
+            },
+          }),
         }),
       }),
     }),
@@ -150,20 +208,80 @@ Deno.test("cmdRevenue reports active subscription counts by plan and MRR", async
   assertStringIncludes(text, "MRR: ₹948");
 });
 
-Deno.test("cmdSubs reports today's and yesterday's new subscriptions by plan", async () => {
+Deno.test("bucketSubsByPlan splits rows into today/yesterday by the tStart boundary and counts by plan", () => {
+  // Review round 1 F8: the spec, HELP_TEXT, and this function's own
+  // (previously-mistitled) test all promised BOTH today and yesterday;
+  // only yesterday was ever queried. This is the pure bucketing logic,
+  // deterministic and boundary-exact — `>= tStart` is TODAY, not yesterday.
+  const tStart = "2026-09-14T00:00:00+05:30";
+  const { today, yesterday } = bucketSubsByPlan(
+    [
+      { plan: "monthly", created_at: "2026-09-14T01:00:00+05:30" }, // today
+      { plan: "monthly", created_at: "2026-09-14T02:00:00+05:30" }, // today
+      { plan: "yearly", created_at: "2026-09-13T20:00:00+05:30" }, // yesterday
+      { plan: "monthly", created_at: "2026-09-13T10:00:00+05:30" }, // yesterday
+      { plan: "monthly", created_at: tStart }, // exactly the boundary — today (>=)
+    ],
+    tStart,
+  );
+  assertEquals(today.get("monthly"), 3);
+  assertEquals(today.has("yearly"), false);
+  assertEquals(yesterday.get("yearly"), 1);
+  assertEquals(yesterday.get("monthly"), 1);
+});
+
+Deno.test("cmdSubs queries only eq+gte (no upper bound) and renders both Today: and Yesterday: lines", async () => {
+  const now = Date.now();
+  const justNow = new Date(now - 60 * 1000).toISOString(); // today, almost certainly
+  const wellIntoYesterday = new Date(now - 25 * 60 * 60 * 1000).toISOString(); // yesterday, safely past any IST boundary
+  const calls: string[] = [];
+  const fake = {
+    from: () => ({
+      select: () => ({
+        eq: (col: string, val: string) => {
+          calls.push(`eq(${col},${val})`);
+          return {
+            gte: (col2: string, val2: string) => {
+              calls.push(`gte(${col2},...)`);
+              return {
+                limit: () => Promise.resolve({
+                  data: [
+                    { plan: "monthly", created_at: justNow },
+                    { plan: "yearly", created_at: wellIntoYesterday },
+                  ],
+                  error: null,
+                }),
+              };
+            },
+          };
+        },
+      }),
+    }),
+  };
+  const text = await cmdSubs(fake);
+  assertEquals(calls, ["eq(status,active)", "gte(created_at,...)"]);
+  assertStringIncludes(text, "Today: monthly: 1");
+  assertStringIncludes(text, "Yesterday: yearly: 1");
+});
+
+Deno.test("cmdSubs renders an explicit cap marker when the read hits SUBS_QUERY_CAP (B-pass finding 2)", async () => {
+  const rows = Array.from({ length: 1000 }, () => ({
+    plan: "monthly",
+    created_at: new Date().toISOString(),
+  }));
   const fake = {
     from: () => ({
       select: () => ({
         eq: () => ({
           gte: () => ({
-            lt: () => Promise.resolve({ data: [{ plan: "monthly", created_at: "2026-09-13T01:00:00Z" }], error: null }),
+            limit: () => Promise.resolve({ data: rows, error: null }),
           }),
         }),
       }),
     }),
   };
   const text = await cmdSubs(fake);
-  assertStringIncludes(text, "monthly");
+  assertStringIncludes(text, "capped at 1000 rows");
 });
 
 Deno.test("cmdExpiring reports 7d and 30d counts", async () => {
@@ -252,6 +370,7 @@ Deno.test("cmdFind searches both email and full_name", async () => {
             limit: () => Promise.resolve({
               data: [{ id: "u1", email: "match@example.com", full_name: "Match Name" }],
               error: null,
+              count: 1,
             }),
           };
         },
@@ -260,7 +379,57 @@ Deno.test("cmdFind searches both email and full_name", async () => {
   };
   const text = await cmdFind(fake, ["match"]);
   assertStringIncludes(capturedFilter!, "match");
-  assertEquals(text, '<b>Matches for "match"</b>\nMatch Name — match@example.com — u1');
+  assertEquals(text, '<b>Matches for "match"</b> (1):\nMatch Name — match@example.com — u1');
+});
+
+Deno.test("sanitizeFindQuery strips PostgREST or= structural characters and query wildcards", () => {
+  // Review round 1 F7: a comma injects an extra disjunct into the `or=`
+  // filter (e.g. `/find x,id.neq.<uuid>` could widen the match to
+  // everyone); an unbalanced paren 400s the whole request; `%`/`*` let a
+  // caller escape the "contains" wrapper this function already applies.
+  assertEquals(sanitizeFindQuery("a,b"), "ab");
+  assertEquals(sanitizeFindQuery("O'Brien (VP)"), "O'Brien VP");
+  assertEquals(sanitizeFindQuery("100%match"), "100match");
+  assertEquals(sanitizeFindQuery("a.b.c"), "abc");
+  assertEquals(sanitizeFindQuery("plain name"), "plain name");
+});
+
+Deno.test("cmdFind sanitizes a comma-bearing query before building the or= filter (does not inject an extra disjunct)", async () => {
+  let capturedFilter: string | null = null;
+  const fake = {
+    from: () => ({
+      select: () => ({
+        or: (filter: string) => {
+          capturedFilter = filter;
+          return { limit: () => Promise.resolve({ data: [], error: null, count: 0 }) };
+        },
+      }),
+    }),
+  };
+  await cmdFind(fake, ["evil,id.neq.x"]);
+  // The comma AND every period must be stripped before interpolation —
+  // exactly one top-level disjunct pair (email.ilike / full_name.ilike),
+  // not three, and no structural "." survives inside the value either.
+  assertEquals(capturedFilter, "email.ilike.%evilidneqx%,full_name.ilike.%evilidneqx%");
+});
+
+Deno.test("cmdFind renders a total and an overflow line when matches exceed the page size", async () => {
+  const fake = {
+    from: () => ({
+      select: () => ({
+        or: () => ({
+          limit: () => Promise.resolve({
+            data: [{ id: "u1", email: "a@example.com", full_name: "A" }],
+            error: null,
+            count: 23,
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdFind(fake, ["a"]);
+  assertStringIncludes(text, '(23):');
+  assertStringIncludes(text, "… +13 more");
 });
 
 Deno.test("cmdUser with no args returns a usage hint", async () => {
@@ -331,9 +500,11 @@ Deno.test("cmdUser with an active subscription renders the plan line with end da
                 eq: (col2: string, val2: unknown) => {
                   subEqCalls.push([col2, val2]);
                   return {
-                    maybeSingle: () => Promise.resolve({
-                      data: { plan: "yearly", status: "active", end_date: "2027-01-15T00:00:00Z" },
-                      error: null,
+                    order: () => ({
+                      limit: () => Promise.resolve({
+                        data: [{ plan: "yearly", status: "active", end_date: "2027-01-15T00:00:00Z" }],
+                        error: null,
+                      }),
                     }),
                   };
                 },
@@ -351,6 +522,76 @@ Deno.test("cmdUser with an active subscription renders the plan line with end da
   assertEquals(
     text,
     "<b>VIP User</b>\nvip@example.com\nid: u42\nsigned up: 2026-01-15\nlast active: 2026-09-12\nplan: yearly (ends 2027-01-15)",
+  );
+});
+
+Deno.test("cmdUser with TWO active subscription rows (a real live shape — renewal overlap) orders by end_date desc, limits to 1, and does not throw", async () => {
+  // Review round 1 F3: `.maybeSingle()` on this query throws PGRST116 when
+  // >1 row matches, and live data on 2026-09-14 showed exactly this shape
+  // for one real user. `.order("end_date", desc).limit(1)` replaces it.
+  // This pins the order/limit call args AND that a multi-row scenario (the
+  // fake returns 2 rows, oldest-first, deliberately NOT pre-sorted — a
+  // real un-ordered query could return them in any order) reads data[0]
+  // rather than crashing on ambiguity.
+  const orderCalls: [string, unknown][] = [];
+  let limitArg: number | undefined;
+  const fake = {
+    from: (table: string) => {
+      if (table === "users") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({
+                data: {
+                  id: "u-multi",
+                  email: "renewed@example.com",
+                  full_name: "Renewed User",
+                  created_at: "2026-01-01T00:00:00Z",
+                  last_active_at: "2026-09-10T00:00:00Z",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "subscriptions") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                order: (col: string, opts: unknown) => {
+                  orderCalls.push([col, opts]);
+                  return {
+                    limit: (n: number) => {
+                      limitArg = n;
+                      return Promise.resolve({
+                        data: [
+                          { plan: "yearly", status: "active", end_date: "2026-08-01T00:00:00Z" },
+                          { plan: "monthly", status: "active", end_date: "2027-06-01T00:00:00Z" },
+                        ],
+                        error: null,
+                      });
+                    },
+                  };
+                },
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    },
+  };
+  const text = await cmdUser(fake, ["renewed@example.com"]);
+  assertEquals(orderCalls, [["end_date", { ascending: false }]]);
+  assertEquals(limitArg, 1);
+  // Reads data[0] verbatim (the real ORDER BY does the sorting server-side —
+  // this test's fixture deliberately puts the "wrong" row first to prove
+  // the code trusts data[0], not that it re-sorts client-side).
+  assertEquals(
+    text,
+    "<b>Renewed User</b>\nrenewed@example.com\nid: u-multi\nsigned up: 2026-01-01\nlast active: 2026-09-10\nplan: yearly (ends 2026-08-01)",
   );
 });
 
@@ -387,7 +628,9 @@ Deno.test("cmdUser without an active subscription renders 'plan: free', reading 
                 eq: (col2: string, val2: unknown) => {
                   subEqCalls.push([col2, val2]);
                   return {
-                    maybeSingle: () => Promise.resolve({ data: null, error: null }),
+                    order: () => ({
+                      limit: () => Promise.resolve({ data: [], error: null }),
+                    }),
                   };
                 },
               };
@@ -431,6 +674,31 @@ Deno.test("cmdAlerts lists open alerts most-recent-first, capped at 10", async (
   // Verify cap: exactly 10 rows shown (rows 0-9), NOT row 10 or 11
   assertEquals(text.includes("row 10"), false);
   assertEquals(text.includes("row 11"), false);
+});
+
+Deno.test("cmdAlerts renders the exact server count and an overflow line when open alerts exceed the page size", async () => {
+  // Review round 1 F5: a bare page of MAX_ALERT_LINES with no total left
+  // the founder unable to tell "10 alerts" from "10 of 29" — live data
+  // 2026-09-14 had 29 open, silently showing only the newest 10. Mirrors
+  // founder_digest_content.ts's already-fixed { count: "exact" } pattern.
+  const fake = {
+    from: () => ({
+      select: () => ({
+        is: () => ({
+          order: () => ({
+            limit: () => Promise.resolve({
+              data: [{ source: "s", severity: "warn", summary: "m", detected_at: "2026-09-13T01:00:00Z" }],
+              error: null,
+              count: 29,
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdAlerts(fake);
+  assertStringIncludes(text, "(29):");
+  assertStringIncludes(text, "… +19 more");
 });
 
 Deno.test("cmdAlerts escapes HTML in alert fields", async () => {
@@ -505,6 +773,30 @@ Deno.test("cmdErrors groups yesterday's real errors by op_type and excludes even
   assertEquals(text.includes("also_excluded_op"), false);
 });
 
+Deno.test("cmdErrors renders an explicit cap marker when the read hits PostgREST's row limit (review round 1 F6)", async () => {
+  // `.limit(2000)` was never a real bound — this project's PostgREST
+  // db-max-rows is 1000, and a truncated read returns HTTP 200 with no
+  // signal at all (scripts/check_unbounded_cron_reads.dart's header). A
+  // fixture returning exactly CLIENT_ERRORS_QUERY_CAP (1000) rows is the
+  // observable proxy for "the read was capped" from inside this function —
+  // it cannot see PostgREST's own truncation, only that it got exactly its
+  // own limit back.
+  const rows = Array.from({ length: 1000 }, () => ({ op_type: "some_op", error_code: "minified:x" }));
+  const fake = {
+    from: () => ({
+      select: () => ({
+        gte: () => ({
+          lt: () => ({
+            limit: () => Promise.resolve({ data: rows, error: null }),
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdErrors(fake);
+  assertStringIncludes(text, "capped at 1000 rows");
+});
+
 Deno.test("cmdErrors escapes HTML in op_type field", async () => {
   const fake = {
     from: () => ({
@@ -536,17 +828,19 @@ Deno.test("cmdCron deduplicates by function name and sorts by age (most stale fi
   const fake = {
     from: () => ({
       select: () => ({
-        order: () => ({
-          limit: () => Promise.resolve({
-            data: [
-              // Most recent of morning-alert (should be used)
-              { function_name: "morning-alert", status: "success", started_at: fiveMinutesAgo },
-              // Older of morning-alert (should be ignored)
-              { function_name: "morning-alert", status: "failed", started_at: fifteenMinutesAgo },
-              // Most recent of evening-alert
-              { function_name: "evening-alert", status: "success", started_at: tenMinutesAgo },
-            ],
-            error: null,
+        gte: () => ({
+          order: () => ({
+            limit: () => Promise.resolve({
+              data: [
+                // Most recent of morning-alert (should be used)
+                { function_name: "morning-alert", status: "success", started_at: fiveMinutesAgo },
+                // Older of morning-alert (should be ignored)
+                { function_name: "morning-alert", status: "failed", started_at: fifteenMinutesAgo },
+                // Most recent of evening-alert
+                { function_name: "evening-alert", status: "success", started_at: tenMinutesAgo },
+              ],
+              error: null,
+            }),
           }),
         }),
       }),
@@ -567,12 +861,14 @@ Deno.test("cmdCron escapes HTML in function name and status", async () => {
   const fake = {
     from: () => ({
       select: () => ({
-        order: () => ({
-          limit: () => Promise.resolve({
-            data: [
-              { function_name: "alert<script>", status: "fail&success", started_at: now.toISOString() },
-            ],
-            error: null,
+        gte: () => ({
+          order: () => ({
+            limit: () => Promise.resolve({
+              data: [
+                { function_name: "alert<script>", status: "fail&success", started_at: now.toISOString() },
+              ],
+              error: null,
+            }),
           }),
         }),
       }),
@@ -582,6 +878,54 @@ Deno.test("cmdCron escapes HTML in function name and status", async () => {
   assertEquals(text.includes("<script>"), false);
   assertStringIncludes(text, "&lt;script&gt;");
   assertStringIncludes(text, "&amp;");
+});
+
+Deno.test("cmdCron queries a 7-day time window (gte on started_at), not a row-count limit — a genuinely stale job that a row cap would drop must still appear", async () => {
+  // Review round 1 F4: `.limit(200)` on `started_at desc` silently dropped
+  // whichever functions were stalest — live evidence showed 3 real
+  // functions missing entirely. A 7-day `.gte()` window closes that
+  // specific gap (correct bound, never a row count) — though it is not a
+  // COMPLETE fix: `cleanup_cron_call_log()` (migration 109) spares only
+  // ONE row globally, not each function's latest, so true >7-day silence
+  // still goes invisible past the retention cut (B-pass finding, same
+  // day; see the code comment above cmdCron).
+  const now = new Date();
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  let gteCol: string | undefined;
+  let gteVal: string | undefined;
+  let limitArg: number | undefined;
+  const fake = {
+    from: () => ({
+      select: () => ({
+        gte: (col: string, val: string) => {
+          gteCol = col;
+          gteVal = val;
+          return {
+            order: () => ({
+              limit: (n: number) => {
+                limitArg = n;
+                return Promise.resolve({
+                  // A genuinely stale function (3 days silent) — well past
+                  // where any 200-row recency window would have reached,
+                  // but inside the 7-day retention window this query uses.
+                  data: [{ function_name: "plateau-alert", status: "success", started_at: threeDaysAgo }],
+                  error: null,
+                });
+              },
+            }),
+          };
+        },
+      }),
+    }),
+  };
+  const text = await cmdCron(fake);
+  assertEquals(gteCol, "started_at");
+  // Within a few ms of "7 days ago" — assert the window, not an exact instant.
+  const gteAgeMs = now.getTime() - new Date(gteVal!).getTime();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  assertEquals(Math.abs(gteAgeMs - sevenDaysMs) < 5000, true);
+  assertEquals(limitArg, 1000);
+  assertStringIncludes(text, "plateau-alert");
 });
 
 /**

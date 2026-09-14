@@ -21,6 +21,17 @@ Deno.test("formatCriticalAlertText includes the source, summary, and suggested a
   assertStringIncludes(text, "Inspect docs/diagnoses");
 });
 
+Deno.test("formatCriticalAlertText renders detected_at as an IST clock time (review round 1 F13 — it was selected/typed but never rendered)", () => {
+  const text = formatCriticalAlertText({
+    source: "alert_client_errors_spike",
+    summary: "test",
+    detected_at: "2026-09-13T02:00:00.000Z", // 07:30 IST
+    suggested_action: null,
+  });
+  assertStringIncludes(text, "07:30");
+  assertStringIncludes(text, "IST");
+});
+
 Deno.test("formatCriticalAlertText handles a null suggested_action without crashing", () => {
   const text = formatCriticalAlertText({
     source: "alert_payment_flow_health",

@@ -1,14 +1,27 @@
 /**
- * telegram.ts — the ONE hardened Telegram sender for this project. Used by
- * founder-digest (daily cron), alert-critical-notify (trigger-invoked), and
- * telegram-admin-bot (webhook replies). Do not duplicate this in a new
- * function — import it.
+ * telegram.ts — the hardened Telegram sender pattern for this project. Used
+ * by alert-critical-notify (trigger-invoked) and telegram-admin-bot (webhook
+ * replies) directly.
  *
- * The error-handling discipline here is load-bearing: a Deno fetch
- * TypeError's `.message` embeds the request URL, which carries the bot
- * token (`https://api.telegram.org/bot<TOKEN>/sendMessage`). Only `.name`
- * (via telegramErrorSummary) is ever allowed to leave this module — never
- * the raw error, never String(err).
+ * ⚠ `founder-digest` does NOT import `sendTelegram` from here (review round
+ * 1, F9 — this header previously claimed it did). It keeps its OWN sender
+ * (`founder-digest/index.ts`) for two real reasons, not an unfinished
+ * extraction: (1) an injectable `fetchImpl` its own secret-hygiene tests
+ * need, and (2) — the load-bearing one — this module's `truncateForTelegram`
+ * is a RAW character slice, while the digest's pre-formatted multi-line HTML
+ * needs a LINE-boundary-aware cut or Telegram 400s the whole message on
+ * unbalanced HTML (Hermes L21 P0; see `_shared/founder_digest_content.ts`'s
+ * header). If you are "finishing" the DRY extraction by switching
+ * founder-digest onto THIS sender, you are reintroducing that P0 — don't,
+ * unless `truncateForTelegram` itself becomes line-boundary-aware first.
+ *
+ * The error-handling discipline here IS shared across all three senders
+ * (this module's own, and founder-digest's twin): a Deno fetch TypeError's
+ * `.message` embeds the request URL, which carries the bot token
+ * (`https://api.telegram.org/bot<TOKEN>/sendMessage`). Only `.name` (via
+ * telegramErrorSummary, exported from here and reused by founder-digest) is
+ * ever allowed to leave either module — never the raw error, never
+ * String(err).
  */
 
 export const TELEGRAM_MAX_CHARS = 4096;

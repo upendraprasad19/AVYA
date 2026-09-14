@@ -1551,3 +1551,26 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   claim is as much the lens's job as catching a wrong one.
   False-alarm rate 1/11 ≈ 9% → well under the 30% threshold; no lens removed. Lenses 6, 8, 9
   extended per above.
+
+- **2026-09-14 (c)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, the F2-F13
+  fix-response commit for a separate whole-branch review's findings (touches
+  `_shared/cron_auth.ts`, catastrophic by path in `docs/blast_radius.yaml`, even though the
+  change to it — exporting a previously-private `timingSafeEqual` — is behavior-preserving for
+  its existing callers). **1 P2, 1 P3; 0 false_alarm; both accepted and fixed in the same
+  commit.** Review: `docs/reviews/014866ecac87-review.md`.
+  **Tuning — lens 8 (`asserted_fixture_value`) caught a review-writer's OWN comment repeating an
+  unverified claim, not just a test's asserted value.** The fix-diff's code comment justifying
+  the `/cron` 7-day-window fix claimed a cleanup function "ALWAYS SPARES each function's most
+  recent row" — plausible-sounding, written by the same author who wrote the fix, and false: the
+  live function body spares exactly ONE row globally, not one per function. This is the same
+  class this history has flagged before (a review's own suggested-fix repeating a stale claim,
+  2026-09-14 (b)'s entry) but one level earlier — here it was the FIX's own justification, not a
+  reviewer's suggestion, and it survived because nobody had re-read the cited function's live
+  body since writing the sentence. **Any comment citing a named function/migration's behavior as
+  the reason a fix is safe is itself a claim in asserted_fixture_value's scope — verify it
+  against the live body, not just the test's literal values.** The deeper defect (the cleanup
+  function itself only sparing one row, not per-function) was correctly NOT fixed in the same
+  diff — filed as OI-199, since it is separate pre-existing infrastructure (migration 109
+  predates the branch) with its own blast radius and testing needs. Distinguishing "the comment
+  is wrong" (fix now) from "the underlying system has a gap" (file it) kept the diff from scope-
+  creeping into an unrelated migration under review-response pressure.
