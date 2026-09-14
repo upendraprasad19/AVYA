@@ -12,6 +12,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### server_trigger_telemetry (1 bugs)
 - 2026-09-14 d70421 — B-pass review of migration 133 (docs/reviews/28213f7956e2-review.md, Finding 3) found private.dispatch_critical_alert_notify()'s EXCEPTION WHEN OTHERS handler was a bare `RETURN NEW;` with zero…
 
+### founder_metrics_ops_acl_replay_guard (1 bugs)
+- 2026-09-14 f7c3a1 — `test/contracts/admin_metrics_functions_role_revoke_test.dart`'s "EVERY post-103 migration ... re-asserts the anon + authenticated revoke (a9d3f1 replay guard)" test failed on the first full `flutter…
+
 ### edge_function_input_validation (3 bugs)
 - 2026-09-14 d3f9a2 — Two review findings on the telegram-admin-bot webhook skeleton (task 8, commit f216b9cd): (1) `update.message?.chat?.id` / `update.message?.text` optional-chained from `.message`, not from `update`…
 - 2026-09-14 abc123 — Code review of telegram-admin-bot (commit 789254d2) identified six security and correctness issues: missing HTML escaping on status/op_type/function_name outputs (XSS risk), unbounded cmdErrors query…
@@ -1191,6 +1194,7 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-09-14 | e1b4a7 | cmdDigest's own test (index_test.ts) passed, but four of the five digest sections (windowed, lifetime, alerts, subscriptions) silently resolved to "unreadable" instead of the intended empty/"none"… | fetchAllPages_chainable_builder_contract | supabase/functions/telegram-admin-bot/index_test.ts |
 | 2026-09-14 | d70421 | B-pass review of migration 133 (docs/reviews/28213f7956e2-review.md, Finding 3) found private.dispatch_critical_alert_notify()'s EXCEPTION WHEN OTHERS handler was a bare `RETURN NEW;` with zero… | server_trigger_telemetry | test/sql/alert_critical_notify_trigger_live_verify.sql |
+| 2026-09-14 | f7c3a1 | `test/contracts/admin_metrics_functions_role_revoke_test.dart`'s "EVERY post-103 migration ... re-asserts the anon + authenticated revoke (a9d3f1 replay guard)" test failed on the first full `flutter… | founder_metrics_ops_acl_replay_guard | test/contracts/admin_metrics_functions_role_revoke_test.dart |
 | 2026-09-14 | d3f9a2 | Two review findings on the telegram-admin-bot webhook skeleton (task 8, commit f216b9cd): (1) `update.message?.chat?.id` / `update.message?.text` optional-chained from `.message`, not from `update`… | edge_function_input_validation | supabase/functions/telegram-admin-bot/index_test.ts |
 | 2026-09-14 | abc123 | Code review of telegram-admin-bot (commit 789254d2) identified six security and correctness issues: missing HTML escaping on status/op_type/function_name outputs (XSS risk), unbounded cmdErrors query… | edge_function_input_validation | supabase/functions/telegram-admin-bot/index_test.ts |
 | 2026-09-14 | 82b018 | Whole-branch review round 1 (context-blind, most-capable-model, live-state verified) of the telegram-admin-bot branch found 13 findings (F1-F13). This doc covers the code-level fixes for F2-F13 (F1 is… | telegram_admin_bot_command_correctness | supabase/functions/telegram-admin-bot/index_test.ts |
