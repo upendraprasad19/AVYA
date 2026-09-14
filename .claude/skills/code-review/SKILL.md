@@ -176,10 +176,15 @@ When invoked, this skill should:
 3. Generate the staging hash **exactly the way the gate does**, or the file you write
    will not be the one it looks for:
    ```bash
-   git diff --cached -- ':(top)' ':(top,exclude)docs/reviews' | git hash-object --stdin
+   git diff --cached -- ':(top)' ':(top,exclude)docs/reviews' ':(top,exclude).claude/skills/code-review/SKILL.md' | git hash-object --stdin
    ```
-   then truncate to 12 chars. Two details are load-bearing and this step documented
-   neither:
+   then truncate to 12 chars. Three details are load-bearing and this step used to document
+   only two — corrected 2026-09-14, telegram-admin-bot batch, after a session chased a
+   FALSE hash-fixed-point across 3 renames believing SKILL.md's own content moved the
+   hash (it does not — `check_code_review_pass_exists.dart`'s real exclusion set already
+   dropped SKILL.md too, per the OI-162 slice 4 addendum this file's own history section
+   documents at length below; this step's code block had simply never been updated to
+   match):
    - It is git's **sha1 `hash-object`**, not `sha256`.
      `scripts/check_code_review_pass_exists.dart` has always used `git hash-object`, so
      a review named by following the old text could never match. (Found by round-1B
@@ -187,6 +192,12 @@ When invoked, this skill should:
    - `docs/reviews/` is **excluded** from the hash (OI-72, same batch). The gate now
      reads the review from the STAGED blob, so the file must be `git add`ed — and
      without the exclusion, staging it would move the hash and rename the very file it
+     is meant to satisfy.
+   - `.claude/skills/code-review/SKILL.md` is **also excluded** (OI-162 slice 4
+     addendum, 2026-09-11) — its own §5.1-required tuning-history entry must land in
+     the SAME commit as any new review file, so without this exclusion staging THAT
+     would move the hash exactly the way staging the review itself would have, with no
+     clean iterative fix. Use the three-pathspec command above, not the two-pathspec
      is meant to satisfy.
 4. **Dispatch a FRESH Sonnet subagent** via `Agent({subagent_type: 'general-purpose', model: 'sonnet', ...})` with:
    - The diff inline (or list of changed files to Read)
@@ -219,6 +230,54 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 - Bundle this with `/hermes-pass`. That's a different skill (per-batch, all 53 lenses, Opus, slower).
 
 ## 7. Tuning history
+
+- **2026-09-14 (c)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
+  second follow-up (migration 135: `founder_metrics_ops()` excludes `error_code='info'` from
+  `client_errors_today`, fixing round-2 finding R2-10 of the branch's whole-branch review;
+  already applied live with explicit founder authorization). **2 findings (0 P0, 0 P1, 1 P2,
+  1 P3); 0 false_alarm — both accepted, neither fixed in-batch** (the P2 is cosmetic/informational
+  on a founder-only ops metric and pre-existing, not a regression; the P3 is a duplicate-sentence
+  nit in a manual, non-gated verification script). Review: `docs/reviews/c0ea56c3d0e5-review.md`.
+  **Tuning 2 — §3 step 3's hash-generation code block was stale for 3 years
+  worth of gate history and cost this exact batch 3 needless renames.** It
+  showed only the `docs/reviews` exclusion; the real gate
+  (`check_code_review_pass_exists.dart`, per its own OI-162 slice 4 comment)
+  has excluded `.claude/skills/code-review/SKILL.md` from the hash since
+  2026-09-11. A session correcting a P2 finding kept "fixing" SKILL.md's own
+  citation of the review filename to match a hash it believed SKILL.md's
+  edits moved — chasing a fixed point that does not exist in the real gate.
+  §3's code block now includes the third pathspec exclusion so this cannot
+  recur; see this review file's own preamble for the full chronology.
+  Run as one agent (3 small files: a migration, a JSON metadata record, a manual SQL verify
+  script).
+  **Tuning — lens 3's "verify the precedent citation, not just its existence" extension
+  (established 2026-09-14 for a repo-precedent-by-name citation) generalizes to a
+  precedent-by-NUMBER-RANGE citation too, and caught a real gap the diff's own author had not
+  noticed.** The migration's header claims it "mirrors the exclusion pattern migrations
+  086/087 already established" — true only for HALF of that pattern. 086/087 exclude both
+  `error_code='event'` AND `'info'` (087 additionally re-includes failure-shaped `'event'` rows
+  via an `op_type` regex, because `ErrorTelemetry.logEvent` hardcodes `error_code='event'` for a
+  huge mix of benign breadcrumbs and real failures alike). This migration excludes only `'info'`.
+  Reading the citation as a checkable claim rather than scene-setting prose, and then measuring
+  it against LIVE data rather than reasoning from the SQL alone, is what surfaced it: `select
+  error_code, count(*) from client_errors where <today> group by error_code` returned
+  `{event: 4, info: 2}` at review time — `client_errors_today` reads **4** right now, on a day
+  with **zero real errors**, because the `'event'` breadcrumbs are still counted. Not a
+  regression (the diff doesn't add this problem, it just doesn't finish removing it), so P2 not
+  P1 — but a citation that names a fix as "mirroring" a broader precedent while shipping a
+  narrower one is exactly the shape lens 3's method exists to catch, and it would have read as
+  clean from the SQL text alone; only running the live count against `error_telemetry.dart`'s
+  hardcoded `'event'` code made it visible.
+  **A second, smaller confirmation — the byte-identical-deploy claim was independently
+  re-derived rather than trusted from the migration's own header/applied_migrations.json note,
+  per the 2026-09-14(b) entry's standing method.** `pg_get_functiondef('public.
+  founder_metrics_ops()'::regprocedure)` was pulled live and diffed against the staged file
+  (identical apart from formatting); `has_function_privilege` was re-queried for all three roles
+  (anon/authenticated/service_role) rather than accepting the note's stated values; and
+  `list_migrations` was cross-checked against the `applied_migrations.json` entry's
+  `cloud_version` field. All three held.
+  False-alarm rate 0/2 → no lens removed; lens 3's citation-verification method now explicitly
+  covers precedent-by-number-range, not just precedent-by-name.
 
 - **2026-09-14 (b)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
   follow-up (migration 134: `client_errors` telemetry + a `COMMENT ON TRIGGER`, fixing 2 of the

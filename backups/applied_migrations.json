@@ -962,5 +962,15 @@
     "slug": "alert_critical_notify_telemetry",
     "cloud_version": "20260914010918",
     "note": "B-pass follow-up to migration 133 (docs/reviews/28213f7956e2-review.md Findings 3 and 4). CREATE OR REPLACE private.dispatch_critical_alert_notify() adds client_errors telemetry (success + failure paths, real columns error_code/error_message/client_version/platform) and a COMMENT ON TRIGGER documenting the AFTER-INSERT-only scope. The review's own suggested-fix cited the wrong client_errors columns (message/severity) -- the exact columns that caused a real prod P0 in migration 073's original body, fixed by 078_fix_dispatch_proactive_coach_promotion_columns.sql. This migration was written from 078's corrected pattern instead, independently re-verified against live information_schema.columns before writing any SQL, and the failure-path telemetry insert is nested in its own BEGIN/EXCEPTION WHEN OTHERS THEN NULL block (078's fix) so a telemetry-insert failure can never itself abort the parent alerts INSERT. Live-verified post-apply inside a rolled-back transaction: a critical insert produced a correct critical_alert_dispatched / error_code='info' telemetry row; the COMMENT ON TRIGGER text confirmed live via obj_description(). Founder go for the live-apply covers this migration under the same 2026-09-14 approval as 133 (same task, same batch, B-pass-mandated follow-up)."
+  },
+  {
+    "migration": "135",
+    "applied_at": "2026-09-14T19:43:41+05:30",
+    "hash": "sha256:577f1a2ab6f16bbcf467fcb757ff993cfcc61ab197a9ccde8dbdd8ec55abee51",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "82b018",
+    "slug": "founder_metrics_ops_exclude_info_client_errors",
+    "cloud_version": "20260914141301",
+    "note": "Review Round 2 finding R2-10 (telegram-admin-bot whole-branch review, diagnose 82b018): migration 134's success-path critical-alert telemetry writes a client_errors row with error_code='info' on every successful dispatch, inflating founder_metrics_ops()'s client_errors_today count even though nothing had gone wrong. CREATE OR REPLACE founder_metrics_ops() with 101_admin_dashboard_metrics_functions.sql's body verbatim (confirmed via live pg_get_functiondef before writing this migration -- byte-identical to 101's definition, no intervening redefinition) plus one added predicate: error_code is distinct from 'info' on the client_errors_today subquery only. Mirrors the exclusion pattern migrations 086/087 already established on the alert-spike side. Post-apply live verification: has_function_privilege confirms anon=false, authenticated=false, service_role=true (unchanged from pre-apply); founder_metrics_ops() still returns a full row (client_errors_today=4, matching the pre-apply smoke-tested value, since no info-coded rows exist in today's window yet). Founder go given 2026-09-14 via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval) -- this migration was deliberately held out of two prior commits specifically pending this authorization."
   }
 ]

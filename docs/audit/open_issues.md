@@ -4240,3 +4240,41 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   predates this branch), out of scope for the telegram-admin-bot batch's
   own fix diff — the comment claiming this behavior was corrected in that
   same commit (`diagnose 82b018`), and this OI tracks the deeper fix.
+
+## OI-200 — founder_metrics_ops().client_errors_today counts benign event-coded breadcrumbs, no 087-style reinclusion filter
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-14, B-pass on migration 135 (`docs/reviews/5eb09cde42a2-review.md`
+  Finding 1) — live query against `dedsavbjuwgarrhphgnl` showed
+  `founder_metrics_ops().client_errors_today = 4` on a day with zero real
+  errors, all four rows `error_code='event'` (benign `ErrorTelemetry`
+  breadcrumbs). `client_errors_today` has counted every `event`-coded row
+  since the function was first created (migration 093/101), regardless of
+  whether the row is a genuine failure — `ErrorTelemetry.logEvent`
+  (`lib/core/services/error_telemetry.dart:332`) hardcodes
+  `error_code:'event'` for both benign breadcrumbs and real failures
+  (`*_failed`, `widget_error_fallback`, `*_returned_null`,
+  `*_unknown_error`), the exact same ambiguity migrations 086/087 resolved
+  on the ALERT-SPIKE side (`alert_client_errors_spike`) by re-including any
+  `event`-coded row whose `op_type` is failure-shaped
+  (`~* '(fail|error|crash|fallback|unknown|exception|timeout|denied|_null)'`).
+  `founder_metrics_ops()` has never had the equivalent reinclusion filter —
+  it either counts all `event` rows (pre-135) or, after 135, still counts
+  all `event` rows (135 only excludes `info`; it does NOT touch `event`).
+- **Scope note**: pre-existing since `founder_metrics_ops()`'s creation,
+  predates the telegram-admin-bot branch entirely — out of scope for
+  migration 135's own fix (R2-10, diagnose `82b018`), which targeted only
+  the NEW regression migration 134 introduced (`info`-coded telemetry
+  inflating the count). Migration 135's own header comment overclaims
+  "mirrors the exclusion pattern migrations 086/087 already established"
+  when it only excludes `info`, not `event` — flagged by the B-pass
+  (`docs/reviews/5eb09cde42a2-review.md` Finding 1). **The migration file
+  itself is NOT corrected**: it was already applied live before the B-pass
+  ran, and `supabase/migrations/CLAUDE.md` ("An APPLIED migration is
+  IMMUTABLE — including its comments") is explicit that editing an applied
+  file's comment silently falsifies its ledger hash with no gate catching
+  it. The correction lives here and in diagnose-doc `82b018` instead, per
+  that same section's guidance. The eventual fix mirrors 087's exact regex
+  reinclusion pattern, applied to `client_errors_today`'s subquery, in a
+  NEW migration (136+).

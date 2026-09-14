@@ -195,6 +195,34 @@ diff found one P2 and one P3, both accepted and fixed in this same commit:
   already-explicit cap+marker pattern — added `SUBS_QUERY_CAP` (1000,
   matching PostgREST's real `db-max-rows`) + the same honest marker.
 
+## Review Round 2 follow-up (separate commits, same batch)
+
+Review Round 2 (fresh, most-capable-model, context-blind review of the
+post-round-1 hardened branch) found 16 findings (R2-01 through R2-16).
+R2-01 (missing plan-review record) is tracked separately — see the
+Summary section above, corrected the same day this doc was first
+committed. R2-02 through R2-16 (15 findings) are fixed across two
+follow-on commits: `bfc1bc11`'s successor commit (14 findings, code/doc
+fixes) and a dedicated migration commit for R2-10 (migration 135,
+`founder_metrics_ops()`'s `client_errors_today` excluding `info`-coded
+rows — migration 134's own success-path telemetry had inflated it).
+
+Migration 135 went through its own catastrophic-tier B-pass
+(`docs/reviews/5eb09cde42a2-review.md`, SECURITY DEFINER content forces
+catastrophic regardless of path tier) after live apply. That B-pass
+found one P2: migration 135's header comment overclaims "mirrors the
+exclusion pattern migrations 086/087 already established" — it excludes
+`info` only, not `event`, so `client_errors_today` still counts every
+benign `event`-coded `ErrorTelemetry` breadcrumb (a real, PRE-EXISTING
+gap since `founder_metrics_ops()`'s creation, unrelated to this batch —
+086/087's full reinclusion pattern was never applied to this reader).
+**The migration file itself cannot be corrected**: it was applied live
+before the B-pass ran, and `supabase/migrations/CLAUDE.md`'s "An APPLIED
+migration is IMMUTABLE" rule is explicit that editing even a comment on
+an applied migration silently falsifies its ledger hash with no gate to
+catch it. The correction lives in `docs/audit/open_issues.md`'s OI-200
+(filed for the deeper `event`-reinclusion gap) and this note instead.
+
 ## Verification
 
 - `deno check --node-modules-dir=none` clean on every touched file.
