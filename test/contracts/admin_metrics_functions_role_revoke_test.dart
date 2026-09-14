@@ -106,9 +106,17 @@ void main() {
     // leak, only a source-drift gap against this test's defense-in-depth
     // policy. See docs/diagnoses/2026-09-14-founder-metrics-ops-revoke-
     // replay-guard-f7c3a1.md.
+    //
+    // SCOPED PER (file, function) PAIR, not per file — B-pass finding 3
+    // (2026-09-14, docs/reviews/9765a1fbaf00-review.md): a file-level skip
+    // would silently exempt a DIFFERENT founder_metrics_* function too, if
+    // either file were ever (improperly — violating the immutability rule
+    // above) edited to also touch one. Both entries name the EXACT function
+    // the exemption covers, so an edit adding a second touch to either file
+    // is caught normally.
     const exemptAlreadyAppliedWithFollowOnRevoke = {
-      '135_founder_metrics_ops_exclude_info_client_errors.sql',
-      '136_founder_metrics_ops_exclude_info_client_errors_7d.sql',
+      ('135_founder_metrics_ops_exclude_info_client_errors.sql', 'founder_metrics_ops'),
+      ('136_founder_metrics_ops_exclude_info_client_errors_7d.sql', 'founder_metrics_ops'),
     };
 
     var checked = 0;
@@ -117,7 +125,6 @@ void main() {
     for (final file in files) {
       final name = file.uri.pathSegments.last;
       if (!name.endsWith('.sql')) continue;
-      if (exemptAlreadyAppliedWithFollowOnRevoke.contains(name)) continue;
       final number = int.tryParse(name.split('_').first);
       if (number == null || number <= 103) continue;
 
@@ -127,6 +134,9 @@ void main() {
       if (fns.isEmpty) continue;
 
       for (final fn in fns) {
+        if (exemptAlreadyAppliedWithFollowOnRevoke.contains((name, fn))) {
+          continue;
+        }
         checked++;
 
         // ORDER MATTERS, and presence alone does not imply it. Default

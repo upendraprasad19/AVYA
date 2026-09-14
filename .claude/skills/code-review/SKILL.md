@@ -231,6 +231,49 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-14 (e)** — blast-radius **platform** — branch `telegram-admin-bot`, Task 13 Step 8
+  push-gate fix (migration 137: re-asserts the anon/authenticated revoke on
+  `founder_metrics_ops()` that migrations 135/136 each omitted — caught by the FIRST full
+  `flutter test` run on this branch, at pre-push, since neither review round nor the Hermes
+  pass ran it locally). **3 findings (0 P0, 0 P1, 2 Medium, 1 Low); 0 false_alarm — all 3
+  accepted and fixed in-batch.** Review: `docs/reviews/9765a1fbaf00-review.md`. Run as one agent
+  (4 small files: a migration, a test-file diff, a diagnose-doc, a JSON ledger entry).
+  **Tuning 1 — a diagnose-doc's SELF-DECLARED `blast_radius:` frontmatter field is not read by
+  any gate and can silently drift from the classifier's actual computed tier — check it
+  explicitly, every time, the same way lens 3 already checks a diff's OWN blast-radius
+  claim.** The doc claimed `catastrophic`; `blast_radius_from_diff.dart` computed `platform`
+  (migration 137 is a bare `revoke`, carrying none of the `SECURITY DEFINER` text its siblings
+  135/136 do). Overstated rather than understated — no review round was skipped as a result —
+  but it directly contradicted the SAME doc's own `impact_analysis` section ("no live exposure
+  at any point"). **Add to lens 3's method: a diagnose-doc's `blast_radius:` field is a claim
+  like any other citation — recompute it, don't read it.**
+  **Tuning 2 — a line-number citation copied from a SIBLING file (not from thin air) is the
+  quietest version of the stale-citation class, because the two files are similar enough that
+  the copy usually happens to be right.** Migration 136's correct `CREATE OR REPLACE
+  FUNCTION` line (27) was reused for migration 135's identical-shaped citation — wrong only
+  because 135's header comment is 3 lines shorter (line 24 is the real one). A citation that
+  is "close enough to plausible" between near-duplicate files is exactly the shape a reader
+  skims past; `grep -n` on each file independently is the only check that catches it.
+  **Tuning 3 — lens 6 (`guard_without_its_mirror`) found a real gap in a guard the SAME BATCH
+  had just written to satisfy lens 6's own prior instance:** the new test exemption (for two
+  already-applied, immutable migrations) skipped at the FILE level, before the scanner
+  extracted which function(s) the file touches — so a future (improper, immutability-violating)
+  edit adding a SECOND function-touch to either exempted file would have silently inherited the
+  exemption too. Fixed by re-scoping the exemption to `(file, function)` pairs, checked only
+  after the function set is computed. **When a fix adds an exemption/allowlist keyed on one
+  dimension (here: filename) while the underlying scan operates on a FINER dimension (here:
+  per-function within a file), the exemption inherits everything the finer dimension could ever
+  match — check whether the exemption's own key matches the scan's actual unit of work.**
+  **A negative result worth keeping, per this file's own convention:** the reviewer independently
+  re-ran both of the author's mutation-proof claims (mutating migration 137's revoke line; the
+  exemption's skip line) rather than trusting the diagnose-doc's assertion, and both reproduced
+  exactly as claimed. It also attempted a live `has_function_privilege` re-check via Supabase MCP,
+  hit a transient connection timeout on both tries, and correctly flagged the claim as
+  UNVERIFIED-BY-IT rather than either asserting a defect or silently passing it — closed during
+  triage by a third, successful live re-check (unchanged: anon=false, authenticated=false,
+  service_role=true).
+  False-alarm rate 0/3 → no lens removed; lens 3 and lens 6 extended per above.
+
 - **2026-09-14 (d)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
   third follow-up (migration 136: `founder_metrics_ops()` extends the (c) entry's fix — adds
   `error_code is distinct from 'info'` to the `client_errors_7d` subquery, the sibling

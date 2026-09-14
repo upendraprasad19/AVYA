@@ -3,7 +3,7 @@ bug_id: f7c3a1
 date: 2026-09-14
 batch: telegram-admin-bot-task-13-push-gate
 status: fixed
-blast_radius: catastrophic
+blast_radius: platform
 symptom: |
   `test/contracts/admin_metrics_functions_role_revoke_test.dart`'s "EVERY
   post-103 migration ... re-asserts the anon + authenticated revoke (a9d3f1
@@ -25,7 +25,7 @@ sot_registry_entry: |
   static contract test over supabase/migrations/, not a Hive/Postgres
   writer-reader data contract.
 writers:
-  - { file: supabase/migrations/135_founder_metrics_ops_exclude_info_client_errors.sql, method_or_widget: "CREATE OR REPLACE FUNCTION public.founder_metrics_ops() — no revoke of its own", line: 27 }
+  - { file: supabase/migrations/135_founder_metrics_ops_exclude_info_client_errors.sql, method_or_widget: "CREATE OR REPLACE FUNCTION public.founder_metrics_ops() — no revoke of its own", line: 24 }
   - { file: supabase/migrations/136_founder_metrics_ops_exclude_info_client_errors_7d.sql, method_or_widget: "CREATE OR REPLACE FUNCTION public.founder_metrics_ops() — no revoke of its own", line: 27 }
   - { file: supabase/migrations/137_founder_metrics_ops_reassert_role_revoke.sql, method_or_widget: "revoke execute on function public.founder_metrics_ops() from anon, authenticated; — the follow-on fix", line: 30 }
 readers:
@@ -197,3 +197,36 @@ migration's own regression-test file locally, before relying on live SQL
 verification alone** — filed as a lesson for future SDD batches touching
 `founder_metrics_*` or any function with an existing named contract test in
 `test/contracts/`.
+
+## B-pass follow-up
+
+`docs/reviews/9765a1fbaf00-review.md` — 3 findings (2 Medium, 1 Low), 0 false
+alarms, all accepted and fixed in the same batch:
+
+- **Finding 1 (blast_radius_mismatch):** this doc's own frontmatter had
+  self-declared `blast_radius: catastrophic` while `blast_radius_from_diff.dart`
+  computes `platform` for the actual commit (migration 137 carries no
+  `SECURITY DEFINER` text, unlike 135/136). Overstated, not gate-bypassing —
+  no review round was skipped — but inconsistent with this doc's own
+  `impact_analysis`. Corrected to `platform` here.
+- **Finding 2 (stale_or_wrong_citation):** the `writers:` entry for migration
+  135 cited line 27 for its `CREATE OR REPLACE FUNCTION` statement; the real
+  line is 24 (135's header is 3 lines shorter than 136's, so 136's correct
+  `line: 27` had been copy-pasted onto 135). Corrected here.
+- **Finding 3 (guard_without_its_mirror):** the test exemption
+  (`admin_metrics_functions_role_revoke_test.dart`) originally skipped
+  migrations 135/136 at the FILE level, before the scanner extracted which
+  function(s) each touches — so if either were ever (improperly) edited to
+  touch a second `founder_metrics_*` function, that touch would silently
+  inherit the exemption too. Tightened to a `(file, function)` pair set,
+  checked only after `fns` is computed, so an exemption for
+  `135 → founder_metrics_ops` cannot cover `135 → founder_metrics_engagement`.
+  Re-mutation-proven after the tightening: commenting out migration 137's
+  revoke still reddens exactly the pinning test; disabling the (now
+  pair-scoped) exemption check still reddens exactly the replay-guard test,
+  naming migration 135.
+
+Live `has_function_privilege` re-verified a third time during triage (values
+unchanged: anon=false, authenticated=false, service_role=true), closing the
+review's one unresolved item (its own live re-check attempt hit a transient
+DB-connection timeout).
