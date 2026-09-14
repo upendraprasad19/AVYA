@@ -220,6 +220,47 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-14** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6 (migration
+  133: a SECURITY DEFINER trigger dispatching an immediate Telegram push on a critical alert).
+  **5 findings (0 P0, 2 P1, 1 P2, 2 P3); 0 false_alarm — all 5 accepted, 4 fixed in-batch (in a
+  follow-up migration + a direct EF comment fix, both separate commits to preserve the
+  hash-pinned review identity), 1 correctly deferred to the branch's still-pending final
+  whole-branch review.** Review: `docs/reviews/28213f7956e2-review.md`. Run as one agent (3
+  small files).
+  **Tuning — the reviewer's OWN suggested-fix for the P2 finding cited the wrong
+  `client_errors` columns, and they were not an arbitrary wrong guess: they were the EXACT
+  columns that caused a real prod P0 in `073_proactive_coach_promotion_trigger.sql`, later fixed
+  by `078_fix_dispatch_proactive_coach_promotion_columns.sql`.** The reviewer correctly cited 073
+  as the precedent this migration's header claims to follow, but wrote its suggested-fix as
+  `client_errors(user_id, op_type, message, severity)` — columns that table has never had (real:
+  `error_code`, `error_message`, `client_version` NOT NULL, `platform` NOT NULL). Had that
+  suggested-fix been applied verbatim, it would have reintroduced 078's exact bug: because a
+  `plpgsql` trigger body is never validated against real schema until it actually RUNS, the
+  broken INSERT would ship silently and only fail live — and because 073's original `WHEN OTHERS`
+  handler used the SAME bad columns for its own telemetry insert, the re-raised exception would
+  have escaped the trigger and aborted the parent `alerts` INSERT, the identical failure mode
+  078's diagnose-doc (`f4b2c9`) documents for `rank_promotions`. Caught only because the fix was
+  independently re-verified against LIVE `information_schema.columns` before being applied, rather
+  than trusted from the review's prose. **Add to lens 3/7's method: when a review's suggested-fix
+  cites a REPO PRECEDENT BY NAME (here, "mirroring 073"), verify the precedent's CURRENT, possibly
+  since-corrected form — not its original commit — before using the suggested-fix verbatim. A
+  precedent that itself needed a follow-up fix (078) is evidence the ORIGINAL version is exactly
+  the wrong thing to copy, and a reviewer citing it by its introducing commit rather than its
+  latest form inherits the bug the follow-up exists to have fixed.** Sibling of this file's own
+  2026-09-04 `latestMigrationDefining` lesson (CLAUDE.md §4.9's "last `CREATE OR REPLACE` wins")
+  applied to a REVIEWER's citation rather than an author's.
+  **Second, smaller — a genuine instance of the hash-fixed-point class this file's 2026-09-11
+  entries already document, worth one more data point because the mitigation held cleanly this
+  time.** Triaging 4 of 5 findings required staging NEW content (a follow-up migration, an EF
+  comment fix) — doing so in the SAME commit as the reviewed diff would have moved the
+  `git hash-object` value the gate keys on, invalidating `28213f7956e2-review.md`'s own filename.
+  Resolved by committing the EXACTLY-as-reviewed diff first (re-verifying the hash matched before
+  committing), then landing the fixes as a separate follow-up commit/review. `docs/reviews/` stays
+  excluded from the hash by design, so the review file's OWN triage edits (marking findings
+  accepted/fixed, setting `verdict: accepted`) could be made freely without this problem — only
+  the code side of the fix needed the split.
+  False-alarm rate 0/5 → no lens removed; lenses 3, 7 extended per above.
+
 - **2026-09-13** — blast-radius **platform** — branch `oi153-pro-media-caps` (OI-153: the
   ai-media-proxy PRO caps moved onto the ledger + the new `founder-digest` cron EF; diagnose
   `a9d4e7`). **6 findings (0 P0, 2 P1, 2 P2, 2 P3); 0 false_alarm — all accepted, 5 fixed
