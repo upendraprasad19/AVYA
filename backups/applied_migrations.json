@@ -972,5 +972,15 @@
     "slug": "founder_metrics_ops_exclude_info_client_errors",
     "cloud_version": "20260914141301",
     "note": "Review Round 2 finding R2-10 (telegram-admin-bot whole-branch review, diagnose 82b018): migration 134's success-path critical-alert telemetry writes a client_errors row with error_code='info' on every successful dispatch, inflating founder_metrics_ops()'s client_errors_today count even though nothing had gone wrong. CREATE OR REPLACE founder_metrics_ops() with 101_admin_dashboard_metrics_functions.sql's body verbatim (confirmed via live pg_get_functiondef before writing this migration -- byte-identical to 101's definition, no intervening redefinition) plus one added predicate: error_code is distinct from 'info' on the client_errors_today subquery only. Mirrors the exclusion pattern migrations 086/087 already established on the alert-spike side. Post-apply live verification: has_function_privilege confirms anon=false, authenticated=false, service_role=true (unchanged from pre-apply); founder_metrics_ops() still returns a full row (client_errors_today=4, matching the pre-apply smoke-tested value, since no info-coded rows exist in today's window yet). Founder go given 2026-09-14 via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval) -- this migration was deliberately held out of two prior commits specifically pending this authorization."
+  },
+  {
+    "migration": "136",
+    "applied_at": "2026-09-14T20:41:30+05:30",
+    "hash": "sha256:0b1a3cb6a27ba1e99e44b168ee048948f22b6da5776ce1676743ce39459768f7",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "82b018",
+    "slug": "founder_metrics_ops_exclude_info_client_errors_7d",
+    "cloud_version": "20260914154130",
+    "note": "Hermes pass finding F1 (telegram-admin-bot whole-branch Hermes pass, diagnose 82b018), corroborated independently by 3 lenses (L1, L22, L35): migration 135 fixed client_errors_today's error_code='info' inflation but left the sibling client_errors_7d subquery in the same function, same table, with the identical bug -- migration 134's success-path telemetry inflates both. CREATE OR REPLACE founder_metrics_ops() with 135's body verbatim (confirmed via live pg_get_functiondef before writing this migration -- byte-identical to 135's definition, no intervening redefinition) plus the same predicate now also on client_errors_7d: error_code is distinct from 'info'. Post-apply live verification: has_function_privilege confirms anon=false, authenticated=false, service_role=true (unchanged); a rolled-back transaction confirmed the exact discrimination -- an info-coded row leaves client_errors_7d unchanged (140->140), a real error-coded row still increments it by one (140->141), and client_errors_today (135's earlier fix) is unregressed (4->5, only the real-error row counted). Founder go given 2026-09-14 via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval) -- this migration was deliberately held out of the Hermes-fix commit specifically pending this authorization."
   }
 ]

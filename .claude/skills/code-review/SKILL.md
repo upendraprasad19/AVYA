@@ -231,6 +231,53 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-14 (d)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
+  third follow-up (migration 136: `founder_metrics_ops()` extends the (c) entry's fix — adds
+  `error_code is distinct from 'info'` to the `client_errors_7d` subquery, the sibling
+  migration 135 already applied to `client_errors_today`; already applied live with explicit
+  founder authorization). **0 findings across all 8 lenses.** Review:
+  `docs/reviews/57b11b5c90cb-review.md`. Run as one agent (3 small files: a migration, a JSON
+  metadata record, a manual SQL verify script).
+  **Every lens's "clean" was backed by a live check or a real cross-reference, not a read of
+  the migration's own prose** — `pg_get_functiondef` pulled live and diffed against the staged
+  body (byte-identical modulo Postgres's canonical type spelling); `has_function_privilege`
+  re-queried for all three roles rather than trusted from the header; `list_migrations`
+  cross-checked against `applied_migrations.json`'s `cloud_version`; and the migration's two
+  citations (086/087's exclusion pattern, 135 as the verbatim base) were each opened and
+  confirmed to say what the header claims, not accepted as scene-setting.
+  **Lens 6 (`guard_without_its_mirror`) — this migration is itself a mirror-fix, so the
+  question was whether a THIRD site shares the same `error_code='info'` inflation bug that
+  neither 135 nor 136 catches.** Found one genuinely separate counting site —
+  `telegram-admin-bot/index.ts:481`'s `cmdErrors` (`/errors` command), a direct
+  `.from("client_errors")` query independent of `founder_metrics_ops()` — and, per the
+  in-file `R2-02` comment, it was ALREADY fixed in an earlier round of this same branch's
+  review, and more completely than the migration under review (it excludes both `'info'` and
+  non-failure-shaped `'event'`, where `founder_metrics_ops()` still only excludes `'info'`).
+  That asymmetry is not new: it's the SAME gap the (c) entry below already recorded as
+  pre-existing/P2 for 135, now equally true of 136 by inheritance — not a fresh regression,
+  and correctly left unfixed by this migration's narrower, deliberately-scoped intent.
+  `admin_metrics_daily`'s snapshot columns and `compute-admin-metrics-daily`'s persistence
+  were confirmed to read `founder_metrics_ops()`'s own return values rather than
+  re-implementing the count, so they inherit the fix rather than constituting a second miss.
+  **Lens 8 (`asserted_fixture_value`) on the new SQL verify file** — the INSERT column list
+  was checked against `backups/live_schema_columns.json`'s real `client_errors` columns
+  (avoiding the exact 073/078 fabricated-column trap CLAUDE.md §4.9 documents), and the
+  `user_id`-omission was checked against the CURRENT schema (nullable since migration 119),
+  not the table's original NOT NULL definition — reading only `018_client_errors.sql` would
+  have wrongly flagged this as a constraint violation. One informational discrepancy noted but
+  NOT filed as a finding: 135's live-verify file recorded `baseline_7d=143` about an hour
+  before 136's recorded `baseline_7d=140` on the same rolling 7-day window — a plausible
+  natural consequence of rows aging out of the window (`client_errors` has no ad hoc deletes,
+  only a 30-day retention cron far outside this window), not falsifiable after the fact, and
+  not something either migration's correctness depends on. Recorded so the reasoning is
+  visible rather than left as an unexamined number mismatch.
+  False-alarm rate: 0/0 (no findings raised) → no lens removed; no lens changed. Third
+  consecutive zero/near-zero-finding pass on this branch's tail of small, well-scoped,
+  already-Hermes-corroborated follow-up migrations (this entry, plus (b) and (c) below) —
+  consistent with, not contradicting, §4.12's "successive reviews keep surfacing new material
+  issues ⇒ split" signal: these are genuinely small, independently-converged units, not a
+  large unit being re-reviewed past diminishing returns.
+
 - **2026-09-14 (c)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
   second follow-up (migration 135: `founder_metrics_ops()` excludes `error_code='info'` from
   `client_errors_today`, fixing round-2 finding R2-10 of the branch's whole-branch review;
