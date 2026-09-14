@@ -80,6 +80,25 @@
 |---|---|---|
 | (none yet) | — | — |
 
+## Trigger-dispatched functions (deliberately NOT in the table above)
+
+`alert-critical-notify` (telegram-admin-bot batch, 2026-09-14) is invoked
+ONLY by the `private.dispatch_critical_alert_notify()` Postgres trigger
+(migration 133, telemetry added by migration 134) via `pg_net.http_post` on
+a critical `alerts` INSERT — it is never `cron.schedule`-dispatched, so it
+has no `cron.job` row and intentionally carries NO row in the active-jobs
+table above. This is a deliberate scope note (per the original plan's
+Task 13), not a silently skipped registration: **Gate 31
+(`scripts/check_cron_registry.dart`) scans `supabase/migrations/*.sql` for
+`cron.schedule(...)` calls only, so it would not see this function even if a
+row existed for it** — a trigger dispatch and a cron dispatch are different
+mechanisms with different auth/telemetry wiring conventions but the same
+`_shared/cron_auth.ts` / `_shared/cron_telemetry.ts` helpers, which is why
+`alert-critical-notify` is still covered by the `cron_auth_adoption_test.dart`
+/ `cron_telemetry_adoption_test.dart` rosters (their own
+`_triggerDispatchedFunctions` list, alongside `proactive-coach-promotion`)
+even though it is absent from this cron-specific registry.
+
 ## How to add a new cron job
 
 1. Write the migration as `supabase/migrations/NNN_<feature>_cron.sql`.

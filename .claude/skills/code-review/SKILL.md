@@ -176,10 +176,15 @@ When invoked, this skill should:
 3. Generate the staging hash **exactly the way the gate does**, or the file you write
    will not be the one it looks for:
    ```bash
-   git diff --cached -- ':(top)' ':(top,exclude)docs/reviews' | git hash-object --stdin
+   git diff --cached -- ':(top)' ':(top,exclude)docs/reviews' ':(top,exclude).claude/skills/code-review/SKILL.md' | git hash-object --stdin
    ```
-   then truncate to 12 chars. Two details are load-bearing and this step documented
-   neither:
+   then truncate to 12 chars. Three details are load-bearing and this step used to document
+   only two — corrected 2026-09-14, telegram-admin-bot batch, after a session chased a
+   FALSE hash-fixed-point across 3 renames believing SKILL.md's own content moved the
+   hash (it does not — `check_code_review_pass_exists.dart`'s real exclusion set already
+   dropped SKILL.md too, per the OI-162 slice 4 addendum this file's own history section
+   documents at length below; this step's code block had simply never been updated to
+   match):
    - It is git's **sha1 `hash-object`**, not `sha256`.
      `scripts/check_code_review_pass_exists.dart` has always used `git hash-object`, so
      a review named by following the old text could never match. (Found by round-1B
@@ -187,6 +192,12 @@ When invoked, this skill should:
    - `docs/reviews/` is **excluded** from the hash (OI-72, same batch). The gate now
      reads the review from the STAGED blob, so the file must be `git add`ed — and
      without the exclusion, staging it would move the hash and rename the very file it
+     is meant to satisfy.
+   - `.claude/skills/code-review/SKILL.md` is **also excluded** (OI-162 slice 4
+     addendum, 2026-09-11) — its own §5.1-required tuning-history entry must land in
+     the SAME commit as any new review file, so without this exclusion staging THAT
+     would move the hash exactly the way staging the review itself would have, with no
+     clean iterative fix. Use the three-pathspec command above, not the two-pathspec
      is meant to satisfy.
 4. **Dispatch a FRESH Sonnet subagent** via `Agent({subagent_type: 'general-purpose', model: 'sonnet', ...})` with:
    - The diff inline (or list of changed files to Read)
@@ -219,6 +230,172 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 - Bundle this with `/hermes-pass`. That's a different skill (per-batch, all 53 lenses, Opus, slower).
 
 ## 7. Tuning history
+
+- **2026-09-14 (d)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
+  third follow-up (migration 136: `founder_metrics_ops()` extends the (c) entry's fix — adds
+  `error_code is distinct from 'info'` to the `client_errors_7d` subquery, the sibling
+  migration 135 already applied to `client_errors_today`; already applied live with explicit
+  founder authorization). **0 findings across all 8 lenses.** Review:
+  `docs/reviews/57b11b5c90cb-review.md`. Run as one agent (3 small files: a migration, a JSON
+  metadata record, a manual SQL verify script).
+  **Every lens's "clean" was backed by a live check or a real cross-reference, not a read of
+  the migration's own prose** — `pg_get_functiondef` pulled live and diffed against the staged
+  body (byte-identical modulo Postgres's canonical type spelling); `has_function_privilege`
+  re-queried for all three roles rather than trusted from the header; `list_migrations`
+  cross-checked against `applied_migrations.json`'s `cloud_version`; and the migration's two
+  citations (086/087's exclusion pattern, 135 as the verbatim base) were each opened and
+  confirmed to say what the header claims, not accepted as scene-setting.
+  **Lens 6 (`guard_without_its_mirror`) — this migration is itself a mirror-fix, so the
+  question was whether a THIRD site shares the same `error_code='info'` inflation bug that
+  neither 135 nor 136 catches.** Found one genuinely separate counting site —
+  `telegram-admin-bot/index.ts:481`'s `cmdErrors` (`/errors` command), a direct
+  `.from("client_errors")` query independent of `founder_metrics_ops()` — and, per the
+  in-file `R2-02` comment, it was ALREADY fixed in an earlier round of this same branch's
+  review, and more completely than the migration under review (it excludes both `'info'` and
+  non-failure-shaped `'event'`, where `founder_metrics_ops()` still only excludes `'info'`).
+  That asymmetry is not new: it's the SAME gap the (c) entry below already recorded as
+  pre-existing/P2 for 135, now equally true of 136 by inheritance — not a fresh regression,
+  and correctly left unfixed by this migration's narrower, deliberately-scoped intent.
+  `admin_metrics_daily`'s snapshot columns and `compute-admin-metrics-daily`'s persistence
+  were confirmed to read `founder_metrics_ops()`'s own return values rather than
+  re-implementing the count, so they inherit the fix rather than constituting a second miss.
+  **Lens 8 (`asserted_fixture_value`) on the new SQL verify file** — the INSERT column list
+  was checked against `backups/live_schema_columns.json`'s real `client_errors` columns
+  (avoiding the exact 073/078 fabricated-column trap CLAUDE.md §4.9 documents), and the
+  `user_id`-omission was checked against the CURRENT schema (nullable since migration 119),
+  not the table's original NOT NULL definition — reading only `018_client_errors.sql` would
+  have wrongly flagged this as a constraint violation. One informational discrepancy noted but
+  NOT filed as a finding: 135's live-verify file recorded `baseline_7d=143` about an hour
+  before 136's recorded `baseline_7d=140` on the same rolling 7-day window — a plausible
+  natural consequence of rows aging out of the window (`client_errors` has no ad hoc deletes,
+  only a 30-day retention cron far outside this window), not falsifiable after the fact, and
+  not something either migration's correctness depends on. Recorded so the reasoning is
+  visible rather than left as an unexamined number mismatch.
+  False-alarm rate: 0/0 (no findings raised) → no lens removed; no lens changed. Third
+  consecutive zero/near-zero-finding pass on this branch's tail of small, well-scoped,
+  already-Hermes-corroborated follow-up migrations (this entry, plus (b) and (c) below) —
+  consistent with, not contradicting, §4.12's "successive reviews keep surfacing new material
+  issues ⇒ split" signal: these are genuinely small, independently-converged units, not a
+  large unit being re-reviewed past diminishing returns.
+
+- **2026-09-14 (c)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
+  second follow-up (migration 135: `founder_metrics_ops()` excludes `error_code='info'` from
+  `client_errors_today`, fixing round-2 finding R2-10 of the branch's whole-branch review;
+  already applied live with explicit founder authorization). **2 findings (0 P0, 0 P1, 1 P2,
+  1 P3); 0 false_alarm — both accepted, neither fixed in-batch** (the P2 is cosmetic/informational
+  on a founder-only ops metric and pre-existing, not a regression; the P3 is a duplicate-sentence
+  nit in a manual, non-gated verification script). Review: `docs/reviews/c0ea56c3d0e5-review.md`.
+  **Tuning 2 — §3 step 3's hash-generation code block was stale for 3 years
+  worth of gate history and cost this exact batch 3 needless renames.** It
+  showed only the `docs/reviews` exclusion; the real gate
+  (`check_code_review_pass_exists.dart`, per its own OI-162 slice 4 comment)
+  has excluded `.claude/skills/code-review/SKILL.md` from the hash since
+  2026-09-11. A session correcting a P2 finding kept "fixing" SKILL.md's own
+  citation of the review filename to match a hash it believed SKILL.md's
+  edits moved — chasing a fixed point that does not exist in the real gate.
+  §3's code block now includes the third pathspec exclusion so this cannot
+  recur; see this review file's own preamble for the full chronology.
+  Run as one agent (3 small files: a migration, a JSON metadata record, a manual SQL verify
+  script).
+  **Tuning — lens 3's "verify the precedent citation, not just its existence" extension
+  (established 2026-09-14 for a repo-precedent-by-name citation) generalizes to a
+  precedent-by-NUMBER-RANGE citation too, and caught a real gap the diff's own author had not
+  noticed.** The migration's header claims it "mirrors the exclusion pattern migrations
+  086/087 already established" — true only for HALF of that pattern. 086/087 exclude both
+  `error_code='event'` AND `'info'` (087 additionally re-includes failure-shaped `'event'` rows
+  via an `op_type` regex, because `ErrorTelemetry.logEvent` hardcodes `error_code='event'` for a
+  huge mix of benign breadcrumbs and real failures alike). This migration excludes only `'info'`.
+  Reading the citation as a checkable claim rather than scene-setting prose, and then measuring
+  it against LIVE data rather than reasoning from the SQL alone, is what surfaced it: `select
+  error_code, count(*) from client_errors where <today> group by error_code` returned
+  `{event: 4, info: 2}` at review time — `client_errors_today` reads **4** right now, on a day
+  with **zero real errors**, because the `'event'` breadcrumbs are still counted. Not a
+  regression (the diff doesn't add this problem, it just doesn't finish removing it), so P2 not
+  P1 — but a citation that names a fix as "mirroring" a broader precedent while shipping a
+  narrower one is exactly the shape lens 3's method exists to catch, and it would have read as
+  clean from the SQL text alone; only running the live count against `error_telemetry.dart`'s
+  hardcoded `'event'` code made it visible.
+  **A second, smaller confirmation — the byte-identical-deploy claim was independently
+  re-derived rather than trusted from the migration's own header/applied_migrations.json note,
+  per the 2026-09-14(b) entry's standing method.** `pg_get_functiondef('public.
+  founder_metrics_ops()'::regprocedure)` was pulled live and diffed against the staged file
+  (identical apart from formatting); `has_function_privilege` was re-queried for all three roles
+  (anon/authenticated/service_role) rather than accepting the note's stated values; and
+  `list_migrations` was cross-checked against the `applied_migrations.json` entry's
+  `cloud_version` field. All three held.
+  False-alarm rate 0/2 → no lens removed; lens 3's citation-verification method now explicitly
+  covers precedent-by-number-range, not just precedent-by-name.
+
+- **2026-09-14 (b)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
+  follow-up (migration 134: `client_errors` telemetry + a `COMMENT ON TRIGGER`, fixing 2 of the
+  prior same-day review's 5 findings). **2 findings (0 P0, 0 P1, 0 P2, 2 P3); 0 false_alarm — both
+  accepted and parked** (a `||`-NULL-propagation diagnostic-quality gap on a doubly-unlikely path,
+  and a migration-header enum mismatch the repo's own convention already documents as unenforced).
+  Review: `docs/reviews/297bae7db41c-review.md`. Run as one agent (3 small files, one a two-line
+  comment fix).
+  **Tuning — the reviewer independently RE-DERIVED the prior review's central safety claim against
+  LIVE state rather than trusting the migration's own header prose, and that is what makes this
+  entry worth recording despite finding nothing above P3.** The header claims the failure-path
+  telemetry insert is "nested... so a telemetry-insert failure can never itself abort the parent
+  alerts INSERT" — exactly the property 078 exists to guarantee for this trigger family. Rather
+  than accept the claim from the comment, the reviewer traced PL/pgSQL exception SCOPING precisely
+  for all three `client_errors` INSERT call sites, THEN cross-checked the traced structure against
+  the LIVE deployed function body (`pg_get_functiondef` via MCP, confirmed byte-identical to the
+  staged file) — closing the exact gap the 2026-09-04(b) entry's "a tier computed before the file
+  exists is not a computed tier" lesson describes for blast-radius, applied here to a STRUCTURAL
+  safety claim instead of a tier number: a claim about live behaviour is only checked once it is
+  checked against what is actually LIVE, not against the file that describes it.
+  **Second, smaller — a genuine confirmation that a prior review's ACCEPTED rationale, reused
+  verbatim in a follow-up migration's header, does not need re-litigating from scratch, but DOES
+  need checking that it was not silently weakened.** Lens 3 (`blast_radius_mismatch`) explicitly
+  cross-referenced the PRIOR review's Finding 2 (the `feature_flag` rationale) rather than raising
+  it fresh, verified 134 reuses it in substance without contradiction, and correctly left the
+  PRIOR review's still-open Finding 1 (the whole-branch plan-review record) alone as genuinely out
+  of scope for this diff. Add to lens 3's method: when a diff's header cites a PRIOR finding by
+  number, verify the citation is accurate and that the rationale it points to still holds for the
+  NEW diff — don't treat "already discussed" as a reason to skip the check entirely.
+  False-alarm rate 0/2 → no lens removed; lens 3 extended per above.
+
+- **2026-09-14** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6 (migration
+  133: a SECURITY DEFINER trigger dispatching an immediate Telegram push on a critical alert).
+  **5 findings (0 P0, 2 P1, 1 P2, 2 P3); 0 false_alarm — all 5 accepted, 4 fixed in-batch (in a
+  follow-up migration + a direct EF comment fix, both separate commits to preserve the
+  hash-pinned review identity), 1 correctly deferred to the branch's still-pending final
+  whole-branch review.** Review: `docs/reviews/28213f7956e2-review.md`. Run as one agent (3
+  small files).
+  **Tuning — the reviewer's OWN suggested-fix for the P2 finding cited the wrong
+  `client_errors` columns, and they were not an arbitrary wrong guess: they were the EXACT
+  columns that caused a real prod P0 in `073_proactive_coach_promotion_trigger.sql`, later fixed
+  by `078_fix_dispatch_proactive_coach_promotion_columns.sql`.** The reviewer correctly cited 073
+  as the precedent this migration's header claims to follow, but wrote its suggested-fix as
+  `client_errors(user_id, op_type, message, severity)` — columns that table has never had (real:
+  `error_code`, `error_message`, `client_version` NOT NULL, `platform` NOT NULL). Had that
+  suggested-fix been applied verbatim, it would have reintroduced 078's exact bug: because a
+  `plpgsql` trigger body is never validated against real schema until it actually RUNS, the
+  broken INSERT would ship silently and only fail live — and because 073's original `WHEN OTHERS`
+  handler used the SAME bad columns for its own telemetry insert, the re-raised exception would
+  have escaped the trigger and aborted the parent `alerts` INSERT, the identical failure mode
+  078's diagnose-doc (`f4b2c9`) documents for `rank_promotions`. Caught only because the fix was
+  independently re-verified against LIVE `information_schema.columns` before being applied, rather
+  than trusted from the review's prose. **Add to lens 3/7's method: when a review's suggested-fix
+  cites a REPO PRECEDENT BY NAME (here, "mirroring 073"), verify the precedent's CURRENT, possibly
+  since-corrected form — not its original commit — before using the suggested-fix verbatim. A
+  precedent that itself needed a follow-up fix (078) is evidence the ORIGINAL version is exactly
+  the wrong thing to copy, and a reviewer citing it by its introducing commit rather than its
+  latest form inherits the bug the follow-up exists to have fixed.** Sibling of this file's own
+  2026-09-04 `latestMigrationDefining` lesson (CLAUDE.md §4.9's "last `CREATE OR REPLACE` wins")
+  applied to a REVIEWER's citation rather than an author's.
+  **Second, smaller — a genuine instance of the hash-fixed-point class this file's 2026-09-11
+  entries already document, worth one more data point because the mitigation held cleanly this
+  time.** Triaging 4 of 5 findings required staging NEW content (a follow-up migration, an EF
+  comment fix) — doing so in the SAME commit as the reviewed diff would have moved the
+  `git hash-object` value the gate keys on, invalidating `28213f7956e2-review.md`'s own filename.
+  Resolved by committing the EXACTLY-as-reviewed diff first (re-verifying the hash matched before
+  committing), then landing the fixes as a separate follow-up commit/review. `docs/reviews/` stays
+  excluded from the hash by design, so the review file's OWN triage edits (marking findings
+  accepted/fixed, setting `verdict: accepted`) could be made freely without this problem — only
+  the code side of the fix needed the split.
+  False-alarm rate 0/5 → no lens removed; lenses 3, 7 extended per above.
 
 - **2026-09-13** — blast-radius **platform** — branch `oi153-pro-media-caps` (OI-153: the
   ai-media-proxy PRO caps moved onto the ledger + the new `founder-digest` cron EF; diagnose
@@ -1480,3 +1657,26 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   claim is as much the lens's job as catching a wrong one.
   False-alarm rate 1/11 ≈ 9% → well under the 30% threshold; no lens removed. Lenses 6, 8, 9
   extended per above.
+
+- **2026-09-14 (c)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, the F2-F13
+  fix-response commit for a separate whole-branch review's findings (touches
+  `_shared/cron_auth.ts`, catastrophic by path in `docs/blast_radius.yaml`, even though the
+  change to it — exporting a previously-private `timingSafeEqual` — is behavior-preserving for
+  its existing callers). **1 P2, 1 P3; 0 false_alarm; both accepted and fixed in the same
+  commit.** Review: `docs/reviews/014866ecac87-review.md`.
+  **Tuning — lens 8 (`asserted_fixture_value`) caught a review-writer's OWN comment repeating an
+  unverified claim, not just a test's asserted value.** The fix-diff's code comment justifying
+  the `/cron` 7-day-window fix claimed a cleanup function "ALWAYS SPARES each function's most
+  recent row" — plausible-sounding, written by the same author who wrote the fix, and false: the
+  live function body spares exactly ONE row globally, not one per function. This is the same
+  class this history has flagged before (a review's own suggested-fix repeating a stale claim,
+  2026-09-14 (b)'s entry) but one level earlier — here it was the FIX's own justification, not a
+  reviewer's suggestion, and it survived because nobody had re-read the cited function's live
+  body since writing the sentence. **Any comment citing a named function/migration's behavior as
+  the reason a fix is safe is itself a claim in asserted_fixture_value's scope — verify it
+  against the live body, not just the test's literal values.** The deeper defect (the cleanup
+  function itself only sparing one row, not per-function) was correctly NOT fixed in the same
+  diff — filed as OI-199, since it is separate pre-existing infrastructure (migration 109
+  predates the branch) with its own blast radius and testing needs. Distinguishing "the comment
+  is wrong" (fix now) from "the underlying system has a gap" (file it) kept the diff from scope-
+  creeping into an unrelated migration under review-response pressure.

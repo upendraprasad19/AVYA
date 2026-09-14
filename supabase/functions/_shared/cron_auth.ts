@@ -76,7 +76,11 @@
  * (migration 107 header) — a weak secret plus a timing oracle is materially
  * worse than either alone.
  */
-async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+// Exported (review round 1 F11) so telegram-admin-bot's webhook-secret
+// comparison — the ONLY gate on that publicly-reachable endpoint, same
+// threat model as the 16+ cron-secret-gated endpoints this was written
+// for — can reuse it instead of a bare `!==`.
+export async function timingSafeEqual(a: string, b: string): Promise<boolean> {
   const enc = new TextEncoder();
   const [da, db] = await Promise.all([
     crypto.subtle.digest("SHA-256", enc.encode(a)),

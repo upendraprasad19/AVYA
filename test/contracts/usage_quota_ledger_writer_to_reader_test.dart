@@ -165,6 +165,12 @@ void main() {
       // there is no consume_quota anywhere in it, which the sibling test
       // below pins by its absence from that allowlist. The atomicity concern
       // is moot for a reader that never gates anything.
+      // ⚠ Moved 2026-09-13 (telegram-admin-bot Task 4): the actual
+      // `.from("usage_counters")` reads (readDigestSections/gatherDigestInput)
+      // now live in `_shared/founder_digest_content.ts`, extracted so `/digest`
+      // can call the exact same builder — `founder-digest/index.ts` itself no
+      // longer spells the table name (it only re-exports), so it is REMOVED
+      // from this allowlist and the shared module is ADDED in its place.
       //
       // founder-digest/index_test.ts is NOT a reader either: it drives the
       // digest's reads with a recording fake client (B-pass 2026-09-13
@@ -183,7 +189,7 @@ void main() {
         'supabase/functions/weekly-report/index.ts',
         'supabase/functions/ai-media-proxy/index.ts',
         'supabase/functions/ai-media-proxy/index_test.ts',
-        'supabase/functions/founder-digest/index.ts',
+        'supabase/functions/_shared/founder_digest_content.ts',
         'supabase/functions/founder-digest/index_test.ts',
       };
       final offenders = <String>[];

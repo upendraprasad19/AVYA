@@ -3560,6 +3560,23 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Blast radius**: `alerts/_thresholds.yaml` + the alert's SQL; classify the written file.
 - **Cited as a live backstop while inert (2026-09-13, Hermes L31 on OI-153)**: migration 131's header (immutable) and the first version of `founder-digest/index.ts`'s header both named `alert_cron_function_dead` as the fallback that "would otherwise take a week to notice" a dead digest. It would notice nothing. The digest header was corrected (v2); the registry row 131 says so; the migration comment cannot be.
 - **Class**: `feedback_green_check_input_set_width` — the alert's input set is bounded by a pruner it does not know about. Also `feedback_bad_news_vs_no_news`: zero firings had two explanations (all healthy / cannot fire) and nobody asked which.
+- ⚠ **Precondition on this alert's own repair (R2-11, review round 2, 2026-09-14):
+  before lowering this threshold (or lengthening retention for it), the fix
+  MUST exclude non-scheduled, trigger-dispatched functions — today just
+  `alert-critical-notify` — from `alert_cron_function_dead`'s scope,** via
+  an allowlist of real `cron.job` slugs or an explicit denylist of
+  trigger-dispatched function names. Reason: `alert-critical-notify` is
+  event-driven (not `cron.schedule`-dispatched), so it can legitimately go
+  long stretches without running; if this alert's own OPEN threshold-below-
+  retention fix (above) ever makes it fire for `alert-critical-notify`, that
+  CRITICAL alert triggers `alert-critical-notify` itself to run, which
+  writes a fresh success row, which resets its own death-clock — a
+  self-sustaining false-critical loop. Today this is INERT only because
+  this OI's own bug (the threshold sitting above the retention ceiling)
+  keeps the alert from ever firing at all — fixing THIS OI without the
+  exclusion would arm the loop for the first time. Cross-referenced from
+  OI-199, whose fix shape (widening retention to per-function) would
+  independently arm the same loop from the other side.
 
 ## OI-180 — `check_sot_registry_parity` silently skips every single-number `line_range:`, so 30 citations are validated by nothing (P2)
 
@@ -4091,3 +4108,215 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Repair**: log `err instanceof Error ? err.name : typeof err` only — `founder-digest/index.ts` `telegramErrorSummary` is the working twin (`supabase/functions/founder-digest/index.ts`, pinned by its `index_test.ts` "carries the error NAME only" test). Redeploy `morning-alert`. Consider hoisting the guarded sender into `_shared/telegram.ts` so a third Telegram caller cannot re-introduce the shape; `supabase/functions/CLAUDE.md` carries the pitfall row.
 - **Blast radius**: `supabase/functions/morning-alert/**` — platform (cron EF; PRO push + Telegram delivery).
 - **Related**: OI-153 (where the class was found while writing the digest's sender).
+
+## OI-197 — Founder observability gaps: payment-flow alerting dormant, EF auth-outage blind spot, no native-crash summary, no server-side error-rate view
+
+- **Status**: OPEN
+- **Blocked on**: none — no schema/migration/payment/auth path touched by the filing itself;
+  each of the 4 items below needs its own scoped design before any code lands
+- **Verified**: never — this is a gap analysis surfaced while brainstorming the Telegram
+  admin-bot design (`docs/superpowers/specs/2026-09-13-telegram-admin-bot-design.md`), not a
+  live-reproduced bug. Each sub-item cites where the gap lives; none has been fixed or tested.
+- **Identified**: 2026-09-13 · filed via mint_oi.sh from branch `telegram-admin-bot`, per
+  founder request during that brainstorm ("what are we not logging that we should be")
+- **What**: four separate detection/observability gaps, each requiring new logic (not just a
+  new report surface) to close:
+  1. **Payment-flow alerting is effectively dormant.** The only existing check
+     (`alert_payment_flow_health`, `docs/operations/CRON_REGISTRY.md` row 076) fires on "fewer
+     than 3 new subscriptions in 24h" — a weak proxy for "payments are broken," not a check on
+     actual Razorpay webhook/signature failures — and the registry itself already notes it is
+     "effectively dormant at current scale." No alert exists for a failed/rejected webhook call.
+  2. **A total Edge-Function auth outage is invisible.** `alert_edge_function_health`
+     (CRON_REGISTRY row 076) computes an error RATE from `cron_call_log`, but a 401 (e.g. the
+     Vault service-role-key drift class this repo has hit before) writes no row to that log at
+     all — so the check's own `total >= 5` guard never matches during exactly the outage it
+     exists to catch. Registry note: "Never fired once."
+  3. **Native crashes (Firebase Crashlytics) aren't summarized anywhere day-to-day.** Crashlytics
+     is wired client-side (with a `kIsWeb` guard, per the debugging skill's §2.37) but nothing
+     pulls a daily/weekly crash count into `founder-digest` or any other founder-facing surface —
+     it's fire-and-forget to Firebase's own console, which nobody routinely opens.
+  4. **No server-side error-rate view.** `public.client_errors` covers client-side telemetry
+     well (op_type/error_code breakdown, per the debugging skill's bug-class catalog), but there
+     is no equivalent aggregated "which Edge Function is erroring most, and at what rate" view —
+     only the coarse pass/fail signal `alert_edge_function_health` computes (and gap #2 shows
+     that signal has its own blind spot).
+- **Fix shape (not decided, sketched for whoever picks this up)**: each item needs its own
+  scoped design, likely as 4 independent small batches rather than one — they don't share a
+  root cause. (1) needs a real Razorpay-webhook-failure signal, not a subscription-count proxy.
+  (2) needs `alert_edge_function_health`'s data source widened to see 401s specifically (or a
+  parallel check keyed on gateway-level rejection, not `cron_call_log`). (3) needs a scheduled
+  pull from Crashlytics (via its API, or a summary written by the client on next launch) into
+  the existing digest/alerts pipeline. (4) needs either a `client_errors`-shaped server-side
+  telemetry sink, or extending the alert crons' aggregate queries to break down by function.
+- **Related**: found during — and referenced in — §8 ("Deferred") of
+  `docs/superpowers/specs/2026-09-13-telegram-admin-bot-design.md`. The Telegram admin bot
+  reports on top of what these checks already produce; it does not close any of these 4 gaps
+  itself.
+
+## OI-198 — pr-detection cron: repeated Gateway Timeout on paged_fetch (4x in 24h, 2026-09-13/14)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-14, live query against `public.cron_call_log`
+- **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
+- **How found**: telegram-admin-bot's `/status` smoke test (Task 13, Step 5) reported
+  "Cron failures (24h): 4" — unexpected against the naive assumption of a quiet cron
+  schedule. Independently verified by re-running `founder_metrics_ops()`'s live SQL
+  (`select count(*) from public.cron_call_log where started_at >= now() - interval '24
+  hours' and (status = 'failed' or (status = 'started' and started_at < now() - interval
+  '1 hour')))`) — matched the bot's reported 4 exactly, plus the underlying rows.
+- **Evidence**: all 4 failing rows are `function_name = 'pr-detection'`, `status =
+  'failed'`, `http_status = 500`, error `paged_fetch[pr-detection prs]: page 0 (rows
+  0-999) failed: Gateway Timeout`, at 2026-09-13 19:30/20:45/21:30/23:45 UTC
+  (request_ids `8c2ec592`, `052a49ab`, `b4ca04c1`, `7e2ce940`).
+- **Scope note**: pre-existing production reliability issue, unrelated to the
+  telegram-admin-bot batch's own code — `pr-detection` and its `_shared/paged_fetch.ts`
+  usage are untouched by this branch. Out of scope to fix here; filed so it isn't lost.
+  The consistent shape (page 0, rows 0-999, every failure) suggests the first page's
+  query itself is timing out rather than an intermittent network blip — worth checking
+  the `prs`-source query plan / row count before assuming it's transient.
+
+## OI-199 — cleanup_cron_call_log() spares only TWO global rows, not each function's latest — true >7d cron silence still goes invisible to /cron
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-14, live read of the function body — corrected same
+  day (R2-06/R2-07, review round 2) to cite migration **110**
+  (`110_cron_silence_per_function_and_cleanup_null_guard.sql:30-47`), the
+  LAST `CREATE OR REPLACE` and therefore the LIVE definition — the original
+  filing below quoted the SUPERSEDED migration 109 body (one spared row);
+  110 already widened that to two, and this OI's core finding (still not
+  PER-FUNCTION) survives the correction unchanged.
+- **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
+- **How found**: B-pass review of telegram-admin-bot's F4 fix (`/cron`'s
+  `.limit(200)` row-window → `.gte()` 7-day time-window). The fix's own
+  code comment claimed `cleanup_cron_call_log()` "always spares each
+  function's most recent row" — the B-pass read the live function body and
+  found this false. The LIVE (migration 110) definition:
+  ```sql
+  CREATE OR REPLACE FUNCTION public.cleanup_cron_call_log()
+  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
+  AS $fn$
+    DELETE FROM public.cron_call_log
+    WHERE started_at < now() - interval '7 days'
+      AND id NOT IN (
+        SELECT id FROM (
+          (SELECT id FROM public.cron_call_log
+            WHERE status = 'success' ORDER BY started_at DESC LIMIT 1)
+          UNION
+          (SELECT id FROM public.cron_call_log
+            ORDER BY started_at DESC LIMIT 1)
+        ) AS keep_rows
+      );
+  $fn$;
+  ```
+  This spares exactly TWO rows globally (the single most-recent
+  `status='success'` row table-wide, AND the single most-recent row of any
+  status table-wide), not one per function. (109's ORIGINAL one-row body,
+  for the record, was `id IS DISTINCT FROM (SELECT id ... WHERE
+  status='success' ORDER BY started_at DESC LIMIT 1)`.)
+- **Consequence**: a cron-dispatched function silent for longer than 7 days
+  has ALL its `cron_call_log` rows purged by the next nightly
+  `cron_call_log_cleanup_daily` run and becomes invisible to
+  `/status`/`/cron`'s 7-day `.gte()` window — the same class of blind spot
+  F4 fixed (a genuinely-stale function silently missing), re-manifesting
+  past 7 days instead of past 200 rows. `alert_cron_silence` (also
+  migration 109) is a real absence-backstop for total-fleet silence, but
+  doesn't cover a single function going silent while others keep running.
+- **Fix shape (not decided)**: widen `cleanup_cron_call_log()`'s exemption
+  from two global rows to a per-`function_name` `DISTINCT ON` — e.g. spare
+  the latest row for EVERY `function_name` present, not just the two
+  fleet-wide ones. Needs a new migration (110 is applied and immutable) and
+  its own live-verify pass (confirm the DISTINCT ON exemption doesn't
+  defeat the 7-day retention's original storage-growth purpose for
+  functions that run frequently). **Precondition (R2-11, review round 2):
+  before this fix ships, it MUST exclude non-scheduled, trigger-dispatched
+  functions (`alert-critical-notify` today) from
+  `alert_cron_function_dead`'s scope** — see the cross-reference in that
+  alert's own OI (OI-179) for why: a per-function retention exemption would
+  arm the exact false-critical-alert loop that OI-179's own threshold
+  currently keeps inert by accident.
+- **Scope note**: pre-existing production infrastructure (migration 110
+  predates this branch), out of scope for the telegram-admin-bot batch's
+  own fix diff — the comment claiming this behavior was corrected in that
+  same commit (`diagnose 82b018`), and this OI tracks the deeper fix.
+
+## OI-200 — founder_metrics_ops().client_errors_today counts benign event-coded breadcrumbs, no 087-style reinclusion filter
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-14, B-pass on migration 135 (`docs/reviews/5eb09cde42a2-review.md`
+  Finding 1) — live query against `dedsavbjuwgarrhphgnl` showed
+  `founder_metrics_ops().client_errors_today = 4` on a day with zero real
+  errors, all four rows `error_code='event'` (benign `ErrorTelemetry`
+  breadcrumbs). `client_errors_today` has counted every `event`-coded row
+  since the function was first created (migration 093/101), regardless of
+  whether the row is a genuine failure — `ErrorTelemetry.logEvent`
+  (`lib/core/services/error_telemetry.dart:332`) hardcodes
+  `error_code:'event'` for both benign breadcrumbs and real failures
+  (`*_failed`, `widget_error_fallback`, `*_returned_null`,
+  `*_unknown_error`), the exact same ambiguity migrations 086/087 resolved
+  on the ALERT-SPIKE side (`alert_client_errors_spike`) by re-including any
+  `event`-coded row whose `op_type` is failure-shaped
+  (`~* '(fail|error|crash|fallback|unknown|exception|timeout|denied|_null)'`).
+  `founder_metrics_ops()` has never had the equivalent reinclusion filter —
+  it either counts all `event` rows (pre-135) or, after 135, still counts
+  all `event` rows (135 only excludes `info`; it does NOT touch `event`).
+- **Scope note**: pre-existing since `founder_metrics_ops()`'s creation,
+  predates the telegram-admin-bot branch entirely — out of scope for
+  migration 135's own fix (R2-10, diagnose `82b018`), which targeted only
+  the NEW regression migration 134 introduced (`info`-coded telemetry
+  inflating the count). Migration 135's own header comment overclaims
+  "mirrors the exclusion pattern migrations 086/087 already established"
+  when it only excludes `info`, not `event` — flagged by the B-pass
+  (`docs/reviews/5eb09cde42a2-review.md` Finding 1). **The migration file
+  itself is NOT corrected**: it was already applied live before the B-pass
+  ran, and `supabase/migrations/CLAUDE.md` ("An APPLIED migration is
+  IMMUTABLE — including its comments") is explicit that editing an applied
+  file's comment silently falsifies its ledger hash with no gate catching
+  it. The correction lives here and in diagnose-doc `82b018` instead, per
+  that same section's guidance. The eventual fix mirrors 087's exact regex
+  reinclusion pattern, applied to `client_errors_today`'s subquery, in a
+  NEW migration (136+).
+
+## OI-201 — alert_cron_function_dead can burst-dispatch many critical alerts at once; Telegram send failures are silently dropped with no retry
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-14, Hermes lens L31 (`docs/audit/2026-09-14-hermes-telegram-admin-bot.md`).
+  Two compounding gaps, both pre-existing infrastructure (migration 110,
+  predates this branch), materially amplified by this branch's own
+  deliverable (`alert-critical-notify` is what turns a Postgres `alerts`
+  row into an actual Telegram push):
+  1. **Burst dispatch**: `alert_cron_function_dead`'s query
+     (`110_cron_silence_per_function_and_cleanup_null_guard.sql:82-119`) is
+     a SET-RETURNING `INSERT ... SELECT` — one `critical`-severity row PER
+     dead function, in one statement. `133`'s trigger is `FOR EACH ROW`, so
+     a single statement that flags N dead functions fires N separate
+     `net.http_post` dispatches to `alert-critical-notify`, each sending
+     its own Telegram message. This repo's own history has a precedent for
+     "many cron jobs dead simultaneously" (the Vault `service_role_key`
+     drift killed 12+ jobs at once) — that exact shape would now burst
+     ~12-20 Telegram sends in one statement, against Telegram's roughly
+     1 msg/sec per-chat rate limit. The other `alerts` writers
+     (`076_alert_detection_crons.sql`, `086`, `087`, `109`) each carry a
+     single-open-alert `NOT EXISTS` dedup guard scoped per-alert; this one
+     is scoped per-`function_name` (`110:112-119`), so it does not bound a
+     fleet-wide event.
+  2. **No retry on Telegram send failure**: `_shared/telegram.ts:63-66`
+     handles a non-2xx Telegram response gracefully (no throw, no token
+     leak — `telegramErrorSummary` returns `err.name` only) but a `429`
+     (rate-limited) is indistinguishable from any other failure, `Retry-
+     After` is ignored, and `pg_net.http_post` is fire-and-forget with no
+     retry at the Postgres layer either. A dropped send during exactly the
+     burst scenario above is lost from the Telegram channel permanently —
+     the founder never sees it, with no compensating signal beyond a
+     `cron_call_log` `failed` row and a `client_errors` `warn` row that
+     nothing surfaces proactively.
+- **Scope note**: out of scope for the telegram-admin-bot batch's own fix
+  diff — fixing requires either batching `alert_cron_function_dead`'s
+  dispatch (one summary alert instead of N) or adding retry/backoff to
+  `alert-critical-notify`'s Telegram send path (with `Retry-After`
+  honored), both separate infrastructure work with their own blast radius
+  and test surface. Filed here rather than fixed in-batch per the same
+  reasoning as OI-199/OI-179 above.

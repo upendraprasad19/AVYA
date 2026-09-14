@@ -62,6 +62,12 @@ function input(over: Partial<DigestInput> = {}): DigestInput {
     windowed: { rows: [] },
     lifetime: { rows: [] },
     alerts: { rows: [] },
+    // Task 5 (telegram-admin-bot) grew DigestInput by two fields; this file's
+    // fixtures predate that and don't exercise either section, so default them
+    // to the readable-empty state so every existing `input()` call keeps
+    // compiling and rendering exactly as before.
+    subscriptions: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
     ...over,
   };
 }
@@ -595,7 +601,12 @@ Deno.test("a failing alerts table makes the alerts section unreadable — never 
   assertStringIncludes((out.alerts as { unreadable: string }).unreadable, "alerts unreadable");
   assert("rows" in out.windowed && out.windowed.rows.length === 1, "usage must still read");
   // And the rendered message carries the marker, not "Alerts yesterday: none".
-  const text = buildDigestText({ dayLabel: DAY, ...out });
+  const text = buildDigestText({
+    dayLabel: DAY,
+    subscriptions: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
+    ...out,
+  });
   assertStringIncludes(text, "⚠ alerts unreadable");
   assertNotIncludes(text, "<b>Alerts yesterday</b>: none");
 });

@@ -36,3 +36,18 @@ export function istDayOfWeek(d: Date = new Date()): number {
 export function istDayStartIso(d: Date = new Date()): string {
   return `${istDateStr(d)}T00:00:00+05:30`;
 }
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Yesterday's IST day as an [yStart, tStart) instant window, plus its IST date label. */
+export function istYesterdayWindow(
+  now: Date = new Date(),
+): { yStart: string; tStart: string; label: string } {
+  const tStartMs = Date.parse(istDayStartIso(now));
+  const yStartMs = tStartMs - ONE_DAY_MS;
+  return {
+    yStart: new Date(yStartMs).toISOString(),
+    tStart: new Date(tStartMs).toISOString(),
+    label: istDateStr(new Date(yStartMs)),
+  };
+}

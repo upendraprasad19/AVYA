@@ -55,6 +55,12 @@ const _wiredCronFunctions = <String>[
   // its cron_call_log row is the ONLY server-side record that it ran, and the
   // message's arrival is the founder-side one.
   'founder-digest',
+  // Added 2026-09-14 (R2-03, telegram-admin-bot review round 2).
+  // alert-critical-notify is trigger-dispatched (migration 133, telemetry
+  // added by migration 134) rather than pg_cron-scheduled, but it already
+  // calls logCronStart/logCronEnd exactly like its pg_cron-scheduled
+  // siblings — it was simply never in scope of this hand-maintained roster.
+  'alert-critical-notify',
 ];
 
 const _functionsDir = 'supabase/functions';

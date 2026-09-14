@@ -942,5 +942,45 @@
     "slug": "vision_trigger_null_channel_guard",
     "cloud_version": "20260913015848",
     "note": "OI-153 Unit F = OI-183. CREATE OR REPLACE of enforce_vision_analysis_daily_limit with migration 129's body verbatim except the guard: IF NEW.channel IS NULL OR NEW.channel NOT IN ('scan_meal','cart_auditor') THEN RETURN NEW. Dormant defect (0 NULL-channel rows, every writer passes a guarded literal, authenticated NULL inserts fail 42501 first) closed for sibling parity. Verified live post-apply inside a rolled-back transaction (test/sql/oi153_pro_media_caps_live_verify.sql Part B): pg_get_functiondef carries the guard; a NULL-channel insert as postgres consumed NO vision unit; a scan_meal insert still consumed exactly one. DISCRIMINATION proven the same way: with 129's pre-132 body restored inside a rolled-back transaction, the identical NULL-channel insert DID create a vision_analysis row (used=1) - the probe is red before 132 and green after. Trigger binding untouched."
+  },
+  {
+    "migration": "133",
+    "applied_at": "2026-09-14T06:29:30+05:30",
+    "hash": "sha256:721c57a9969a05981f2047a78be1c1065796006883c9ca893e93f1a97ef36f86",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "n/a",
+    "slug": "alert_critical_notify_trigger",
+    "cloud_version": "20260914005825",
+    "note": "Telegram admin bot batch, Task 6 (docs/superpowers/plans/2026-09-13-telegram-admin-bot.md). CREATE OR REPLACE private.dispatch_critical_alert_notify() (SECURITY DEFINER, private schema per the public-SECURITY-DEFINER-is-anon-executable pitfall) + AFTER INSERT trigger on public.alerts WHEN (NEW.severity='critical'), same shape as 073_proactive_coach_promotion_trigger.sql: exception-swallowing, fire-and-forget pg_net.http_post to /functions/v1/alert-critical-notify with 'Bearer '||private.cron_get_secret(). Pre-apply live verification: private.cron_get_secret() exists, pg_net enabled, public.alerts columns (id/source/severity/summary/suggested_action) match both the trigger body and the verify SQL. Post-apply live verification (test/sql/alert_critical_notify_trigger_live_verify.sql, rolled-back transaction): a critical-severity insert and a non-critical insert both succeeded and returned normally, proving the trigger neither blocks nor errors the parent INSERT. The trigger's pg_net dispatch fired async against alert-critical-notify, which is NOT YET DEPLOYED (Task 13 of the same plan) -- expected to 404 harmlessly in pg_net's background worker; no Telegram message is sent until that function is deployed. Founder go given 2026-09-14 for this specific live apply via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval)."
+  },
+  {
+    "migration": "134",
+    "applied_at": "2026-09-14T06:45:42+05:30",
+    "hash": "sha256:a8bc7554e86e5e31fdf6da23ab2c06c36221310a0e9f4d578a428c60c395e095",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "n/a",
+    "slug": "alert_critical_notify_telemetry",
+    "cloud_version": "20260914010918",
+    "note": "B-pass follow-up to migration 133 (docs/reviews/28213f7956e2-review.md Findings 3 and 4). CREATE OR REPLACE private.dispatch_critical_alert_notify() adds client_errors telemetry (success + failure paths, real columns error_code/error_message/client_version/platform) and a COMMENT ON TRIGGER documenting the AFTER-INSERT-only scope. The review's own suggested-fix cited the wrong client_errors columns (message/severity) -- the exact columns that caused a real prod P0 in migration 073's original body, fixed by 078_fix_dispatch_proactive_coach_promotion_columns.sql. This migration was written from 078's corrected pattern instead, independently re-verified against live information_schema.columns before writing any SQL, and the failure-path telemetry insert is nested in its own BEGIN/EXCEPTION WHEN OTHERS THEN NULL block (078's fix) so a telemetry-insert failure can never itself abort the parent alerts INSERT. Live-verified post-apply inside a rolled-back transaction: a critical insert produced a correct critical_alert_dispatched / error_code='info' telemetry row; the COMMENT ON TRIGGER text confirmed live via obj_description(). Founder go for the live-apply covers this migration under the same 2026-09-14 approval as 133 (same task, same batch, B-pass-mandated follow-up)."
+  },
+  {
+    "migration": "135",
+    "applied_at": "2026-09-14T19:43:41+05:30",
+    "hash": "sha256:577f1a2ab6f16bbcf467fcb757ff993cfcc61ab197a9ccde8dbdd8ec55abee51",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "82b018",
+    "slug": "founder_metrics_ops_exclude_info_client_errors",
+    "cloud_version": "20260914141301",
+    "note": "Review Round 2 finding R2-10 (telegram-admin-bot whole-branch review, diagnose 82b018): migration 134's success-path critical-alert telemetry writes a client_errors row with error_code='info' on every successful dispatch, inflating founder_metrics_ops()'s client_errors_today count even though nothing had gone wrong. CREATE OR REPLACE founder_metrics_ops() with 101_admin_dashboard_metrics_functions.sql's body verbatim (confirmed via live pg_get_functiondef before writing this migration -- byte-identical to 101's definition, no intervening redefinition) plus one added predicate: error_code is distinct from 'info' on the client_errors_today subquery only. Mirrors the exclusion pattern migrations 086/087 already established on the alert-spike side. Post-apply live verification: has_function_privilege confirms anon=false, authenticated=false, service_role=true (unchanged from pre-apply); founder_metrics_ops() still returns a full row (client_errors_today=4, matching the pre-apply smoke-tested value, since no info-coded rows exist in today's window yet). Founder go given 2026-09-14 via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval) -- this migration was deliberately held out of two prior commits specifically pending this authorization."
+  },
+  {
+    "migration": "136",
+    "applied_at": "2026-09-14T20:41:30+05:30",
+    "hash": "sha256:0b1a3cb6a27ba1e99e44b168ee048948f22b6da5776ce1676743ce39459768f7",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "82b018",
+    "slug": "founder_metrics_ops_exclude_info_client_errors_7d",
+    "cloud_version": "20260914154130",
+    "note": "Hermes pass finding F1 (telegram-admin-bot whole-branch Hermes pass, diagnose 82b018), corroborated independently by 3 lenses (L1, L22, L35): migration 135 fixed client_errors_today's error_code='info' inflation but left the sibling client_errors_7d subquery in the same function, same table, with the identical bug -- migration 134's success-path telemetry inflates both. CREATE OR REPLACE founder_metrics_ops() with 135's body verbatim (confirmed via live pg_get_functiondef before writing this migration -- byte-identical to 135's definition, no intervening redefinition) plus the same predicate now also on client_errors_7d: error_code is distinct from 'info'. Post-apply live verification: has_function_privilege confirms anon=false, authenticated=false, service_role=true (unchanged); a rolled-back transaction confirmed the exact discrimination -- an info-coded row leaves client_errors_7d unchanged (140->140), a real error-coded row still increments it by one (140->141), and client_errors_today (135's earlier fix) is unregressed (4->5, only the real-error row counted). Founder go given 2026-09-14 via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval) -- this migration was deliberately held out of the Hermes-fix commit specifically pending this authorization."
   }
 ]
