@@ -4158,3 +4158,46 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   The consistent shape (page 0, rows 0-999, every failure) suggests the first page's
   query itself is timing out rather than an intermittent network blip — worth checking
   the `prs`-source query plan / row count before assuming it's transient.
+
+## OI-199 — cleanup_cron_call_log() spares only ONE global row, not each function's latest — true >7d cron silence still goes invisible to /cron
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-14, live read of the function body via migration 109's source
+- **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
+- **How found**: B-pass review of telegram-admin-bot's F4 fix (`/cron`'s
+  `.limit(200)` row-window → `.gte()` 7-day time-window). The fix's own
+  code comment claimed `cleanup_cron_call_log()` (migration 109) "always
+  spares each function's most recent row" — the B-pass read the live
+  function body and found this false:
+  ```sql
+  DELETE FROM public.cron_call_log
+  WHERE started_at < now() - interval '7 days'
+    AND id IS DISTINCT FROM (
+      SELECT id FROM public.cron_call_log
+      WHERE status = 'success'
+      ORDER BY started_at DESC
+      LIMIT 1
+    );
+  ```
+  This spares exactly ONE row globally (the single most-recent
+  `status='success'` row table-wide), not one per function.
+- **Consequence**: a cron-dispatched function silent for longer than 7 days
+  has ALL its `cron_call_log` rows purged by the next nightly
+  `cron_call_log_cleanup_daily` run and becomes invisible to
+  `/status`/`/cron`'s 7-day `.gte()` window — the same class of blind spot
+  F4 fixed (a genuinely-stale function silently missing), re-manifesting
+  past 7 days instead of past 200 rows. `alert_cron_silence` (also
+  migration 109) is a real absence-backstop for total-fleet silence, but
+  doesn't cover a single function going silent while others keep running.
+- **Fix shape (not decided)**: widen `cleanup_cron_call_log()`'s exemption
+  from a single global `ORDER BY started_at DESC LIMIT 1` to a per-
+  `function_name` `DISTINCT ON` — e.g. spare the latest row for EVERY
+  `function_name` present, not just the fleet-wide latest. Needs a new
+  migration (109 is applied and immutable) and its own live-verify pass
+  (confirm the DISTINCT ON exemption doesn't defeat the 7-day retention's
+  original storage-growth purpose for functions that run frequently).
+- **Scope note**: pre-existing production infrastructure (migration 109
+  predates this branch), out of scope for the telegram-admin-bot batch's
+  own fix diff — the comment claiming this behavior was corrected in that
+  same commit (`diagnose 82b018`), and this OI tracks the deeper fix.
