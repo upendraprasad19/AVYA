@@ -952,5 +952,15 @@
     "slug": "alert_critical_notify_trigger",
     "cloud_version": "20260914005825",
     "note": "Telegram admin bot batch, Task 6 (docs/superpowers/plans/2026-09-13-telegram-admin-bot.md). CREATE OR REPLACE private.dispatch_critical_alert_notify() (SECURITY DEFINER, private schema per the public-SECURITY-DEFINER-is-anon-executable pitfall) + AFTER INSERT trigger on public.alerts WHEN (NEW.severity='critical'), same shape as 073_proactive_coach_promotion_trigger.sql: exception-swallowing, fire-and-forget pg_net.http_post to /functions/v1/alert-critical-notify with 'Bearer '||private.cron_get_secret(). Pre-apply live verification: private.cron_get_secret() exists, pg_net enabled, public.alerts columns (id/source/severity/summary/suggested_action) match both the trigger body and the verify SQL. Post-apply live verification (test/sql/alert_critical_notify_trigger_live_verify.sql, rolled-back transaction): a critical-severity insert and a non-critical insert both succeeded and returned normally, proving the trigger neither blocks nor errors the parent INSERT. The trigger's pg_net dispatch fired async against alert-critical-notify, which is NOT YET DEPLOYED (Task 13 of the same plan) -- expected to 404 harmlessly in pg_net's background worker; no Telegram message is sent until that function is deployed. Founder go given 2026-09-14 for this specific live apply via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval)."
+  },
+  {
+    "migration": "134",
+    "applied_at": "2026-09-14T06:45:42+05:30",
+    "hash": "sha256:a8bc7554e86e5e31fdf6da23ab2c06c36221310a0e9f4d578a428c60c395e095",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "n/a",
+    "slug": "alert_critical_notify_telemetry",
+    "cloud_version": "20260914010918",
+    "note": "B-pass follow-up to migration 133 (docs/reviews/28213f7956e2-review.md Findings 3 and 4). CREATE OR REPLACE private.dispatch_critical_alert_notify() adds client_errors telemetry (success + failure paths, real columns error_code/error_message/client_version/platform) and a COMMENT ON TRIGGER documenting the AFTER-INSERT-only scope. The review's own suggested-fix cited the wrong client_errors columns (message/severity) -- the exact columns that caused a real prod P0 in migration 073's original body, fixed by 078_fix_dispatch_proactive_coach_promotion_columns.sql. This migration was written from 078's corrected pattern instead, independently re-verified against live information_schema.columns before writing any SQL, and the failure-path telemetry insert is nested in its own BEGIN/EXCEPTION WHEN OTHERS THEN NULL block (078's fix) so a telemetry-insert failure can never itself abort the parent alerts INSERT. Live-verified post-apply inside a rolled-back transaction: a critical insert produced a correct critical_alert_dispatched / error_code='info' telemetry row; the COMMENT ON TRIGGER text confirmed live via obj_description(). Founder go for the live-apply covers this migration under the same 2026-09-14 approval as 133 (same task, same batch, B-pass-mandated follow-up)."
   }
 ]

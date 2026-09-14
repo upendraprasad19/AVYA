@@ -1,7 +1,8 @@
 /**
  * alert-critical-notify — reads ONE alerts row by id and pushes it to the
  * founder's Telegram immediately. Invoked ONLY by the private.
- * dispatch_critical_alert_notify() trigger (migration 131) on a critical
+ * dispatch_critical_alert_notify() trigger (migration 133, telemetry added
+ * by migration 134) on a critical
  * alerts INSERT — never reachable from anywhere else. Cron-secret
  * authenticated, same as every other server-triggered function in this repo.
  */

@@ -220,6 +220,36 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-14 (b)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
+  follow-up (migration 134: `client_errors` telemetry + a `COMMENT ON TRIGGER`, fixing 2 of the
+  prior same-day review's 5 findings). **2 findings (0 P0, 0 P1, 0 P2, 2 P3); 0 false_alarm — both
+  accepted and parked** (a `||`-NULL-propagation diagnostic-quality gap on a doubly-unlikely path,
+  and a migration-header enum mismatch the repo's own convention already documents as unenforced).
+  Review: `docs/reviews/297bae7db41c-review.md`. Run as one agent (3 small files, one a two-line
+  comment fix).
+  **Tuning — the reviewer independently RE-DERIVED the prior review's central safety claim against
+  LIVE state rather than trusting the migration's own header prose, and that is what makes this
+  entry worth recording despite finding nothing above P3.** The header claims the failure-path
+  telemetry insert is "nested... so a telemetry-insert failure can never itself abort the parent
+  alerts INSERT" — exactly the property 078 exists to guarantee for this trigger family. Rather
+  than accept the claim from the comment, the reviewer traced PL/pgSQL exception SCOPING precisely
+  for all three `client_errors` INSERT call sites, THEN cross-checked the traced structure against
+  the LIVE deployed function body (`pg_get_functiondef` via MCP, confirmed byte-identical to the
+  staged file) — closing the exact gap the 2026-09-04(b) entry's "a tier computed before the file
+  exists is not a computed tier" lesson describes for blast-radius, applied here to a STRUCTURAL
+  safety claim instead of a tier number: a claim about live behaviour is only checked once it is
+  checked against what is actually LIVE, not against the file that describes it.
+  **Second, smaller — a genuine confirmation that a prior review's ACCEPTED rationale, reused
+  verbatim in a follow-up migration's header, does not need re-litigating from scratch, but DOES
+  need checking that it was not silently weakened.** Lens 3 (`blast_radius_mismatch`) explicitly
+  cross-referenced the PRIOR review's Finding 2 (the `feature_flag` rationale) rather than raising
+  it fresh, verified 134 reuses it in substance without contradiction, and correctly left the
+  PRIOR review's still-open Finding 1 (the whole-branch plan-review record) alone as genuinely out
+  of scope for this diff. Add to lens 3's method: when a diff's header cites a PRIOR finding by
+  number, verify the citation is accurate and that the rationale it points to still holds for the
+  NEW diff — don't treat "already discussed" as a reason to skip the check entirely.
+  False-alarm rate 0/2 → no lens removed; lens 3 extended per above.
+
 - **2026-09-14** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6 (migration
   133: a SECURITY DEFINER trigger dispatching an immediate Telegram push on a critical alert).
   **5 findings (0 P0, 2 P1, 1 P2, 2 P3); 0 false_alarm — all 5 accepted, 4 fixed in-batch (in a
