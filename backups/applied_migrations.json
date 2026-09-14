@@ -982,5 +982,15 @@
     "slug": "founder_metrics_ops_exclude_info_client_errors_7d",
     "cloud_version": "20260914154130",
     "note": "Hermes pass finding F1 (telegram-admin-bot whole-branch Hermes pass, diagnose 82b018), corroborated independently by 3 lenses (L1, L22, L35): migration 135 fixed client_errors_today's error_code='info' inflation but left the sibling client_errors_7d subquery in the same function, same table, with the identical bug -- migration 134's success-path telemetry inflates both. CREATE OR REPLACE founder_metrics_ops() with 135's body verbatim (confirmed via live pg_get_functiondef before writing this migration -- byte-identical to 135's definition, no intervening redefinition) plus the same predicate now also on client_errors_7d: error_code is distinct from 'info'. Post-apply live verification: has_function_privilege confirms anon=false, authenticated=false, service_role=true (unchanged); a rolled-back transaction confirmed the exact discrimination -- an info-coded row leaves client_errors_7d unchanged (140->140), a real error-coded row still increments it by one (140->141), and client_errors_today (135's earlier fix) is unregressed (4->5, only the real-error row counted). Founder go given 2026-09-14 via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval) -- this migration was deliberately held out of the Hermes-fix commit specifically pending this authorization."
+  },
+  {
+    "migration": "137",
+    "applied_at": "2026-09-14T23:37:04+05:30",
+    "hash": "sha256:28ca39654267585e5ee9f92032aa4568a33be570873a1dbc4987ead9435bc220",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "f7c3a1",
+    "slug": "founder_metrics_ops_reassert_role_revoke",
+    "cloud_version": "20260914180704",
+    "note": "First full `flutter test` run of the telegram-admin-bot branch (pre-push, Task 13 Step 8) failed test/contracts/admin_metrics_functions_role_revoke_test.dart's a9d3f1 replay-guard test: migrations 135 and 136 each CREATE OR REPLACE founder_metrics_ops() without their own explicit `revoke execute ... from anon, authenticated;`, drift from the established a9d3f1/e4a1b7 defense-in-depth pattern that neither review round nor the Hermes pass caught (none ran flutter test locally, only live SQL + Deno tests). Live has_function_privilege verified BEFORE this migration: anon=false, authenticated=false, service_role=true -- migration 103's original revoke survived both 135's and 136's signature-unchanged CREATE OR REPLACE per ordinary Postgres ACL-preservation semantics, so there was never a live exposure; this migration is defense-in-depth against a full migration-set replay relying on that implicit preservation. Idempotent revoke, applied after founder authorization via AskUserQuestion 2026-09-14 per CLAUDE.md 4.3. Post-apply has_function_privilege unchanged (anon=false, authenticated=false, service_role=true), confirming no behavioural change. Paired with a narrow, named, documented exemption for 135/136 in admin_metrics_functions_role_revoke_test.dart plus a new test pinning this migration's own revoke line (both mutation-proven -- see diagnose f7c3a1)."
   }
 ]
