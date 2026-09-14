@@ -39,6 +39,20 @@ status: active
    `founder-digest` (job `founder_digest_daily`, 08:00 IST — the founder's
    Telegram digest of yesterday's `usage_counters` + `alerts`; READ-ONLY, the
    one aggregate reader of the ledger, OI-153 2026-09-12).
+4. **Trigger/webhook-dispatched, not cron** (telegram-admin-bot batch,
+   2026-09-14): `alert-critical-notify` — invoked ONLY by the
+   `private.dispatch_critical_alert_notify()` Postgres trigger (migration
+   133, telemetry added by 134) via `pg_net.http_post` on a critical
+   `alerts` INSERT; cron-secret authenticated via `_shared/cron_auth.ts`
+   like the role-3 functions, but never reachable from `cron.job_run_details`
+   — its own telemetry lives in `cron_call_log` under `function_name =
+   'alert-critical-notify'` regardless. `telegram-admin-bot` — the founder's
+   read-only admin console over Telegram (`@IcanbefitterBot`), `verify_jwt
+   =false`, internet-facing; auth is Telegram's webhook secret token header
+   + a single allowlisted chat id, both checked in-handler (never at the
+   gateway). Reuses `founder-digest`'s own `_shared/founder_digest_content.ts`
+   builder for its `/digest` command. See
+   `docs/superpowers/specs/2026-09-13-telegram-admin-bot-design.md`.
 
 Shared helpers live under `_shared/`:
 

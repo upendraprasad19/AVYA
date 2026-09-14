@@ -4135,3 +4135,26 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   `docs/superpowers/specs/2026-09-13-telegram-admin-bot-design.md`. The Telegram admin bot
   reports on top of what these checks already produce; it does not close any of these 4 gaps
   itself.
+
+## OI-198 — pr-detection cron: repeated Gateway Timeout on paged_fetch (4x in 24h, 2026-09-13/14)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-14, live query against `public.cron_call_log`
+- **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
+- **How found**: telegram-admin-bot's `/status` smoke test (Task 13, Step 5) reported
+  "Cron failures (24h): 4" — unexpected against the naive assumption of a quiet cron
+  schedule. Independently verified by re-running `founder_metrics_ops()`'s live SQL
+  (`select count(*) from public.cron_call_log where started_at >= now() - interval '24
+  hours' and (status = 'failed' or (status = 'started' and started_at < now() - interval
+  '1 hour')))`) — matched the bot's reported 4 exactly, plus the underlying rows.
+- **Evidence**: all 4 failing rows are `function_name = 'pr-detection'`, `status =
+  'failed'`, `http_status = 500`, error `paged_fetch[pr-detection prs]: page 0 (rows
+  0-999) failed: Gateway Timeout`, at 2026-09-13 19:30/20:45/21:30/23:45 UTC
+  (request_ids `8c2ec592`, `052a49ab`, `b4ca04c1`, `7e2ce940`).
+- **Scope note**: pre-existing production reliability issue, unrelated to the
+  telegram-admin-bot batch's own code — `pr-detection` and its `_shared/paged_fetch.ts`
+  usage are untouched by this branch. Out of scope to fix here; filed so it isn't lost.
+  The consistent shape (page 0, rows 0-999, every failure) suggests the first page's
+  query itself is timing out rather than an intermittent network blip — worth checking
+  the `prs`-source query plan / row count before assuming it's transient.
