@@ -33,7 +33,7 @@ export const HELP_TEXT = [
   "/alerts — open alerts",
   "/errors — yesterday's errors, grouped by source",
   "/cron — cron job health",
-  "/digest — re-send today's digest",
+  "/digest — re-send yesterday's digest",
   "/help — this list",
 ].join("\n");
 
@@ -50,6 +50,25 @@ export async function isAuthorizedTelegramSender(opts: {
   chatId: string | number;
   expectedChatId: string;
 }): Promise<boolean> {
+  // F4 (Hermes 2026-09-14, L23): explicit checks + operator-facing warnings
+  // for an unset secret/chat-id, mirroring _shared/cron_auth.ts's own
+  // `cronSecret.length === 0` pattern. Before this, an unset
+  // TELEGRAM_WEBHOOK_SECRET / FOUNDER_TELEGRAM_CHAT_ID was rejected only
+  // INCIDENTALLY — an empty/absent header can never hash-match an empty
+  // expected value — so a mis-provisioned deploy was silently dead with no
+  // diagnostic signal, rather than loud and traceable.
+  if (opts.expectedSecretToken.length === 0) {
+    console.error(
+      "[telegram-admin-bot] TELEGRAM_WEBHOOK_SECRET is unset — every webhook call will be rejected.",
+    );
+    return false;
+  }
+  if (opts.expectedChatId.length === 0) {
+    console.error(
+      "[telegram-admin-bot] FOUNDER_TELEGRAM_CHAT_ID is unset — every webhook call will be rejected.",
+    );
+    return false;
+  }
   if (!opts.secretTokenHeader) return false;
   if (!await timingSafeEqual(opts.secretTokenHeader, opts.expectedSecretToken)) return false;
   return String(opts.chatId) === opts.expectedChatId;
@@ -476,7 +495,17 @@ export async function cmdErrors(supabase: any): Promise<string> {
   // an 'event'-coded row whose op_type is failure-shaped; 'info' stays
   // fully excluded, same as 087.
   const FAILURE_SHAPED_OP_TYPE = /(fail|error|crash|fallback|unknown|exception|timeout|denied|_null)/i;
-  const rows = (data ?? []).filter((r: { op_type: string; error_code: string }) => {
+  // F2 (Hermes 2026-09-14, L21): the cap marker below must reflect whether
+  // the RAW read hit PostgREST's row limit, not whether the FILTERED array
+  // did. `rawRows` is the un-filtered read; `rows` (post-`event`/`info`
+  // exclusion) is what's rendered. Checking `rows.length` against the cap
+  // meant that on any real day where the filter removed even one row (which
+  // it does every day — 'info' rows are routine), the truncation marker
+  // could never fire even when the raw read WAS truncated at 1000 rows.
+  // `cmdSubs` (above) already gets this right by checking its unfiltered
+  // array — this mirrors that pattern.
+  const rawRows = data ?? [];
+  const rows = rawRows.filter((r: { op_type: string; error_code: string }) => {
     if (r.error_code === "info") return false;
     if (r.error_code !== "event") return true;
     return FAILURE_SHAPED_OP_TYPE.test(r.op_type);
@@ -494,8 +523,10 @@ export async function cmdErrors(supabase: any): Promise<string> {
     lines.push(`${escapeHtml(opType)}: ${n}`);
   }
   // The read itself was capped at CLIENT_ERRORS_QUERY_CAP rows — an honest
-  // marker beats a silent undercount on a day busy enough to hit it.
-  if (rows.length >= CLIENT_ERRORS_QUERY_CAP) {
+  // marker beats a silent undercount on a day busy enough to hit it. Checked
+  // against the RAW read (rawRows), not the post-filter `rows` — see F2 note
+  // above.
+  if (rawRows.length >= CLIENT_ERRORS_QUERY_CAP) {
     lines.push(`⚠ counts capped at ${CLIENT_ERRORS_QUERY_CAP} rows — actual total may be higher`);
   }
   return lines.join("\n");

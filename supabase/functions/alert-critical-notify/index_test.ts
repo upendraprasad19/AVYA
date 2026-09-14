@@ -9,6 +9,59 @@ Deno.env.set("CRON_SECRET", CRON_SECRET_FOR_TEST);
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { formatCriticalAlertText, handler } from "./index.ts";
 
+/**
+ * Loads a FRESH instance of index.ts via a cache-busted dynamic import.
+ *
+ * Every other test in this file uses the static `handler` import at the top,
+ * which is fine because they all return before the handler's internal
+ * `createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)` call — that's
+ * deliberate (R2-16's comment above). But `SUPABASE_URL`/
+ * `SUPABASE_SERVICE_ROLE_KEY` in index.ts are MODULE-SCOPE consts, and ES
+ * module imports are hoisted: the static `import { handler } from "./index.ts"`
+ * at the top of this file evaluates index.ts's top level BEFORE this file's
+ * own `Deno.env.set()` calls run, despite those calls appearing first in
+ * source order. So the statically-imported `handler` closes over an EMPTY
+ * `SUPABASE_URL` — reaching its `createClient()` call always throws
+ * "supabaseUrl is required" before ever touching `alerts` or `sendFn`.
+ * (Same class `supabase/functions/CLAUDE.md`'s pitfall table already
+ * documents for `ai-media-proxy`'s `STORAGE_PREFIX`: "needs `Deno.env.set(...)`
+ * BEFORE a dynamic `await import("./index.ts")` — a static import is hoisted
+ * above the `set`".) A cache-busted dynamic import re-evaluates the module
+ * fresh, AFTER the env vars above are already set, so its `handler` actually
+ * reaches the `alerts` read and `sendFn` — which is what the F5 test below
+ * needs to exercise the real token-leak-shaped catch path.
+ */
+async function importFreshHandler(): Promise<typeof handler> {
+  const mod = await import(`./index.ts?cachebust=${crypto.randomUUID()}`) as { handler: typeof handler };
+  return mod.handler;
+}
+
+/**
+ * Stubs `globalThis.fetch` so the handler's internal supabase-js `alerts`
+ * row read succeeds without touching the real network — same pattern as
+ * `_shared/gemini_backoff_retry_test.ts`'s `installFetchQueue`. Returns a
+ * restore function; callers MUST call it in a `finally`.
+ */
+function stubFetchForAlertsRead(): () => void {
+  const original = globalThis.fetch;
+  globalThis.fetch = ((_input: unknown, _init?: unknown): Promise<Response> => {
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          source: "alert_test",
+          summary: "test summary",
+          detected_at: "2026-09-14T02:00:00.000Z",
+          suggested_action: null,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+  }) as typeof fetch;
+  return () => {
+    globalThis.fetch = original;
+  };
+}
+
 Deno.test("formatCriticalAlertText includes the source, summary, and suggested action", () => {
   const text = formatCriticalAlertText({
     source: "alert_client_errors_spike",
@@ -94,4 +147,55 @@ Deno.test("handler rejects a request with non-numeric alert_id", async () => {
   assertEquals(startCalls, 1);
   assertEquals(endCalls.length, 1);
   assertEquals(endCalls[0].status, "failed");
+});
+
+Deno.test("F5 (Hermes 2026-09-14, L21): the final catch never leaks a bot-token-shaped error string into telemetry", async () => {
+  // This exercises the outer catch block (index.ts's bottom try/catch) via
+  // an injected sendFn that throws the SHAPE of error a real Deno `fetch`
+  // TypeError has against the Telegram API: err.toString()/.message embeds
+  // the full request URL, which for a Telegram call includes the bot token.
+  // Not reachable today (sendTelegram never lets a raw fetch rejection
+  // escape to this catch — see _shared/telegram.ts's own header), but the
+  // guard is positional, not structural, so this pins the structural fix:
+  // only telegramErrorSummary's output (which extracts err.name only) may
+  // reach logCronEnd's errorSummary field, never the raw error string.
+  const restoreFetch = stubFetchForAlertsRead();
+  try {
+    const freshHandler = await importFreshHandler();
+    const req = new Request("https://example.com/alert-critical-notify", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${CRON_SECRET_FOR_TEST}`,
+      },
+      body: JSON.stringify({ alert_id: 42 }),
+    });
+
+    const fakeTokenShapedError = new Error(
+      "error sending request for url (https://api.telegram.org/bot123456:FAKE-TOKEN-VALUE/sendMessage)",
+    );
+
+    const endCalls: Array<{ status: string; opts?: { errorSummary?: string } }> = [];
+    const res = await freshHandler(
+      req,
+      {
+        logCronStart: async (_fn: string) => 1,
+        logCronEnd: async (_id, status, opts) => {
+          endCalls.push({ status, opts: opts as { errorSummary?: string } });
+        },
+      },
+      async () => {
+        throw fakeTokenShapedError;
+      },
+    );
+
+    assertEquals(res.status, 500);
+    assertEquals(endCalls.length, 1);
+    assertEquals(endCalls[0].status, "failed");
+    const summary = endCalls[0].opts?.errorSummary ?? "";
+    assertEquals(summary.includes("123456:FAKE-TOKEN-VALUE"), false);
+    assertEquals(summary.includes("api.telegram.org"), false);
+    assertStringIncludes(summary, "Error");
+  } finally {
+    restoreFetch();
+  }
 });

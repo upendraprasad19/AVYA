@@ -223,6 +223,45 @@ an applied migration silently falsifies its ledger hash with no gate to
 catch it. The correction lives in `docs/audit/open_issues.md`'s OI-200
 (filed for the deeper `event`-reinclusion gap) and this note instead.
 
+## Hermes pass follow-up (separate commit, catastrophic tier)
+
+A Hermes deep-review pass (8 parallel Opus lens agents — L1, L14, L21, L22,
+L23, L31, L35, L40 — `docs/audit/2026-09-14-hermes-telegram-admin-bot.md`)
+ran against the full 32-commit branch after Review Round 2's fixes landed,
+per CLAUDE.md §4.12.3's requirement at catastrophic tier. Zero P0/P1. Five
+findings fixed in the same follow-on commit as this note:
+
+- **F1** (corroborated independently by 3 lenses — L1, L22, L35): migration
+  135 fixed `client_errors_today`'s `'info'`-row inflation but left the
+  sibling `client_errors_7d` subquery, in the same function, on the same
+  table, with the identical bug — migration 134's success-path telemetry
+  inflates both. New migration 136 (`CREATE OR REPLACE
+  founder_metrics_ops()`, copying 135's body verbatim plus the same
+  exclusion predicate on `client_errors_7d`) is written and held out of the
+  tree pending live-apply authorization, same as 135 was.
+- **F2**: `/errors`'s truncation marker checked the FILTERED row count
+  instead of the raw read's count, so it could never fire once the
+  `'info'`/`'event'` filter removed even one row — the founder would see
+  an undercount with no warning it was truncated.
+- **F3**: `/help`'s digest description said "today's" when `cmdDigest`
+  actually composes yesterday's IST window by design.
+- **F4/F5**: two defensive hardenings (an explicit unset-secret check in
+  `isAuthorizedTelegramSender`, matching `cron_auth.ts`'s own convention;
+  and routing `alert-critical-notify`'s one remaining raw-error catch
+  through `telegramErrorSummary` instead of `String(err)`, closing a
+  positional-not-structural token-leak shape).
+
+One finding (burst-dispatch of `alert_cron_function_dead` + no retry on a
+Telegram send failure — pre-existing infrastructure in migration 110,
+amplified but not created by this branch) is filed as OI-201 rather than
+fixed in-batch, per the same reasoning as OI-179/OI-199 above. Three
+findings are accepted as documented tradeoffs with no action (fire-and-
+forget telemetry marking enqueue not delivery — a systemic repo-wide
+pattern; a one-time `admin_metrics_daily` trend discontinuity at the 135
+cutover date; migration 134's non-executable rollback-DDL pointer, noted
+here since 134 is applied and immutable and cannot itself be corrected).
+Full triage: the Hermes report's own Founder triage notes section.
+
 ## Verification
 
 - `deno check --node-modules-dir=none` clean on every touched file.

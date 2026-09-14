@@ -42,6 +42,52 @@ Deno.test("isAuthorizedTelegramSender coerces a numeric Telegram chat id before 
   );
 });
 
+Deno.test("isAuthorizedTelegramSender explicitly rejects + logs when TELEGRAM_WEBHOOK_SECRET is unset (F4, Hermes 2026-09-14)", async () => {
+  // Before this fix, an unset secret was rejected only INCIDENTALLY — an
+  // empty/absent header can never hash-match an empty expected value — with
+  // no diagnostic signal. This asserts the explicit check + warning exist,
+  // mirroring _shared/cron_auth.ts's own `cronSecret.length === 0` pattern.
+  const originalError = console.error;
+  const logs: string[] = [];
+  console.error = (...args: unknown[]) => {
+    logs.push(args.map(String).join(" "));
+  };
+  try {
+    const result = await isAuthorizedTelegramSender({
+      secretTokenHeader: null,
+      expectedSecretToken: "",
+      chatId: "12345",
+      expectedChatId: "12345",
+    });
+    assertEquals(result, false);
+    assertEquals(logs.length, 1);
+    assertStringIncludes(logs[0], "TELEGRAM_WEBHOOK_SECRET");
+  } finally {
+    console.error = originalError;
+  }
+});
+
+Deno.test("isAuthorizedTelegramSender explicitly rejects + logs when FOUNDER_TELEGRAM_CHAT_ID is unset (F4, Hermes 2026-09-14)", async () => {
+  const originalError = console.error;
+  const logs: string[] = [];
+  console.error = (...args: unknown[]) => {
+    logs.push(args.map(String).join(" "));
+  };
+  try {
+    const result = await isAuthorizedTelegramSender({
+      secretTokenHeader: "s3cr3t",
+      expectedSecretToken: "s3cr3t",
+      chatId: "12345",
+      expectedChatId: "",
+    });
+    assertEquals(result, false);
+    assertEquals(logs.length, 1);
+    assertStringIncludes(logs[0], "FOUNDER_TELEGRAM_CHAT_ID");
+  } finally {
+    console.error = originalError;
+  }
+});
+
 Deno.test("parseCommand strips the leading slash and any @BotName suffix, lowercases the command", () => {
   assertEquals(parseCommand("/Status@IcanbefitterBot"), { cmd: "status", args: [] });
   assertEquals(parseCommand("/user  foo@bar.com"), { cmd: "user", args: ["foo@bar.com"] });
@@ -882,6 +928,33 @@ Deno.test("cmdErrors renders an explicit cap marker when the read hits PostgREST
   // it cannot see PostgREST's own truncation, only that it got exactly its
   // own limit back.
   const rows = Array.from({ length: 1000 }, () => ({ op_type: "some_op", error_code: "minified:x" }));
+  const fake = {
+    from: () => ({
+      select: () => ({
+        gte: () => ({
+          lt: () => ({
+            limit: () => Promise.resolve({ data: rows, error: null }),
+          }),
+        }),
+      }),
+    }),
+  };
+  const text = await cmdErrors(fake);
+  assertStringIncludes(text, "capped at 1000 rows");
+});
+
+Deno.test("cmdErrors's cap marker checks the RAW read's length, not the post-filter one (F2, Hermes 2026-09-14)", async () => {
+  // 1000 raw rows (== CLIENT_ERRORS_QUERY_CAP) with exactly one 'info'-coded
+  // row that the filter removes, leaving 999 post-filter. Before this fix
+  // the marker checked the FILTERED array's length (999 < 1000), so it could
+  // never fire even though the raw read WAS truncated at 1000 rows — on any
+  // real day where the filter removes even one row (routine — 'info' rows
+  // are routine), the truncation marker was structurally dead.
+  const rows: Array<{ op_type: string; error_code: string }> = Array.from(
+    { length: 999 },
+    () => ({ op_type: "some_op", error_code: "minified:x" }),
+  );
+  rows.push({ op_type: "filtered_out_op", error_code: "info" });
   const fake = {
     from: () => ({
       select: () => ({

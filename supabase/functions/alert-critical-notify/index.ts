@@ -12,7 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { clientError, corsHeaders, ok, serverError } from "../_shared/error.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
-import { escapeHtml, sendTelegram } from "../_shared/telegram.ts";
+import { escapeHtml, sendTelegram, telegramErrorSummary } from "../_shared/telegram.ts";
 import { istClock } from "../_shared/founder_digest_content.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -112,7 +112,16 @@ export const handler = async (
   } catch (err) {
     const requestId = crypto.randomUUID().slice(0, 8);
     console.error(`[alert-critical-notify] request_id=${requestId}`, err);
-    await telemetry.logCronEnd(logId, "failed", { httpStatus: 500, errorSummary: String(err).slice(0, 200) });
+    // F5 (Hermes 2026-09-14, L21): raw `String(err)` on a caught fetch
+    // TypeError embeds the full request URL, which for a Telegram API call
+    // includes the bot token. Not reachable today (sendTelegram never lets a
+    // raw fetch rejection escape to this catch — see its own module header),
+    // but positional, not structural: a future `await fetch(...)` added
+    // inside this try would leak the token here with no gate to catch it.
+    // `telegramErrorSummary` is the same guard `_shared/telegram.ts` already
+    // uses for every reachable Telegram error path — only `err.name` leaves
+    // this function, never the raw error.
+    await telemetry.logCronEnd(logId, "failed", { httpStatus: 500, errorSummary: telegramErrorSummary(err) });
     return serverError("alert-critical-notify", err);
   }
 };
