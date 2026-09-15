@@ -367,6 +367,9 @@ class _HeroCta extends StatelessWidget {
                   ),
                   child: Text(
                     'VIEW CARD →',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
                     style: AppTypography.mono.copyWith(
                       fontSize: 11,
                       letterSpacing: 1.2,
