@@ -203,6 +203,16 @@ class CoachInteractionRepository {
     String key, {
     required String aiResponse,
     required String modelUsed,
+    // APK +43 obs 2 — true when [aiResponse] is the server's hardcoded
+    // "trouble reaching the model" apology rather than real model output
+    // (AiChatResponse.hadHardFailure). The turn still delivers normally
+    // (pending: false, no retry UI — that's `updateInteractionWithError`'s
+    // job) but is marked `failed` so `recentHistoryExchanges` excludes it
+    // from the next request's replayed history. Without this, a genuine
+    // quota-exhaustion apology gets fed back to the model on the very next
+    // turn, which echoes it back as if it were a normal continuation —
+    // turning one transient outage into a self-perpetuating "stuck" chat.
+    bool hadHardFailure = false,
   }) async {
     // gate16-exempt: in-place mutation + write-back. Map is not surfaced
     // to a List consumer; the key is held by the caller.
@@ -212,7 +222,7 @@ class CoachInteractionRepository {
     entry['ai_response'] = aiResponse;
     entry['model_used'] = modelUsed;
     entry['pending'] = false;
-    entry['failed'] = false;
+    entry['failed'] = hadHardFailure;
     entry.remove('error_text');
     await _hive.coachBox.put(key, entry);
   }

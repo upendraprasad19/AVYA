@@ -69,6 +69,16 @@ class ErrorTelemetry {
   static void Function(String opType, {String? message})?
       debugOnLogEventForTests;
 
+  /// Test seam — when non-null, `recordNonFatal` invokes this instead of
+  /// making Crashlytics/network calls, so a behavioral test can assert a
+  /// non-fatal was recorded (error object + `reason`) without a Supabase
+  /// or Crashlytics client. Mirrors [debugOnLogEventForTests]. Production
+  /// code MUST leave this null. Reset to null in `setUp`/`tearDown`.
+  @visibleForTesting
+  static void Function(Object error, StackTrace? stack,
+      {required String reason, Map<String, String>? extra})?
+      debugOnRecordNonFatalForTests;
+
   /// HIGH-priority op_type matcher — must stay in lock-step with the
   /// server-side `HIGH_PRIORITY_OP_TYPES` set in
   /// `supabase/functions/log-client-error/index.ts`. Drift between
@@ -224,6 +234,10 @@ class ErrorTelemetry {
     required String reason,
     Map<String, String>? extra,
   }) async {
+    if (debugOnRecordNonFatalForTests != null) {
+      debugOnRecordNonFatalForTests!(error, stack, reason: reason, extra: extra);
+      return;
+    }
     // Crashlytics leg.
     if (!kDebugMode) {
       try {

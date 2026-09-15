@@ -196,6 +196,66 @@ void main() {
     ]);
   });
 
+  test(
+      '(APK +43 obs 2) updateInteractionWithResponse(hadHardFailure: true) '
+      'excludes the turn from replay; default (false) keeps it', () async {
+    // Seed two pending rows the way SendMessageNotifier.send() does before
+    // the AI response arrives.
+    final box = HiveService.instance.coachBox;
+    await box.put('coach_100', {
+      'id': 'coach_100',
+      'user_message': 'hi',
+      'ai_response': '',
+      'pending': true,
+      'is_user_message': true,
+      'created_at': '2026-09-16T01:00:00.000',
+    });
+    await box.put('coach_200', {
+      'id': 'coach_200',
+      'user_message': 'what is my workout today',
+      'ai_response': '',
+      'pending': true,
+      'is_user_message': true,
+      'created_at': '2026-09-16T02:00:00.000',
+    });
+
+    // coach_100 — a genuine Gemini quota exhaustion (AiChatResponse.
+    // hadHardFailure == true, per ai_service.dart's `had_hard_failure`
+    // parse). The turn still delivered normally (no retry-error bubble) —
+    // this is NOT updateInteractionWithError's job — but must not poison
+    // the next request's history.
+    await CoachInteractionRepository.instance.updateInteractionWithResponse(
+      'coach_100',
+      aiResponse: 'I had trouble reaching the model. Try again in a moment.',
+      modelUsed: 'Gemini 2.5 Flash Lite',
+      hadHardFailure: true,
+    );
+    // coach_200 — a real, successful reply. Omitting hadHardFailure must
+    // default to false (existing callers / existing behavior unaffected).
+    await CoachInteractionRepository.instance.updateInteractionWithResponse(
+      'coach_200',
+      aiResponse: 'Push day — bench, incline dumbbell, dips.',
+      modelUsed: 'Gemini 2.5 Flash',
+    );
+
+    // The apology row is excluded from replay (same `failed` filter as
+    // test (b) above) — the real reply survives.
+    final history = CoachInteractionRepository.instance.recentHistoryExchanges();
+    expect(history, [
+      {'role': 'user', 'text': 'what is my workout today'},
+      {'role': 'model', 'text': 'Push day — bench, incline dumbbell, dips.'},
+    ]);
+
+    // The apology row is still DELIVERED to the user (pending: false, no
+    // error_text / retry UI) — only excluded from replay.
+    final raw = Map<String, dynamic>.from(box.get('coach_100') as Map);
+    expect(raw['pending'], false);
+    expect(raw['failed'], true);
+    expect(raw['error_text'], isNull);
+    expect(raw['ai_response'],
+        'I had trouble reaching the model. Try again in a moment.');
+  });
+
   test('(Hermes P2) restored NON-CHAT channels excluded; app + local rows kept',
       () async {
     await putRow('coach_100', user: 'coach q', ai: 'coach a', channel: 'app', createdAt: '2026-07-07T01:00:00.000');
