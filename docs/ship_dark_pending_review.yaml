@@ -185,34 +185,6 @@ pending:
       inert ONLY because THIS flag short-circuits at :60 before it runs. Whoever
       flips this will immediately consume every readiness row accumulated since.
 
-  - flag: enable_exercise_id_history
-    branch: workout-idkey-variety-11
-    build_commit: d66cd4c1
-    build_date: 2026-07-18
-    merge_commit: 1d93b677
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      Forward-only by design — turning it on starts ID-keying new history and
-      does not retro-key old rows, so a flip is not cleanly reversible in the
-      data even though the code path is.
-
-  - flag: enable_injury_substitute_pref
-    branch: workout-variety-injurysub-11bc
-    build_commit: c7e26462
-    build_date: 2026-07-18
-    merge_commit: 0fa2b56c
-    flip_reviewed: false
-    flip_commit: null
-
-  - flag: enable_cross_phase_variety
-    branch: workout-variety-11b
-    build_commit: 6e8b491d
-    build_date: 2026-07-19
-    merge_commit: 544a1bbe
-    flip_reviewed: false
-    flip_commit: null
-
   - flag: enable_plateau_escalation
     branch: workout-plateau-12
     build_commit: 83180fe6
@@ -231,6 +203,63 @@ pending:
 # and by the Sunday push.
 
 resolved:
+  - flag: enable_exercise_id_history
+    branch: workout-idkey-variety-11
+    build_commit: d66cd4c1
+    build_date: 2026-07-18
+    merge_commit: 1d93b677
+    flip_reviewed: true
+    flip_commit: fccb77cc
+    flip_review_record: docs/plan-reviews/oi53-batch1-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 1 of 3, flag 1 of 3 this batch). Kill-switch key is now
+      `disable_exercise_id_history` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass (0 P0/P1, 3 documentation findings all accepted --
+      docs/reviews/1cadbcd1d01f-review.md).
+      Forward-only by design — turning it on starts ID-keying new history and does not retro-key
+      old rows, so a flip is not cleanly reversible in the data even though the code path is
+      (kill-switch reverts the CODE path verbatim; already-stamped exercise_id data persists
+      harmlessly since an OFF resolver never reads it).
+
+  - flag: enable_injury_substitute_pref
+    branch: workout-variety-injurysub-11bc
+    build_commit: c7e26462
+    build_date: 2026-07-18
+    merge_commit: 0fa2b56c
+    flip_reviewed: true
+    flip_commit: fccb77cc
+    flip_review_record: docs/plan-reviews/oi53-batch1-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 1 of 3, flag 2 of 3 this batch). Kill-switch key is now
+      `disable_injury_substitute_pref` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass (0 P0/P1, 3 documentation findings all accepted --
+      docs/reviews/1cadbcd1d01f-review.md).
+      Re-ranks the already-safe (post-injury-filter) candidate list toward a curated
+      InjurySubstitutes sub; a preference, not a filter, so it can never surface a
+      contraindicated exercise regardless of polarity. The behavioral test's original
+      flag-difference and curated-set-membership assertions were direction-blind (the curated
+      list is an ordered MENU of several valid subs, not one unique answer) -- fixed with a
+      rank-order comparison at the first point of divergence between ON/OFF plans, confirmed by
+      mutation to be the only assertion of the three that discriminates.
+
+  - flag: enable_cross_phase_variety
+    branch: workout-variety-11b
+    build_commit: 6e8b491d
+    build_date: 2026-07-19
+    merge_commit: 544a1bbe
+    flip_reviewed: true
+    flip_commit: fccb77cc
+    flip_review_record: docs/plan-reviews/oi53-batch1-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 1 of 3, flag 3 of 3 this batch). Kill-switch key is now
+      `disable_cross_phase_variety` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass (0 P0/P1, 3 documentation findings all accepted --
+      docs/reviews/1cadbcd1d01f-review.md).
+      The only pre-existing test seeded no schedule data at all, so it passed regardless of the
+      flag's actual state -- fixed by seeding a real week-1 schedule row via the production read
+      path (MigratedKey + workoutBox) and pairing a "default reads real data" test with a
+      "kill-switch suppresses it despite real data" test, both confirmed by mutation.
+
   - flag: enable_deload_reason_line
     branch: unitb-deload-reason
     build_commit: null            # built and shipped dark in the phase-arc flip batch
