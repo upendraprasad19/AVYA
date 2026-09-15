@@ -4219,27 +4219,49 @@ concepts:
       Complementary to (not a replacement for) the per-request snapshot,
       long-term coach_memory, and semantic retrieval.
       APK +43 obs 2 (diagnose a1c6b9, 2026-09-16) — HISTORY-POISONING FIX.
-      When every bounded Gemini retry pass genuinely exhausts (tool-loop.ts
-      sets the hardcoded "I had trouble reaching the model" apology),
-      that apology used to be persisted like any real reply and so got
-      REPLAYED as `history` on the user's next turn — the model then
-      echoed the apology as if continuing a real conversation, turning
-      one transient outage (Gemini quota exhaustion) into a self-
-      perpetuating "stuck" chat that outlived the outage itself. Fix:
-      `runToolLoop`'s `ToolLoopResult.hadHardFailure` (tool-loop.ts:114,
-      set true at :271) threads through `ai-proxy/index.ts`'s response
-      body as `had_hard_failure` (:1161) → `AiChatResponse.hadHardFailure`
-      (ai_service.dart:41/316) → `CoachInteractionRepository.
-      updateInteractionWithResponse(hadHardFailure:)` (coach_interaction_
-      repository.dart:202-228) writes `entry['failed'] = hadHardFailure`
-      instead of the old unconditional `false` — so `recentHistoryExchanges`'s
-      pre-existing `map['failed'] == true` filter (line 315) now also
-      excludes a hard-failure apology turn from replay. Also guards the
-      semantic-memory embed (ai-proxy/index.ts:1120) so the apology is
-      never embedded either. Three call sites in ai_coach_provider.dart
-      thread the flag through (:673-677 media path, :906-910 primary
-      chat, :976-980 auth-retry). Does NOT change the different
-      loop-exhaustion apology text elsewhere in tool-loop.ts (untouched).
+      When every bounded Gemini retry pass genuinely exhausts, tool-loop.ts
+      sets one of TWO hardcoded, non-model apologies (exported as
+      `HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED` — the Gemini-call-throws
+      catch block — and `HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED` — MAX_ROUNDS
+      exhausted with no terminal text and no queued intents; a B-pass found
+      the second site same-session). Either apology used to be persisted
+      like any real reply and so got REPLAYED as `history` on the user's
+      next turn — the model then echoed the apology as if continuing a real
+      conversation, turning one transient outage (Gemini quota exhaustion)
+      into a self-perpetuating "stuck" chat that outlived the outage itself.
+      Fix: `runToolLoop`'s `ToolLoopResult.hadHardFailure` is set true at
+      BOTH apology sites in tool-loop.ts and threads through
+      `ai-proxy/index.ts`'s response body as `had_hard_failure` →
+      `AiChatResponse.hadHardFailure` (ai_service.dart) →
+      `CoachInteractionRepository.updateInteractionWithResponse
+      (hadHardFailure:)` (coach_interaction_repository.dart), which writes
+      `entry['had_hard_failure'] = hadHardFailure` — a field DELIBERATELY
+      SEPARATE from `failed` (plan-review round 1 finding: `failed` is also
+      read by `ChatHistoryNotifier.build` to render an error bubble + Retry
+      button, which a hard-failure apology must not trigger, so `failed`
+      stays unconditionally false on this success-resolution path exactly as
+      it was before this feature existed). `recentHistoryExchanges`'s
+      exclusion filter now checks `map['failed'] == true ||
+      map['had_hard_failure'] == true`. Also guards the semantic-memory
+      embed (ai-proxy/index.ts, gated on `!loop.hadHardFailure`) so neither
+      apology is ever embedded either. Three call sites in
+      ai_coach_provider.dart thread the flag through (media path, primary
+      chat, auth-retry).
+      RESTORE-PATH GAP + FIX (plan-review round 1 finding, same diagnose):
+      `ai-proxy`'s reservation-resolve UPDATE persists `ai_response` to the
+      cloud `ai_coach_interactions` row UNCONDITIONALLY, with no column for
+      `hadHardFailure` — so a hard-failure apology turn IS present in the
+      cloud table exactly like a real reply, and `_restoreCoachInteractions`
+      (sync_coach.dart) previously wrote a restored row with no `failed`/
+      `had_hard_failure` key at all, letting the poisoned text re-enter
+      replay on a cold restore (reinstall / new device) even though the live
+      path was fully guarded. Fixed by recognizing the restored row's exact
+      text: `kKnownHardFailureApologyTexts` (sync_coach.dart) mirrors both
+      exported tool-loop.ts strings — parity pinned by
+      test/contracts/hard_failure_apology_texts_parity_test.dart —
+      and `_restoreCoachInteractions` now writes
+      `'had_hard_failure': isKnownHardFailureApologyText(map['ai_response'])`
+      into every restored row.
       ACCEPTED RESIDUAL (plan-review R1 + Hermes security lens, 2026-07-08):
       because the coach history lives in the user's own client-side Hive, a user
       can forge `model`-role turns that replay at model-trust — a SAME-USER
@@ -4261,14 +4283,27 @@ concepts:
           (Hive iteration is insertion order, not chronological), slices the
           last `limit` EXCHANGES, expands each to a user turn then a model turn.
       - file: lib/features/ai_coach/repositories/coach_interaction_repository.dart
-        line_range: 202-228
+        line_range: 202-231
         method: "`updateInteractionWithResponse` (CoachInteractionRepository)"
         notes: |
-          APK +43 obs 2 (diagnose a1c6b9) — writes entry['failed'] =
-          hadHardFailure (was unconditionally false). This is the field
-          `recentHistoryExchanges`'s `map['failed'] == true` filter
-          (line 315) excludes on — so a genuine hard-failure apology turn
-          no longer replays into the next request's history.
+          APK +43 obs 2 (diagnose a1c6b9) — writes entry['had_hard_failure']
+          = hadHardFailure (new field; `failed` stays unconditionally false
+          here, as it always was pre-feature — plan-review round 1 caught
+          that overloading `failed` collided with its OTHER reader,
+          ChatHistoryNotifier.build's error-bubble+Retry render). This is
+          one of two fields `recentHistoryExchanges`'s exclusion filter
+          checks — so a genuine hard-failure apology turn no longer replays
+          into the next request's history.
+      - file: lib/core/services/sync/sync_coach.dart
+        line_range: 198-266
+        method: "`_restoreCoachInteractions` (SyncServiceCoach extension)"
+        notes: |
+          Plan-review round 1 finding, same diagnose — the RESTORE-path twin
+          of the writer above. The cloud row carries no `hadHardFailure`
+          column, so this writes `had_hard_failure:
+          isKnownHardFailureApologyText(map['ai_response'])`, recognizing a
+          restored hard-failure apology by its exact (mirrored) text instead
+          of a flag.
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
         line_range: 162-166
         method: recentHistoryExchanges (shim forwarder)
@@ -5289,7 +5324,7 @@ concepts:
       reader drift instance).
     writers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 8-25
+        line_range: 35-85
         method: syncCoachMemoryNow
         notes: |
           The Hive read uses 'coaching_notes' (singular Hive key); the

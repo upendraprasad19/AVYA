@@ -238,8 +238,8 @@ void main() {
       modelUsed: 'Gemini 2.5 Flash',
     );
 
-    // The apology row is excluded from replay (same `failed` filter as
-    // test (b) above) — the real reply survives.
+    // The apology row is excluded from replay via `had_hard_failure` (test
+    // below pins this filter clause directly) — the real reply survives.
     final history = CoachInteractionRepository.instance.recentHistoryExchanges();
     expect(history, [
       {'role': 'user', 'text': 'what is my workout today'},
@@ -247,13 +247,80 @@ void main() {
     ]);
 
     // The apology row is still DELIVERED to the user (pending: false, no
-    // error_text / retry UI) — only excluded from replay.
+    // error_text / retry UI) — only excluded from replay. `failed` stays
+    // FALSE (plan-review round 1 finding, diagnose a1c6b9): it is also read
+    // by ChatHistoryNotifier.build to render an error bubble + Retry
+    // button, which a hard-failure apology must not trigger — that is a
+    // distinct field, `had_hard_failure`.
     final raw = Map<String, dynamic>.from(box.get('coach_100') as Map);
     expect(raw['pending'], false);
-    expect(raw['failed'], true);
+    expect(raw['failed'], false);
+    expect(raw['had_hard_failure'], true);
     expect(raw['error_text'], isNull);
     expect(raw['ai_response'],
         'I had trouble reaching the model. Try again in a moment.');
+  });
+
+  test(
+      '(plan-review round 1) had_hard_failure ALONE excludes a row from '
+      'replay even when failed is false/absent', () async {
+    // Pins the exclusion filter's OTHER clause directly (map['failed'] ==
+    // true || map['had_hard_failure'] == true) — the test above only proves
+    // the end-to-end write→read chain for the live-flag path; this proves
+    // the filter itself doesn't silently regress to checking `failed` alone
+    // (which would defeat both this fix and the restore-path fix below,
+    // since neither writes `failed: true` any more).
+    await putRow('coach_100', user: 'good', ai: 'GA',
+        createdAt: '2026-07-07T01:00:00.000');
+    final box = HiveService.instance.coachBox;
+    await box.put('coach_200', {
+      'id': 'coach_200',
+      'user_message': 'poisoned',
+      'ai_response': 'some hard-failure apology text',
+      'failed': false,
+      'had_hard_failure': true,
+      'created_at': '2026-07-07T02:00:00.000',
+    });
+
+    final history = CoachInteractionRepository.instance.recentHistoryExchanges();
+    expect(history, [
+      {'role': 'user', 'text': 'good'},
+      {'role': 'model', 'text': 'GA'},
+    ]);
+  });
+
+  test(
+      '(plan-review round 1, restore-path) a restored row recognized as a '
+      'known hard-failure apology text is excluded from replay', () async {
+    // Simulates the Hive row shape _restoreCoachInteractions now produces
+    // (sync_coach.dart) for a cloud row whose ai_response is byte-identical
+    // to one of the two known tool-loop.ts apology strings — the cloud
+    // table has no `had_hard_failure` column, so the restore path
+    // recognizes the row by exact text instead of a flag. Structural pin
+    // that _restoreCoachInteractions actually calls the pure recognizer and
+    // writes this key lives in
+    // test/contracts/hard_failure_apology_texts_parity_test.dart; this test
+    // proves the DOWNSTREAM consequence — recentHistoryExchanges honors the
+    // field the restore path writes.
+    await putRow('coach_100', user: 'good', ai: 'GA',
+        createdAt: '2026-07-07T01:00:00.000');
+    final box = HiveService.instance.coachBox;
+    await box.put('coach_200', {
+      'id': 'coach_200',
+      'user_message': 'what is my workout today',
+      'ai_response':
+          'I had trouble reaching the model. Try again in a moment.',
+      'channel': 'app',
+      'source': 'cloud_restore',
+      'had_hard_failure': true,
+      'created_at': '2026-07-07T02:00:00.000',
+    });
+
+    final history = CoachInteractionRepository.instance.recentHistoryExchanges();
+    expect(history, [
+      {'role': 'user', 'text': 'good'},
+      {'role': 'model', 'text': 'GA'},
+    ]);
   });
 
   test('(Hermes P2) restored NON-CHAT channels excluded; app + local rows kept',

@@ -1,5 +1,33 @@
 part of '../sync_service.dart';
 
+/// Mirrors the two hardcoded, non-model apology strings exported from
+/// `supabase/functions/_shared/tool-loop.ts`
+/// (`HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED` /
+/// `HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED`). `ai-proxy`'s reservation-resolve
+/// UPDATE persists `ai_response` to the cloud `ai_coach_interactions` row
+/// UNCONDITIONALLY — there is no cloud column carrying `hadHardFailure` — so
+/// a cold restore of this exact row on another device has no flag to read
+/// (plan-review round 1 finding, APK +43 obs 2, diagnose a1c6b9).
+/// `_restoreCoachInteractions` below recognizes a restored hard-failure turn
+/// by its exact text instead. Parity with the server strings is pinned by
+/// test/contracts/hard_failure_apology_texts_parity_test.dart.
+const Set<String> kKnownHardFailureApologyTexts = {
+  'I had trouble reaching the model. Try again in a moment.',
+  "Recruit — I had trouble pinning that down. Try asking again with a bit "
+      "more specificity. If you want today's workout or your current plan, "
+      "ask plainly: \"what's my workout today\" or \"what's my plan\" — I'll "
+      "read the manifest directly.",
+};
+
+/// True when [aiResponse] is (trimmed) byte-identical to one of the known
+/// hard-failure apology texts above. Pure — no Hive/network reads — so it is
+/// directly mutation-testable; the only I/O-touching call site
+/// (`_restoreCoachInteractions`) is pinned structurally instead, mirroring
+/// the existing `restore_keys_deterministic_test.dart` source-grep pattern.
+bool isKnownHardFailureApologyText(String? aiResponse) {
+  return kKnownHardFailureApologyTexts.contains((aiResponse ?? '').trim());
+}
+
 /// Sync + restore for AI coach surfaces: coach_memory (induction state +
 /// coach_notes) and ai_coach_interactions (chat history). See CLAUDE.md
 /// §11 for the AI architecture context.
@@ -214,6 +242,16 @@ extension SyncServiceCoach on SyncService {
           // cart_auditor / …) from the replayed coach history (Hermes P2).
           'channel': map['channel'],
           'source': 'cloud_restore',
+          // Plan-review round 1 finding (APK +43 obs 2, diagnose a1c6b9):
+          // the cloud row carries no `hadHardFailure` column, so a restored
+          // hard-failure apology is recognized by its exact text instead.
+          // Deliberately a SEPARATE field from `failed` — `failed` also
+          // drives ChatHistoryNotifier.build's error-bubble+Retry UI, which
+          // a hard-failure apology must NOT trigger on restore any more than
+          // it does on the live path. recentHistoryExchanges excludes on
+          // EITHER field.
+          'had_hard_failure':
+              isKnownHardFailureApologyText(map['ai_response'] as String?),
         });
       }
     } catch (e, st) {
