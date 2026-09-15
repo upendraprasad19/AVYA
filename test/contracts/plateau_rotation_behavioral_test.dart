@@ -173,7 +173,7 @@ void main() {
 
     test('composition: variety avoid-names + plateau names BOTH non-empty → both '
         'avoided, rotation fires, no slot emptied', () async {
-      // generateV4 does NOT read enable_cross_phase_variety (the service layer does);
+      // generateV4 does NOT read crossPhaseVarietyEnabled (the service layer does);
       // plateau computes its own avoid-names IN generateV4 → structurally independent
       // of the variety flag. To EXERCISE the union {variety ∪ plateau} both-non-empty
       // (B-pass P2), pass a non-null previousPhaseByDay (variety-like) alongside the

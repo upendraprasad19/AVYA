@@ -1,5 +1,7 @@
 // ①.1d (Batch 11-C) — curated injury-substitute PREFERENCE, PRODUCTION behavioral
 // test (platform behavioral_test_path, §4.4 rule 21; SoT `injury_safe_substitute_preference`).
+// LIVE since 2026-09-16 (OI-53) — `enable_injury_substitute_pref` flipped to
+// `disable_injury_substitute_pref`, default ON.
 //
 // Drives the REAL PlanGenerator.instance.generateV4 through the Hive-boot harness
 // (seed the FULL library into exerciseBox, call the real engine) — so the
@@ -13,9 +15,10 @@
 //      contraindicated exercise).
 //  (3) INJURY-GATED — with NO injuries, ON == OFF (preferredFor([]) == [] → no-op).
 //  (4) UNCURATED FALLTHROUGH — an injury with no curated map entry (neck) → ON == OFF.
-//  (5) SHIP-DARK — default (flag unset) == OFF for a shoulder user is NOT asserted as
-//      "== no-injury" (injuries still filter); it's covered by (1)'s OFF arm being the
-//      verbatim candidates.first path.
+//  (5) DEFAULT-ON — default (kill-switch unset) == ON for a shoulder user is NOT
+//      asserted as "== no-injury" (injuries still filter); it's covered by (1)'s
+//      ON arm, which is now the flag-unset path exercised by every other test
+//      in this file that calls gen(sub: true).
 
 import 'dart:convert';
 import 'dart:io';
@@ -75,16 +78,17 @@ void main() {
   });
 
   // Generate a full_gym / intermediate / build_muscle / phase-1 plan with the
-  // injury-substitute flag ON or OFF (toggled in configBox, read inside generateV4).
+  // injury-substitute flag ON (default, kill-switch absent) or OFF (kill-switch
+  // set), toggled in configBox, read inside generateV4.
   Future<Phase> gen({
     required bool sub,
     List<String> injuries = const ['shoulder'],
   }) async {
     final cfg = HiveService.instance.configBox;
     if (sub) {
-      await cfg.put('enable_injury_substitute_pref', true);
+      await cfg.delete('disable_injury_substitute_pref');
     } else {
-      await cfg.delete('enable_injury_substitute_pref');
+      await cfg.put('disable_injury_substitute_pref', true);
     }
     return PlanGenerator.instance.generateV4(
       goal: 'build_muscle',
@@ -114,15 +118,51 @@ void main() {
   test('(1) shoulder injury: ON re-ranks slots toward a curated sub', () async {
     final offP = await gen(sub: false);
     final onP = await gen(sub: true);
+    final onOrdered = ordered(onP);
+    final offOrdered = ordered(offP);
     // Same exercises get used (deep pool), but ON assigns the curated sub to the
     // priority slot → the ORDERED plan differs.
-    expect(ordered(onP), isNot(equals(ordered(offP))),
+    expect(onOrdered, isNot(equals(offOrdered)),
         reason: 'ON must re-rank ≥1 slot pick for a shoulder-injured user');
     // The plan contains ≥1 curated shoulder sub (the re-rank surfaced it).
-    final subs = InjurySubstitutes.preferredFor(['shoulder']).toSet();
+    final subs = InjurySubstitutes.preferredFor(['shoulder'])
+        .map((s) => s.toLowerCase())
+        .toSet();
     final onNames = allNames(onP).map((n) => n.toLowerCase()).toSet();
     expect(subs.intersection(onNames), isNotEmpty,
         reason: 'the ON plan must contain a curated shoulder sub');
+    // DIRECTIONAL, not just "differs" and not just "a curated name shows up
+    // somewhere": `InjurySubstitutes._preferred['shoulder']` is the WHOLE
+    // menu of shoulder-safe options for a pattern, ordered MOST-preferred
+    // first — the injury FILTER (a separate, always-on mechanism) already
+    // restricts candidates to safe ones, so BOTH the verbatim pick and the
+    // preferred pick are typically members of this same curated set. A bare
+    // `subs.contains(...)` check is satisfied by either one and cannot tell
+    // them apart (verified live: "Push Up" — this list's LEAST-preferred
+    // horizontal_push entry — passed a plain membership check even when
+    // gen(sub:) was wired backwards). The real signal is ORDER: ON's pick at
+    // the first point of divergence must rank EARLIER (more preferred) in
+    // this list than OFF's pick there. Anchored at the FIRST divergence
+    // because pickedNames dedups across the whole plan, so any slot AFTER
+    // the first divergence has already-diverged candidate pools and proves
+    // nothing about which side the re-rank favoured.
+    final subsRanked = InjurySubstitutes.preferredFor(['shoulder']);
+    final firstDivergence = List.generate(
+            onOrdered.length < offOrdered.length
+                ? onOrdered.length
+                : offOrdered.length,
+            (i) => i)
+        .firstWhere((i) => onOrdered[i] != offOrdered[i]);
+    final onRank = subsRanked.indexOf(onOrdered[firstDivergence].toLowerCase());
+    final offRank =
+        subsRanked.indexOf(offOrdered[firstDivergence].toLowerCase());
+    expect(onRank, greaterThanOrEqualTo(0),
+        reason: 'ON\'s pick at the first divergence must itself be a '
+            'curated substitute');
+    expect(offRank == -1 || onRank < offRank, isTrue,
+        reason: 'ON\'s pick must rank EARLIER (more preferred) than OFF\'s '
+            'pick at the same slot — proves the re-rank pulled toward the '
+            'curated priority order, not merely that the plans differ');
   });
 
   test('(2) safety: every ON cascade pick is shoulder-safe (post-filter re-rank)',

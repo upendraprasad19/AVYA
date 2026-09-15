@@ -250,7 +250,7 @@ Everything currently owed, from any source — not only audit findings. `MEMORY.
 durable *why* (scars, retrospectives) but lives in the harness dir outside git and is invisible to
 cloud sessions; **this file is the cross-session backlog.**
 
-## OI-53 — Flip the remaining 8 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05; deload-reason-line flipped 2026-09-06)
+## OI-53 — Flip the remaining 6 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05; deload-reason-line flipped 2026-09-06; exercise_id_history + injury_substitute_pref + cross_phase_variety flipped 2026-09-16)
 
 - **Status**: OPEN
 - **Verified**: 2026-08-05 — flag inventory, dependency order and the data lag all re-derived from
@@ -266,7 +266,13 @@ cloud sessions; **this file is the cross-session backlog.**
   ⚠ **DATED FOUNDER DECISION 2026-09-06: `enable_deload_reason_line` approved and flipped** as Unit B (branch
   `unitb-deload-reason`, record `docs/plan-reviews/unitb-deload-reason.md`) — the piece split
   out of the phase-arc flip the day before, once its stale-reason defect was fixed (diagnose
-  `c5a8f3`). **8 remain.**
+  `c5a8f3`).
+  ⚠ **DATED FOUNDER DECISION 2026-09-16: `exerciseIdHistoryEnabled` + `injurySubstitutePreferenceEnabled`
+  + `crossPhaseVarietyEnabled` approved and flipped together** as Batch 1 of a founder-directed
+  release-blocker triage (branch `oi53-batch1-flip`, record `docs/plan-reviews/oi53-batch1-flip.md`)
+  — the three lowest-risk of the remaining flags (bounded/preference-only re-ranks with no ability
+  to widen a slot's candidate pool beyond what queryV4's injury/equipment filters already permit).
+  **6 remain.**
 - **What this actually is — 13 product decisions, not one toggle.** The ledger is explicit:
   *"there is no batch discount, and flipping thirteen flags in one commit would be one review
   pretending to be thirteen."* Each flip-on commit needs its own **full ×2 + `bpass: accepted`**
@@ -319,6 +325,20 @@ cloud sessions; **this file is the cross-session backlog.**
   quotes above ("13", "thirteen") describe the pre-flip state and are left as the ledger's own
   wording; the live number is **12**. Related: OI-89 (its condition (a) closed with this flip),
   and OI-95 (the flip's kill-switch is reachable only in debug builds).
+- ✅ **`exerciseIdHistoryEnabled` + `injurySubstitutePreferenceEnabled` + `crossPhaseVarietyEnabled`
+  — FLIPPED 2026-09-16 (branch `oi53-batch1-flip`, record `docs/plan-reviews/oi53-batch1-flip.md`,
+  ×2 review converged).** All three are bounded re-ranks of an already-safe candidate list (the
+  injury/equipment filters run first and are unaffected by any of these three) — none can widen
+  what a user is prescribed beyond what the pre-flip cascade could already produce, only change
+  which already-eligible pick wins. `exerciseIdHistoryEnabled` is forward-only (new `exlog_*` rows
+  start carrying a matchable `exercise_id`; a later kill-switch reverts the CODE path verbatim but
+  does not retro-strip already-stamped ids — harmless, since an OFF resolver never reads them).
+  Review found zero code-correctness issues across two independent rounds; both rounds' documentation
+  findings (a stale flag-name cross-reference in `plan_engine/CLAUDE.md`, three untouched
+  `docs/sot_registry.yaml` concept entries, and this board entry itself) are fixed in the same
+  branch. `ship_dark_pending_review.yaml`'s three `pending:` entries move to `resolved:` in this
+  branch's follow-up records commit, per this repo's established split-commit convention for that
+  file. **6 remain.**
 
 ## OI-54 — Confirm `/admin` access
 

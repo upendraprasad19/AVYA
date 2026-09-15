@@ -231,6 +231,38 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-16** — blast-radius **platform** — branch `oi53-batch1-flip` (OI-53 batch 1: flip
+  `exerciseIdHistoryEnabled` + `injurySubstitutePreferenceEnabled` + `crossPhaseVarietyEnabled`
+  from ship-dark default-OFF to default-ON-with-kill-switch — the full ×2-review flip-on tier per
+  §4.12.4, not the lighter ship-dark build tier). **3 findings (0 P0, 0 P1, 1 P2, 2 P3); 0
+  false_alarm — all 3 accepted, 2 fixed in-batch, 1 accepted with no code fix (substance already
+  tracked by an existing, wider OI).** Review: `docs/reviews/1cadbcd1d01f-review.md`. Run as one
+  agent (10 files: 1 flag-definitions file, 4 behavioral test files, 1 nested CLAUDE.md, 1
+  SoT-registry, 2 OI-board files, 1 plan-review record).
+  **Tuning — `modelled_on_is_a_checkable_claim` gains: verify a claimed "established convention"
+  against the CONTENT of the cited commits, not just their existence in `git log`.** The diff's own
+  plan-review record justified leaving `docs/ship_dark_pending_review.yaml` untouched (these 3
+  flags stay under `pending:` pending a follow-up records commit) by calling that a "established
+  split-commit convention" for this file, citing two real prior commit pairs. Reading the actual
+  diffs of the other 3 prior OI-53-family flips (not just checking they existed) found 2 of them
+  had written a literal placeholder string `flip_commit: pending` into the WRONG list
+  (`pending:`, not `resolved:`) and the 3rd hadn't touched the ledger at all — all 3 sat wrong for
+  27/5/1 days until a dedicated cleanup commit (whose own message calls it a bug fix, not a
+  workflow) corrected them. The convention was real for the 2 MOST RECENT flips only; citing "5
+  prior commits" without opening what each one actually wrote let a 2-real/3-broken precedent read
+  as an established pattern. **The general form: when a citation claims a REPEATED pattern across
+  N prior instances, open all N, not just enough to find one clean example** — sibling of this same
+  file's existing "verify the precedent's CURRENT form" rule (2026-09-14), one level earlier: here
+  the precedent's frequency was the unchecked claim, not its content.
+  **A negative result worth keeping.** Every other lens returned clean, and each "verified clean"
+  claim in the reviewer's own report (mutation-test results, the OI-53 board arithmetic, the
+  dev-panel absence grep, the blast-radius `requires:` list) was independently re-run by the
+  orchestrating session before being trusted, rather than accepted on the subagent's prose — the
+  OI-53 "6 remain" figure in particular was re-confirmed a THIRD independent time this way (having
+  already been corrected once from a subagent's stale arithmetic earlier in the same session,
+  per this record's own plan-review "Remediation" section) and held exactly.
+  False-alarm rate 0/3 → no lens removed; `modelled_on_is_a_checkable_claim` extended per above.
+
 - **2026-09-14 (e)** — blast-radius **platform** — branch `telegram-admin-bot`, Task 13 Step 8
   push-gate fix (migration 137: re-asserts the anon/authenticated revoke on
   `founder_metrics_ops()` that migrations 135/136 each omitted — caught by the FIRST full
