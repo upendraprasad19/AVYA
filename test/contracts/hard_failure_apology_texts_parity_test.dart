@@ -12,13 +12,29 @@
 // kKnownHardFailureApologyTexts — a client-side MIRROR of the two exported
 // TS constants in supabase/functions/_shared/tool-loop.ts
 // (HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED /
-// HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED). This file has three jobs:
-//   1. PARITY — each Dart string is byte-identical to its TS source.
-//   2. BEHAVIOR — isKnownHardFailureApologyText (pure) is mutation-tested
-//      directly, no Hive/network required.
-//   3. WIRING — _restoreCoachInteractions actually calls the recognizer and
-//      writes its result into 'had_hard_failure' (source-grep, mirrors the
-//      established test/sync/restore_keys_deterministic_test.dart pattern).
+// HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED).
+//
+// Plan-review round 2 finding, same diagnose: that recognizer covers only
+// the two known apology TEXTS and misses a THIRD, structurally distinct
+// failure case — ai-proxy/index.ts's runToolLoop-THREW catch block (a
+// genuine crash calling the tool loop, separate from the two apologies
+// runToolLoop itself returns via a normal 200 response), which writes
+// ai_response: "[failed] runToolLoop threw", model_used: "failed"
+// unconditionally, text not in kKnownHardFailureApologyTexts. Fix:
+// isRestoredHardFailureRow composes isKnownHardFailureApologyText with a
+// second signal — model_used == kModelUsedLoopThrewSentinel, a client-side
+// mirror of ai-proxy/index.ts's exported MODEL_USED_LOOP_THREW_SENTINEL.
+//
+// This file has three jobs:
+//   1. PARITY — each Dart string/sentinel is byte-identical to its TS
+//      source (tool-loop.ts for the two apology texts, ai-proxy/index.ts
+//      for the loop-threw sentinel).
+//   2. BEHAVIOR — isKnownHardFailureApologyText and isRestoredHardFailureRow
+//      (both pure) are mutation-tested directly, no Hive/network required.
+//   3. WIRING — _restoreCoachInteractions actually calls
+//      isRestoredHardFailureRow and writes its result into
+//      'had_hard_failure' (source-grep, mirrors the established
+//      test/sync/restore_keys_deterministic_test.dart pattern).
 // The DOWNSTREAM consequence (a row so marked is excluded from replay) is
 // pinned behaviorally in
 // test/contracts/coach_chat_history_replay_writer_to_reader_test.dart.
@@ -47,10 +63,13 @@ String _stripComments(String src) {
 void main() {
   group('parity — Dart mirror matches the TS source exactly', () {
     late String toolLoopSrc;
+    late String aiProxySrc;
 
     setUpAll(() {
       toolLoopSrc =
           File('supabase/functions/_shared/tool-loop.ts').readAsStringSync();
+      aiProxySrc =
+          File('supabase/functions/ai-proxy/index.ts').readAsStringSync();
     });
 
     test('every known Dart apology text appears verbatim in tool-loop.ts',
@@ -79,6 +98,39 @@ void main() {
       expect(
           toolLoopSrc.contains('export const HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED'),
           isTrue);
+    });
+
+    test(
+        'kModelUsedLoopThrewSentinel matches ai-proxy/index.ts\'s exported '
+        'MODEL_USED_LOOP_THREW_SENTINEL', () {
+      // "failed" has no characters that TS string-literal-escapes
+      // differently from Dart's evaluated form, so no re-escape is needed
+      // here the way the apology texts above require — confirmed by
+      // asserting the literal appears in the EXPORT STATEMENT itself, not
+      // just anywhere in the file.
+      expect(kModelUsedLoopThrewSentinel, 'failed');
+      expect(
+          aiProxySrc.contains(
+              'export const MODEL_USED_LOOP_THREW_SENTINEL = "$kModelUsedLoopThrewSentinel"'),
+          isTrue,
+          reason: 'Dart kModelUsedLoopThrewSentinel drifted from '
+              'ai-proxy/index.ts\'s exported MODEL_USED_LOOP_THREW_SENTINEL');
+    });
+
+    test('the runToolLoop-threw catch site actually writes the sentinel',
+        () {
+      final catchStart = aiProxySrc.indexOf('catch (loopErr)');
+      expect(catchStart, greaterThan(0),
+          reason: 'the runToolLoop-threw catch block must exist');
+      final nextCatch =
+          aiProxySrc.indexOf('\n    } catch', catchStart + 1);
+      final body = aiProxySrc.substring(
+          catchStart, nextCatch > catchStart ? nextCatch : aiProxySrc.length);
+      expect(body.contains('model_used: MODEL_USED_LOOP_THREW_SENTINEL'),
+          isTrue,
+          reason: 'the catch block must write the named sentinel constant, '
+              'not a raw re-typed string literal that could drift from it '
+              'independently of the parity assertion above');
     });
   });
 
@@ -116,6 +168,63 @@ void main() {
     });
   });
 
+  group('isRestoredHardFailureRow — pure composition, mutation-tested', () {
+    test('true when aiResponse matches a known apology text alone', () {
+      expect(
+          isRestoredHardFailureRow(
+            aiResponse: kKnownHardFailureApologyTexts.first,
+            modelUsed: 'Gemini 2.5 Flash',
+          ),
+          isTrue);
+    });
+
+    test('true when modelUsed matches the loop-threw sentinel alone', () {
+      expect(
+          isRestoredHardFailureRow(
+            aiResponse: '[failed] runToolLoop threw',
+            modelUsed: kModelUsedLoopThrewSentinel,
+          ),
+          isTrue);
+    });
+
+    test('true when BOTH signals fire (not mutually exclusive)', () {
+      expect(
+          isRestoredHardFailureRow(
+            aiResponse: kKnownHardFailureApologyTexts.first,
+            modelUsed: kModelUsedLoopThrewSentinel,
+          ),
+          isTrue);
+    });
+
+    test('false when neither signal fires — real model output', () {
+      expect(
+          isRestoredHardFailureRow(
+            aiResponse: 'Push day — bench, incline dumbbell, dips.',
+            modelUsed: 'Gemini 2.5 Flash',
+          ),
+          isFalse);
+    });
+
+    test('false for null aiResponse and a non-sentinel modelUsed', () {
+      expect(
+          isRestoredHardFailureRow(aiResponse: null, modelUsed: 'unknown'),
+          isFalse);
+    });
+
+    test('false for a near-miss modelUsed (must be exact, not a substring)',
+        () {
+      expect(
+          isRestoredHardFailureRow(
+            aiResponse: 'real reply',
+            modelUsed: 'failed_something_else',
+          ),
+          isFalse,
+          reason: 'must be an exact sentinel match — a real model_used '
+              'value that happens to contain "failed" as a substring must '
+              'not be excluded from replay');
+    });
+  });
+
   group('wiring — _restoreCoachInteractions calls the recognizer', () {
     late String src;
 
@@ -123,7 +232,7 @@ void main() {
       src = _stripComments(loadSyncServiceSource().readAsStringSync());
     });
 
-    test('restore body writes had_hard_failure via isKnownHardFailureApologyText',
+    test('restore body writes had_hard_failure via isRestoredHardFailureRow',
         () {
       final start = src.indexOf('Future<void> _restoreCoachInteractions(');
       expect(start, greaterThan(0),
@@ -133,10 +242,12 @@ void main() {
 
       expect(body.contains("'had_hard_failure':"), isTrue,
           reason: 'restore must write the had_hard_failure key');
-      expect(body.contains('isKnownHardFailureApologyText('), isTrue,
-          reason: 'restore must derive had_hard_failure from the pure '
-              'recognizer, not a hand-rolled comparison (which would drift '
-              'independently of the parity test above)');
+      expect(body.contains('isRestoredHardFailureRow('), isTrue,
+          reason: 'restore must derive had_hard_failure from the composed '
+              'recognizer (apology-text OR loop-threw-sentinel), not a '
+              'hand-rolled comparison or a call to only the single-text '
+              'recognizer — which would silently drop the round-2 fix\'s '
+              'third failure case');
     });
   });
 }

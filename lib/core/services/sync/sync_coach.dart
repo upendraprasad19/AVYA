@@ -28,6 +28,30 @@ bool isKnownHardFailureApologyText(String? aiResponse) {
   return kKnownHardFailureApologyTexts.contains((aiResponse ?? '').trim());
 }
 
+/// Mirrors `supabase/functions/ai-proxy/index.ts`'s
+/// `MODEL_USED_LOOP_THREW_SENTINEL` — set when `runToolLoop` itself THROWS
+/// (a genuine crash calling the tool loop), a THIRD, structurally distinct
+/// failure-text case from the two apology texts above: that catch block
+/// never runs the normal reservation-resolve path at all, so `ai_response`
+/// is a different literal ("[failed] runToolLoop threw") not in
+/// [kKnownHardFailureApologyTexts]. Plan-review round 2 finding, same
+/// diagnose (a1c6b9) — the original restore-path defense covered only the
+/// known-apology-TEXT case and missed this one.
+const String kModelUsedLoopThrewSentinel = 'failed';
+
+/// True when a restored row (identified by [aiResponse] and [modelUsed])
+/// should be excluded from history replay: either it matches a known
+/// apology text, OR its `model_used` carries the loop-threw sentinel. Both
+/// signals are pure/text-based because the cloud table carries no
+/// `hadHardFailure` column for either failure shape.
+bool isRestoredHardFailureRow({
+  required String? aiResponse,
+  required String? modelUsed,
+}) {
+  return isKnownHardFailureApologyText(aiResponse) ||
+      modelUsed == kModelUsedLoopThrewSentinel;
+}
+
 /// Sync + restore for AI coach surfaces: coach_memory (induction state +
 /// coach_notes) and ai_coach_interactions (chat history). See CLAUDE.md
 /// §11 for the AI architecture context.
@@ -244,14 +268,18 @@ extension SyncServiceCoach on SyncService {
           'source': 'cloud_restore',
           // Plan-review round 1 finding (APK +43 obs 2, diagnose a1c6b9):
           // the cloud row carries no `hadHardFailure` column, so a restored
-          // hard-failure apology is recognized by its exact text instead.
-          // Deliberately a SEPARATE field from `failed` — `failed` also
-          // drives ChatHistoryNotifier.build's error-bubble+Retry UI, which
-          // a hard-failure apology must NOT trigger on restore any more than
-          // it does on the live path. recentHistoryExchanges excludes on
-          // EITHER field.
-          'had_hard_failure':
-              isKnownHardFailureApologyText(map['ai_response'] as String?),
+          // hard-failure turn is recognized by its exact text/sentinel
+          // instead (round 2 widened this to a THIRD failure shape — the
+          // runToolLoop-threw case, recognized via model_used rather than
+          // apology text). Deliberately a SEPARATE field from `failed` —
+          // `failed` also drives ChatHistoryNotifier.build's
+          // error-bubble+Retry UI, which a hard-failure turn must NOT
+          // trigger on restore any more than it does on the live path.
+          // recentHistoryExchanges excludes on EITHER field.
+          'had_hard_failure': isRestoredHardFailureRow(
+            aiResponse: map['ai_response'] as String?,
+            modelUsed: map['model_used'] as String?,
+          ),
         });
       }
     } catch (e, st) {

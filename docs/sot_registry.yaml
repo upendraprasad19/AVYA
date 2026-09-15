@@ -4274,7 +4274,7 @@ concepts:
       model-role turn against a recent ai_coach_interactions.ai_response.
     writers:
       - file: lib/features/ai_coach/repositories/coach_interaction_repository.dart
-        line_range: 297-347
+        line_range: 311-362
         method: "`recentHistoryExchanges` (CoachInteractionRepository)"
         notes: |
           Reads replayable coach_<ms> rows — EXCLUDES kind-tagged (e.g.
@@ -4295,23 +4295,26 @@ concepts:
           checks — so a genuine hard-failure apology turn no longer replays
           into the next request's history.
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 198-266
+        line_range: 222-294
         method: "`_restoreCoachInteractions` (SyncServiceCoach extension)"
         notes: |
           Plan-review round 1 finding, same diagnose — the RESTORE-path twin
           of the writer above. The cloud row carries no `hadHardFailure`
           column, so this writes `had_hard_failure:
-          isKnownHardFailureApologyText(map['ai_response'])`, recognizing a
-          restored hard-failure apology by its exact (mirrored) text instead
-          of a flag.
+          isRestoredHardFailureRow(aiResponse:, modelUsed:)`, recognizing a
+          restored hard-failure row either by its exact (mirrored) apology
+          text or by its `model_used` matching the loop-threw sentinel
+          (plan-review round 2 finding — the restore-path defense originally
+          covered only the apology-text case and missed the runToolLoop-
+          threw case, whose ai_response text differs).
       - file: lib/features/ai_coach/repositories/ai_coach_repository.dart
-        line_range: 162-166
+        line_range: 171-176
         method: recentHistoryExchanges (shim forwarder)
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 731-826
+        line_range: 783-967
         method: |
           SendMessageNotifier.send — assembles history ONCE (kill-switched) and
-          threads it into BOTH chat() call sites (primary :755 + auth-retry :826).
+          threads it into BOTH chat() call sites (primary :895 + auth-retry :967).
       - file: lib/core/services/ai_service.dart
         line_range: 311-432
         method: |
@@ -4326,7 +4329,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: supabase/functions/ai-proxy/index.ts
-        line_range: 180-820
+        line_range: 257-1045
         method: destructure history → capCoachHistory() → runToolLoop(history)
         semantic: pass-through
         fields_read: [role, text]

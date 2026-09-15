@@ -91,6 +91,21 @@ const LABEL_FLASH = "Gemini 2.5 Flash";
 const LABEL_FLASH_LITE = "Gemini 2.5 Flash Lite";
 
 /**
+ * Sentinel `model_used` value for the runToolLoop-THREW catch (a genuine
+ * crash calling the tool loop, distinct from the two known hardcoded
+ * apology texts runToolLoop itself returns via a normal 200 -- those never
+ * set model_used to this value, see tool-loop.ts's
+ * HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED / HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED).
+ * Exported so the client-side restore-path defense (sync_coach.dart's
+ * kModelUsedLoopThrewSentinel, parity-tested by
+ * test/contracts/hard_failure_apology_texts_parity_test.dart) can recognize
+ * this THIRD failure-text case too. Plan-review round 2 finding, APK +43
+ * obs 2, diagnose a1c6b9: the original restore-path defense only mirrored
+ * the two apology TEXTS and missed this structurally distinct failure mode.
+ */
+export const MODEL_USED_LOOP_THREW_SENTINEL = "failed";
+
+/**
  * Check if a user holds an active PRO subscription. Returns false on any
  * error (fail closed — cheaper to incorrectly gate a PRO user than to
  * leak unlimited chat to a free user).
@@ -1046,7 +1061,10 @@ yet" — never make up a number.
         // rather than rejecting (feedback_postgrest_builder_no_catch.md).
         const { error: resolveErr } = await supabaseClient
           .from("ai_coach_interactions")
-          .update({ ai_response: "[failed] runToolLoop threw", model_used: "failed" })
+          .update({
+            ai_response: "[failed] runToolLoop threw",
+            model_used: MODEL_USED_LOOP_THREW_SENTINEL,
+          })
           .eq("id", chatReservationId);
         if (resolveErr) {
           console.error(

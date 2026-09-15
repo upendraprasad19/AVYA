@@ -18,23 +18,29 @@ sot_registry_entry: |
   block documenting the hadHardFailure mechanism (both tool-loop.ts apology
   sites, a DEDICATED had_hard_failure field kept separate from the
   pre-existing failed field per plan-review round 1, and a restore-path
-  text-matching defense for the same round's other finding), a new writer
-  entry for CoachInteractionRepository.updateInteractionWithResponse, a new
+  text/sentinel-matching defense for the same round's other finding, widened
+  by round 2 to a third failure shape via isRestoredHardFailureRow), a new
+  writer entry for CoachInteractionRepository.updateInteractionWithResponse, a new
   writer entry for sync_coach.dart's _restoreCoachInteractions, and corrects
   the pre-existing recentHistoryExchanges/syncCoachMemoryNow writer
   citations' line_ranges (drifted from unrelated earlier edits in the same
   files this batch — caught by scripts/check_sot_registry_parity.dart
-  before commit).
+  before commit). Plan-review round 2 (2026-09-16) corrected 3 further
+  line_range citations that had drifted (recentHistoryExchanges, the
+  ai_coach_repository.dart shim forwarder, SendMessageNotifier.send) and
+  re-derived _restoreCoachInteractions's own range after round 2's code
+  change shifted it again — re-verified green against
+  scripts/check_sot_registry_parity.dart.
 writers:
-  - { file: supabase/functions/_shared/tool-loop.ts, method_or_widget: "runToolLoop — HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED catch block AND HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED (loop-exhausted branch) both set hadHardFailure=true", line: 298 }
-  - { file: supabase/functions/ai-proxy/index.ts, method_or_widget: "chat handler — forwards loop.hadHardFailure as had_hard_failure in the JSON response body", line: 1161 }
+  - { file: supabase/functions/_shared/tool-loop.ts, method_or_widget: "runToolLoop — HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED catch block AND HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED (loop-exhausted branch) both set hadHardFailure=true", line: 296 }
+  - { file: supabase/functions/ai-proxy/index.ts, method_or_widget: "chat handler — forwards loop.hadHardFailure as had_hard_failure in the JSON response body", line: 1179 }
   - { file: lib/core/services/ai_service.dart, method_or_widget: "_buildResponse — parses had_hard_failure into AiChatResponse.hadHardFailure", line: 316 }
-  - { file: lib/features/ai_coach/repositories/coach_interaction_repository.dart, method_or_widget: "updateInteractionWithResponse — writes entry['had_hard_failure'] = hadHardFailure (NEW dedicated field; entry['failed'] stays unconditionally false, plan-review round 1 finding 2 — failed also drives ChatHistoryNotifier.build's error-bubble+Retry UI)", line: 228 }
-  - { file: lib/core/services/sync/sync_coach.dart, method_or_widget: "_restoreCoachInteractions — writes had_hard_failure: isKnownHardFailureApologyText(ai_response) on every restored row (plan-review round 1 finding 1 — the cloud row has no hadHardFailure column, so the restore path recognizes the two known apology texts instead of a flag)", line: 224 }
+  - { file: lib/features/ai_coach/repositories/coach_interaction_repository.dart, method_or_widget: "updateInteractionWithResponse — writes entry['had_hard_failure'] = hadHardFailure (NEW dedicated field; entry['failed'] stays unconditionally false, plan-review round 1 finding 2 — failed also drives ChatHistoryNotifier.build's error-bubble+Retry UI)", line: 231 }
+  - { file: lib/core/services/sync/sync_coach.dart, method_or_widget: "_restoreCoachInteractions — writes had_hard_failure: isRestoredHardFailureRow(aiResponse:, modelUsed:) on every restored row (plan-review round 1 finding 1 — the cloud row has no hadHardFailure column, so the restore path recognizes it by text/sentinel instead of a flag; round 2 widened the recognizer to also cover the runToolLoop-threw failure shape via modelUsed's sentinel)", line: 279 }
 readers:
-  - { file: lib/features/ai_coach/repositories/coach_interaction_repository.dart, method_or_widget: "recentHistoryExchanges — excludes on map['failed'] == true OR map['had_hard_failure'] == true", line: 319 }
-  - { file: supabase/functions/ai-proxy/index.ts, method_or_widget: "semantic-memory embed guard — never embeds the apology into memory_embeddings", line: 1120 }
-  - { file: lib/features/ai_coach/providers/ai_coach_provider.dart, method_or_widget: "SendMessageNotifier — 3 updateInteractionWithResponse call sites thread hadHardFailure through (media path / primary chat / auth-retry)", line: 677 }
+  - { file: lib/features/ai_coach/repositories/coach_interaction_repository.dart, method_or_widget: "recentHistoryExchanges — excludes on map['failed'] == true OR map['had_hard_failure'] == true", line: 329 }
+  - { file: supabase/functions/ai-proxy/index.ts, method_or_widget: "semantic-memory embed guard — never embeds the apology into memory_embeddings", line: 1138 }
+  - { file: lib/features/ai_coach/providers/ai_coach_provider.dart, method_or_widget: "SendMessageNotifier — 3 updateInteractionWithResponse call sites thread hadHardFailure through (media path / primary chat / auth-retry)", line: 673 }
 hive_key_prefix: coach_
 hive_key_formula: "coach_<millisecondsSinceEpoch>"
 sync_methods: []
@@ -72,7 +78,7 @@ regression_test_planned:
   - test/contracts/coach_chat_history_replay_writer_to_reader_test.dart (new case: hadHardFailure:true excludes the turn from replay; default false keeps it; plan-review round 1 added 2 more cases — had_hard_failure alone excludes, and a simulated restored row excludes)
   - supabase/functions/_shared/tool-loop_hard_failure_flag_test.ts (new file, Deno: exhaustion sets hadHardFailure=true + exact apology text; happy path false; FC2 queued-intent case stays false; B-pass added the loop-exhausted-branch case)
   - test/ai_coach/ai_service_had_hard_failure_parse_test.dart (new file: had_hard_failure JSON true/false/missing parse into AiChatResponse.hadHardFailure)
-  - test/contracts/hard_failure_apology_texts_parity_test.dart (new file, plan-review round 1 — TS/Dart string parity, isKnownHardFailureApologyText pure-function behavior + mutation coverage, and a source-grep pin that _restoreCoachInteractions actually calls it)
+  - test/contracts/hard_failure_apology_texts_parity_test.dart (new file, plan-review round 1 — TS/Dart string parity, isKnownHardFailureApologyText pure-function behavior + mutation coverage, and a source-grep pin that _restoreCoachInteractions actually calls it; round 2 extended it — MODEL_USED_LOOP_THREW_SENTINEL parity, isRestoredHardFailureRow behavioral coverage, wiring pin updated to the composed function — 8 tests -> 17)
 impact_analysis: |
   Root cause confirmed via live Supabase log query (query_logs against
   function_logs/function_edge_logs), NOT guessed: on 2026-09-15 at
@@ -129,8 +135,8 @@ impact_analysis: |
   below for the fix and why it required a THIRD field design decision
   (finding 2, below) rather than simply setting `failed: true` on restore.
 touched_layers_checked:
-  - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "ai_service.dart, coach_interaction_repository.dart, ai_coach_repository.dart (shim), ai_coach_provider.dart (3 call sites) all updated; flutter analyze lib/ exits 0 with only pre-existing info-level issues, none in touched files." }
-  - { tier: 2, name: "Hive (local state)", status: fixed_in_this_batch, evidence: "coach_<ms> row's NEW 'had_hard_failure' field (kept SEPARATE from 'failed', which stays unconditionally false on this write path — plan-review round 1 finding 2) correctly reflects a hard-failure apology turn on both the live path (flag threaded through) and the restore path (text-matched by isKnownHardFailureApologyText) — pinned by test/contracts/coach_chat_history_replay_writer_to_reader_test.dart's 3 cases and test/contracts/hard_failure_apology_texts_parity_test.dart." }
+  - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "ai_service.dart, coach_interaction_repository.dart, ai_coach_repository.dart (shim), ai_coach_provider.dart (3 call sites), sync_coach.dart all updated; flutter analyze lib/ exits 0, zero warnings/errors. Corrected 2026-09-16 (plan-review round 2 finding) — this row previously claimed 'none in touched files' for the info-level issues; false — ai_coach_repository.dart:32:8 carries one ('meta' package not a direct dependency), pre-existing from commit b34bbafe2 (2026-05-22, confirmed via git blame), not introduced by this batch, and not fatal to flutter analyze lib/'s exit code either way." }
+  - { tier: 2, name: "Hive (local state)", status: fixed_in_this_batch, evidence: "coach_<ms> row's NEW 'had_hard_failure' field (kept SEPARATE from 'failed', which stays unconditionally false on this write path — plan-review round 1 finding 2) correctly reflects a hard-failure apology turn on both the live path (flag threaded through) and the restore path (text-OR-sentinel-matched by isRestoredHardFailureRow, widened from the round-1 text-only isKnownHardFailureApologyText by round 2's finding) — pinned by test/contracts/coach_chat_history_replay_writer_to_reader_test.dart's 3 cases and test/contracts/hard_failure_apology_texts_parity_test.dart's 17." }
   - { tier: 3, name: "Postgres schema", status: not_applicable, evidence: "The 'failed'/'had_hard_failure' flags are Hive-local only (coach_<ms> row fields), never synced to the ai_coach_interactions cloud table — confirmed against backups/live_schema_columns.json, which lists that table's columns as id/user_id/snapshot_id/channel/user_message/ai_response/model_used/tokens_used/was_helpful/created_at/summarized/tool_calls with no such column. Corrected 2026-09-16 (B-pass P3 finding) — an earlier draft of this doc's cloud_columns field incorrectly listed 'failed' alongside 'ai_response'. Plan-review round 1 finding 1 confirmed the CONSEQUENCE of this schema gap (no cloud column exists to carry the flag through a restore) and fixed it client-side via text-matching rather than adding a migration — deliberately, to stay within this batch's scope; see 'Plan-review round 1' below." }
   - { tier: 6, name: "Edge Function code vs deploy", status: not_applicable, evidence: "tool-loop.ts + ai-proxy/index.ts changed in this worktree but NOT yet deployed — deploy requires separate explicit founder authorization per CLAUDE.md §4.3 (live prod apply needs its own explicit go). deno check --node-modules-dir=none passed clean on both files pre-deploy." }
   - { tier: 12, name: "Client -> server contract", status: fixed_in_this_batch, evidence: "had_hard_failure is a new, additive JSON field on ai-proxy's response body — a client running the OLD ai_service.dart against a NEW ai-proxy ignores the unknown field (no break); a client running the NEW ai_service.dart against an UN-DEPLOYED old ai-proxy sees the field missing and defaults hadHardFailure to false (identical to pre-fix behavior, no break either direction)." }
@@ -170,7 +176,7 @@ distinguish from real model output because `ai-proxy` returned it as an
 ordinary 200 response.
 
 **Reader:** `CoachInteractionRepository.recentHistoryExchanges`
-(`coach_interaction_repository.dart:297`, unchanged by this fix) already
+(`coach_interaction_repository.dart:311`, unchanged by this fix) already
 filters `map['failed'] == true` out of replayed history — the filter logic
 was always correct; the writer simply never gave it the signal to act on.
 
@@ -182,15 +188,15 @@ in its response body, so the client had no way to mark the row.
 
 ## Fix
 
-1. **Server: `ToolLoopResult.hadHardFailure`** (`tool-loop.ts:114`) — new
-   field, `false` by default (`tool-loop.ts:234`), set `true` in BOTH
+1. **Server: `ToolLoopResult.hadHardFailure`** (`tool-loop.ts:139`) — new
+   field, `false` by default (`tool-loop.ts:259`), set `true` in BOTH
    branches that set a hardcoded, non-model apology text: the catch-block
-   one (`tool-loop.ts:269-272`), guarded by the same `!finalText &&
+   one (`tool-loop.ts:294-297`), guarded by the same `!finalText &&
    intents.length === 0` condition as the apology itself (so the FC2
    queued-intent case — a summarization-round failure over an already-
    working "Logged" card — still never sets it, matching the apology's own
    scope); and the loop-exhausted-without-a-terminal-response one
-   (`tool-loop.ts:508-521`, added after a same-batch B-pass review caught
+   (`tool-loop.ts:533-545`, added after a same-batch B-pass review caught
    that the first version of this fix covered only the catch-block apology
    — see `docs/reviews/6f1e4db85459-review.md` finding 1 — leaving this
    SECOND hardcoded apology, "Recruit — I had trouble pinning that down...",
@@ -198,9 +204,9 @@ in its response body, so the client had no way to mark the row.
    to close). Both sites leave the FC2 "Copy that, Recruit — I've queued
    that below" acknowledgment excluded — it is real, useful output, not an
    apology substitute.
-2. **Server: thread through the response.** `ai-proxy/index.ts:1161` adds
+2. **Server: thread through the response.** `ai-proxy/index.ts:1179` adds
    `had_hard_failure: loop.hadHardFailure` to the JSON response body.
-   `ai-proxy/index.ts:1120` also guards the semantic-memory embed with
+   `ai-proxy/index.ts:1138` also guards the semantic-memory embed with
    `!loop.hadHardFailure` — an apology turn is never embedded into
    `memory_embeddings`, closing the same self-perpetuation shape one layer
    further out (a future retrieval pass surfacing the apology back into a
@@ -212,9 +218,12 @@ in its response body, so the client had no way to mark the row.
    this field) or an un-deployed old `ai-proxy` both default safely to
    `false`.
 4. **Client: write it.** `updateInteractionWithResponse` gains a
-   `hadHardFailure` parameter (default `false`) and writes `entry['failed']
-   = hadHardFailure` instead of the old unconditional `false`
-   (`coach_interaction_repository.dart:225`). The shim forwarder
+   `hadHardFailure` parameter (default `false`,
+   `coach_interaction_repository.dart:220`) and originally wrote
+   `entry['failed'] = hadHardFailure` instead of the old unconditional
+   `false` — superseded by plan-review round 1 finding 2 below, which
+   reverts `failed` to unconditional `false` and carries this signal in a
+   new, separate `had_hard_failure` field instead. The shim forwarder
    `ai_coach_repository.dart` passes it through unchanged. All three real
    call sites in `ai_coach_provider.dart` (media path :677, primary chat
    :910, auth-retry :980) now pass `hadHardFailure:
@@ -296,6 +305,106 @@ as enumerating its instances; the mechanical check that would have (grep the
 whole file, not the diff hunk, for the shape that makes a guard necessary)
 ran only after the B-pass and round 1 supplied it externally.
 
+## Plan-review round 2 (independent, context-blind — CLAUDE.md §4.12, on the
+post-round-1-hardened state)
+
+Dispatched after round 1's 3 findings were fixed and committed (`b0e43c20`).
+Re-verified every claim independently against live current file contents
+(never trusted the reviewer's own line-number citations at face value —
+several were themselves off by the time this section was written, since
+round 2's own code fix further shifted `sync_coach.dart`). Found 1 P2
+(a real, narrow functional gap) and 4 P3s (citation drift / verification-
+claim precision), all fixed same session, no deferrals. Severity converged
+from round 1's 2×P1 + 1×P2 to this round's 1×P2 + 4×P3 — read as genuine
+convergence (the P3s are non-functional documentation drift, not new
+mechanism-level defects), not the §4.12 point-1 signal to split the unit
+further. No round 3 dispatched on that basis.
+
+**Finding 1 (P2) — the restore-path defense (round 1's own fix) covers only
+the two apology TEXTS and misses a THIRD, structurally distinct failure
+case.** `ai-proxy/index.ts`'s `catch (loopErr)` block (around what is now
+line 1048) — reached when `runToolLoop` itself THROWS, a genuine crash
+calling the tool loop, separate from the two apologies `runToolLoop` returns
+via a normal 200 response — writes `ai_response: "[failed] runToolLoop
+threw"`, `model_used: "failed"` to the cloud row unconditionally. That text
+is not in `kKnownHardFailureApologyTexts`, so a cold restore of this
+specific row would not be marked `had_hard_failure: true` and would
+incorrectly replay into the model's own history — the identical
+self-perpetuation shape this whole batch exists to close, via a third
+trigger neither the live-path fix nor round 1's restore-path fix covered.
+Independently confirmed by reading the catch block directly and by a
+repo-wide grep confirming `model_used: "failed"` is a unique, purpose-built
+sentinel written at exactly this one site — a robust signal distinct from
+apology-text matching. Fix: `ai-proxy/index.ts` exports
+`MODEL_USED_LOOP_THREW_SENTINEL = "failed"`; `sync_coach.dart` mirrors it as
+`kModelUsedLoopThrewSentinel` and adds `isRestoredHardFailureRow({aiResponse,
+modelUsed})`, composing `isKnownHardFailureApologyText(aiResponse) ||
+modelUsed == kModelUsedLoopThrewSentinel`; `_restoreCoachInteractions` now
+calls the composed function instead of the single-text recognizer directly.
+Parity with the TS export, and the composition's four boolean-input
+combinations, are pinned in
+`test/contracts/hard_failure_apology_texts_parity_test.dart` (extended to 17
+tests). This is a mirror-of-the-mirror-defense-itself — recorded as its own
+addendum to instance #31 in the harness memory's `guard_without_its_mirror`
+recurring-class file rather than a new instance, since it is the same
+restore-path-vs-live-path asymmetry round 1 found, just one failure-shape
+deeper.
+
+**Findings 2-3 (P3, citation drift) — `docs/sot_registry.yaml`'s
+`coach_chat_history_replay` entry and this doc's own YAML frontmatter both
+had line citations that had drifted, some already stale when round 1 wrote
+them, none caused by round 2's own (not-yet-written-at-review-time) code
+change.** Independently re-verified every cited line against the live file
+before correcting any of them (grepping fresh rather than trusting either
+the reviewer's or round 1's numbers — this exact mistake, guessing instead
+of grepping, had already recurred twice earlier in this same session).
+Corrected in `docs/sot_registry.yaml`: `recentHistoryExchanges` writer
+`297-347` → `311-362`; the `ai_coach_repository.dart` shim-forwarder writer
+`162-166` → `171-176`; `SendMessageNotifier.send` `731-826` → `783-967`
+(its `notes:` prose "primary :755 + auth-retry :826" → "primary :895 +
+auth-retry :967"); `_restoreCoachInteractions` `198-266` → `222-294` (this
+one WAS shifted by round 2's own code addition, correctly re-derived after
+the fix rather than before). Corrected in this doc's own frontmatter and
+body prose: `coach_interaction_repository.dart` writer `228`→`231` and
+reader `319`→`329`; `sync_coach.dart` writer `224`→`279`; `ai-proxy/index.ts`
+`1161`→`1179` and `1120`→`1138`; `ai_coach_provider.dart` reader `677`→`673`;
+`tool-loop.ts` `114`→`139`, `234`→`259`, `269-272`→`294-297`,
+`508-521`→`533-545`. Spot-checking the registry's `readers:` block for the
+same concept (not flagged by round 2, found while re-verifying its
+neighbours) turned up one more: `ai-proxy/index.ts`'s reader entry
+(`capCoachHistory()`/`runToolLoop(history)`) cited `180-820`, but line 180
+is inside an unrelated function and the actual `capCoachHistory` /
+`runToolLoop` call sites are at `1032`/`1041` — both outside that range.
+Corrected to `257-1045` (destructure through the `runToolLoop` call). All
+re-verified green against `scripts/check_sot_registry_parity.dart` after
+correction.
+
+**Finding 4 (P3) — the diagnose-doc's `flutter analyze` verification claims
+didn't name which invocation was actually being cited.** `scripts/pre-push.sh`
+runs bare `flutter analyze --no-fatal-infos` (no path argument, whole repo)
+unconditionally — the doc's claims cited `flutter analyze lib/` and
+`flutter analyze lib/ test/` (both path-scoped, neither flagged), which is a
+different invocation than the actual push gate. Fixed by re-running the
+EXACT push-gate command: `flutter analyze --no-fatal-infos` (bare, whole
+repo, matching `pre-push.sh:112` verbatim) → exit 0, "277 issues found"
+(ran in 372.7s). Since `--no-fatal-infos` makes ONLY warnings/errors fatal,
+the bare exit-0 IS itself the proof all 277 are info-level — no separate
+severity grep needed (and a severity grep over analyzer stdout is its own
+documented trap, CLAUDE.md §4.9 — the fixed-width-7 column alignment makes
+a naive `^\s+warning` anchor structurally blind to `warning` specifically).
+
+**Finding 5 (P3) — "zero [info-level] issues in touched files" was false.**
+`ai_coach_repository.dart:32:8` carries one (`'meta' package not a direct
+dependency`, `depend_on_referenced_packages`) — confirmed pre-existing via
+`git blame` (commit `b34bbafe2`, 2026-05-22, long before this batch), and
+confirmed the file itself WAS touched by this batch's fix commit (`444ba20f`,
+2 lines, the shim forwarder threading `hadHardFailure` through) via
+`git show --stat`. Non-fatal to `flutter analyze`'s exit code either way (an
+info, not a warning/error) and not introduced by this batch, but the "zero
+in touched files" claim itself was simply wrong — corrected in all three
+places it appeared (tier-1 `touched_layers_checked` evidence and twice in
+the Verification section).
+
 ## Verification
 
 **Deno (server):**
@@ -315,9 +424,12 @@ passed. `deno check --node-modules-dir=none` on both `tool-loop.ts` and
 `ai-proxy/index.ts` passed clean.
 
 **Mutated and run** (rule 21), twice — once per `hadHardFailure = true;`
-site: (1) removed the catch-block site (`tool-loop.ts:271`) — reddened
+site (line numbers as of THAT mutation pass; both sites have since drifted
+to `tool-loop.ts:296` and `:544` respectively as later edits shifted the
+file — re-verified current per plan-review round 2's citation-accuracy
+finding): (1) removed the catch-block site — reddened
 exactly 1 of what was then 3 tests (`Actual: false / Expected: true`).
-(2) After the B-pass fix added the second site (`tool-loop.ts:520`) and
+(2) After the B-pass fix added the second site and
 its 4th test, removed THAT line — `grep -c "hadHardFailure = true"
 tool-loop.ts` confirmed exactly 1 site remained before trusting the run —
 reddened exactly 1 of 4 tests (the new one, `Actual: false / Expected:
@@ -355,8 +467,9 @@ mutated code yield `false` there — expected, that test asserts the DEFAULT,
 not this specific parse line). Restored; re-ran green (3/3). `git diff
 --stat` confirmed only the 19 intended lines remained.
 
-`flutter analyze lib/` exits 0 (only pre-existing info-level issues, none in
-touched files). Combined run of all 3 new/extended Dart test files together
+`flutter analyze lib/` exits 0, zero warnings/errors (see the corrected
+tier-1 evidence above re: the one pre-existing info-level issue in a touched
+file). Combined run of all 3 new/extended Dart test files together
 with the pre-existing `error_telemetry_helper_*` and
 `ai_breakdown_save_confirmation_test.dart` files (Obs 1's tests) — 34/34
 passing.
@@ -368,10 +481,11 @@ source-text escaping of the embedded quotes, and both export sites exist),
 whitespace-tolerant match, real-output rejection, null/empty rejection,
 near-miss rejection), and a source-grep wiring pin that
 `_restoreCoachInteractions` calls the recognizer and writes
-`had_hard_failure`. 8/8 passed. `flutter analyze lib/ test/` exits 0 (250
-pre-existing info-level issues across the whole tree, zero warnings/errors,
-zero in any file this batch touched — confirmed by grepping the analyzer
-output for both severity levels and for every touched filename).
+`had_hard_failure`. 8/8 passed. `flutter analyze lib/ test/` exits 0, zero
+warnings/errors. Corrected 2026-09-16 (plan-review round 2 finding) — this
+sentence previously also claimed "zero [info-level issues] in any file this
+batch touched"; false — see the corrected tier-1 evidence above
+(`ai_coach_repository.dart:32:8`, pre-existing, non-fatal).
 
 **Mutated and run, four separate mutations, each restored before the next:**
 1. Deleted the `'had_hard_failure': isKnownHardFailureApologyText(...)` line
@@ -409,6 +523,47 @@ are byte-identical, confirmed by this same test file's parity check, so
 extracting them to named exports could not change runtime behavior — no new
 mutation needed for a pure refactor with its own parity test already
 covering the one way it could silently break).
+
+**Plan-review round 2 fix — `test/contracts/hard_failure_apology_texts_parity_test.dart`
+extended to 17 tests:** added a parity assertion that
+`kModelUsedLoopThrewSentinel` matches `ai-proxy/index.ts`'s exported
+`MODEL_USED_LOOP_THREW_SENTINEL` (both the constant's value AND that the
+catch site actually writes the named constant, not a re-typed literal), 6
+behavioral tests for `isRestoredHardFailureRow` (true via apology-text
+alone, true via sentinel alone, true when both fire, false when neither,
+false for null input, false for a near-miss substring), and updated the
+existing wiring test to assert `_restoreCoachInteractions` calls
+`isRestoredHardFailureRow(` (not the single-text recognizer directly). 17/17
+passed. `deno check --node-modules-dir=none` on `ai-proxy/index.ts` passed
+clean; `git status --short` confirmed `node_modules/pg` was undisturbed
+(the documented `--node-modules-dir=auto` trap).
+
+**Mutated and run, two separate mutations, each restored before the next:**
+1. Removed the `modelUsed == kModelUsedLoopThrewSentinel` clause from
+   `isRestoredHardFailureRow` (leaving only the apology-text check) —
+   reddened exactly 1 of 17 (`isRestoredHardFailureRow — ... true when
+   modelUsed matches the loop-threw sentinel alone`: `Expected: true /
+   Actual: <false>`); the "both signals fire" test stayed green, confirming
+   it was passing via the apology-text arm, not silently relying on the
+   removed clause.
+2. Reverted `_restoreCoachInteractions`'s Hive-put to call
+   `isKnownHardFailureApologyText(map['ai_response'])` directly instead of
+   the composed `isRestoredHardFailureRow(...)` — reddened exactly 1 of 17
+   (the wiring test: `Expected: true / Actual: <false>`, "restore body
+   writes had_hard_failure via isRestoredHardFailureRow").
+
+Both mutations confirmed real, narrow detection (file still compiled and
+ran each time); both restored via Edit; re-ran green (17/17) after each. A
+third mutation on the TS side (`MODEL_USED_LOOP_THREW_SENTINEL = "failed"` →
+`"loop_threw"`, leaving the Dart mirror at `'failed'`) reddened exactly 1 of
+17 (the parity assertion) — confirming the parity test, not just the
+behavioral ones, actually detects server/client drift on this constant, the
+exact failure mode this fix exists to close (round 2's own finding was that
+nothing detected this drift before this fix existed). Restored; re-ran
+green (17/17). `flutter test test/contracts/coach_chat_history_replay_writer_to_reader_test.dart`
+re-run unaffected (11/11) — round 2's fix changed only the restore path's
+recognizer composition, not `recentHistoryExchanges`'s exclusion logic or
+the live-path writer, both already covered by round 1's tests.
 
 ## Related
 
