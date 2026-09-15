@@ -1,0 +1,192 @@
+# Closure ledger — OI-153: PRO media caps on the usage ledger + the founder's
+# daily Telegram digest (+ Unit F = OI-183). Gate 40 (validate_audit_closure.dart).
+# One terminal_state per item; no `deferred:` key. 6 units + 3 live-apply items
+# + 19 Hermes findings (H1–H19, docs/audit/2026-09-13-hermes-oi153-pro-media-caps.md)
+# + 2 B-pass findings (BP1/BP2, a per-commit review of the same ai-media-proxy
+# redeploy the Hermes pass above touched, folded into the c7e2a4 diagnose-doc)
+# = 30, over the §4.2 ≥4 threshold. Branch: oi153-pro-media-caps.
+#
+# Diagnose-doc: docs/diagnoses/2026-09-12-pro-media-caps-dormant-and-video-uncapped-a9d4e7.md
+# Plan: docs/audit/oi153-plan.md · Record: docs/plan-reviews/oi153-pro-media-caps.md
+# (its `bpass_review:` field is the one pointer to the B-pass).
+#
+# Deploy-state claims here were written AFTER the fact, from the Management API
+# and the decoded multipart /body (deploy-rollback skill 6.9) — the B-pass's
+# finding 1 was a tier-6 line written before its deploy, and this ledger exists
+# to hold the version precisely because a diagnose-doc cannot be amended after
+# its commit without another commit.
+
+batch: oi153-pro-media-caps
+total_findings: 30
+closed_count: 30
+
+findings:
+  - id: OI153-A
+    title: "Unit A — the PRO image cap (50/day) actually fires: ai-media-proxy counted ai_coach_interactions.channel values nothing writes (CODE-1) and failed OPEN on a read error (CODE-3); moved onto ONE atomic consume_quota('pro_image_daily', istDayStartIso(), 50), consume-FIRST, after the Storage fetch and before the Gemini call"
+    terminal_state: closed_in_commit
+    commit: "67ba6ba4"
+    verification: "test/contracts/pro_media_daily_caps_writer_to_reader_test.dart (16 tests: key/cap association by isVideo, guard condition exactly isPro, consume placed after fetchImageAsBase64 and before geminiChat, -1 → gated:true 200, ledger error → pro_quota_unavailable, subscriptions error → tier_unavailable) + test/contracts/usage_quota_ledger_writer_to_reader_test.dart census (0 legacy readers) + test/contracts/founder_digest_caps_mirror_test.dart (the digest's 50 pinned to the proxy's constant). Mutation ledger in the diagnose-doc (M1–M14) and the B-pass (a–h): every mutation reddens ≥1, restored byte-identically. LIVE: test/sql/oi153_pro_media_caps_live_verify.sql Part A — consume_quota 1..50 then -1 on pro_image_daily, `used` stays 50 after the refusal, the next IST day starts fresh — ran green inside a rolled-back transaction 2026-09-13."
+    notes: "Founder decisions 2026-09-12: 50 images / 10 videos per IST day, in-app coach reply (not the paywall), midnight-IST reset. The refusal is HTTP 200 gated:true with a rank-free Bridge reply, so every installed APK renders it as an ordinary coach bubble — no client change, no APK."
+
+  - id: OI153-B
+    title: "Unit B — the PRO video cap (10/day) exists: PRO+video matched neither pre-fix branch (CODE-2) and was uncapped; same guard, key AND cap selected by isVideo"
+    terminal_state: closed_in_commit
+    commit: "67ba6ba4"
+    verification: "Same test file as OI153-A — two regexes pin the isVideo ? pro_video_daily : pro_image_daily key ternary and the isVideo ? 10 : 50 cap ternary, and the 16th test (B-pass finding 5) requires the guard condition to be exactly isPro with no conditional and no isVideo between the guard and the RPC. Mutations: swapping either ternary's arms reddens 1; `if (isPro && !isVideo)` (the exact pre-fix defect) reddens 2; a nested `if (isVideo)` inside the block reddens 1. LIVE Part A: pro_video_daily 1..10 then -1, independent of the image key's count."
+    notes: "No client-side video upload path exists today (grep for pickVideo / 'video' under lib/ is empty; media_picker.dart's only sendWithMedia call is mediaType image), so the video cap protects the API surface (a PRO token used outside the app) — the H-23 threat model — and has no UI to hit it from. Said to the founder in the close-out."
+
+  - id: OI153-C
+    title: "Unit C — the capped-PRO reply in the coach's voice, naming the midnight-IST reset, with NO client behaviour change (cap copies are functions of the number; the client copy mirror edited for parity only)"
+    terminal_state: closed_in_commit
+    commit: "67ba6ba4"
+    verification: "The copy-mirror assertions in pro_media_daily_caps_writer_to_reader_test.dart pin the EF copy (_shared/coach_replies.ts) against the client mirror (lib/features/ai_coach/copy/coach_replies.dart) including the apostrophe-safe extractor (review round 2); lib/ has zero readers of gated / gate_reason / pro_daily_* / resets_at (B-pass negative result), which is what makes the batch APK-free."
+    notes: "The copy proposed by the agent was accepted by the founder verbatim on 2026-09-12 ('let's go ahead with the wordings which you proposed')."
+
+  - id: OI153-D
+    title: "Unit D — founder-digest: a new cron-dispatched, read-only Edge Function sending ONE Telegram message at 08:00 IST with yesterday's ledger per key (windowed + lifetime), users at a ceiling, top-5 id prefixes and the day's alerts — three states per section, never zeros for a failed read; + migration 131 scheduling it"
+    terminal_state: closed_in_commit
+    commit: "f15fad75 (code, 26 Deno tests) + 8f6f96c1 (readDigestSections extraction, B-pass finding 3) + the apply commit (migration 131, the cron snapshot, the CRON_REGISTRY row)"
+    verification: "supabase/functions/founder-digest/index_test.ts — 26 tests incl. 7 recording-fake tests that pin each read's table, select list, filter columns, order, limit and per-section unreadable state (mutations n/n2/n3/n4 redden 1 each; the alerts-failing case was added when n4 reddened nothing). test/contracts/founder_digest_caps_mirror_test.dart pins DIGEST_KEYS' set, caps and kinds against every consume_quota site in the EFs AND the three trigger bodies (positive control: ai-media-proxy resolves to exactly pro_image_daily + pro_video_daily + free_image_analysis). Adoption tests: cron_telemetry + cron_auth rosters carry founder-digest. LIVE: migration 131 applied 2026-09-13 07:28:25 IST (cloud version 20260913015825); cron.job jobid 38 founder_digest_daily `30 2 * * *` active with the expected net.http_post command (live-verify Part C); founder-digest v1 deployed 2026-09-13 (verify_jwt=false; Management API version 1); first digest delivered 02:00:25Z via the same net.http_post shape the cron uses — cron_call_log id 7007 status success http 200 (pg_net's own row timed out at 5000 ms, as every EF-dispatched job's does here; the function completed and the message arrived). FIRST NATURAL FIRE 02:30:00Z (jobid 38): edge log POST 200 at 02:30:20Z, message delivered — and NO cron_call_log row, because the start insert lost the burst race to a PostgREST 504 (OI-194, Hermes H3). Then founder-digest v2 DEPLOYED 2026-09-13 ~06:47Z with the nine Hermes digest fixes (H4 H5 H6 H7 H8 H11 H12 H13 H14): Management API version 2, verify_jwt false; every bundled file byte-identical to the worktree by decoded multipart /body sha256 (index.ts 13f42aa3…, error/cron_auth/cron_telemetry/ist_date/paged_fetch all equal); 32 Deno tests (mutations m1–m6 redden 1 each); a manual net.http_post re-run through the cron's own command shape at 06:49:29Z → 200 {ok:true, day:2026-09-12, chars:401}, cron_call_log row 06:49:32Z success 200, message delivered (the day's third digest — a duplicate, acceptable per the header)."
+    notes: "TELEGRAM_BOT_TOKEN + FOUNDER_TELEGRAM_CHAT_ID set as Edge secrets 2026-09-12 (SECRET_INVENTORY.md rows; never printed). The sender logs only err.name on a fetch failure — a Deno fetch error's message embeds the token-bearing URL — which is the class filed as OI-196 against morning-alert's older sender. pg_cron 1.6.4's named cron.schedule upserts, so re-running 131 is idempotent. The first NATURAL cron fire (02:30Z 2026-09-13) is checked in the close-out; a miss there is OI-194's class, not this unit's."
+
+  - id: OI153-E
+    title: "Unit E — tests, census, ratchet, registry and docs land in the SAME commits as the code they pin (ledger census allowlist, usage_counter_source_lib ratchet at 0 for ai-media-proxy, SoT registry readers, SECRET_INVENTORY rows, naming glossary, supabase/functions/CLAUDE.md pitfalls, root CLAUDE.md's corrected Deno row, deploy-tooling smoke tolerance)"
+    terminal_state: closed_in_commit
+    commit: "67ba6ba4 + f15fad75 + 8f6f96c1 + the apply commit"
+    verification: "Every gate in scripts/pre-commit.sh green on each commit (the loop, not a hand-picked subset — §4.12.5); check_cron_registry (Gate 31) PASS with 30 live jobs registered; check_unbounded_cron_reads scans 17 registered functions incl. founder-digest (bounded: fetchAllPages + .limit(50)); 783 Dart tests across the affected contract files green; whole-tree deno check --node-modules-dir=none PASS; docs/sot_registry.yaml carries the digest as a reader of pro_media_daily_caps and usage_quota_ledger."
+    notes: "The OI-153 board entry is CLOSED with a per-defect resolution; the batch's five filings are OI-192..196. The first draft numbered them 191..195 by eyeballing the board's tail (commit 8f6f96c1); the OI allocator landed on main while this branch was in flight and another session reserved oi/191 at 07:40 IST, so 192–195 were claimed exactly via mint_oi.sh --reserve and the morning-alert filing became OI-196. Commit 8f6f96c1's message still says 191..195 — the allocator's own 'pushed messages are never rewritten' class, recorded here so the discrepancy is findable."
+
+  - id: OI153-F
+    title: "Unit F (= OI-183) — enforce_vision_analysis_daily_limit's channel guard was NULL-blind (NEW.channel NOT IN (...) → NULL → falls through → consumes a vision unit) while both siblings use IS DISTINCT FROM; migration 132 adds NEW.channel IS NULL OR"
+    terminal_state: closed_in_commit
+    commit: "the apply commit (migration 132 + backups/applied_migrations.json + the T11 pin)"
+    verification: "LIVE: migration 132 applied 2026-09-13 07:28:48 IST (cloud version 20260913015848); pg_get_functiondef shows the IS NULL OR guard. test/sql/oi153_pro_media_caps_live_verify.sql Part B — a NULL-channel insert leaves the vision_analysis ledger row untouched while a scan_meal control consumes one — green in a rolled-back transaction, and the DISCRIMINATION run (129's body restored inside the same rolled-back transaction) turned it RED, so the probe measures 132 and not nothing. SOURCE: cap_triggers_use_usage_counters_test.dart 'every channel guard is NULL-safe' (T11); mutation M12 (the IS NULL OR arm removed from 132) reddens exactly that test, 1/11, for the NULL-blind reason — control 11/11 green, file restored to sha256 e857fb2d."
+    notes: "Dormant at closure (0 NULL-channel rows; every writer passes a literal; an authenticated NULL insert dies on RLS/grants before the body runs) — kept because it closed the residue OI-162 slice 4 parked and because the sibling asymmetry is the shape a future writer copies. Board: OI-183 → CLOSED in the apply commit (closes-oi: OI-183)."
+
+  - id: OI153-DEPLOY-1
+    title: "Live apply — ai-media-proxy v24 (the caps) then v25 (the Hermes L23 fixes) then v26 (the B-pass BP-1/BP-2 fixes) deployed on the founder's 2026-09-12 pre-authorization, verify_jwt=true unchanged"
+    terminal_state: closed_in_commit
+    commit: "the apply commit (archives backups/edge_function_payloads/ai-media-proxy/v3_8f6f96c.json for v24, v4_nosha.json for v25, v5_nosha.json for v26 — the tool's own local counter, NOT the platform version; 'nosha' because v25/v26 were deployed from the worktree before the apply commit existed — each archive's index.ts sha256 equals the committed blob)"
+    verification: "Management API: ai-media-proxy version 24, updated_at 2026-09-13T02:17Z, verify_jwt true (was v23 of 2026-09-10, the PRE-fix bundle, until then). Byte-identity per deploy-rollback skill 6.9: decoded multipart /body → index.ts sha256 48549aa17f8dd218… and _shared/coach_replies.ts 0fea2a5ac9cb7512… both EQUAL the branch HEAD blobs (main's pre-merge copies differ, as they must until the merge carries these same bytes). Boot: anon-Bearer POST → the module's own 401 Invalid or expired token (not a 503 BOOT_ERROR). Auth-correct (skill 6.7): a real user token (QA account test7, minted through the admin generate_link → verify path, session revoked after) with body {} → the module's own 400 Missing 'message' in request body, never 401 — ledger-neutral (the request never reaches consume_quota). THEN v25 (2026-09-13 ~06:39Z, Hermes H1/H2/H18 — the OI-28 guard over the RESOLVED URL, the served-MIME cap key, the non-numeric RPC result refused): Management API version 25, verify_jwt true; decoded multipart /body index.ts sha256 9fe6771d022b482b… EQUALS the worktree file (5 bundled files, all equal); anon-Bearer → the module's own 401; real-user (QA account, magiclink-minted, session revoked) body {} → 400 Missing message; real-user traversal probes → `<own>/../<other>/x.jpg` 403 authorization (request a1baa07c), `%2e%2e` 403 (7290407d), `../../../../../../rest/v1/users` 400 validation not-a-Storage-URL (be0a185c); positive control `<own>/does-not-exist.jpg` → 400 storage 'Failed to fetch image: 400 Bad Request' (ef814132) — the fetch reached Storage for the caller's own folder and for nothing else. 16 Deno tests in ai-media-proxy/index_test.ts (mutation M1, the exact pre-fix guard, reddens 6/16). THEN v26 (2026-09-13 ~13:04Z, B-pass BP-1/BP-2 — the vestigial raw-string SSRF pre-check deleted so parseStorageUrl is the only origin check; the asymmetric free/video paywall fixed via the new exported checkFreeImageQuota, called from both a pre-fetch fast path and a new post-fetch mirror): Management API version 26, verify_jwt true, ezbr_sha256 616ae1a6684d8ecd…; decoded multipart /body index.ts sha256 690b859627034462e1afb98fcd860ce57b92f7435b6a4620cdba3736b5d1c959 EQUALS the worktree file (48464 bytes); anon-Bearer → the module's own 401; real-user body {} → 400 Missing message; the SAME traversal probes still refuse identically → `<own>/../<other>/x.jpg` 403 authorization (request 8337bed1), `%2e%2e` 403 (426c6b69), the /rest escape 400 validation (a71493e4); positive control `<own>/does-not-exist.jpg` → 400 storage (05478348) — confirms BP-1's deletion of the vestigial pre-check did not reopen c7e2a4. 21 Deno tests (the 16 above + 1 BP-1 uppercase-host/port-443 test + 4 BP-2 checkFreeImageQuota tests); pro_media_daily_caps_writer_to_reader_test.dart's two Hermes-F2 tests rewritten for the corrected one-site/two-site shapes (OI153-BP1, OI153-BP2)."
+    notes: "Deployed from the worktree BEFORE the merge, deliberately: main's ai-media-proxy and _shared had not changed since the branch base (git diff --quiet 39111d1e main -- supabase/functions/ai-media-proxy is empty), so the merge carries these exact bytes and live == main holds the moment it lands; deploying first let this ledger record the version instead of a promise. Rollback: deploy_via_api.js --rollback ai-media-proxy 39111d1e (the cap returns to dormant; usage_counters rows age out) — but NOT past v25's guard: a rollback to any pre-v25 bundle re-opens the L23 traversal (c7e2a4), so the rollback target for a cap problem is the v25/v26 bundle with the cap block reverted, never the branch base."
+
+  - id: OI153-DEPLOY-2
+    title: "Live apply — migrations 131 + 132 applied and ledgered; cron snapshot regenerated; registry row added"
+    terminal_state: closed_in_commit
+    commit: "the apply commit"
+    verification: "backups/applied_migrations.json entries 131 (cloud 20260913015825) and 132 (20260913015848); backups/live_cron_jobs.json regenerated 2026-09-13T07:32:07+05:30 with 30 jobs (adds jobid 37 usage_counters_retention_daily, which the committed snapshot had not yet carried, and jobid 38 founder_digest_daily) in the file's original one-line-per-job format; docs/operations/CRON_REGISTRY.md row 131 (Gate 31 PASS: 30/30 live jobs registered)."
+    notes: "Both applied 2026-09-13 ~07:28 IST on the founder's explicit 'I will authorize merge and EF deploys and migrations right now' (2026-09-12). Part C of the live-verify SQL confirms the cron row's command carries the founder-digest URL and the private.cron_get_secret() bearer."
+
+  - id: OI153-DEPLOY-3
+    title: "Live apply — founder-digest v2 (Hermes digest findings) then v3 (the .limit(10) gate-literal fix + mode-aware unlistedTotals) deployed on the same pre-authorization, verify_jwt=false unchanged"
+    terminal_state: closed_in_commit
+    commit: "the apply commit (archives backups/edge_function_payloads/founder-digest/v2_nosha.json for v2 and v3_nosha.json for v3 — deployed from the worktree before the commit existed; each archive's index.ts sha256 equals the committed blob)"
+    verification: "See OI153-D's verification tail: version 2, byte-identical /body, 32 Deno tests, manual re-run 200 with a cron_call_log row, message delivered. THEN v3 (2026-09-13 ~13:08Z — the alerts .limit() literal fixed to satisfy check_unbounded_cron_reads.dart, which reads only literals; unlistedTotals made mode-aware so an unlisted LIFETIME key reports movers instead of summing two users' cumulative counters): Management API version 3, verify_jwt false, ezbr_sha256 fe6a00aa13086baec…; decoded multipart /body index.ts sha256 6bfa7f8779fa6d704f0a57080f96e791da8a6570b330705fb363a32d719cd272 EQUALS the worktree file (23754 bytes); 33 Deno tests (32 + 1 new mode-aware-lifetime test). Manual re-run through the cron's own net.http_post shape: the pg_net CALLER timed out at its own 5000ms ceiling (net._http_response: 'Timeout of 5000 ms reached' — expected; the digest's real work outlives that client-side wait, same as the migration's own 'Verify (manual)' comment anticipates) but function_edge_logs shows the invocation completed and answered `POST | 200` — reachable ONLY via the post-send success branch (index.ts:432; a Telegram failure returns 502 at :427), so the digest WAS delivered. Its OWN cron_call_log row is ABSENT this run: `[cron_telemetry] start insert failed for founder-digest { message: \"Gateway Timeout\" }` at 13:08:06 — logCronStart's own insert hit a live PostgREST 504, and logCronEnd is a documented no-op on the resulting null id (cron_telemetry.ts:47). A LIVE recurrence of OI153-H3/OI-194 during this batch's OWN verification, not a v3 regression (the mechanism is in the shared wrapper, untouched by this diff) — see H3."
+    notes: "Rollback: deploy_via_api.js --rollback founder-digest 8f6f96c1 (v2's bytes; v1 is 8f6f96c1's own parent if a deeper rollback is ever needed). v1's only functional differences from v2 are the ones Hermes found — a page-length alert count, a mid-line truncation that can 400 at Telegram, sequential unbounded reads, dropped unlisted keys; v2 vs v3 differ only in the gate-literal and the lifetime-summing bug — so a rollback trades correctness for nothing at either step; listed for completeness."
+
+  # ---- Hermes E-pass 2026-09-13 (docs/audit/2026-09-13-hermes-oi153-pro-media-caps.md) ----
+  - id: OI153-H1
+    title: "Hermes L23 F1 P0 — ai-media-proxy user-scope guard read the URL as SENT, fetch requests it RESOLVED: `<own>/../<victim>/x.jpg` fetched the victim's object with the service role; six `..` reached /rest/v1/users"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — ai-media-proxy v25 (diagnose c7e2a4)"
+    verification: "supabase/functions/ai-media-proxy/index_test.ts (16; M1 exact pre-fix body reddens 6/16); live v25 traversal probes 403/403/400 with the positive control reaching Storage (OI153-DEPLOY-1)."
+  - id: OI153-H2
+    title: "Hermes L23 F2 P1 — cap key/cap and the free-tier video paywall chosen by the client's media_type while Gemini is told Storage's content-type"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — ai-media-proxy v25"
+    verification: "test/contracts/pro_media_daily_caps_writer_to_reader_test.dart 'Hermes L23 F2' group (+2; M3 reassignment dropped → 1 red, M4 derivation moved above the fetch → 2 red)."
+  - id: OI153-H3
+    title: "Hermes L31 F1 P1 — cron_call_log START-insert loss at burst slots erases successful runs fleet-wide (logCronStart swallows → logCronEnd(null) no-op); 46/50 in 24h"
+    terminal_state: blocked_on_user
+    reason: "The fix lives in _shared/cron_telemetry.ts, bundled into EVERY cron function and reaching each only on its own redeploy — twenty functions, not the two this batch's authorisation covers. Filed as OI-194 with the measured mechanism and repair candidate (d); the founder's go for the fleet redeploy is the unblock. Recurred AGAIN live during this batch's OWN v3 manual verification (2026-09-13 13:08:06 UTC, OI153-DEPLOY-3): the digest still delivered (the 200 response is reachable only post-send) but left no cron_call_log row — the exact documented mechanism, observed a further time on this very function while verifying its own redeploy."
+  - id: OI153-H4
+    title: "Hermes L22 F1 P2 — digest alerts header counted the capped page (limit 50) instead of the server total"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — founder-digest v2"
+    verification: "index_test.ts: exact-count header test + the read-shape test pins { count: \"exact\" } and .limit(MAX_ALERT_LINES); m1 and m4 redden 1 each."
+  - id: OI153-H5
+    title: "Hermes L21 F1 P2 — raw-slice truncation can cut inside <b> or &amp;, and Telegram 400s unbalanced HTML (whole digest lost)"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — founder-digest v2"
+    verification: "index_test.ts line-boundary truncation test; m2 (raw slice restored) reddens 1."
+  - id: OI153-H6
+    title: "Hermes L40 F1 P2 — the token guard in sendTelegram was structural only; a one-token edit to String(err) would leak with every test green"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — founder-digest v2 (sendTelegram exported, fetchImpl injectable)"
+    verification: "index_test.ts drives the catch arm with a URL-bearing TypeError and the non-2xx arm through an injected fetch; m3 (String(err)) reddens 1."
+  - id: OI153-H7
+    title: "Hermes L31 F4 P2 — digest reads sequential and unbounded"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — founder-digest v2 (Promise.all + maxPages: MAX_PAGES)"
+    verification: "deno check + 32 tests; MAX_PAGES pinned at 200; live manual run 200 in one round trip."
+  - id: OI153-H8
+    title: "Hermes L31 F2 P2 — digest header cited the inert alert_cron_function_dead as its backstop (OI-179)"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — founder-digest v2 header; OI-179 board note"
+    verification: "supabase/functions/founder-digest/index.ts header names arrival as the only liveness signal and the 02:30Z telemetry loss; docs/audit/open_issues.md OI-179 'cited as a live backstop while inert'."
+  - id: OI153-H9
+    title: "Hermes L31 F3 P2 — CRON_REGISTRY row 131 wording (unit letter, alert count/order, the three disagreeing records, unquoted rollback)"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — docs/operations/CRON_REGISTRY.md row 131"
+    verification: "Gate 31 (check_cron_registry.dart) PASS; row text reviewed against live cron.job_run_details / net._http_response / cron_call_log for the 02:30Z fire."
+  - id: OI153-H10
+    title: "Hermes cross-lens P2 — unit lettering disagreed (migration header 'Unit E' vs ledger/YAML 'Unit D'); diagnose-doc tier-6 lagged the deploy"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — backups/applied_migrations.json 131 note; docs/diagnoses/…a9d4e7.md tier 6"
+    verification: "validate_diagnose_doc.dart OK on a9d4e7; the ledger note names the mislabel as frozen by immutability; tier 6 says v25 with evidence."
+  - id: OI153-H11
+    title: "Hermes L1 F2 P2 — a quota_key the ledger carries but DIGEST_KEYS does not was silently dropped (indistinguishable from 'none')"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — founder-digest v2 (unlistedTotals → '⚠ unlisted keys' line, both sections)"
+    verification: "index_test.ts unlisted-key test (windowed + lifetime, still ranks the user); m5 reddens 1."
+  - id: OI153-H12
+    title: "Hermes L1 F3 P2 — lifetime line said 'at N/N' over yesterday's movers; a mover at the ceiling REACHED it yesterday"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — founder-digest v2 ('reached N/N yesterday')"
+    verification: "index_test.ts lifetime label test; m6 reddens 1."
+  - id: OI153-H13
+    title: "Hermes L22 F3 P2 — Deno fixtures used severities P0/P1/P2; the live alerts.severity CHECK is info|warn|critical"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — founder-digest/index_test.ts fixtures"
+    verification: "grep -c 'severity: \"P' index_test.ts → 0; 32 tests green."
+  - id: OI153-H14
+    title: "Hermes L40 F2 P2 — the digest header did not state what leaves the project (to Telegram's servers)"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — founder-digest v2 header paragraph"
+    verification: "supabase/functions/founder-digest/index.ts header 'What leaves the project' paragraph (prefixes are correlation keys, not anonymisation; no message text, health data, media or email)."
+  - id: OI153-H15
+    title: "Hermes L40 P2 — morning-alert's sender logs the token-bearing fetch error, plus the chatId and errorBody lines"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — docs/audit/open_issues.md OI-196 widened 2026-09-13 (Hermes L40)"
+    notes: "The fix itself is OI-196's, a different function with its own deploy; this batch's terminal act is the widened filing."
+  - id: OI153-H16
+    title: "Hermes L14 PARTIAL — cron.job's uniqueness arbiter is (jobname, username), not jobname alone"
+    terminal_state: verified_clean
+    evidence: "Every job here is scheduled as postgres via cron.schedule, which upserts by name for the calling role; 131's cron.unschedule guard is correct for that role. Recorded in CRON_REGISTRY row 131; no change owed by this batch."
+  - id: OI153-H17
+    title: "Hermes L35 PARTIAL — both migrations' rollback comments are prose, not runnable statements"
+    terminal_state: verified_clean
+    evidence: "The files are applied and immutable; the exact rollback SQL lives in CRON_REGISTRY row 131 (cron.unschedule('founder_digest_daily')) and 132's is 'CREATE OR REPLACE with 129's body'; the registry-gate blind spot is OI-193."
+  - id: OI153-H18
+    title: "Hermes L23 F3 P2 — `proCount as number` read a null RPC result as GRANTED"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — ai-media-proxy v25"
+    verification: "pro_media_daily_caps_writer_to_reader_test.dart anchor 'if (proConsumeError || typeof proCount !== \"number\")' + the absent cast; M5 (typeof half dropped) reddens 1."
+  - id: OI153-H19
+    title: "Hermes cross-lens PARTIAL — ledger grants (usage_counters / consume_quota EXECUTE) are OI-184's class"
+    terminal_state: verified_clean
+    evidence: "This batch adds two new keys to the same table under the same grants and changes nothing about them; OI-184 (INFRA-14 as a gate gap) is open on the board and owns the class."
+
+  # ---- B-pass 2026-09-13 (per-commit review of this same apply commit,
+  #      on the ai-media-proxy redeploy the Hermes pass above already touched;
+  #      docs/reviews/<hash>-review.md) ----
+  - id: OI153-BP1
+    title: "B-pass P2 — a vestigial raw-string SSRF pre-check ran BEFORE parseStorageUrl and was strictly MORE restrictive (a false-rejection bug, not a security gap): an uppercase host or an explicit :443 port failed the raw compare while parseStorageUrl correctly accepts both"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — ai-media-proxy v26 (the pre-check deleted; parseStorageUrl's null branch is now the ONLY origin check)"
+    verification: "index_test.ts 'a differently-cased host or an explicit default port is NOT rejected — parseStorageUrl is the ONLY origin check' (both shapes fetched successfully); live v26 traversal probes still 403/403/400 (OI153-DEPLOY-1) confirm the deletion did not reopen c7e2a4."
+  - id: OI153-BP2
+    title: "B-pass P1 — the Hermes F2 served-MIME reconciliation only handled ONE direction (image mislabelled as video); a free caller mislabelling a real VIDEO as \"image\" walked past the pre-fetch video paywall entirely, on the unverified claim, denying a legitimate free analysis"
+    terminal_state: closed_in_commit
+    commit: "the apply commit — ai-media-proxy v26 (checkFreeImageQuota extracted as a shared exported helper; the pre-fetch video paywall deleted — it trusted the same unverified claim the reconciliation exists to close; the free-image cap check now runs at BOTH the pre-fetch fast path and a new post-fetch mirror, both calling the one helper)"
+    verification: "index_test.ts +4 (checkFreeImageQuota: fail-closed on an unreadable ledger with no log row, an absent row grants, at-ceiling refuses with the honest count, under-ceiling proceeds); pro_media_daily_caps_writer_to_reader_test.dart's two Hermes-F2 tests rewritten — 'the video paywall has EXACTLY ONE site' (was 2) and 'the free-image cap check has EXACTLY TWO sites, sharing ONE helper' (was 1, unshared). Naively deleting the pre-fetch video paywall without the mirror would have opened a WORSE bug (a free user bypassing the free-image lifetime cap entirely by mislabelling every image as video) — the diagnose-doc (c7e2a4) records why the shared-helper, two-call-site design was chosen instead of the obvious one-line deletion."

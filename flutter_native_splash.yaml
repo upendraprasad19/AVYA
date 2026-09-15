@@ -1,0 +1,16 @@
+flutter_native_splash:
+  # This package generates native splash screens for Android and iOS.
+  color: "07090e"
+  color_dark: "07090e"
+  image: assets/avya_icon.png
+  image_dark: assets/avya_icon.png
+
+  # Android-specific options
+  android: true
+  android_gravity: center
+
+  # iOS-specific options
+  ios: true
+
+  # Fullscreen splash
+  fullscreen: true

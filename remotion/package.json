@@ -1,0 +1,25 @@
+{
+  "name": "icanbefitter-remotion",
+  "version": "1.0.0",
+  "description": "Remotion video templates for ICANBEFITTER",
+  "scripts": {
+    "start": "remotion preview src/index.ts",
+    "render:workout": "remotion render src/index.ts WorkoutCompletion --output out/workout.mp4",
+    "render:weekly": "remotion render src/index.ts WeeklyRecap --output out/weekly.mp4"
+  },
+  "dependencies": {
+    "@remotion/lambda": "^4.0.0",
+    "@remotion/renderer": "^4.0.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "remotion": "^4.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
+}
