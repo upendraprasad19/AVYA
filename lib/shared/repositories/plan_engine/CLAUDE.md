@@ -158,15 +158,16 @@ rows carry the library `exercise_id` (`WorkoutWriteService.logExercise` optional
 `ExerciseData.exerciseId` on the active-workout path + the manual swap/add/
 create picker paths (`swap_sheets.dart` reads the picked row's `id`;
 `SwapExerciseData` gained an `id` field), and from the coach `_executeLogSet`
-ONLY when the id resolves to a real library exercise). When
-`enable_exercise_id_history` is ON, `ProgressionResolver.resolve` matches a plan
-exercise to logged history by id — **INCLUSIVE** with name (id-matched ∪
-name-matched, the MORE-RECENT wins; graded session-lists unioned) via a parallel
+ONLY when the id resolves to a real library exercise). **LIVE since 2026-09-16
+(OI-53)** — `ProgressionResolver.resolve` matches a plan exercise to logged
+history by id — **INCLUSIVE** with name (id-matched ∪ name-matched, the
+MORE-RECENT wins; graded session-lists unioned) via a parallel
 `lastSessionById`/`allById` index keyed on non-empty ids only — so a rename/swap no
 longer SPLITS an exercise's weight history. `plan_generator` threads each plan
-exercise's `exerciseId` (parallel to `repRanges`). Ship-dark **DEFAULT OFF**
-(`PlanEngineFlags.exerciseIdHistoryEnabled`) → indices null → name-only,
-byte-identical. Forward-only: legacy/restored/no-id rows fall to the name index
+exercise's `exerciseId` (parallel to `repRanges`). Kill-switch
+`disable_exercise_id_history` (`PlanEngineFlags.exerciseIdHistoryEnabled`) → indices
+null → name-only, byte-identical. Forward-only: legacy/restored/no-id rows fall to
+the name index
 (restore does NOT reconstruct the Hive `exercise_id`). ⚠ The Hive library id is
 **Hive-LOCAL** — the cloud `workout_log_exercises.exercise_id` is a SEPARATE
 name-derived onConflict identity; the library id MUST NOT be projected upward
@@ -175,17 +176,18 @@ name-derived onConflict identity; the library id MUST NOT be projected upward
 `exlog_exercise_id_behavioral_test.dart` + absence gate
 `sync_exlog_no_library_id_test.dart`.
 
-**Injury-substitute preference (①.1d — Batch 11-C, ship-dark).** When
-`enable_injury_substitute_pref` is ON, `_cascadeFill` re-ranks the already-safe
-(POST-injury-filter), same-`movement_pattern` `queryV4` candidate list to PREFER a
-curated `InjurySubstitutes` sub (map/joint-friendlier order, EXACT lowercased name
+**Injury-substitute preference (①.1d — Batch 11-C).** **LIVE since 2026-09-16
+(OI-53)** — `_cascadeFill` re-ranks the already-safe (POST-injury-filter),
+same-`movement_pattern` `queryV4` candidate list to PREFER a curated
+`InjurySubstitutes` sub (map/joint-friendlier order, EXACT lowercased name
 match) over queryV4's compound/priority sort — at all 4 attempt-return sites via the
 pure `_selectCandidate`. It runs on the post-filter list → can NEVER surface a
 contraindicated exercise; a PREFERENCE (falls through to `candidates.first` when no
 curated sub is a candidate). The flag is resolved ONCE in `generateV4` →
 `applyInjurySubstitutePreference` threaded pickV4/buildPinnedDays → `_fillSlots` →
-`_cascadeFill` (mirrors `applyInjuryUniversalFilter`). DEFAULT OFF → verbatim
-`candidates.first` (byte-identical). The pure-Dart `cascade_tracer.dart` mirrors it
+`_cascadeFill` (mirrors `applyInjuryUniversalFilter`). Kill-switch
+`disable_injury_substitute_pref` → verbatim `candidates.first` (byte-identical).
+The pure-Dart `cascade_tracer.dart` mirrors it
 (`_selectCandidateName`); `query_v4_mirror.dart` UNCHANGED; `generator_matrix.dart`'s
 trace call is NOT wired (param defaults false → frozen D3 baseline unmoved). Curated
 map covers 6 of 9 `InjuryVocab` tokens (ankle/neck/hamstring → no subs → fallthrough),
@@ -196,8 +198,9 @@ pick that's in the user's `demoted` set (still injury-filtered → safe). SoT
 `injury_substitute_preference_behavioral_test.dart`. **11-B (W3.4 cross-phase variety)
 extends the SAME `_selectCandidate` with an `avoidNames` tiebreak (below).**
 
-**Cross-phase variety (W3.4 — Batch 11-B, ship-dark).** On a genuine FRESH phase
-advance (pins==null), `WorkoutScheduleReadService.previousPhaseNamesByDay()` reads the
+**Cross-phase variety (W3.4 — Batch 11-B).** **LIVE since 2026-09-16 (OI-53)** — on
+a genuine FRESH phase advance (pins==null),
+`WorkoutScheduleReadService.previousPhaseNamesByDay()` reads the
 just-finished phase's per-day A/B picks (getWeek(1)/getWeek(2), LOWERCASED — the SAME
 rows repeatPinsFrom reads, via the shared `_exerciseNamesOfRow`/`_namesByDayIndex`
 parsers, but WITHOUT the G5 gate) and threads them as `previousPhaseByDay` → generateV4
@@ -206,9 +209,9 @@ parsers, but WITHOUT the G5 gate) and threads them as `previousPhaseByDay` → g
 used last phase. **SOFT** bias — feeds `_selectCandidate` ONLY, NEVER
 queryV4/pickedNames/excludeNames → can never hard-empty a slot (BOUNDED: falls to
 `pool.first` when only last-phase picks remain). Composes with ①.1d (injury-sub selects
-the pool, variety breaks ties within it). Ship-dark `enable_cross_phase_variety` — the
-service-layer gate is inside `previousPhaseNamesByDay` (OFF → `{}` → no getWeek reads →
-avoidNames empty → byte-identical). The pure-Dart `cascade_tracer.dart` mirrors it
+the pool, variety breaks ties within it). Kill-switch `disable_cross_phase_variety` —
+the service-layer gate is inside `previousPhaseNamesByDay` (kill-switch ON → `{}` → no
+getWeek reads → avoidNames empty → byte-identical). The pure-Dart `cascade_tracer.dart` mirrors it
 (`_preferNovelName`); `generator_matrix.dart` NOT wired → frozen D3 baseline unmoved.
 attempt-5 pool is NOT variety-eligible; buildPinnedDays UNCHANGED (variety ⟂ pins). No
 migration (reads existing schedule_* rows). SoT `cross_phase_variety`; behavioral
@@ -259,7 +262,7 @@ feeds `_selectCandidate` ONLY (never queryV4/excludeNames) on a guaranteed-non-e
 pool → never empties a slot / wrong pattern / disturbs the attempt-5 injury floor; on a
 shallow pool `_preferNovel` falls to `pool.first` (the stuck lift RETAINED, no crash).
 **Reuses `enable_plateau_escalation` (NO new flag), INDEPENDENT of
-`enable_cross_phase_variety`** (rotation fires under the plateau flag alone). DEFAULT OFF
+`crossPhaseVarietyEnabled`** (rotation fires under the plateau flag alone). DEFAULT OFF
 / opt-in false → `plateauAvoid {}` → the union `{...listA, ...{}}` ≡ `listA.toSet()` →
 byte-identical. Rotation is a SWAP (slot-count-neutral; a rotated-in sibling may carry ±1
 base `default_sets`, bounded — pre-existing 11-B behavior). **rung-2 (+sets) and rung-3

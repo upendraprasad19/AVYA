@@ -1,5 +1,7 @@
 // W3.4 (Batch 11-B) — cross-phase VARIETY, PRODUCTION behavioral test (platform
 // behavioral_test_path, §4.4 rule 21; SoT `cross_phase_variety`).
+// LIVE since 2026-09-16 (OI-53) — `enable_cross_phase_variety` flipped to
+// `disable_cross_phase_variety`, default ON.
 //
 // Drives the REAL PlanGenerator.instance.generateV4 through the library-seed
 // harness. `previousPhaseByDay` (per-day prior-phase A/B picks, LOWERCASED) makes
@@ -28,7 +30,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 
@@ -189,11 +193,46 @@ void main() {
       expect(m[1]!.a, ['deadlift']);
     });
 
-    test('ship-dark: flag OFF → previousPhaseNamesByDay() returns {}', () async {
-      await HiveService.instance.configBox
-          .delete('enable_cross_phase_variety');
+    // Seeds a real week-1 schedule row so previousPhaseNamesByDay() has
+    // something non-empty to find via getWeek(1) — without this, "returns {}"
+    // would pass whether the flag gate fired OR there was simply no data,
+    // which is the exact "mutation reddens nothing" trap CLAUDE.md rule 21
+    // warns about (verified live: inverting the flag comparison left this
+    // test green until seeded data was added).
+    Future<void> seedWeek1Row() async {
+      final monday = DateTime(2026, 1, 5); // any Monday
+      await MigratedKey.write('plan_start_date', monday.toIso8601String());
+      await HiveService.instance.workoutBox.put(
+        'schedule_${formatDateKey(monday)}',
+        wrow(0, ['Barbell Bench Press']),
+      );
+    }
+
+    test('default (kill-switch absent) → previousPhaseNamesByDay() reads real getWeek(1) data',
+        () async {
+      addTearDown(
+          () => MigratedKey.delete('plan_start_date')); // see cleanup below
+      await seedWeek1Row();
       expect(WorkoutScheduleReadService.instance.previousPhaseNamesByDay(),
-          isEmpty);
+          isNotEmpty,
+          reason: 'default is ON — a real week-1 row must surface as an '
+              'avoid-name entry');
+    });
+
+    test('kill-switch: disable_cross_phase_variety=true → previousPhaseNamesByDay() '
+        'returns {} even with real data present', () async {
+      addTearDown(() async {
+        await HiveService.instance.configBox
+            .delete('disable_cross_phase_variety');
+        await MigratedKey.delete('plan_start_date');
+      });
+      await seedWeek1Row();
+      await HiveService.instance.configBox
+          .put('disable_cross_phase_variety', true);
+      expect(WorkoutScheduleReadService.instance.previousPhaseNamesByDay(),
+          isEmpty,
+          reason: 'the SAME seeded row must be suppressed by the kill-switch '
+              '— proves the guard fires, not merely that there was no data');
     });
   });
 }

@@ -1,10 +1,11 @@
 // Behavioral regression — W3.3 (Batch 11-A): ID-keyed exercise history in
-// ProgressionResolver, behind `enable_exercise_id_history` (default OFF, ship
-// dark). The resolver matches a logged `exlog_*` row to a plan exercise by the
-// library `exercise_id` — INCLUSIVE with name (id-matched ∪ name-matched, the
-// MORE-RECENT of the two) — so a renamed/swapped exercise no longer splits its
-// weight history. Forward-only: legacy / restored / no-id rows still match by
-// name. Flag OFF → the id-index is never built → name-only (byte-identical).
+// ProgressionResolver, behind `disable_exercise_id_history` (default ON, LIVE
+// since 2026-09-16, OI-53). The resolver matches a logged `exlog_*` row to a
+// plan exercise by the library `exercise_id` — INCLUSIVE with name
+// (id-matched ∪ name-matched, the MORE-RECENT of the two) — so a
+// renamed/swapped exercise no longer splits its weight history. Forward-only:
+// legacy / restored / no-id rows still match by name. Kill-switch ON → the
+// id-index is never built → name-only (byte-identical to pre-flip).
 //
 // Sessions are seeded at a ≤7d gap so the ⑦a detraining decay factor is 1.0
 // (base == logged weight) and the progression math is clean. Upper-body names
@@ -97,8 +98,8 @@ void main() {
     await HiveService.instance.workoutBox.put('exlog_${dateStr}_$name$suffix', row);
   }
 
-  Future<void> enableIdHistory() async =>
-      HiveService.instance.configBox.put('enable_exercise_id_history', true);
+  Future<void> disableIdHistory() async =>
+      HiveService.instance.configBox.put('disable_exercise_id_history', true);
   Future<void> enableGraded() async =>
       HiveService.instance.configBox.put('enable_graded_progression', true);
 
@@ -118,9 +119,7 @@ void main() {
         exerciseIds: {planName: planId},
       )[planName];
 
-  group('inclusive id-OR-name match (flag ON)', () {
-    setUp(enableIdHistory);
-
+  group('inclusive id-OR-name match (flag ON, now default)', () {
     test('id match survives a rename — log under a different name, same id',
         () async {
       // Logged under "Bench" with library id 'lib_bench'; the current plan
@@ -159,11 +158,12 @@ void main() {
     });
   });
 
-  test('flag OFF (default) → name-only, byte-identical (rename NOT matched)',
+  test('flag OFF (kill-switch) → name-only, byte-identical to pre-flip',
       () async {
-    // Same seed as the rename case, flag OFF: the id-index is never built and
-    // the name differs → no match → no weight. Flag ON resolves 102.5; the
-    // delta proves the id path is genuinely gated.
+    // Same seed as the rename case, kill-switch ON: the id-index is never
+    // built and the name differs → no match → no weight. Default (kill-switch
+    // absent) resolves 102.5; the delta proves the id path is genuinely gated.
+    await disableIdHistory();
     await seedExlog('Bench',
         weight: 100, reps: 10, daysAgo: 3, exerciseId: 'lib_bench');
     expect(resolved('Barbell Bench Press', planId: 'lib_bench'), isNull);
@@ -171,12 +171,12 @@ void main() {
 
   test('graded union — id-index sessions feed the 2-consecutive back-off gate',
       () async {
-    // graded ON + id-history ON. One below-range session arrives via the NAME
-    // index (older), the other via the ID index (newer, different name). The
-    // graded rule unions BOTH → 2 consecutive distinct-day below-range → back
-    // off (−1.25 → 98.8). Without the union only the name session counts → 1
-    // session → HOLD (100.0); 98.8 proves the id-index sessions are unioned in.
-    await enableIdHistory();
+    // id-history ON (now default) + graded ON. One below-range session arrives
+    // via the NAME index (older), the other via the ID index (newer, different
+    // name). The graded rule unions BOTH → 2 consecutive distinct-day
+    // below-range → back off (−1.25 → 98.8). Without the union only the name
+    // session counts → 1 session → HOLD (100.0); 98.8 proves the id-index
+    // sessions are unioned in.
     await enableGraded();
     await setIntermediateProfile();
     await seedExlog('Bench', weight: 100, reps: 7, daysAgo: 5); // name, below

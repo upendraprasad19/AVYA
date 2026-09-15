@@ -329,20 +329,27 @@ class PlanEngineFlags {
     }
   }
 
-  /// W3.3 (Batch 11-A ID-keyed history): the READER switch. When ON,
-  /// `ProgressionResolver` matches a logged `exlog_*` row to a plan exercise by
-  /// the library `exercise_id` — INCLUSIVE with name (id-matched ∪ name-matched,
-  /// the more-recent of the two, no split-history loss) — instead of name-only.
-  /// Ship-dark DEFAULT OFF → name-only (byte-identical). The WRITE side (stamping
-  /// `exercise_id` on new exlog rows) is unflagged-additive; only this READ switch
-  /// is gated. The cloud sync onConflict key stays name-derived regardless. Set
-  /// `configBox['enable_exercise_id_history'] = true` to enable.
+  /// W3.3 (Batch 11-A ID-keyed history): the READER switch. LIVE since
+  /// 2026-09-16 (OI-53). `ProgressionResolver` matches a logged `exlog_*` row to
+  /// a plan exercise by the library `exercise_id` — INCLUSIVE with name
+  /// (id-matched ∪ name-matched, the more-recent of the two, no split-history
+  /// loss) — instead of name-only. The WRITE side (stamping `exercise_id` on new
+  /// exlog rows) is unflagged-additive; only this READ switch was gated. The
+  /// cloud sync onConflict key stays name-derived regardless.
+  /// Kill-switch `configBox['disable_exercise_id_history'] = true` restores the
+  /// pre-flip name-only match.
+  ///
+  /// ⚠ Forward-only, same as before the flip: turning this back OFF does not
+  /// retro-strip an `exercise_id` already stamped on an exlog row written while
+  /// it was ON — the CODE path reverts verbatim (§4.6's actual requirement); the
+  /// DATA persists, harmlessly, since an OFF resolver never reads it.
   static bool get exerciseIdHistoryEnabled {
     try {
-      return HiveService.instance.configBox.get('enable_exercise_id_history') ==
+      return HiveService.instance.configBox
+              .get('disable_exercise_id_history') !=
           true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 
@@ -390,38 +397,39 @@ class PlanEngineFlags {
     }
   }
 
-  /// ①.1d (Batch 11-C): curated per-injury safe-substitute PREFERENCE. When ON,
-  /// `_cascadeFill` re-ranks the already-safe (post-injury-filter), same-pattern
-  /// candidate list to PREFER a curated `InjurySubstitutes` sub over queryV4's
-  /// generic sort. Ship-dark DEFAULT OFF → verbatim `candidates.first` at every
-  /// attempt (byte-identical). It re-ranks the POST-filter list so it can NEVER
-  /// surface a contraindicated exercise; a PREFERENCE (falls through when no
-  /// curated sub is a candidate). Set `configBox['enable_injury_substitute_pref']
-  /// = true` to enable.
+  /// ①.1d (Batch 11-C): curated per-injury safe-substitute PREFERENCE. LIVE
+  /// since 2026-09-16 (OI-53). `_cascadeFill` re-ranks the already-safe
+  /// (post-injury-filter), same-pattern candidate list to PREFER a curated
+  /// `InjurySubstitutes` sub over queryV4's generic sort. It re-ranks the
+  /// POST-filter list so it can NEVER surface a contraindicated exercise; a
+  /// PREFERENCE (falls through when no curated sub is a candidate).
+  /// Kill-switch `configBox['disable_injury_substitute_pref'] = true` restores
+  /// the verbatim `candidates.first` pick at every attempt.
   static bool get injurySubstitutePreferenceEnabled {
     try {
       return HiveService.instance.configBox
-              .get('enable_injury_substitute_pref') ==
+              .get('disable_injury_substitute_pref') !=
           true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 
-  /// W3.4 (Batch 11-B): cross-phase VARIETY. When ON, a fresh phase advance passes
-  /// the PREVIOUS phase's per-slot picks as `avoidNames` to `_cascadeFill`, and the
-  /// pure `_selectCandidate` (`_preferNovel` inner) prefers a same-pattern SIBLING
-  /// not used last phase (bounded — never forces a wrong pattern / empties a slot).
-  /// Read at the SERVICE layer to gate the `previousPhaseNamesByDay()` read; OFF →
-  /// not called → avoidNames empty everywhere → `candidates.first` (byte-identical).
-  /// Set `configBox['enable_cross_phase_variety'] = true` to enable.
+  /// W3.4 (Batch 11-B): cross-phase VARIETY. LIVE since 2026-09-16 (OI-53). A
+  /// fresh phase advance passes the PREVIOUS phase's per-slot picks as
+  /// `avoidNames` to `_cascadeFill`, and the pure `_selectCandidate`
+  /// (`_preferNovel` inner) prefers a same-pattern SIBLING not used last phase
+  /// (bounded — never forces a wrong pattern / empties a slot). Read at the
+  /// SERVICE layer to gate the `previousPhaseNamesByDay()` read.
+  /// Kill-switch `configBox['disable_cross_phase_variety'] = true` restores the
+  /// verbatim `candidates.first` pick (avoidNames empty everywhere).
   static bool get crossPhaseVarietyEnabled {
     try {
       return HiveService.instance.configBox
-              .get('enable_cross_phase_variety') ==
+              .get('disable_cross_phase_variety') !=
           true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 
