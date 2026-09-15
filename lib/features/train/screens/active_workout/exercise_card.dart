@@ -4,6 +4,19 @@ part of 'screen.dart';
 // Supports all 6 logging types: weight_reps, bodyweight_reps,
 // weighted_bodyweight, timed, cardio, distance
 
+// Obs 4, internal-testing batch 2026-09-15. `lastWeight * effectiveLoadFactor`
+// is a float multiplication that rarely lands on an exact value, so the old
+// `w == w.roundToDouble() ? ... : w.toString()` fallback printed float noise
+// like `27.900000000000002` into the weight input. Round to 2dp first (the
+// precision every other weight display in this app uses), then still strip a
+// clean trailing `.0`.
+String formatWeightDisplayValue(double w) {
+  final rounded = double.parse(w.toStringAsFixed(2));
+  return rounded == rounded.roundToDouble()
+      ? rounded.toInt().toString()
+      : rounded.toString();
+}
+
 class _ExerciseCard extends ConsumerStatefulWidget {
   final int exerciseIndex;
   final ExerciseData exercise;
@@ -89,7 +102,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         lastPerf.lastWeight! > 0) {
       // Show clean number: strip trailing .0
       final w = lastPerf.lastWeight! * widget.data.effectiveLoadFactor(exercise);
-      weightValue = w == w.roundToDouble() ? w.toInt().toString() : w.toString();
+      weightValue = formatWeightDisplayValue(w);
     } else {
       final raw = exercise.weight.replaceAll('kg', '').replaceAll('BW', '').trim();
       weightValue = (raw != '0' && raw.isNotEmpty) ? raw : '';
@@ -107,9 +120,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
       final captured = savedValues['${widget.exerciseIndex}-$s'];
       if (captured == null) continue;
       if (captured.weight != null) {
-        final w = captured.weight!;
-        _weightControllers[s].text =
-            w == w.roundToDouble() ? w.toInt().toString() : w.toString();
+        _weightControllers[s].text = formatWeightDisplayValue(captured.weight!);
       }
       if (captured.reps != null) {
         _repsControllers[s].text = captured.reps.toString();

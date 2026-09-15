@@ -86,6 +86,10 @@ extension _HeroCards on _TrainScreenState {
       4: 'Peak',
     };
     final modeLabel = phaseMode[plan.phase] ?? 'Focused';
+    // Obs 5 follow-up (diagnose 6c2f91) — surface that a live session already
+    // exists so the user isn't tempted to re-tap START and silently discard
+    // it via beginWorkoutWithReadiness's guard.
+    final isResuming = ref.watch(activeWorkoutProvider).hasInProgressSession;
 
     return WardCard(
       variant: WardCardVariant.hero,
@@ -134,7 +138,7 @@ extension _HeroCards on _TrainScreenState {
           ),
           const SizedBox(height: 14),
           WardButton(
-            label: 'START WORKOUT',
+            label: isResuming ? 'RESUME WORKOUT' : 'START WORKOUT',
             trailing: const Icon(Icons.arrow_forward,
                 size: 14, color: AppColors.bgDeep),
             onPressed: () async {

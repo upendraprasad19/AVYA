@@ -62,7 +62,20 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex) {
                 reps: currentExercise.reps,
                 weight: currentExercise.weight,
                 rest: currentExercise.rest,
-                loggingType: currentExercise.loggingType,
+                // Obs 6: use the SWAPPED-IN exercise's own logging type, not
+                // the outgoing one's. Pre-fix this always read
+                // currentExercise.loggingType (the OUTGOING exercise), so
+                // swapping a timed exercise for a weight/reps one kept
+                // showing the timed UI until removed and re-added.
+                // '' (never the outgoing exercise's type) when swapEx carries
+                // none — swapExercise() below runs this through
+                // LoggingTypeResolver.resolve(), which only trusts a
+                // non-EMPTY direct value and otherwise looks the NEW
+                // exercise up by name in exerciseBox/customBox. Falling back
+                // to the outgoing type here would short-circuit that
+                // by-name lookup and silently reintroduce this same bug for
+                // any picker row missing logging_type.
+                loggingType: swapEx.loggingType ?? '',
                 category: currentExercise.category,
                 equipmentNeeded: currentExercise.equipmentNeeded,
                 // W3.3 (Batch 11-A): the swapped-IN exercise's library id (from
@@ -93,16 +106,30 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex) {
         // exercise is auto-swapped into the slot, with an UNDO
         // snackbar for recoverability.
         if (addEx.name == '__ADD_MODE__') {
-          // Bug s1n4c0 (APK Test #16.2) — pop the outer swap sheet BEFORE
-          // opening CreateCustomExerciseSheet. Pre-fix, the swap sheet
-          // stayed mounted while the create sheet opened on top, so when
-          // create.onCreated fired ScaffoldMessenger.showSnackBar at
-          // _openCreateAndAutoSwap, the snackbar was hosted against a
-          // context shadowed by the still-active swap modal route. The
-          // 5s dismiss timer never fired on Android and the user had to
-          // restart the app to clear the toast. Mirrors the picker-path
-          // pop at the onSelect handler above.
-          Navigator.of(ctx).pop();
+          // Obs 5, internal-testing batch 2026-09-15 (diagnose 6c2f91) — do
+          // NOT pop here. The "+ ADD EXERCISE" button INSIDE
+          // ExerciseSwapSheet (exercise_swap_sheet.dart's onPressed) already
+          // calls `Navigator.of(context).pop()` on itself before invoking
+          // this onAdd callback, so the swap sheet is ALREADY gone by the
+          // time this runs. A second pop here doesn't re-pop the (already
+          // closed) swap sheet — it pops the NEXT route down: the active
+          // workout screen's own page, ejecting the user to the Train tab.
+          // CreateCustomExerciseSheet then opens on top of THAT instead of
+          // the active workout screen. The in-progress ActiveWorkoutData
+          // survives this (it's a plain, non-autoDispose provider), but the
+          // Train tab shows no "resume" affordance, so tapping START again
+          // there calls startWorkout() — an unconditional, no-confirmation
+          // full reset — which is what actually destroyed the founder's
+          // progress. Live-verified 2026-09-15 by navigating straight back
+          // into /train/active-workout (bypassing START): the session was
+          // still there, sets checked and timer still running.
+          //
+          // Bug s1n4c0 (APK Test #16.2), which originally ADDED this now-
+          // removed pop, was solving a REAL but DIFFERENT problem — the
+          // swap sheet staying mounted caused create.onCreated's SnackBar to
+          // host against a shadowed context — but exercise_swap_sheet.dart's
+          // own self-pop (added independently) already solves that; this
+          // extra pop was a double-pop regression, not a needed fix.
           _openCreateAndAutoSwap(context, ref, exerciseIndex);
         }
       },

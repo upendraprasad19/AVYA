@@ -325,6 +325,8 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                         name: ex['name'] as String? ?? 'Unknown',
                         detail: _buildDetail(ex),
                         id: ex['id'] as String?, // W3.3: carry the library id
+                        // Obs 6: the swapped-IN exercise's own logging type.
+                        loggingType: ex['logging_type'] as String?,
                       )),
                     )),
 
@@ -348,6 +350,8 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                           name: ex['name'] as String? ?? 'Custom Exercise',
                           detail: 'Custom',
                           id: ex['id'] as String?, // W3.3: carry the custom id
+                          // Obs 6: the swapped-IN exercise's own logging type.
+                          loggingType: ex['logging_type'] as String?,
                         )),
                       )),
                 ],

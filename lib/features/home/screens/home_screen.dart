@@ -894,6 +894,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       workoutMode: modeLabel,
       durationMin: estDuration,
       exerciseCount: exercises.length,
+      // Obs 5 follow-up (diagnose 6c2f91) — same resume-awareness as Train's
+      // hero card; both route through beginWorkoutWithReadiness's guard.
+      isInProgress: ref.watch(activeWorkoutProvider).hasInProgressSession,
       // Home's START must actually START the workout, not just navigate.
       // Previously this was a bare `context.go(...)`, so ActiveWorkoutScreen
       // mounted with a null workoutDay and rendered "No workout in progress"

@@ -26,6 +26,19 @@ import '../../../shared/widgets/error_state.dart';
 /// coach-screen status pill that could have been reused was removed in
 /// 2026-04-18 (single-model migration), so no in-repo tab primitive
 /// exists to ride. Pill styling matches WardChip conventions.
+
+// Obs 2, internal-testing batch 2026-09-15. Both tabs' `_load()` used to
+// await SubmissionsRepository calls with no ceiling — a stalled network
+// request left the spinner (`_rows`/`_loading`) stuck forever, with no
+// `_error` ever set to surface a Retry button. Extracted as its own function
+// (rather than an inline `.timeout()` at each call site) so the timeout
+// behavior is directly testable with fakeAsync + a never-completing
+// Completer, without needing to fake the Supabase client.
+const submissionsLoadTimeout = Duration(seconds: 15);
+
+Future<T> applySubmissionsLoadTimeout<T>(Future<T> future) =>
+    future.timeout(submissionsLoadTimeout);
+
 class SubmissionsScreen extends StatefulWidget {
   const SubmissionsScreen({super.key});
 
@@ -157,8 +170,10 @@ class _MySubmissionsBodyState extends State<_MySubmissionsBody> {
     }
     try {
       final repo = SubmissionsRepository.instance;
-      final foods = await repo.fetchMyFoodSubmissions(userId);
-      final exercises = await repo.fetchMyExerciseSubmissions(userId);
+      final foods = await applySubmissionsLoadTimeout(
+          repo.fetchMyFoodSubmissions(userId));
+      final exercises = await applySubmissionsLoadTimeout(
+          repo.fetchMyExerciseSubmissions(userId));
 
       final rows = <Map<String, dynamic>>[
         for (final f in foods)
@@ -331,11 +346,14 @@ class _CommunityReviewBodyState extends State<_CommunityReviewBody> {
       }
 
       final repo = SubmissionsRepository.instance;
-      final foods = await repo.fetchPendingFoodReviews(userId);
-      final exercises = await repo.fetchPendingExerciseReviews(userId);
+      final foods = await applySubmissionsLoadTimeout(
+          repo.fetchPendingFoodReviews(userId));
+      final exercises = await applySubmissionsLoadTimeout(
+          repo.fetchPendingExerciseReviews(userId));
 
       // Filter out items the user already voted on.
-      final reviewedKeys = await repo.fetchAlreadyReviewedKeys(userId);
+      final reviewedKeys = await applySubmissionsLoadTimeout(
+          repo.fetchAlreadyReviewedKeys(userId));
 
       final items = <Map<String, dynamic>>[
         for (final f in foods)

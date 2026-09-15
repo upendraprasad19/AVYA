@@ -271,11 +271,21 @@ class SwapExerciseData {
   /// null → the swap logs match history by name (forward-only fallback).
   final String? id;
 
+  /// Obs 6, internal-testing batch 2026-09-15: the swapped-IN exercise's own
+  /// `logging_type` (from its library/custom-exercise row). Pre-fix this
+  /// field did not exist at all, so `_showSwapSheet`'s onSelect
+  /// (swap_sheets.dart) fell back to the OUTGOING exercise's loggingType —
+  /// swapping a timed exercise for a weight/reps one kept showing the timed
+  /// UI until the exercise was removed and re-added. null only for the
+  /// `__ADD_MODE__` sentinel, which never reaches a logging-type read.
+  final String? loggingType;
+
   const SwapExerciseData({
     required this.name,
     required this.detail,
     this.emoji = '',
     this.id,
+    this.loggingType,
   });
 }
 
@@ -1222,6 +1232,15 @@ class ActiveWorkoutData {
 
   double get progressPercent =>
       totalSets > 0 ? completedSets / totalSets : 0.0;
+
+  /// True whenever `startWorkout()` has assigned a day and neither
+  /// `completeWorkout()` nor `cancelWorkout()` has run since — i.e. there is
+  /// live session state (checked sets, elapsed timer, in-session swaps) that
+  /// a fresh `startWorkout()` call would silently overwrite. Obs 5 follow-up
+  /// (diagnose 6c2f91): gates the Train/Home START buttons' RESUME label and
+  /// `beginWorkoutWithReadiness`'s discard-confirmation guard.
+  bool get hasInProgressSession =>
+      workoutDay != null && !isComplete && !isSaved;
 
   String get timerFormatted {
     final mins = (elapsedSeconds ~/ 60).toString().padLeft(2, '0');
