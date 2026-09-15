@@ -1,0 +1,74 @@
+<!-- LOCKED design contract for the free-tier hold-week Train UI (2026-07-21).
+     Founder-approved. Deload chip = dashed "H4 · DELOAD". Wardroom palette.
+     This is the visual contract the implementation slices build to.
+     Wrap in <!doctype html><body> to view standalone. -->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,700;0,9..40,800;0,9..40,900&display=swap');
+body{background:#0d0d0d;margin:0;padding:24px}
+.wr{font-family:'DM Sans',sans-serif;--bg:#02070F;--card:#06101F;--cardHi:#0A1828;--input:#0E1E30;--border:#1A2C40;--gold:#D4B270;--goldSoft:#1AD4B270;--txt:#F2EDE4;--dim:#8A9BAA;--mute:#4D6070;--ghost:#2A3848;--ok:#7FB4A2}
+.wr *{box-sizing:border-box}
+.phone{max-width:392px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:22px;overflow:hidden}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:1.6px;color:var(--dim)}
+.chip{flex:0 0 auto;width:52px;height:60px;border-radius:12px;background:var(--input);border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative}
+.chip .lab{font-size:14px;font-weight:800;color:var(--dim)}
+.chip.done .lab{color:var(--txt)}
+.chip.done .tick{position:absolute;top:5px;right:6px;font-size:11px;color:var(--gold)}
+.chip.sel{background:var(--gold);border-color:var(--gold);width:78px}
+.chip.sel .lab{color:#0B0B0B}
+.chip.sel .dt{font-size:9.5px;font-weight:700;letter-spacing:.3px;color:#3d2f10}
+.chip.deload{border-style:dashed;border-color:var(--gold);background:transparent}
+.chip.deload .lab{color:var(--gold)}
+.chip.deload .tag{font-size:8px;font-weight:700;letter-spacing:.5px;color:var(--gold);opacity:.85}
+.grp{font-size:11px;font-weight:700;letter-spacing:1.4px;color:var(--mute);margin:0 0 7px 2px}
+.grp.hold{color:var(--gold)}
+</style>
+<div class="wr">
+<div class="phone">
+  <div style="height:22px;background:#01040A"></div>
+  <div style="background:#0A1020;border-bottom:1px solid var(--border);padding:14px 16px 13px">
+    <div style="display:flex;align-items:center;gap:8px"><span style="color:var(--gold)">⚓</span><span class="eyebrow">TRAIN · DEPLOYMENT 01 · PHASE I</span></div>
+    <div style="font-size:26px;font-weight:900;color:var(--txt);margin:8px 0 6px">FOUNDATION</div>
+    <div style="display:inline-flex;align-items:center;gap:7px;background:var(--goldSoft);border:1px solid var(--gold);border-radius:100px;padding:4px 11px"><span style="width:6px;height:6px;border-radius:50%;background:var(--gold)"></span><span style="font-size:11px;font-weight:800;letter-spacing:1px;color:var(--gold)">HOLDING · H3</span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px"><span style="font-size:11px;font-weight:700;color:var(--dim)">4 / 5 SESSIONS</span><div style="flex:1;height:6px;background:var(--input);border-radius:3px;overflow:hidden"><div style="width:80%;height:100%;background:var(--gold)"></div></div><span style="font-size:11px;font-weight:800;color:var(--gold)">80%</span></div>
+  </div>
+  <div style="padding:14px 16px 4px"><div class="grp">PHASE I · FOUNDATION</div>
+    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
+      <div class="chip done"><span class="tick">✓</span><span class="lab">W1</span></div>
+      <div class="chip done"><span class="tick">✓</span><span class="lab">W2</span></div>
+      <div class="chip done"><span class="tick">✓</span><span class="lab">W3</span></div>
+      <div class="chip done"><span class="tick">✓</span><span class="lab">W4</span></div>
+    </div></div>
+  <div style="padding:8px 16px 14px"><div class="grp hold">PHASE I · HOLDING</div>
+    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
+      <div class="chip done"><span class="tick">✓</span><span class="lab">H1</span></div>
+      <div class="chip done"><span class="tick">✓</span><span class="lab">H2</span></div>
+      <div class="chip sel"><span class="lab">H3</span><span class="dt">21–27 JUL</span></div>
+      <div class="chip deload"><span class="lab">H4</span><span class="tag">DELOAD</span></div>
+    </div></div>
+  <div style="margin:0 16px 14px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:15px 16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span class="eyebrow" style="color:var(--gold)">TODAY · HOLD WEEK</span><span style="font-size:11px;font-weight:700;color:var(--mute)">MON · UPPER</span></div>
+    <div style="font-size:18px;font-weight:800;color:var(--txt);margin:2px 0 12px">Upper Body — Peak</div>
+    <button style="width:100%;background:var(--gold);color:#0B0B0B;border:none;border-radius:100px;padding:12px;font-family:inherit;font-size:13px;font-weight:900;letter-spacing:.5px">START WORKOUT</button>
+  </div>
+  <div style="margin:0 16px 16px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span class="eyebrow">12-WEEK ROADMAP</span><span style="font-size:11px;font-weight:800;color:var(--gold)">PHASE I · HOLDING</span></div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:1;background:var(--cardHi);border:1.5px solid var(--gold);border-radius:12px;padding:11px 10px"><div style="font-size:15px;font-weight:900;color:var(--gold)">I</div><div style="font-size:11px;font-weight:700;color:var(--txt);margin-top:3px">Foundation</div><div style="font-size:10.5px;color:var(--dim);margin-top:1px">Active</div></div>
+      <div style="flex:1;background:var(--input);border:1px solid var(--border);border-radius:12px;padding:11px 10px"><div style="font-size:15px;font-weight:900;color:var(--ghost)">II</div><div style="font-size:11px;font-weight:700;color:var(--mute);margin-top:3px">Strength</div><div style="font-size:10.5px;color:var(--mute);margin-top:1px">🔒 PRO</div></div>
+      <div style="flex:1;background:var(--input);border:1px solid var(--border);border-radius:12px;padding:11px 10px"><div style="font-size:15px;font-weight:900;color:var(--ghost)">III</div><div style="font-size:11px;font-weight:700;color:var(--mute);margin-top:3px">Hypertrophy</div><div style="font-size:10.5px;color:var(--mute);margin-top:1px">🔒 PRO</div></div>
+    </div>
+  </div>
+</div>
+<div style="text-align:center;margin:22px 0 10px"><span class="eyebrow" style="color:var(--mute)">ENTRY POINT — THE WALL AT END OF WEEK 4</span></div>
+<div class="phone">
+  <div style="height:22px;background:#01040A"></div>
+  <div style="margin:16px;background:var(--card);border:1px solid var(--border);border-radius:22px;padding:20px 18px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="color:var(--gold)">⚑</span><span class="eyebrow" style="color:var(--gold)">PHASE I COMPLETE</span></div>
+    <div style="font-size:20px;font-weight:900;color:var(--txt);line-height:1.25;margin-bottom:8px">Four weeks down.<br>Hold the line, or deploy on.</div>
+    <div style="font-size:12.5px;color:var(--dim);line-height:1.5;margin-bottom:16px">Keep training this phase for as many weeks as you like — your streak keeps climbing. Or go PRO to advance to Strength.</div>
+    <button style="width:100%;background:var(--gold);color:#0B0B0B;border:none;border-radius:100px;padding:13px;font-family:inherit;font-size:13px;font-weight:900;letter-spacing:.4px;margin-bottom:10px">DEPLOY TO PHASE II — GO PRO</button>
+    <button style="width:100%;background:var(--goldSoft);color:var(--gold);border:1.5px solid var(--gold);border-radius:100px;padding:12px;font-family:inherit;font-size:13px;font-weight:800;letter-spacing:.4px">HOLD THE LINE — ANOTHER WEEK</button>
+    <div style="display:flex;align-items:center;gap:7px;margin-top:14px;padding-top:13px;border-top:1px solid var(--border)"><span style="color:var(--mute)">💡</span><span style="font-size:11px;color:var(--mute);line-height:1.4">Want different drills? Swap any day from <span style="color:var(--dim);font-weight:700">MY TEMPLATES</span>.</span></div>
+  </div>
+</div>
+</div>

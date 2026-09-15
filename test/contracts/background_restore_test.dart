@@ -1,0 +1,186 @@
+// test/contracts/background_restore_test.dart
+//
+// Obs 4 (2026-06-05) — cold-start latency. Two fixes:
+//   * backend-warm: warm the PostgREST/edge connection during splash so the
+//     restore's first query doesn't eat the ~24s cold-start penalty (un-flagged,
+//     low-risk).
+//   * background-restore: a returning user reaches /home immediately while the
+//     cloud restore finishes in the background; the ownership gate stays BLOCKING
+//     (cross-account safety, APK #15.4); the in-flight restore is NOT cancelled
+//     (single restore, no double-write race); post-restore heals run ref-free,
+//     then bump a tick the home screen bridges to invalidateOnRetry.
+//
+// Slow-boot guard (4e8b1d): the flag flipped from opt-IN (`bg_restore_enabled`,
+// default OFF — returning users blocked >1 min on the full restore every cold
+// start) to opt-OUT (`disable_bg_restore` kill-switch). Returning users now
+// DEFAULT to the bg path; fresh installs still block; the kill-switch preserves
+// the old blocking path (§4.6). Because the restore now runs concurrently with
+// logging, the loss-sensitive restore writers are additive / local-wins
+// (skip-if-local-exists) so a background restore never overwrites a just-logged
+// local row (c5a1f2); reconcileExlogIndexes heals any index drift post-restore.
+//
+// Source-grep with comment-stripping (the established pattern for the
+// restoring-screen surface — see auth_invalidation_*). Behavioral coverage is
+// the device walk on the flag rollout + the local-wins/additive restore test
+// (restore_local_wins_additive_test.dart).
+
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
+
+String _strip(String s) => s
+    .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+    .replaceAll(RegExp(r'(?<!:)//[^\n]*'), '');
+
+void main() {
+  late String restoring, splash, sync, home, supa, tabMixin;
+  setUpAll(() {
+    restoring = _strip(
+        readRestoringScreenSource());
+    splash = _strip(File('lib/features/auth/screens/splash_screen.dart')
+        .readAsStringSync());
+    sync = _strip(
+        File('lib/core/services/sync_service.dart').readAsStringSync());
+    home = _strip(File('lib/features/home/screens/home_screen.dart')
+        .readAsStringSync());
+    tabMixin = _strip(
+        File('lib/shared/mixins/hive_tab_scaffold.dart').readAsStringSync());
+    supa = _strip(File('lib/core/services/supabase_service.dart')
+        .readAsStringSync());
+  });
+
+  // The _goHome method body (between its signature and _ensureOwnershipBeforeHome).
+  String goHomeBody() {
+    final a = restoring.indexOf('Future<void> _goHome(');
+    final b = restoring.indexOf('Future<void> _ensureOwnershipBeforeHome');
+    expect(a, greaterThan(-1));
+    expect(b, greaterThan(a));
+    return restoring.substring(a, b);
+  }
+
+  group('Obs 4 — backend warm-up (un-flagged, low-risk)', () {
+    test('SupabaseService exposes warmConnection', () {
+      expect(supa.contains('Future<void> warmConnection()'), isTrue);
+    });
+    test('splash fires warmConnection fire-and-forget after init', () {
+      expect(
+        splash.contains(
+            'unawaited(SupabaseService.instance.warmConnection())'),
+        isTrue,
+        reason: 'warm-up must be fire-and-forget — never blocks navigation',
+      );
+    });
+  });
+
+  group('Obs 4 — restore completion tick (home refresh bridge)', () {
+    test('SyncService exposes restoreCompletedTick + bumpRestoreCompleted', () {
+      expect(sync.contains('restoreCompletedTick'), isTrue);
+      expect(sync.contains('void bumpRestoreCompleted()'), isTrue);
+    });
+    // b3c9d4 (2026-09-02) — REPOINTED, not loosened or deleted. The listener
+    // MOVED out of home_screen into HiveTabScaffoldMixin so all four tab
+    // screens get it. While it lived in home_screen only Home refreshed after
+    // a background restore, so Profile and Edit Profile served a pre-restore
+    // profile map for the whole session (founder saw Home render the name
+    // while Profile showed 'User'). These assertions are STRONGER than the
+    // single one they replace: they pin the new home, that Home does not
+    // re-register it, and the specific provider whose omission caused the bug.
+    test('the shared tab mixin listens to the tick (added + removed) + '
+        'invalidateOnRetry', () {
+      expect(tabMixin.contains('restoreCompletedTick'), isTrue);
+      expect(tabMixin.contains('.addListener(_onRestoreCompleted)'), isTrue,
+          reason: 'registration belongs to the mixin so EVERY tab gets it — '
+              'a per-screen list is exactly what got forgotten');
+      expect(tabMixin.contains('.removeListener(_onRestoreCompleted)'), isTrue,
+          reason: 'listener must be removed in dispose (no leak)');
+      expect(tabMixin.contains('invalidateOnRetry(ref)'), isTrue);
+    });
+    test('home does NOT also register the tick (no double-invalidate)', () {
+      expect(home.contains('restoreCompletedTick.addListener'), isFalse,
+          reason: 'home inherits the mixin registration; re-adding it here '
+              'would invalidate every home provider twice per restore');
+    });
+    test('home refreshes userProfileProvider on the tick — THE omission', () {
+      expect(home.contains('ref.invalidate(userProfileProvider)'), isTrue,
+          reason: 'omitting it stranded Profile + Edit Profile on a '
+              'pre-restore profile map for the whole session (b3c9d4)');
+    });
+  });
+
+  group('Obs 4 — bg-restore flag-gated + ownership stays blocking', () {
+    test('bg path is opt-OUT via disable_bg_restore (default ON for returning '
+        'users) — slow-boot guard 4e8b1d', () {
+      expect(restoring.contains("configBox.get('disable_bg_restore')"), isTrue,
+          reason: 'returning users default to the bg path; the kill-switch '
+              'opts out (the old opt-in bg_restore_enabled is gone)');
+      expect(restoring.contains("configBox.get('bg_restore_enabled')"), isFalse,
+          reason: 'opt-in flag must be fully replaced by the opt-out kill-switch');
+      expect(
+          RegExp(r'if\s*\(\s*!killSwitch\s*&&\s*isReturning\s*\)')
+              .hasMatch(goHomeBody()),
+          isTrue,
+          reason: 'returning users take the bg path unless kill-switch set');
+    });
+
+    test('fresh install (not returning) still blocks on the full restore', () {
+      final body = goHomeBody();
+      expect(body.contains("localProfile['primary_goal']"), isTrue,
+          reason: 'isReturning = local profile present; a fresh install '
+              '(primary_goal null) is NOT returning → falls through to the '
+              'blocking default path');
+    });
+
+    test('ownership (openForUser) completes BEFORE navigation in the bg path',
+        () {
+      final body = goHomeBody();
+      final ownIdx = body.indexOf('await HiveUserSession.openForUser(userId)');
+      // b3f9a1: the nav target is now the allowlisted destination
+      // (resolveRestoreDestination(widget.next), default /home) instead of a
+      // literal '/home' — the openForUser-BEFORE-navigation ORDER is unchanged.
+      final goIdx = body
+          .indexOf('context.go(RestoringScreen.resolveRestoreDestination(widget.next))');
+      expect(ownIdx, greaterThan(-1), reason: 'bg path must await openForUser');
+      expect(goIdx, greaterThan(ownIdx),
+          reason: 'ownership gate MUST complete before navigation '
+              '(cross-account safety, APK #15.4)');
+    });
+
+    test('the in-flight restore is NOT cancelled in the bg path', () {
+      expect(goHomeBody().contains('cancelInflightRestore'), isFalse,
+          reason: 'cancel + re-run would race the unwinding restore against '
+              'the heals — keep the single in-flight restore');
+    });
+
+    test('default path preserves order: await restore → ownership → go', () {
+      final body = goHomeBody();
+      final r = body.lastIndexOf('await restoreFuture');
+      final e = body.lastIndexOf('_ensureOwnershipBeforeHome(userId)');
+      // b3f9a1: nav target is now resolveRestoreDestination(widget.next)
+      // (default /home) — the restore→ownership→go ORDER is unchanged.
+      final g = body
+          .lastIndexOf('context.go(RestoringScreen.resolveRestoreDestination(widget.next))');
+      expect(r > -1 && r < e && e < g, isTrue,
+          reason: 'default/fresh-install path keeps the proven order');
+    });
+
+    test('bg heals run post-restore, ref-free, then bump the tick', () {
+      final idx =
+          restoring.indexOf('Future<void> _healAfterRestoreInBackground()');
+      expect(idx, greaterThan(-1));
+      final body = restoring.substring(idx);
+      expect(body.contains('ExlogKeyMigrator.runIfNeeded()'), isTrue);
+      expect(body.contains('PhaseProgressReconciler.reconcile('), isTrue);
+      expect(body.contains('SyncService.instance.bumpRestoreCompleted()'),
+          isTrue);
+    });
+
+    test('bg heal reconciles the exlog index (defense-in-depth c5a1f2)', () {
+      final idx =
+          restoring.indexOf('Future<void> _healAfterRestoreInBackground()');
+      final body = restoring.substring(idx);
+      expect(body.contains('reconcileExlogIndexes()'), isTrue,
+          reason: 'post-restore heal must rebuild the exlog index as the union '
+              'of present keys so any race/rogue drift self-heals');
+    });
+  });
+}

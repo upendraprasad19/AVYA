@@ -1,0 +1,358 @@
+# Closure ledger — unitb-deload-reason (Unit B, OI-53 flag 4 of 12)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. `<branch>@branch` is the in-branch commit form (precedent:
+# phase-arc-flip.closure.yaml).
+#
+# FOUR passes produced these: a context-blind B-pass and plan-review round 1
+# (both against the build commit c22e12c2, dispatched CONCURRENTLY — an error,
+# see PROC-1), round 2 against the hardened branch, and a scoped round 3 against
+# the round-2 remediation.
+#
+# The shape worth reading: severity fell each round while the findings got more
+# specific. Round 2's only P1 was not in this batch's code at all — the flip made
+# five PRE-EXISTING copy branches user-visible and one stated a falsehood. Round 3
+# found that the round-2 fix, a single inserted line, re-staled 13 citations the
+# branch had corrected one commit earlier.
+
+batch: unitb-deload-reason
+plan_review_record: docs/plan-reviews/unitb-deload-reason.md
+bpass_review: docs/reviews/06d7bc7f5e28-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-09-06-deload-reason-outlives-the-week-it-describes-c5a8f3.md
+  - docs/diagnoses/2026-09-06-backstop-copy-claims-history-the-app-does-not-have-d9e1b4.md
+
+findings:
+  # ── B-pass (context-blind, against c22e12c2) ─────────────────────
+  - id: B1
+    title: "P0 — readiness_flag_no_hive_default_test asserted the OLD catch-block default; RED at HEAD"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Reproduced independently before acting (Expected: false / Actual: true). Flipped to isTrue
+      in 23bc109c; the comment now records that a getter has two halves in two files. The test's
+      own comment said "Pinned here so a future flip has to change it deliberately" — it fired
+      into a wall. 75/75 green across the five touched files at HEAD.
+
+  - id: B2
+    title: "P1 — 'one seam covers all three paths' is false; the AI-coach regen writes no blob"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Fact confirmed (grep over regenerate_plan_planner + workout_write_service → 0 and 0), but
+      the CONSEQUENCE was re-framed: node and line both read the blob, so that path cannot make
+      them contradict — it leaves both stale together. Corrected in every live site; the real
+      defect it exposes is a pre-existing phase-arc bug, filed as OI-166 (see OI-166 below).
+
+  - id: B3
+    title: "P2 — ship_dark_pending_review.yaml still listed the flag as pending in the flip commit"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: >
+      Moved to `resolved:` in the SAME commit as the plan-review record it points at, so the
+      pointer is never written ahead of its target (the 2026-09-05 self-attesting-artifact lesson).
+
+  - id: B4
+    title: "P2 — nested plan_engine/CLAUDE.md (auto-loaded) still documented the pre-Unit-B contract"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: >
+      Rewritten with the map value shape, the equality check, the kill-switch name and the new
+      behavioral test. This is the highest-cost doc class in the repo: auto-loaded as authoritative,
+      never opened deliberately.
+
+  - id: B5
+    title: "P2 — the diff moved deload_evaluator.dart :231→:244 and :228→:241, staling 10 citations"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      18 citations repointed across lib/, test/ and the SoT registry; historical records (closure
+      YAMLs, the prior diagnose-doc, the prior batch's plan) left as written. ⚠ Re-broken by the
+      round-2 fix and re-closed under R3-1 — see the lesson there.
+
+  - id: B6
+    title: "P3 — phase_arc_strip.dart comment still said SHIP-DARK"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: Rewritten; the load-bearing "flag checked FIRST" sentence kept.
+
+  - id: B7
+    title: "P3 — guard compared raw tokens while PhaseArcStrip.labelFor normalises"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Both sides now lowercase+trim. Round 2 found this also closed a REAL hole: a
+      `{'week_character':'  '}` stamp against `waves[3]=='  '` compared equal RAW and rendered a
+      reason under an em-dash-floored node.
+
+  - id: B8
+    title: "P3 — dev-panel comment credited deloadReasonProvider for a rebuild it does not cause"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: >
+      Now names the real chain — phaseArcProvider re-emits a new PhaseArcData identity, which works
+      only because that class has no `==` override. Verified: train_provider.dart declares none.
+
+  - id: B9
+    title: "P3 — concept: was a 3-paragraph block scalar, breaking the generated INDEX.md table row"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      `concept: deload_decision_reason` (a registry name, as agent_brief_preamble specifies); prose
+      moved to the body; index regenerated and the row verified single-line.
+
+  - id: B10
+    title: "P3 — the OI board committed a present-tense pointer to a plan-review record that did not exist"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: Record lands before any merge; ordering rule recorded — never commit a pointer ahead of its target.
+
+  # ── plan-review round 1 (against c22e12c2) ───────────────────────
+  - id: R1-1
+    title: "P0 — the red default-pin test (same as B1, found independently)"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: Two independent reviewers converged on it; recorded separately because independent confirmation is itself evidence.
+
+  - id: R1-2
+    title: "P1 — the mandatory plan-review record did not exist and the board already claimed it did"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: Same as B10; the record exists in this commit.
+
+  - id: R1-3
+    title: "P1 — ship_dark ledger not updated by the flip-on commit"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: Same as B3.
+
+  - id: R1-4
+    title: "P1 — claimed: the guard is blind to a stale KEEP reason, so the class is half-closed"
+    terminal_state: verified_clean
+    evidence: >
+      NOT ACCEPTED, and round 2 independently agreed after trying to break the reasoning. The
+      shipped defect was a CONTRADICTION (a `working` line under a DELOAD node). In the keep case
+      node and line AGREE — both say recovery week, which is what the user is doing. Round 2's
+      closing argument, now recorded in the diagnose-doc: PeriodizationEngine._waveNames makes
+      week 4 `deload` in EVERY generated blob, so after any regen only two states are reachable
+      (stamp `working` → suppressed, the shipped bug; stamp `deload` → agreement), and no regen
+      mutates any input the KEEP copy branches on. The residue — a keep reason ageing against
+      later-logged readiness — is inherent to a once-per-phase stamp and is not what was alleged.
+
+  - id: R1-5
+    title: "P2 — the AI-coach scope overclaim (same as B2)"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: See B2. ⚠ Survived its own first remediation — see R2-2.
+
+  - id: R1-6
+    title: "P2 — four of twelve new assertions are VACUOUS; three guard mutations reddened ZERO"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Reproduced: 12/12 green with the `waves.length < 4` guard deleted, because the enclosing
+      `catch (_) { return null; }` produced the same null the tests asserted. Fixed structurally —
+      the validation is now the pure `validatedDeloadReason` with no catch above it, so every null
+      has one source. That mutation now reddens 1, and round 3 measured the `is! Map` deletion at
+      3 red where it was previously 0. This became rule 21's THIRD named mutation trap in CLAUDE.md.
+
+  - id: R1-7
+    title: "P2 — mutation counts measured against ONE file (2/1/3), not the batch's real test set"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Re-measured across every touched test file: 4/2/3 plus a fourth leg at 1. Round 2 and round 3
+      each re-ran all four legs independently and got 4-2-3-1. Recorded as instance #33 of
+      feedback_green_check_input_set_width.md — the rule broken by whoever had just written it.
+
+  - id: R1-8
+    title: "P2 — 10 stale :228/:231 citations (same class as B5)"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: See B5 and R3-1.
+
+  - id: R1-9
+    title: "P3 — two comments still claimed the line was dark / DEFAULT OFF"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Both rewritten. The triggered-deload note was wrong TWICE over: killing that switch now DOES
+      change something visible, because currentDeloadReason gates on it before anything else.
+
+  - id: R1-10
+    title: "P3 — 'SELF-VALIDATING' oversells: the two operands are not independent on the lift path"
+    terminal_state: verified_clean
+    evidence: >
+      Correct as an observation and left as designed. Immediately after an eval the blob and the
+      stamp are both written from `liftedAny`, so the guard detects a THIRD PARTY changing the blob —
+      a freshness check, which is exactly what the defect required. The diagnose-doc now states the
+      guard's limit explicitly rather than implying more.
+
+  - id: R1-11
+    title: "P3 — partial lift stamps 'working' while skipped rows stay 'deload'"
+    terminal_state: verified_clean
+    evidence: >
+      Pre-existing semantics of `_liftWeekFour`, unchanged by this batch and correct: `liftedAny`
+      means at least one row was lifted, and the blob follows the same rule, so stamp and blob agree.
+      Note-only in the review; no code change warranted.
+
+  - id: R1-12
+    title: "P3 — the generated INDEX.md row spans three lines (same as B9)"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: See B9.
+
+  # ── plan-review round 2 (against the hardened branch 23bc109c) ───
+  - id: R2-1
+    title: "P1 — the backstop copy tells a first-block user they are 'two blocks in'"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      THE finding of this batch, and not in its code at all: the flip makes five pre-existing copy
+      branches user-visible and one is false. `notBackstop` is false in three worlds (never
+      recorded / overdue / corrupt marker); the wording covered the second only, and
+      `last_actual_deload_phase` has ONE writer in the repo and is never synced or restored, so it
+      is null on a user's first firm keep and after any reinstall. Phase 1 reaches it because
+      archetypeForPhase(1) is 'hypertrophy'. Fixed via a required `hasDeloadOnRecord` and a split
+      branch; diagnose d9e1b4. Mutation-proven: collapsing the ternary reddens 2, verified twice
+      (author and round 3), file still compiling.
+
+  - id: R2-2
+    title: "P2 — the B2/R1-5 scope overclaim SURVIVED its own remediation in three places incl. source"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      The retraction had been ADDED without the original claim being struck. Round 3 swept the repo
+      and confirms every live site is now scoped; remaining text is only inside the review file and
+      the plan's own retraction, which are historical. Recorded as instance #20 of
+      feedback_mistake_unverified_done_claims.md — a correction is not the fix; removing the
+      falsehood is.
+
+  - id: R2-3
+    title: "P2 — docs/sot_registry.yaml carried the retracted 3-leg / 2-1-3 mutation numbers"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Worse than stale prose because that file is machine-read and §4.1.5 tells sessions to trust it.
+      Now 4 legs / 4-2-3-1; round 3 re-measured all four legs itself and confirms.
+
+  - id: R2-4
+    title: "P3 — stale test counts (12 vs 20) and 'three touched test files' vs four"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: Corrected; and re-corrected at R3-4, since the round-2 fix itself changed the count again.
+
+  - id: R2-5
+    title: "P3 — OI-166's writer inventory said THREE; a wider grep finds FOUR"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      The published grep matched only `put(_planKey` and missed deload_evaluator's own
+      `put(_kPlanKey, plan)`. The OI's conclusion (the coach is not among the writers) is unaffected,
+      but an evidence field carried a wrong count. Widened grep now published in the entry.
+
+  - id: R2-6
+    title: "P3 — docs/plans/unit-b-deload-reason-line.md repointed inconsistently"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: >
+      Labelled a PRE-IMPLEMENTATION ARTIFACT whose line numbers are as-of plan time, with the
+      maintained citations named. Its one factually-WRONG row (the AI-coach regen listed as a blob
+      re-stamper) corrected, since that was wrong when written rather than merely stale.
+
+  - id: R2-7
+    title: "P3 — deloadReasonProvider's doc did not mention suppression as a null cause"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: Now names all three null causes and that they collapse to one rendering.
+
+  # ── plan-review round 3 (scoped to the round-2 remediation) ──────
+  - id: R3-1
+    title: "P2 — the one-line round-2 insertion re-staled 13 citations across 8 files"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      `hasDeloadOnRecord: markerPhase != null,` shifted deload_evaluator.dart by +1, breaking every
+      :241/:244 citation the branch had corrected ONE COMMIT EARLIER — six of the eight files being
+      lib source, in a class no gate covers (check_sot_registry_parity validates structured
+      line_range fields, not prose in `notes:`). All 14 repointed to :242/:245 AFTER freezing
+      content; `git grep -nE "deload_evaluator\.dart:(241|244)"` → 0.
+      LESSON, and it is the batch's most reusable: capture citations LAST, and re-derive them after
+      EVERY edit pass, including the pass that only adds one line.
+
+  - id: R3-2
+    title: "P3 — deload_evaluator.dart cited deload_reason.dart:27-31, which round 2 moved"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Not an offset error but a different construct — :27-31 is now the signature, not the ternary.
+      Repointed to :41-43 and verified by reading those lines.
+
+  - id: R3-3
+    title: "P3 — d9e1b4 published a verification grep that returns 4, not 0, on its own tree"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      The unscoped `grep -inE deload docs/diagnoses/INDEX.md` counts this batch's OWN two entries,
+      so a not-a-recurrence claim self-refuted. Now published scoped to the pre-batch tree
+      (`git show 12e7906c:... | grep -icE deload` → 0), with the trap explained inline.
+
+  - id: R3-4
+    title: "P3 — 'ALL FOUR touched test files' was false at HEAD (five) and contradicted its neighbour"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: >
+      The round-2 remediation added a fifth test file, re-invalidating the input-set claim it was
+      itself correcting. Both sites now say five, with the recursion noted.
+
+  - id: R3-5
+    title: "P3 — deload_reason.dart's header said 'two' worlds where its own branch comment said three"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: >
+      Under-enumeration inside the comment whose entire point is enumeration. Header now names all
+      three and says to COUNT.
+
+  - id: R3-6
+    title: "P3 — the four new copy assertions did not distinguish control from discriminating"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Two of four stay green under the collapse mutation. Both now carry a CONTROL: prefix and a
+      comment naming which two actually redden, per the §4.9 "a test that EXECUTES green tells you
+      nothing until you run it against the code it replaces" rule. No artifact over-claimed —
+      d9e1b4 always said "reddens 2".
+
+  - id: R3-7
+    title: "P3 — a fixture comment's 'only those two rewrite the blob' contradicted OI-166's FOUR"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    notes: >
+      Narrowed to the RE-STAMP class (the state the fixture builds) and the other two writers named,
+      so the test file and the board agree.
+
+  # ── carried out of the batch, terminal here ──────────────────────
+  - id: OI-166
+    title: "The AI-coach regen writes schedule rows but never current_plan, so the phase-arc strip renders a stale wave"
+    terminal_state: blocked_on_user
+    reason: >
+      FOUNDER decision required. Pre-existing since flag 3 shipped 2026-09-05 and NOT introduced by
+      this batch; Unit B's guard is blind to it by construction, because that path moves neither the
+      node nor the line and leaves both stale together. The honest repair writes the regenerated
+      wave into `current_plan`, changing an AI-COACH WRITE path — a different blast radius from this
+      read-side display batch, and the planner writes rows over a date range that need not align
+      with the plan's week boundaries, which is the real work. Three options and a recommendation
+      (option 1, as its own unit) are on the board at docs/audit/open_issues.md. Filed rather than
+      absorbed per §4.12.1 — split and ship the smallest converged piece.
+
+  - id: PROC-1
+    title: "Two reviewers were dispatched against ONE worktree concurrently and mutated it simultaneously"
+    terminal_state: closed_in_commit
+    commit: unitb-deload-reason@branch
+    verification: >
+      Author error, not a code defect. Both were told they may mutate to verify; they did, observed
+      each other's edits mid-run, and each had to discount results — the B-pass declined to run its
+      mutations at all and said so. Rounds 2 and 3 ran alone and re-measured everything. Recorded in
+      .claude/skills/code-review/SKILL.md's tuning history as a dispatch rule: serialise review
+      rounds, or give each reviewer its own worktree.
+
+closed_count: 38
