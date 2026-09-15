@@ -4361,3 +4361,39 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   dependency sweep first (the 3 writers above, plus `telegram-admin-bot`'s
   unused `subscription_expires_at` select at `:406`) and its own migration.
 - **Identified**: 2026-09-15 · filed via mint_oi.sh from branch `oi-stale-subscription-status`
+
+## OI-205 — Already-authenticated user opening a valid /reset or /confirm link is silently switched to a different account with no consent prompt
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-16, B-pass on the email-confirm-ux batch
+  (`docs/reviews/email-confirm-ux-bpass.md` Finding 4). `_authRedirect`
+  (`lib/core/router/app_router.dart`) makes both `/reset` (`isOnReset`) and
+  `/confirm` (`isOnConfirm`) unconditional passthroughs, returned BEFORE
+  `isAuthenticated` is even read. So an already-signed-in user who opens
+  EITHER a stale/re-clicked link of their own, or a forwarded/shared link on
+  a device someone else is using, gets `verifyOTP`'d against whatever account
+  the token resolves to, with the resulting session silently replacing the
+  one already active — no prompt, no signal that a switch is about to happen.
+  `_ensureLocalUser`'s cross-account guard (`auth_provider.dart:894-951`) is
+  correctly reused by both flows, so there is no cross-account Hive DATA
+  LEAK — the gap is consent/signal, not data safety.
+- **Scope note**: `/reset` has carried this shape since it shipped; the
+  email-confirm-ux batch's `/confirm` screen deliberately mirrors `/reset`'s
+  passthrough (`app_router.dart`'s own comment: "same shape as /reset") rather
+  than introducing a new inconsistency, so this is a pre-existing
+  architectural characteristic being consistently extended to a second entry
+  point, not a new regression. Out of scope for that batch to fix outright:
+  the actual remedy is real UX design (an interstitial — "you're signed in as
+  X, confirming this link will switch accounts" — or equivalent), which
+  applies equally to `/reset` and hasn't been product-specified. Documented as
+  a deliberate, accepted decision (not a silent gap) in
+  `lib/features/auth/CLAUDE.md`'s pitfalls table alongside the existing
+  `/reset` note.
+- **Fix shape (not decided)**: add an `isAuthenticated` check inside
+  `confirmEmail`/the password-reset equivalent, and — only if a session
+  already exists AND the verified token resolves to a DIFFERENT user id than
+  the current session — surface an explicit confirm-before-switch step
+  instead of switching silently. Needs a product decision on the actual UX,
+  not just the guard.
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `email-confirm-ux`

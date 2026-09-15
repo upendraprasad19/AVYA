@@ -636,35 +636,92 @@ class AuthNotifier extends Notifier<AuthState2> {
   Future<void> confirmEmail(String tokenHash) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
-      final response = await _supabase.client.auth.verifyOTP(
-        tokenHash: tokenHash,
-        type: OtpType.signup,
-      );
-
-      if (response.user == null) {
-        state = state.copyWith(
-          status: AuthStatus.error,
-          errorMessage: 'This confirmation link is invalid or has expired.',
-        );
-        return;
-      }
-
-      await _ensureLocalUser(response.user!);
-      unawaited(ErrorTelemetry.logEvent('auth_signed_in',
-          message:
-              'method=email_confirm userId=${response.user!.id.substring(0, 8)}'));
-      state = state.copyWith(status: AuthStatus.success);
-    } on AuthException catch (e) {
-      state = state.copyWith(
-        status: AuthStatus.error,
-        errorMessage: e.message,
-      );
+      // Bounded by the same ceiling as signInWithEmail: verifyOTP + the
+      // _ensureLocalUser fan-out below is the identical network-touching
+      // shape (HiveUserSession.openForUser, one-shot migrators,
+      // hydrateFromCloud) that motivated signInTimeout in the first place
+      // (diagnose a9c4e2) — and confirmEmail fires automatically on mount,
+      // with no prior user gesture, so an unbounded hang here is worse, not
+      // better, than the sign-in case it borrows the ceiling from.
+      await boundSignIn(() => _performConfirmEmail(tokenHash));
+    } on TimeoutException catch (e, st) {
+      unawaited(ErrorTelemetry.logEvent('auth_confirm_email_timeout',
+          message: 'email confirm exceeded ${signInTimeout.inSeconds}s'));
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'auth_confirm_email_timeout'));
+      state = confirmEmailErrorState(state, e);
+    } on StateError catch (e) {
+      state = confirmEmailErrorState(state, e);
+      debugPrint('[confirmEmail] poisoned-clear escalation: $e');
     } catch (e) {
+      state = confirmEmailErrorState(state, e);
+    }
+  }
+
+  /// Pure mapping from a thrown error to the resulting error [AuthState2] —
+  /// extracted so this SELECTION logic (which message a given failure gets)
+  /// is directly testable without a live Supabase call, unlike [confirmEmail]
+  /// itself: there is no dependency-injection seam for `verifyOTP`, so a test
+  /// can't otherwise force a `TimeoutException` or `StateError` out of it.
+  ///
+  /// - [TimeoutException] — [boundSignIn]'s ceiling fired; actionable message,
+  ///   distinct from "invalid or expired" (that reads as "request a new link",
+  ///   which is the wrong recovery action for a slow network).
+  /// - [StateError] — `_ensureLocalUser`'s cross-account guard already
+  ///   force-signed-out for safety; confirmation SUCCEEDED at the Supabase
+  ///   level, so mirrors [signUpWithEmail]'s identical handler rather than
+  ///   the generic fallback.
+  /// - [AuthException] — surfaced verbatim, same as every other auth method.
+  /// - anything else — the generic "invalid or expired" fallback.
+  @visibleForTesting
+  static AuthState2 confirmEmailErrorState(AuthState2 state, Object error) {
+    if (error is TimeoutException) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage:
+            'Confirmation is taking longer than usual. Check your connection and try again.',
+      );
+    }
+    if (error is StateError) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage:
+            'Couldn’t clean up the previous session. Please sign in again.',
+      );
+    }
+    if (error is AuthException) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: error.message,
+      );
+    }
+    return state.copyWith(
+      status: AuthStatus.error,
+      errorMessage: 'This confirmation link is invalid or has expired.',
+    );
+  }
+
+  /// The confirmation sequence itself. Bounded by [signInTimeout] at its only
+  /// call site — see [confirmEmail].
+  Future<void> _performConfirmEmail(String tokenHash) async {
+    final response = await _supabase.client.auth.verifyOTP(
+      tokenHash: tokenHash,
+      type: OtpType.signup,
+    );
+
+    if (response.user == null) {
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: 'This confirmation link is invalid or has expired.',
       );
+      return;
     }
+
+    await _ensureLocalUser(response.user!);
+    unawaited(ErrorTelemetry.logEvent('auth_signed_in',
+        message:
+            'method=email_confirm userId=${response.user!.id.substring(0, 8)}'));
+    state = state.copyWith(status: AuthStatus.success);
   }
 
   /// True while [signOut] is tearing the session down.

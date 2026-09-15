@@ -70,7 +70,7 @@
                 <data
                     android:scheme="https"
                     android:host="app.icanbefitter.com"
-                    android:pathPrefix="/confirm" />
+                    android:path="/confirm" />
             </intent-filter>
         </activity>
         <activity

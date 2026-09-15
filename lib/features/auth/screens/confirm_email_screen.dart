@@ -29,16 +29,38 @@ class ConfirmEmailScreen extends ConsumerStatefulWidget {
 }
 
 class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
-  bool _started = false;
+  // Tracks WHICH token_hash verification has already been triggered for —
+  // not just whether any verification has started. A bare bool would
+  // permanently block a second, different token_hash delivered to this same
+  // mounted State: go_router's pageKey is path-only (`ValueKey('/confirm')`,
+  // no query string — go_router-17.2.3 match.dart:227-251), and Android's
+  // singleTop launch mode (AndroidManifest.xml, shared with the OAuth
+  // callback) delivers a second `/confirm?token_hash=...` intent to the
+  // already-running Activity via onNewIntent while the first is still the
+  // matched location — e.g. two confirmation-link taps in quick succession.
+  // Flutter then reuses the Element/State and calls didUpdateWidget, not
+  // initState, so both arms must be guarded.
+  String? _startedFor;
 
   @override
   void initState() {
     super.initState();
-    final tokenHash = widget.tokenHash;
+    _maybeStartVerification(widget.tokenHash);
+  }
+
+  @override
+  void didUpdateWidget(covariant ConfirmEmailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.tokenHash != oldWidget.tokenHash) {
+      _maybeStartVerification(widget.tokenHash);
+    }
+  }
+
+  void _maybeStartVerification(String? tokenHash) {
     if (tokenHash == null || tokenHash.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_started || !mounted) return;
-      _started = true;
+      if (_startedFor == tokenHash || !mounted) return;
+      _startedFor = tokenHash;
       ref.read(authNotifierProvider.notifier).confirmEmail(tokenHash);
     });
   }
@@ -85,6 +107,7 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(),
                 const SizedBox(
@@ -101,6 +124,14 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
                   textAlign: TextAlign.center,
                   style: AppTypography.body.copyWith(color: AppColors.textDim),
                 ),
+                const SizedBox(height: AppSpacing.stackL),
+                // Escape hatch: confirmEmail is bounded by signInTimeout, but
+                // that still leaves up to that long with nothing tappable —
+                // this fires automatically on mount with no prior user
+                // gesture, unlike a hung sign-in the user can at least
+                // correlate with their own tap. Always visible, not staged
+                // behind a delay, so there is never a moment with no way out.
+                _buildSignInLink(),
               ],
             ),
           ),
@@ -129,28 +160,32 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
                   style: AppTypography.body.copyWith(color: AppColors.textDim),
                 ),
                 const SizedBox(height: AppSpacing.stackL),
-                GestureDetector(
-                  onTap: () => context.go('/sign-in'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'GO TO SIGN IN',
-                        style: AppTypography.h3.copyWith(
-                          fontSize: 12,
-                          color: AppColors.bgDeep,
-                          letterSpacing: 2.5,
-                          height: 1,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                _buildSignInLink(),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSignInLink() {
+    return GestureDetector(
+      onTap: () => context.go('/sign-in'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.accent,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Center(
+          child: Text(
+            'GO TO SIGN IN',
+            style: AppTypography.h3.copyWith(
+              fontSize: 12,
+              color: AppColors.bgDeep,
+              letterSpacing: 2.5,
+              height: 1,
             ),
           ),
         ),

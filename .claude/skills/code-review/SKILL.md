@@ -1723,3 +1723,26 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   predates the branch) with its own blast radius and testing needs. Distinguishing "the comment
   is wrong" (fix now) from "the underlying system has a gap" (file it) kept the diff from scope-
   creeping into an unrelated migration under review-response pressure.
+
+- **2026-09-16** — blast-radius **account** — branch `email-confirm-ux`, the B-pass on the
+  signup-confirmation-link feature (new `/confirm` screen + Android App Links). **7 findings (2
+  P1, 2 P2, 3 P3); 0 false_alarm — all 7 accepted** (5 fixed in code, 1 resolved via
+  documentation + a filed OI rather than an unscoped UX redesign, 1 recorded as pre-existing
+  architecture needing no action). Review: `docs/reviews/email-confirm-ux-bpass.md`.
+  **Tuning — verifying a framework-internals claim means reading the installed PACKAGE'S OWN
+  SOURCE, not reasoning from how the library is generally believed to behave.** Finding 1's whole
+  severity rested on whether go_router's `pageKey` includes the query string — the reviewer read
+  `go_router-17.2.3/lib/src/match.dart:227-292` directly and confirmed
+  `pageKey: ValueKey<String>(newMatchedPath)` never touches `uri.query`, and independently
+  confirmed `AndroidManifest.xml`'s pre-existing `launchMode="singleTop"` rather than assuming it.
+  Lens 6 (`guard_without_its_mirror`) already asks to "verify every claim against code + live
+  state", but this pass is worth citing because the claim being verified was about a THIRD-PARTY
+  DEPENDENCY's internals, not this repo's own code — the temptation to reason from memory of "how
+  go_router generally works" is exactly the shape a subagent hallucinates most fluently
+  (debugging skill bug-class 2.9). The author independently re-verified the same two claims
+  post-review (both confirmed) before trusting the fix's design on them.
+  **A second pattern worth keeping, not tuning:** the review ran the mutation test ITSELF
+  end-to-end (baseline green → neuter the guard → confirm exactly the two expected tests redden
+  for a genuine assertion failure, not a compile error → revert → confirm byte-identical) rather
+  than trusting the dispatch brief's characterization of what the test would show. No lens
+  changed; a 0% false-alarm rate here is a data point, not evidence a lens is under-firing.
