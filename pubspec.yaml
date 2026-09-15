@@ -99,7 +99,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.0
-  flutter_native_splash: ^2.4.0
+  flutter_native_splash: ^2.4.8
   # Tech-debt audit 2026-05-20 / T1: device-CI scaffold. Patrol drives
   # native UI (Razorpay WebView, system permission dialogs, OAuth
   # consent screens) that vanilla flutter_test cannot reach. Tests in
