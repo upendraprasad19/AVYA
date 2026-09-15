@@ -568,12 +568,10 @@ extension _ProfileContent on _ProfileScreenState {
                   subtitle: 'Artwork and open-source attributions',
                   trailing: const ProfileRowChevron(),
                   showBorder: false,
-                  onTap: () => showLicensePage(
-                    context: context,
-                    applicationName: 'ICANBEFITTER',
-                    applicationLegalese:
-                        'Exercise artwork CC BY-SA 4.0 — workout-guide '
-                        '(Bryl Lim), traced from Everkinetic.',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CreditsLicensesScreen(),
+                    ),
                   ),
                 ),
               ]),
