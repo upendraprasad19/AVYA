@@ -33,6 +33,11 @@ class TodayWorkoutCard extends StatelessWidget {
 
   final bool isRestDay;
   final bool isDone;
+  // Obs 5 follow-up (diagnose 6c2f91) — a live, unfinished session already
+  // exists (ActiveWorkoutData.hasInProgressSession). Swaps the START label
+  // to RESUME so the user isn't tempted to re-tap START and silently
+  // discard it via beginWorkoutWithReadiness's guard.
+  final bool isInProgress;
 
   final double? totalVolumeKg;
   final String? bestLift;
@@ -54,6 +59,7 @@ class TodayWorkoutCard extends StatelessWidget {
     this.stepsGoal = AppConstants.defaultDailyStepGoal,
     this.isRestDay = false,
     this.isDone = false,
+    this.isInProgress = false,
     this.totalVolumeKg,
     this.bestLift,
     this.onViewCard,
@@ -85,6 +91,7 @@ class TodayWorkoutCard extends StatelessWidget {
               exerciseCount: exerciseCount,
               isRestDay: isRestDay,
               isDone: isDone,
+              isInProgress: isInProgress,
               totalVolumeKg: totalVolumeKg,
               bestLift: bestLift,
               onStart: onStart,
@@ -125,6 +132,7 @@ class _HeroCard extends StatelessWidget {
     required this.exerciseCount,
     required this.isRestDay,
     required this.isDone,
+    required this.isInProgress,
     required this.totalVolumeKg,
     required this.bestLift,
     required this.onStart,
@@ -138,6 +146,7 @@ class _HeroCard extends StatelessWidget {
   final int exerciseCount;
   final bool isRestDay;
   final bool isDone;
+  final bool isInProgress;
   final double? totalVolumeKg;
   final String? bestLift;
   final VoidCallback onStart;
@@ -263,6 +272,7 @@ class _HeroCard extends StatelessWidget {
           _HeroCta(
             isRestDay: isRestDay,
             isDone: isDone,
+            isInProgress: isInProgress,
             totalVolumeKg: totalVolumeKg,
             bestLift: bestLift,
             onStart: onStart,
@@ -279,6 +289,7 @@ class _HeroCta extends StatelessWidget {
   const _HeroCta({
     required this.isRestDay,
     required this.isDone,
+    required this.isInProgress,
     required this.totalVolumeKg,
     required this.bestLift,
     required this.onStart,
@@ -286,6 +297,7 @@ class _HeroCta extends StatelessWidget {
   });
   final bool isRestDay;
   final bool isDone;
+  final bool isInProgress;
   final double? totalVolumeKg;
   final String? bestLift;
   final VoidCallback onStart;
@@ -418,7 +430,7 @@ class _HeroCta extends StatelessWidget {
             ),
             const SizedBox(width: 5),
             Text(
-              'START',
+              isInProgress ? 'RESUME' : 'START',
               style: AppTypography.mono.copyWith(
                 color: AppColors.bgDeep,
                 letterSpacing: 2,

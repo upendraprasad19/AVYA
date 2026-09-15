@@ -4,6 +4,9 @@ extension _PlannedExpansion on _TrainScreenState {
   // ── Planned Expansion (today, not yet started) ──────────────────
 
   Widget _buildPlannedExpansion(BuildContext context, WorkoutDayData day) {
+    // Obs 5 follow-up (diagnose 6c2f91) — same resume-awareness as the hero
+    // card; both route through beginWorkoutWithReadiness's discard guard.
+    final isResuming = ref.watch(activeWorkoutProvider).hasInProgressSession;
     return Container(
       color: AppColors.card,
       padding: const EdgeInsets.fromLTRB(50, 4, 14, 12),
@@ -58,7 +61,7 @@ extension _PlannedExpansion on _TrainScreenState {
             // A genuinely empty day shows only the "No exercises scheduled"
             // line above. Q6 keeps it free; this only adds the content gate.
             WardButton(
-              label: 'START WORKOUT',
+              label: isResuming ? 'RESUME WORKOUT' : 'START WORKOUT',
               leading: const Icon(Icons.play_arrow_rounded,
                   size: 16, color: AppColors.bgDeep),
               onPressed: () async {

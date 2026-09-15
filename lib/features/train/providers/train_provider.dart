@@ -1233,6 +1233,15 @@ class ActiveWorkoutData {
   double get progressPercent =>
       totalSets > 0 ? completedSets / totalSets : 0.0;
 
+  /// True whenever `startWorkout()` has assigned a day and neither
+  /// `completeWorkout()` nor `cancelWorkout()` has run since — i.e. there is
+  /// live session state (checked sets, elapsed timer, in-session swaps) that
+  /// a fresh `startWorkout()` call would silently overwrite. Obs 5 follow-up
+  /// (diagnose 6c2f91): gates the Train/Home START buttons' RESUME label and
+  /// `beginWorkoutWithReadiness`'s discard-confirmation guard.
+  bool get hasInProgressSession =>
+      workoutDay != null && !isComplete && !isSaved;
+
   String get timerFormatted {
     final mins = (elapsedSeconds ~/ 60).toString().padLeft(2, '0');
     final secs = (elapsedSeconds % 60).toString().padLeft(2, '0');

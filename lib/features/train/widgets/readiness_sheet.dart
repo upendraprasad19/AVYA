@@ -3,6 +3,8 @@
 // BuildContext) — it is shown here, at the widget layer, from the two START
 // buttons (hero_cards + planned_expansion) via `beginWorkoutWithReadiness`.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,9 +13,11 @@ import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
+import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
@@ -24,9 +28,32 @@ import '../providers/train_provider.dart';
 /// check-in if present (app-kill re-entry → NEVER re-prompt / re-derive — the
 /// healthBox row is the single source), else show the skippable 3×3 sheet. The
 /// chosen/stored level flows into `startWorkout`. Callers navigate AFTER this.
+///
+/// Obs 5 follow-up (diagnose 6c2f91): `startWorkout()` unconditionally
+/// discards any live session (checked sets, elapsed timer). This is the
+/// SINGLE funnel every START button routes through (see the comment at
+/// `home_screen.dart`'s `TodayWorkoutCard.onStart`), so the guard lives here,
+/// once, rather than duplicated at each of the three call sites. When a live
+/// session already exists, ask before overwriting it; RESUME (or dismissing
+/// the dialog) returns without touching state, so the caller's unconditional
+/// post-call `context.go('/train/active-workout')` lands on the EXISTING
+/// session untouched.
 Future<void> beginWorkoutWithReadiness(
     BuildContext context, WidgetRef ref, WorkoutDayData day) async {
   final notifier = ref.read(activeWorkoutProvider.notifier);
+  if (ref.read(activeWorkoutProvider).hasInProgressSession) {
+    final choice = await showResumeOrDiscardGuard(context);
+    if (choice != StartWorkoutGuardChoice.discardAndStartFresh) {
+      return;
+    }
+    // A7 parity with `_showCancelDialog`/`_showFinishDialog` (both fire this
+    // unawaited too) — clear the AI-coach mid-workout snapshot
+    // (`ActiveWorkoutPersistence`) for the session being discarded so it
+    // doesn't outlive the state it describes. Safe to not await: the
+    // in-memory Hive box (never a LazyBox here) reflects the delete
+    // synchronously — only the disk flush is the async part.
+    unawaited(ActiveWorkoutPersistence.clearState());
+  }
   if (!PlanEngineFlags.readinessEnabled) {
     notifier.startWorkout(day);
     return;
@@ -37,6 +64,64 @@ Future<void> beginWorkoutWithReadiness(
     level = await showReadinessSheet(context);
   }
   notifier.startWorkout(day, readiness: level);
+}
+
+/// The two choices offered when `beginWorkoutWithReadiness` finds a live
+/// session already in progress.
+enum StartWorkoutGuardChoice { resume, discardAndStartFresh }
+
+/// Confirmation dialog mirroring `_showCancelDialog`'s style
+/// (`active_workout/finish_dialog.dart`) — same shape, same danger-colored
+/// destructive action, for the same "about to lose progress" moment.
+/// A dismissed dialog (barrier tap / back button, `null` result) is treated
+/// as RESUME by the caller — the safe default that never silently discards.
+Future<StartWorkoutGuardChoice?> showResumeOrDiscardGuard(
+    BuildContext context) {
+  return showDialog<StartWorkoutGuardChoice>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        side: const BorderSide(color: AppColors.line2),
+      ),
+      title: Text(
+        'Workout Already in Progress',
+        style: AppTypography.h2.copyWith(fontSize: 18),
+      ),
+      content: Text(
+        'You have logged sets in an unfinished workout. Starting a new one '
+        'will discard that progress.',
+        style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx)
+              .pop(StartWorkoutGuardChoice.discardAndStartFresh),
+          child: Text(
+            'DISCARD & START FRESH',
+            style: AppTypography.mono.copyWith(
+              fontSize: 11,
+              color: AppColors.bad,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () =>
+              Navigator.of(ctx).pop(StartWorkoutGuardChoice.resume),
+          child: Text(
+            'RESUME',
+            style: AppTypography.mono.copyWith(
+              fontSize: 11,
+              color: AppColors.accent,
+              letterSpacing: 2,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Shows the skippable 3×3 sheet. On START writes `readiness_<today>` via
