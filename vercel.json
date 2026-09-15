@@ -8,5 +8,7 @@
     { "source": "/admin", "destination": "/#/admin", "permanent": false },
     { "source": "/admin/", "destination": "/#/admin", "permanent": false }
   ],
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/((?!\\.well-known/).*)", "destination": "/index.html" }
+  ]
 }

@@ -2,7 +2,7 @@
 scope: auth
 parent: ../../../CLAUDE.md
 created: 2026-05-18
-updated: 2026-05-21
+updated: 2026-09-16
 status: active
 ---
 
@@ -14,10 +14,24 @@ status: active
 ## What lives here
 
 `lib/features/auth/` owns sign-in / sign-up / sign-out + the post-auth boot
-sequence. Three screens:
+sequence. Four screens:
 
 - `sign_in_screen.dart` — Email + Google OAuth + Phone OTP entry surface.
 - `splash_screen.dart` — Initial decision: signed-in → restore route, signed-out → Welcome.
+- `confirm_email_screen.dart` — **2026-09-16.** Landing screen for the signup
+  confirmation link at `/confirm?token_hash=...`. Exists because Supabase's
+  default confirmation link points at the project's own `*.supabase.co`
+  domain, which we don't control and can't verify Android App Links against
+  — the "Confirm signup" email template was changed (Supabase dashboard) to
+  link here instead, at `app.icanbefitter.com/confirm`, a domain we DO
+  control. Calls `AuthNotifier.confirmEmail` (`verifyOTP(tokenHash:, type:
+  OtpType.signup)` — NOT PKCE-bound, same reasoning as the `/reset` code-flow
+  redesign below) and on success routes into `/restoring`, same as every
+  other sign-in path. Android intercepts `https://app.icanbefitter.com/confirm/*`
+  via the `autoVerify` intent-filter in `AndroidManifest.xml` +
+  `web/.well-known/assetlinks.json`; anyone without the app lands on the
+  same route as a normal web page (one Flutter codebase, so "web fallback"
+  needs no separate implementation).
 - `restoring_screen.dart` — The post-auth branded gate added in APK Test #2. Waits
   for `AuthSessionBootstrapper.resolveDestination()` + `SyncService.restoreFromCloudForUser()`
   in parallel (**CORRECTED 2026-08-02, diagnose b3f9e7 plan-review round 1** — this
@@ -123,6 +137,7 @@ read user-scoped Hive without going through `wrapUserScopedBox`.
 | A failed `user_profile` read routes an onboarded user into onboarding | `resolveDestination`'s catch used to return `StartMissionBrief` — presenting "could not read" as the positive fact "this user has no profile". **Two entrances, neither visible at the call site:** the SELECT throws, OR it returns **HTTP 200 with zero rows** because `user_profile_select_own` (own-row-only RLS) filtered a stale / not-yet-attached token, and `.maybeSingle()` then yields `null`, identical to "no such user". Now returns `DestinationUnknown` after `ensureFreshToken()` + one hard-refresh retry; the `sealed` hierarchy makes an unhandled branch a COMPILE error. All three not-onboarded branches consult `hasLocalOnboardedEvidence` (`lib/core/services/local_onboarding_evidence.dart`) **after** `ensureOpenedForCurrentSession()` — under owner-null `wrapUserScopedBox` serves `GuardedBox.empty` (`guarded_box.dart:333`) so the read silently returns "no evidence"; relying on the parallel `restoreFromCloudForUser` to have opened the session is a RACE (`sync_service.dart:454` is fire-and-forget). Third instance of this misroute class (1bfeed → a3f6d9 → c2e9f4); a3f6d9 fixed the writers, this fixes the classifier that decides which writer runs. Kill-switches `disable_resolve_destination_unknown` / `disable_local_onboarded_evidence`. | `docs/diagnoses/2026-08-10-resolve-destination-failed-read-means-new-user-c2e9f4.md` + debugging skill bug-class 2.49 |
 | Consent is collected on the EMAIL path and nowhere else | `_privacyAccepted` (`sign_in_screen.dart:111`, default **false** since 2026-08-25 / diagnose `d8f2c1`) gates exactly ONE widget — the email CREATE ACCOUNT button (`:1023`). **`signInWithGoogle()` (`:365`) — the primary CTA — has no consent gate at all**, and phone OTP has the same gap dormant behind `_kEnablePhoneEnlist`. Google users converge instead on `ensureTermsConsentFallback` (`auth_session_bootstrapper.dart:294`, from b3f9e7), which auto-stamps `terms_accepted_at` from `created_at` with **no user gesture**. So the app runs two consent regimes: an explicit tick on the secondary route, a backdated timestamp on the primary one. Un-ticking the email box made the asymmetry sharper, not new. Do NOT "fix" this by copying the checkbox into the OAuth card without deciding where consent belongs in a redirect flow (before launch, or as a post-redirect step) — that is a UX decision, tracked as founder row 3.5 in `docs/operations/GO_LIVE_CHECKLIST.md`. | diagnose `d8f2c1` + B-pass on `launch-blockers-1a` (Finding 1) |
 | "Every post-auth path converges on `hydrateFromCloud`" is FALSE for Google OAuth | `hydrateFromCloud` has exactly one call site in the repo — inside `_ensureLocalUser`, reachable only from email/OTP (methods that get a synchronous `response.user`). `signInWithGoogle()` returns immediately after starting the redirect and never reaches it; the post-redirect re-entry (`RestoringScreen`) calls `resolveDestination` + `restoreFromCloudForUser`, neither of which is `hydrateFromCloud`. A fallback/heal wired only into `hydrateFromCloud` silently never runs for Google OAuth users. Verify with `grep -rn "hydrateFromCloud(" lib` (expect exactly 1 real call site) before assuming it's a universal hook; `RestoringScreen`'s `_goHome`/`_ensureOwnershipBeforeHome` (after `HiveUserSession.openForUser`) is the actual OAuth convergence point. Caught only by an independent plan-review round, not the B-pass (which reviews line-level bugs, not call-graph reachability) — see `feedback_plan_review_twice.md`. | diagnose b3f9e7 plan-review round 1 (`docs/plan-reviews/terms-accepted-fix.md`) |
+| Signup confirmation email never arrives, or its link opens a browser instead of the app | Two INDEPENDENT causes, easy to conflate. (1) No custom SMTP configured on the Supabase project (or a freshly-verified sending domain with zero reputation) → confirmation lands in spam or never sends; check `auth.users.confirmation_sent_at` vs `email_confirmed_at` and the sender's own transactional-email delivery log (Supabase's own `auth_logs` only proves GoTrue attempted the send, not that it was delivered). (2) The link opening a browser instead of the app is Android App Links needing THREE things simultaneously: `web/.well-known/assetlinks.json` live at `https://app.icanbefitter.com/.well-known/assetlinks.json` (not swallowed by `vercel.json`'s SPA catch-all rewrite — the rewrite's `source` must exclude `.well-known/`), the `autoVerify` intent-filter in `AndroidManifest.xml`, AND the Supabase "Confirm signup" email template pointing at `app.icanbefitter.com/confirm` instead of its own `*.supabase.co` domain (which we don't control and can't verify App Links against — Supabase Custom Domains, a paid add-on, is the only alternative). Verification only completes against a REAL signed build + the real live domain; it cannot be confirmed from `flutter test`. | `lib/features/auth/screens/confirm_email_screen.dart` |
 
 ## Tests pinning the rules here
 
@@ -135,6 +150,7 @@ read user-scoped Hive without going through `wrapUserScopedBox`.
 - `test/contracts/auth_provider_error_surfacing_test.dart`
 - `test/contracts/full_name_backfill_test.dart`
 - `test/contracts/terms_acceptance_behavioral_test.dart` — real Hive round-trip (throws before `HiveUserSession.openForUser`, persists after) + pure-logic `shouldStampFallbackTermsConsent` table.
+- `test/auth/confirm_email_screen_test.dart` — missing/empty `token_hash` never reaches `confirmEmail`; a present one calls it exactly once and doesn't re-fire on rebuild. Mutation-proven (removing the guard reddens both null/empty cases).
 
 ## See also
 

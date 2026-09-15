@@ -54,6 +54,24 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="io.supabase.icanbefitter" android:host="login-callback" />
             </intent-filter>
+            <!-- Android App Link for the signup-confirmation email — the
+                 "Confirm signup" Supabase email template links here instead of
+                 Supabase's own domain (which we don't control and can't verify
+                 App Links against). Scoped to /confirm only, not the whole
+                 domain, so /reset and /admin keep opening in the browser.
+                 Requires web/.well-known/assetlinks.json to be live at
+                 https://app.icanbefitter.com/.well-known/assetlinks.json for
+                 autoVerify to succeed. See lib/features/auth/screens/
+                 confirm_email_screen.dart + lib/core/router/app_router.dart. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="app.icanbefitter.com"
+                    android:pathPrefix="/confirm" />
+            </intent-filter>
         </activity>
         <activity
             android:name="com.yalantis.ucrop.UCropActivity"

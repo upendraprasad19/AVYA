@@ -374,7 +374,7 @@ class AuthNotifier extends Notifier<AuthState2> {
         state = state.copyWith(
           status: AuthStatus.error,
           errorMessage:
-              'Check your email for a confirmation link, then sign in.',
+              'Check your email (and spam folder) for a confirmation link, then sign in.',
         );
         return;
       }
@@ -618,6 +618,51 @@ class AuthNotifier extends Notifier<AuthState2> {
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: 'OTP verification failed. Please try again.',
+      );
+    }
+  }
+
+  /// Verifies a signup-confirmation link's token hash and, on success, signs
+  /// the user in — the counterpart to [verifyOtp] for the email-confirmation
+  /// flow reached via `/confirm` (see `confirm_email_screen.dart`).
+  ///
+  /// Uses `tokenHash`, not the default `{{ .ConfirmationURL }}` link, because
+  /// that flow requires the confirmation email to link at a domain we
+  /// control (`app.icanbefitter.com`, for Android App Links) rather than
+  /// Supabase's own domain. `verifyOTP` with a bare token hash is NOT
+  /// PKCE-bound — unlike the old password-recovery link (diagnose c9e2b7),
+  /// it can be completed on any device, which is exactly why the recovery
+  /// flow above also moved to a token/code shape instead of a raw link.
+  Future<void> confirmEmail(String tokenHash) async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    try {
+      final response = await _supabase.client.auth.verifyOTP(
+        tokenHash: tokenHash,
+        type: OtpType.signup,
+      );
+
+      if (response.user == null) {
+        state = state.copyWith(
+          status: AuthStatus.error,
+          errorMessage: 'This confirmation link is invalid or has expired.',
+        );
+        return;
+      }
+
+      await _ensureLocalUser(response.user!);
+      unawaited(ErrorTelemetry.logEvent('auth_signed_in',
+          message:
+              'method=email_confirm userId=${response.user!.id.substring(0, 8)}'));
+      state = state.copyWith(status: AuthStatus.success);
+    } on AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: e.message,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'This confirmation link is invalid or has expired.',
       );
     }
   }

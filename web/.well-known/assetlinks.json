@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.icanbefitter.icanbefitter",
+      "sha256_cert_fingerprints": [
+        "43:6E:AC:BB:5C:DC:D7:87:6F:D9:81:9F:F5:D3:7D:DE:97:BB:C7:BE:17:E1:CD:24:98:F2:7B:A4:D2:F3:22:D8",
+        "6D:42:3B:62:53:36:40:77:62:25:9B:BE:C2:4D:9F:35:3F:FE:0F:0B:56:98:99:A3:7B:83:66:19:31:08:9D:28"
+      ]
+    }
+  }
+]
