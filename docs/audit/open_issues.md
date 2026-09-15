@@ -4361,3 +4361,58 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   dependency sweep first (the 3 writers above, plus `telegram-admin-bot`'s
   unused `subscription_expires_at` select at `:406`) and its own migration.
 - **Identified**: 2026-09-15 · filed via mint_oi.sh from branch `oi-stale-subscription-status`
+
+## OI-204 — Full-rescan sync architecture (_syncExerciseLogs/_syncNutritionLogs) times out at 45s under growing history
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-16, `client_errors` telemetry for user `d7a67a37` (founder's
+  device) + live read of `lib/core/services/sync/sync_workout.dart:185-308` and
+  the `_syncNutritionLogs` sibling in `sync_nutrition.dart`
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `apk43-obs-fixes`
+- **How found**: investigating APK +43 founder observations 1 (snack save fails)
+  and 2 (AI coach stuck apologising). Neither symptom's own root cause is this
+  bug, but `client_errors` showed a 25+ hour sustained pathology overlapping
+  both windows: since 2026-09-14 ~23:06 IST, **424** `restore_op_done` events,
+  **34×** 45s `TimeoutException` on `sync_exercise_logs`, **22×** on the
+  generic `sync_service_restore_op_timeout` wrapper, **11×** on
+  `sync_nutrition_logs`, plus one DNS failure and one Supabase PGRST002
+  "schema cache… Service Unavailable" blip. Still ongoing as of the last query
+  (2026-09-16 00:11 IST).
+- **Root cause**: `syncWorkoutData()`/`syncNutritionData()` are the COALESCED,
+  per-write fire-and-forget sync entries (`lib/core/services/CLAUDE.md`'s
+  `SyncCoalescer` — fired after every `WorkoutWriteService.logExercise` /
+  `NutritionWriteService.logMeal`). `_syncExerciseLogs` (`sync_workout.dart:185`)
+  and `_syncNutritionLogs` iterate **every** Hive key with the domain prefix
+  (`exlog_*` / `nlog_*`) — the ENTIRE historical log, not just what changed
+  since the last sync — and `await`s an individual `.upsert()` network call
+  per row, sequentially, inside the loop (`sync_workout.dart:287-308` for the
+  summary row alone; per-set rows add more). No "unchanged since last sync"
+  skip exists anywhere in this path. As the founder's historical log count
+  grows, each coalesced pass takes proportionally longer; `restore_op_done`
+  telemetry shows individual passes at 14-40s even on success, and `_safeRestoreOp`'s
+  45s `restoreOpTimeout` ceiling (`sync_service.dart:2204`, added 2026-08-07 for
+  a DIFFERENT class — an unbounded wedge, diagnose b7e4c1) now gets tripped
+  routinely rather than only on a genuine network wedge.
+- **Consequence**: every workout set or meal logged fires another full
+  historical re-sync in the background; on this account it now frequently
+  exceeds 45s and aborts (silently, from the user's perspective — `_safeRestoreOp`
+  swallows the timeout and reports only to telemetry). Plausible (unconfirmed)
+  contributor to APK +43 observation 1 (snack save) via device resource
+  contention during the save window, though the actual observation-1 root
+  cause was traced to a separate telemetry gap (see the `apk43-obs-fixes`
+  branch's diagnose-docs for observations 1 and 2, shipped in this same batch).
+- **Fix shape (not decided)**: real fix is incremental/delta sync — track a
+  per-row "last synced" marker (timestamp, dirty-flag, or hash) so
+  `_syncExerciseLogs`/`_syncNutritionLogs` only push rows that changed since
+  their last successful sync, collapsing each coalesced pass from O(total
+  historical rows) to O(rows changed). This is a platform-blast-radius change
+  to `sync_fanout_workout_domain`/`sync_fanout_nutrition_domain` — a
+  SoT-registered, contract-tested concept (`test/contracts/sync_fanout_contract_test.dart`,
+  `docs/architecture/sync.md`) in the codebase's most heavily-guarded
+  subsystem (writer/reader drift is the single most recurrent bug class here).
+  Needs its own §4.11 gate-before-refactor + §4.12 ×2 plan review, not a
+  same-batch patch.
+- **Scope note**: founder explicitly scoped this out of the apk43-obs-fixes
+  batch (2026-09-16) — document + file now, design + implement as its own
+  dedicated follow-up.
