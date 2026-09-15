@@ -62,7 +62,20 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex) {
                 reps: currentExercise.reps,
                 weight: currentExercise.weight,
                 rest: currentExercise.rest,
-                loggingType: currentExercise.loggingType,
+                // Obs 6: use the SWAPPED-IN exercise's own logging type, not
+                // the outgoing one's. Pre-fix this always read
+                // currentExercise.loggingType (the OUTGOING exercise), so
+                // swapping a timed exercise for a weight/reps one kept
+                // showing the timed UI until removed and re-added.
+                // '' (never the outgoing exercise's type) when swapEx carries
+                // none — swapExercise() below runs this through
+                // LoggingTypeResolver.resolve(), which only trusts a
+                // non-EMPTY direct value and otherwise looks the NEW
+                // exercise up by name in exerciseBox/customBox. Falling back
+                // to the outgoing type here would short-circuit that
+                // by-name lookup and silently reintroduce this same bug for
+                // any picker row missing logging_type.
+                loggingType: swapEx.loggingType ?? '',
                 category: currentExercise.category,
                 equipmentNeeded: currentExercise.equipmentNeeded,
                 // W3.3 (Batch 11-A): the swapped-IN exercise's library id (from
