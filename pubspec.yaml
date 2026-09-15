@@ -94,7 +94,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   hive: ^2.2.3
-  build_runner: ^2.13.1
+  build_runner: ^2.15.1
   riverpod_generator: ^4.0.3
   integration_test:
     sdk: flutter
