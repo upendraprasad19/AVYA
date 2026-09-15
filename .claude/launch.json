@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "flutter-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8080", "--directory", "build/web"],
+      "port": 8080
+    },
+    {
+      "name": "flutter-web-debug",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run", "-d", "web-server", "--web-port", "8082",
+        "--dart-define-from-file=.env", "-t", "lib/main.dart"
+      ],
+      "port": 8082
+    },
+    {
+      "name": "u7-mockup",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8181", "--directory", ".preview"],
+      "port": 8181
+    }
+  ]
+}

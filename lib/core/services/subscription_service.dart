@@ -1,0 +1,1228 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
+
+/// Severity of the Home subscription-expiry banner (diagnose 2026-06-06).
+/// `expiringSoon` = still PRO with < 7 days left; `lapsed` = PRO has expired and
+/// not yet renewed. Decided by the pure [SubscriptionService.expiryBannerSeverity].
+enum ExpiryBannerSeverity { none, expiringSoon, lapsed }
+
+/// Manages PRO subscription state.
+///
+/// Reads/writes Hive configBox for instant local checks (offline-first).
+/// Refreshes from Supabase on app launch when online.
+class SubscriptionService {
+  SubscriptionService._() {
+    _registerLifecycle();
+  }
+  static final SubscriptionService _instance = SubscriptionService._();
+
+  /// Tech-debt audit 2026-05-20 / A7 (B5 D9-D10) — prefer
+  /// `ref.read(subscriptionServiceProvider)` over `.instance`. The
+  /// singleton path is preserved for non-Riverpod contexts (main.dart
+  /// bootstrap, static helpers); the Provider exposes the same
+  /// instance with `ref.listen(authUserIdTokenProvider, …)` wiring so
+  /// the SingletonLifecycleRegistry reset fires through Riverpod's
+  /// lifecycle. Full removal lands in a follow-up batch (CLAUDE.md §4.11).
+  @Deprecated(
+      'Use ref.read(subscriptionServiceProvider) — singleton path will be removed after full migration')
+  static SubscriptionService get instance => _instance;
+
+  final HiveService _hive = HiveService.instance;
+
+  /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
+  /// hook. The instance carries no mutable in-memory cache (every read
+  /// goes through Hive/MigratedKey), but the static [onStateChanged]
+  /// callback fires the Riverpod invalidation chain. On a user swap we
+  /// must re-fire it so widgets re-read the new user's PRO state from
+  /// the now-flipped namespaced userBox — otherwise a previously-PRO
+  /// account's pill can linger for one frame on the new account.
+  void _registerLifecycle() {
+    SingletonLifecycleRegistry.register('SubscriptionService', _onUserChanged);
+  }
+
+  /// A7 — invoked from [SingletonLifecycleRegistry.notifyUserChanged].
+  /// All entitlement state lives in MigratedKey (per-user userBox), so
+  /// there is no in-memory cache to drop. We only need to re-fire the
+  /// state-changed hook so consumers re-render with the new user.
+  void _onUserChanged() {
+    // OI-44 Unit 6 — account swap is one of the two moments local entitlement
+    // state can BECOME cross-account (the other is boot, wired in
+    // splash_screen). Pre-split this was covered incidentally because every
+    // isPro() read re-ran the guard, including the one in
+    // SubscriptionInfoNotifier.build(). Build methods now use the pure
+    // proStateSnapshot(), so the guard is invoked explicitly here instead.
+    // Runs BEFORE the invalidation so consumers re-read post-enforcement state.
+    try {
+      evaluateEntitlement();
+    } catch (_) {
+      // Never let enforcement break the user-swap hook.
+    }
+    try {
+      onStateChanged?.call();
+    } catch (_) {
+      // Hook intentionally swallows — same pattern as _downgradeLocally.
+    }
+  }
+
+  // ── Pricing (sourced from AppConstants) ─────────────────────
+  static int get monthlyPriceInr => AppConstants.monthlyPriceInr;
+  static int get yearlyPriceInr => AppConstants.yearlyPriceInr;
+
+  // ── PRO Feature Keys (canonical list from AppConstants) ─────
+  /// All feature keys that require a PRO subscription.
+  /// Usage-gated features (scan_meal, cart_auditor, ai_text_log)
+  /// are included here — the usage counter service handles limits.
+  ///
+  /// audit-2026-05-16 E.8 — `featureActiveWorkoutMode`, `featureVoiceNotes`,
+  /// `featureDietPlanPdf` removed entirely. Active workout is free since
+  /// Test #2 Q6, voice is free since Test #9 F13, diet-plan PDF is free per
+  /// docs/architecture/business-rules.md. The constants themselves are also deleted from
+  /// AppConstants in this batch.
+  /// `featurePhotoAnalysis` added — was a documented PRO feature per
+  /// docs/architecture/business-rules.md with no gate callsite anywhere
+  /// (audit F8.1 sub-bug); now in the list.
+  static const List<String> allProFeatures = [
+    AppConstants.featurePhases2To12,
+    AppConstants.featureAiCoachUnlimited,
+    AppConstants.featureWeeklyAiReport,
+    AppConstants.featureProgressPhotos,
+    AppConstants.featureScanMealPro,
+    AppConstants.featureCartAuditorPro,
+    AppConstants.featureAiTextLogPro,
+    AppConstants.featureMorningAlertPro,
+    AppConstants.featurePredictionMonthly,
+    AppConstants.featurePhotoAnalysis,
+    AppConstants.featureAdaptiveWorkouts,
+  ];
+
+  // ── Hive Keys ───────────────────────────────────────────────
+
+  static const String _isProKey = 'isPro';
+  static const String _expiresAtKey = 'expiresAt';
+  static const String _planKey = 'plan';
+  static const String _lastVerifiedKey = 'lastVerifiedAt';
+
+  /// Stamped when PRO lapses due to EXPIRY (now past `expiresAt`), so the Home
+  /// expiry banner can show "your PRO expired" even after [_downgradeLocally]
+  /// wipes `expiresAt`. **User-scoped**: registered in
+  /// `UserConfigMigrator.userScopedKeys` AND written only with an open session
+  /// (see [isPro]) so it never seeds the shared `configBox` — without both, a
+  /// configBox fall-through would leak User A's lapsed banner to User B
+  /// (review P0, 2026-06-06). Cleared on renewal ([writeSubscriptionState]).
+  /// NOT stamped on cross-account/sign-out wipes — only the genuine-expiry
+  /// branch in [isPro] sets it.
+  static const String _proLapsedAtKey = 'pro_lapsed_at';
+
+  /// Debug-only (year-sim harness). When true, [refreshFromSupabase] skips its
+  /// server query + downgrade so a dev-granted PRO state survives a simulation.
+  /// The sim user has no real `subscriptions` row, so an un-paused refresh would
+  /// `_downgradeLocally()` mid-run and silently gate off phase generation
+  /// (stuck-at-Phase-1 → rank never climbs). Mirrors
+  /// `SyncService.pausedForSimulation`. Set/cleared by `SimulationService.run`
+  /// and the `/dev` autorun; always false in normal app flow + release.
+  static bool pausedForSimulation = false;
+
+  /// APK Test #12 / Task C-1 + H-41 (audit-2026-05-11) — payment
+  /// grace window key. While a payment is in-flight,
+  /// [verifyFromServer] will NOT downgrade the user even if the server
+  /// reports `is_pro: false` (the webhook hasn't fired yet). Set by
+  /// [RazorpayService] on payment success; cleared when the webhook
+  /// lands OR `verify-payment` confirms a final verdict.
+  ///
+  /// H-41 — pre-fix this was a pure ISO-timestamp `until` value.
+  /// Time-based windows have two pathologies: (a) a slow webhook past
+  /// 10 min flips grace to false even though we're still legitimately
+  /// awaiting verdict; (b) a fast confirmation in 5s leaves the
+  /// window open for another 9:55, masking unrelated downgrade events
+  /// during that window.
+  ///
+  /// Now stores `{order_id, started_at_iso}`. Event-based clear from
+  /// [clearPaymentInFlight] (webhook landed / final verdict). The
+  /// 10-min ceiling is preserved ONLY as a fallback safety cap, in
+  /// case the clear path is missed.
+  static const String _paymentInFlightOrderKey = 'paymentInFlightOrder';
+
+  /// Legacy key — read for back-compat one cold start after upgrade,
+  /// then never written again. Removed in a future cleanup batch.
+  static const String _paymentInFlightUntilKey = 'paymentInFlightUntil';
+
+  /// Hard ceiling — even with the event-based clear path, never honour
+  /// a stale grace window past this duration. Protects against the
+  /// clear path being missed (network drop after webhook, app killed
+  /// mid-verify, etc.).
+  static const Duration _paymentGraceWindow = Duration(minutes: 10);
+
+  /// Server-side verification cache TTL (5 minutes).
+  static const Duration _verifyCacheTtl = Duration(minutes: 5);
+
+  /// Returns true if a payment is currently mid-confirmation. While
+  /// true, downgrade decisions in [verifyFromServer] are suppressed.
+  ///
+  /// H-41 evaluation logic:
+  ///   1. If a `paymentInFlightOrder` record exists AND `started_at`
+  ///      is within the 10-min ceiling → in flight.
+  ///   2. Else if the legacy `paymentInFlightUntil` timestamp exists
+  ///      and is still in the future (cold-start upgrade) → in flight.
+  ///   3. Otherwise → not in flight.
+  bool get isPaymentInFlight {
+    final rec = MigratedKey.read<dynamic>(_paymentInFlightOrderKey);
+    if (rec is Map) {
+      final startedAt =
+          DateTime.tryParse((rec['started_at'] ?? '').toString());
+      if (startedAt != null) {
+        return DateTime.now().difference(startedAt) < _paymentGraceWindow;
+      }
+    }
+    // Legacy fallback — read once per device until first event-based
+    // write supersedes it.
+    final legacy = MigratedKey.read<dynamic>(_paymentInFlightUntilKey);
+    if (legacy != null) {
+      final until = DateTime.tryParse(legacy.toString());
+      if (until != null) return DateTime.now().isBefore(until);
+    }
+    return false;
+  }
+
+  /// Order id of the in-flight payment (event-based handle for the
+  /// webhook + verify-payment confirmation paths to clear by). Returns
+  /// null when no payment is in flight.
+  String? get paymentInFlightOrderId {
+    final rec = MigratedKey.read<dynamic>(_paymentInFlightOrderKey);
+    if (rec is Map) {
+      final id = rec['order_id'];
+      return id is String && id.isNotEmpty ? id : null;
+    }
+    return null;
+  }
+
+  /// Marks a payment as in-flight by recording its Razorpay order_id +
+  /// the start timestamp. Public so [RazorpayService] can call it on
+  /// payment success. The 10-min ceiling enforced by [isPaymentInFlight]
+  /// is a fallback only — the canonical clear path is event-based.
+  Future<void> markPaymentInFlight({String? orderId}) async {
+    final startedAt = DateTime.now().toIso8601String();
+    await MigratedKey.write(_paymentInFlightOrderKey, <String, dynamic>{
+      'order_id': orderId ?? '',
+      'started_at': startedAt,
+    });
+    // Clear the legacy time-based key in the same write — if it
+    // happens to be present from a pre-upgrade install, the event-
+    // based path now owns the grace window.
+    try {
+      await MigratedKey.delete(_paymentInFlightUntilKey);
+    } catch (_) {}
+  }
+
+  /// Clears the payment grace window. Called from:
+  ///   - [RazorpayService] webhook-confirmed path (preferred clear)
+  ///   - [RazorpayService.verifyPayment] final-verdict path (success
+  ///     OR explicit final failure)
+  ///   - Defensive on subscription-state writes after server confirms.
+  ///
+  /// Idempotent — safe to call when no payment is in flight.
+  Future<void> clearPaymentInFlight() async {
+    await MigratedKey.delete(_paymentInFlightOrderKey);
+    await MigratedKey.delete(_paymentInFlightUntilKey);
+  }
+
+  /// APK Test #12.2 / cold-start reactivity hook.
+  ///
+  /// Wired from `app.dart` initState — invokes a Riverpod invalidation
+  /// of `subscriptionInfoProvider` (+ `messageLimitProvider`) so widgets
+  /// watching these providers rebuild after `writeSubscriptionState` /
+  /// `_downgradeLocally` changes Hive.
+  ///
+  /// Pre-fix: `refreshFromSupabase` is unawaited on splash. It
+  /// successfully wrote `isPro=true` to local Hive, but no provider
+  /// invalidation fired. The UI kept showing the stale `isPro=false`
+  /// from when subscriptionInfoProvider was first built. Founder
+  /// observation 2026-05-06: "I don't see PRO pill on profile, may be
+  /// reading from local phone data." Yes — local phone data was
+  /// correct (post-refresh) but Riverpod cached the stale snapshot.
+  static void Function()? onStateChanged;
+
+  /// e4a7c9 — fires when entitlement LAPSES, so PRO-only resources can be torn
+  /// down. Distinct from [onStateChanged], which is "state changed, re-render";
+  /// this one is "PRO ended, release what PRO owned".
+  ///
+  /// A separate hook rather than a direct `SyncService` call because
+  /// `sync_service.dart` already imports THIS file — calling back would create
+  /// an import cycle and, worse, would touch `SyncService.instance` (a lazy
+  /// singleton whose constructor registers a lifecycle callback) from inside an
+  /// entitlement write. `app.dart` already imports both and is the natural
+  /// wiring point.
+  ///
+  /// FOLLOWS THE THREE-HOOK CONVENTION EXACTLY — both halves are load-bearing
+  /// and each has been got wrong once in this repo:
+  ///   * installed in `app.dart` initState beside onStateChanged / the
+  ///     NutritionWriteService + RankService hooks, and CLEARED in its
+  ///     dispose() beside them. RankService was installed and never cleared
+  ///     (OI-51 / e7b3c5); set and clear must stay symmetric.
+  ///   * NEVER nulled in `AuthNotifier.unbindSessionIdentity` — initState runs
+  ///     once per process, so nulling on sign-out kills it permanently for
+  ///     every later sign-in (auth_provider.dart:562-575).
+  static void Function()? onDowngrade;
+
+  /// Atomically writes all subscription keys in a single Hive batch.
+  ///
+  /// Hive's [Box.putAll] writes all entries in one I/O operation,
+  /// preventing inconsistent state if the app crashes mid-write.
+  ///
+  /// Public so [RazorpayService] can use the same atomic pattern.
+  Future<void> writeSubscriptionState({
+    required bool isPro,
+    required String expiresAt,
+    required String plan,
+  }) async {
+    // Phase 2 Unit C — capture old PRO state BEFORE the write so we
+    // can detect a free→PRO TRANSITION below. If the box is not yet
+    // open (very early boot), the snapshot returns false safely.
+    //
+    // OI-44 Unit 6 — deliberately the PURE read, not isPro(). This is a
+    // comparison ("was PRO before?"), not an entitlement decision, and running
+    // the enforcement here would let _downgradeLocally() fire (and invalidate
+    // providers) in the middle of a write that is about to overwrite exactly
+    // the keys it wipes. Same free→PRO transition is detected either way.
+    final oldIsPro = proStateSnapshot();
+
+    // Test #10.1 — write via MigratedKey (per-user userBox post-migration).
+    try {
+      await MigratedKey.write(_isProKey, isPro);
+      await MigratedKey.write(_expiresAtKey, expiresAt);
+      await MigratedKey.write(_planKey, plan);
+      // Renewal/activation clears the lapsed marker so the Home expiry banner
+      // disappears once PRO is active again (diagnose 2026-06-06).
+      await MigratedKey.delete(_proLapsedAtKey);
+      // APK Test #12.8 — fire success event so we can correlate UI
+      // mismatch reports with the actual write timestamp.
+      unawaited(ErrorTelemetry.logEvent(
+        'subscription_state_written',
+        message: 'isPro=$isPro plan=$plan',
+      ));
+    } catch (e, st) {
+      // APK Test #12.8 — surface MigratedKey write failures. These were
+      // previously invisible: a failed write left the UI/UI-state desync
+      // and produced "PRO pill stuck on GO PRO after payment" symptoms.
+      unawaited(ErrorTelemetry.recordNonFatal(
+        e,
+        st,
+        reason: 'subscription_write_failure',
+        extra: {'isPro': isPro.toString(), 'plan': plan},
+      ));
+      rethrow;
+    }
+    // APK Test #12.2 — fire reactivity hook so any widgets watching
+    // subscriptionInfoProvider rebuild with the new state.
+    try {
+      onStateChanged?.call();
+    } catch (_) {}
+
+    // Phase 2 Unit C — first-PRO instant-3 freeze grant.
+    // Fire ONLY on a genuine free→PRO transition (oldIsPro==false,
+    // isPro==true) AND only when the session box is open (user is
+    // the current owner). This prevents phantom-grants on:
+    //   - Every boot-refresh of an already-PRO user (oldIsPro==true).
+    //   - Renewals (still PRO, no transition).
+    //   - Very-early-boot calls before openForUser (session==null,
+    //     guard returns false).
+    // The migration-095 backfill and the flag's own idempotency check
+    // inside grantFirstProFreezes() are defence-in-depth layers.
+    if (!oldIsPro && isPro) {
+      final sessionOwned =
+          HiveUserSession.currentOwnerFullId != null;
+      if (sessionOwned) {
+        StreakProgressService.instance.grantFirstProFreezes();
+      }
+    }
+  }
+
+  // ── Core API ────────────────────────────────────────────────
+
+  /// Returns `true` if the user has an active PRO subscription.
+  ///
+  /// Checks Hive configBox for the `isPro` flag and verifies the local
+  /// expiry date has not passed. If expired, immediately downgrades.
+  ///
+  /// Also runs a "who does this Hive state belong to?" check: if the
+  /// profile stored in Hive has an `id` that doesn't match the current
+  /// Supabase session's user id, the Hive cache is from another
+  /// account (Android Auto Backup restore, dev-build Hive copy, manual
+  /// tamper). Force-downgrade and return free. This is the defensive
+  /// layer that catches leaks the startup id-mismatch guard misses.
+  bool isPro() {
+    // OI-44 Unit 6 — DECISION entry point. Behaviour is byte-identical to the
+    // pre-split version: enforce the entitlement invariants (which may
+    // downgrade), then report the resulting state. Every one of the 30+
+    // decision callsites keeps the defense-in-depth it has today.
+    //
+    // What CHANGED is who else calls this. Riverpod BUILD methods and the
+    // re-entrant reads inside verifyFromServer() now use [proStateSnapshot]
+    // instead, because a mutation reached from a provider's build() made that
+    // provider invalidate ITSELF (profile_provider.dart SubscriptionInfo
+    // build → isPro → _downgradeLocally → onStateChanged → app.dart
+    // ref.invalidate(subscriptionInfoProvider)).
+    if (!_pureProReadEnabled) {
+      // Kill-switch closed (§4.6): verbatim pre-split path.
+      return _legacyIsProWithInlineEnforcement();
+    }
+    _enforceEntitlementInvariants();
+    return proStateSnapshot();
+  }
+
+  /// PURE read of local PRO state. Zero Hive writes, zero telemetry.
+  ///
+  /// Answers "what does local state currently SAY?" — it does not enforce
+  /// anything. Use this from Riverpod build methods and from any code path
+  /// already inside an entitlement evaluation (re-running the guard there is
+  /// redundant re-entrancy). Use [isPro] for an actual entitlement DECISION.
+  ///
+  /// Mirrors the read half of [isPro] exactly, including the release-build
+  /// tamper rule: `isPro` flag set with no expiry is only honoured in debug.
+  bool proStateSnapshot() {
+    final pro = MigratedKey.readWithDefault<bool>(_isProKey, false);
+    if (!pro) return false;
+
+    if (_crossAccountMismatch()) return false;
+
+    final expiresAtRaw = MigratedKey.read<dynamic>(_expiresAtKey);
+    if (expiresAtRaw == null) {
+      // isPro flag is set but no expiry — only treat as PRO in debug builds.
+      // In release builds, this is a tampered state (rooted device attack).
+      return kDebugMode;
+    }
+
+    final expiresAt = DateTime.tryParse(expiresAtRaw.toString());
+    if (expiresAt == null || DateTime.now().isAfter(expiresAt)) return false;
+
+    return true;
+  }
+
+  /// True when Hive holds a profile belonging to a DIFFERENT account than the
+  /// current Supabase session — i.e. the local entitlement cache is not ours.
+  ///
+  /// Pure. Shared by [proStateSnapshot] (which just reports free) and
+  /// [_enforceEntitlementInvariants] (which force-downgrades + logs), so the
+  /// two can never disagree about what "cross-account" means.
+  bool _crossAccountMismatch() {
+    try {
+      final profile = _hive.userBox.get('profile');
+      final localId = (profile is Map) ? profile['id'] as String? : null;
+      final sessionId = SupabaseService.instance.currentUser?.id;
+      return localId != null && sessionId != null && localId != sessionId;
+    } catch (_) {
+      // Box not open / Supabase not initialized — cannot prove a mismatch, so
+      // don't claim one. The expiry check still applies, and the startup guard
+      // (hive_user_session.dart) covers the not-yet-initialized case.
+      return false;
+    }
+  }
+
+  /// Enforce the two entitlement invariants, downgrading if either is broken.
+  ///
+  /// This is the MUTATING half of the old `isPro()`. Both branches are the
+  /// pre-split code verbatim — no logic was changed in the split, only its
+  /// location and its name.
+  ///
+  /// Public entry point is [evaluateEntitlement]; [isPro] calls it inline so
+  /// every entitlement decision keeps today's defense-in-depth.
+  void _enforceEntitlementInvariants() {
+    if (!MigratedKey.readWithDefault<bool>(_isProKey, false)) return;
+
+    // Defense-in-depth: PRO + Hive-profile.id ≠ session.id means the
+    // Hive cache is from a different account. Don't trust any of it.
+    if (_crossAccountMismatch()) {
+      // APK Test #12.8 — surface cross-account guard fires. These
+      // indicate Hive state from a different account (Auto Backup
+      // restore, dev-build Hive copy, manual tamper) and force-
+      // downgrade. Previously invisible.
+      try {
+        final profile = _hive.userBox.get('profile');
+        final localId = (profile is Map) ? profile['id'] as String? : null;
+        final sessionId = SupabaseService.instance.currentUser?.id;
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent(
+          'pro_state_force_downgrade_cross_account',
+          message:
+              'localId=${(localId?.length ?? 0) >= 8 ? localId!.substring(0, 8) : localId} '
+              'sessionId=${(sessionId?.length ?? 0) >= 8 ? sessionId!.substring(0, 8) : sessionId}',
+        );
+      } catch (_) {
+        // Telemetry must never break the guard.
+      }
+      _downgradeLocally();
+      return;
+    }
+
+    final expiresAtRaw = MigratedKey.read<dynamic>(_expiresAtKey);
+    if (expiresAtRaw == null) return; // debug-only tolerance, see snapshot
+
+    final expiresAt = DateTime.tryParse(expiresAtRaw.toString());
+    if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {
+      // Expired — downgrade immediately (no grace period). Stamp pro_lapsed_at
+      // (once) BEFORE the wipe so the Home expiry banner can surface "your PRO
+      // expired" even though _downgradeLocally clears expiresAt. Only this
+      // genuine-expiry path stamps it — the cross-account wipe above does not
+      // (diagnose 2026-06-06).
+      // Session-gated so the marker is written to the per-user userBox, NEVER
+      // the shared configBox (cross-account leak vector — review P0 2026-06-06).
+      if (expiresAt != null &&
+          HiveUserSession.currentOwnerFullId != null &&
+          MigratedKey.read<dynamic>(_proLapsedAtKey) == null) {
+        unawaited(
+            MigratedKey.write(_proLapsedAtKey, expiresAt.toIso8601String()));
+      }
+      _downgradeLocally();
+    }
+  }
+
+  /// Explicitly re-evaluate local entitlement, downgrading if it no longer
+  /// holds. Named so a reader can see the write coming.
+  ///
+  /// **Why this exists (OI-44 Unit 6).** Pre-split, the cross-account guard
+  /// fired as a side effect of every `isPro()` read — including the one in
+  /// `SubscriptionInfoNotifier.build()`, which is what renders the PRO pill.
+  /// Routing build methods to the pure [proStateSnapshot] removes that
+  /// incidental coverage, and `refreshFromSupabase()` does NOT replace it: it
+  /// decides from the SERVER response and never compares Hive `profile.id`
+  /// against the session. So this is called at the two moments local state can
+  /// actually BECOME cross-account:
+  ///   1. boot — `splash_screen`, beside the existing `refreshFromSupabase()`
+  ///      (covers an Android Auto Backup restore of another account's Hive);
+  ///   2. account swap — [_onUserChanged], fired by
+  ///      `SingletonLifecycleRegistry.notifyUserChanged()`.
+  /// That is strictly better than the old shape, which re-ran the guard on
+  /// every render and still only ever caught these same two transitions.
+  void evaluateEntitlement() {
+    // Deliberately NOT gated on _pureProReadEnabled (round-1 P1-4).
+    //
+    // The first version stood down when the kill-switch was closed, reasoning
+    // that the legacy inline path would enforce instead. That was wrong and
+    // produced a state WEAKER THAN BOTH: the pure-read callsites
+    // (profile_provider, home_provider, isExpiringSoon, isLapsed,
+    // writeSubscriptionState, the 8 in verifyFromServer) are NOT behind the
+    // flag, so with the switch closed the build methods stayed pure — losing
+    // the incidental guard the pre-split code had — while these explicit calls
+    // went inert too. An Auto-Backup cross-account restore would then have been
+    // caught by nothing until the user tapped a gated feature.
+    //
+    // Enforcing unconditionally is safe in both configurations: with the switch
+    // open this is the primary coverage; with it closed it merely runs the same
+    // guard slightly earlier than the inline path would have. There is no
+    // configuration in which enforcing here is worse.
+    //
+    // Session guard (round-1 P3-8): _onUserChanged also fires on sign-out and
+    // account deletion, AFTER the per-user boxes close. MigratedKey then falls
+    // back to the SHARED configBox, so enforcing with no owner could delete
+    // shared-box keys — the same box whose cross-account leakage was a P0 on
+    // 2026-06-06. With no session there is no entitlement to evaluate anyway.
+    if (HiveUserSession.currentOwnerFullId == null) return;
+    _enforceEntitlementInvariants();
+  }
+
+  /// Boot variant of [evaluateEntitlement] — opens the session FIRST.
+  ///
+  /// **Round-2 P0.** The first version called the synchronous
+  /// [evaluateEntitlement] directly from `splash_screen`, which made boot
+  /// enforcement a permanent no-op: at cold start no `openForUser` has run yet,
+  /// so `currentOwnerFullId` is null and the guard returned immediately. The
+  /// unit then claimed boot coverage it did not have — worse than not claiming
+  /// it, because the build-method readers had already been made pure.
+  ///
+  /// `splash_screen.dart:127-134` documents this exact trap for the guard that
+  /// used to live there, and EVERY sibling initializer fired from that same
+  /// point opens the session first: `refreshFromSupabase` (:778),
+  /// `RankService.evaluateAndPromote` (`rank_service.dart:83`),
+  /// `scheduled_workouts_resync_migrator` (:60). This one now does too.
+  ///
+  /// Kept separate from [evaluateEntitlement] rather than folded into it: the
+  /// account-swap caller (`_onUserChanged`) must NOT re-open boxes, because it
+  /// also fires on sign-out and account deletion while those boxes are being
+  /// torn down.
+  Future<void> evaluateEntitlementAtBoot() async {
+    try {
+      await HiveUserSession.ensureOpenedForCurrentSession();
+    } catch (_) {
+      // Not authenticated / nothing to open — the guard below no-ops anyway.
+    }
+    evaluateEntitlement();
+  }
+
+  /// §4.6 kill-switch for the Unit 6 CQRS split. Default ON (new path).
+  ///
+  /// Set `configBox['disable_cqrs_pure_pro_read'] = true` to restore the
+  /// verbatim pre-split behaviour **of `isPro()` itself** — enforcement inline
+  /// on every call, via [_legacyIsProWithInlineEnforcement].
+  ///
+  /// **Scope, stated precisely (round-1 P1-4).** It does NOT revert the whole
+  /// unit, and must not be read as doing so. Callsites that were moved to
+  /// [proStateSnapshot] — the provider builds, `isExpiringSoon`, `isLapsed`,
+  /// `writeSubscriptionState`, and the re-entrant reads in
+  /// [verifyFromServer] — stay pure in both configurations. What the switch
+  /// buys is the old `isPro()` semantics for the 30+ DECISION callsites, which
+  /// is where a regression would actually bite. [evaluateEntitlement] is
+  /// deliberately outside the switch so that closing it can never leave the
+  /// cross-account guard with LESS coverage than either the old or the new
+  /// path — see the comment there.
+  bool get _pureProReadEnabled {
+    try {
+      return _hive.configBox.get('disable_cqrs_pure_pro_read') != true;
+    } catch (_) {
+      return true; // box not open — new path is the default
+    }
+  }
+
+  /// The pre-split `isPro()`, preserved verbatim for the kill-switch (§4.6.2:
+  /// "old path preserved verbatim, reachable when gate closed").
+  bool _legacyIsProWithInlineEnforcement() {
+    final pro = MigratedKey.readWithDefault<bool>(_isProKey, false);
+    if (!pro) return false;
+
+    try {
+      final profile = _hive.userBox.get('profile');
+      final localId = (profile is Map) ? profile['id'] as String? : null;
+      final sessionId = SupabaseService.instance.currentUser?.id;
+      if (localId != null && sessionId != null && localId != sessionId) {
+        // ignore: discarded_futures
+        ErrorTelemetry.logEvent(
+          'pro_state_force_downgrade_cross_account',
+          message:
+              'localId=${localId.length >= 8 ? localId.substring(0, 8) : localId} '
+              'sessionId=${sessionId.length >= 8 ? sessionId.substring(0, 8) : sessionId}',
+        );
+        _downgradeLocally();
+        return false;
+      }
+    } catch (_) {
+      // Box not open / Supabase not initialized — fall through to expiry.
+    }
+
+    final expiresAtRaw = MigratedKey.read<dynamic>(_expiresAtKey);
+    if (expiresAtRaw == null) {
+      return kDebugMode;
+    }
+
+    final expiresAt = DateTime.tryParse(expiresAtRaw.toString());
+    if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {
+      if (expiresAt != null &&
+          HiveUserSession.currentOwnerFullId != null &&
+          MigratedKey.read<dynamic>(_proLapsedAtKey) == null) {
+        unawaited(
+            MigratedKey.write(_proLapsedAtKey, expiresAt.toIso8601String()));
+      }
+      _downgradeLocally();
+      return false;
+    }
+
+    return true;
+  }
+
+  /// High-value features that trigger server-side verification.
+  /// Prevents Hive-spoofing on rooted devices for premium features.
+  ///
+  /// Progress photos are included because they involve Supabase Storage
+  /// writes to a user-scoped bucket — granting access via a spoofed
+  /// local flag would let a free user persist private photos onto
+  /// infrastructure we pay for.
+  ///
+  /// F34 (2026-06-07) — residual risk note. The AI-cost features
+  /// (scan_meal / cart_auditor / ai_text_log) are NOT in this set, so their
+  /// gate trusts the local isPro() flag, which a rooted device can spoof. That
+  /// is intentionally tolerated because their real spend cap is enforced
+  /// SERVER-SIDE inside Postgres, not by this client gate: the
+  /// `trg_food_text_rate_limit` trigger (function
+  /// `enforce_food_text_daily_limit`, live definition migration 127 — created by
+  /// 026 — on `ai_coach_interactions`)
+  /// runs BEFORE INSERT in the same transaction as the row, re-derives PRO
+  /// status from the `subscriptions` table (status='active' AND end_date>now()),
+  /// and raises SQLSTATE P0001 once the per-day cap is hit (free 10 / PRO 200) —
+  /// which `ai-proxy` maps to a 429. A spoofed client isPro() therefore cannot
+  /// exceed the paid Gemini quota; the worst it buys is the free-tier daily cap,
+  /// which the server grants anyway. Adding these to server-verification here
+  /// would only add a redundant round-trip per call, not close a real hole.
+  static const Set<String> _highValueFeatures = {
+    AppConstants.featurePhases2To12,
+    AppConstants.featureAiCoachUnlimited,
+    AppConstants.featureProgressPhotos,
+  };
+
+  /// Invoke a gate callback, reporting rather than swallowing a throw.
+  ///
+  /// Round-1 P3-9: `gate()` used to be a synchronous `void`, so a throw from
+  /// `onFree()`/`onPro()` on the LOCAL (non-server-verified) path propagated to
+  /// the caller. Now that the method is `async`, that same throw is captured
+  /// into the returned Future — and 6 of the 10 callsites sit in synchronous
+  /// closures that cannot await it, so it would vanish. The high-value path
+  /// already routed its callbacks through `.catchError` for the same reason
+  /// (diagnose 7b3eaf). This makes the local path symmetric: the exception is
+  /// recorded, not silently dropped (`feedback_observability_silent_drop`).
+  void _runCallback(VoidCallback cb, String feature, String reason) {
+    try {
+      cb();
+    } catch (e, st) {
+      // Reported ONCE, with feature context, and NOT rethrown (round-2 P3-F4).
+      // Rethrowing looked safer but wasn't: 6 of the 10 callsites are
+      // synchronous closures that cannot await the returned Future, so the
+      // rethrow landed in `runZonedGuarded` (main.dart:120) as a SECOND,
+      // context-free report of the same error. One labelled record beats a
+      // duplicate plus an anonymous one. The high-value branch already
+      // swallows-and-reports the same way (diagnose 7b3eaf).
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'subscription_gate_callback_threw',
+          extra: {'feature': feature, 'exit_reason': reason}));
+    }
+  }
+
+  /// Legacy alias for [gateAndVerify], kept so no callsite breaks mid-migration
+  /// (same shim shape as `currentStreak()`'s C-14 split).
+  ///
+  /// Prefer [gateAndVerify] — the name should say that this may perform a
+  /// server round-trip AND write local entitlement state.
+  @Deprecated('OI-44 Unit 6: use gateAndVerify() — the name must admit the '
+      'server round-trip and the possible local downgrade')
+  Future<void> gate(
+    String feature, {
+    required VoidCallback onPro,
+    required VoidCallback onFree,
+  }) =>
+      gateAndVerify(feature, onPro: onPro, onFree: onFree);
+
+  /// The ONLY way to gate PRO features in the app.
+  ///
+  /// ```dart
+  /// await subscriptionService.gateAndVerify(
+  ///   AppConstants.featureScanMealPro,
+  ///   onPro: () => scanMeal(),
+  ///   onFree: () => showPaywallSheet(context, feature: 'Scan Meal'),
+  /// );
+  /// ```
+  ///
+  /// Phase 1 is ALWAYS free — never gate it.
+  /// High-value features trigger server-side verification (cached 5 min).
+  ///
+  /// **Returns a Future (OI-44 Unit 6).** The name is the smaller half of that
+  /// finding; the real defect was that this was `void` while dispatching an
+  /// async verify whose callbacks decide the outcome — so **no caller could
+  /// await the decision**, and when the chain died silently the taps just
+  /// vanished (diagnose 7b3eaf, "GENERATE NEXT PHASE does nothing"). The
+  /// timeout + catchError added then stopped the disappearance; returning the
+  /// Future is what finally makes the contract expressible, and lets a test
+  /// assert that exactly one of onPro/onFree ran.
+  ///
+  /// Observably identical for a caller that ignores the Future: an async
+  /// function returns at its first suspension, so onPro/onFree still fire at
+  /// exactly the same moment they did before.
+  Future<void> gateAndVerify(
+    String feature, {
+    required VoidCallback onPro,
+    required VoidCallback onFree,
+  }) async {
+    if (!isPro()) {
+      // APK Test #12.6 telemetry — paywall fires after isPro() returned
+      // false BUT a recent localActivationAt or in-flight payment grace
+      // suggests the user might actually be PRO. Catches "free user
+      // saw paywall after paying" cases that the new grace window was
+      // designed to prevent. Fire-and-forget.
+      try {
+        final localAct = MigratedKey.read<dynamic>('localActivationAt');
+        final mightBePro = isPaymentInFlight ||
+            (localAct != null &&
+                DateTime.tryParse(localAct.toString()) != null &&
+                DateTime.now()
+                        .difference(DateTime.parse(localAct.toString()))
+                        .inMinutes <
+                    15);
+        if (mightBePro) {
+          unawaited(ErrorTelemetry.logEvent(
+            'paywall_hit_when_pro',
+            message: 'feature=$feature paymentInFlight=$isPaymentInFlight '
+                'localActivationAt=$localAct',
+          ));
+        }
+      } catch (_) {
+        // Never let telemetry break the gate path.
+      }
+      unawaited(ErrorTelemetry.logEvent('subscription_gate_routed',
+          message: 'feature=$feature exit=onFree reason=not_pro_local'));
+      _runCallback(onFree, feature, 'not_pro_local');
+      return;
+    }
+
+    // High-value features: verify server-side (async, cached 5 min).
+    //
+    // Bug 2026-05-22 / diagnose 7b3eaf — pre-fix had no .catchError on
+    // verifyFromServer().then(...) and no timeout. If verify threw
+    // (network blip, JWT expired, Edge function down) NEITHER onPro NOR
+    // onFree fired — button taps vanished silently. Founder hit this on
+    // GENERATE NEXT PHASE (2026-05-21). Telemetry showed zero
+    // train_graduation_generate_phase_2_failed events, zero cloud
+    // writes. Fix: 10s timeout + .catchError, both fall back to onPro
+    // since local isPro() already returned true (we trust local over
+    // server when server fails). Telemetry on every exit so future
+    // silent-disappear bugs are one-query debuggable.
+    if (_highValueFeatures.contains(feature)) {
+      // EXACTLY-ONCE dispatch (B-pass finding — a defect in the ORIGINAL 7b3eaf
+      // code, not in this unit's split).
+      //
+      // `.then(...).catchError(...)` puts the callbacks INSIDE the guarded
+      // region, so `.catchError` was catching two unrelated things: a genuine
+      // verify failure (where falling back to onPro is correct, because local
+      // isPro() already said PRO) AND a throw from onPro/onFree themselves.
+      // The second case is an entitlement bug: a paywall sheet that threw made
+      // `onFree()` fail, which landed in `.catchError`, which called
+      // `onPro()` — silently GRANTING a PRO feature to a free user.
+      //
+      // Two guards: callbacks run through `_runCallback` (which reports and
+      // does not rethrow, so they can no longer reach `.catchError` at all),
+      // and a `dispatched` latch makes double-dispatch structurally impossible.
+      // Only with both is this method's docstring claim — that exactly one of
+      // onPro/onFree runs — actually true.
+      var dispatched = false;
+      void dispatchOnce(VoidCallback cb, String exit, String reason) {
+        if (dispatched) return;
+        dispatched = true;
+        unawaited(ErrorTelemetry.logEvent('subscription_gate_routed',
+            message: 'feature=$feature exit=$exit reason=$reason'));
+        _runCallback(cb, feature, reason);
+      }
+
+      // AWAITED so the returned Future resolves only once the callback has run.
+      await verifyFromServer()
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        // Timeout is not a failure: local isPro() already returned true, and
+        // we trust local over an unreachable server (7b3eaf).
+        return true;
+      }).then((verified) {
+        if (verified) {
+          dispatchOnce(onPro, 'onPro', 'verify_pro');
+        } else {
+          dispatchOnce(onFree, 'onFree', 'verify_failed');
+        }
+      }).catchError((Object e, StackTrace st) {
+        // Reaches here only for a genuine verifyFromServer/timeout failure now.
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'subscription_gate_verify_failed'));
+        dispatchOnce(onPro, 'onPro', 'verify_threw_${e.runtimeType}');
+      });
+      return;
+    }
+
+    unawaited(ErrorTelemetry.logEvent('subscription_gate_routed',
+        message: 'feature=$feature exit=onPro reason=local_pro'));
+    _runCallback(onPro, feature, 'local_pro');
+  }
+
+  /// Polls Supabase `subscriptions` table for the current user and
+  /// updates Hive configBox accordingly.
+  ///
+  /// Call on app launch (when online). Failures are silently ignored
+  /// so the app continues to work offline with cached state.
+  Future<void> refreshFromSupabase() async {
+    try {
+      final supabase = SupabaseService.instance;
+      final userId = supabase.currentUser?.id;
+      if (userId == null) return;
+
+      // Year-sim harness: the simulated user has no real `subscriptions` row,
+      // so an un-paused refresh would `_downgradeLocally()` and wipe the
+      // dev-granted PRO mid-run — gating off phase generation. Skip entirely
+      // while a sim is in flight (debug-only; always false in normal flow).
+      if (pausedForSimulation) {
+        debugPrint('[SubscriptionService.refreshFromSupabase] paused for '
+            'simulation — trusting local state');
+        return;
+      }
+
+      // C-7 (audit-2026-05-11) — defensive HiveUserSession bootstrap.
+      // Splash fires `refreshFromSupabase` fire-and-forget BEFORE
+      // `_ensureLocalUser` has opened the per-user namespaced boxes.
+      // Without this, the configBox/userBox reads / writes below race
+      // with the session and the upgrade pill stays grey even after the
+      // server confirms PRO.
+      await HiveUserSession.ensureOpenedForCurrentSession();
+
+      // APK Test #12.1 / hotfix — check payment grace window FIRST,
+      // before any state evaluation. This is the second downgrade path
+      // (alongside `verifyFromServer`); without this gate, a cold start
+      // within minutes of payment success would query Supabase, find no
+      // row (test mode webhook lag, or production webhook delay), and
+      // call `_downgradeLocally()` even though the user just paid.
+      //
+      // The pre-existing `localActivationAt` grace check below was
+      // conditional on `isPro()` being true — fragile during a cold
+      // start session-restore race where MigratedKey reads can fall
+      // back to an empty configBox. The new `isPaymentInFlight` check
+      // is unconditional and time-based.
+      if (isPaymentInFlight) {
+        debugPrint('[SubscriptionService.refreshFromSupabase] payment in '
+            'flight — skipping server query, trusting local state');
+        // APK Test #12.8 — explicit grace-skip event so we can tell apart
+        // "skipped because grace" from "skipped because no session".
+        unawaited(ErrorTelemetry.logEvent('subscription_refresh_grace_skip',
+            message: 'reason=payment_in_flight'));
+        return;
+      }
+
+      // Grace period: if local activation just happened (Phase 3 fallback),
+      // don't query Supabase yet — give the direct write time to propagate.
+      // APK Test #12.1 — dropped the `&& isPro()` conditional. localActivationAt
+      // alone is enough; the cold-start session race could make isPro() return
+      // false transiently and skip the grace window.
+      final localActivation = MigratedKey.read<dynamic>('localActivationAt');
+      if (localActivation != null) {
+        final activatedAt = DateTime.tryParse(localActivation.toString());
+        if (activatedAt == null) {
+          // Malformed timestamp — clear and continue with server check.
+          await MigratedKey.delete('localActivationAt');
+        } else if (DateTime.now().difference(activatedAt).inMinutes < 10) {
+          debugPrint('[SubscriptionService.refreshFromSupabase] within '
+              'localActivationAt grace — skipping server query');
+          unawaited(ErrorTelemetry.logEvent('subscription_refresh_grace_skip',
+              message: 'reason=local_activation'));
+          return; // Grace period — don't override local activation yet
+        } else {
+          // Past grace period — clear the flag
+          await MigratedKey.delete('localActivationAt');
+        }
+      }
+
+      final response = await supabase.client
+          .from('subscriptions')
+          .select()
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .order('end_date', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (response == null) {
+        debugPrint('[SubscriptionService.refreshFromSupabase] no active '
+            'subscription row — downgrading locally');
+        // APK Test #12.8 — distinct event so we can tell apart
+        // "downgraded because no row" from "downgraded because expired".
+        unawaited(ErrorTelemetry.logEvent(
+            'subscription_refresh_query_returned_null'));
+        unawaited(_downgradeLocally());
+        return;
+      }
+
+      final endDate = response['end_date'] as String?;
+      final plan = response['plan'] as String?;
+
+      if (endDate == null) {
+        unawaited(ErrorTelemetry.logEvent('subscription_refresh_expired_state',
+            message: 'reason=null_end_date'));
+        unawaited(_downgradeLocally());
+        return;
+      }
+
+      final expiresAt = DateTime.tryParse(endDate);
+      if (expiresAt == null || DateTime.now().isAfter(expiresAt)) {
+        unawaited(ErrorTelemetry.logEvent('subscription_refresh_expired_state',
+            message: 'reason=past_end_date end_date=$endDate'));
+        unawaited(_downgradeLocally());
+        return;
+      }
+
+      // Active subscription — upgrade locally (atomic write).
+      await writeSubscriptionState(
+        isPro: true,
+        expiresAt: expiresAt.toIso8601String(),
+        plan: plan ?? 'monthly',
+      );
+      // APK Test #12.8 — success ping so dashboard can correlate "I paid
+      // but pill is stuck" reports against actual server-confirmed state.
+      unawaited(ErrorTelemetry.logEvent('subscription_refresh_success',
+          message: 'plan=${plan ?? 'monthly'}'));
+    } catch (e, st) {
+      // Offline or error — keep cached state, do not throw.
+      debugPrint('[SubscriptionService.refreshFromSupabase] $e');
+
+      // APK Test #12.5 / Class 3 — surface silent failures to
+      // server-side telemetry so we can see when sync breaks for a
+      // user (was previously ONLY a debugPrint — invisible in prod).
+      // Fire-and-forget; never let logging fail block recovery.
+      unawaited(_logRefreshFailure(e));
+
+      // audit-2026-05-11 H-42 — direct Crashlytics path alongside the
+      // log-client-error funnel above (defense-in-depth — if Edge
+      // Functions are down, Crashlytics still gets the signal).
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'subscription_refresh_from_supabase'));
+
+      // Don't let network errors perpetuate phantom PRO indefinitely.
+      // If local activation grace period (10 min) has passed, clear the flag
+      // so the NEXT launch will do a proper server check.
+      final localAct = MigratedKey.read<dynamic>('localActivationAt');
+      if (localAct != null) {
+        final actAt = DateTime.tryParse(localAct.toString());
+        if (actAt != null && DateTime.now().difference(actAt).inMinutes >= 10) {
+          await MigratedKey.delete('localActivationAt');
+        }
+      }
+    }
+  }
+
+  /// APK Test #12.5 / Class 3 — fire-and-forget telemetry hook for
+  /// `refreshFromSupabase` failures. Posts to `log-client-error`
+  /// Edge Function with a short type tag so we can audit sync gaps
+  /// without needing the user's debug log.
+  Future<void> _logRefreshFailure(Object err) async {
+    try {
+      final supabase = SupabaseService.instance;
+      // Skip if we don't even have a session — the failure is
+      // probably "user logged out", not interesting.
+      if (supabase.currentUser == null) return;
+      await supabase.callFunction(
+        'log-client-error',
+        body: {
+          'type': 'subscription_refresh_failure',
+          'message': err.toString(),
+        },
+      );
+    } catch (_) {
+      // Swallow — don't escalate logging-of-logging-failures.
+    }
+  }
+
+  /// Server-side subscription verification via `verify-subscription` edge function.
+  ///
+  /// Called from `gate()` for high-value PRO features. Uses a 5-minute cache TTL
+  /// so we don't hit the server on every single gate() call.
+  ///
+  /// If the server confirms the user is NOT PRO but Hive says they are,
+  /// this immediately downgrades. Prevents Hive-spoofing attacks.
+  ///
+  /// Returns `true` if verified PRO, `false` if free/expired/offline.
+  Future<bool> verifyFromServer({bool force = false}) async {
+    try {
+      final supabase = SupabaseService.instance;
+      if (!supabase.isInitialized || !supabase.isAuthenticated) {
+        debugPrint('[SubscriptionService.verifyFromServer] supabase not ready '
+            '— returning local isPro=${proStateSnapshot()}');
+        return proStateSnapshot();
+      }
+
+      // Check cache — skip server call if verified recently (unless forced)
+      if (!force) {
+        final lastVerifiedRaw = MigratedKey.read<dynamic>(_lastVerifiedKey);
+        if (lastVerifiedRaw != null) {
+          final lastVerified = DateTime.tryParse(lastVerifiedRaw.toString());
+          if (lastVerified != null &&
+              DateTime.now().difference(lastVerified) < _verifyCacheTtl) {
+            debugPrint('[SubscriptionService.verifyFromServer] cache fresh '
+                '(last=${lastVerified.toIso8601String()}) — local isPro=${proStateSnapshot()}');
+            return proStateSnapshot(); // Cache is fresh — trust local state
+          }
+        }
+      }
+
+      final response = await supabase.callFunction(
+        'verify-subscription',
+        body: {},
+      );
+
+      if (response.status != 200) {
+        // Offline-first: trust local Hive cache when server is unreachable.
+        // This is intentional — a non-200 (network error, 401, 5xx) should
+        // not immediately downgrade the user. The cache has a TTL
+        // (_verifyCacheTtl) and will re-verify on next app launch.
+        debugPrint('[SubscriptionService.verifyFromServer] HTTP ${response.status} '
+            '— trust local isPro=${proStateSnapshot()}');
+        // APK Test #12.8 — surface non-200 from verify-subscription so
+        // we can correlate "PRO pill stuck" with server-side verify
+        // failures (auth gateway, edge function down, etc.).
+        unawaited(ErrorTelemetry.logEvent('subscription_verify_non_200',
+            message: 'status=${response.status} localIsPro=${proStateSnapshot()}'));
+        return proStateSnapshot();
+      }
+
+      final data = response.data as Map<String, dynamic>?;
+      if (data == null) {
+        debugPrint('[SubscriptionService.verifyFromServer] empty body '
+            '— trust local isPro=${proStateSnapshot()}');
+        return proStateSnapshot();
+      }
+
+      final serverIsPro = data['is_pro'] as bool? ?? false;
+      final serverPlan = data['plan'] as String?;
+      final serverExpiresAt = data['expires_at'] as String?;
+      debugPrint('[SubscriptionService.verifyFromServer] server returned '
+          'is_pro=$serverIsPro plan=$serverPlan expires_at=$serverExpiresAt');
+
+      if (serverIsPro && serverExpiresAt != null) {
+        // Server confirms PRO — update local cache (atomic write)
+        await writeSubscriptionState(
+          isPro: true,
+          expiresAt: serverExpiresAt,
+          plan: serverPlan ?? 'monthly',
+        );
+        // Webhook has fired — clear the grace window so subsequent
+        // verifies behave normally (no false-positive grace).
+        await clearPaymentInFlight();
+        debugPrint('[SubscriptionService.verifyFromServer] confirmed PRO '
+            '— local cache updated, payment_in_flight cleared');
+      } else {
+        // APK Test #12 / Task C-1 — payment grace window. If a payment
+        // is mid-confirmation (toast fired, webhook hasn't yet), DO NOT
+        // downgrade. The optimistic local state must survive until the
+        // grace window expires or the webhook arrives.
+        if (isPaymentInFlight) {
+          debugPrint('[SubscriptionService.verifyFromServer] server says '
+              'NOT pro BUT payment in flight — suppressing downgrade, '
+              'returning local isPro=${proStateSnapshot()}');
+          // Don't update _lastVerifiedKey — we want the next verify to
+          // re-check after a short interval, not trust this stale "no" for 5min.
+          return proStateSnapshot();
+        }
+        // Server says NOT PRO + no grace window — downgrade (anti-spoof).
+        debugPrint('[SubscriptionService.verifyFromServer] server says '
+            'NOT pro, no grace window — downgrading locally');
+        await _downgradeLocally();
+      }
+
+      // Update verification timestamp
+      await MigratedKey.write(_lastVerifiedKey, DateTime.now().toIso8601String());
+
+      return serverIsPro;
+    } on Exception catch (e) {
+      // Network errors, timeouts, platform exceptions — trust cached state.
+      debugPrint('[SubscriptionService.verifyFromServer] threw: $e '
+          '— trust local isPro=${proStateSnapshot()}');
+      return proStateSnapshot();
+    }
+  }
+
+  /// Returns the current plan name (e.g., "monthly", "yearly"), or null.
+  String? get currentPlan {
+    return MigratedKey.read<String>(_planKey);
+  }
+
+  /// Returns the subscription expiry date, or null.
+  DateTime? get expiresAt {
+    final raw = MigratedKey.read<dynamic>(_expiresAtKey);
+    if (raw == null) return null;
+    return DateTime.tryParse(raw.toString());
+  }
+
+  /// Returns the number of days until subscription expires.
+  /// Returns -1 if not a PRO user or no expiry date is set.
+  int daysUntilExpiry() {
+    final expiry = expiresAt;
+    if (expiry == null) return -1;
+    final diff = expiry.difference(DateTime.now()).inDays;
+    return diff < 0 ? 0 : diff;
+  }
+
+  /// Returns true if the subscription expires within 7 days.
+  /// Returns false if the user is not PRO or has no expiry date.
+  bool get isExpiringSoon {
+    if (!proStateSnapshot()) return false;
+    final days = daysUntilExpiry();
+    return days >= 0 && days < 7;
+  }
+
+  /// The date PRO lapsed due to expiry, or null. Set by [isPro] on the
+  /// genuine-expiry path; cleared on renewal (diagnose 2026-06-06).
+  DateTime? get proLapsedAt {
+    final raw = MigratedKey.read<dynamic>(_proLapsedAtKey);
+    if (raw == null) return null;
+    return DateTime.tryParse(raw.toString());
+  }
+
+  /// True when PRO has expired and has NOT yet been renewed — drives the red
+  /// "your PRO expired" Home banner. (`expiresAt` is wiped on downgrade, so we
+  /// rely on the [proLapsedAt] marker instead.)
+  bool get isLapsed => !proStateSnapshot() && proLapsedAt != null;
+
+  /// PURE production helper (shared by the Home banner provider + tested
+  /// directly): which expiry banner to show. `lapsed` wins over `expiringSoon`;
+  /// `expiringSoon` requires an active PRO with < 7 days left.
+  static ExpiryBannerSeverity expiryBannerSeverity({
+    required bool isPro,
+    required int daysUntilExpiry,
+    required bool isLapsed,
+  }) {
+    if (isLapsed) return ExpiryBannerSeverity.lapsed;
+    if (isPro && daysUntilExpiry >= 0 && daysUntilExpiry < 7) {
+      return ExpiryBannerSeverity.expiringSoon;
+    }
+    return ExpiryBannerSeverity.none;
+  }
+
+  // ── Private ─────────────────────────────────────────────────
+
+  /// Soft-lock: clear ALL PRO-state keys from Hive. User-visible data
+  /// (workout history, logs, templates) is untouched — only the PRO
+  /// entitlement cache is wiped so the next `isPro()` returns false and
+  /// `expiresAt`-dependent UI (subscription card renewal date, "days
+  /// until expiry" banner, etc.) stops showing stale dates.
+  ///
+  /// Why not just flip `_isProKey` to false: leaving `_expiresAtKey`
+  /// and `_planKey` around means a subscription card that reads those
+  /// directly (not via `isPro()`) can still show the old account's
+  /// renewal date — exactly the bug observed 2026-04-24 with the
+  /// Auto-Backup-leaked icanbefitter@gmail.com PRO state showing up on
+  /// a fresh upendra.prasad@thinkingcode.com account as "renews 18 May".
+  Future<void> _downgradeLocally() async {
+    // Debug-only year-sim guard (always false in release/normal flow).
+    // The single sink for every downgrade path — refreshFromSupabase
+    // (response==null / no-active-row), verifyFromServer, AND the in-line
+    // expiry/cross-account checks in isPro() all funnel here. Guarding at
+    // the top-of-refreshFromSupabase entry alone is insufficient: an
+    // un-paused refresh kicked off during the ~100s boot restore can still
+    // be IN FLIGHT when the sim sets the flag, then resolve AFTER the
+    // dev-PRO grant and wipe it — silently gating off phase generation
+    // (stuck-at-Phase-1 → rank never climbs). Skipping the wipe here keeps
+    // the dev-granted PRO durable for the whole simulated span.
+    if (pausedForSimulation) {
+      debugPrint('[SubscriptionService._downgradeLocally] paused for '
+          'simulation — preserving dev-granted PRO');
+      return;
+    }
+    await MigratedKey.write(_isProKey, false);
+    await MigratedKey.delete(_expiresAtKey);
+    await MigratedKey.delete(_planKey);
+    await MigratedKey.delete('localActivationAt');
+    await MigratedKey.delete(_lastVerifiedKey);
+    // APK Test #12.2 — fire reactivity hook so widgets re-render
+    // with the downgraded state.
+    try {
+      onStateChanged?.call();
+    } catch (_) {}
+
+    // e4a7c9 — release PRO-owned resources. Today that is the weight_logs
+    // Realtime WAL subscription: subscribeToRealtimeSync's re-entrancy return
+    // means an ALREADY-ATTACHED channel never re-enters the entitlement gate,
+    // so without a teardown here a lapsed PRO user keeps a live PRO channel
+    // (and its share of the 35.4%-of-DB-CPU WAL poll) until app background or
+    // dispose. Gating the subscribe alone is half a fix.
+    //
+    // Separate try/catch from onStateChanged above: a throwing teardown must
+    // not prevent the re-render, and a throwing re-render must not prevent the
+    // teardown. Sharing one block would let either failure eat the other.
+    try {
+      onDowngrade?.call();
+    } catch (_) {}
+
+    // Phase 2 Unit C — clamp streak_freezes_available back to the
+    // free-tier cap (1) on lapse. Does NOT touch the grant-done flag
+    // (intentional — re-purchase must NOT re-grant 3 freezes; the
+    // weekly refill on the first PRO Monday is the correct path).
+    // Cross-account guard (subscription_expiry_banner P0): only mutate the
+    // progress map when a session is open — with no owner, the userBox write
+    // leaks into the shared box. Same rule as the grant hook in
+    // writeSubscriptionState.
+    if (HiveUserSession.currentOwnerFullId != null) {
+      StreakProgressService.instance.resetToFreeCapOnLapse();
+    }
+  }
+}

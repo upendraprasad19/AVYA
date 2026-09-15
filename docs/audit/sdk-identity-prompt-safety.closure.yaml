@@ -1,0 +1,360 @@
+# Closure ledger — sdk-identity-prompt-safety (OI-51 + OI-47)
+#
+# §4.2 structural invariant: every entry carries a terminal_state; the schema
+# has no `deferred:` key. Gate 40 recomputes the tally and fails if any item is
+# non-terminal.
+#
+# Two units that share a theme (untrusted values crossing a trust boundary) and
+# nothing else — one Flutter client, one Deno server. Unit A shipped first and
+# separately (ff716e29) so the live privacy fix was not held behind the larger
+# server survey.
+#
+# Both OIs were filed 2026-05-17 and BOTH descriptions turned out to be partly
+# wrong. That is recorded per-entry below rather than smoothed over, because
+# "the ticket was stale" is the reason both sat for 71 days.
+
+batch: sdk-identity-prompt-safety
+date: 2026-07-27
+blast_radius: platform
+diagnose_docs:
+  - docs/diagnoses/2026-07-27-signout-leaves-device-bound-to-signed-out-user-e7b3c5.md
+  - docs/diagnoses/2026-07-27-unsanitized-user-text-into-llm-prompts-f4a9c2.md
+review_rounds: 3
+total_count: 22
+closed_count: 22
+
+findings:
+  - id: A1
+    title: signOut never released the OneSignal external_id binding
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: ff716e29
+    verification: >-
+      _ensureLocalUser binds the device with OneSignal.login(user.id); a
+      repo-wide grep for OneSignal.logout() returned nothing before this batch.
+      The exposure is the SIGNED-OUT WINDOW, not cross-user attribution — when B
+      signs in, _ensureLocalUser overwrites the binding, so B is attributed
+      correctly. Between A signing out and anyone signing in, unbounded on a
+      device that changed hands, the handset stays external_id = A and A's
+      pushes keep arriving with A's fitness data. unbindSessionIdentity() now
+      calls logout() under the same !kIsWeb guard as the bind site.
+
+  - id: A2
+    title: Crashlytics userIdentifier stayed set to the signed-out user
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: ff716e29
+    verification: >-
+      setUserIdentifier('') under the same !kDebugMode guard as the bind site.
+      Guard symmetry is load-bearing: an unbind running where the bind never did
+      would be a new failure mode, not a fix.
+
+  - id: A3
+    title: RankService.onStateChanged had NO clear site anywhere in the codebase
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: ff716e29
+    verification: >-
+      The finding this batch nearly missed, and the reason the tests are derived.
+      OI-51 named two static callbacks; enumerating the DECLARATION site
+      (`grep -rn "static void Function()? onStateChanged" lib/` — exactly three
+      hits) found a third. app.dart:76 installs RankService beside the other two
+      and dispose() at :90-91 cleared only the first two, so it survived
+      sign-out AND widget teardown. Cleared in both places now. Negative-control:
+      removing it from unbindSessionIdentity fails ONLY 'DERIVED COMPLETENESS';
+      removing it from dispose fails ONLY 'DERIVED SYMMETRY'.
+
+  - id: A4
+    title: OI-51's remaining two sub-findings were already closed before this batch
+    severity: P3
+    terminal_state: verified_clean
+    evidence: >-
+      Razorpay callbacks are nulled by razorpay_service._onUserChanged() via
+      SingletonLifecycleRegistry (2026-05-20 audit, after the OI was filed), and
+      SubscriptionService.onStateChanged WAS reset — but at app.dart:90 in
+      dispose(), which is widget teardown, not sign-out. Recorded so the batch
+      does not take credit for work it did not do.
+
+  - id: B1
+    title: No prompt sanitiser existed for any Edge Function
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: b1bd184d
+    verification: >-
+      _shared/sanitize_for_prompt.ts ships three shapes matched to three
+      call-site kinds, dependency-free so it type-checks and tests with no
+      network (the esm.sh 522 that reddened CI on 2026-07-27 is why).
+      19 behavioural cases, each feeding a real injection payload — none would
+      pass against a no-op implementation.
+
+  - id: B2
+    title: OI-47's site list was both stale AND incomplete — 5 filed, 15 real
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 842e813c
+    verification: >-
+      Three passes gave three answers: the ticket said 5; grep on geminiChat(
+      found 14; widening to userPrompt|systemPrompt|generateContent found 15.
+      The 15th, proactive-coach-promotion, calls the Gemini REST endpoint via
+      fetch directly and interpolates a user-editable first name into the SYSTEM
+      INSTRUCTION — the sharpest placement in the tree, invisible to a grep keyed
+      on the shared helper. All 15 now import the sanitiser.
+
+  - id: B3
+    title: daily-snapshot — the highest-consequence site, absent from the OI entirely
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 842e813c
+    verification: >-
+      Its prompt extracts "facts the user explicitly stated" and writes them to
+      user_profile, so typed text can steer what the system durably believes —
+      and weekly-report, future-prediction and the coach all read that profile.
+      A persistence loop, not a one-shot. Now sanitizeBlock + fenceAsData plus an
+      explicit treat-as-data instruction.
+
+  - id: B4
+    title: JSON.stringify sites were assumed safe; measurement showed a residual lever
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: 842e813c
+    verification: >-
+      A Deno probe settled it rather than reasoning about it: JSON.stringify
+      escapes LF/CR/C0 but passes U+2028/U+2029/U+0085 through RAW, and those
+      render as line breaks to a model. Stringified sites are therefore a real
+      but NARROWER exposure needing a different fix — sanitizeJsonForPrompt
+      escapes exactly those three and preserves the JSON structure, where
+      sanitizeBlock would have destroyed it. A BASELINE test pins the
+      measurement so a future V8 change surfaces instead of silently invalidating
+      the premise.
+
+  - id: B5a
+    title: FC7's untrusted-data boundary was half a fix in ai-proxy
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: 842e813c
+    verification: >-
+      Recurrence of 9c2d4a. FC7 added an instructional boundary around
+      ai-proxy's snapshot concatenation -- correct, but structural escaping was
+      never added. Closed with sanitizeJsonForPrompt, then superseded by the
+      nonce fence in f402938e.
+
+  - id: B5b
+    title: ai-media-proxy had neither half, and the merged B5 entry hid it
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: 57d9dfb8
+    verification: >-
+      SPLIT OUT BECAUSE THE MERGED ENTRY WAS FALSE. B5 originally covered both
+      functions and asserted "Both now carry both [halves]". The B-pass proved
+      otherwise: ai-media-proxy still wrapped client-controlled snapshot_json in
+      a HARDCODED <user_snapshot> tag, and `<`, `>`, `/` are all \p{P}/\p{S} --
+      allowed through by design -- so a field containing the literal closing tag
+      closes the fence early. sanitizeJsonForPrompt only re-escapes the three
+      Unicode separators; it was never going to close a guessable delimiter.
+      It also had NO snapshot size cap despite CLAUDE.md 4.4 rule 18 requiring
+      one on every AI endpoint. Both closed: nonce fence + a 10,000-char cap
+      throwing a typed 400.
+
+      Kept as its own entry so a partial fix can never again hide behind a
+      claim about a pair. A terminal_state asserts real resolution (4.2's
+      closed==N invariant); asserting it for two functions when only one was
+      fixed is exactly the over-reporting that invariant exists to prevent.
+
+  - id: B15
+    title: The coverage gate could not fail -- three real fixes reverted, two passed
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: 57d9dfb8
+    verification: >-
+      The B-pass reverted three genuine fixes and the gate stayed green for two
+      of them (food_parser's fence and ai-media-proxy's principal marker). Root
+      cause was the APPROACH, not one bug: v3 traced identifiers to their
+      declarations, and every tracing rule needed a text window that either bled
+      into unrelated code (false PASS) or truncated the value (false FAIL). Five
+      tuning rounds did not converge.
+
+      Rebuilt (v4) on a blunter, checkable contract: a prompt value must be
+      VISIBLY safe at its own assignment -- an interpolation-free literal or a
+      recognised marker. No tracing. A DECLARATION is now itself a site, which
+      removes the ES6-shorthand ambiguity outright; value extraction is a
+      balanced-expression scan rather than a window, so multi-line values read
+      correctly without bleeding.
+
+      THE DURABLE PART: the gate now TESTS ITSELF. Six synthetic snippets --
+      every false-pass shape from v1/v2/v3 -- are asserted rejected, and eight
+      legitimate shapes asserted accepted. Every hole this gate ever had would
+      have been caught on its first run by that test. Four negative controls,
+      each reverting a real fix, now fail the gate by name.
+
+  - id: B6
+    title: The fix itself nearly introduced a silent conversation truncation
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: 94f0bf9e
+    verification: >-
+      Caught by self-review AFTER 842e813c landed. Both conversation sites took
+      sanitizeBlock's default kBlockMaxLen of 8,000 chars; neither had ANY
+      character cap before, so the fix silently introduced one. Measured rather
+      than guessed — ai_coach_interactions by user and IST day, 47 user-days:
+      max 5,668 chars, p95 1,801, avg 541, ZERO above 8,000, max 9 turns/day.
+      So not an active regression, but 1.4x headroom is too thin: the upstream
+      bound is .limit(30) turns and ai-proxy caps one user_message at 5,000
+      chars. The failure mode is what made it worth fixing — truncation is
+      disclosed to the model but invisible to us, so daily-snapshot would extract
+      a profile from half a conversation and write it to user_profile. Both sites
+      now pass maxLen 32000 explicitly (~5.6x observed max, ~18x p95).
+
+  - id: A5
+    title: The first sign-out fix was itself a regression that killed provider invalidation
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: 39a092d1
+    verification: >-
+      Review round 1. unbindSessionIdentity nulled all three static
+      onStateChanged callbacks, but app.dart:45/59/76 is the ONLY install site
+      in lib/ (grep-verified) and ICanBeFitterApp is constructed once per
+      process, so initState runs ONCE for the app's lifetime and
+      _ensureLocalUser never re-installs. Nulling on sign-out therefore killed
+      invalidation permanently for every later sign-in in the same process --
+      silently, because every call site uses `onStateChanged?.call()`. That
+      reintroduced APK #12.2, #12.4 and OI-37. OI-51's sub-finding 4 is wrong on
+      its premise: the closure captures the process-lived ProviderScope ref, not
+      a user, so the correct number of clears on the sign-out path is ZERO.
+      Reverted; the test now asserts the INVERSE with the three bug ids in its
+      failure reason.
+
+  - id: A6
+    title: Sign-out was not the choke point -- SIX paths end a session, not two
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: f402938e
+    verification: >-
+      Rounds 1 and 2 corrected the list from 2 to 5. The DERIVED gate then found
+      a sixth on its first run -- settings_screen.dart:323 -- that no reviewer
+      and no author had named. All six now reach the extracted top-level
+      releaseDeviceSessionIdentity(), and the test greps `.auth.signOut(` rather
+      than restating a list. This entry is the clearest evidence in the batch
+      for deriving over enumerating.
+
+  - id: B7
+    title: The data fence was forgeable by the content it contained
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: e793f7c4
+    verification: >-
+      fenceAsData wrapped content in a FIXED <<<END_X>>> marker and sanitizeBlock
+      did not strip it -- the doc even told callers not to pass raw text, and all
+      three call sites did exactly that. A boundary the contained text can forge
+      is worse than none, because it reads as protection.
+
+  - id: B8
+    title: Zero-width characters made the defang a complete no-op
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: 39a092d1
+    verification: >-
+      Round 1's fix defanged runs of angle brackets, which requires them to be
+      ADJACENT. Interleaving U+200B produced a payload sanitizeBlock returned
+      byte-identical, and the module's own property test called it clean.
+      Reproduced with an external probe. Superseded structurally by B10.
+
+  - id: B9
+    title: coach_memory replayed an AI-written name into the SYSTEM prompt every turn
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: 39a092d1
+    verification: >-
+      renderCoachMemoryBlock interpolated preferred_name raw, inside quotes, into
+      the block ai-proxy concatenates into the system prompt of EVERY chat turn --
+      and daily-snapshot writes that field from AI extraction of the user's own
+      chat text. A two-hop persistence loop. Missed because the coverage gate
+      opened only <fn>/index.ts, so a _shared helper was structurally invisible.
+
+  - id: B10
+    title: The denylist could never be completed, so the design was replaced
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: f402938e
+    verification: >-
+      Round 2 defeated the character class with five more BMP characters AND
+      astral Tag characters that a non-`u` regex structurally cannot match -- each
+      Tag char maps to an ASCII byte, so that was a covert channel, not a fence
+      trick. The stated premise ("strip category Cf") was also wrong: U+3164 is
+      Lo and U+FE00-FE0F are Mn. Replaced with (a) per-call nonce delimiters, so
+      forgery requires guessing an unpredictable token, and (b) an allowlist with
+      the `u` flag. The two are COUPLED: an allowlist without \p{M} destroys
+      Devanagari, and with \p{M} the old adjacency fence would break -- the nonce
+      is what allows the policy to be permissive enough for Indic text. Measured
+      both ways; both properties asserted.
+
+  - id: B11
+    title: Two more raw system-prompt sites, invisible to the file-level gate
+    severity: P0
+    terminal_state: closed_in_commit
+    commit: f402938e
+    verification: >-
+      Round 2. food_parser.ts:84 sent `userPrompt: description` raw, reached from
+      the AI-coach tool loop; ai-proxy's formatRetrievalBlock piped retrieved past
+      messages into the SYSTEM prompt with no sanitising, inside a hand-rolled
+      <retrieved_context> tag a stored memory could close. ai-proxy read "clean"
+      because the file imported the sanitiser -- for two other sites.
+
+  - id: B12
+    title: An object-literal lookup with an unvalidated key leaked a native function into the prompt
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: f402938e
+    verification: >-
+      motivation_style = "constructor" made `{...}[mem.motivation_style]` return
+      Object, rendering `function Object() { [native code] }` into the system
+      prompt. Reachable because daily-snapshot:264 stores whatever Gemini returns
+      and the TS union is compile-time only. Now a Map, which has no prototype
+      chain to walk.
+
+  - id: B13
+    title: Both gates were closed lists, and one actively silenced a correct detection
+    severity: P1
+    terminal_state: closed_in_commit
+    commit: f402938e
+    verification: >-
+      The prompt gate checked FILES and kept an allowlist; the entry written for
+      food_parser.ts explained the template literals at :104/:149 while never
+      mentioning `userPrompt: description` at :84. The detector was right and the
+      justification was about different code. Both gates now derive: prompt
+      ASSIGNMENTS with identifier tracing and no allowlist (a deliberate raw pass
+      must be stated in code via asPrincipalMessage()), and sign-out sites by
+      grep.
+
+  - id: B14
+    title: Six smaller defects folded from rounds 1 and 2
+    severity: P2
+    terminal_state: closed_in_commit
+    commit: f402938e
+    verification: >-
+      Surrogate-pair truncation could emit a lone high surrogate (TextEncoder
+      turns it into U+FFFD); the [...truncated] marker was user-forgeable;
+      sanitizeJsonForPrompt threw uncaught on BigInt and circular input;
+      `Number(x) || "unknown"` turned a legitimate 0 into "unknown" and later
+      still accepted "   ", true and []; the Dart owner-resolution regex missed
+      Dart 3 class modifiers; future-prediction defaulted a null primary_goal to
+      "general_fitness" (the body_fat ?? 18.0 anti-pattern). All fixed with cases.
+
+# ── Not closed here, and deliberately so ────────────────────────────────────
+#
+# ai-proxy's prediction branch reads its system prompt from the CLIENT:
+#   const systemPrompt = (context?.system_prompt as string) ?? "<default>"
+# A caller can replace the system prompt wholesale. This is a DIFFERENT bug
+# class from OI-47 — not a data field leaking into instructions, but an
+# instruction field being writable — and whether client-supplied system_prompt
+# is an intended feature of that endpoint is a product decision. Surfaced to the
+# founder with the evidence rather than changed unilaterally inside a
+# sanitisation batch. It is not an item of THIS batch, so it is recorded here as
+# context, not as a finding with a terminal state.
+#
+# ── Live state ──────────────────────────────────────────────────────────────
+#
+# Unit A is LIVE-capable on the next APK: it is Flutter code, no deploy needed.
+# Unit B is INERT. Edge Function code changes take effect only on redeploy, and
+# a redeploy needs its own explicit authorization (CLAUDE.md §4.3). Deployed
+# versions are UNCHANGED by this batch. Any claim that prompt injection is
+# "fixed in production" would be false until that deploy happens.
