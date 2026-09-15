@@ -4320,3 +4320,44 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   honored), both separate infrastructure work with their own blast radius
   and test surface. Filed here rather than fixed in-batch per the same
   reasoning as OI-199/OI-179 above.
+
+## OI-202 — users.subscription_status never reconciles to free after expiry
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-15, founder spot-check of `public.users` via the Supabase
+  table editor — `test6@gmail.com` (`subscription_status='pro'`,
+  `subscription_expires_at` 2026-07-03) and `test3@gmail.com` (same,
+  `subscription_expires_at` 2026-06-22), both over 2 months past their own
+  listed expiry, still read `'pro'`. Cross-checked against the already-shipped
+  fix at the consumption layer: `supabase/functions/_shared/subscription.ts`'s
+  docstring (added 2026-07-26) documents the identical symptom in production
+  ("Live it claimed 6 PRO users, all 6 lapsed. `morning-alert` read it and sent
+  Gemini-generated PRO-tier copy to churned users") and names the root cause —
+  three writers (the `update_user_subscription_status` trigger,
+  `razorpay-webhook/index.ts:604`, `verify-payment/index.ts:629`) set the column
+  to `'pro'`; NONE unset it, no cron/trigger reconciles it. Confirmed every real
+  consumer has since been migrated off this column: the client
+  (`subscription_service.dart` → `verify-subscription/index.ts:66-73` queries
+  `subscriptions` directly with `status='active'` + a live `end_date > now()`
+  compare; zero references to `subscription_status` anywhere under `lib/`),
+  `morning-alert`/`weekly-recap-ready` (via `_shared/subscription.ts`'s
+  `fetchProUserIds`/`isProUser`, same predicate), and `telegram-admin-bot`'s
+  `/user` command (`index.ts:404-436` — selects `subscription_expires_at` from
+  `users` but never displays it; the printed "plan: X (ends Y)" line is
+  re-derived from a fresh `subscriptions` query, per its own inline comment at
+  `:413-417`).
+- **Scope note**: not a live bug — nothing that gates an actual decision reads
+  this column today (verified above). Purely misleading for anyone — founder,
+  future session, ad-hoc dashboard — manually inspecting `public.users`
+  directly, exactly as happened here. The column drifts further from reality
+  forever under the current architecture, since no writer ever resets it on
+  expiry.
+- **Fix shape (not decided)**: either (a) add a reconciliation job/trigger that
+  flips `subscription_status` back to `'free'` and nulls
+  `subscription_expires_at` once the backing `subscriptions.end_date` lapses
+  (keeps the column trustworthy for ad-hoc queries), or (b) drop both columns
+  outright since no code path reads them for a decision — would need a
+  dependency sweep first (the 3 writers above, plus `telegram-admin-bot`'s
+  unused `subscription_expires_at` select at `:406`) and its own migration.
+- **Identified**: 2026-09-15 · filed via mint_oi.sh from branch `oi-stale-subscription-status`
