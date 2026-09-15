@@ -117,7 +117,7 @@ Total gates: **98** (49 numbered, 49 by filename only).
 
 `/build-apk` procedural steps with no script — a gate must never mint one of these:
 
-`1`, `2`, `3`, `3.5`, `4`, `5`, `6`
+`1`, `2`, `2.5`, `3`, `3.5`, `4`, `5`, `6`
 
 ## Historical aliases
 

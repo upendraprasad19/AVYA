@@ -35,7 +35,7 @@ Build a production-ready APK with all required pre-flight gates, pre-flight chec
 
 All gates are Dart CLI scripts. Run with `dart run scripts/<name>.dart`. Each exits 0 on pass. Failures are printed to stderr. Gates run in order — first failure stops the build (unless `--emergency-bypass` is active).
 
-**Fast-path:** pass `--from-green` to skip *re-running* the redundant gates (4 analyze, 5 full `flutter test`, 7–17/23 dart gates) when building a commit already pushed **and CI-green** — pre-push + CI just ran them on this exact SHA. Gates 1/2/3 + the clean build + Gate 13 + Gate 48 (release-signed) ALWAYS still run. See the `--from-green` section below.
+**Fast-path:** pass `--from-green` to skip *re-running* the redundant gates (4 analyze, 5 full `flutter test`, 7–17/23 dart gates) when building a commit already pushed **and CI-green** — pre-push + CI just ran them on this exact SHA. Gates 1/2/2.5/3 + the clean build + Gate 13 + Gate 48 (release-signed) ALWAYS still run. See the `--from-green` section below.
 
 ### Gate 1 — On `main` with clean working tree (existing)
 
@@ -64,12 +64,39 @@ LAST_BUMP=$(git log -1 --format=%H --grep="bump versionCode" -- pubspec.yaml)
 echo "Current versionCode: $CURRENT (last bump commit: $LAST_BUMP)"
 ```
 
-If a bump is needed: `Edit pubspec.yaml → 1.0.0+N → 1.0.0+(N+1)`, then commit via
+If a bump is needed: `Edit pubspec.yaml → 1.0.0+N → 1.0.0+(N+1)` **AND**
+`Edit lib/core/constants/app_constants.dart → appVersion = '1.0.0+(N+1)'` in the SAME commit —
+`check_app_version_matches_pubspec.dart` (Gate 51, pre-commit) hard-fails a commit where the two
+drift, so both edits are required, not optional. Then commit via
 `sh scripts/safe_commit.sh "chore: bump versionCode 1.0.0+N → 1.0.0+(N+1) for APK Test #X"`
 (NOT a raw `git commit` — a PreToolUse hook blocks that; `safe_commit.sh` is the sanctioned path,
 see CLAUDE.md §4.3), then continue.
 
 **Why this matters:** Android silently rejects a same-versionCode reinstall as a no-op. Founder hit this on Tests #7, #8, #10, #11, #11.1, #12 — all originally built at `1.0.0+6`.
+
+### Gate 2.5 — versionCode not already built/uploaded by THIS pipeline (NEW — 2026-09-15)
+
+**Gate 2 is blind to a versionCode consumed OUTSIDE the bump-commit trail.** It only compares
+the current versionCode against past `chore: bump versionCode` commits — it cannot see an actual
+build/upload that happened without a later bump commit yet existing. This is exactly what
+happened on 2026-09-15: `1.0.0+42` was bumped-to by commit `64fc2893`, then built and uploaded to
+Play Console, but no bump-away commit existed yet when `/build-apk --bundle` was next invoked —
+Gate 2 read as a clean pass immediately before that mistake was nearly repeated. See
+`feedback_mistake_versioncode_gate2_blind_spot.md`.
+
+```bash
+dart run scripts/verify_versioncode_available.dart
+```
+
+If this FAILS: the current versionCode was already recorded as built by a prior `/build-apk` run
+(`backups/built_versioncodes.json`) or already shipped as an APK (`backups/apk_sizes.json`). Bump
+versionCode (Gate 2's edit, both files) before proceeding — do NOT override.
+
+If this PASSES: it means "not known to be already built **by this pipeline**" — it CANNOT see a
+manual/out-of-band Play Console upload. **Always ask the founder explicitly: "has
+`1.0.0+N` already been built or uploaded outside `/build-apk`?"** before proceeding, the same way
+Gate 3.5 asks about CI state. Never assume a Gate 2.5 PASS alone is sufficient — this incident's
+root cause was treating a mechanical pass as sufficient without asking that question.
 
 ### Gate 3 — `.env` exists (existing)
 
@@ -373,6 +400,19 @@ the founder's phone (it stayed on +28). Needs `apksigner` (Android SDK build-too
 (`JAVA_HOME` or Android Studio's bundled JBR is auto-detected). On a deliberate keystore rotation,
 update `kExpectedSha256` in the gate.
 
+### Gate 2.5 record — versionCode consumed (post-build, NEW — 2026-09-15)
+
+After Gate 48 passes (artifact is release-signed and real), record the versionCode as built by
+this pipeline so Gate 2.5 can catch a re-build attempt on a future invocation:
+
+```bash
+dart run scripts/verify_versioncode_available.dart --record apk   # default APK path
+dart run scripts/verify_versioncode_available.dart --record aab   # --bundle path
+```
+
+This is separate from Gate 13's `apk_sizes.json` (APK-only, size-focused) — `--record` here
+tracks versionCode consumption for BOTH artifact types, since an `.aab` has no size ledger yet.
+
 ### Report results
 
 ```
@@ -396,7 +436,8 @@ below recompiles everything regardless — a second analyze/test pass is ~7–10
 signal.
 
 **ALWAYS still run (never skipped, even with `--from-green`):** Pre-build housekeeping, Gate 1
-(on `main` + clean tree), Gate 2 (versionCode), Gate 3 (.env), the clean build (`flutter clean`
+(on `main` + clean tree), Gate 2 (versionCode), Gate 2.5 (versionCode not already built), Gate 3
+(.env), the clean build (`flutter clean`
 → `build apk` — recompiles, catches compile/asset/Gradle errors), Gate 13 (size + record), and
 Gate 48 (release-signed — the signer cert is independent of the gates skipped above).
 
@@ -464,7 +505,8 @@ If the build fails or hangs:
 ## Rules
 
 - **ALWAYS** build from `main` with a clean working tree. Never from a feature branch. Never with uncommitted changes.
-- **ALWAYS** bump versionCode in `pubspec.yaml` for every shipped APK. Same versionCode = Android silently rejects the install on update.
+- **ALWAYS** bump versionCode in BOTH `pubspec.yaml` AND `lib/core/constants/app_constants.dart` for every shipped APK/AAB. Same versionCode = Android silently rejects the install on update.
+- **ALWAYS** run Gate 2.5 (`verify_versioncode_available.dart`) and ask the founder whether the current versionCode was already built/uploaded outside `/build-apk` before proceeding — a mechanical PASS is not proof (it cannot see a manual Play Console upload).
 - **ALWAYS** use `--flavor prod --release` (never build dev APKs for distribution).
 - **ALWAYS** include `--dart-define-from-file=.env` (without it, SUPABASE_URL is empty and auth crashes).
 - **ALWAYS** run `flutter clean` before release builds unless `--skip-clean` is passed.
