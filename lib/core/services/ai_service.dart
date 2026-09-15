@@ -30,6 +30,16 @@ class AiChatResponse {
   final List<ToolIntent> toolIntents;
   final List<Map<String, dynamic>> toolCallsLog;
 
+  /// APK +43 obs 2 — true when [reply] is the server's hardcoded
+  /// "trouble reaching the model" apology (every bounded Gemini retry
+  /// pass genuinely exhausted), not real model output. Callers persisting
+  /// this turn to `coachBox` MUST mark it `failed: true` so
+  /// [CoachInteractionRepository.recentHistoryExchanges] excludes it from
+  /// the next request's replayed history — otherwise the model echoes the
+  /// apology back as if it were a normal continuation once the outage has
+  /// already cleared.
+  final bool hadHardFailure;
+
   const AiChatResponse({
     required this.reply,
     required this.modelUsed,
@@ -37,6 +47,7 @@ class AiChatResponse {
     this.actions = const [],
     this.toolIntents = const [],
     this.toolCallsLog = const [],
+    this.hadHardFailure = false,
   });
 }
 
@@ -225,6 +236,13 @@ class AiService {
     return AiService._instance._compactContext(ctx);
   }
 
+  /// Test-only seam exposing the private response-building routine (APK +43
+  /// obs 2 — pins `had_hard_failure` JSON → [AiChatResponse.hadHardFailure]).
+  @visibleForTesting
+  static AiChatResponse buildResponseForTest(Map<String, dynamic> data) {
+    return AiService._instance._buildResponse(data);
+  }
+
   // ── Response parsing helpers ──────────────────────────────────
 
   /// Parse the Edge Function response into an [AiChatResponse].
@@ -295,6 +313,7 @@ class AiService {
           : const [],
       toolIntents: parsedIntents,
       toolCallsLog: parsedCallsLog,
+      hadHardFailure: data['had_hard_failure'] as bool? ?? false,
     );
   }
 

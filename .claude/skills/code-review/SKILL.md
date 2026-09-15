@@ -231,6 +231,54 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-16 (a)** — blast-radius **platform** — worktree `apk43-obs-fixes`
+  (not yet a merged branch), APK 1.0.0+43 observation batch, Obs 1 (nutrition
+  save-meal silent-catch telemetry, diagnose `d8e2f4`) + Obs 2 (AI coach
+  history-poisoning `hadHardFailure` flag, diagnose `a1c6b9`). **3 findings
+  (1 P1, 0 P2, 2 P3); 0 false_alarm — all 3 accepted and fixed in the same
+  session.** Review: `docs/reviews/6f1e4db85459-review.md`. Run as one agent.
+  **Tuning 1 — lens 6 (`guard_without_its_mirror`) found the batch's own
+  fix incomplete by grepping the file for a SECOND instance of the exact
+  string shape the fix was written around, not by re-reading the diff.**
+  `tool-loop.ts` has TWO hardcoded, non-model apology texts (a documented,
+  pre-existing pair — one for "the Gemini call itself threw", one for "the
+  loop exhausted without ever producing text or a queued intent"). The
+  diff added a `hadHardFailure` flag and wired it through the ENTIRE
+  history-replay + memory-embed pipeline correctly for the FIRST apology,
+  and simply never checked whether the second one needed the same
+  treatment — its own diagnose-doc's root-cause section only named the one
+  code path it was written against. `grep -n "I had trouble"
+  supabase/functions/_shared/tool-loop.ts` — one command — surfaces the
+  second site immediately; the diff's own author had run that exact
+  investigation for the FIRST site (a live Supabase log query) and had no
+  reason to suspect a sibling existed elsewhere in the same file. **Add to
+  lens 6's method: when a fix's mechanism is "mark case X so it can't
+  reach sink Y", grep the whole touched file (not just the diff hunk) for
+  every OTHER value that also reaches sink Y unconditionally — a new flag
+  is a new mirror-case surface, and the diff hunk itself will never show
+  you a sibling it didn't touch.**
+  **Tuning 2 — the fastest way to find an untested vacuous negative
+  control is still lens 8's own "would this pass if the feature did
+  nothing at all?" question, but it has to be asked about the SPECIFIC
+  code path claimed, not the test's name.** Finding 3's test was literally
+  titled "negative control" and its docstring said "no exception is
+  thrown" — both true, both describing a path (the `state == null` early
+  return) that sits BEFORE the code under test. A reader trusting the
+  title would credit it with proving something it structurally cannot.
+  The check that catches this is mechanical and cheap: read the function
+  body, find every `return` that precedes the code the fix touches, and
+  ask which of them the "negative control" actually exercises.
+  **Tuning 3 — a diagnose-doc's own `cloud_columns:` frontmatter claim is
+  exactly as citable-and-wrong as a line-number citation (2026-09-14
+  Tuning 2's class), just for a schema shape instead of a file position.**
+  `failed` was invented as a plausible-sounding cloud column because the
+  SAME name is real on the Hive side one paragraph earlier in the same
+  doc — the author's own correct Hive fact bled into an adjacent,
+  unverified cloud claim. `backups/live_schema_columns.json` settles it in
+  one read; the SoT registry entry itself (unlike the diagnose-doc) never
+  made the same mistake, which is worth noting as a MODEL for how the
+  doc's own frontmatter should have been written.
+
 - **2026-09-14 (e)** — blast-radius **platform** — branch `telegram-admin-bot`, Task 13 Step 8
   push-gate fix (migration 137: re-asserts the anon/authenticated revoke on
   `founder_metrics_ops()` that migrations 135/136 each omitted — caught by the FIRST full

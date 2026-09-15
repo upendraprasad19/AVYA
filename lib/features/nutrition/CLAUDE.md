@@ -39,6 +39,7 @@ for `nlog_*` Hive rows + `nutrition_logs` cloud) + `nutrition_read_service.dart`
 | `water_target` | `water_target_service.dart` (Hive `configBox['water_target_ml']`) | `waterTargetProvider`. |
 | `diet_plan_saved_loaded` | `diet_plan_screen.dart` `_savePlan` → `configBox['saved_diet_plan']` + `ref.invalidate(dietPlanProvider)` | `TodaysMealsCard` renders "FROM YOUR DIET PLAN" hints on empty slots. |
 | `food_text_analysis` daily cap | server-side trigger `trg_food_text_rate_limit` (live definition migration 127) — 10/day free, 200/day PRO. Free arm lowered 50→10 in b8f4c2 to match `AppConstants.freeAiTextLogsPerDay`. Insert-first pattern: `ai-proxy` inserts placeholder row BEFORE Gemini. | client error mapping returns 429 → "limit reached". |
+| `ai_breakdown_notifier_save_meal` telemetry (APK +43 obs 1, diagnose `d8e2f4`, 2026-09-16) | `AiBreakdownNotifier.saveMeal` catch block (`nutrition_provider.dart`) now calls `ErrorTelemetry.recordNonFatal(reason: 'ai_breakdown_notifier_save_meal')` — was a bare `debugPrint`, invisible to `client_errors`. Root cause of the underlying founder-reported failure (breakfast/lunch/dinner saved, snack repeatedly didn't) was NOT conclusively identified — every throw site inside `NutritionWriteService.logMeal` is independently guarded with its own telemetry; this closes the one gap that had none. | `client_errors` table, `op_type = 'ai_breakdown_notifier_save_meal'`. |
 
 ## Common pitfalls
 
@@ -60,6 +61,7 @@ for `nlog_*` Hive rows + `nutrition_logs` cloud) + `nutrition_read_service.dart`
 - `test/contracts/diet_plan_saved_loaded_writer_to_reader_test.dart`
 - `test/contracts/saved_meals_writer_to_reader_test.dart`
 - `test/contracts/water_logs_writer_to_reader_test.dart`
+- `test/contracts/ai_breakdown_notifier_save_meal_telemetry_test.dart` (behavioral — the catch block's `ErrorTelemetry.recordNonFatal` call, via fault-injection test seams)
 
 ## See also
 

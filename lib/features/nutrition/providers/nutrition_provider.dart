@@ -908,6 +908,20 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     state = null;
   }
 
+  /// APK +43 obs 1 — test-only fault injection. When non-null, `saveMeal`
+  /// throws this object immediately before calling
+  /// `NutritionWriteService.instance.logMeal`. `NutritionWriteService` is a
+  /// hard singleton with no DI seam, and every throw site inside its
+  /// `logMeal` is already wrapped by its own internal try/catch (Hive put,
+  /// provider invalidate, sync fan-out) — so nothing in normal operation is
+  /// known to organically escape to this method's own catch block. This
+  /// seam lets a test exercise the REAL catch block + REAL
+  /// `ErrorTelemetry.recordNonFatal` call end-to-end regardless. Mirrors
+  /// the existing `serviceFailCounts` / `resetCircuitBreakerForTests` test
+  /// seams above. Null in production; reset in `setUp`/`tearDown`.
+  @visibleForTesting
+  static Object? throwBeforeLogMealForTest;
+
   /// Save the analysed meal to nutrition log via NutritionWriteService.
   /// (Plan C-10: routes through service to ensure per-item rows reach
   /// nutrition_log_items + the aiText counter increments via the
@@ -949,6 +963,9 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
     }
 
     try {
+      if (throwBeforeLogMealForTest != null) {
+        throw throwBeforeLogMealForTest!;
+      }
       final result = await NutritionWriteService.instance.logMeal(
         date: DateTime.now(),
         mealType: mealType.toLowerCase(),
@@ -961,7 +978,17 @@ class AiBreakdownNotifier extends Notifier<AiBreakdownData?> {
       }
       return result;
     } catch (e, st) {
+      // APK +43 obs 1 — this catch previously swallowed the exception with
+      // only a debugPrint, making a founder-reported "Could not save"
+      // invisible to client_errors. Every save attempted breakfast/lunch/
+      // dinner successfully then failed repeatedly on snack, and there was
+      // no way to tell whether the Hive put itself threw or something
+      // upstream of it did (it was neither — see diagnose doc). Every other
+      // catch block in this file/NutritionWriteService reports via
+      // ErrorTelemetry; this one didn't.
       debugPrint('[AiBreakdownNotifier.saveMeal] error: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'ai_breakdown_notifier_save_meal'));
       return WriteResult.fail(e.toString());
     }
   }

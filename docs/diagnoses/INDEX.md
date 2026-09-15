@@ -6,6 +6,13 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### error_telemetry_helper (2 bugs)
+- 2026-09-16 d8e2f4 — Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when…
+- 2026-05-08 b0fd76 — Telemetry payload had no contract (any shape was accepted, breaking structured log queries); restore had a race condition where stale tmpl_* keys from earlier broken restores accumulated and caused…
+
+### coach_chat_history_replay (1 bugs)
+- 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
+
 ### active_workout_resume_guard (1 bugs)
 - 2026-09-15 e8f4a1 — Raised by the founder as the still-unanswered half of Obs 5 (diagnose 6c2f91): "whether to also add a 'resume in-progress workout' indicator on the Train tab and/or a confirmation before…
 
@@ -1168,9 +1175,6 @@ rather than a Hive box. (1 bugs)
 ### workout_templates (1 bugs)
 - 2026-05-08 5a36ad — Sync stack had systemic failures — workout templates were not deduped (UNIQUE constraint added), streak pill showed cached value instead of live calculateCurrentStreak(), completed_at was overwritten…
 
-### error_telemetry_helper (1 bugs)
-- 2026-05-08 b0fd76 — Telemetry payload had no contract (any shape was accepted, breaking structured log queries); restore had a race condition where stale tmpl_* keys from earlier broken restores accumulated and caused…
-
 ### subscription_payment_grace_window (2 bugs)
 - 2026-05-06 5456c4 — Multiple issues in one batch — PRO upgrade did not unlock after payment, receipt showed wrong set counts, today card had duplicate text, weight chart decimals were static, swap kept stale…
 - 2026-05-06 d9b546 — PRO unlock still failed systemically across multiple code paths; logging_type repair migrator was not library-aware, repairing to wrong types for exercises present in the library.
@@ -1209,6 +1213,8 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-16 | d8e2f4 | Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when… | error_telemetry_helper | test/contracts/ai_breakdown_notifier_save_meal_telemetry_test.dart |
+| 2026-09-16 | a1c6b9 | Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"… | coach_chat_history_replay | test/contracts/coach_chat_history_replay_writer_to_reader_test.dart |
 | 2026-09-15 | e8f4a1 | Raised by the founder as the still-unanswered half of Obs 5 (diagnose 6c2f91): "whether to also add a 'resume in-progress workout' indicator on the Train tab and/or a confirmation before… | active_workout_resume_guard | test/contracts/active_workout_resume_guard_behavioral_test.dart |
 | 2026-09-15 | 2a9f3c | Founder-reported screenshot from internal testing: Profile > My Submissions tab stuck on an infinite loading spinner — "My submissions and added exercises not being shown". No error, no retry option,… | submissions_load_resilience | test/contracts/submissions_load_timeout_behavioral_test.dart |
 | 2026-09-15 | 6c2f91 | Founder-reported, live-reproduced jointly with the agent in Chrome on the amar@gmail.com test account: mid active-workout, after logging all 4 sets of an exercise, tapping SWAP on the next exercise… | active_workout_swap_add_exercise_navigation | test/contracts/swap_add_exercise_double_pop_behavioral_test.dart |

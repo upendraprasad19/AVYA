@@ -674,6 +674,7 @@ class SendMessageNotifier extends Notifier<bool> {
         coachKey,
         aiResponse: aiResponse.reply,
         modelUsed: aiResponse.modelUsed,
+        hadHardFailure: aiResponse.hadHardFailure,
       );
 
       // Unit 8 — analysis just completed; flip the LIVE user photo bubble
@@ -906,6 +907,7 @@ class SendMessageNotifier extends Notifier<bool> {
         coachKey,
         aiResponse: aiResponse.reply,
         modelUsed: aiResponse.modelUsed,
+        hadHardFailure: aiResponse.hadHardFailure,
       );
 
       // Extract coaching notes after every AI response
@@ -975,6 +977,7 @@ class SendMessageNotifier extends Notifier<bool> {
             coachKey,
             aiResponse: retryResponse.reply,
             modelUsed: retryResponse.modelUsed,
+            hadHardFailure: retryResponse.hadHardFailure,
           );
           await repo.extractCoachingNotes();
           ref.invalidate(coachInsightProvider);

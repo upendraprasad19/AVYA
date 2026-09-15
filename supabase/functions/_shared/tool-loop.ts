@@ -57,6 +57,31 @@ import {
 
 const MAX_ROUNDS = 3;
 
+/**
+ * Hardcoded, non-model apology set when the Gemini call itself throws inside
+ * the tool loop. Exported (not just a local literal) because `ai-proxy`'s
+ * reservation-resolve UPDATE persists `ai_response` to the cloud
+ * `ai_coach_interactions` row UNCONDITIONALLY — there is no cloud column for
+ * `hadHardFailure` — so a cold restore of this exact row on another device
+ * has no flag to read. The client-side mirror
+ * (`kKnownHardFailureApologyTexts` in
+ * lib/core/services/sync/sync_coach.dart) recognizes the restored row by its
+ * exact text instead. Parity pinned by
+ * test/contracts/hard_failure_apology_texts_parity_test.dart. Plan-review
+ * round 1 finding, APK +43 obs 2, diagnose a1c6b9.
+ */
+export const HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED =
+  "I had trouble reaching the model. Try again in a moment.";
+
+/**
+ * The OTHER hardcoded apology — set when MAX_ROUNDS exhausts with no
+ * terminal text and no queued intents (B-pass finding, same diagnose). Same
+ * cloud-persistence gap and same client-side mirror as
+ * [HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED].
+ */
+export const HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED =
+  "Recruit — I had trouble pinning that down. Try asking again with a bit more specificity. If you want today's workout or your current plan, ask plainly: \"what's my workout today\" or \"what's my plan\" — I'll read the manifest directly.";
+
 export interface ToolLoopOptions {
   /** System prompt — already assembled by caller (7-block layout incl. coach_memory). */
   systemPrompt: string;
@@ -100,6 +125,18 @@ export interface ToolLoopResult {
   usedFallback: boolean;
   /** Number of rounds executed (1..maxRounds). */
   roundsExecuted: number;
+  /**
+   * True when [text] is the hardcoded "I had trouble reaching the model"
+   * string set below because every bounded Gemini retry pass genuinely
+   * exhausted (diagnose a1c6b9, APK +43 obs 2) — as opposed to real model
+   * output. The caller (ai-proxy) surfaces this to the client so the turn
+   * can be excluded from `recentHistoryExchanges()` replay: without this,
+   * a genuine quota-exhaustion apology gets fed back into the NEXT request's
+   * `history`, and the model echoes the apology as if it were a normal
+   * continuation — turning one transient outage into a self-perpetuating
+   * "stuck" conversation that outlives the outage itself.
+   */
+  hadHardFailure: boolean;
 }
 
 /**
@@ -219,6 +256,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   let usedFallback = false;
   let finalText = "";
   let roundsExecuted = 0;
+  let hadHardFailure = false;
 
   // Tier-filtered tool list passed to the model. Pre-converted once
   // (registry is small; conversion is cheap; doing it once avoids
@@ -254,7 +292,8 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
       // trouble reaching the model" over a working "Logged" card — the
       // loop-exit confirmation below handles the intents.length>0 case.
       if (!finalText && intents.length === 0) {
-        finalText = "I had trouble reaching the model. Try again in a moment.";
+        finalText = HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED;
+        hadHardFailure = true;
       }
       break;
     }
@@ -493,8 +532,16 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         "Copy that, Recruit — I've queued that below. Review the details and tap APPLY to confirm.";
     } else {
       console.log(`[tool-loop] max rounds (${maxRounds}) exhausted without terminal response`);
-      finalText =
-        "Recruit — I had trouble pinning that down. Try asking again with a bit more specificity. If you want today's workout or your current plan, ask plainly: \"what's my workout today\" or \"what's my plan\" — I'll read the manifest directly.";
+      finalText = HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED;
+      // APK +43 obs 2 (B-pass finding, diagnose a1c6b9) — this is the OTHER
+      // hardcoded non-model apology in this file (the catch block above sets
+      // the first one). It has the exact same self-perpetuation shape: if
+      // this text gets persisted as a normal reply and replayed into the
+      // NEXT request's `history`, the model echoes/continues from it as if
+      // it were a real prior turn. hadHardFailure must cover BOTH — the
+      // FC2 queued-intent acknowledgment right above is real, useful output
+      // and stays excluded from this flag.
+      hadHardFailure = true;
     }
   }
 
@@ -505,6 +552,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     tokensUsed,
     usedFallback,
     roundsExecuted,
+    hadHardFailure,
   };
 }
 

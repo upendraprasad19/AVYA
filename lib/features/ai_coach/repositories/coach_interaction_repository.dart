@@ -203,6 +203,21 @@ class CoachInteractionRepository {
     String key, {
     required String aiResponse,
     required String modelUsed,
+    // APK +43 obs 2 — true when [aiResponse] is the server's hardcoded
+    // "trouble reaching the model" apology rather than real model output
+    // (AiChatResponse.hadHardFailure). The turn still delivers normally
+    // (pending: false, no retry UI — that's `updateInteractionWithError`'s
+    // job) and is marked `had_hard_failure` (a field SEPARATE from
+    // `failed` — plan-review round 1 finding, diagnose a1c6b9: `failed` is
+    // also read by `ChatHistoryNotifier.build` to render an error bubble +
+    // Retry button, which a hard-failure apology must NOT trigger; `failed`
+    // therefore stays unconditionally false here, exactly as it was before
+    // this parameter existed) so `recentHistoryExchanges` excludes it from
+    // the next request's replayed history. Without this, a genuine
+    // quota-exhaustion apology gets fed back to the model on the very next
+    // turn, which echoes it back as if it were a normal continuation —
+    // turning one transient outage into a self-perpetuating "stuck" chat.
+    bool hadHardFailure = false,
   }) async {
     // gate16-exempt: in-place mutation + write-back. Map is not surfaced
     // to a List consumer; the key is held by the caller.
@@ -213,6 +228,7 @@ class CoachInteractionRepository {
     entry['model_used'] = modelUsed;
     entry['pending'] = false;
     entry['failed'] = false;
+    entry['had_hard_failure'] = hadHardFailure;
     entry.remove('error_text');
     await _hive.coachBox.put(key, entry);
   }
@@ -263,8 +279,16 @@ class CoachInteractionRepository {
   ///
   /// Excludes rows that cannot be safely replayed:
   ///  - `kind`-tagged action rows (e.g. `completion_prompt` tap-cards),
-  ///  - `pending`/`failed` rows (incl. the CURRENT turn's just-written pending
-  ///    row — so a message never leaks into its own history),
+  ///  - `pending`/`failed`/`had_hard_failure` rows (incl. the CURRENT turn's
+  ///    just-written pending row — so a message never leaks into its own
+  ///    history). `had_hard_failure` is a SEPARATE field from `failed`
+  ///    (plan-review round 1, diagnose a1c6b9): a hard-failure apology
+  ///    delivers normally (no error bubble/Retry — see
+  ///    `updateInteractionWithResponse`) but must still be excluded from
+  ///    replay, on BOTH the live path (`hadHardFailure` threaded through)
+  ///    and a cold restore of the same row (`_restoreCoachInteractions`
+  ///    recognizes it by exact apology text — the cloud has no column for
+  ///    this flag),
   ///  - media rows (`mode == 'media'` — their `user_message` is a `[Photo] …`
   ///    placeholder, not usable text),
   ///  - any row missing a non-empty `user_message` OR `ai_response`.
@@ -303,6 +327,7 @@ class CoachInteractionRepository {
       if (map['kind'] != null) continue; // action rows (completion_prompt etc.)
       if (map['pending'] == true) continue;
       if (map['failed'] == true) continue;
+      if (map['had_hard_failure'] == true) continue;
       if (map['mode'] == 'media') continue; // '[Photo] …' placeholder text
       // Only genuine coach-chat rows (null channel = local coach write).
       final channel = map['channel'] as String?;
