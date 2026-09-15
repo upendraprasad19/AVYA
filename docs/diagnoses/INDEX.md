@@ -12,8 +12,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### submissions_load_resilience (1 bugs)
 - 2026-09-15 2a9f3c — Founder-reported screenshot from internal testing: Profile > My Submissions tab stuck on an infinite loading spinner — "My submissions and added exercises not being shown". No error, no retry option,…
 
-### active_workout_swap_add_exercise_navigation (1 bugs)
+### active_workout_swap_add_exercise_navigation (2 bugs)
 - 2026-09-15 6c2f91 — Founder-reported, live-reproduced jointly with the agent in Chrome on the amar@gmail.com test account: mid active-workout, after logging all 4 sets of an exercise, tapping SWAP on the next exercise…
+- 2026-09-15 d2f8a3 — `main` CI ("Test & Analyze" → "Unit Tests") went RED at e46cecc9 (the obs-batch-0914 merge) with: test/contracts/swap_undo_snackbar_modal_pop_test.dart: s1n4c0 — onAdd "__ADD_MODE__" handler pops…
 
 ### active_workout_logging_type_resolution (1 bugs)
 - 2026-09-15 9b1e7a — Founder-reported: swapped a timed exercise for a weight/reps exercise mid active-workout. The weight/reps exercise kept showing the timed UI (sets + duration + rest timer) instead of weight/reps…
@@ -1212,6 +1213,7 @@ rather than a Hive box. (1 bugs)
 | 2026-09-15 | 2a9f3c | Founder-reported screenshot from internal testing: Profile > My Submissions tab stuck on an infinite loading spinner — "My submissions and added exercises not being shown". No error, no retry option,… | submissions_load_resilience | test/contracts/submissions_load_timeout_behavioral_test.dart |
 | 2026-09-15 | 6c2f91 | Founder-reported, live-reproduced jointly with the agent in Chrome on the amar@gmail.com test account: mid active-workout, after logging all 4 sets of an exercise, tapping SWAP on the next exercise… | active_workout_swap_add_exercise_navigation | test/contracts/swap_add_exercise_double_pop_behavioral_test.dart |
 | 2026-09-15 | 9b1e7a | Founder-reported: swapped a timed exercise for a weight/reps exercise mid active-workout. The weight/reps exercise kept showing the timed UI (sets + duration + rest timer) instead of weight/reps… | active_workout_logging_type_resolution | test/contracts/swap_exercise_logging_type_behavioral_test.dart |
+| 2026-09-15 | d2f8a3 | `main` CI ("Test & Analyze" → "Unit Tests") went RED at e46cecc9 (the obs-batch-0914 merge) with: test/contracts/swap_undo_snackbar_modal_pop_test.dart: s1n4c0 — onAdd "__ADD_MODE__" handler pops… | active_workout_swap_add_exercise_navigation | test/contracts/swap_undo_snackbar_modal_pop_test.dart |
 | 2026-09-15 | f4c8a2 | Founder-reported screenshot from internal testing: the active-workout weight input pre-fills with a garbage-precision value like "27.9000000000000..." instead of a clean decimal. Founder asked "why… | active_workout_weight_prefill | test/train/exercise_card_weight_display_format_test.dart |
 | 2026-09-14 | e1b4a7 | cmdDigest's own test (index_test.ts) passed, but four of the five digest sections (windowed, lifetime, alerts, subscriptions) silently resolved to "unreadable" instead of the intended empty/"none"… | fetchAllPages_chainable_builder_contract | supabase/functions/telegram-admin-bot/index_test.ts |
 | 2026-09-14 | d70421 | B-pass review of migration 133 (docs/reviews/28213f7956e2-review.md, Finding 3) found private.dispatch_critical_alert_notify()'s EXCEPTION WHEN OTHERS handler was a bare `RETURN NEW;` with zero… | server_trigger_telemetry | test/sql/alert_critical_notify_trigger_live_verify.sql |
