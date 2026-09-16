@@ -634,6 +634,22 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// it can be completed on any device, which is exactly why the recovery
   /// flow above also moved to a token/code shape instead of a raw link.
   Future<void> confirmEmail(String tokenHash) async {
+    // OI-205 interim guard (2026-09-16, plan-review round 1 Finding 1):
+    // /confirm is an autoVerify Android App Link — tapping it from ANY app
+    // hands control straight to the already-running Activity, unlike /reset
+    // (browser-only, no App Link). Refuse outright rather than silently
+    // switching an already-authenticated user's session; the full consent
+    // UX (switch vs. cancel) remains a real product decision, tracked by
+    // OI-205, not decided here. Checked BEFORE the loading state so a
+    // blocked attempt never touches Supabase at all.
+    final guardState = confirmEmailAuthGuardState(
+      state,
+      alreadyAuthenticated: _supabase.isAuthenticated,
+    );
+    if (guardState != null) {
+      state = guardState;
+      return;
+    }
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
       // Bounded by the same ceiling as signInWithEmail: verifyOTP + the
@@ -656,6 +672,27 @@ class AuthNotifier extends Notifier<AuthState2> {
     } catch (e) {
       state = confirmEmailErrorState(state, e);
     }
+  }
+
+  /// Pure decision for the OI-205 interim guard — extracted the same way as
+  /// [confirmEmailErrorState] below, so the DECISION (block + which message)
+  /// is testable with a bare bool, without needing a real, initialized
+  /// `SupabaseService` singleton (its `isAuthenticated` only ever reads true
+  /// after `SupabaseService.instance.initialize()`, which throws in a test
+  /// environment with empty `.env` values — there is no seam to fake just
+  /// the initialized flag). Returns `null` when not blocked (proceed as
+  /// normal); a terminal error [AuthState2] when blocked.
+  @visibleForTesting
+  static AuthState2? confirmEmailAuthGuardState(
+    AuthState2 state, {
+    required bool alreadyAuthenticated,
+  }) {
+    if (!alreadyAuthenticated) return null;
+    return state.copyWith(
+      status: AuthStatus.error,
+      errorMessage:
+          'You’re already signed in. Sign out first to confirm a different account.',
+    );
   }
 
   /// Pure mapping from a thrown error to the resulting error [AuthState2] —

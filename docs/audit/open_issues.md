@@ -4378,22 +4378,57 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   `_ensureLocalUser`'s cross-account guard (`auth_provider.dart:894-951`) is
   correctly reused by both flows, so there is no cross-account Hive DATA
   LEAK — the gap is consent/signal, not data safety.
-- **Scope note**: `/reset` has carried this shape since it shipped; the
-  email-confirm-ux batch's `/confirm` screen deliberately mirrors `/reset`'s
-  passthrough (`app_router.dart`'s own comment: "same shape as /reset") rather
-  than introducing a new inconsistency, so this is a pre-existing
-  architectural characteristic being consistently extended to a second entry
-  point, not a new regression. Out of scope for that batch to fix outright:
-  the actual remedy is real UX design (an interstitial — "you're signed in as
-  X, confirming this link will switch accounts" — or equivalent), which
-  applies equally to `/reset` and hasn't been product-specified. Documented as
-  a deliberate, accepted decision (not a silent gap) in
+- **Scope note**: `/reset` has carried this ROUTER-GUARD shape since it
+  shipped, and `/confirm` deliberately mirrors it (`app_router.dart`'s own
+  comment: "same shape as /reset") rather than introducing a new
+  inconsistency — that much is a pre-existing characteristic being
+  consistently extended, not a new regression, and remains correct.
+  ⚠ **Corrected 2026-09-16, plan-review round 1
+  (`docs/plan-reviews/round-reports/email-confirm-ux-round1.md` Finding 1):
+  the two are NOT reachability-symmetric in practice, and this note
+  previously implied they were.** `/reset` has ZERO Android App Link
+  registered anywhere (`AndroidManifest.xml` grepped in full for
+  `intent-filter`/`android:host`/`android:path`/`autoVerify` — the only
+  `app.icanbefitter.com` App Link in the file is the brand-new one this
+  batch adds, scoped to `/confirm` exactly); per diagnose `c9e2b7`, password
+  reset was redesigned in 2026-08 to an in-app 6-digit code, so a `/reset`
+  LINK, on the rare occasion one exists at all, only ever opens in a
+  **browser** on Android — a separate Flutter-web instance, structurally
+  unable to touch the native app's live session. `/confirm`, by contrast,
+  is now `autoVerify="true"`: tapping the link from ANY app on a phone with
+  AVYA installed hands control DIRECTLY to the already-running Activity via
+  `onNewIntent`/`singleTop`, with no "happens to already be in the same
+  browser tab" precondition. `/confirm`'s silent-account-switch exposure is
+  therefore materially broader and more automatic than `/reset`'s — not
+  merely "the same shape, extended to a second entry point." The actual
+  remedy is still real UX design (an interstitial, or equivalent) applying
+  to both routes, and is still out of scope for a bug-fix batch to design
+  unilaterally — but whoever prioritizes this OI should do so from this
+  corrected risk picture, not the original symmetric one. Documented as a
+  known, corrected-in-place decision (not a silent gap) in
   `lib/features/auth/CLAUDE.md`'s pitfalls table alongside the existing
   `/reset` note.
-- **Fix shape (not decided)**: add an `isAuthenticated` check inside
-  `confirmEmail`/the password-reset equivalent, and — only if a session
-  already exists AND the verified token resolves to a DIFFERENT user id than
-  the current session — surface an explicit confirm-before-switch step
-  instead of switching silently. Needs a product decision on the actual UX,
-  not just the guard.
+- **Interim guard SHIPPED 2026-09-16** (same batch, founder-approved via
+  AskUserQuestion after the round-1 correction above): `confirmEmail` now
+  refuses outright — via the pure, mutation-tested
+  `AuthNotifier.confirmEmailAuthGuardState` — and never calls `verifyOTP` at
+  all when `SupabaseService.instance.isAuthenticated`, showing "You're
+  already signed in. Sign out first to confirm a different account." instead
+  of silently switching. This closes the SILENT part of the exposure for
+  `/confirm` specifically (no consent-to-switch flow, no same-vs-different-
+  account distinction — those still need the real UX decision below).
+  `/reset` is UNCHANGED — it was not touched by this batch and its exposure
+  is already much lower per the corrected risk picture above.
+- **Fix shape (not decided) — the REMAINING gap**: a same-vs-different-
+  account distinction (harmlessly re-confirming your OWN already-used link
+  should not need a sign-out) needs comparing the verified token's resolved
+  user id against the currently-authenticated one — not feasible without
+  first calling `verifyOTP`, which itself already mutates the client's
+  active session as a side effect, so a clean "reject and restore the prior
+  session" implementation needs real session-capture/restore design, not a
+  quick guard. Deliberately NOT attempted in this batch (real edge cases:
+  restore failure, token expiry mid-round-trip) — tracked here rather than
+  rushed under review-response pressure. Also still open: the actual
+  confirm-before-switch UX (interstitial or equivalent) for the DIFFERENT-
+  account case, applying to both `/reset` and `/confirm`.
 - **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `email-confirm-ux`

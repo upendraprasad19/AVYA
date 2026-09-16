@@ -87,4 +87,44 @@ void main() {
     expect(result.status, AuthStatus.error);
     expect(result.errorMessage, contains('invalid or has expired'));
   });
+
+  group(
+    'confirmEmailAuthGuardState — OI-205 interim guard (block, don\'t '
+    'silently switch accounts, when already authenticated)',
+    () {
+      test('blocks with an actionable message when already authenticated', () {
+        final result = AuthNotifier.confirmEmailAuthGuardState(
+          loadingState,
+          alreadyAuthenticated: true,
+        );
+
+        expect(result, isNotNull);
+        expect(result!.status, AuthStatus.error);
+        expect(result.errorMessage, contains('already signed in'));
+        expect(
+          result.errorMessage,
+          isNot(contains('invalid or has expired')),
+          reason:
+              'this is a distinct, more specific refusal — not the generic '
+              'link-invalid fallback.',
+        );
+      });
+
+      test('does not block (returns null) when not authenticated', () {
+        final result = AuthNotifier.confirmEmailAuthGuardState(
+          loadingState,
+          alreadyAuthenticated: false,
+        );
+
+        expect(
+          result,
+          isNull,
+          reason:
+              'the mirror case: the overwhelming majority of real /confirm '
+              'opens are an unauthenticated user completing signup — this '
+              'must never be blocked.',
+        );
+      });
+    },
+  );
 }
