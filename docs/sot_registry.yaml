@@ -9849,8 +9849,17 @@ concepts:
       quote. `recent_pr_exercise` is banned from this function entirely: it has
       no recency bound (its source scans all history), and pr-detection already
       owns "you just hit a PR" with a correct 20-minute lookback. Removing it
-      from the TITLE alone is insufficient — it must also leave the Gemini
-      userState, or the model narrates the stale PR into the body.
+      from the TITLE alone is insufficient — it must also be absent from every
+      input the message-composition code reads.
+      # Corrected 2026-09-16 -- B-pass on cron-ai-removal
+      # (247d945d1ba0-review.md Finding 3). This paragraph previously read
+      # "...it must also leave the Gemini userState, or the model narrates
+      # the stale PR into the body" -- describing streak-guardian's OLD
+      # Gemini-based composition. cron-ai-removal removed Gemini from
+      # streak-guardian entirely (verified:
+      # `grep -c "userState\|geminiChat" supabase/functions/streak-guardian/index.ts`
+      # -> 0); message composition (including this concept's ban) now
+      # lives in message.ts's pickStreakMessage, a template, not a prompt.
 
       (2) WEEKLY-RECAP-READY: the Sunday Brief is PRO-only and had NO
       subscription check at all. The canonical predicate is
@@ -9879,9 +9888,13 @@ concepts:
         semantic: canonical-pro-predicate
     readers:
       - file: supabase/functions/streak-guardian/index.ts
-        line_range: 214
+        line_range: 264
         method: streakDays
         semantic: reads-the-selected-row
+        # Corrected 2026-09-16 (was 214) -- B-pass on cron-ai-removal
+        # (247d945d1ba0-review.md Finding 4) found this citation stale;
+        # predates this batch (see OI-209 for the systemic parser gap
+        # that left it, and 14 siblings elsewhere, unchecked).
       - file: supabase/functions/weekly-recap-ready/index.ts
         line_range: 263
         method: concurrency loop

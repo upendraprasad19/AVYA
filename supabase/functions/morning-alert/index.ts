@@ -103,7 +103,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 
 const PAGE_SIZE = 200; // Users fetched per page to cap memory
-const CONCURRENCY = 20; // Parallel AI calls within each chunk
+const CONCURRENCY = 20; // Parallel alert composition + delivery within each chunk
 
 // ── Counters (module-level so generateAndStoreAlert can increment) ────
 let proLightAlerts = 0;

@@ -68,9 +68,13 @@ export function composeCongrats(
   const rankLabel = RANK_LABELS[rankCode] ?? rankCode;
   const name = firstNameOf(ctx.full_name);
   const goal = goalToCopy(ctx.primary_goal);
-  // Deterministic default when the caller doesn't pin one: stable across
-  // repeat calls for the same rank-up (keyed on rank code + workout count,
-  // not a clock or RNG, so a retry never surfaces a different message).
+  // Deterministic default when the caller doesn't pin one: keyed on rank
+  // code + workout count, not a clock or RNG. Stable WITHIN a single
+  // invocation, but total_workouts_done is re-read live from user_progress
+  // on every call (index.ts's loadUserContext), not pinned to the
+  // triggering event -- so a genuine retry after the user logs another
+  // workout in between CAN select a different (equally-approved) variant.
+  // Cosmetic only: never a duplicate/incorrect send, just a different copy.
   const idx = variantIndex ?? (rankCode.length + ctx.total_workouts_done) % 3;
   return variant(idx, name, rankLabel, ctx.total_workouts_done, ctx.current_streak_weeks, goal);
 }
