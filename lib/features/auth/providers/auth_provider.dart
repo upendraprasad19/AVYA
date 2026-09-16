@@ -641,7 +641,17 @@ class AuthNotifier extends Notifier<AuthState2> {
     // switching an already-authenticated user's session; the full consent
     // UX (switch vs. cancel) remains a real product decision, tracked by
     // OI-205, not decided here. Checked BEFORE the loading state so a
-    // blocked attempt never touches Supabase at all.
+    // blocked attempt never touches Supabase at all — this ORDERING is
+    // correct-by-inspection (the guard is unconditionally the first
+    // statement in this method) but round 2 correctly noted it is not
+    // independently pinned by a test: proving it end-to-end needs
+    // `SupabaseService.instance.isAuthenticated` to read true, which
+    // requires `SupabaseService.instance.initialize()` to have run — that
+    // throws in a test environment with empty `.env` values, and no seam
+    // exists to fake just the initialized flag (same gap
+    // `confirmEmailAuthGuardState`'s own doc comment already names).
+    // Adding one is a real, separate change to a shared core service, not a
+    // one-line addition to slip into this batch.
     final guardState = confirmEmailAuthGuardState(
       state,
       alreadyAuthenticated: _supabase.isAuthenticated,
@@ -690,10 +700,26 @@ class AuthNotifier extends Notifier<AuthState2> {
     if (!alreadyAuthenticated) return null;
     return state.copyWith(
       status: AuthStatus.error,
-      errorMessage:
-          'You’re already signed in. Sign out first to confirm a different account.',
+      errorMessage: alreadyAuthenticatedConfirmMessage,
     );
   }
+
+  /// The exact message [confirmEmailAuthGuardState] sets. Exposed as a named
+  /// constant (not a literal re-typed at the call site) so
+  /// `ConfirmEmailScreen` can detect this SPECIFIC case and offer a real
+  /// sign-out action instead of the generic error CTA — plan-review round 2
+  /// found that CTA (`context.go('/sign-in')`) is a silent no-op for exactly
+  /// this population: `_authRedirect`/`postSessionRedirect` bounce an
+  /// already-authenticated, onboarded user straight back to `/home` before
+  /// `SignInScreen` ever renders, so the button never actually let them sign
+  /// out despite the message promising it would.
+  ///
+  /// Deliberately NOT `@visibleForTesting` — unlike [confirmEmailAuthGuardState]
+  /// and [confirmEmailErrorState], this constant's whole purpose is to be read
+  /// by production code in a different file (`confirm_email_screen.dart`), not
+  /// just by tests.
+  static const String alreadyAuthenticatedConfirmMessage =
+      'You’re already signed in. Sign out first to confirm a different account.';
 
   /// Pure mapping from a thrown error to the resulting error [AuthState2] —
   /// extracted so this SELECTION logic (which message a given failure gets)

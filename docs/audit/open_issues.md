@@ -4362,7 +4362,7 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   unused `subscription_expires_at` select at `:406`) and its own migration.
 - **Identified**: 2026-09-15 · filed via mint_oi.sh from branch `oi-stale-subscription-status`
 
-## OI-205 — Already-authenticated user opening a valid /reset or /confirm link is silently switched to a different account with no consent prompt
+## OI-205 — Already-authenticated user opening a valid /reset link is silently switched to a different account with no consent prompt (/confirm partially guarded — no same-vs-different-account distinction yet)
 
 - **Status**: OPEN
 - **Blocked on**: none

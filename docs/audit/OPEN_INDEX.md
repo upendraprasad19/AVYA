@@ -121,4 +121,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-200 | founder_metrics_ops().client_errors_today counts benign event-coded… | none | 2026-09-14, B-pass on migration 135… | [:4244](open_issues.md#L4244) |
 | OI-201 | alert_cron_function_dead can burst-dispatch many critical alerts at once;… | none | 2026-09-14, Hermes lens L31… | [:4282](open_issues.md#L4282) |
 | OI-202 | users.subscription_status never reconciles to free after expiry | none | 2026-09-15, founder spot-check of… | [:4324](open_issues.md#L4324) |
-| OI-205 | Already-authenticated user opening a valid /reset or /confirm link is… | none | 2026-09-16, B-pass on the… | [:4365](open_issues.md#L4365) |
+| OI-205 | Already-authenticated user opening a valid /reset link is silently… | none | 2026-09-16, B-pass on the… | [:4365](open_issues.md#L4365) |

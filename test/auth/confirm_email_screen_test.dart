@@ -31,6 +31,35 @@ class _SucceedingAuthNotifier extends AuthNotifier {
   }
 }
 
+/// Starts already in the OI-205-guard-blocked error state (as if confirmEmail
+/// already ran and refused) and tracks whether [signOut] was actually
+/// invoked — round 2's exact concern: does the CTA in this state perform a
+/// real sign-out, or merely navigate (a no-op for an authenticated user)?
+class _AlreadyAuthenticatedAuthNotifier extends AuthNotifier {
+  bool signOutCalled = false;
+
+  @override
+  AuthState2 build() {
+    ref.onDispose(cancelOAuthWatch);
+    return const AuthState2(
+      status: AuthStatus.error,
+      errorMessage: AuthNotifier.alreadyAuthenticatedConfirmMessage,
+    );
+  }
+
+  @override
+  Future<void> confirmEmail(String tokenHash) async {
+    // Deliberately a no-op: the screen must already be showing the blocked
+    // state from build() above, not depend on a real confirmEmail call.
+  }
+
+  @override
+  Future<void> signOut() async {
+    signOutCalled = true;
+    state = const AuthState2();
+  }
+}
+
 void main() {
   testWidgets(
     'a missing token_hash shows the invalid-link message without calling confirmEmail',
@@ -204,6 +233,65 @@ void main() {
             'suite ever drove AuthStatus.success, so a typo\'d route name or '
             'a ref.listen firing on the wrong status would have passed.',
       );
+    },
+  );
+
+  testWidgets(
+    'the already-signed-in guard state actually signs out before navigating '
+    '(round 2 Finding 1 — GO TO SIGN IN alone is a no-op for an '
+    'authenticated user; _authRedirect bounces back to /home before '
+    'SignInScreen ever renders)',
+    (tester) async {
+      final notifier = _AlreadyAuthenticatedAuthNotifier();
+      final router = GoRouter(
+        initialLocation: '/confirm',
+        routes: [
+          GoRoute(
+            path: '/confirm',
+            builder: (_, _) =>
+                const ConfirmEmailScreen(tokenHash: 'real-token-hash'),
+          ),
+          GoRoute(
+            path: '/sign-in',
+            builder: (_, _) =>
+                const Scaffold(body: Text('SIGN-IN-SCREEN-STUB')),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [authNotifierProvider.overrideWith(() => notifier)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('SIGN OUT'), findsOneWidget);
+      expect(
+        find.text('GO TO SIGN IN'),
+        findsNothing,
+        reason:
+            'the already-signed-in state must NOT show the generic '
+            '"GO TO SIGN IN" CTA — that button alone would be a silent '
+            'no-op for this exact population.',
+      );
+
+      await tester.tap(find.text('SIGN OUT'));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (find.text('SIGN-IN-SCREEN-STUB').evaluate().isNotEmpty) break;
+      }
+
+      expect(
+        notifier.signOutCalled,
+        isTrue,
+        reason:
+            'tapping SIGN OUT must actually call AuthNotifier.signOut — not '
+            'just navigate, which _authRedirect would silently reject for '
+            'an authenticated user.',
+      );
+      expect(find.text('SIGN-IN-SCREEN-STUB'), findsOneWidget);
     },
   );
 }

@@ -86,6 +86,14 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
 
     final authState = ref.watch(authNotifierProvider);
     if (authState.status == AuthStatus.error) {
+      // Distinct from the generic error CTA (round 2 finding): navigating to
+      // /sign-in while still authenticated is a silent no-op — _authRedirect
+      // bounces straight back to /home before SignInScreen ever renders — so
+      // this specific message needs an action that actually signs out first.
+      if (authState.errorMessage ==
+          AuthNotifier.alreadyAuthenticatedConfirmMessage) {
+        return _buildAlreadySignedInState(context);
+      }
       return _buildErrorState(
         context,
         authState.errorMessage ??
@@ -161,6 +169,66 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
                 ),
                 const SizedBox(height: AppSpacing.stackL),
                 _buildSignInLink(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Distinct from [_buildErrorState]: the CTA here actually signs the user
+  /// out before navigating, rather than merely calling `context.go`, which
+  /// `_authRedirect` would otherwise bounce straight back to `/home` for an
+  /// authenticated, onboarded user before `SignInScreen` ever rendered
+  /// (round-2 finding — the same class as `reset_password_screen.dart`'s
+  /// diagnose c8f1d3: a screen that signs out in place must navigate
+  /// explicitly afterward, since GoRouter has no `refreshListenable` tied to
+  /// auth state).
+  Widget _buildAlreadySignedInState(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(),
+                Text(
+                  AuthNotifier.alreadyAuthenticatedConfirmMessage,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body.copyWith(color: AppColors.textDim),
+                ),
+                const SizedBox(height: AppSpacing.stackL),
+                GestureDetector(
+                  onTap: () async {
+                    await ref.read(authNotifierProvider.notifier).signOut();
+                    if (context.mounted) context.go('/sign-in');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'SIGN OUT',
+                        style: AppTypography.h3.copyWith(
+                          fontSize: 12,
+                          color: AppColors.bgDeep,
+                          letterSpacing: 2.5,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
