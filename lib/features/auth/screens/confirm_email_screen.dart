@@ -207,7 +207,18 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
                 const SizedBox(height: AppSpacing.stackL),
                 GestureDetector(
                   onTap: () async {
-                    await ref.read(authNotifierProvider.notifier).signOut();
+                    try {
+                      await ref.read(authNotifierProvider.notifier).signOut();
+                    } catch (e) {
+                      debugPrint('[ConfirmEmailScreen] signOut error: $e');
+                      // OI-51 DERIVED gate (settings_screen.dart's
+                      // _SignOutButton carries the identical precedent):
+                      // signOut() failing partway may leave the device still
+                      // bound to the departing user's push identity. Release
+                      // explicitly so a partial failure doesn't leave a stale
+                      // OneSignal/Crashlytics binding behind.
+                      await releaseDeviceSessionIdentity();
+                    }
                     if (context.mounted) context.go('/sign-in');
                   },
                   child: Container(
