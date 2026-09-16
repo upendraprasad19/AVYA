@@ -27,8 +27,9 @@
 //
 // WHY THE HARM IS ASYMMETRIC: the dilution only ever pushes the rate DOWN, and
 // only for a user who took a hold -- i.e. the free user who chose to stay rather
-// than churn. With enable_adherence_gate ON they are then offered the
-// "detrained / repeat the phase" path on a perfect record.
+// than churn. With the adherence gate ON (LIVE default since 2026-09-16, OI-53
+// batch 2) they are then offered the "detrained / repeat the phase" path on a
+// perfect record.
 
 import 'dart:io';
 

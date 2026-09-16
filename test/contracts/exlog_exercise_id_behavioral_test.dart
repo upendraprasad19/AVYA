@@ -100,8 +100,6 @@ void main() {
 
   Future<void> disableIdHistory() async =>
       HiveService.instance.configBox.put('disable_exercise_id_history', true);
-  Future<void> enableGraded() async =>
-      HiveService.instance.configBox.put('enable_graded_progression', true);
 
   Future<void> setIntermediateProfile() async =>
       HiveService.instance.userBox.put('profile', {
@@ -171,13 +169,13 @@ void main() {
 
   test('graded union — id-index sessions feed the 2-consecutive back-off gate',
       () async {
-    // id-history ON (now default) + graded ON. One below-range session arrives
-    // via the NAME index (older), the other via the ID index (newer, different
-    // name). The graded rule unions BOTH → 2 consecutive distinct-day
-    // below-range → back off (−1.25 → 98.8). Without the union only the name
-    // session counts → 1 session → HOLD (100.0); 98.8 proves the id-index
-    // sessions are unioned in.
-    await enableGraded();
+    // id-history ON (now default) + graded progression ON (now default, OI-53
+    // batch 2 — neither needs an explicit setup call any more). One
+    // below-range session arrives via the NAME index (older), the other via
+    // the ID index (newer, different name). The graded rule unions BOTH → 2
+    // consecutive distinct-day below-range → back off (−1.25 → 98.8). Without
+    // the union only the name session counts → 1 session → HOLD (100.0);
+    // 98.8 proves the id-index sessions are unioned in.
     await setIntermediateProfile();
     await seedExlog('Bench', weight: 100, reps: 7, daysAgo: 5); // name, below
     await seedExlog('Bench Variant',

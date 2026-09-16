@@ -37,19 +37,21 @@ class PlanEngineFlags {
     }
   }
 
-  /// W2.1 (Batch 3b-ii) graded double progression in ProgressionResolver.
-  /// **Default OFF (ship dark, §4.6)** — unlike the reduce-only ⑦a decay, W2.1
-  /// can INCREASE prescribed load (progress at the top of the rep-range;
-  /// beginner auto-linear), so it is NOT the safe direction: it ships inert and
-  /// is flipped ON after APK verification. When OFF, resolve() uses the verbatim
-  /// fixed-10/5 rule (+ independent ⑦a decay). Set
-  /// `configBox['enable_graded_progression'] = true` to enable.
+  /// W2.1 (Batch 3b-ii) graded double progression in ProgressionResolver. LIVE
+  /// since 2026-09-16 (OI-53 batch 2). Rep-range-aware banding (progress at the
+  /// top of the rep-range / hold within / back off on 2 consecutive
+  /// below-range sessions) replaces the old fixed-10/5 rule; beginner
+  /// auto-linear window (<120d training age) always progresses. Independent of
+  /// ⑦a's reduce-only decay. Kill-switch
+  /// `configBox['disable_graded_progression'] = true` restores the verbatim
+  /// fixed-10/5 rule.
   static bool get gradedProgressionEnabled {
     try {
-      return HiveService.instance.configBox.get('enable_graded_progression') ==
+      return HiveService.instance.configBox
+              .get('disable_graded_progression') !=
           true;
     } catch (_) {
-      return false; // no Hive (pure unit test) → safe default: OFF (verbatim)
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 
@@ -99,38 +101,39 @@ class PlanEngineFlags {
     }
   }
 
-  /// ⑦(b) session-time detraining resume cut. **Default OFF (ship dark, §4.6)** —
-  /// like W2.1 (and unlike ⑦a's gen-time number) it changes the interactive
-  /// active-workout UI (a resume banner + a reduced weight prefill + the overload
-  /// indicator / "TRY:" hint), so it ships inert and is flipped ON after APK
-  /// verification. When ON, `ActiveWorkoutNotifier.startWorkout` scales ONLY the
-  /// last-logged-weight prefill by `detrainingFactorForGap(getDaysSinceLastWorkout())`
-  /// for that session (never persisted; never the ⑦a-decayed prescription).
-  /// Set `configBox['enable_session_detraining_cut'] = true` to enable.
+  /// ⑦(b) session-time detraining resume cut. LIVE since 2026-09-16 (OI-53
+  /// batch 2). Like W2.1 (and unlike ⑦a's gen-time number) it changes the
+  /// interactive active-workout UI (a resume banner + a reduced weight prefill
+  /// + the overload indicator / "TRY:" hint): `ActiveWorkoutNotifier.startWorkout`
+  /// scales ONLY the last-logged-weight prefill by
+  /// `detrainingFactorForGap(getDaysSinceLastWorkout())` for that session
+  /// (never persisted; never the ⑦a-decayed prescription). Kill-switch
+  /// `configBox['disable_session_detraining_cut'] = true` restores the
+  /// verbatim prefill (no cut).
   static bool get sessionDetrainingCutEnabled {
     try {
       return HiveService.instance.configBox
-              .get('enable_session_detraining_cut') ==
+              .get('disable_session_detraining_cut') !=
           true;
     } catch (_) {
-      return false; // no Hive (pure unit test) → safe default: OFF (no cut)
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 
-  /// ⑤ (Batch 4) physique-focus bring-up. **Default OFF (ship dark, §4.6)** — the
-  /// user's self-selected `physique_focus` translates to muscle tokens that
+  /// ⑤ (Batch 4) physique-focus bring-up. LIVE since 2026-09-16 (OI-53 batch 2).
+  /// The user's self-selected `physique_focus` translates to muscle tokens that
   /// PeriodizationEngine turns into +1 set on matching exercises (INCREASES
-  /// prescribed volume), so it ships inert and is flipped ON after APK
-  /// verification. When OFF, the `effectiveBodyFocus` seam is byte-identical to
-  /// today (explicit focus ignored; the auto weakMuscles() path is unchanged).
-  /// Set `configBox['enable_physique_focus_bringup'] = true` to enable.
+  /// prescribed volume). Kill-switch
+  /// `configBox['disable_physique_focus_bringup'] = true` restores the
+  /// verbatim `effectiveBodyFocus` seam (explicit focus ignored; the auto
+  /// weakMuscles() path unchanged).
   static bool get physiqueFocusBringupEnabled {
     try {
       return HiveService.instance.configBox
-              .get('enable_physique_focus_bringup') ==
+              .get('disable_physique_focus_bringup') !=
           true;
     } catch (_) {
-      return false; // no Hive (pure unit test) → safe default: OFF (no bring-up)
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 
@@ -282,33 +285,38 @@ class PlanEngineFlags {
   }
 
   /// ⑧ Batch 8 (W2.5 adherence gate): the "repeat the last phase's content"
-  /// advance. When ON, a phase advance that passes `repeatContent:true` PINS
-  /// the just-finished
-  /// phase's exercises into the new phase (via generateV4's pinnedExercisesByDay)
-  /// instead of a fresh selection, gated on the prior phase's
-  /// {planGoal, equipment, daysPerWeek, effectiveExp} being UNCHANGED. Ship-dark
-  /// DEFAULT OFF (§4.6 — changes generated content + adds a `last_phase_profile`
-  /// config write). OFF → no extraction, no gate, no config write, `repeatContent`
-  /// inert → byte-identical to today. Set `configBox['enable_adherence_gate'] =
-  /// true` to enable.
-  ///
-  /// ⚠ Corrected 2026-08-05: this comment used to say the `repeatContent:true`
-  /// caller was "not yet wired". It IS wired — `pro_phase_advance.dart:167-169`
-  /// computes it as `adherenceGateEnabled && currentPhaseCompletionRate() <
-  /// AppConstants.phaseUnlockCompletionRate` and passes it through
-  /// `autoGenerateNextPhaseIfNeeded`. The `&&` short-circuits, so with the flag
-  /// OFF the completion-rate scan never runs and the path stays byte-identical
-  /// — which is why the stale note survived: flag-OFF behaviour is the same
-  /// either way, so nothing failed to make it visible. Same phantom-citation
-  /// class as the `check_writer_reader_drift.dart` gate `lib/CLAUDE.md` cited
-  /// for months without it ever existing: a doc claiming LESS coverage than
-  /// reality is quieter than one claiming more, but it still mis-scopes the
-  /// next person's plan.
+  /// advance. LIVE since 2026-09-16 (OI-53 batch 2). When ON, a phase advance
+  /// that passes `repeatContent:true` PINS the just-finished phase's exercises
+  /// into the new phase (via generateV4's pinnedExercisesByDay) instead of a
+  /// fresh selection, gated on the prior phase's {planGoal, equipment,
+  /// daysPerWeek, effectiveExp} being UNCHANGED (the G5 faithfulness gate).
+  /// `repeatContent`/`repeat` is computed at TWO call sites —
+  /// `pro_phase_advance.dart`'s automatic low-adherence repeat
+  /// (`adherenceGateEnabled && currentPhaseCompletionRate() <
+  /// AppConstants.phaseUnlockCompletionRate`) and `graduation_screen.dart`'s
+  /// explicit choice sheet (`adherenceGateEnabled &&
+  /// shouldOfferAdvanceChoice(...)`), but the two are NOT symmetric: the
+  /// automatic path re-checks the flag a second, redundant time immediately
+  /// before `_buildRepeatPins` (mutation-confirmed 2026-09-16: neutering
+  /// either check alone is invisible to `pro_phase_advance_behavioral_test.dart`;
+  /// only neutering both reddens it), while the choice-sheet path takes the
+  /// user's already-made choice straight through with no re-check of its own
+  /// — a kill-switch flip during the human-time gap between the sheet opening
+  /// and the tap was NOT honored until a B-pass finding (2026-09-16) moved the
+  /// check into `_buildRepeatPins` itself: the ONE method BOTH callers funnel
+  /// through, so it is now checked exactly once for the choice-sheet path and
+  /// redundantly for the automatic path, universally rather than
+  /// caller-dependent (also mutation-confirmed: reverting that check reddens
+  /// exactly the graduation-path kill-switch test). Kill-switch
+  /// `configBox['disable_adherence_gate'] = true` restores the verbatim path:
+  /// no extraction, no gate, no `last_phase_profile` write, `repeatContent`
+  /// inert everywhere → byte-identical.
   static bool get adherenceGateEnabled {
     try {
-      return HiveService.instance.configBox.get('enable_adherence_gate') == true;
+      return HiveService.instance.configBox.get('disable_adherence_gate') !=
+          true;
     } catch (_) {
-      return false;
+      return true; // no Hive (pure unit test) → default: ON
     }
   }
 

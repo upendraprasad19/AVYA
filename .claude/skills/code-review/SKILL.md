@@ -311,6 +311,49 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   per this record's own plan-review "Remediation" section) and held exactly.
   False-alarm rate 0/3 → no lens removed; `modelled_on_is_a_checkable_claim` extended per above.
 
+- **2026-09-16 (c)** — blast-radius **platform** — branch `oi53-batch2-flip` (OI-53 batch 2: flip
+  `gradedProgressionEnabled` + `sessionDetrainingCutEnabled` + `physiqueFocusBringupEnabled` +
+  `adherenceGateEnabled` from ship-dark default-OFF to default-ON-with-kill-switch, same pattern
+  as batch 1 above). **2 findings (0 P0, 0 P1, 1 P2, 1 P3); 0 false_alarm — both pending
+  founder triage at write time.** Review: `docs/reviews/c22fa39a1cbf-review.md`. Run as one
+  agent (22 files: 1 flag-definitions file, 4 call-site comment updates, 7 behavioral test
+  files, 2 nested CLAUDE.md, 1 SoT registry, 2 OI-board files).
+  **Tuning — lens 6 (`guard_without_its_mirror`) found the batch's own "redundant defense-in-depth"
+  claim was TRUE for only one of the two call sites it was written to describe, and the batch's
+  own more-precise sibling docs already knew the narrower truth.** `adherenceGateEnabled` gates
+  a repeat-pin decision computed at two call sites — `pro_phase_advance.dart`'s automatic
+  low-adherence repeat (3-a2) and `graduation_screen.dart`'s explicit choice sheet (3-b). The
+  flags file's doc comment, a new `docs/audit/open_issues.md` bullet, and a nested CLAUDE.md all
+  described the flag as re-checked a second, redundant, mutation-confirmed time "immediately
+  before `_buildRepeatPins`" for the mechanism as a whole. Tracing the actual call graph found
+  that re-check exists ONLY on the 3-a2 path (`workout_schedule_read_service.dart:659`,
+  reachable with zero `await`s from the first read — genuinely un-raceable); the 3-b
+  (graduation) path calls `buildRepeatPinsForAdvance` → `_buildRepeatPins` directly, which
+  contains no flag reference at all, and its ONE flag read sits before a real human-time
+  `await showAdvanceChoiceSheet(context)` with nothing re-verifying it after. Two files already
+  had the narrower, correct phrasing — `docs/sot_registry.yaml`'s own concept entry ("checked
+  TWICE on the 3-a2 path") and the new test's own comment ("checked TWICE on this path") — which
+  is what made the broader claim in the other three files checkable as wrong rather than merely
+  ambiguous. **Add to lens 6's method: when a diff describes a guard as covering "N call sites"
+  collectively, find the one sibling doc (if any) that scopes the claim to a SINGLE site, and
+  treat any wider phrasing elsewhere as the thing to verify, not confirm.** Coverage gap
+  confirmed structurally: `grep -rln "runGraduationPhaseAdvance" test/` found no test that
+  touches `PlanEngineFlags.adherenceGateEnabled` while driving that function, so nothing catches
+  a future regression on the unprotected path. Rated P2, not higher, because none of the OI-53
+  flags has a release-build toggle (dev-panel only, no RemoteConfig, per OI-95) — the race
+  window is real but reachable only in a debug/QA session today.
+  **Tuning 2 — lens 8 extended to a PROSE count, not just a test literal, and caught a
+  same-diff self-inconsistency.** A freshly-filed OI's own "how found" bullet said "4 more
+  stale citations" and then named five; cross-checked against the `sot_registry.yaml` diff,
+  which does show exactly five method-level `line_range:` corrections for the named methods.
+  All five corrected ranges, and separately the new OI's own cited line numbers for the
+  DIFFERENT (deliberately out-of-scope, pre-existing) stale citations it was filed to track,
+  were independently re-read against the live file and are byte-exact — the miscount is
+  isolated to the one summary number, not to any of the corrections themselves. **Lens 8's
+  "compute it, don't read it" method applies equally to a hand-counted list inside a doc as to
+  a test's expected literal — count the enumeration, don't trust the numeral next to it.**
+  False-alarm rate 0/2 → no lens removed; lens 6 and lens 8 extended per above.
+
 - **2026-09-14 (e)** — blast-radius **platform** — branch `telegram-admin-bot`, Task 13 Step 8
   push-gate fix (migration 137: re-asserts the anon/authenticated revoke on
   `founder_metrics_ops()` that migrations 135/136 each omitted — caught by the FIRST full

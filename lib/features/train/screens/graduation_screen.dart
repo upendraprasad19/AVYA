@@ -366,11 +366,12 @@ class _GenerateNextPhaseButtonState
 
       final scheduleSvc = ref.read(workoutScheduleReadServiceProvider);
 
-      // ⑧ 3-b (W2.5, ship-dark): on a LOW-adherence advance, OFFER a choice —
-      // repeat the just-finished phase's drills (detrained) or take fresh
-      // orders; the phase advances EITHER way (F3). The flag short-circuits so
-      // the ~90-Hive-read currentPhaseCompletionRate() is NEVER evaluated when
-      // OFF → then no sheet, no abort-check, VERBATIM generation.
+      // ⑧ 3-b (W2.5): on a LOW-adherence advance, OFFER a choice — repeat the
+      // just-finished phase's drills (detrained) or take fresh orders; the
+      // phase advances EITHER way (F3). LIVE since 2026-09-16 (OI-53 batch 2;
+      // kill-switch `disable_adherence_gate`). The flag short-circuits so the
+      // ~90-Hive-read currentPhaseCompletionRate() is NEVER evaluated when
+      // killed → then no sheet, no abort-check, VERBATIM generation.
       var choice = AdvanceChoice.advance;
       final offerChoice = PlanEngineFlags.adherenceGateEnabled &&
           shouldOfferAdvanceChoice(
@@ -389,18 +390,21 @@ class _GenerateNextPhaseButtonState
       // regenerate a plan for a phase the user is already on. Route to /train.
       //
       // Unit 3c (OI-45 finding 5): this check used to sit INSIDE the
-      // `if (offerChoice)` block above, and `offerChoice` requires
-      // PlanEngineFlags.adherenceGateEnabled — ship-dark, DEFAULT OFF
-      // (plan_engine_flags.dart) — so on the production default path it never
-      // executed at all. Hoisted out so it runs on every unlock.
+      // `if (offerChoice)` block above, and `offerChoice` required
+      // PlanEngineFlags.adherenceGateEnabled — ship-dark, DEFAULT OFF at the
+      // time — so on the production default path it never executed at all.
+      // Hoisted out so it runs on every unlock.
       //
       // Precise about what that buys, because round-1 review caught the
-      // over-claim: on the flag-OFF path there is NO await between the
-      // `progress` read above and this line, so `live == currentPhase` always
-      // and this early-out cannot fire. It is load-bearing only across the
-      // choice-sheet await (flag ON) — and it becomes so the moment that flag
-      // flips. The default path's real protection is the shared advance lock
-      // below plus commitPhaseAdvance's re-read at write time.
+      // over-claim: with NO await between the `progress` read above and this
+      // line, `live == currentPhase` always and this early-out cannot fire on
+      // its own. It is load-bearing only across the choice-sheet await — which
+      // is now the PRODUCTION default path (LIVE since 2026-09-16, OI-53
+      // batch 2), not only a killed-switch corner case. The pre-flip default
+      // path's protection (the shared advance lock below + commitPhaseAdvance's
+      // re-read at write time) still applies underneath; this hoist is what
+      // additionally covers the choice-sheet await now that it runs by
+      // default.
       final live =
           (UserRepository.instance.getProgress()?['current_phase'] as int?) ?? 1;
       if (live >= nextPhase) {

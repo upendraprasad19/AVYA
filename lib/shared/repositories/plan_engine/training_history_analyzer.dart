@@ -137,10 +137,11 @@ class TrainingHistoryAnalyzer {
 
   /// ⑤ (Batch 4) — resolves the effective bodyFocus for the periodization +1-set
   /// nudge, in PRECEDENCE order: an explicit [explicitBodyFocus] (rarely passed) >
-  /// the user's `physique_focus` bring-up ([physiqueFocusMuscles], ship-dark
-  /// behind `enable_physique_focus_bringup`, applies at ALL phases) > the auto
-  /// laggard signal ([weakMuscles], phase≥2 only). When the flag is OFF this is
-  /// BYTE-IDENTICAL to the pre-⑤ seam (`explicitBodyFocus.isEmpty && phase>=2 ?
+  /// the user's `physique_focus` bring-up ([physiqueFocusMuscles], LIVE since
+  /// 2026-09-16 — OI-53 batch 2, kill-switch `disable_physique_focus_bringup`,
+  /// applies at ALL phases) > the auto laggard signal ([weakMuscles], phase≥2
+  /// only). When killed this is BYTE-IDENTICAL to the pre-⑤ seam
+  /// (`explicitBodyFocus.isEmpty && phase>=2 ?
   /// weakMuscles() : explicitBodyFocus`). Extracted from `plan_generator`'s inline
   /// seam so the flag-gate + precedence glue is DIRECTLY behavior-tested (B-pass P2).
   static List<String> resolveBodyFocus({

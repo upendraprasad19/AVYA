@@ -1324,8 +1324,9 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
     // ⑦(b) session-time detraining cut: a user resuming after a training gap
     // restarts lighter. Compute ONE session factor from the global days-since-
-    // last-workout; ship-dark behind enable_session_detraining_cut. Applied ONLY
-    // to the last-logged-weight prefill (never the ⑦a-decayed prescription).
+    // last-workout; LIVE since 2026-09-16 (OI-53 batch 2; kill-switch
+    // disable_session_detraining_cut). Applied ONLY to the last-logged-weight
+    // prefill (never the ⑦a-decayed prescription).
     double sessionFactor = 1.0;
     if (PlanEngineFlags.sessionDetrainingCutEnabled) {
       sessionFactor = detrainingFactorForGap(

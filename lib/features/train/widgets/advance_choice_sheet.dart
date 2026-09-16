@@ -1,7 +1,8 @@
 // ⑧ 8-B / UNIT 3-b — the graduation "repeat vs advance" choice sheet + the pure
 // gate helper. Shown from graduation `_onPro` when a low-adherence PRO taps
-// "generate next phase" (ship-dark, `enable_adherence_gate`). Non-shaming Navy
-// framing: two FORWARD options, never "you failed / you missed / low adherence".
+// "generate next phase". LIVE since 2026-09-16 (OI-53 batch 2); kill-switch
+// `disable_adherence_gate`. Non-shaming Navy framing: two FORWARD options,
+// never "you failed / you missed / low adherence".
 
 import 'package:flutter/material.dart';
 

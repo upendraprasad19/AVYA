@@ -80,10 +80,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   //   daysPerWeek + goal + equipment + fitness_experience drive the split
   //   resolver + volume filter + exercise selector. injuries drive the
   //   exercise-selector exclusion masks. physique_focus drives +1 set on
-  //   matching exercises via PeriodizationEngine (⑤ Batch 4, ship-dark behind
-  //   enable_physique_focus_bringup). session_duration_minutes is collected but
-  //   NOT yet consumed by the engine (③ deferred). ALL must trigger reschedule
-  //   on change.
+  //   matching exercises via PeriodizationEngine (⑤ Batch 4, LIVE since
+  //   2026-09-16 — OI-53 batch 2, kill-switch disable_physique_focus_bringup).
+  //   session_duration_minutes is collected but NOT yet consumed by the engine
+  //   (③ deferred). ALL must trigger reschedule on change.
   late int _originalDaysPerWeek;
   late String _originalGoal;
   late String _originalEquipment;
@@ -1885,11 +1885,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       // plan would keep showing the old 4-7 exercises forever.
       //
       // physique_focus drives +1 set on matching exercises via PeriodizationEngine
-      // (⑤ Batch 4, ship-dark behind enable_physique_focus_bringup); injuries
-      // drive exclusion masks in the exercise selector. session_duration_minutes
-      // is collected but NOT yet consumed by the engine (③ deferred). ALL must
-      // trigger reschedule on change to keep today's schedule consistent with the
-      // saved profile.
+      // (⑤ Batch 4, LIVE since 2026-09-16 — OI-53 batch 2, kill-switch
+      // disable_physique_focus_bringup); injuries drive exclusion masks in the
+      // exercise selector. session_duration_minutes is collected but NOT yet
+      // consumed by the engine (③ deferred). ALL must trigger reschedule on
+      // change to keep today's schedule consistent with the saved profile.
       final planChanged = computePlanChanged(
         daysPerWeek: _daysPerWeek,
         originalDaysPerWeek: _originalDaysPerWeek,
