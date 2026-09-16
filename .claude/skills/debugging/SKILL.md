@@ -1320,3 +1320,48 @@ added, false of the flip being performed.
   (the timeout residual, found while fixing the 3rd recurrence, not yet
   fixed). See `docs/reviews/a558ff1b978b-review.md` for the B-pass that
   found it.
+
+### 2.66 A NEW site reaches for the "more correct" IST helper where it actually needed to MATCH an existing raw-UTC site instead (NEW 2026-09-16)
+
+- **Telltale:** two call sites are meant to agree on "the same window" (the
+  same `now - N days` cutoff), one pre-existing and one just-added. The new
+  one uses `istDateStr()` — this repo's own mandated, gate-enforced IST
+  helper (`check_local_date_key_drift.dart`) — while the pre-existing one
+  uses a raw-UTC `.toISOString().split('T')[0]` for the identical instant.
+  Both look individually correct; neither the author nor the gate catches
+  the mismatch, because the gate's job is "did you use an IST helper
+  somewhere plausible", not "do these two cutoffs describe the same day".
+- **Root-cause shape:** `istDateStr()` and a raw-UTC `.toISOString()` split
+  only disagree in a roughly 5.5-hour daily window (UTC 18:30–24:00, when
+  IST has already rolled to the next calendar date) — so the bug is
+  correct >77% of the time, invisible to a quick manual check, and untested
+  by any fixture that stubs the date query away entirely (as this repo's
+  own Supabase-client stubs commonly do). This is the SAME general shape as
+  §2.53/§2.54/§2.63/§2.65 (bad-news-vs-no-news family) but a distinct
+  mechanism: not an overloaded sentinel or a swallowed exception, but two
+  independently-"correct" TIMEZONE CONVENTIONS applied to what the code
+  believed was one shared concept.
+- **Worked instance (diagnose `e5c9b2`, cron-ai-removal batch):** a
+  schedule-existence probe added to `future-prediction/index.ts` (itself a
+  same-day fix, diagnose `9c3d7a`, for a DIFFERENT bug) used `istDateStr()`
+  to compute a 4-week cutoff meant to mirror `_shared/rank_engine.ts`'s
+  `completionRateOverWindow`, which has always used a raw-UTC cutoff for
+  the same window. Caught only because a SECOND independent review round
+  was dispatched specifically to re-check the FIRST round's own fix (per
+  CLAUDE.md §4.12 point 1) — a single review pass, or trusting the fix's
+  own "matches the file's existing IST pattern" justification (which was
+  true of a same-file precedent with nothing to disagree with, and false of
+  the actual cross-file target), would have missed it.
+- **Fix pattern:** when a new site must agree with an EXISTING site's
+  cutoff/date-key convention, don't independently re-derive "the correct"
+  version — extract the existing site's exact computation into a shared,
+  named, exported function and call THAT from both places. A shared
+  function neither site can silently drift from is stronger than two call
+  sites that happen to compute the same thing today. Before trusting an
+  IST-vs-raw-UTC choice at a new site, ask specifically: *is there an
+  EXISTING site this one must produce byte-identical dates with, and if so,
+  which convention does THAT site use* — never assume "the IST helper" is
+  the safe default without checking what it needs to agree with.
+- **Prior incidents:** none yet on this exact mechanism; filed as a new
+  class distinct from `feedback_ist_sweep_gap.md` (which covers a single
+  site missing IST entirely, not two sites disagreeing on convention).
