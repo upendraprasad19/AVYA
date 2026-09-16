@@ -159,12 +159,13 @@ Future<bool> runProPhaseAdvance(WidgetRef ref) async {
   final sessionDuration =
       (profile['session_duration_minutes'] as num?)?.toInt();
 
-  // ⑧ 3-a2 (W2.5, ship-dark): when the adherence gate is ON AND the just-
-  // finished phase's completion rate is low, REPEAT its content into the next
-  // phase (at detrained loads) instead of a fresh pick. The `&&` short-circuits
-  // so the ≤12× getWeek loop inside currentPhaseCompletionRate never runs when
-  // the flag is OFF — then `repeatContent` stays false and this is
-  // byte-identical to the fresh-generation path.
+  // ⑧ 3-a2 (W2.5): when the adherence gate is ON (LIVE default since
+  // 2026-09-16, OI-53 batch 2; kill-switch `disable_adherence_gate`) AND the
+  // just-finished phase's completion rate is low, REPEAT its content into the
+  // next phase (at detrained loads) instead of a fresh pick. The `&&`
+  // short-circuits so the ≤12× getWeek loop inside currentPhaseCompletionRate
+  // never runs when the kill-switch is set — then `repeatContent` stays false
+  // and this is byte-identical to the fresh-generation path.
   final repeatContent = PlanEngineFlags.adherenceGateEnabled &&
       ref.read(workoutScheduleServiceProvider).currentPhaseCompletionRate() <
           AppConstants.phaseUnlockCompletionRate;

@@ -9,8 +9,9 @@ import 'package:icanbefitter/core/theme/typography.dart';
 /// pick. Dismissible (X) — the flag is cleared only on the explicit dismiss tap
 /// (via `phaseRepeatNudgeProvider.dismiss()`), NEVER in build, so it survives
 /// Home rebuilds until acted on. Navy framing: "run the drill again", never
-/// "you failed". Ship-dark: only ever surfaces when the writer set the flag,
-/// which requires `enable_adherence_gate` ON.
+/// "you failed". Only ever surfaces when the writer set the flag, which
+/// requires `adherenceGateEnabled` — LIVE default since 2026-09-16 (OI-53
+/// batch 2; kill-switch `disable_adherence_gate`).
 class PhaseRepeatNudgeBanner extends StatelessWidget {
   final VoidCallback onDismiss;
 

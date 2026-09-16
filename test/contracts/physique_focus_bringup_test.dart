@@ -1,5 +1,6 @@
-// Behavioral regression — ⑤ (Batch 4, Option 1): physique_focus bring-up. The
-// user's self-selected `physique_focus` is CENTRALLY translated to muscle-
+// Behavioral regression — ⑤ (Batch 4, Option 1): physique_focus bring-up. LIVE
+// since 2026-09-16 (OI-53 batch 2); kill-switch `disable_physique_focus_bringup`.
+// The user's self-selected `physique_focus` is CENTRALLY translated to muscle-
 // substring tokens (TrainingHistoryAnalyzer.physiqueFocusToBodyFocus), read from
 // the profile via a try/catch helper (physiqueFocusMuscles → [] on null/corrupt),
 // and fed to effectiveBodyFocus, which PeriodizationEngine turns into +1 set per
@@ -142,10 +143,9 @@ void main() {
     // generateV4 seam extracted; these pin it so reverting the seam fails a test,
     // not just the components. The flag-ON case fails if the seam stops calling
     // physiqueFocusMuscles; the flag-OFF case fails if ship-dark ever leaks.
-    test('flag ON + physique_focus=glutes_legs → physique tokens (phase 1, wins)',
-        () async {
-      await HiveService.instance.configBox
-          .put('enable_physique_focus_bringup', true);
+    test(
+        'flag ON (LIVE default) + physique_focus=glutes_legs → physique '
+        'tokens (phase 1, wins)', () async {
       await HiveService.instance.userBox
           .put('profile', {'physique_focus': 'glutes_legs'});
       expect(
@@ -154,7 +154,11 @@ void main() {
           ['glutes', 'quads', 'hamstrings', 'calves']);
     });
 
-    test('flag OFF (default) → byte-identical (physique_focus ignored)', () async {
+    test(
+        'kill-switch ON (disable_physique_focus_bringup) → byte-identical '
+        '(physique_focus ignored)', () async {
+      await HiveService.instance.configBox
+          .put('disable_physique_focus_bringup', true);
       await HiveService.instance.userBox
           .put('profile', {'physique_focus': 'glutes_legs'});
       // phase 1: no weakMuscles → []; phase 2: weakMuscles (no 14 days) → [].
@@ -168,10 +172,9 @@ void main() {
           isEmpty);
     });
 
-    test('flag ON + balanced → [] at phase 1 (no bring-up, no phase-1 fallback)',
-        () async {
-      await HiveService.instance.configBox
-          .put('enable_physique_focus_bringup', true);
+    test(
+        'flag ON (LIVE default) + balanced → [] at phase 1 (no bring-up, no '
+        'phase-1 fallback)', () async {
       await HiveService.instance.userBox
           .put('profile', {'physique_focus': 'balanced'});
       expect(
@@ -181,8 +184,6 @@ void main() {
     });
 
     test('explicit bodyFocus param passes through unchanged', () async {
-      await HiveService.instance.configBox
-          .put('enable_physique_focus_bringup', true);
       expect(
           TrainingHistoryAnalyzer.resolveBodyFocus(
               explicitBodyFocus: const ['chest'], phase: 1),

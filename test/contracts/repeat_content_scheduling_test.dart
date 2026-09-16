@@ -12,7 +12,8 @@
 //      spanned (union keys).
 //  (B) HIVE — `generateAndSchedule` FORWARDS `pinnedExercisesByDay` to the rows
 //      (the facade-drop bug class) AND writes `last_phase_profile` ONLY when the
-//      adherence-gate flag is ON (ship-dark). Uses the seeded-library + session
+//      adherence-gate flag is ON — LIVE since 2026-09-16 (OI-53 batch 2);
+//      kill-switch `disable_adherence_gate`. Uses the seeded-library + session
 //      harness the 2-cap test established.
 
 import 'dart:convert';
@@ -201,12 +202,15 @@ void main() {
       if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
     });
 
+    // LIVE since 2026-09-16 (OI-53 batch 2) — kill-switch `disable_adherence_gate`.
+    // setFlag's CONTRACT (on == the flag reads as enabled) is unchanged; only the
+    // underlying Hive key + polarity flipped, so no call site below needed to move.
     Future<void> setFlag(bool on) async {
       final cfg = Hive.box(HiveService.configBoxName);
       if (on) {
-        await cfg.put('enable_adherence_gate', true);
+        await cfg.delete('disable_adherence_gate');
       } else {
-        await cfg.delete('enable_adherence_gate');
+        await cfg.put('disable_adherence_gate', true);
       }
       await MigratedKey.delete('last_phase_profile'); // reset (userBox + configBox)
     }
@@ -223,8 +227,8 @@ void main() {
       return const [];
     }
 
-    test('flag ON: pinnedExercisesByDay flows to the rows (A→wk1, B→wk2) + '
-        'last_phase_profile is written', () async {
+    test('flag ON (LIVE default): pinnedExercisesByDay flows to the rows '
+        '(A→wk1, B→wk2) + last_phase_profile is written', () async {
       await setFlag(true);
       final svc = WorkoutScheduleReadService.instance;
       await svc.generateAndSchedule(
@@ -251,7 +255,8 @@ void main() {
       await setFlag(false);
     });
 
-    test('flag OFF: last_phase_profile is NOT written (ship-dark)', () async {
+    test('kill-switch ON (disable_adherence_gate): last_phase_profile is NOT '
+        'written', () async {
       await setFlag(false);
       final svc = WorkoutScheduleReadService.instance;
       await svc.generateAndSchedule(

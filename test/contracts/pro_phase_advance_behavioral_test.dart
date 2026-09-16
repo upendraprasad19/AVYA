@@ -65,6 +65,7 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -458,6 +459,116 @@ void main() {
     });
   });
 
+  // ──── D3 — repeatContent gated on flag AND completion (OI-53 batch 2) ─────
+
+  group('runProPhaseAdvance — repeatContent gated on flag AND completion', () {
+    // Closes a real coverage gap found while flipping adherenceGateEnabled to
+    // default-ON: repeat_content_scheduling_test.dart proves the flag gates
+    // the last_phase_profile WRITE, and advance_choice_test.dart source-pins
+    // that graduation_screen's choice offer is flag-short-circuited — but
+    // nothing drove the OUTCOME of pro_phase_advance.dart:169's
+    // (`adherenceGateEnabled && currentPhaseCompletionRate() < threshold`)
+    // through a real advance.
+    //
+    // Mutation-tested (2026-09-16): the flag is checked TWICE on this path —
+    // here, and again at workout_schedule_read_service.dart:659's
+    // `repeatContent && PlanEngineFlags.adherenceGateEnabled` immediately
+    // before _buildRepeatPins. The two are redundant (same flag, no `await`
+    // between the reads), so neutering EITHER check alone left both tests
+    // below green — only neutering BOTH simultaneously reddened the OFF case.
+    // This test therefore pins the OBSERVABLE end-to-end outcome (does a real
+    // advance actually repeat), not "line :168 specifically" — an honest
+    // downgrade from the claim this comment originally made, and arguably the
+    // more useful property: it survives either check being refactored away on
+    // its own, and only fails if the gate is genuinely gone from BOTH.
+
+    Future<({WidgetRef ref, ProviderContainer container})> pumpRef(
+        WidgetTester tester) async {
+      final c = Completer<({WidgetRef ref, ProviderContainer container})>();
+      await tester.pumpWidget(
+          ProviderScope(child: _RefCaptureWidget(onCapture: c.complete)));
+      await tester.pump();
+      return (await tester.runAsync(() => c.future))!;
+    }
+
+    // Generates a REAL phase-1 schedule (so currentPhaseCompletionRate() reads
+    // a genuine 0.0 from actual workout days, not the degenerate empty-
+    // schedule case) and — the flag defaulting ON (LIVE) — stamps the
+    // last_phase_profile G5 baseline the next advance compares against.
+    // goal/equipment/days mirror _seedProAndExpiredPhase's profile exactly,
+    // and phase 1's effectiveLevel('intermediate', 1) == phase 2's
+    // effectiveLevel('intermediate', 2) == 'intermediate' (the widen
+    // threshold is phase>=4) so the G5 gate is a genuine match, not a
+    // coincidental no-op. Both sub-tests share this baseline; only the
+    // kill-switch AT ADVANCE TIME differs.
+    Future<void> seedExpiredLowCompletionPhaseWithG5Baseline() async {
+      await _seedProAndExpiredPhase(); // isPro + matching profile fields
+      await WorkoutScheduleReadService.instance.generateAndSchedule(
+        goal: 'build_muscle',
+        equipment: 'full_gym',
+        daysPerWeek: 4,
+        startDate: DateTime.now().subtract(const Duration(days: 31)),
+        experienceLevel: 'intermediate',
+        phase: 1,
+      );
+      await UserRepository.instance
+          .saveProgress({'current_phase': 1, 'current_week': 4});
+      // Nothing marked completed → currentPhaseCompletionRate() == 0.0, well
+      // under AppConstants.phaseUnlockCompletionRate (0.8).
+    }
+
+    testWidgets(
+        'flag ON (LIVE default) + low completion + matching G5 baseline → '
+        'repeats (nudge flagged)', (tester) async {
+      await tester.runAsync(seedExpiredLowCompletionPhaseWithG5Baseline);
+      final captured = await pumpRef(tester);
+
+      late bool generated;
+      await tester.runAsync(() async {
+        generated = await runProPhaseAdvance(captured.ref);
+      });
+
+      expect(generated, isTrue,
+          reason: 'precondition: PRO + expired gates passed and a plan was '
+              'actually generated — otherwise this test proves nothing');
+      expect(MigratedKey.read<bool>('phase_repeat_nudge_pending'), isTrue,
+          reason: 'flag ON + completion 0.0 < 0.8 → repeatContent computed '
+              'true → G5 matched (identical goal/equipment/days/experience) → '
+              'pins applied → nudge flagged. Paired with the OFF case below, '
+              'this is THE regression assertion for the flag actually '
+              'gating a real advance end-to-end.');
+    });
+
+    testWidgets(
+        'kill-switch ON (disable_adherence_gate) + SAME low completion + '
+        'SAME G5 baseline → never repeats (nudge NOT flagged)',
+        (tester) async {
+      await tester.runAsync(seedExpiredLowCompletionPhaseWithG5Baseline);
+      // Flip the kill-switch ON only at ADVANCE time — last_phase_profile
+      // from the seed above is left in place, so a G5 match is still
+      // POSSIBLE; only the kill-switch differs from the case above.
+      await tester.runAsync(() => HiveService.instance.configBox
+          .put('disable_adherence_gate', true));
+      final captured = await pumpRef(tester);
+
+      late bool generated;
+      await tester.runAsync(() async {
+        generated = await runProPhaseAdvance(captured.ref);
+      });
+
+      expect(generated, isTrue,
+          reason: 'precondition: the advance itself still runs — only the '
+              'repeat decision is under test');
+      expect(MigratedKey.read<bool>('phase_repeat_nudge_pending'), isNot(true),
+          reason: 'the kill-switch must short-circuit repeatContent to false '
+              'REGARDLESS of the low completion rate and the matching G5 '
+              'baseline — the "byte-identical when killed" claim, proven '
+              'end-to-end rather than only at the last_phase_profile '
+              'write (repeat_content_scheduling_test.dart) or by source '
+              'anchor (advance_choice_test.dart).');
+    });
+  });
+
   // ──────── D2 — runGraduationPhaseAdvance (Unit B / OI-84 relocation) ───────
 
   group('runGraduationPhaseAdvance (relocated from graduation_screen._onPro)',
@@ -630,6 +741,99 @@ void main() {
           isFalse,
           reason: 'and the Home nudge must not be written for a repeat that '
               'never actually repeated anything');
+    });
+
+    // ──── D2 kill-switch coverage (B-pass finding, OI-53 batch 2) ─────
+    //
+    // The four outcome-arm tests above and the "NO repeatable content" test
+    // exercise `repeat: true` only with either `repeat: false` or a
+    // G5-mismatch (no prior phase content) — none builds a MATCHING G5
+    // baseline, so none can tell "flag OFF" apart from "G5 refused". That gap
+    // is exactly what let a real asymmetry through two plan-review rounds:
+    // unlike the 3-a2 automatic path (`runProPhaseAdvance`, D3 above), which
+    // re-checks `adherenceGateEnabled` immediately before building pins,
+    // `runGraduationPhaseAdvance` -> `buildRepeatPinsForAdvance` took the
+    // user's already-made `repeat: true` choice and built pins
+    // unconditionally — so a kill-switch flip during the human-time gap
+    // between the choice sheet opening and the user tapping "repeat" was not
+    // honored. Fixed by moving the check into `_buildRepeatPins` itself (the
+    // one method both callers funnel through) rather than duplicating a
+    // caller-side check here — mutation-tested (2026-09-16): reverting that
+    // one line reddened exactly the kill-switch test below, positive control
+    // stayed green.
+    Future<void> seedMatchingG5BaselineForGraduation() async {
+      await _seedProAndExpiredPhase(); // isPro + matching profile fields
+      await WorkoutScheduleReadService.instance.generateAndSchedule(
+        goal: 'build_muscle',
+        equipment: 'full_gym',
+        daysPerWeek: 4,
+        startDate: DateTime.now().subtract(const Duration(days: 31)),
+        experienceLevel: 'intermediate',
+        phase: 1,
+      );
+      await UserRepository.instance.saveProgress({'current_phase': 1});
+    }
+
+    testWidgets(
+        'repeat: true + flag ON (LIVE default) + matching G5 baseline -> '
+        'pins ARE built (nudge flagged)', (tester) async {
+      await tester.runAsync(seedMatchingG5BaselineForGraduation);
+      final captured = await pumpRef(tester);
+
+      late GraduationAdvanceResult result;
+      await tester.runAsync(() async {
+        result = await runGraduationPhaseAdvance(
+          ref: captured.ref,
+          profile: profile,
+          nextPhase: 2,
+          repeat: true,
+          stopwatch: Stopwatch()..start(),
+        );
+      });
+
+      expect(result.outcome, GraduationAdvanceOutcome.committed);
+      expect(result.repeatNudgeFlagged, isTrue,
+          reason: 'precondition/positive-control: a matching G5 baseline + '
+              'repeat:true + flag ON must actually build pins — paired with '
+              'the kill-switch case below, this proves the flag genuinely '
+              'gates this path rather than the assertion passing vacuously '
+              'either way');
+    });
+
+    testWidgets(
+        'repeat: true + kill-switch ON (disable_adherence_gate) + SAME '
+        'matching G5 baseline -> pins are NOT built (nudge not flagged)',
+        (tester) async {
+      await tester.runAsync(seedMatchingG5BaselineForGraduation);
+      await tester.runAsync(() => HiveService.instance.configBox
+          .put('disable_adherence_gate', true));
+      final captured = await pumpRef(tester);
+
+      late GraduationAdvanceResult result;
+      await tester.runAsync(() async {
+        result = await runGraduationPhaseAdvance(
+          ref: captured.ref,
+          profile: profile,
+          nextPhase: 2,
+          repeat: true,
+          stopwatch: Stopwatch()..start(),
+        );
+      });
+
+      expect(result.outcome, GraduationAdvanceOutcome.committed,
+          reason: 'the advance itself still runs — only the repeat CONTENT '
+              'decision is under test');
+      expect(result.repeatNudgeFlagged, isFalse,
+          reason: 'the kill-switch must be honored even though the CALLER '
+              'already decided repeat:true before this point in time — the '
+              'B-pass finding this pins: the choice-sheet path had no '
+              'kill-switch re-check of its own, unlike the automatic 3-a2 '
+              'path (D3 above), so a kill-switch flip during the human-time '
+              'gap between the sheet opening and the tap was silently '
+              'ignored. Fixed by checking inside _buildRepeatPins itself.');
+      expect(MigratedKey.read<bool>('phase_repeat_nudge_pending') ?? false,
+          isFalse,
+          reason: 'no pins built → no repeat nudge written either');
     });
 
     testWidgets('busy — a held lock turns the graduation advance away',

@@ -633,10 +633,14 @@ class WorkoutScheduleReadService {
     List<String> bodyFocus = const [],
     int? sessionDuration,
     String? cardioPreference,
-    // ⑧ 2-int (W2.5): when true (UNIT 3's low-adherence "repeat" choice — not yet
-    // wired) AND the adherence-gate flag is ON, the new phase REPEATS the just-
-    // finished phase's exercise selection (at detrained loads) instead of a fresh
-    // pick. Default false + flag-gated → ship-dark inert → byte-identical.
+    // ⑧ 2-int (W2.5): when true AND the adherence-gate flag is ON, the new
+    // phase REPEATS the just-finished phase's exercise selection (at
+    // detrained loads) instead of a fresh pick. Default false + flag-gated.
+    // Wired by BOTH Unit 3-a2 (pro_phase_advance.dart's automatic low-
+    // adherence repeat) and Unit 3-b (graduation_screen's explicit choice
+    // sheet) — corrected 2026-09-16 (OI-53 batch 2): this comment called the
+    // trigger "not yet wired" after both units had already wired it; the
+    // prose was never updated when they landed.
     bool repeatContent = false,
   }) async {
     if (!isPhaseExpired()) return (generated: false, repeated: false);
@@ -707,6 +711,17 @@ class WorkoutScheduleReadService {
   /// →advanced@5) — so a beginner advancing 2→3 gets DIFFERENT frames even with
   /// goal/equipment/days unchanged, and the pin would slot full-body names into
   /// Push/Pull/Legs frames. Absent baseline (legacy / first flip-on) → null.
+  ///
+  /// The `adherenceGateEnabled` kill-switch is re-checked HERE, not only by the
+  /// callers — B-pass finding (2026-09-16, OI-53 batch 2): the 3-a2 caller
+  /// (`autoGenerateNextPhaseIfNeeded`) short-circuits before ever reaching this
+  /// method, but the 3-b caller ([buildRepeatPinsForAdvance], the graduation
+  /// choice sheet) did not — `runGraduationPhaseAdvance` takes the user's
+  /// already-chosen `repeat: true` and calls straight through with no re-read,
+  /// so a kill-switch flip during the human-time gap between the choice sheet
+  /// opening and the user tapping "repeat" was NOT honored. Checking it as the
+  /// first line of the one method both paths funnel through makes it
+  /// genuinely universal instead of caller-dependent.
   Map<int, ({List<String> a, List<String> b})>? _buildRepeatPins({
     required String goal,
     required String equipment,
@@ -714,6 +729,7 @@ class WorkoutScheduleReadService {
     required String experienceLevel,
     required int newPhase,
   }) {
+    if (!PlanEngineFlags.adherenceGateEnabled) return null;
     final stored = MigratedKey.read<Map>('last_phase_profile');
     return repeatPinsFrom(
       stored: stored, // user-scoped (userBox); null (absent) → fresh
@@ -730,9 +746,14 @@ class WorkoutScheduleReadService {
   /// ⑧ 3-b: public entry to [_buildRepeatPins] for the graduation choice sheet's
   /// "repeat" branch (graduation calls the read service DIRECTLY, not the
   /// facade + not autoGenerate). Visibility-only delegate — identical G5 gate +
-  /// A/B extraction. MUST be called BEFORE generateAndSchedule overwrites
-  /// plan_start (same ordering obligation as [_buildRepeatPins] — getWeek reads
-  /// the just-finished window).
+  /// A/B extraction + `adherenceGateEnabled` kill-switch (checked inside
+  /// [_buildRepeatPins] itself, not here — this call site has no `await`
+  /// between the choice sheet closing and this call, but the kill-switch
+  /// re-check still matters: [_buildRepeatPins] is the ONE place both this and
+  /// the 3-a2 caller funnel through, so a future caller gets the check for
+  /// free instead of having to remember it). MUST be called BEFORE
+  /// generateAndSchedule overwrites plan_start (same ordering obligation as
+  /// [_buildRepeatPins] — getWeek reads the just-finished window).
   Map<int, ({List<String> a, List<String> b})>? buildRepeatPinsForAdvance({
     required String goal,
     required String equipment,
@@ -1291,9 +1312,11 @@ class WorkoutScheduleReadService {
   /// card here would ship half of OI-125 by accident.
   ///
   /// Ⓐ No longer INERT-by-two-flags in the sense the old note implied: this
-  /// function still runs only when `enable_adherence_gate` is ON (both readers
-  /// `&&`-short-circuit), but the hold rows it now excludes are produced by a
-  /// SEPARATE flag (`enable_hold_weeks`), and the defect needed both.
+  /// function still runs only when `adherenceGateEnabled` is ON (LIVE default
+  /// since 2026-09-16 — OI-53 batch 2; kill-switch `disable_adherence_gate`;
+  /// both callers `&&`-short-circuit their own call to this function), but the
+  /// hold rows it now excludes are produced by a SEPARATE flag
+  /// (`enable_hold_weeks`), and the defect needed both.
   double currentPhaseCompletionRate() {
     final progress = UserRepository.instance.getProgress();
     final phase = (progress?['current_phase'] as int?) ?? 1;

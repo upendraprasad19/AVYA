@@ -1,11 +1,12 @@
 // Behavioral regression — ⑦(b) (Batch 3, remaining half): session-time detraining
 // resume cut. On starting a workout after a training gap, the last-logged-weight
-// prefill is scaled by `detrainingFactorForGap(getDaysSinceLastWorkout())`, behind
-// `enable_session_detraining_cut` (default OFF, ship dark). The factor lives on
-// `ActiveWorkoutData` (session-only) and MUST survive `copyWith` (round-2 F1) — the
-// 1×/sec timer's `copyWith(elapsedSeconds:)` would otherwise revert it to 1.0 within
-// a frame while a prefill-only test still passed. The ⑦a-decayed PRESCRIPTION weight
-// is never cut (disjoint prefill branches).
+// prefill is scaled by `detrainingFactorForGap(getDaysSinceLastWorkout())`. LIVE
+// since 2026-09-16 (OI-53 batch 2); kill-switch `disable_session_detraining_cut`.
+// The factor lives on `ActiveWorkoutData` (session-only) and MUST survive
+// `copyWith` (round-2 F1) — the 1×/sec timer's `copyWith(elapsedSeconds:)` would
+// otherwise revert it to 1.0 within a frame while a prefill-only test still
+// passed. The ⑦a-decayed PRESCRIPTION weight is never cut (disjoint prefill
+// branches).
 
 import 'dart:io';
 
@@ -129,8 +130,8 @@ void main() {
       });
     }
 
-    Future<void> enableCut() async => HiveService.instance.configBox
-        .put('enable_session_detraining_cut', true);
+    Future<void> disableCut() async => HiveService.instance.configBox
+        .put('disable_session_detraining_cut', true);
 
     double factorAfterStart() {
       const day = WorkoutDayData(dayNumber: 1, name: 'Push');
@@ -138,9 +139,9 @@ void main() {
       return container.read(activeWorkoutProvider).sessionDetrainingFactor;
     }
 
-    test('flag ON + 25d gap → 0.825, SURVIVES setElapsedSeconds (F1 integration)',
-        () async {
-      await enableCut();
+    test(
+        'flag ON (LIVE default) + 25d gap → 0.825, SURVIVES setElapsedSeconds '
+        '(F1 integration)', () async {
       await seedWorkoutLog(25);
       expect(factorAfterStart(), 0.825);
       // The screen ticks elapsed every second → copyWith; factor must persist.
@@ -149,19 +150,21 @@ void main() {
           container.read(activeWorkoutProvider).sessionDetrainingFactor, 0.825);
     });
 
-    test('kill-switch OFF (default) → 1.0 (no cut, verbatim)', () async {
-      await seedWorkoutLog(25); // large gap, but flag off → no cut
+    test('kill-switch ON (disable_session_detraining_cut) → 1.0 (no cut, '
+        'verbatim)', () async {
+      await disableCut();
+      await seedWorkoutLog(25); // large gap, but kill-switch ON → no cut
       expect(factorAfterStart(), 1.0);
     });
 
-    test('flag ON + 3d gap → 1.0 (≤7d, no cut / no banner)', () async {
-      await enableCut();
+    test('flag ON (LIVE default) + 3d gap → 1.0 (≤7d, no cut / no banner)',
+        () async {
       await seedWorkoutLog(3);
       expect(factorAfterStart(), 1.0);
     });
 
-    test('flag ON + no history (gap -1) → 1.0 (first-ever, no cut)', () async {
-      await enableCut();
+    test('flag ON (LIVE default) + no history (gap -1) → 1.0 (first-ever, '
+        'no cut)', () async {
       expect(factorAfterStart(), 1.0);
     });
   });

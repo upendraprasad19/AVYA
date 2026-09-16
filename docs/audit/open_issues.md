@@ -250,7 +250,7 @@ Everything currently owed, from any source — not only audit findings. `MEMORY.
 durable *why* (scars, retrospectives) but lives in the harness dir outside git and is invisible to
 cloud sessions; **this file is the cross-session backlog.**
 
-## OI-53 — Flip the remaining 6 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05; deload-reason-line flipped 2026-09-06; exercise_id_history + injury_substitute_pref + cross_phase_variety flipped 2026-09-16)
+## OI-53 — Flip the remaining 2 workout-generator ship-dark flags (was 13; equipment-exclusions flipped 2026-08-05; readiness + triggered-deload flipped 2026-09-01; phase-arc flipped 2026-09-05; deload-reason-line flipped 2026-09-06; exercise_id_history + injury_substitute_pref + cross_phase_variety flipped 2026-09-16 batch 1; graded_progression + session_detraining_cut + physique_focus_bringup + adherence_gate flipped 2026-09-16 batch 2)
 
 - **Status**: OPEN
 - **Verified**: 2026-08-05 — flag inventory, dependency order and the data lag all re-derived from
@@ -272,7 +272,15 @@ cloud sessions; **this file is the cross-session backlog.**
   release-blocker triage (branch `oi53-batch1-flip`, record `docs/plan-reviews/oi53-batch1-flip.md`)
   — the three lowest-risk of the remaining flags (bounded/preference-only re-ranks with no ability
   to widen a slot's candidate pool beyond what queryV4's injury/equipment filters already permit).
-  **6 remain.**
+  ⚠ **DATED FOUNDER DECISION 2026-09-16: `gradedProgressionEnabled` + `sessionDetrainingCutEnabled`
+  + `physiqueFocusBringupEnabled` + `adherenceGateEnabled` approved and flipped together** as
+  Batch 2 of the same triage (branch `oi53-batch2-flip`) — the founder's own scoping question
+  ("all 6 remaining, or the 4 clean ones") surfaced that `volumeTitrationEnabled`'s readiness
+  dependency is, unlike its siblings `triggeredDeloadEnabled`/`plateauEscalationEnabled`, NOT
+  enforced in code (`volume_titration.dart:116-136`'s `_recovered()` has no readiness gate at
+  all — it is inert today only because the flag itself short-circuits first); that flag and
+  `plateauEscalationEnabled` (which depends on it) were deliberately excluded from this batch.
+  **2 remain.**
 - **What this actually is — 13 product decisions, not one toggle.** The ledger is explicit:
   *"there is no batch discount, and flipping thirteen flags in one commit would be one review
   pretending to be thirteen."* Each flip-on commit needs its own **full ×2 + `bpass: accepted`**
@@ -338,7 +346,38 @@ cloud sessions; **this file is the cross-session backlog.**
   `docs/sot_registry.yaml` concept entries, and this board entry itself) are fixed in the same
   branch. `ship_dark_pending_review.yaml`'s three `pending:` entries move to `resolved:` in this
   branch's follow-up records commit, per this repo's established split-commit convention for that
-  file. **6 remain.**
+  file. **6 remained at the time this bullet was written; superseded by Batch 2 below — 2 remain now.**
+- ✅ **`gradedProgressionEnabled` + `sessionDetrainingCutEnabled` + `physiqueFocusBringupEnabled` +
+  `adherenceGateEnabled` — FLIPPED 2026-09-16 (branch `oi53-batch2-flip`, ×2 review converged).**
+  All four INCREASE prescribed load/volume or change the interactive UI (unlike Batch 1's bounded
+  re-ranks), matching the founder's original "not the safe direction" ship-dark framing for each.
+  `adherenceGateEnabled` is the most architecturally involved: it gates a `last_phase_profile`
+  Hive write, a G5 faithfulness re-ranking gate, AND the actual `repeatContent`/`repeat` trigger
+  computation at TWO independent call sites (`pro_phase_advance.dart`'s automatic low-adherence
+  repeat, `graduation_screen.dart`'s explicit choice sheet). The automatic path re-checks the flag
+  a SECOND, redundant time immediately before `_buildRepeatPins` (confirmed by mutation — neutering
+  either check alone left the relevant test green; only neutering both reddened it). That trigger
+  computation had NO behavioral test coverage before this batch — the pre-existing
+  `repeat_phase_pinned_selection_behavioral_test.dart` tests the pinning MECHANISM directly
+  (`pinnedExercisesByDay`) and never touches the flag; `repeat_content_scheduling_test.dart`
+  covers the `last_phase_profile` write half only. Closed by a new
+  `pro_phase_advance_behavioral_test.dart` group driving the actual gating decision end-to-end
+  (real expired phase, real completion rate, real G5-matching baseline), mutation-proven. A
+  second, unrelated stale comment was found and fixed in the same investigation:
+  `workout_schedule_read_service.dart`'s `autoGenerateNextPhaseIfNeeded` doc called the
+  `repeatContent` trigger "not yet wired" — it had been wired by Units 3-a2/3-b for weeks; the
+  prose was never updated when they landed.
+  **B-pass finding (2026-09-16), fixed same batch:** unlike the automatic path, the choice-sheet
+  path had NO re-check at all — `runGraduationPhaseAdvance` took the user's already-made
+  `repeat: true` choice and called through to `_buildRepeatPins` unconditionally, so a kill-switch
+  flip during the human-time gap between the choice sheet opening and the tap was silently not
+  honored, contradicting the flag's own "byte-identical when killed" guarantee. Fixed by moving the
+  check into `_buildRepeatPins` itself — the ONE method both callers funnel through — so it is now
+  genuinely universal rather than caller-dependent; mutation-confirmed (reverting the check reddened
+  exactly the new graduation-path kill-switch test, nothing else). `ship_dark_pending_review.yaml`'s
+  four `pending:` entries move to `resolved:` in this branch's follow-up records commit. **2 remain**
+  (`volumeTitrationEnabled`, `plateauEscalationEnabled` — see the DATED FOUNDER DECISION above for
+  why they were excluded).
 
 ## OI-54 — Confirm `/admin` access
 
@@ -3945,6 +3984,12 @@ The evidence-backed risk on return is **injury, not lost gains** — CSCCa/NSCA 
    - The time-gating argument still holds on the evidence (Kubo 2012: tendon stiffness ~3 months to build, **1 month to lose**, so a strong first session is not readiness — ⚠️ n=9, one tendon, isometric, the only direct human time-course data found). But it argues for a **deliberate, bounded re-entry ramp**, not for slowing down a ramp that is already an order of magnitude too slow.
 4. **Half the feature is switched off, so for a PRO user the two halves disagree in production.** `sessionDetrainingCutEnabled` defaults **false** (`plan_engine_flags.dart:110-120`). On phase ≥2 generation prescribes −50%; the active-workout screen then prefills the **old undecayed** last-logged weight, with no welcome-back banner and no explanation. The user sees two different numbers and no reason for either. ⚠️ Per defect 2's scope correction this disagreement is **PRO-only** — on phase 1 neither half decays, so they agree, wrongly.
 
+⚠️ **CORRECTED 2026-09-16 (OI-53 batch 2) — the premises of defects 2, 3 and 4 above all changed under this OI**, discovered while flipping four unrelated flags and re-grepping every live reference to their old key names before landing. `sessionDetrainingCutEnabled` and `gradedProgressionEnabled` both flipped from default-OFF to default-ON (kill-switches `disable_session_detraining_cut` / `disable_graded_progression`). Read each correction below against the CURRENT code, not the defect text above it, which now describes the PRE-flip state:
+- **Defect 2's "for a FREE user it never fires at all" is now FALSE.** `ActiveWorkoutNotifier.startWorkout` (`train_provider.dart:1320-1334`) applies ⑦(b) unconditionally on the flag — there is no phase or tier check anywhere near it — so a free (phase-1) user now gets the session-prefill cut too. This does not touch ⑦(a) (`ProgressionResolver.resolve()` still returns `{}` for `phase<=1`), so it does not "fix" the free-user decay gap this defect was filed against; it changes WHICH half a free user gets.
+- **Defect 3's "beginners are on the unconditional ramp is false … `gradedProgressionEnabled` … is default FALSE" is now FALSE.** The flag is default TRUE, so the ORIGINAL claim round 3 was correcting — "beginners are on the unconditional ramp" — is TRUE again in production (`ProgressionResolver`'s beginner auto-linear window, `training-age < 120d`, always progresses regardless of rep-range). **This needs its own re-verification, not an inference from this note** — round 3's correction may have found other reasons the original hazard was overstated beyond the flag's default; nobody has re-checked those since. Flagged here so the next reader does not carry forward a "corrected" verdict whose load-bearing premise no longer holds.
+- **Defect 4's "the two halves disagree… PRO-only… on phase 1 neither half decays, so they agree, wrongly" is now FALSE in the OPPOSITE direction.** For phase ≥2 the two halves now AGREE (both decay) — the defect as originally filed is resolved there. But phase 1 flips from "neither decays" to "⑦(b) decays, ⑦(a) doesn't" (⑦(a) is phase-gated at `phase<=1`; ⑦(b) is not) — a NEW disagreement, inverted, and still live. Nothing in OI-53 batch 2 touched ⑦(a)'s phase gate; this is a byproduct of ⑦(b) alone moving.
+This is reported as-is, not resolved — the underlying re-entry/detraining PRODUCT design is explicitly `Blocked on: founder product decision` above, and a 4-flag ship-dark batch is not the place to redesign it.
+
 ### The unsettled part, stated so nobody re-litigates it
 
 **Do NOT pick a load-reduction percentage.** Published guidance spans **10% to 60%** for overlapping scenarios with no experiment adjudicating — the single most confident "not settled" finding in the research. The recommendation is to **re-baseline from what the user actually logs** in the first sessions back. Our flat −50% sits at the aggressive end of a range nobody has validated.
@@ -4549,6 +4594,50 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   `isRegenerableIgnored('deno.lock')`. Filed only, not implemented, per
   founder instruction (documentation-only batch).
 - **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `deno-lock-retire-fix`
+
+## OI-207 — sot_registry.yaml: hold-weeks line_range citations (762-847, 890-915) stale, pre-dates OI-53 batch 1/2
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-16, live `Read` of `lib/core/services/workout_schedule_read_service.dart`
+  vs `git show HEAD:<path>` at the same lines, cross-checked against `docs/sot_registry.yaml`
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `oi53-batch2-flip`
+- **How found**: opportunistically, by the OI-53 batch 2 plan-review round-1 subagent, while
+  independently re-deriving OTHER `workout_schedule_read_service.dart` citations this batch's own
+  comment-only edits had shifted (see the batch's flip commit — 5 more stale citations in the SAME
+  file were found and fixed there: `pastPhaseBlocks`, `_scheduleRowsBefore`, `pastPhaseBlocksForDisplay`,
+  `holdSnapshotBlock`, `currentWeekColumnProjection`; a B-pass/round-2 follow-up sweep then found and
+  fixed 3 more of the same class — a class-level range, a `tool_dispatcher.dart` sibling citation,
+  and two inline `file:line` comments in the new test file). These two are DIFFERENT — confirmed
+  already wrong at `HEAD`, i.e. before OI-53 batch 1 or batch 2 touched anything, so filed separately
+  rather than folded into that batch's diff.
+- **Root cause**: `docs/sot_registry.yaml` has two `line_range:` citations against this file for
+  hold-weeks (FOB-3 / OI-60) concepts that no longer bound their methods:
+  - Line ~6830: `line_range: 890-915`, method `activeHoldWeeks / activeHoldOrdinalFor / weekIdentity
+    — the seam + the single flag gate`. Actual: `activeHoldWeeks` at line 1000, `activeHoldOrdinalFor`
+    at 1005, `weekIdentity` at 1019-1024. Off by ~110 lines.
+  - Line ~6946: `line_range: 762-847`, method `isDeloadHold / _holdDatesByOrdinal / holdOrdinalForDate
+    / holdWeeks / holdWeekSessionProgress`. Actual: `isDeloadHold` at line 901, `holdWeekSessionProgress`
+    starting at 1092 (body continues past 1103). Off by ~140 lines at the start.
+  `check_sot_registry_parity.dart`'s stale-line-range check is a substring search for the method
+  name anywhere inside the cited window — both citations are wide enough (25 and 85 lines) that
+  they may still coincidentally contain an incidental mention of one of the several method names
+  in their multi-method group, which is plausibly why the gate has stayed green through whatever
+  intervening edits caused this drift. Not re-derived here: exactly which past commit(s) moved
+  these methods without updating the citation.
+- **Consequence**: doc-accuracy only — nobody has reported acting on a wrong line number from this
+  citation. The registry entries' `notes:`/`semantic:` prose is unaffected; only the `line_range:`
+  pointer is stale.
+- **Fix shape**: re-derive each method's real current span (multi-method groups may need splitting
+  into per-method ranges rather than one shared range, since the two groups' real spans now
+  interleave — `activeHoldWeeks`/`activeHoldOrdinalFor`/`weekIdentity` at 1000-1024 sits INSIDE the
+  810-line-off `762-847`→real-901+ group's likely corrected span, which needs care, not a
+  mechanical shift). Small, isolated YAML-only fix; does not need its own plan-review round.
+- **Scope note**: deliberately excluded from OI-53 batch 2 (branch `oi53-batch2-flip`) — unrelated
+  SoT concept (hold-weeks/OI-60, not any of the 4 flags that batch flips), pre-dates that batch,
+  and the two groups' overlapping real spans need a judgment call this batch's reviewers should not
+  have to spend attention on. Fix as part of whatever batch next touches hold-weeks, or as a
+  standalone doc-only fix.
 
 ## OI-208 — AuthNotifier._teardown() swallows internal failures with no signal to callers -- a timeout leaves all 3 signOut() call sites unable to react (OI-51 residual)
 

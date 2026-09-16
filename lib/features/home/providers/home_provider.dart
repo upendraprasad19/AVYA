@@ -954,7 +954,8 @@ final allExercisePRsProvider =
 /// plan (adherence-gate flag ON + low completion). Local-only + user-scoped
 /// (MigratedKey → userBox). CLEARED only on an explicit [PhaseRepeatNudgeNotifier.dismiss]
 /// (never in build) so the banner SURVIVES Home rebuilds until the user acts.
-/// Ship-dark: with `enable_adherence_gate` OFF the writer never fires ⇒ stays false.
+/// LIVE since 2026-09-16 (OI-53 batch 2); kill-switch `disable_adherence_gate` —
+/// with the kill-switch ON the writer never fires ⇒ stays false.
 class PhaseRepeatNudgeNotifier extends Notifier<bool> {
   @override
   bool build() =>

@@ -1,8 +1,9 @@
 // Behavioral regression — W2.1 (Batch 3b-ii): graded double progression in
-// ProgressionResolver, behind `enable_graded_progression` (default OFF, ship
-// dark). Rep-range-aware banding + 2-consecutive-below-range back-off gate +
-// beginner auto-linear window. Sessions seeded at a ≤7d gap so ⑦a decay is 1.0
-// (base == logged weight) and the band math is clean.
+// ProgressionResolver. LIVE since 2026-09-16 (OI-53 batch 2); kill-switch
+// `disable_graded_progression`. Rep-range-aware banding + 2-consecutive-
+// below-range back-off gate + beginner auto-linear window. Sessions seeded at
+// a ≤7d gap so ⑦a decay is 1.0 (base == logged weight) and the band math is
+// clean.
 
 import 'dart:io';
 
@@ -94,8 +95,8 @@ void main() {
     await HiveService.instance.userBox.put('profile', p);
   }
 
-  Future<void> enableGraded() async =>
-      HiveService.instance.configBox.put('enable_graded_progression', true);
+  Future<void> disableGraded() async =>
+      HiveService.instance.configBox.put('disable_graded_progression', true);
 
   double? resolved(String name, {String? repRange}) => ProgressionResolver.resolve(
         phase: 2,
@@ -103,9 +104,8 @@ void main() {
         repRanges: {name: repRange},
       )[name];
 
-  group('rep-range-aware banding (flag ON, non-beginner)', () {
+  group('rep-range-aware banding (flag ON — LIVE default, non-beginner)', () {
     setUp(() async {
-      await enableGraded();
       await setProfile('intermediate', onboardedDaysAgo: 400);
     });
 
@@ -147,9 +147,7 @@ void main() {
     });
   });
 
-  group('beginner auto-linear window (flag ON)', () {
-    setUp(enableGraded);
-
+  group('beginner auto-linear window (flag ON — LIVE default)', () {
     test('beginner + <120d training-age → always progress (mid-range reps)',
         () async {
       await setProfile('beginner', onboardedDaysAgo: 30);
@@ -172,10 +170,12 @@ void main() {
     });
   });
 
-  test('kill-switch OFF (default) → verbatim fixed-10/5 (byte-identical)',
-      () async {
-    // No enable flag; reps=10 in "8-12" → OFF fixed rule progresses (≥10),
-    // ON would HOLD → proves the flag genuinely gates.
+  test('kill-switch ON (disable_graded_progression) → verbatim fixed-10/5 '
+      '(byte-identical)', () async {
+    // Kill-switch explicitly set; reps=10 in "8-12" → OFF fixed rule
+    // progresses (≥10), ON (the LIVE default) would HOLD → proves the
+    // kill-switch genuinely gates.
+    await disableGraded();
     await setProfile('intermediate', onboardedDaysAgo: 400);
     await seedExlog('Bench', weight: 100, reps: 10, daysAgo: 3);
     expect(resolved('Bench', repRange: '8-12'), 102.5);
