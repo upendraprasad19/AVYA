@@ -138,38 +138,6 @@ pending:
   #     biases toward LIFTING)"
   # So enable_readiness flips FIRST or those two are inert-to-wrong.
 
-  - flag: enable_graded_progression
-    branch: workout-graded-progression
-    build_commit: c4db7214
-    build_date: 2026-07-13
-    merge_commit: 266fa884
-    flip_reviewed: false
-    flip_commit: null
-
-  - flag: enable_session_detraining_cut
-    branch: workout-resume-banner
-    build_commit: 8a2e8654
-    build_date: 2026-07-13
-    merge_commit: b81e4fb6
-    flip_reviewed: false
-    flip_commit: null
-
-  - flag: enable_physique_focus_bringup
-    branch: workout-body-focus
-    build_commit: e0abbc24
-    build_date: 2026-07-13
-    merge_commit: f53d439c
-    flip_reviewed: false
-    flip_commit: null
-
-  - flag: enable_adherence_gate
-    branch: workout-adherence-8a2int
-    build_commit: f47de745
-    build_date: 2026-07-18
-    merge_commit: 4fdcf4af
-    flip_reviewed: false
-    flip_commit: null
-
   - flag: enable_volume_titration
     branch: workout-titration-9
     build_commit: 05f66c9b
@@ -181,9 +149,11 @@ pending:
       WARNING added 2026-09-01: this flag's readiness dependency is now LIVE
       (enable_readiness flipped that day), and unlike triggered_deload's and
       plateau_escalation's it is NOT enforced in code. _recovered()
-      (volume_titration.dart:112-132) has no readiness gate at all; titration is
+      (volume_titration.dart:116-136) has no readiness gate at all; titration is
       inert ONLY because THIS flag short-circuits at :60 before it runs. Whoever
       flips this will immediately consume every readiness row accumulated since.
+      EXCLUDED from OI-53 batch 2 (2026-09-16) for exactly this reason — see
+      docs/audit/open_issues.md's OI-53 entry for the founder's scoping decision.
 
   - flag: enable_plateau_escalation
     branch: workout-plateau-12
@@ -194,6 +164,9 @@ pending:
     flip_commit: null
     note: >
       Depends on enable_readiness (see above).
+      EXCLUDED from OI-53 batch 2 (2026-09-16) alongside enable_volume_titration —
+      see docs/audit/open_issues.md's OI-53 entry for the founder's scoping
+      decision.
 
 # ── HARD PRECONDITIONS for flipping enable_hold_weeks ─────────────────────
 # Not a wish-list. The flip-on commit already requires the full ×2 + bpass
@@ -259,6 +232,91 @@ resolved:
       flag's actual state -- fixed by seeding a real week-1 schedule row via the production read
       path (MigratedKey + workoutBox) and pairing a "default reads real data" test with a
       "kill-switch suppresses it despite real data" test, both confirmed by mutation.
+
+  - flag: enable_graded_progression
+    branch: workout-graded-progression
+    build_commit: c4db7214
+    build_date: 2026-07-13
+    merge_commit: 266fa884
+    flip_reviewed: true
+    flip_commit: 035461c7
+    flip_review_record: docs/plan-reviews/oi53-batch2-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 2, flag 1 of 4 this batch). Kill-switch key is now
+      `disable_graded_progression` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass (0 P0/P1 on this flag specifically; the B-pass's one
+      substantive finding was on the adherenceGateEnabled flag below) --
+      docs/reviews/c22fa39a1cbf-review.md.
+      The fixed 10/5 reps-rule becomes rep-range-aware (progress at the top of the range, hold
+      within, back off on 2 consecutive below-range sessions); beginner auto-linear window (<120d
+      training age) always progresses. Independent of the pre-existing ⑦a reduce-only detraining
+      decay. Kill-switch restores the verbatim fixed-10/5 rule byte-identical, confirmed by
+      mutation (hardcoding the getter to `true` reddened exactly the kill-switch test).
+
+  - flag: enable_session_detraining_cut
+    branch: workout-resume-banner
+    build_commit: 8a2e8654
+    build_date: 2026-07-13
+    merge_commit: b81e4fb6
+    flip_reviewed: true
+    flip_commit: 035461c7
+    flip_review_record: docs/plan-reviews/oi53-batch2-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 2, flag 2 of 4 this batch). Kill-switch key is now
+      `disable_session_detraining_cut` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass -- docs/reviews/c22fa39a1cbf-review.md.
+      ⚠ CROSS-CUTTING CONSEQUENCE documented on the OI board (not fixed by this batch): flipping
+      this alongside enable_graded_progression invalidates the premises of OI-188's defects 2/3/4
+      (a separate, larger returning-user re-entry analysis, `Blocked on: founder product decision`).
+      `ActiveWorkoutNotifier.startWorkout` (train_provider.dart) applies the session-time prefill
+      cut with NO phase/tier gate anywhere, so free users (phase 1) now get the cut for the first
+      time (generation-time decay ⑦a is still phase-gated off for phase<=1), and phase-1 now
+      DISAGREES with phase>=2 in a new, inverted way. See docs/audit/open_issues.md's OI-188 entry
+      for the full corrected analysis.
+      Kill-switch restores the verbatim prefill (no cut), byte-identical, confirmed by mutation.
+
+  - flag: enable_physique_focus_bringup
+    branch: workout-body-focus
+    build_commit: e0abbc24
+    build_date: 2026-07-13
+    merge_commit: f53d439c
+    flip_reviewed: true
+    flip_commit: 035461c7
+    flip_review_record: docs/plan-reviews/oi53-batch2-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 2, flag 3 of 4 this batch). Kill-switch key is now
+      `disable_physique_focus_bringup` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass -- docs/reviews/c22fa39a1cbf-review.md.
+      Translates the user's `physique_focus` profile field to muscle-substring tokens at the
+      `effectiveBodyFocus` seam, adding +1 set per matching exercise via the EXISTING bodyFocus
+      periodization mechanism (no periodization change). Explicit focus precedes auto
+      `weakMuscles()` and applies at all phases. Kill-switch restores the verbatim seam,
+      byte-identical, confirmed by mutation.
+
+  - flag: enable_adherence_gate
+    branch: workout-adherence-8a2int
+    build_commit: f47de745
+    build_date: 2026-07-18
+    merge_commit: 4fdcf4af
+    flip_reviewed: true
+    flip_commit: 035461c7
+    flip_review_record: docs/plan-reviews/oi53-batch2-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 2, flag 4 of 4 this batch). Kill-switch key is now
+      `disable_adherence_gate` and the catch-block default inverted to ON. Full ×2 context-blind
+      plan review plus a B-pass (1 P2, 1 P3, both accepted and fixed in-batch) --
+      docs/reviews/c22fa39a1cbf-review.md. The most architecturally involved of the 4: gates a
+      `last_phase_profile` Hive write, a G5 faithfulness re-ranking gate, AND the actual
+      `repeatContent`/`repeat` trigger computation at two call sites (pro_phase_advance.dart's
+      automatic low-adherence repeat; graduation_screen.dart's explicit choice sheet).
+      ⚠ B-PASS FOUND AND FIXED A REAL ASYMMETRY: the automatic path redundantly re-checks the flag
+      a second time immediately before `_buildRepeatPins` (mutation-confirmed); the choice-sheet
+      path took the user's already-made choice straight through with NO re-check, so a kill-switch
+      flip during the human-time gap between the sheet opening and the tap was not honored --
+      contradicting the flag's own byte-identical-when-killed guarantee. Fixed by moving the check
+      into `_buildRepeatPins` itself (the ONE method both callers funnel through), mutation-proven
+      (reverting the new guard reddens exactly the new graduation-path kill-switch test). See
+      docs/plan-reviews/oi53-batch2-flip.md for the full account.
 
   - flag: enable_deload_reason_line
     branch: unitb-deload-reason
