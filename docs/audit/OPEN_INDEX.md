@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**114 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**115 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -122,3 +122,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-201 | alert_cron_function_dead can burst-dispatch many critical alerts at once;… | none | 2026-09-14, Hermes lens L31… | [:4302](open_issues.md#L4302) |
 | OI-202 | users.subscription_status never reconciles to free after expiry | none | 2026-09-15, founder spot-check of… | [:4344](open_issues.md#L4344) |
 | OI-204 | Full-rescan sync architecture (_syncExerciseLogs/_syncNutritionLogs) times… | none | 2026-09-16, `client_errors` telemetry… | [:4385](open_issues.md#L4385) |
+| OI-206 | retire_worktree.dart's regenerable-ignored-paths allowlist is missing… | none | 2026-09-16, live read of… | [:4440](open_issues.md#L4440) |
