@@ -1925,3 +1925,31 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   for a genuine assertion failure, not a compile error → revert → confirm byte-identical) rather
   than trusting the dispatch brief's characterization of what the test would show. No lens
   changed; a 0% false-alarm rate here is a data point, not evidence a lens is under-firing.
+
+- **2026-09-16 (b)** — blast-radius **platform** — branch `cron-ai-removal`, the B-pass on the
+  Gemini-removal batch (9 cron/prediction Edge Functions converted from AI calls to deterministic
+  templates / real trend math, after this batch's own 4-round plan-review chain caught 3 unrelated
+  defects earlier). **6 findings (2 P1, 1 P2, 3 P3); 0 false_alarm — all 6 accepted**, but only 4
+  fixed in-batch: Finding 2 (unbounded regression forecast, reproduced exactly via `deno run`
+  against the two cited fixtures) and Findings 3/5/6 (stale comments/prose) fixed directly;
+  Findings 1 and 4 resolved via a founder decision + 2 filed OIs (OI-210, OI-209) rather than
+  in-batch code changes. Review: `docs/reviews/247d945d1ba0-review.md`.
+  **Tuning — `blast_radius_mismatch` (lens 3) caught something wider than a tier-classifier
+  disagreement: it questioned whether the touched code has ANY live caller at all.** Finding 1
+  found that `future-prediction` — roughly a quarter of this batch's commits — has zero confirmed
+  callers anywhere in the shipped app (no client call site, no cron schedule, not in
+  `CRON_REGISTRY.md`), while the actual live prediction surface calls a completely different,
+  untouched, still-Gemini-calling function. That's a reachability question, not a tier
+  question — the lens's own name and worked examples so far have been about a diff's blast-radius
+  TIER disagreeing with the classifier, not about whether a function is reachable at all. Worth
+  keeping the lens's scope explicitly this wide: a batch can be internally correct and still not
+  achieve its stated goal if the code it hardens is never invoked.
+  **Second pattern, a recurrence of the email-confirm-ux entry's lesson above, not a new one:**
+  Finding 4's suggested fix (widen a parser regex) was drafted, then found to surface 14
+  pre-existing violations in subsystems this batch never touched, against a gate
+  (`check_sot_registry_parity.dart`) that runs unconditionally on every commit repo-wide. Landing
+  it half-done would have failed pre-commit for every future commit until all 14 were cleared — a
+  worse outcome than the finding itself. Reverted; filed as OI-209 instead. **A review's suggested
+  fix is a starting hypothesis, not an instruction — verify its OWN blast radius (run the widened
+  check, count what turns red) before applying it, the same discipline this skill asks of the
+  findings themselves.**
