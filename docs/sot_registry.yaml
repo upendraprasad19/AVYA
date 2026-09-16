@@ -6064,15 +6064,6 @@ concepts:
           instruction outlives the conversation that carried it. Note :230 is
           NOT a prompt -- it is getEmbedding + a storage insert, and sanitising
           there would corrupt stored memory for retrieval while buying nothing.
-      - file: supabase/functions/future-prediction/index.ts
-        line_range: 1-9999
-        method: generatePrediction
-        semantic: sanitise
-        fields_read: [user_profile.*, user_progress.*]
-        notes: |
-          `.select("*")` puts the WHOLE row in the prompt, including the
-          free-text columns daily-snapshot's extraction writes. Second hop of
-          the same loop.
       - file: supabase/functions/weekly-report/index.ts
         line_range: 1-9999
         method: weekly report user message
