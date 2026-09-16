@@ -191,7 +191,34 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                               holdDay: holdTodayDay,
                               isHolding: holdStatus.isHolding,
                             ))
-                    else
+                    else if (!(isFutureUngeneratedPhase(selectedWeek) &&
+                        weekDays.isEmpty))
+                      // Plan-review round 1 (obs-batch-2026-09-16, diagnose
+                      // c4f9a1): suppressed for a future-PHASE week — this
+                      // card's own condition (`selectedWeek > plan.currentWeek`,
+                      // and `plan.currentWeek` is hard-clamped to [1,4] by
+                      // getCurrentWeekNumber()) is ALWAYS true for weeks 5-12,
+                      // the exact range the phase-lock empty-state card further
+                      // down now explains. Without this suppression a user
+                      // would see BOTH "Week 5 hasn't started yet" here AND
+                      // "Complete Phase III to unlock Phase IV" below it —
+                      // two un-reconciled messages about the identical
+                      // condition, which reads as confusing/buggy in exactly
+                      // the way this whole fix exists to avoid.
+                      //
+                      // Round 2 refinement: the guard ALSO requires
+                      // weekDays.isEmpty, not just isFutureUngeneratedPhase
+                      // alone — the phase-lock card below only renders
+                      // `if (weekDays.isEmpty)`, so a future-phase week that
+                      // (rarely — e.g. a hold row extending past week 4 for
+                      // phase > 1) already HAS data would otherwise hit
+                      // neither this card's original branch NOR the
+                      // hero-card branch above, leaving the top of the
+                      // screen silently blank. Requiring both conditions
+                      // means this card still renders its ORIGINAL text for
+                      // that rare case, and only ever gets suppressed when
+                      // the empty-state card below is guaranteed to render
+                      // in its place.
                       Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: AppSpacing.screenPadding),
@@ -366,7 +393,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
 
                     // Compact week rows
                     if (weekDays.isEmpty)
-                      _buildEmptyWeek()
+                      _buildEmptyWeek(
+                        isFutureUngeneratedPhase:
+                            isFutureUngeneratedPhase(selectedWeek),
+                        currentPhase: plan.phase,
+                      )
                     else
                       _buildCompactWeekRows(context, weekDays),
 

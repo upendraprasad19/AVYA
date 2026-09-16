@@ -20,6 +20,22 @@ import '../providers/auth_provider.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/forgot_password_sheet.dart';
 
+/// Pure mapping extracted for testability — which SnackBar styling an
+/// `AuthState2` toast should render with. `AuthStatus.info` is a non-error,
+/// expected-happy-path message (e.g. "check your email to confirm") and
+/// renders in Wardroom gold, matching `SyncBanner`'s tone for the same kind
+/// of informational/next-step message; every other status reaching this
+/// listener is `AuthStatus.error` and renders in red. Diagnose — see
+/// docs/diagnoses/: before this fix EVERY message reaching this listener,
+/// including the non-error confirmation-pending one, rendered red.
+({Color background, Color text}) authToastStyleFor(AuthStatus status) {
+  final isInfo = status == AuthStatus.info;
+  return (
+    background: isInfo ? AppColors.accent : AppColors.bad,
+    text: isInfo ? AppColors.bgDeep : Colors.white,
+  );
+}
+
 /// Enum for the current sign-in view.
 enum _SignInView { main, email, phone }
 
@@ -162,14 +178,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
     // Listen for auth state changes to navigate.
     ref.listen<AuthState2>(authNotifierProvider, (prev, next) {
-      if (next.status == AuthStatus.error && next.errorMessage != null) {
+      if ((next.status == AuthStatus.error ||
+              next.status == AuthStatus.info) &&
+          next.errorMessage != null) {
+        final toastStyle = authToastStyleFor(next.status);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               next.errorMessage!,
-              style: AppTypography.bodySm.copyWith(color: Colors.white),
+              style: AppTypography.bodySm.copyWith(color: toastStyle.text),
             ),
-            backgroundColor: AppColors.bad,
+            backgroundColor: toastStyle.background,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.sharp),

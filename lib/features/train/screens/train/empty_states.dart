@@ -34,14 +34,30 @@ extension _EmptyStates on _TrainScreenState {
     );
   }
 
-  Widget _buildEmptyWeek() {
+  /// [isFutureUngeneratedPhase] / [currentPhase]: a PRO user can page ahead
+  /// into a phase group beyond their actual current phase
+  /// (`isFutureUngeneratedPhase(selectedWeek)`, see
+  /// `lib/core/utils/hold_week_labels.dart`) — that phase genuinely has no
+  /// generated schedule yet, which is expected, not a glitch. Founder
+  /// observation 2026-09-16: the generic "No workouts scheduled" empty
+  /// state read like a bug here rather than an intentional gate; other
+  /// fitness apps (Fitbod, JuggernautAI, Ladder) always pair a locked
+  /// future block with a lock icon + a stated unlock condition instead of a
+  /// bare empty state. Diagnose — see docs/diagnoses/.
+  Widget _buildEmptyWeek({
+    bool isFutureUngeneratedPhase = false,
+    int currentPhase = 1,
+  }) {
+    final copy =
+        isFutureUngeneratedPhase ? futurePhaseUnlockCopy(currentPhase) : null;
     return Padding(
       padding:
           const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      child: const EmptyState(
-        icon: Icons.fitness_center,
-        title: 'No workouts scheduled',
-        subtitle: 'This week has no workouts in your plan.',
+      child: EmptyState(
+        icon: copy != null ? Icons.lock_open_outlined : Icons.fitness_center,
+        title: copy?.title ?? 'No workouts scheduled',
+        subtitle:
+            copy?.subtitle ?? 'This week has no workouts in your plan.',
       ),
     );
   }

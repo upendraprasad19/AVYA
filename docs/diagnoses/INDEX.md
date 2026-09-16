@@ -17,6 +17,21 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-09-16 d4a8f6 — The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called…
 - 2026-07-27 e7b3c5 — Sign-out cleared Hive and Supabase but released nothing the device holds outside them. After user A signed out the handset was still OneSignal external_id = A and Crashlytics userIdentifier = A, so…
 
+### web_confirm_link_routing (1 bugs)
+- 2026-09-16 9c4e1a — A founder's friend attempted a real signup. He tapped the "Confirm signup" link from his email on a phone with the app NOT installed. His browser opened the webapp, and after a moment he was dropped…
+
+### quote_picker_category_derivation (1 bugs)
+- 2026-09-16 e3d8fa — Founder completed an all-legs Phase 3 workout (Barbell Back Squat, Leg Extension, Leg Curl (Lying), Handstand Hold, Front Lever Hold) and the post-completion receipt card showed the caption "Lats lit.…
+
+### auth_toast_severity_styling (1 bugs)
+- 2026-09-16 a8e4d2 — On the signup screen, after tapping CREATE ACCOUNT with email confirmation required, the "Check your email (and spam folder) for a confirmation link, then sign in." message rendered in a plain red…
+
+### sync_queue_auto_drain_triggers (1 bugs)
+- 2026-09-16 b7c2a9 — Founder saw a "2 changes waiting to sync" banner with a Retry action on the Home screen (logged in as upendra), unprompted. Tapping Retry resolved it immediately. Founder asked what happened and why…
+
+### train_screen_future_phase_empty_state (1 bugs)
+- 2026-09-16 c4f9a1 — Founder (a PRO user, Phase III) tapped week chip "W5" on the Train screen's roadmap header — a week in Phase IV, the phase after his current one. The screen showed the generic "No workouts scheduled /…
+
 ### active_workout_resume_guard (1 bugs)
 - 2026-09-15 e8f4a1 — Raised by the founder as the still-unanswered half of Obs 5 (diagnose 6c2f91): "whether to also add a 'resume in-progress workout' indicator on the Train tab and/or a confirmation before…
 
@@ -1217,6 +1232,11 @@ rather than a Hive box. (1 bugs)
 | 2026-09-16 | d8e2f4 | Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when… | error_telemetry_helper | test/contracts/ai_breakdown_notifier_save_meal_telemetry_test.dart |
 | 2026-09-16 | a1c6b9 | Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"… | coach_chat_history_replay | test/contracts/coach_chat_history_replay_writer_to_reader_test.dart |
 | 2026-09-16 | d4a8f6 | The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called… | device_session_identity_binding | test/contracts/signout_unbinds_sdk_identity_test.dart |
+| 2026-09-16 | 9c4e1a | A founder's friend attempted a real signup. He tapped the "Confirm signup" link from his email on a phone with the app NOT installed. His browser opened the webapp, and after a moment he was dropped… | web_confirm_link_routing | test/contracts/confirm_web_redirect_test.dart |
+| 2026-09-16 | e3d8fa | Founder completed an all-legs Phase 3 workout (Barbell Back Squat, Leg Extension, Leg Curl (Lying), Handstand Hold, Front Lever Hold) and the post-completion receipt card showed the caption "Lats lit.… | quote_picker_category_derivation | test/contracts/quote_picker_category_from_exercises_test.dart |
+| 2026-09-16 | a8e4d2 | On the signup screen, after tapping CREATE ACCOUNT with email confirmation required, the "Check your email (and spam folder) for a confirmation link, then sign in." message rendered in a plain red… | auth_toast_severity_styling | test/contracts/auth_toast_info_status_test.dart |
+| 2026-09-16 | b7c2a9 | Founder saw a "2 changes waiting to sync" banner with a Retry action on the Home screen (logged in as upendra), unprompted. Tapping Retry resolved it immediately. Founder asked what happened and why… | sync_queue_auto_drain_triggers | test/contracts/sync_queue_auto_drain_test.dart |
+| 2026-09-16 | c4f9a1 | Founder (a PRO user, Phase III) tapped week chip "W5" on the Train screen's roadmap header — a week in Phase IV, the phase after his current one. The screen showed the generic "No workouts scheduled /… | train_screen_future_phase_empty_state | test/contracts/hold_week_labels_test.dart |
 | 2026-09-15 | e8f4a1 | Raised by the founder as the still-unanswered half of Obs 5 (diagnose 6c2f91): "whether to also add a 'resume in-progress workout' indicator on the Train tab and/or a confirmation before… | active_workout_resume_guard | test/contracts/active_workout_resume_guard_behavioral_test.dart |
 | 2026-09-15 | 2a9f3c | Founder-reported screenshot from internal testing: Profile > My Submissions tab stuck on an infinite loading spinner — "My submissions and added exercises not being shown". No error, no retry option,… | submissions_load_resilience | test/contracts/submissions_load_timeout_behavioral_test.dart |
 | 2026-09-15 | 6c2f91 | Founder-reported, live-reproduced jointly with the agent in Chrome on the amar@gmail.com test account: mid active-workout, after logging all 4 sets of an exercise, tapping SWAP on the next exercise… | active_workout_swap_add_exercise_navigation | test/contracts/swap_add_exercise_double_pop_behavioral_test.dart |

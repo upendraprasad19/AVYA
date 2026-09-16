@@ -23,8 +23,6 @@ void main() {
     });
 
     test('leg exercises → legs even when the name says nothing', () {
-      // Unambiguous leg names (avoid "Back Squat"→BACK→pull + "Leg Press"→
-      // PRESS→push keyword-precedence quirks).
       expect(
         QuotePicker.categoryForExercises(
             ['Goblet Squat', 'Leg Extension', 'Calf Raise'], 'Day 1'),
@@ -81,6 +79,64 @@ void main() {
       // …genuine whole-word matches still resolve.
       expect(QuotePicker.categoryForWorkout('Lat Pulldown'), 'pull');
       expect(QuotePicker.categoryForWorkout('Barbell Row'), 'pull');
+    });
+
+    test(
+        'BACK/CURL/PRESS cross-category collisions — the founder-reported '
+        '"lats lit" bug on an all-legs day', () {
+      // Pre-fix: "BACK" and "CURL" were checked as part of the PULL branch,
+      // which ran BEFORE the LEGS branch. "Barbell Back Squat" and "Leg Curl
+      // (Lying)" both genuinely contain a whole PULL-shaped word (BACK,
+      // CURL) alongside a whole LEGS-shaped word (SQUAT, LEG) — a real
+      // cross-category collision, not a substring bug, so tightening BACK/
+      // CURL to \b-bounded regex alone would NOT have fixed this (both are
+      // already whole words in these names). The fix reorders LEGS ahead of
+      // PULL/PUSH so the leg-specific qualifier wins the tie.
+      expect(QuotePicker.categoryForWorkout('Barbell Back Squat'), 'legs');
+      expect(QuotePicker.categoryForWorkout('Leg Curl (Lying)'), 'legs');
+      expect(
+        QuotePicker.categoryForWorkout('Standing Single Leg Curl'),
+        'legs',
+      );
+      expect(QuotePicker.categoryForWorkout('Sliding Leg Curl'), 'legs');
+
+      // Same PRE-EXISTING collision class the reorder also fixes, surfaced
+      // by this batch's audit of the real exercise library, not previously
+      // reported: "Leg Press" matched PUSH's "PRESS" keyword and never
+      // reached the legs check under the old pull -> push -> legs order.
+      expect(QuotePicker.categoryForWorkout('Leg Press'), 'legs');
+
+      // Genuine mid-word substring bugs (same CLASS as the original obs-2
+      // "template"->LAT fix, this time for BACK): "Kickback" contains
+      // "back" mid-word with no legs-qualifier to rescue it via reordering,
+      // so BACK itself needed the \b-bounded fix. This only asserts the
+      // fix stops the wrong-category regression (pull) — it does NOT assert
+      // the true category (push, per exercise_library.json ground truth):
+      // "Dumbbell Kickback" has no TRICEP/PUSH/PRESS/CHEST/SHOULDER keyword
+      // of its own and falls to 'general', an accepted residual gap (B-pass
+      // Finding 1, docs/reviews/08821dc5a27b-review.md; see the diagnose-doc's
+      // impact_analysis) — do not read this assertion as "resolves correctly".
+      expect(
+        QuotePicker.categoryForWorkout('Dumbbell Kickback'),
+        isNot('pull'),
+      );
+      expect(
+        QuotePicker.categoryForWorkout('Glute Kickback'),
+        'legs', // GLUTE wins regardless, via the reorder
+      );
+
+      // The exact founder-reported workout (leg day; screenshot showed the
+      // "Lats lit. Standing taller already." pull/back quote on this list).
+      expect(
+        QuotePicker.categoryForExercises([
+          'Barbell Back Squat',
+          'Leg Extension',
+          'Leg Curl (Lying)',
+          'Handstand Hold',
+          'Front Lever Hold',
+        ], 'Legs'),
+        'legs',
+      );
     });
   });
 }

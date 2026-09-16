@@ -171,3 +171,43 @@ String deploymentEyebrowLabel({
       '  ·  ${phaseName.toUpperCase()}';
   return isHolding ? deployment : '$deployment  ·  WK $currentWeek OF 4';
 }
+
+/// Roman numeral for phase 1-12. Shared home for the mapping already
+/// duplicated privately in `week_selector.dart`'s `_phaseRoman` — this copy
+/// is for NEW call sites (the phase-lock empty-state card, diagnose — see
+/// docs/diagnoses/); `week_selector.dart`'s own private copy is left
+/// untouched rather than migrated, to avoid touching a well-tested existing
+/// file for a purely cosmetic consolidation.
+String phaseRoman(int phase) {
+  const map = {
+    1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI',
+    7: 'VII', 8: 'VIII', 9: 'IX', 10: 'X', 11: 'XI', 12: 'XII',
+  };
+  return map[phase] ?? '$phase';
+}
+
+/// True when [selectedWeek] (a display-LOCAL week number within the Train
+/// screen's rolling 3-phase-group window — 1-4 current phase, 5-8 next,
+/// 9-12 the phase after — see `week_selector.dart`'s `_PhaseGroup` layout)
+/// falls in a phase beyond the user's actual current phase. Distinguishes
+/// "this future PHASE hasn't been generated yet, and won't be until the
+/// current one is complete" from "this week is still within the current
+/// phase" (all 4 of which are generated together when a phase starts, so an
+/// empty CURRENT-phase week is a different, rarer situation this function
+/// deliberately does not try to explain).
+bool isFutureUngeneratedPhase(int selectedWeek) =>
+    (selectedWeek - 1) ~/ 4 >= 1;
+
+/// Copy for the phase-lock empty-state card shown when a PRO user pages
+/// ahead into a phase that isn't generated yet because the current one
+/// isn't finished. Always names the user's ACTUAL current phase as the
+/// unlock action, regardless of how many phases ahead they're previewing —
+/// the plan engine only ever generates one phase ahead at a time ("the
+/// moment you finish"), so completing the current phase is always the
+/// correct next step whether they tapped the very next phase or one after.
+({String title, String subtitle}) futurePhaseUnlockCopy(int currentPhase) => (
+      title: 'Complete Phase ${phaseRoman(currentPhase)} to unlock '
+          'Phase ${phaseRoman(currentPhase + 1)}',
+      subtitle: 'Your AI coach generates the next 4 weeks the moment '
+          'you finish this one.',
+    );

@@ -6,10 +6,21 @@
 /// all retries (dead-lettered + sent to server telemetry).
 ///
 /// Drains run on:
-///   * App launch (in `main.dart` after Hive opens, before `runApp`)
-///   * Connectivity restore (via `connectivity_plus`)
-///   * Periodic timer (every 5 min while app foregrounded)
+///   * App launch (`splash_screen.dart`, before routing)
+///   * Connectivity restore (via `connectivity_plus`, wired in
+///     `SyncStateNotifier.build` — `lib/shared/providers/sync_state_provider.dart`)
+///   * Periodic timer, `syncQueueAutoDrainInterval` (5 min), same notifier —
+///     NOT foreground-gated (simpler; an occasional drain call while
+///     backgrounded is harmless, see that file's comment)
 ///   * Explicit user "Retry now" tap in `SyncBanner`
+///
+/// **Corrected 2026-09-16 (diagnose — see docs/diagnoses/):** this comment
+/// claimed all four triggers existed for months while only app-launch and
+/// the manual retry were actually wired — a queued offline write could sit
+/// forever until the user relaunched the app or noticed the banner. The
+/// other two are wired now; verify with
+/// `grep -rn "SyncQueue.instance.drain()" lib/` before trusting a doc
+/// comment like this one again.
 ///
 /// Reference: docs/superpowers/specs/2026-04-17-sync-reliability.md Pillar B.
 library;
@@ -138,6 +149,28 @@ class SyncQueue {
   final StreamController<int> _pendingCountController =
       StreamController<int>.broadcast();
 
+  /// In-flight guard (B-pass Finding 4, `docs/reviews/08821dc5a27b-review.md`):
+  /// `_isDue` is a time-based backoff check, not a concurrency lock, so two
+  /// overlapping `drain()` calls (e.g. a connectivity flap coinciding with
+  /// the periodic timer, both added this batch) could both `_loadAll()` the
+  /// same due op and both fire its executor. Currently harmless because
+  /// every registered executor is independently idempotent — this guard
+  /// removes the redundant work rather than relying on that staying true for
+  /// every future executor.
+  bool _draining = false;
+
+  /// Coalesced-rerun flag (plan-review round 2,
+  /// `docs/plan-reviews/obs-batch-2026-09-16-round2.md` Finding 1) — same
+  /// "in-flight + dirty do-while" shape `SyncCoalescer` already uses
+  /// elsewhere in this codebase (`lib/core/services/CLAUDE.md`). Without
+  /// this, `_draining` alone made the pre-existing manual "Retry now" tap
+  /// (`retryNow()` → this same `drain()`) a SILENT no-op whenever it raced
+  /// an already-in-flight auto-drain — a user tapping Retry expects an
+  /// actual attempt to happen, not to be dropped with zero indication.
+  /// Setting this instead GUARANTEES a fresh due-ops pass starts after
+  /// every caller's request, even one that arrived mid-drain.
+  bool _rerunRequested = false;
+
   /// Callback invoked when an op is dead-lettered. `SyncService` wires this
   /// up in `init()` to call the `log-client-error` Edge Function.
   Future<void> Function(PendingSyncOp op)? onDeadLetter;
@@ -213,14 +246,32 @@ class SyncQueue {
   }
 
   /// Drain due ops. Idempotent — safe to call from multiple triggers.
+  /// In-flight guarded AND coalesced: an overlapping call while a drain is
+  /// already running never races to read+run the same ops twice, but it
+  /// ALSO never silently drops the caller's request — it sets
+  /// [_rerunRequested] so the already-running call loops once more before
+  /// releasing [_draining], guaranteeing a fresh pass starts after every
+  /// call to this method returns.
   Future<void> drain() async {
-    final ops = _loadAll();
-    final now = DateTime.now();
-    for (final op in ops) {
-      if (!_isDue(op, now)) continue;
-      await _runOne(op);
+    if (_draining) {
+      _rerunRequested = true;
+      return;
     }
-    _notifyPending();
+    _draining = true;
+    try {
+      do {
+        _rerunRequested = false;
+        final ops = _loadAll();
+        final now = DateTime.now();
+        for (final op in ops) {
+          if (!_isDue(op, now)) continue;
+          await _runOne(op);
+        }
+        _notifyPending();
+      } while (_rerunRequested);
+    } finally {
+      _draining = false;
+    }
   }
 
   /// Count of currently-queued ops. Used on app launch to populate the

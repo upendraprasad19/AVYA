@@ -236,6 +236,13 @@ paths:
   - { glob: ".claude/settings.json", tier: platform }
 
   # ----- account -----
+  # vercel.json's `redirects` array is what makes any bare-path web route
+  # (auth confirm/reset links, /admin) actually reachable under the app's
+  # HashUrlStrategy — a silently-dropped or malformed entry here breaks
+  # signup/auth on the web for every user hitting it, not just one feature.
+  # Added after diagnose 9c4e1a (2026-09-16): the default `feature` tier this
+  # file previously fell through to under `default_tier` did not reflect that.
+  - { glob: "vercel.json", tier: account }
   - { glob: "lib/features/auth/**", tier: account }
   - { glob: "lib/features/ai_coach/**", tier: account }
   - { glob: "lib/core/services/health_write_service.dart", tier: account }
