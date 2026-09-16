@@ -277,10 +277,12 @@ serve(async (req: Request) => {
       const preferredName = (usableMemory?.preferred_name as string | null) ??
         userById.get(userId) ??
         null;
-      // OI-47 round 1: this firstName reaches the FALLBACK message that
-      // actually ships when Gemini fails or times out -- the sanitised
-      // Gemini path is only the success case. Splitting on whitespace
-      // drops spaces but not CR, U+2028/2029/0085, controls or angle runs.
+      // OI-47 round 1 (historical): this firstName feeds the deterministic
+      // template message (cron-ai-removal batch, 2026-09-16, removed the
+      // Gemini path this comment used to contrast against). Sanitisation
+      // still matters: the template interpolates this value directly.
+      // Splitting on whitespace drops spaces but not CR, U+2028/2029/0085,
+      // controls or angle runs.
       const firstName = preferredName
           ? sanitizeIdentifier(preferredName.split(" ")[0], { maxLen: 32 })
           : null;

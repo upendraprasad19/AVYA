@@ -145,8 +145,10 @@ Deno.serve(async (req) => {
       // Personalization
       const memory = await fetchCoachMemory(supabase, userId);
       const usableMemory = memory?.private_mode ? null : memory;
-      // OI-47 round 1: firstName feeds composeMessage(), which builds the
-      // FALLBACK push that actually ships when Gemini fails.
+      // OI-47 round 1 (historical): firstName feeds composeMessage(), which
+      // builds the deterministic template push (cron-ai-removal batch,
+      // 2026-09-16, removed the Gemini path this comment used to contrast
+      // against).
       const firstName = sanitizeIdentifier(
         usableMemory?.preferred_name as string | null,
         { fallback: "champ", maxLen: 32 },

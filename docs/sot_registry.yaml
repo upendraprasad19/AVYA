@@ -6080,47 +6080,6 @@ concepts:
           constraint -- an authenticated caller POSTs any JSON. Numerics coerced
           with Number() so a string payload cannot smuggle prose through a field
           the prompt presents as a measurement.
-      - file: supabase/functions/plateau-alert/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: One of six alert functions sharing an identical userState shape.
-      - file: supabase/functions/pr-detection/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: Same family.
-      - file: supabase/functions/protein-gap-alert/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: Same family.
-      - file: supabase/functions/re-engagement/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: Same family.
-      - file: supabase/functions/streak-guardian/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: |
-          Same family, but its userState carries recent_pr_exercise -- an
-          exercise name, which for a custom exercise is user-authored text.
-      - file: supabase/functions/workout-window-closing/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState, workoutName]
-        notes: |
-          The only one in the family with a BARE free-text interpolation --
-          workoutName, a user-editable schedule/template name that no
-          JSON.stringify protects. The other five interpolate only numbers.
     class_constraints: |
       Any NEW Edge Function that builds a prompt MUST import
       `_shared/sanitize_for_prompt.ts`, or be added to VERIFIED_CLEAN in
