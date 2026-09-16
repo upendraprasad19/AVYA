@@ -567,7 +567,10 @@ serve(async (req: Request) => {
     //
     // On query error this returns an EMPTY set, i.e. nobody is PRO and every
     // user gets the free template. That is the fail-safe direction — the
-    // alternative is spending Gemini tokens on users we cannot confirm.
+    // alternative is sending the PRO-light template to users we cannot
+    // confirm (both templates are deterministic since cron-ai-removal,
+    // 2026-09-16 — this comment previously described the pre-batch
+    // Gemini-token-spend tradeoff, which no longer applies).
     const proUserIds = await fetchProUserIds(supabaseClient);
     console.log(
       `morning-alert [generate]: ${proUserIds.size} PRO user(s) ` +

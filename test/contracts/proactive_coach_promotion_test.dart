@@ -123,6 +123,13 @@ void main() {
     final src = _stripDartComments(
         File('supabase/functions/proactive-coach-promotion/index.ts')
             .readAsStringSync());
+    // cron-ai-removal batch (2026-09-16): f4d771d2 extracted composeCongrats
+    // + RANK_LABELS out of index.ts into this sibling file and removed the
+    // Gemini call entirely. Read separately so the assertions below can
+    // target whichever file the concept they pin actually lives in now.
+    final congratsSrc = _stripDartComments(
+        File('supabase/functions/proactive-coach-promotion/congrats.ts')
+            .readAsStringSync());
 
     test('verify_jwt=false (invoked by trigger using service_role_key)', () {
       // verify_jwt config is set in the deploy invocation, not the
@@ -224,16 +231,34 @@ void main() {
       );
     });
 
-    test('RANK_LABELS uses canonical ladder codes (matches '
+    test('RANK_LABELS (congrats.ts) uses canonical ladder codes (matches '
         'rank_ladder_data.dart)', () {
       // Canonical codes per kRankLadder: SD2,SD1,LS,PO,CPO,MCPO,SubLt,Lt,
       // LtCdr,Cdr,Capt. The buggy map used PO2/PO1/ENS/LTJG/LCDR/CDR/CAPT.
-      for (final code in ['LS:', 'PO:', 'MCPO:', 'SubLt:', 'LtCdr:']) {
-        expect(src.contains(code), isTrue,
+      // cron-ai-removal batch (2026-09-16): RANK_LABELS moved from index.ts
+      // to congrats.ts (f4d771d2) — repointed at congratsSrc, not src.
+      //
+      // Match the FULL `code: "Label",` declaration, not a bare `code:`
+      // fragment: a bare 'LS:' is a substring of 'RANK_LABELS:' (the
+      // declaration's own type annotation) and a bare 'PO:' is a substring
+      // of 'MCPO:' — both nest inside unrelated text, so either check would
+      // stay green even if that rank's own entry were deleted. Found via
+      // this batch's own mutate-it-and-run-it pass (CLAUDE.md rule 21):
+      // renaming LS's key alone left the old bare-substring version of this
+      // test green.
+      final labelPairs = {
+        'LS': 'Leading Seaman',
+        'PO': 'Petty Officer',
+        'MCPO': 'Master Chief Petty Officer',
+        'SubLt': 'Sub Lieutenant',
+        'LtCdr': 'Lieutenant Commander',
+      };
+      labelPairs.forEach((code, label) {
+        expect(congratsSrc.contains('$code: "$label"'), isTrue,
             reason: 'RANK_LABELS missing canonical code $code (audit EF-1).');
-      }
+      });
       for (final ghost in ['PO2:', 'PO1:', 'ENS:', 'LTJG:']) {
-        expect(src.contains(ghost), isFalse,
+        expect(congratsSrc.contains(ghost), isFalse,
             reason: 'RANK_LABELS uses nonexistent code $ghost (audit EF-1).');
       }
     });
@@ -280,34 +305,36 @@ void main() {
       );
     });
 
-    test('Gemini model is gemini-2.5-flash (cheap path for short text)',
-        () {
-      // Per docs/architecture/ai.md model matrix — flash for text
-      // analysis-class tasks (the congrats is 80-120 words, not weekly
-      // report depth).
-      expect(
-        src.contains('gemini-2.5-flash'),
-        isTrue,
-        reason: 'use gemini-2.5-flash for short proactive messages. '
-            '2.5-pro is reserved for weekly report (PRO-only).',
-      );
+    test(
+        'no longer calls Gemini for the congrats message '
+        '(cron-ai-removal batch, 2026-09-16)', () {
+      // f4d771d2 replaced the Gemini call with a pure, deterministic
+      // template (congrats.ts) — there is no model to pin a name for, and
+      // no system prompt to enforce brand-voice rules on at request time.
+      // Mirrors the Deno-side negative assertion in
+      // proactive-coach-promotion/index_test.ts.
+      for (final fileSrc in [src, congratsSrc]) {
+        expect(fileSrc.contains('gemini-2.5-flash'), isFalse,
+            reason: 'composeCongrats no longer calls any Gemini model.');
+        expect(fileSrc.contains('generativelanguage.googleapis.com'), isFalse,
+            reason: 'the raw Gemini fetch endpoint must be gone.');
+        expect(fileSrc.contains('GEMINI_API_KEY'), isFalse,
+            reason: 'GEMINI_API_KEY must no longer be referenced.');
+      }
     });
 
-    test('system prompt enforces "no emojis" + military lexicon sparingly',
-        () {
-      // The prompt is the brand voice — pin both rules.
-      expect(
-        src.contains('NO emojis'),
-        isTrue,
-        reason: 'AVYA brand voice forbids emojis (Wardroom + Indian '
-            'Navy style).',
-      );
-      expect(
-        src.contains('Military lexicon'),
-        isTrue,
-        reason: 'prompt must explicitly steer the model toward the '
-            'military lexicon brand voice.',
-      );
+    test(
+        'the shipped congrats copy is brand-voice compliant '
+        '(no emoji — the LLM system-prompt rule this used to enforce is '
+        'now structurally guaranteed by fixed, founder-approved copy)', () {
+      // The three variant() template strings are the ENTIRE congrats
+      // surface now (no LLM in the loop to introduce an emoji at
+      // request time), so scan the actual shipped copy directly rather
+      // than a system-prompt instruction that no longer exists.
+      final emoji = RegExp(r'\p{Extended_Pictographic}', unicode: true);
+      expect(emoji.hasMatch(congratsSrc), isFalse,
+          reason: 'congrats.ts template copy must contain no emoji '
+              '(Wardroom + Indian Navy brand voice).');
     });
   });
 }

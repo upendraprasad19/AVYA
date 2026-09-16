@@ -21,7 +21,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-09-16 e5c9b2 — This batch's own prior fix (`593094e3`, diagnose `9c3d7a`) added a schedule-row existence probe to `future-prediction/index.ts` meant to mirror `completionRateOverWindow`'s notion of "the last 4…
 - 2026-09-16 9c3d7a — `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,…
 
-### proactive_coach_promotion_congrats (2 bugs)
+### proactive_coach_promotion_congrats (3 bugs)
+- 2026-09-16 c4e8a1 — `test/contracts/proactive_coach_promotion_test.dart` had 3 RED tests on this branch, introduced by `f4d771d2` (the very first fix commit in this batch, before either plan-review round even ran) and…
 - 2026-09-16 a1f7d3 — `proactive-coach-promotion`'s `ai_coach_interactions` insert hardcoded `model_used: "gemini-2.5-flash"` unconditionally, unchanged by this batch's earlier fix (`f4d771d2`, diagnose `b7c9e2`) that…
 - 2026-09-16 b7c9e2 — `proactive-coach-promotion` (fired by the `trg_dispatch_proactive_coach_promotion` Postgres trigger on every rank_promotions INSERT) composed its congrats copy with a raw `fetch()` call straight to…
 
@@ -1227,6 +1228,7 @@ rather than a Hive box. (1 bugs)
 | 2026-09-16 | d4a8f6 | The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called… | device_session_identity_binding | test/contracts/signout_unbinds_sdk_identity_test.dart |
 | 2026-09-16 | e5c9b2 | This batch's own prior fix (`593094e3`, diagnose `9c3d7a`) added a schedule-row existence probe to `future-prediction/index.ts` meant to mirror `completionRateOverWindow`'s notion of "the last 4… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
 | 2026-09-16 | 9c3d7a | `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
+| 2026-09-16 | c4e8a1 | `test/contracts/proactive_coach_promotion_test.dart` had 3 RED tests on this branch, introduced by `f4d771d2` (the very first fix commit in this batch, before either plan-review round even ran) and… | proactive_coach_promotion_congrats | test/contracts/proactive_coach_promotion_test.dart |
 | 2026-09-16 | a1f7d3 | `proactive-coach-promotion`'s `ai_coach_interactions` insert hardcoded `model_used: "gemini-2.5-flash"` unconditionally, unchanged by this batch's earlier fix (`f4d771d2`, diagnose `b7c9e2`) that… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |
 | 2026-09-16 | b7c9e2 | `proactive-coach-promotion` (fired by the `trg_dispatch_proactive_coach_promotion` Postgres trigger on every rank_promotions INSERT) composed its congrats copy with a raw `fetch()` call straight to… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |
 | 2026-09-15 | e8f4a1 | Raised by the founder as the still-unanswered half of Obs 5 (diagnose 6c2f91): "whether to also add a 'resume in-progress workout' indicator on the Train tab and/or a confirmation before… | active_workout_resume_guard | test/contracts/active_workout_resume_guard_behavioral_test.dart |

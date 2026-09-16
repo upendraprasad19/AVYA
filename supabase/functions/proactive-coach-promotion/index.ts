@@ -1,8 +1,9 @@
 // proactive-coach-promotion / Theme C (closes-diagnose 8b1f33).
 //
 // Fired by Postgres trigger trg_dispatch_proactive_coach_promotion on
-// every rank_promotions INSERT (migration 073). Composes an AI
-// congratulation message via Gemini, writes it to ai_coach_interactions
+// every rank_promotions INSERT (migration 073). Composes a deterministic
+// congratulation message (congrats.ts — no LLM call, cron-ai-removal
+// batch 2026-09-16), writes it to ai_coach_interactions
 // (the canonical chat table — offline-first: the in-app chat UI reads
 // Hive, this cloud row is the upward-sync target that surfaces once the
 // coach domain syncs down to the device), and sends an OneSignal push so
@@ -55,7 +56,7 @@ serve(async (req: Request): Promise<Response> => {
   //
   // verify_jwt=false (the Postgres trigger trg_dispatch_proactive_coach_promotion
   // dispatches via pg_net, not an end-user JWT). Without a manual gate an
-  // unauthenticated POST could drive Gemini cost + OneSignal push +
+  // unauthenticated POST could drive OneSignal push cost +
   // ai_coach_interactions writes to ANY user_id. The trigger sends
   // `Authorization: Bearer <service_role_jwt>` (migration 078, resolved from
   // Vault via private.morning_alert_get_service_key()), so the SAME shared
@@ -65,7 +66,7 @@ serve(async (req: Request): Promise<Response> => {
   // rejecting anonymous callers. Verifies the JWT signature against
   // SUPABASE_JWT_SECRET + role-claim === 'service_role'; CRON_SECRET opaque
   // token is the escape hatch inside the helper. Reject BEFORE any
-  // Gemini/push/DB work.
+  // push/DB work.
   if (!await isAuthorizedCronCall(req)) {
     console.warn(`[proactive-coach-promotion] unauthorized caller; status=401`);
     return jsonResponse({ error: "Unauthorized" }, 401);
@@ -186,7 +187,7 @@ async function loadUserContext(
   // Unit C (§2.24) — surface a query failure instead of coercing to a null/0
   // context (which sends a de-personalized "Congratulations, soldier" push). This
   // runs first in the per-invocation flow, so a throw here happens BEFORE the
-  // Gemini compose + the ai_coach_interactions insert + the OneSignal push.
+  // congrats compose + the ai_coach_interactions insert + the OneSignal push.
   const ctxErr = userRes.error ?? profileRes.error ?? progressRes.error;
   if (ctxErr) throw ctxErr;
   return {
