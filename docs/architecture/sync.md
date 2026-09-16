@@ -52,7 +52,7 @@ status: scaffold
 | `foodBox` | food_database (seeded from bundled JSON) |
 | `customBox` | user_custom_exercises, user_custom_foods |
 | `coachBox` | ai_coach_interactions, coaching_notes |
-| `syncBox` | last_sync_timestamps (pending_sync_queue is **planned** — see `docs/superpowers/specs/2026-04-17-sync-reliability.md`, not yet implemented) |
+| `syncBox` | last_sync_timestamps + `pending_sync_<id>` rows (the retry queue — **corrected 2026-09-16**: this row said "planned, not yet implemented" for months after `lib/core/services/sync_queue.dart` shipped; see that file's header for the drain triggers and diagnose docs/diagnoses/ for the auto-drain gap this same date closed) |
 | `configBox` | subscription status, feature flags, app config |
 
 #### workoutBox Key Patterns

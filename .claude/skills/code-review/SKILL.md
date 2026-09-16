@@ -410,6 +410,60 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   a test's expected literal — count the enumeration, don't trust the numeral next to it.**
   False-alarm rate 0/2 → no lens removed; lens 6 and lens 8 extended per above.
 
+- **2026-09-16 (d)** — blast-radius **platform** — branch `obs-batch-2026-09-16` (a 5-fix
+  founder-observation batch: quote-picker category collision, sync-queue auto-drain never
+  wired, Train phase-lock empty state, signup-confirm toast color, and the `/confirm` web
+  redirect — none individually account/platform-worthy, but `pubspec.yaml`/`pubspec.lock`
+  adding `connectivity_plus` for the sync fix classified the WHOLE batch platform-tier).
+  **7 findings (0 P1, 2 P2, 5 P3); 0 false_alarm — all 7 accepted and fixed in the same
+  session.** Review: `docs/reviews/08821dc5a27b-review.md`. Run as one agent (26 files, but
+  ~1,050 of the 1,699 inserted lines were diagnose-doc/test prose — modest real code diff for
+  5 independent, small, well-scoped fixes).
+  **Tuning 1 — lens 3 (`blast_radius_mismatch`) caught a diagnose-doc under-declaring its OWN
+  fix's tier, not just the batch's.** Finding 2: `lib/core/utils/hold_week_labels.dart` falls
+  under the `lib/core/** -> account` catch-all in `docs/blast_radius.yaml`, which the author
+  missed because the OTHER two files touched by that same fix (`screen.dart`,
+  `empty_states.dart`) are feature-tier — a diagnose-doc's self-declared tier needs the
+  classifier run on ALL of ITS OWN touched files, not just the ones that feel representative.
+  Cross-checking all 5 of this batch's diagnose-docs the same way found the other 4 exactly
+  matched the classifier; only the one spanning `lib/core/` under-declared.
+  **Tuning 2 — lens 6 (`guard_without_its_mirror`) applied to §4.6 itself, not just to a guard
+  in the diff: a fix that establishes a NEW dependency triggering a stricter blast-radius tier
+  inherits that tier's `requires:` obligations, and nobody re-checked them.** Finding 3: adding
+  `connectivity_plus` pushed the whole batch to `platform`, which `docs/blast_radius.yaml`
+  gates on `feature_flag`, and CLAUDE.md §4.6 independently mandates a kill-switch for any
+  sync-touching change — the new always-on connectivity listener + periodic timer shipped with
+  zero `configBox`/`kDebugMode` gating. **Add to lens 3/6's shared method: when a batch's
+  overall tier is driven by ONE file (here, a pubspec dependency bump for an unrelated-looking
+  fix), check that tier's `requires:` list against the WHOLE batch, not just the file that
+  triggered it** — the obligation attaches to the tier, not to the triggering file.
+  **Tuning 3 — lens 6, a second instance in the same pass: a doc comment's safety claim
+  attributed protection to the WRONG mechanism, and two new auto-drain triggers turned a
+  previously-rare race into a routine one.** Finding 4: a comment claimed `drain()`'s
+  `_isDue` backoff check made overlapping calls "a cheap no-op" — `_isDue` is purely
+  time-based and has zero concurrency semantics; the actual (pre-existing) safety is that both
+  registered executors are independently idempotent. Harmless today, but the batch that just
+  added a SECOND auto-drain trigger (making overlap routine instead of requiring a user
+  double-tap) is exactly the batch that should have re-examined this claim instead of
+  copy-pasting it forward. **Add to lens 6: when a diff adds a NEW trigger for an existing
+  code path, re-verify any comment near that path asserting concurrency safety — a claim
+  written when the path had one caller does not automatically hold with two.**
+  **Tuning 4 — self_attesting_artifact (lens 10) found citation drift that then had to be
+  re-derived a SECOND time, because fixing Findings 3+4 shifted the very lines Finding 6 named.**
+  The reviewer's suggested corrected line numbers for Finding 6 were accurate when written and
+  stale by the time they were applied, since Findings 3/4's own remediation (a new getter + two
+  guard clauses) landed ABOVE the connectivity listener in the same file. **Add to the general
+  fix-application method: when triage fixes findings in a batch where an EARLIER finding's fix
+  could shift an EARLIER-computed line citation, re-derive citations LAST, after all other
+  fixes in the pass have landed — not from the review's suggested numbers.**
+  **A negative result worth keeping.** Two mutation-proof claims in the diagnose-docs
+  (quote-picker's 1-of-9, train-phase-lock's 2-of-39) were independently reproduced exactly by
+  the reviewer, and the sync-queue mutation the reviewer ran as a bonus check (to investigate
+  Finding 7) was independently re-run a SECOND time by the author post-remediation, against the
+  grown 18-test file (up from 11), reddening the same 3 assertions — confirming the fix's
+  protection survived the batch's own additional changes rather than assuming it did.
+  False-alarm rate 0/7 → no lens removed; lenses 3, 6, 10 extended per above.
+
 - **2026-09-14 (e)** — blast-radius **platform** — branch `telegram-admin-bot`, Task 13 Step 8
   push-gate fix (migration 137: re-asserts the anon/authenticated revoke on
   `founder_metrics_ops()` that migrations 135/136 each omitted — caught by the FIRST full

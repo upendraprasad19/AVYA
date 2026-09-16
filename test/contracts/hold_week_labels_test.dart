@@ -300,4 +300,86 @@ void main() {
               'elsewhere on this same screen.');
     });
   });
+
+  // Founder observation 2026-09-16: a PRO user paging ahead into a phase
+  // that isn't generated yet saw a generic "No workouts scheduled" empty
+  // state that read like a bug rather than an intentional gate. Diagnose —
+  // see docs/diagnoses/.
+  group('phaseRoman', () {
+    test('maps 1-12 to the same numerals week_selector.dart already uses',
+        () {
+      expect(phaseRoman(1), 'I');
+      expect(phaseRoman(3), 'III');
+      expect(phaseRoman(4), 'IV');
+      expect(phaseRoman(9), 'IX');
+      expect(phaseRoman(12), 'XII');
+    });
+
+    test('out-of-table falls back to the bare number rather than throwing',
+        () {
+      expect(phaseRoman(13), '13');
+      expect(phaseRoman(0), '0');
+    });
+  });
+
+  group('isFutureUngeneratedPhase', () {
+    test('weeks 1-4 (current phase group) are NOT a future phase', () {
+      for (final w in [1, 2, 3, 4]) {
+        expect(isFutureUngeneratedPhase(w), isFalse,
+            reason: 'week $w is within the CURRENT phase group');
+      }
+    });
+
+    test('weeks 5-8 (next phase group) ARE a future phase — the exact '
+        'founder-reported "W5" case', () {
+      for (final w in [5, 6, 7, 8]) {
+        expect(isFutureUngeneratedPhase(w), isTrue);
+      }
+    });
+
+    test('weeks 9-12 (phase after next) are ALSO a future phase', () {
+      for (final w in [9, 10, 11, 12]) {
+        expect(isFutureUngeneratedPhase(w), isTrue);
+      }
+    });
+  });
+
+  group('futurePhaseUnlockCopy', () {
+    test('always names the ACTUAL current phase as the unlock action — the '
+        'founder-reported screenshot (Phase III current, W5 previewed)', () {
+      final copy = futurePhaseUnlockCopy(3);
+      expect(copy.title, 'Complete Phase III to unlock Phase IV');
+      expect(
+        copy.subtitle,
+        'Your AI coach generates the next 4 weeks the moment '
+            'you finish this one.',
+      );
+    });
+
+    test('phase 1 (a brand-new user previewing ahead)', () {
+      expect(
+        futurePhaseUnlockCopy(1).title,
+        'Complete Phase I to unlock Phase II',
+      );
+    });
+
+    test('never claims to unlock more than one phase ahead, even for a '
+        'phase-after-next preview (weeks 9-12) — completing the CURRENT '
+        'phase is always the correct immediate next step', () {
+      // futurePhaseUnlockCopy takes only currentPhase, not "how far ahead
+      // the user tapped" — so a caller previewing weeks 5-8 OR weeks 9-12
+      // from the same current phase 3 gets the IDENTICAL copy naming Phase
+      // IV, never Phase V, because the plan engine only ever generates one
+      // phase ahead at a time. (B-pass Finding 5,
+      // docs/reviews/08821dc5a27b-review.md: this used to assert
+      // `futurePhaseUnlockCopy(3).title == futurePhaseUnlockCopy(3).title`,
+      // a self-comparison that cannot fail for any implementation — fixed
+      // to assert the actual expected value.)
+      expect(
+        futurePhaseUnlockCopy(3).title,
+        'Complete Phase III to unlock Phase IV',
+      );
+      expect(futurePhaseUnlockCopy(3).title, isNot(contains('Phase V')));
+    });
+  });
 }

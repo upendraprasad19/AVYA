@@ -88,10 +88,19 @@ final currentUserProvider = Provider<User?>((ref) {
 // ── Auth Notifier ───────────────────────────────────────────────
 
 /// Possible states during an auth operation.
-enum AuthStatus { idle, loading, success, error }
+/// `info` is a non-error, expected-happy-path message (e.g. "check your
+/// email to confirm") — distinct from `error` so the UI can render it
+/// without red/alarm styling. Added this batch (diagnose — see
+/// docs/diagnoses/): the confirmation-pending message below was previously
+/// forced into `error` for lack of any other bucket, which is why it
+/// rendered in the same red SnackBar as a genuine sign-in failure.
+enum AuthStatus { idle, loading, success, error, info }
 
 class AuthState2 {
   final AuthStatus status;
+  // Carries the message for BOTH AuthStatus.error and AuthStatus.info — the
+  // field name predates `info` and renaming it is a larger, purely cosmetic
+  // change touching every call site for no behavioral benefit.
   final String? errorMessage;
   final bool otpSent;
 
@@ -372,7 +381,7 @@ class AuthNotifier extends Notifier<AuthState2> {
               termsAcceptedAt: termsAcceptedAt, termsVersion: termsVersion);
         } catch (_) {}
         state = state.copyWith(
-          status: AuthStatus.error,
+          status: AuthStatus.info,
           errorMessage:
               'Check your email (and spam folder) for a confirmation link, then sign in.',
         );

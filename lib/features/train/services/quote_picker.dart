@@ -53,15 +53,46 @@ class QuotePicker {
   /// SHORT keywords MUST be word-bounded — bare `.contains('LAT')` matched
   /// mid-word ("test temp**lat**e" → pull → the founder's stray "lat" quote,
   /// Unit 3 obs 2; also "warm-up"→ARM, "leverage"→LEG, "grow"→ROW,
-  /// "absolute"→ABS, "grunt"→RUN). Long unambiguous keywords (PULL, PRESS,
-  /// SQUAT, …) stay substrings so compounds like "Pulldown" still match.
+  /// "absolute"→ABS, "grunt"→RUN; "**back**" inside "Kick**back**"→pull,
+  /// this batch — "Cable Tricep Kickback" / "Dumbbell Kickback" / "Glute
+  /// Kickback" all matched a mid-word `.contains('BACK')`). Long unambiguous
+  /// keywords (PULL, PRESS, SQUAT, …) stay substrings so compounds like
+  /// "Pulldown" still match.
+  ///
+  /// The word-boundary fix stops all three Kickback names from wrongly
+  /// landing on 'pull', but only "Cable Tricep Kickback" (TRICEP) and "Glute
+  /// Kickback" (GLUTE) land on their TRUE category after it — "Dumbbell
+  /// Kickback" has no other keyword in this list and falls to 'general'
+  /// (accepted residual gap, see the diagnose-doc's `impact_analysis`; a
+  /// strict improvement over the pre-fix 'pull', not a full fix).
   static bool _hasWord(String upperName, String pattern) =>
       RegExp(pattern).hasMatch(upperName);
 
   /// Derive a quote category from a workout name. Falls back to 'general'.
+  ///
+  /// LEGS is checked FIRST, ahead of PULL/PUSH — deliberately, not
+  /// alphabetically. A whole-word-boundary fix on BACK/CURL alone does NOT
+  /// fix names like "Barbell Back Squat" or "Leg Curl (Lying)": "Back" and
+  /// "Curl" are genuine, correctly-spelled whole words there, so `\bBACK\b`
+  /// / `\bCURLS?\b` still match — this is a real cross-category keyword
+  /// COLLISION, not a substring bug, and no amount of word-boundary
+  /// tightening resolves a collision between two equally-valid whole-word
+  /// matches. Verified against the full `assets/data/exercise_library.json`
+  /// (this batch, diagnose — see docs/diagnoses/): every name matching BOTH
+  /// a pull keyword and a legs keyword resolves correctly once legs wins the
+  /// tie — including a PRE-EXISTING, previously-unreported miscategorization
+  /// this same audit surfaced: "Leg Press" matched PUSH's `PRESS` keyword
+  /// and was never reaching the legs check at all under the old pull→push→
+  /// legs order.
   static String categoryForWorkout(String workoutName) {
     final name = workoutName.toUpperCase();
-    if (name.contains('PULL') || name.contains('BACK') ||
+    if (name.contains('SQUAT') || name.contains('LUNGE') ||
+        name.contains('GLUTE') || name.contains('QUAD') ||
+        name.contains('HAMSTRING') || name.contains('CALF') ||
+        _hasWord(name, r'\bLEGS?\b')) {
+      return 'legs';
+    }
+    if (name.contains('PULL') || _hasWord(name, r'\bBACK\b') ||
         name.contains('DEADLIFT') || name.contains('BICEP') ||
         name.contains('CURL') ||
         _hasWord(name, r'\bLATS?\b') || _hasWord(name, r'\bROWS?\b')) {
@@ -71,12 +102,6 @@ class QuotePicker {
         name.contains('PRESS') || name.contains('SHOULDER') ||
         name.contains('TRICEP')) {
       return 'push';
-    }
-    if (name.contains('SQUAT') || name.contains('LUNGE') ||
-        name.contains('GLUTE') || name.contains('QUAD') ||
-        name.contains('HAMSTRING') || name.contains('CALF') ||
-        _hasWord(name, r'\bLEGS?\b')) {
-      return 'legs';
     }
     if (name.contains('CORE') || name.contains('PLANK') ||
         name.contains('CRUNCH') || _hasWord(name, r'\bABS?\b')) {
