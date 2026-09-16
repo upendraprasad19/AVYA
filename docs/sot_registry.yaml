@@ -6063,12 +6063,6 @@ concepts:
           Sharpest placement in the tree -- a user-editable first name inside the
           SYSTEM INSTRUCTION. Missed by the first survey because it calls the
           Gemini REST endpoint via `fetch`, not geminiChat.
-      - file: supabase/functions/morning-alert/index.ts
-        line_range: 1-9999
-        method: generateProAlert
-        semantic: sanitise
-        fields_read: [preferred_name, full_name, snapshot_json]
-        notes: The site OI-47 filed. Name raw, snapshot stringified.
       - file: supabase/functions/rolling-context/index.ts
         line_range: 1-9999
         method: summarizeMessages
