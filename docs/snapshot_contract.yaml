@@ -635,9 +635,12 @@ extra_server_written_keys:
   - key: future_prediction
     written_by: future-prediction Edge Function
     readers:
-      - { fn: future-prediction, file: supabase/functions/future-prediction/index.ts, line: 288 }
+      - { fn: future-prediction, file: supabase/functions/future-prediction/index.ts, line: 251 }
     notes: |
-      Self-read (function caches its own output for re-display).
+      Self-read (function caches its own output for re-display). Citation
+      moved 288 -> 251 on 2026-09-16 (cron-ai-removal batch): removing the
+      Gemini prediction path and adding the real-trend-math helpers shifted
+      line numbers throughout the file.
 
   - key: beat_my_coach
     written_by: beat-my-coach Edge Function
@@ -649,13 +652,16 @@ extra_server_written_keys:
   - key: morning_alert
     written_by: morning-alert Edge Function (self)
     readers:
-      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 620 }
+      - { fn: morning-alert, file: supabase/functions/morning-alert/index.ts, line: 413 }
     notes: |
       Self-read (function stores its template alert for later display).
       Citation moved 505 -> 568 on 2026-07-26: the PRO-predicate fix added
       imports and explanatory comments above this line. Caught by this gate on
       the same commit, which is the first time it could have been — the
       `extra_server_written_keys:` parsing fix landed here too.
+      Citation moved 568 -> 413 on 2026-09-16 (cron-ai-removal batch):
+      removing the AI branch (generateProAlert + the Gemini call) deleted
+      ~150 lines above this read.
 
 # ── Orphan readers (cron functions reading keys the writer doesn't emit) ──
 #

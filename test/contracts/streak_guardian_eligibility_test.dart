@@ -47,10 +47,18 @@ String _strip(String src) => src
 void main() {
   late String src;
   late String raw;
+  late String messageSrc;
 
   setUpAll(() {
     raw = File('supabase/functions/streak-guardian/index.ts').readAsStringSync();
     src = _strip(raw);
+    // cron-ai-removal batch (2026-09-16): the entire streakDays/weight
+    // if-chain this file's "root cause 2" group pins was extracted out of
+    // index.ts into a sibling file, message.ts (pickStreakMessage) —
+    // read separately so those assertions can target where the chain
+    // actually lives now.
+    messageSrc = _strip(
+        File('supabase/functions/streak-guardian/message.ts').readAsStringSync());
   });
 
   group('root cause 1 — one row gates the send AND supplies the copy', () {
@@ -111,45 +119,64 @@ void main() {
   group('root cause 2 — the unbounded PR branch is gone from every surface',
       () {
     test('no recentPR identifier survives anywhere in the code', () {
-      expect(
-        src.contains('recentPR'),
-        isFalse,
-        reason: 'both the declaration and the title branch are removed.',
-      );
+      // Check both files: the milestone/weight chain this identifier used
+      // to live beside moved to message.ts in the cron-ai-removal batch,
+      // so a forbidden pattern could in principle have followed it there.
+      for (final s in [src, messageSrc]) {
+        expect(
+          s.contains('recentPR'),
+          isFalse,
+          reason: 'both the declaration and the title branch are removed.',
+        );
+      }
     });
 
     test('the "You hit a PR recently!" title is gone', () {
       expect(src.contains('You hit a PR recently'), isFalse);
+      expect(messageSrc.contains('You hit a PR recently'), isFalse);
     });
 
     test('recent_pr_exercise is NOT handed to Gemini', () {
       // The load-bearing second half. Dropping it from the title alone would
       // not have been enough: the model writes the body independently and
       // would happily narrate the same unbounded, possibly months-old PR into
-      // the copy. The model can only say what it is given.
+      // the copy. The model can only say what it is given. (Doubly moot
+      // since cron-ai-removal: streak-guardian no longer calls Gemini at
+      // all — but the negative assertion still stands on its own merits.)
       expect(
         src.contains('recent_pr_exercise'),
         isFalse,
         reason: 'this is how the contradiction reached the phone even with a '
             'different title.',
       );
+      expect(messageSrc.contains('recent_pr_exercise'), isFalse);
     });
 
     test('the surviving arms of the else-if chain still exist', () {
       // Removing a branch from the MIDDLE of an else-if chain is exactly where
-      // a stray brace silently re-nests everything after it. Pin the arms that
-      // must remain reachable.
-      expect(src.contains('milestone!'), isTrue);
-      expect(src.contains('Almost at your goal weight!'), isTrue);
+      // a stray brace silently re-nests everything after it. Pin the arms
+      // that must remain reachable.
+      //
+      // cron-ai-removal batch (2026-09-16): the whole chain moved from
+      // index.ts's else-if ladder into message.ts's pickStreakMessage as a
+      // sequence of early-return `if`s — check messageSrc, not src.
+      expect(messageSrc.contains('milestone!'), isTrue);
+      expect(messageSrc.contains('Almost at your goal weight!'), isTrue);
     });
 
     test('braces and parens balance — the chain was not broken by the removal',
         () {
       // Cheap structural proof for a Deno file no Dart test can execute.
+      // Check both files: index.ts still exists as its own compilation
+      // unit, and message.ts is where the actual chain lives now.
       int net(String s, String open, String close) =>
           s.split(open).length - s.split(close).length;
       expect(net(src, '{', '}'), 0, reason: 'unbalanced braces in index.ts');
       expect(net(src, '(', ')'), 0, reason: 'unbalanced parens in index.ts');
+      expect(net(messageSrc, '{', '}'), 0,
+          reason: 'unbalanced braces in message.ts');
+      expect(net(messageSrc, '(', ')'), 0,
+          reason: 'unbalanced parens in message.ts');
     });
   });
 
