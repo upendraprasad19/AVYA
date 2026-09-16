@@ -374,7 +374,7 @@ class AuthNotifier extends Notifier<AuthState2> {
         state = state.copyWith(
           status: AuthStatus.error,
           errorMessage:
-              'Check your email for a confirmation link, then sign in.',
+              'Check your email (and spam folder) for a confirmation link, then sign in.',
         );
         return;
       }
@@ -620,6 +620,171 @@ class AuthNotifier extends Notifier<AuthState2> {
         errorMessage: 'OTP verification failed. Please try again.',
       );
     }
+  }
+
+  /// Verifies a signup-confirmation link's token hash and, on success, signs
+  /// the user in — the counterpart to [verifyOtp] for the email-confirmation
+  /// flow reached via `/confirm` (see `confirm_email_screen.dart`).
+  ///
+  /// Uses `tokenHash`, not the default `{{ .ConfirmationURL }}` link, because
+  /// that flow requires the confirmation email to link at a domain we
+  /// control (`app.icanbefitter.com`, for Android App Links) rather than
+  /// Supabase's own domain. `verifyOTP` with a bare token hash is NOT
+  /// PKCE-bound — unlike the old password-recovery link (diagnose c9e2b7),
+  /// it can be completed on any device, which is exactly why the recovery
+  /// flow above also moved to a token/code shape instead of a raw link.
+  Future<void> confirmEmail(String tokenHash) async {
+    // OI-205 interim guard (2026-09-16, plan-review round 1 Finding 1):
+    // /confirm is an autoVerify Android App Link — tapping it from ANY app
+    // hands control straight to the already-running Activity, unlike /reset
+    // (browser-only, no App Link). Refuse outright rather than silently
+    // switching an already-authenticated user's session; the full consent
+    // UX (switch vs. cancel) remains a real product decision, tracked by
+    // OI-205, not decided here. Checked BEFORE the loading state so a
+    // blocked attempt never touches Supabase at all — this ORDERING is
+    // correct-by-inspection (the guard is unconditionally the first
+    // statement in this method) but round 2 correctly noted it is not
+    // independently pinned by a test: proving it end-to-end needs
+    // `SupabaseService.instance.isAuthenticated` to read true, which
+    // requires `SupabaseService.instance.initialize()` to have run — that
+    // throws in a test environment with empty `.env` values, and no seam
+    // exists to fake just the initialized flag (same gap
+    // `confirmEmailAuthGuardState`'s own doc comment already names).
+    // Adding one is a real, separate change to a shared core service, not a
+    // one-line addition to slip into this batch.
+    final guardState = confirmEmailAuthGuardState(
+      state,
+      alreadyAuthenticated: _supabase.isAuthenticated,
+    );
+    if (guardState != null) {
+      state = guardState;
+      return;
+    }
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    try {
+      // Bounded by the same ceiling as signInWithEmail: verifyOTP + the
+      // _ensureLocalUser fan-out below is the identical network-touching
+      // shape (HiveUserSession.openForUser, one-shot migrators,
+      // hydrateFromCloud) that motivated signInTimeout in the first place
+      // (diagnose a9c4e2) — and confirmEmail fires automatically on mount,
+      // with no prior user gesture, so an unbounded hang here is worse, not
+      // better, than the sign-in case it borrows the ceiling from.
+      await boundSignIn(() => _performConfirmEmail(tokenHash));
+    } on TimeoutException catch (e, st) {
+      unawaited(ErrorTelemetry.logEvent('auth_confirm_email_timeout',
+          message: 'email confirm exceeded ${signInTimeout.inSeconds}s'));
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'auth_confirm_email_timeout'));
+      state = confirmEmailErrorState(state, e);
+    } on StateError catch (e) {
+      state = confirmEmailErrorState(state, e);
+      debugPrint('[confirmEmail] poisoned-clear escalation: $e');
+    } catch (e) {
+      state = confirmEmailErrorState(state, e);
+    }
+  }
+
+  /// Pure decision for the OI-205 interim guard — extracted the same way as
+  /// [confirmEmailErrorState] below, so the DECISION (block + which message)
+  /// is testable with a bare bool, without needing a real, initialized
+  /// `SupabaseService` singleton (its `isAuthenticated` only ever reads true
+  /// after `SupabaseService.instance.initialize()`, which throws in a test
+  /// environment with empty `.env` values — there is no seam to fake just
+  /// the initialized flag). Returns `null` when not blocked (proceed as
+  /// normal); a terminal error [AuthState2] when blocked.
+  @visibleForTesting
+  static AuthState2? confirmEmailAuthGuardState(
+    AuthState2 state, {
+    required bool alreadyAuthenticated,
+  }) {
+    if (!alreadyAuthenticated) return null;
+    return state.copyWith(
+      status: AuthStatus.error,
+      errorMessage: alreadyAuthenticatedConfirmMessage,
+    );
+  }
+
+  /// The exact message [confirmEmailAuthGuardState] sets. Exposed as a named
+  /// constant (not a literal re-typed at the call site) so
+  /// `ConfirmEmailScreen` can detect this SPECIFIC case and offer a real
+  /// sign-out action instead of the generic error CTA — plan-review round 2
+  /// found that CTA (`context.go('/sign-in')`) is a silent no-op for exactly
+  /// this population: `_authRedirect`/`postSessionRedirect` bounce an
+  /// already-authenticated, onboarded user straight back to `/home` before
+  /// `SignInScreen` ever renders, so the button never actually let them sign
+  /// out despite the message promising it would.
+  ///
+  /// Deliberately NOT `@visibleForTesting` — unlike [confirmEmailAuthGuardState]
+  /// and [confirmEmailErrorState], this constant's whole purpose is to be read
+  /// by production code in a different file (`confirm_email_screen.dart`), not
+  /// just by tests.
+  static const String alreadyAuthenticatedConfirmMessage =
+      'You’re already signed in. Sign out first to confirm a different account.';
+
+  /// Pure mapping from a thrown error to the resulting error [AuthState2] —
+  /// extracted so this SELECTION logic (which message a given failure gets)
+  /// is directly testable without a live Supabase call, unlike [confirmEmail]
+  /// itself: there is no dependency-injection seam for `verifyOTP`, so a test
+  /// can't otherwise force a `TimeoutException` or `StateError` out of it.
+  ///
+  /// - [TimeoutException] — [boundSignIn]'s ceiling fired; actionable message,
+  ///   distinct from "invalid or expired" (that reads as "request a new link",
+  ///   which is the wrong recovery action for a slow network).
+  /// - [StateError] — `_ensureLocalUser`'s cross-account guard already
+  ///   force-signed-out for safety; confirmation SUCCEEDED at the Supabase
+  ///   level, so mirrors [signUpWithEmail]'s identical handler rather than
+  ///   the generic fallback.
+  /// - [AuthException] — surfaced verbatim, same as every other auth method.
+  /// - anything else — the generic "invalid or expired" fallback.
+  @visibleForTesting
+  static AuthState2 confirmEmailErrorState(AuthState2 state, Object error) {
+    if (error is TimeoutException) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage:
+            'Confirmation is taking longer than usual. Check your connection and try again.',
+      );
+    }
+    if (error is StateError) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage:
+            'Couldn’t clean up the previous session. Please sign in again.',
+      );
+    }
+    if (error is AuthException) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: error.message,
+      );
+    }
+    return state.copyWith(
+      status: AuthStatus.error,
+      errorMessage: 'This confirmation link is invalid or has expired.',
+    );
+  }
+
+  /// The confirmation sequence itself. Bounded by [signInTimeout] at its only
+  /// call site — see [confirmEmail].
+  Future<void> _performConfirmEmail(String tokenHash) async {
+    final response = await _supabase.client.auth.verifyOTP(
+      tokenHash: tokenHash,
+      type: OtpType.signup,
+    );
+
+    if (response.user == null) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'This confirmation link is invalid or has expired.',
+      );
+      return;
+    }
+
+    await _ensureLocalUser(response.user!);
+    unawaited(ErrorTelemetry.logEvent('auth_signed_in',
+        message:
+            'method=email_confirm userId=${response.user!.id.substring(0, 8)}'));
+    state = state.copyWith(status: AuthStatus.success);
   }
 
   /// True while [signOut] is tearing the session down.

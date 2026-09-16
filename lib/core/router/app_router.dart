@@ -10,6 +10,7 @@ import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/auth/screens/splash_screen.dart';
 import 'package:icanbefitter/features/auth/screens/sign_in_screen.dart';
 import 'package:icanbefitter/features/auth/screens/reset_password_screen.dart';
+import 'package:icanbefitter/features/auth/screens/confirm_email_screen.dart';
 import 'package:icanbefitter/features/auth/screens/restoring_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/mission_brief_screen.dart';
 import 'package:icanbefitter/features/onboarding/screens/onboarding_chat_screen.dart';
@@ -126,6 +127,25 @@ class AppRouter {
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
           child: const ResetPasswordScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      ),
+
+      // Signup-confirmation link (`/confirm?token_hash=...`) — the "Confirm
+      // signup" Supabase email template points here instead of Supabase's
+      // own domain, so Android App Links can claim it. No session exists
+      // yet; exempt from _authRedirect below, same as /reset.
+      GoRoute(
+        path: '/confirm',
+        name: 'confirmEmail',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: ConfirmEmailScreen(
+            tokenHash: state.uri.queryParameters['token_hash'],
+          ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
@@ -616,6 +636,9 @@ class AppRouter {
     // /reset is the password-reset screen — reachable from an email link
     // WITHOUT a normal session. Must bypass all auth guards.
     final isOnReset = state.matchedLocation == '/reset';
+    // /confirm is the signup-confirmation screen — same shape as /reset:
+    // reached from an email link before any session exists.
+    final isOnConfirm = state.matchedLocation == '/confirm';
     // Treat every `/onboarding*` sub-route (welcome / goal / stats /
     // plan / chat / mission-brief) as "on onboarding" so the stepped flow
     // can navigate between its own screens without the not-onboarded redirect
@@ -647,6 +670,9 @@ class AppRouter {
     // Password reset screen — always passthrough. User has no normal session
     // during recovery; the screen itself guards against accidental access.
     if (isOnReset) return null;
+
+    // Signup-confirmation screen — always passthrough for the same reason.
+    if (isOnConfirm) return null;
 
     // Idempotency: already-inducted users landing on /coach/induction or
     // /coach/muster (deep-link, hot reload, back-navigation) get bounced to

@@ -1771,7 +1771,7 @@ concepts:
       defect this concept exists to fix.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 695-704
+        line_range: 1159-1168
         method: terms-write block inside _ensureLocalUser (not itself a named method)
         semantic: hive-write
         notes: |
@@ -9809,11 +9809,11 @@ concepts:
       .timeout() frees the AWAITER and does NOT cancel the request.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 639
+        line_range: 804
         method: signOutInProgress
         semantic: teardown-window-flag
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 685-723
+        line_range: 850-887
         method: signOut
         semantic: set-in-try-clear-in-finally
         notes: >-
@@ -9839,7 +9839,7 @@ concepts:
         semantic: telemetry-reason-split
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 763-768
+        line_range: 789-794
         method: postSessionRedirect
         semantic: branch-order-is-the-fix
         notes: signOutInProgress MUST be tested BEFORE the onboarding read.
