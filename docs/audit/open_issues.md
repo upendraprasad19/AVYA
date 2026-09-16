@@ -4436,3 +4436,45 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Scope note**: founder explicitly scoped this out of the apk43-obs-fixes
   batch (2026-09-16) — document + file now, design + implement as its own
   dedicated follow-up.
+
+## OI-206 — retire_worktree.dart's regenerable-ignored-paths allowlist is missing deno.lock
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-16, live read of `scripts/retire_worktree_lib.dart:236-303`
+  (`regenerableIgnoredPaths`) — no `deno.lock` entry anywhere in the list —
+  plus `.gitignore:140` (`deno.lock` is gitignored, 0 tracked files by that
+  name per `git ls-files`) and a live check of the primary worktree, where
+  `deno.lock` exists untracked (16,625 bytes, last written 2026-07-27),
+  produced as a side effect of running Deno tooling and never committed.
+- **How found**: while closing out plan-review round 2 on the apk43-obs-fixes
+  batch, which added `deno check --node-modules-dir=none` runs against
+  `tool-loop.ts` and `ai-proxy/index.ts` per CLAUDE.md's Deno mandate — each
+  run leaves a fresh `deno.lock` in the worktree root.
+- **Root cause**: the allowlist is exact-match-only by design (its own header
+  comment records three prior review rounds each finding a P0 from looser
+  matching), so it only protects paths someone has explicitly enumerated.
+  `deno.lock` was never added — most likely because Deno itself was not
+  installed on this machine until 2026-09-12 (CLAUDE.md's git-hooks section,
+  Deno 2.9.6 via winget), so before that date no worktree could produce the
+  file at all and the gap was latent rather than live.
+- **Consequence**: CLAUDE.md now directs running `deno check
+  --node-modules-dir=none supabase/functions/<fn>/index.ts` (and `deno test`)
+  on every touched Edge Function before the commit. Both commands write
+  `deno.lock` into the worktree root as a side effect. Any worktree that
+  follows that mandate and then merges cleanly will report `KEEP` from
+  `retire_worktree.dart` forever afterward — leg 3 (no non-regenerable
+  ignored files) fails on a file that is, in fact, fully regenerable
+  (`deno check`/`deno test` recreate it byte-for-byte from
+  `supabase/functions/**`'s import graph). Same bug-class this exact file has
+  already fixed twice before, for `.claude/.batch_close_state` (diagnose
+  `b4d7e9`, OI-128's shape) and the `.claude/.ci_reconcile_pending.jsonl`
+  pair — a tool that writes a new gitignored file into the worktree owes this
+  list an entry, and the 2026-09-12 Deno adoption shipped without one.
+- **Fix shape (not decided)**: add `'deno.lock'` as one more exact-match entry
+  to `regenerableIgnoredPaths` (`scripts/retire_worktree_lib.dart:236`), with
+  a comment citing this OI, plus a case in
+  `test/scripts/retire_worktree_lib_test.dart` asserting
+  `isRegenerableIgnored('deno.lock')`. Filed only, not implemented, per
+  founder instruction (documentation-only batch).
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `deno-lock-retire-fix`
