@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { istDateStr } from "../_shared/ist_date.ts";
+import { predictLift, predictStreakWeeks, predictWeight } from "./trend.ts";
+import { completionRateOverWindow } from "../_shared/rank_engine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,43 +15,79 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 /**
- * Generate a local fallback prediction without AI (used for free users after onboarding).
- * Uses simple heuristics based on profile data.
+ * Generate a local fallback prediction without AI (used for all users).
+ * Real trend math where there's enough history; per-field static-formula
+ * fallback otherwise — never all-or-nothing.
  */
-export function generateLocalPrediction(
+export async function generateLocalPrediction(
+  supabase: SupabaseClient,
+  userId: string,
   profile: Record<string, unknown>,
   progress: Record<string, unknown>,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const currentWeight = (profile.current_weight_kg as number) ?? 70;
   const targetWeight = (profile.target_weight_kg as number) ?? currentWeight;
   const goal = (profile.primary_goal as string) ?? "general_fitness";
-  const experience =
-    (progress.detected_experience_level as string) ?? "beginner";
+  const experience = (progress.detected_experience_level as string) ?? "beginner";
   const daysPerWeek = (profile.days_per_week as number) ?? 3;
 
-  // Weight prediction: move ~30% toward target in 90 days
-  const weightDiff = targetWeight - currentWeight;
-  const predictedWeight =
-    Math.round((currentWeight + weightDiff * 0.3) * 10) / 10;
-
-  // Lift predictions based on experience and goal
+  // Static formulas stay as the FALLBACK for each field individually —
+  // never all-or-nothing.
+  const weightFallback = Math.round((currentWeight + (targetWeight - currentWeight) * 0.3) * 10) / 10;
   const liftMultipliers: Record<string, Record<string, number>> = {
     beginner: { squat: 0.8, bench: 0.5, deadlift: 1.0 },
     intermediate: { squat: 1.2, bench: 0.8, deadlift: 1.5 },
     advanced: { squat: 1.5, bench: 1.1, deadlift: 1.8 },
   };
-
   const multipliers = liftMultipliers[experience] ?? liftMultipliers.beginner;
-  const bodyweight = currentWeight;
-
-  const predictedLifts = {
-    squat_kg: Math.round(bodyweight * multipliers.squat),
-    bench_kg: Math.round(bodyweight * multipliers.bench),
-    deadlift_kg: Math.round(bodyweight * multipliers.deadlift),
+  const liftFallback = {
+    squat: Math.round(currentWeight * multipliers.squat),
+    bench: Math.round(currentWeight * multipliers.bench),
+    deadlift: Math.round(currentWeight * multipliers.deadlift),
   };
+  const streakFallback = Math.min(daysPerWeek >= 4 ? 10 : 8, 13);
 
-  // Streak prediction based on training days
-  const predictedStreak = Math.min(daysPerWeek >= 4 ? 10 : 8, 13);
+  const since90 = istDateStr(new Date(Date.now() - 90 * 24 * 3600 * 1000));
+  const { data: weightRows } = await supabase
+    .from("weight_logs")
+    .select("date, weight_kg")
+    .eq("user_id", userId)
+    .gte("date", since90)
+    .order("date", { ascending: true });
+
+  const predictedWeight = predictWeight(
+    (weightRows ?? []).map((r: Record<string, unknown>) => ({
+      date: r.date as string,
+      weight_kg: r.weight_kg as number,
+    })),
+    weightFallback,
+  );
+
+  async function liftPrediction(matchSubstring: string, fallback: number): Promise<number> {
+    const { data: rows } = await supabase
+      .from("workout_log_exercises")
+      .select("completed_at, weight_kg")
+      .eq("user_id", userId)
+      .eq("is_pr", true)
+      .ilike("exercise_id", `%${matchSubstring}%`)
+      .order("completed_at", { ascending: true });
+    return predictLift(
+      (rows ?? []).map((r: Record<string, unknown>) => ({
+        completed_at: r.completed_at as string,
+        weight_kg: r.weight_kg as number,
+      })),
+      fallback,
+    );
+  }
+
+  const [squatKg, benchKg, deadliftKg] = await Promise.all([
+    liftPrediction("squat", liftFallback.squat),
+    liftPrediction("bench", liftFallback.bench),
+    liftPrediction("deadlift", liftFallback.deadlift),
+  ]);
+
+  const adherenceRate = await completionRateOverWindow(supabase, userId, 4);
+  const predictedStreak = predictStreakWeeks(adherenceRate < 0 ? null : adherenceRate, streakFallback);
 
   const taglines: Record<string, string[]> = {
     build_muscle: [
@@ -76,7 +114,7 @@ export function generateLocalPrediction(
   return {
     predicted_weight_kg: predictedWeight,
     predicted_bf_pct: null,
-    predicted_lifts: predictedLifts,
+    predicted_lifts: { squat_kg: squatKg, bench_kg: benchKg, deadlift_kg: deadliftKg },
     predicted_streak_weeks: predictedStreak,
     confidence: "medium",
     tagline,
@@ -228,7 +266,9 @@ serve(async (req: Request) => {
       current_phase: 1,
     };
 
-    const prediction = generateLocalPrediction(
+    const prediction = await generateLocalPrediction(
+      supabaseClient,
+      userId,
       profileData as Record<string, unknown>,
       progress as Record<string, unknown>,
     );
