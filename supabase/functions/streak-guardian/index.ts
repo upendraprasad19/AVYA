@@ -13,16 +13,14 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
-import { captainPrompt } from "../_shared/captain_manual.ts";
 import {
   fetchNotificationPrefsDetailed,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
-import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
-import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
+import { pickStreakMessage } from "./message.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -267,86 +265,19 @@ serve(async (req: Request) => {
       const weight = snap?.current_weight_kg as number | null;
       const targetWeight = snap?.target_weight_kg as number | null;
 
-      // Fallback: hardcoded English messages preserved as safety net.
-      let title = "Don't break your streak!";
-      let fallbackMessage = `You haven't logged today. ${streakWeeks}-week streak on the line!`;
-
-      if (streakDays === 7) {
-        title = "1 week strong!";
-        fallbackMessage = "You've hit 7 days straight — that's the hardest week done. Don't stop now!";
-      } else if (streakDays === 14) {
-        title = "2 weeks! You're building a habit.";
-        fallbackMessage = "14 days of consistency. Most people quit by now — you didn't. Keep going!";
-      } else if (streakDays === 30) {
-        title = "30-day warrior!";
-        fallbackMessage = "A full month of training. You're in the top 5% of users. Log today to keep it alive!";
-      } else if (streakDays === 50) {
-        title = "50 days. Legendary.";
-        fallbackMessage = "Half a century of consistency. This streak is worth protecting — don't miss today!";
-      } else if (streakDays === 100) {
-        title = "100-DAY STREAK!";
-        fallbackMessage = "Triple digits. You're officially unstoppable. One workout away from 101!";
-      } else if (streakDays % 10 === 0 && streakDays > 10) {
-        title = `${streakDays}-day milestone!`;
-        fallbackMessage = `${streakDays} days of showing up. That's elite. Don't let today be the one you miss.`;
-        // A `recent_pr_exercise` branch used to sit between this arm and the next,
-        // titling the push "You hit a PR recently!". It carried NO recency check:
-        // the field comes from ai_snapshot_builder._getPRTimelineSummary, which
-        // scans every exlog row ever with no date cutoff, so "recently" could mean
-        // months ago — the founder's snapshot was quoting a 75-day-old PR beside a
-        // 0-day streak. Removed rather than date-bounded: `pr-detection` is a
-        // separate cron with a correct 20-minute lookback that already owns "you
-        // just hit a PR" in real time, so a second surface celebrating the same
-        // event later is redundant even when correctly bounded. Users who would
-        // have hit it now fall through to the goal-weight / variant framings.
-        // Diagnose e3b9d7.
-      } else if (weight && targetWeight && Math.abs(weight - targetWeight) < 2) {
-        title = "Almost at your goal weight!";
-        fallbackMessage = `You're within 2kg of your target. Don't miss today — every session counts now.`;
-      } else {
-        const variants = [
-          `It's getting late. Your ${streakWeeks}-week streak is waiting for today's workout.`,
-          `${streakDays} days of consistency so far. One workout keeps it alive.`,
-          `You didn't come this far to only come this far. ${streakWeeks} weeks and counting!`,
-          `Your future self will thank you. Log a workout before midnight to keep your streak.`,
-        ];
-        fallbackMessage = variants[streakDays % variants.length];
-      }
-
-      // Generate Captain-voiced copy via Gemini; fall back to English on error.
-      let message = fallbackMessage;
-      try {
-        // `recent_pr_exercise` was ALSO handed to Gemini here. Dropping it from
-        // the title alone would not have been enough: the model writes the body
-        // independently and would happily narrate the same unbounded, possibly
-        // months-old PR into the copy — which is how the contradiction reached
-        // the founder's phone in the first place ("You hit a PR recently!" beside
-        // "streak at 0 days"). The model can only say what it is given.
-        const userState = {
-          streak_days: streakDays,
-          streak_weeks: streakWeeks,
-          current_weight_kg: weight,
-          target_weight_kg: targetWeight,
-          workout_logged_today: false,
-        };
-        const { content } = await geminiChat({
-          model: MODEL_FLASH,
-          systemPrompt: captainPrompt("proactive"),
-          userPrompt:
-            `User state: ${sanitizeJsonForPrompt(userState)}.\n\n` +
-            `Generate a streak protection nudge — user has not logged today and their ` +
-            `${streakDays}-day streak is at risk.`,
-          maxTokens: 120,
-          temperature: 0.7,
-        });
-        if (content && content.trim().length > 0) {
-          message = content.trim();
-        }
-      } catch (e) {
-        console.warn(
-          `[streak-guardian] Gemini failed for ${userId}, using fallback copy: ${e}`,
-        );
-      }
+      // A `recent_pr_exercise` branch used to sit here, titling the push "You
+      // hit a PR recently!". It carried NO recency check: the field comes
+      // from ai_snapshot_builder._getPRTimelineSummary, which scans every
+      // exlog row ever with no date cutoff, so "recently" could mean months
+      // ago. Removed rather than date-bounded: `pr-detection` is a separate
+      // cron with a correct 20-minute lookback that already owns "you just
+      // hit a PR" in real time. Diagnose e3b9d7.
+      const { title, message } = pickStreakMessage({
+        streakDays,
+        streakWeeks,
+        weight,
+        targetWeight,
+      });
 
       const ok = await sendPushNotification({
         userId,

@@ -14,7 +14,32 @@ import {
   buildCurrentRankMap,
   buildRankPromotionsMap,
   buildUserProgressMap,
+  windowSinceDateUtc,
 } from "./rank_engine.ts";
+
+Deno.test("windowSinceDateUtc — returns a YYYY-MM-DD string windowWeeks*7 days before now, raw UTC (no IST shift)", () => {
+  const result = windowSinceDateUtc(4);
+  assertEquals(/^\d{4}-\d{2}-\d{2}$/.test(result), true);
+  const expected = new Date(Date.now() - 4 * 7 * 24 * 3600 * 1000)
+    .toISOString()
+    .split("T")[0];
+  assertEquals(result, expected);
+});
+
+Deno.test("windowSinceDateUtc — matches the exact cutoff completionRateOverWindow queries internally (single source of truth, no cross-caller drift)", () => {
+  // completionRateOverWindow computes its own `sinceIso.split('T')[0]` from
+  // `new Date(Date.now() - windowWeeks*7*24*3600*1000).toISOString()` — the
+  // same expression this helper now owns. Any caller (e.g.
+  // future-prediction's schedule-existence probe) that needs to agree with
+  // completionRateOverWindow's notion of "the same window" must call this
+  // helper rather than re-deriving the cutoff independently, or the two can
+  // silently disagree by up to a day around the IST/UTC boundary.
+  const a = windowSinceDateUtc(4);
+  const b = new Date(Date.now() - 4 * 7 * 24 * 3600 * 1000)
+    .toISOString()
+    .split("T")[0];
+  assertEquals(a, b);
+});
 
 Deno.test("buildUserProgressMap — keys rows by user_id, preserves fields", () => {
   const map = buildUserProgressMap([

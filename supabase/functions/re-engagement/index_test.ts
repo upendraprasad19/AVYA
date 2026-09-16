@@ -17,6 +17,7 @@ import {
   assertStrictEquals,
 } from "https://deno.land/std@0.224.0/testing/asserts.ts";
 import { mapFallbackCandidates } from "./index.ts";
+import { buildReengagementMessage } from "./message.ts";
 
 Deno.test("mapFallbackCandidates projects RPC rows into parallel candidate list + name map", () => {
   const rows = [
@@ -136,6 +137,27 @@ Deno.test("markProactiveSent is NOT wrapped in a local try and no mark-failure c
       "markFailures counter is back — it can only ever be 0 while the " +
         "helper is non-throwing, which is worse than omitting it",
     );
+  }
+});
+
+Deno.test("buildReengagementMessage: with a name", () => {
+  assertEquals(
+    buildReengagementMessage("Rahul"),
+    "Rahul — haven't heard from you in a few days. Everything okay? No judgment — just tell me what happened and we reset.",
+  );
+});
+
+Deno.test("buildReengagementMessage: null name omits greeting", () => {
+  assertEquals(
+    buildReengagementMessage(null),
+    "haven't heard from you in a few days. Everything okay? No judgment — just tell me what happened and we reset.",
+  );
+});
+
+Deno.test("re-engagement no longer calls Gemini", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  if (src.includes("geminiChat(")) {
+    throw new Error("expected geminiChat( to be gone from re-engagement/index.ts");
   }
 });
 

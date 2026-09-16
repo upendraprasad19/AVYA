@@ -20,6 +20,19 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### web_confirm_link_routing (1 bugs)
 - 2026-09-16 9c4e1a — A founder's friend attempted a real signup. He tapped the "Confirm signup" link from his email on a phone with the app NOT installed. His browser opened the webapp, and after a moment he was dropped…
 
+### streak_guardian_message_composition, future_prediction_streak_forecast, morning_alert_ai_removal (1 bugs)
+- 2026-09-16 f8a3c6 — Two more RED/stale-citation defects surfaced by proactively running the FULL set of Flutter contract tests referencing any of this batch's 9 touched functions, after Round 3's review found a similar…
+
+### future_prediction_streak_forecast (3 bugs)
+- 2026-09-16 e5c9b2 — This batch's own prior fix (`593094e3`, diagnose `9c3d7a`) added a schedule-row existence probe to `future-prediction/index.ts` meant to mirror `completionRateOverWindow`'s notion of "the last 4…
+- 2026-09-16 9c3d7a — `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,…
+- 2026-09-16 b2f7c4 — `future-prediction`'s new real-trend-math path (this same batch, Task 10, `trend.ts`) computed `predictWeight`/`predictLift` via unbounded least-squares linear regression with no sanity clamp on the…
+
+### proactive_coach_promotion_congrats (3 bugs)
+- 2026-09-16 c4e8a1 — `test/contracts/proactive_coach_promotion_test.dart` had 3 RED tests on this branch, introduced by `f4d771d2` (the very first fix commit in this batch, before either plan-review round even ran) and…
+- 2026-09-16 a1f7d3 — `proactive-coach-promotion`'s `ai_coach_interactions` insert hardcoded `model_used: "gemini-2.5-flash"` unconditionally, unchanged by this batch's earlier fix (`f4d771d2`, diagnose `b7c9e2`) that…
+- 2026-09-16 b7c9e2 — `proactive-coach-promotion` (fired by the `trg_dispatch_proactive_coach_promotion` Postgres trigger on every rank_promotions INSERT) composed its congrats copy with a raw `fetch()` call straight to…
+
 ### quote_picker_category_derivation (1 bugs)
 - 2026-09-16 e3d8fa — Founder completed an all-legs Phase 3 workout (Barbell Back Squat, Leg Extension, Leg Curl (Lying), Handstand Hold, Front Lever Hold) and the post-completion receipt card showed the caption "Lats lit.…
 
@@ -1233,6 +1246,13 @@ rather than a Hive box. (1 bugs)
 | 2026-09-16 | a1c6b9 | Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"… | coach_chat_history_replay | test/contracts/coach_chat_history_replay_writer_to_reader_test.dart |
 | 2026-09-16 | d4a8f6 | The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called… | device_session_identity_binding | test/contracts/signout_unbinds_sdk_identity_test.dart |
 | 2026-09-16 | 9c4e1a | A founder's friend attempted a real signup. He tapped the "Confirm signup" link from his email on a phone with the app NOT installed. His browser opened the webapp, and after a moment he was dropped… | web_confirm_link_routing | test/contracts/confirm_web_redirect_test.dart |
+| 2026-09-16 | f8a3c6 | Two more RED/stale-citation defects surfaced by proactively running the FULL set of Flutter contract tests referencing any of this batch's 9 touched functions, after Round 3's review found a similar… | streak_guardian_message_composition, future_prediction_streak_forecast, morning_alert_ai_removal | test/contracts/streak_guardian_eligibility_test.dart, test/contracts/snapshot_contract_consolidated_test.dart |
+| 2026-09-16 | e5c9b2 | This batch's own prior fix (`593094e3`, diagnose `9c3d7a`) added a schedule-row existence probe to `future-prediction/index.ts` meant to mirror `completionRateOverWindow`'s notion of "the last 4… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
+| 2026-09-16 | 9c3d7a | `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
+| 2026-09-16 | b2f7c4 | `future-prediction`'s new real-trend-math path (this same batch, Task 10, `trend.ts`) computed `predictWeight`/`predictLift` via unbounded least-squares linear regression with no sanity clamp on the… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
+| 2026-09-16 | c4e8a1 | `test/contracts/proactive_coach_promotion_test.dart` had 3 RED tests on this branch, introduced by `f4d771d2` (the very first fix commit in this batch, before either plan-review round even ran) and… | proactive_coach_promotion_congrats | test/contracts/proactive_coach_promotion_test.dart |
+| 2026-09-16 | a1f7d3 | `proactive-coach-promotion`'s `ai_coach_interactions` insert hardcoded `model_used: "gemini-2.5-flash"` unconditionally, unchanged by this batch's earlier fix (`f4d771d2`, diagnose `b7c9e2`) that… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |
+| 2026-09-16 | b7c9e2 | `proactive-coach-promotion` (fired by the `trg_dispatch_proactive_coach_promotion` Postgres trigger on every rank_promotions INSERT) composed its congrats copy with a raw `fetch()` call straight to… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |
 | 2026-09-16 | e3d8fa | Founder completed an all-legs Phase 3 workout (Barbell Back Squat, Leg Extension, Leg Curl (Lying), Handstand Hold, Front Lever Hold) and the post-completion receipt card showed the caption "Lats lit.… | quote_picker_category_derivation | test/contracts/quote_picker_category_from_exercises_test.dart |
 | 2026-09-16 | a8e4d2 | On the signup screen, after tapping CREATE ACCOUNT with email confirmation required, the "Check your email (and spam folder) for a confirmation link, then sign in." message rendered in a plain red… | auth_toast_severity_styling | test/contracts/auth_toast_info_status_test.dart |
 | 2026-09-16 | b7c2a9 | Founder saw a "2 changes waiting to sync" banner with a Retry action on the Home screen (logged in as upendra), unprompted. Tapping Retry resolved it immediately. Founder asked what happened and why… | sync_queue_auto_drain_triggers | test/contracts/sync_queue_auto_drain_test.dart |

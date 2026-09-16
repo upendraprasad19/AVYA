@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**118 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**120 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -126,3 +126,5 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-206 | retire_worktree.dart's regenerable-ignored-paths allowlist is missing… | none | 2026-09-16, live read of… | [:4556](open_issues.md#L4556) |
 | OI-207 | sot_registry.yaml: hold-weeks line_range citations (762-847, 890-915)… | none | 2026-09-16, live `Read` of… | [:4598](open_issues.md#L4598) |
 | OI-208 | AuthNotifier._teardown() swallows internal failures with no signal to… | none | 2026-09-16, B-pass on the… | [:4642](open_issues.md#L4642) |
+| OI-209 | check_sot_registry_parity.dart's line_range parser is blind to bare… | none | 2026-09-16, B-pass on the… | [:4675](open_issues.md#L4675) |
+| OI-210 | future-prediction Edge Function has no live caller anywhere in the shipped… | founder decision (see below — surfaced… | 2026-09-16, B-pass on the… | [:4730](open_issues.md#L4730) |

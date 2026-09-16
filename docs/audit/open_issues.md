@@ -4671,3 +4671,111 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   12-line diagnose-doc-driven fix.
 - **Identified**: 2026-09-16 · filed via mint_oi.sh from branch
   `email-confirm-ux`, during the B-pass on diagnose `d4a8f6`.
+
+## OI-209 — check_sot_registry_parity.dart's line_range parser is blind to bare (non-dash) entries -- 15 stale citations invisible, 14 predating cron-ai-removal in unrelated subsystems
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-16, B-pass on the cron-ai-removal batch
+  (`docs/reviews/247d945d1ba0-review.md` Finding 4) plus independent
+  re-verification. `scripts/check_sot_registry_parity.dart`'s block-form
+  parser (`blockRegex`) requires a dash-separated `line_range: N-M` —
+  `grep -cE "^\s*line_range:\s*[0-9]+\s*$" docs/sot_registry.yaml` finds
+  **30** bare-number entries the gate has never checked at all. Widening
+  the regex to accept a bare `line_range: N` as a 1-line range (the same
+  convention the file's own `ist_sites` inline-map parser already applies
+  for `line: N`) surfaces **15** stale-line-range errors, spanning
+  `lib/core/services/phase_progress_reconciler.dart`,
+  `lib/core/services/sync_service.dart` (x2),
+  `supabase/functions/streak-guardian/index.ts`,
+  `lib/features/auth/screens/sign_in_screen.dart` (x3),
+  `lib/core/services/supabase_service.dart` (x4),
+  `lib/features/profile/services/notification_inbox_service.dart` (x2),
+  `lib/core/services/day_rollover_service.dart` — confirmed via
+  `git diff main...cron-ai-removal -- docs/sot_registry.yaml` that NONE of
+  these 15 registry entries were touched by this batch's diff, i.e. all 15
+  predate this branch. The one entry this batch's own review actually
+  named (`streak-guardian/index.ts`, `line_range: 214`, method
+  `streakDays`) was corrected directly in the same batch
+  (`docs/sot_registry.yaml`, now `264`, matching
+  `grep -n "const streakDays" supabase/functions/streak-guardian/index.ts`
+  → line 264) — trivial, verified, no gate-behavior change required. The
+  other 14 are unrelated to cron-ai-removal (auth, sync, notification
+  inbox, day rollover) and were deliberately NOT fixed in that batch —
+  see Scope note.
+- **Scope note**: `check_sot_registry_parity.dart` runs UNCONDITIONALLY in
+  the pre-commit gate loop (`scripts/pre-commit.sh:324`, `for GATE in
+  scripts/check_*.dart`, not in the case-skip allowlist), on every commit
+  in the whole repo, with no arguments (hard-fail mode, not
+  `--warn-only`). Widening the parser without first fixing all 15 exposed
+  violations would fail pre-commit for every future commit until they
+  are all cleared — a repo-wide blocking-gate regression wildly out of
+  proportion to a "remove Gemini calls from cron functions" batch, and
+  touching 5 subsystems that batch never opened a single file in. Reverted
+  the parser widening from the worktree rather than commit it half-done
+  (`git checkout -- scripts/check_sot_registry_parity.dart`); filed here
+  instead per precedent OI-207 (same shape: a review found stale
+  `sot_registry.yaml` citations predating the batch that found them, filed
+  separately rather than folded in).
+- **Suggested fix**: (1) widen the parser per the diff already drafted and
+  reverted (accept a bare `line_range: N` as `N-N`); (2) fix the 14
+  newly-exposed pre-existing stale citations, most likely across several
+  small, unrelated commits grouped by subsystem rather than one giant
+  diff; (3) land the parser widening only once (2) is clean, so the gate
+  never goes red for a pre-existing reason.
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `cron-ai-removal`,
+  during the self-triggered `/code-review` B-pass required before merge
+  (CLAUDE.md §4.3).
+
+## OI-210 — future-prediction Edge Function has no live caller anywhere in the shipped app -- decide: wire it up to replace ai-proxy's predict path, or delete it
+
+- **Status**: OPEN
+- **Blocked on**: founder decision (see below — surfaced and answered once
+  already, but the answer was "leave as-is for now", not a final call on
+  wire-up-vs-delete)
+- **Verified**: 2026-09-16, B-pass on the cron-ai-removal batch
+  (`docs/reviews/247d945d1ba0-review.md` Finding 1), independently
+  re-verified before acting: `grep -rn "futurePredictionFunction" lib/`
+  → only the declaration at `app_constants.dart:26`, never called again
+  anywhere in `lib/`; `grep -n "future-prediction"
+  docs/operations/CRON_REGISTRY.md` → no match; `grep -rln
+  "future-prediction" supabase/migrations/*.sql` → no match (not
+  `pg_cron`-scheduled). The prediction card users actually see comes from
+  a DIFFERENT, entirely untouched path: `lib/core/services/
+  prediction_service.dart`'s `regeneratePrediction()` (manual/PRO-monthly
+  refresh) and `lib/features/onboarding/providers/
+  onboarding_provider.dart`'s onboarding-completion prediction (fires on
+  EVERY new signup) both call `AiService.instance.predict()` →
+  `ai-proxy` with `type: 'prediction'` — a separate, still-Gemini-calling
+  path this batch never touched (`ai-proxy`'s own prompt: "Be specific
+  with numbers but realistic").
+- **Why this matters**: this batch's stated motivation was reducing
+  Gemini quota pressure after a production 429 exhaustion incident. This
+  batch spent ~3 commits + 3 diagnose-docs (`9c3d7a`, `e5c9b2`, `b2f7c4`)
+  hardening `future-prediction` — real trend math, a streak-forecast
+  fix, a timezone fix, a sanity-clamp fix — none of which currently
+  reduces any live Gemini call, because nothing calls this function. The
+  highest-frequency actual prediction call in the app (every onboarding
+  completion) is on the untouched `ai-proxy` path and remains uncapped.
+- **Founder decision so far (2026-09-16)**: presented 4 options (leave
+  as-is + file this OI / wire future-prediction in now, expanding this
+  batch's scope / delete future-prediction as dead code / investigate
+  first). Founder chose "leave as-is, file a follow-up decision" —
+  this batch's future-prediction work ships as a real, harmless
+  improvement to currently-unreachable code; this OI carries the actual
+  wire-up-vs-delete decision for a future batch, not resolved now.
+- **Suggested fix (either direction, not both)**: (1) WIRE UP — redirect
+  `prediction_service.dart`'s `regeneratePrediction()` and
+  `onboarding_provider.dart`'s onboarding-completion prediction call to
+  invoke `future-prediction` instead of `ai-proxy` `type='prediction'`.
+  Real scope: two client call sites, a new `functions.invoke('future-
+  prediction', ...)` call each, response-shape reconciliation (
+  `future-prediction`'s response schema vs `AiChatResponse`'s), and its
+  own plan-review round given it changes a live, PRO-relevant user flow.
+  Actually closes the 429-mitigation goal for predictions. OR (2) DELETE
+  — remove `future-prediction/` (index.ts, trend.ts, index_test.ts,
+  `AppConstants.futurePredictionFunction`) entirely; the app keeps using
+  `ai-proxy`'s predict path as it does today, unaffected either way.
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch
+  `cron-ai-removal`, during the self-triggered `/code-review` B-pass
+  required before merge (CLAUDE.md §4.3).

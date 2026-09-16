@@ -36,16 +36,15 @@ import {
   shouldSendProactive,
 } from "../_shared/proactive_dedup.ts";
 import { fetchCoachMemory } from "../_shared/coach_memory.ts";
-import { captainPrompt } from "../_shared/captain_manual.ts";
-import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
-import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
+import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import {
   fetchNotificationPrefs,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
 import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
+import { buildProteinGapMessage } from "./message.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -273,51 +272,19 @@ serve(async (req: Request) => {
       const memory = await fetchCoachMemory(supabase, userId);
       const usableMemory = memory?.private_mode ? null : memory;
       const preferredName = usableMemory?.preferred_name as string | null;
-      // OI-47 round 1: this firstName reaches the FALLBACK message that
-      // actually ships when Gemini fails or times out -- the sanitised
-      // Gemini path is only the success case. Splitting on whitespace
-      // drops spaces but not CR, U+2028/2029/0085, controls or angle runs.
+      // OI-47 round 1 (historical): this firstName feeds the deterministic
+      // template message (cron-ai-removal batch, 2026-09-16, removed the
+      // Gemini path this comment used to contrast against). Sanitisation
+      // still matters: the template interpolates this value directly.
+      // Splitting on whitespace drops spaces but not CR, U+2028/2029/0085,
+      // controls or angle runs.
       const firstName = preferredName
           ? sanitizeIdentifier(preferredName.split(" ")[0], { maxLen: 32 })
           : null;
       const diet = (profile.diet_preference as string | null) ?? null;
 
       const gap = Math.round(target - consumed);
-      const quickFix = pickQuickFix(gap, diet);
-      const greeting = firstName ? `${firstName} — ` : "";
-      // Fallback: existing hardcoded English copy preserved as safety net.
-      const fallbackMessage =
-        `${greeting}${gap}g short on protein today. ${quickFix} Want a dinner suggestion?`;
-
-      // Generate Captain-voiced copy via Gemini; fall back to English on error.
-      let message = fallbackMessage;
-      try {
-        const userState = {
-          first_name: firstName,
-          protein_gap_g: gap,
-          protein_consumed_g: Math.round(consumed),
-          protein_target_g: Math.round(target),
-          diet_preference: diet,
-          quick_fix_suggestion: quickFix,
-        };
-        const { content } = await geminiChat({
-          model: MODEL_FLASH,
-          systemPrompt: captainPrompt("proactive"),
-          userPrompt:
-            `User state: ${sanitizeJsonForPrompt(userState)}.\n\n` +
-            `Generate a protein gap alert — user is ${gap}g short on protein today ` +
-            `and needs a quick fix suggestion before end of day.`,
-          maxTokens: 120,
-          temperature: 0.7,
-        });
-        if (content && content.trim().length > 0) {
-          message = content.trim();
-        }
-      } catch (e) {
-        console.warn(
-          `[protein-gap-alert] Gemini failed for ${userId}, using fallback copy: ${e}`,
-        );
-      }
+      const message = buildProteinGapMessage(firstName, gap, diet);
 
       try {
         const ok = await sendPushNotification({
@@ -379,30 +346,3 @@ serve(async (req: Request) => {
     );
   }
 });
-
-/**
- * Pick a quick-fix protein suggestion based on gap size and diet.
- *
- * Diet values from user_profile.diet_preference (Indian app enum):
- *   - 'veg' / 'vegan'  → vegetarian suggestions (paneer, milk, almonds)
- *   - 'eggetarian'     → eggs allowed (treated as non-veg for protein density)
- *   - 'non_veg' / null → all options on the table (chicken, eggs)
- *
- * 6 variants total: 3 gap buckets × {veg, non-veg}.
- */
-function pickQuickFix(gap: number, diet: string | null): string {
-  const isVeg = diet === "veg" || diet === "vegan";
-  if (gap >= 40) {
-    return isVeg
-      ? "Quick fix: 200g paneer + a glass of milk."
-      : "Quick fix: 150g chicken breast or 4 boiled eggs.";
-  }
-  if (gap >= 20) {
-    return isVeg
-      ? "Quick fix: 100g paneer or a scoop of whey."
-      : "Quick fix: 100g chicken or 3 boiled eggs.";
-  }
-  return isVeg
-    ? "Quick fix: a glass of milk + 30g almonds."
-    : "Quick fix: 2 boiled eggs.";
-}

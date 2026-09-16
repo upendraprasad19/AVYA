@@ -1,11 +1,8 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { istDateStr } from "../_shared/ist_date.ts";
-import {
-  sanitizeIdentifier,
-  sanitizeJsonForPrompt,
-} from "../_shared/sanitize_for_prompt.ts";
+import { predictLift, predictStreakWeeks, predictWeight } from "./trend.ts";
+import { completionRateOverWindow, windowSinceDateUtc } from "../_shared/rank_engine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,148 +14,108 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// 2026-04-18 · Migrated to Gemini 2.5 Flash (was cerebras/gpt-oss-120b).
-// Flash handles the short structured-JSON prediction comfortably.
-
 /**
- * Call AI to generate a 90-day fitness prediction via cascadeChat.
- * Returns structured JSON prediction or null on failure.
+ * Generate a local fallback prediction without AI (used for all users).
+ * Real trend math where there's enough history; per-field static-formula
+ * fallback otherwise — never all-or-nothing.
  */
-async function generatePrediction(
+export async function generateLocalPrediction(
+  supabase: SupabaseClient,
+  userId: string,
   profile: Record<string, unknown>,
   progress: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> {
-  const systemPrompt =
-    `You are a fitness prediction engine for ICANBEFITTER, a fitness app for young professionals in India. ` +
-    `Given a user's profile and progress data, predict their 90-day outcomes. ` +
-    `Be realistic and conservative — do not over-promise. Use Indian fitness context. ` +
-    `Return ONLY valid JSON (no markdown, no preamble) with this exact structure:\n` +
-    `{\n` +
-    `  "predicted_weight_kg": <number>,\n` +
-    `  "predicted_bf_pct": <number or null if insufficient data>,\n` +
-    `  "predicted_lifts": {\n` +
-    `    "squat_kg": <number>,\n` +
-    `    "bench_kg": <number>,\n` +
-    `    "deadlift_kg": <number>\n` +
-    `  },\n` +
-    `  "predicted_streak_weeks": <number>,\n` +
-    `  "confidence": "<low|medium|high>",\n` +
-    `  "tagline": "<motivational 1-liner about their potential>"\n` +
-    `}`;
-
-  // OI-47 / e7b3c5. Both objects come from `.select("*")`, so the WHOLE row
-  // lands in the prompt -- including the free-text columns daily-snapshot's
-  // extraction writes (lifestyle_notes, food_preferences, schedule_constraints,
-  // supplement_use, motivation_notes, preferred_name).
-  //
-  // The stringify sites are a NARROWER exposure than a raw interpolation and
-  // are treated accordingly: JSON.stringify already escapes LF/CR/C0, but
-  // measurably leaves U+2028/U+2029/U+0085 raw, and those render as line breaks
-  // to a model. sanitizeJsonForPrompt closes exactly that gap and nothing else,
-  // preserving the JSON structure the prompt depends on.
-  //
-  // The three BARE interpolations below are the genuinely open ones -- no
-  // stringify protects them. They are short identity-like fields, so
-  // sanitizeIdentifier is the right shape; the fallbacks keep the sentence
-  // grammatical rather than emitting "null" or an empty gap.
-  const userPrompt =
-    `User Profile:\n${sanitizeJsonForPrompt(profile, 2)}\n\n` +
-    `User Progress:\n${sanitizeJsonForPrompt(progress, 2)}\n\n` +
-    `Predict 90-day outcomes for this user. Be realistic based on their current stats, ` +
-    `goal (${
-      // FALLBACK IS "unspecified", NOT a real goal. `primary_goal` is nullable
-      // and generatePrediction runs at trigger === "onboarding" -- exactly when
-      // it is most likely unset. Defaulting to "general_fitness" would tell
-      // Gemini the user chose a goal they never chose, steering the whole
-      // 90-day prediction off a fabricated premise. That is the
-      // `body_fat ?? 18.0` anti-pattern CLAUDE.md 4.12 names by name.
-      sanitizeIdentifier(profile.primary_goal as string | null, {
-        fallback: "unspecified",
-      })
-    }), training frequency (${
-      sanitizeIdentifier(String(profile.days_per_week ?? ""), {
-        fallback: "unspecified",
-      })
-    } days/week), ` +
-    `and experience level (${
-      sanitizeIdentifier(progress.detected_experience_level as string | null, {
-        fallback: "beginner",
-      })
-    }).`;
-
-  const { content } = await geminiChat({
-    model: MODEL_FLASH,
-    systemPrompt,
-    userPrompt,
-    maxTokens: 500,
-    temperature: 0.3,
-    timeoutMs: 15_000,
-    jsonMode: true,
-  });
-
-  if (!content) return null;
-
-  // Parse JSON from response — handle markdown code blocks
-  let jsonStr = content.trim();
-  if (jsonStr.startsWith("```")) {
-    jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  }
-
-  try {
-    const prediction = JSON.parse(jsonStr);
-    if (
-      typeof prediction.predicted_weight_kg !== "number" ||
-      !prediction.predicted_lifts ||
-      !prediction.tagline
-    ) {
-      console.error("Invalid prediction structure:", prediction);
-      return null;
-    }
-    return prediction;
-  } catch (parseErr) {
-    console.error("Failed to parse prediction JSON:", parseErr, jsonStr);
-    return null;
-  }
-}
-
-/**
- * Generate a local fallback prediction without AI (used for free users after onboarding).
- * Uses simple heuristics based on profile data.
- */
-function generateLocalPrediction(
-  profile: Record<string, unknown>,
-  progress: Record<string, unknown>,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const currentWeight = (profile.current_weight_kg as number) ?? 70;
   const targetWeight = (profile.target_weight_kg as number) ?? currentWeight;
   const goal = (profile.primary_goal as string) ?? "general_fitness";
-  const experience =
-    (progress.detected_experience_level as string) ?? "beginner";
+  const experience = (progress.detected_experience_level as string) ?? "beginner";
   const daysPerWeek = (profile.days_per_week as number) ?? 3;
 
-  // Weight prediction: move ~30% toward target in 90 days
-  const weightDiff = targetWeight - currentWeight;
-  const predictedWeight =
-    Math.round((currentWeight + weightDiff * 0.3) * 10) / 10;
-
-  // Lift predictions based on experience and goal
+  // Static formulas stay as the FALLBACK for each field individually —
+  // never all-or-nothing.
+  const weightFallback = Math.round((currentWeight + (targetWeight - currentWeight) * 0.3) * 10) / 10;
   const liftMultipliers: Record<string, Record<string, number>> = {
     beginner: { squat: 0.8, bench: 0.5, deadlift: 1.0 },
     intermediate: { squat: 1.2, bench: 0.8, deadlift: 1.5 },
     advanced: { squat: 1.5, bench: 1.1, deadlift: 1.8 },
   };
-
   const multipliers = liftMultipliers[experience] ?? liftMultipliers.beginner;
-  const bodyweight = currentWeight;
-
-  const predictedLifts = {
-    squat_kg: Math.round(bodyweight * multipliers.squat),
-    bench_kg: Math.round(bodyweight * multipliers.bench),
-    deadlift_kg: Math.round(bodyweight * multipliers.deadlift),
+  const liftFallback = {
+    squat: Math.round(currentWeight * multipliers.squat),
+    bench: Math.round(currentWeight * multipliers.bench),
+    deadlift: Math.round(currentWeight * multipliers.deadlift),
   };
+  const streakFallback = Math.min(daysPerWeek >= 4 ? 10 : 8, 13);
 
-  // Streak prediction based on training days
-  const predictedStreak = Math.min(daysPerWeek >= 4 ? 10 : 8, 13);
+  const since90 = istDateStr(new Date(Date.now() - 90 * 24 * 3600 * 1000));
+  const { data: weightRows } = await supabase
+    .from("weight_logs")
+    .select("date, weight_kg")
+    .eq("user_id", userId)
+    .gte("date", since90)
+    .order("date", { ascending: true });
+
+  const predictedWeight = predictWeight(
+    (weightRows ?? []).map((r: Record<string, unknown>) => ({
+      date: r.date as string,
+      weight_kg: r.weight_kg as number,
+    })),
+    weightFallback,
+  );
+
+  async function liftPrediction(matchSubstring: string, fallback: number): Promise<number> {
+    const { data: rows } = await supabase
+      .from("workout_log_exercises")
+      .select("completed_at, weight_kg")
+      .eq("user_id", userId)
+      .eq("is_pr", true)
+      .ilike("exercise_id", `%${matchSubstring}%`)
+      .order("completed_at", { ascending: true });
+    return predictLift(
+      (rows ?? []).map((r: Record<string, unknown>) => ({
+        completed_at: r.completed_at as string,
+        weight_kg: r.weight_kg as number,
+      })),
+      fallback,
+    );
+  }
+
+  const [squatKg, benchKg, deadliftKg] = await Promise.all([
+    liftPrediction("squat", liftFallback.squat),
+    liftPrediction("bench", liftFallback.bench),
+    liftPrediction("deadlift", liftFallback.deadlift),
+  ]);
+
+  // completionRateOverWindow returns 0.0 for BOTH "zero scheduled rows in
+  // the window" (no history — should fall back) AND "real 0% completion on
+  // a non-empty schedule" (a genuine signal). It only distinguishes a query
+  // ERROR via the -1.0 sentinel, so a bare `adherenceRate < 0` check reads a
+  // brand-new user's empty schedule as "0% adherence" and predicts 0
+  // streak-weeks instead of falling back. Probe for schedule-row existence
+  // directly to tell the two apart, without changing the shared helper's
+  // contract (also used by evaluate-rank-promotions). Uses
+  // windowSinceDateUtc — the SAME raw-UTC cutoff completionRateOverWindow
+  // computes internally — rather than istDateStr, so the probe's window and
+  // completionRateOverWindow's window can never disagree about which rows
+  // are "in the last 4 weeks" (an IST-shifted cutoff here would drift from
+  // completionRateOverWindow's raw-UTC one by up to a day near the
+  // IST-midnight boundary).
+  const streakWindowSince = windowSinceDateUtc(4);
+  const { data: scheduleProbeRows } = await supabase
+    .from("scheduled_workouts")
+    .select("status")
+    .eq("user_id", userId)
+    .gte("scheduled_date", streakWindowSince)
+    .order("scheduled_date", { ascending: true });
+  const hasScheduleHistory = (scheduleProbeRows ?? []).some(
+    (r: Record<string, unknown>) => r.status !== "rest",
+  );
+
+  const adherenceRate = await completionRateOverWindow(supabase, userId, 4);
+  const predictedStreak = predictStreakWeeks(
+    !hasScheduleHistory || adherenceRate < 0 ? null : adherenceRate,
+    streakFallback,
+  );
 
   const taglines: Record<string, string[]> = {
     build_muscle: [
@@ -185,7 +142,7 @@ function generateLocalPrediction(
   return {
     predicted_weight_kg: predictedWeight,
     predicted_bf_pct: null,
-    predicted_lifts: predictedLifts,
+    predicted_lifts: { squat_kg: squatKg, bench_kg: benchKg, deadlift_kg: deadliftKg },
     predicted_streak_weeks: predictedStreak,
     confidence: "medium",
     tagline,
@@ -337,35 +294,12 @@ serve(async (req: Request) => {
       current_phase: 1,
     };
 
-    // Check subscription status for AI vs local prediction
-    const { data: activeSubscription } = await supabaseClient
-      .from("subscriptions")
-      .select("status")
-      .eq("user_id", userId)
-      .eq("status", "active")
-      .gt("end_date", new Date().toISOString())
-      .limit(1)
-      .single();
-
-    const isPro = !!activeSubscription;
-
-    let prediction: Record<string, unknown> | null = null;
-
-    if (isPro || trigger === "onboarding") {
-      // Use AI for PRO users and first onboarding prediction
-      prediction = await generatePrediction(
-        profileData as Record<string, unknown>,
-        progress as Record<string, unknown>,
-      );
-    }
-
-    if (!prediction) {
-      // Fallback to local prediction if AI fails or for free users
-      prediction = generateLocalPrediction(
-        profileData as Record<string, unknown>,
-        progress as Record<string, unknown>,
-      );
-    }
+    const prediction = await generateLocalPrediction(
+      supabaseClient,
+      userId,
+      profileData as Record<string, unknown>,
+      progress as Record<string, unknown>,
+    );
 
     // Add metadata
     prediction.generated_at = new Date().toISOString();

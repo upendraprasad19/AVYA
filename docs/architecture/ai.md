@@ -63,6 +63,21 @@ All 8 cron-driven Edge Functions in prod. Each uses `_shared/proactive_dedup.ts`
 Cron registrations live in `supabase/migrations/031_proactive_triggers_cron.sql`. Each uses `private.morning_alert_get_service_key()` for the Bearer token (consistent with `compute_coach_signals` cron pattern).
 
 ## Model matrix
+
+⚠ **Corrected 2026-09-16 (`cron-ai-removal` batch,
+`docs/superpowers/specs/2026-09-16-proactive-cron-ai-removal-design.md`):**
+this table previously listed `morning-alert` and `future-prediction` as
+Gemini callers. Both had their Gemini call removed in that batch —
+`morning-alert` now composes its free/PRO-light alert copy from a
+deterministic template (`morning-alert/message.ts`), and
+`future-prediction` computes its 90-day forecast from real trend math over
+the user's own weight/lift/adherence history
+(`future-prediction/trend.ts`), falling back to the existing static
+per-field formulas when there isn't enough history. Neither row belongs
+in this table any more; see `supabase/functions/CLAUDE.md`'s AI
+Architecture section for the current, grep-derived list of every function
+that still calls an LLM (6, as of the same batch).
+
 | Edge Function | Model | Purpose |
 |---|---|---|
 | `ai-proxy` (chat + food text + prediction) | `gemini-2.5-flash` | Free + PRO coach, food text analysis, prediction card |
@@ -70,9 +85,7 @@ Cron registrations live in `supabase/migrations/031_proactive_triggers_cron.sql`
 | `ai-media-proxy` | `gemini-2.5-flash-lite` | Photo-upload chat — 5 free LIFETIME image reads (`usage_counters` key `free_image_analysis`), then PRO; PRO is capped **50 images / 10 videos per IST day** (keys `pro_image_daily` / `pro_video_daily`, OI-153, 2026-09-12) via ONE atomic `consume_quota` after the Storage fetch and before Gemini; a reached cap is an HTTP 200 `gated: true` coach reply (`gate_reason: pro_image_daily_limit_reached` / `pro_video_daily_limit_reached`, `resets_at` = next IST midnight), never the paywall and never a 429. Fails CLOSED on a ledger error (`pro_quota_unavailable`) or a tier-read error (`tier_unavailable`). Video has no client picker today — the cap protects the API surface |
 | `assess-body-composition` | `gemini-2.5-flash-lite` | Body-fat % from photo |
 | `daily-snapshot` (coaching notes) | `gemini-2.5-flash` | Extract facts from daily conversations |
-| `morning-alert` | `gemini-2.5-flash` | Personalised morning push |
 | `rolling-context` | `gemini-2.5-flash` | Nightly conversation summary |
-| `future-prediction` | `gemini-2.5-flash` | 90-day forecast card |
 | `weekly-report` | `gemini-2.5-pro` | Deepest reasoning, PRO-only weekly |
 | `_shared/embeddings.ts` | `gemini-embedding-001` | Memory retrieval vectors |
 

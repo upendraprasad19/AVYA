@@ -6054,21 +6054,6 @@ concepts:
         semantic: sanitise-then-fence
         fields_read: [snapshot_json]
         notes: Client-supplied JSON at SYSTEM trust; had neither half of FC7.
-      - file: supabase/functions/proactive-coach-promotion/index.ts
-        line_range: 1-9999
-        method: composeCongrats
-        semantic: sanitise
-        fields_read: [full_name]
-        notes: |
-          Sharpest placement in the tree -- a user-editable first name inside the
-          SYSTEM INSTRUCTION. Missed by the first survey because it calls the
-          Gemini REST endpoint via `fetch`, not geminiChat.
-      - file: supabase/functions/morning-alert/index.ts
-        line_range: 1-9999
-        method: generateProAlert
-        semantic: sanitise
-        fields_read: [preferred_name, full_name, snapshot_json]
-        notes: The site OI-47 filed. Name raw, snapshot stringified.
       - file: supabase/functions/rolling-context/index.ts
         line_range: 1-9999
         method: summarizeMessages
@@ -6079,15 +6064,6 @@ concepts:
           instruction outlives the conversation that carried it. Note :230 is
           NOT a prompt -- it is getEmbedding + a storage insert, and sanitising
           there would corrupt stored memory for retrieval while buying nothing.
-      - file: supabase/functions/future-prediction/index.ts
-        line_range: 1-9999
-        method: generatePrediction
-        semantic: sanitise
-        fields_read: [user_profile.*, user_progress.*]
-        notes: |
-          `.select("*")` puts the WHOLE row in the prompt, including the
-          free-text columns daily-snapshot's extraction writes. Second hop of
-          the same loop.
       - file: supabase/functions/weekly-report/index.ts
         line_range: 1-9999
         method: weekly report user message
@@ -6104,47 +6080,6 @@ concepts:
           constraint -- an authenticated caller POSTs any JSON. Numerics coerced
           with Number() so a string payload cannot smuggle prose through a field
           the prompt presents as a measurement.
-      - file: supabase/functions/plateau-alert/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: One of six alert functions sharing an identical userState shape.
-      - file: supabase/functions/pr-detection/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: Same family.
-      - file: supabase/functions/protein-gap-alert/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: Same family.
-      - file: supabase/functions/re-engagement/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: Same family.
-      - file: supabase/functions/streak-guardian/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState]
-        notes: |
-          Same family, but its userState carries recent_pr_exercise -- an
-          exercise name, which for a custom exercise is user-authored text.
-      - file: supabase/functions/workout-window-closing/index.ts
-        line_range: 1-9999
-        method: proactive alert prompt
-        semantic: sanitise
-        fields_read: [userState, workoutName]
-        notes: |
-          The only one in the family with a BARE free-text interpolation --
-          workoutName, a user-editable schedule/template name that no
-          JSON.stringify protects. The other five interpolate only numbers.
     class_constraints: |
       Any NEW Edge Function that builds a prompt MUST import
       `_shared/sanitize_for_prompt.ts`, or be added to VERIFIED_CLEAN in
@@ -9914,8 +9849,17 @@ concepts:
       quote. `recent_pr_exercise` is banned from this function entirely: it has
       no recency bound (its source scans all history), and pr-detection already
       owns "you just hit a PR" with a correct 20-minute lookback. Removing it
-      from the TITLE alone is insufficient — it must also leave the Gemini
-      userState, or the model narrates the stale PR into the body.
+      from the TITLE alone is insufficient — it must also be absent from every
+      input the message-composition code reads.
+      # Corrected 2026-09-16 -- B-pass on cron-ai-removal
+      # (247d945d1ba0-review.md Finding 3). This paragraph previously read
+      # "...it must also leave the Gemini userState, or the model narrates
+      # the stale PR into the body" -- describing streak-guardian's OLD
+      # Gemini-based composition. cron-ai-removal removed Gemini from
+      # streak-guardian entirely (verified:
+      # `grep -c "userState\|geminiChat" supabase/functions/streak-guardian/index.ts`
+      # -> 0); message composition (including this concept's ban) now
+      # lives in message.ts's pickStreakMessage, a template, not a prompt.
 
       (2) WEEKLY-RECAP-READY: the Sunday Brief is PRO-only and had NO
       subscription check at all. The canonical predicate is
@@ -9944,9 +9888,13 @@ concepts:
         semantic: canonical-pro-predicate
     readers:
       - file: supabase/functions/streak-guardian/index.ts
-        line_range: 214
+        line_range: 264
         method: streakDays
         semantic: reads-the-selected-row
+        # Corrected 2026-09-16 (was 214) -- B-pass on cron-ai-removal
+        # (247d945d1ba0-review.md Finding 4) found this citation stale;
+        # predates this batch (see OI-209 for the systemic parser gap
+        # that left it, and 14 siblings elsewhere, unchecked).
       - file: supabase/functions/weekly-recap-ready/index.ts
         line_range: 263
         method: concurrency loop
