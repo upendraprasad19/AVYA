@@ -120,14 +120,29 @@ export function ranksUpTo(code: string): RankLadderEntry[] {
 /// and pre-onboarding rows are excluded from both numerator and
 /// denominator so the rate matches the client's
 /// `WorkoutRepository.completionRateOverWindow` semantics.
+/// Raw-UTC calendar-date cutoff, `windowWeeks` back from now — the SAME
+/// date-key convention `completionRateOverWindow` uses internally for its
+/// own `scheduled_workouts` window query (deliberately NOT IST-shifted; see
+/// that function's own query below). Exported so a caller that needs to
+/// agree with `completionRateOverWindow`'s notion of "the same window" (e.g.
+/// future-prediction's schedule-existence probe) reuses this single source
+/// of truth instead of re-deriving the cutoff independently — a
+/// re-derivation that used `istDateStr()` instead of this raw-UTC form once
+/// silently disagreed with this function by up to a day around the
+/// 18:30-24:00 UTC / IST-already-rolled-over boundary (diagnose e5c9b2).
+export function windowSinceDateUtc(windowWeeks: number): string {
+  return new Date(Date.now() - windowWeeks * 7 * 24 * 3600 * 1000)
+    .toISOString()
+    .split('T')[0];
+}
+
 export async function completionRateOverWindow(
   supabase: SupabaseClient,
   userId: string,
   windowWeeks: number,
 ): Promise<number> {
   if (windowWeeks <= 0) return 0.0;
-  const sinceIso = new Date(Date.now() - windowWeeks * 7 * 24 * 3600 * 1000)
-    .toISOString();
+  const sinceDate = windowSinceDateUtc(windowWeeks);
   // ⚠ ADDING A RANK: a window > 142 weeks (≈1000 days) breaks the waiver
   // below. `completionRateOverWindow` would then sum a denominator clipped at
   // 1000, return an inflated completion rate, and promote a user who did not
@@ -151,7 +166,7 @@ export async function completionRateOverWindow(
     .from('scheduled_workouts')
     .select('status, scheduled_date')
     .eq('user_id', userId)
-    .gte('scheduled_date', sinceIso.split('T')[0]);
+    .gte('scheduled_date', sinceDate);
   if (error) {
     // Unit C (§2.24) — return a -1.0 SENTINEL (not 0.0) on a transient query error.
     // The only consumer is the gate `if (rate < gate.completionRateMinimum) return

@@ -17,7 +17,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-09-16 d4a8f6 — The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called…
 - 2026-07-27 e7b3c5 — Sign-out cleared Hive and Supabase but released nothing the device holds outside them. After user A signed out the handset was still OneSignal external_id = A and Crashlytics userIdentifier = A, so…
 
-### future_prediction_streak_forecast (1 bugs)
+### future_prediction_streak_forecast (2 bugs)
+- 2026-09-16 e5c9b2 — This batch's own prior fix (`593094e3`, diagnose `9c3d7a`) added a schedule-row existence probe to `future-prediction/index.ts` meant to mirror `completionRateOverWindow`'s notion of "the last 4…
 - 2026-09-16 9c3d7a — `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,…
 
 ### proactive_coach_promotion_congrats (2 bugs)
@@ -1224,6 +1225,7 @@ rather than a Hive box. (1 bugs)
 | 2026-09-16 | d8e2f4 | Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when… | error_telemetry_helper | test/contracts/ai_breakdown_notifier_save_meal_telemetry_test.dart |
 | 2026-09-16 | a1c6b9 | Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"… | coach_chat_history_replay | test/contracts/coach_chat_history_replay_writer_to_reader_test.dart |
 | 2026-09-16 | d4a8f6 | The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called… | device_session_identity_binding | test/contracts/signout_unbinds_sdk_identity_test.dart |
+| 2026-09-16 | e5c9b2 | This batch's own prior fix (`593094e3`, diagnose `9c3d7a`) added a schedule-row existence probe to `future-prediction/index.ts` meant to mirror `completionRateOverWindow`'s notion of "the last 4… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
 | 2026-09-16 | 9c3d7a | `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
 | 2026-09-16 | a1f7d3 | `proactive-coach-promotion`'s `ai_coach_interactions` insert hardcoded `model_used: "gemini-2.5-flash"` unconditionally, unchanged by this batch's earlier fix (`f4d771d2`, diagnose `b7c9e2`) that… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |
 | 2026-09-16 | b7c9e2 | `proactive-coach-promotion` (fired by the `trg_dispatch_proactive_coach_promotion` Postgres trigger on every rank_promotions INSERT) composed its congrats copy with a raw `fetch()` call straight to… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |

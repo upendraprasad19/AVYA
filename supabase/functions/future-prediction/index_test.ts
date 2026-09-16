@@ -119,6 +119,17 @@ Deno.test("generateLocalPrediction is now async and calls the trend helpers (sou
   }
 });
 
+Deno.test("the schedule-existence probe reuses windowSinceDateUtc (raw-UTC), not istDateStr, so its window cutoff can never drift from completionRateOverWindow's own", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  if (!src.includes("windowSinceDateUtc(4)")) {
+    throw new Error(
+      "expected the schedule-existence probe to compute its cutoff via windowSinceDateUtc(4), " +
+        "the same raw-UTC helper completionRateOverWindow uses internally — an istDateStr()-shifted " +
+        "cutoff here would disagree with completionRateOverWindow's raw-UTC one by up to a day",
+    );
+  }
+});
+
 Deno.test("future-prediction no longer calls Gemini for predictions — generatePrediction and the isPro AI branch are gone", async () => {
   const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
   if (src.includes("async function generatePrediction")) {

@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { istDateStr } from "../_shared/ist_date.ts";
 import { predictLift, predictStreakWeeks, predictWeight } from "./trend.ts";
-import { completionRateOverWindow } from "../_shared/rank_engine.ts";
+import { completionRateOverWindow, windowSinceDateUtc } from "../_shared/rank_engine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,8 +93,14 @@ export async function generateLocalPrediction(
   // brand-new user's empty schedule as "0% adherence" and predicts 0
   // streak-weeks instead of falling back. Probe for schedule-row existence
   // directly to tell the two apart, without changing the shared helper's
-  // contract (also used by evaluate-rank-promotions).
-  const streakWindowSince = istDateStr(new Date(Date.now() - 4 * 7 * 24 * 3600 * 1000));
+  // contract (also used by evaluate-rank-promotions). Uses
+  // windowSinceDateUtc — the SAME raw-UTC cutoff completionRateOverWindow
+  // computes internally — rather than istDateStr, so the probe's window and
+  // completionRateOverWindow's window can never disagree about which rows
+  // are "in the last 4 weeks" (an IST-shifted cutoff here would drift from
+  // completionRateOverWindow's raw-UTC one by up to a day near the
+  // IST-midnight boundary).
+  const streakWindowSince = windowSinceDateUtc(4);
   const { data: scheduleProbeRows } = await supabase
     .from("scheduled_workouts")
     .select("status")
