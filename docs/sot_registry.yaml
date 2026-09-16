@@ -6054,15 +6054,6 @@ concepts:
         semantic: sanitise-then-fence
         fields_read: [snapshot_json]
         notes: Client-supplied JSON at SYSTEM trust; had neither half of FC7.
-      - file: supabase/functions/proactive-coach-promotion/index.ts
-        line_range: 1-9999
-        method: composeCongrats
-        semantic: sanitise
-        fields_read: [full_name]
-        notes: |
-          Sharpest placement in the tree -- a user-editable first name inside the
-          SYSTEM INSTRUCTION. Missed by the first survey because it calls the
-          Gemini REST endpoint via `fetch`, not geminiChat.
       - file: supabase/functions/rolling-context/index.ts
         line_range: 1-9999
         method: summarizeMessages

@@ -25,13 +25,10 @@ import {
   fetchNotificationPrefs,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
-import {
-  asAuthoredPrompt, sanitizeIdentifier
-} from "../_shared/sanitize_for_prompt.ts";
+import { composeCongrats } from "./congrats.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID")!;
 const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY")!;
 
@@ -48,29 +45,6 @@ interface UserContext {
   current_streak_weeks: number;
   total_workouts_done: number;
 }
-
-// Rank ladder labels mirror lib/core/services/rank_ladder_data.dart.
-// Hardcoded here so the Edge Function doesn't reach back into the
-// client codebase. If the ladder ever changes, this map updates in
-// the same commit as the client one.
-// Codes + labels MUST match lib/core/services/rank_ladder_data.dart
-// (kRankLadder) EXACTLY. The prior map used codes (PO2/PO1/ENS/LTJG/
-// LCDR/CDR/CAPT) that exist in no ladder — 7 of 11 ranks fell through to
-// the raw code in the AI prompt. Canonical ladder: SD2, SD1, LS, PO, CPO,
-// MCPO, SubLt, Lt, LtCdr, Cdr, Capt.
-const RANK_LABELS: Record<string, string> = {
-  SD2: "Seaman 2nd Class",
-  SD1: "Seaman 1st Class",
-  LS: "Leading Seaman",
-  PO: "Petty Officer",
-  CPO: "Chief Petty Officer",
-  MCPO: "Master Chief Petty Officer",
-  SubLt: "Sub Lieutenant",
-  Lt: "Lieutenant",
-  LtCdr: "Lieutenant Commander",
-  Cdr: "Commander",
-  Capt: "Captain",
-};
 
 serve(async (req: Request): Promise<Response> => {
   if (req.method !== "POST") {
@@ -136,8 +110,10 @@ serve(async (req: Request): Promise<Response> => {
     // 1. Pull user context (profile + progress snapshot).
     const userCtx = await loadUserContext(admin, user_id);
 
-    // 2. Compose AI congrats via Gemini.
-    const congrats = await composeCongrats(userCtx, rank_code);
+    // 2. Compose congrats copy — deterministic, no AI call (fixes the
+    //    missing-fallback bug: a Gemini hiccup used to silently drop the
+    //    user's promotion entirely: no chat message, no push, bare 500).
+    const congrats = composeCongrats(userCtx, rank_code);
 
     // 3. Write to ai_coach_interactions (canonical chat table). The
     //    proactive message is an assistant turn with no user prompt, so
@@ -219,86 +195,6 @@ async function loadUserContext(
     current_streak_weeks: progressRes.data?.current_streak_weeks ?? 0,
     total_workouts_done: progressRes.data?.total_workouts_done ?? 0,
   };
-}
-
-async function composeCongrats(
-  ctx: UserContext,
-  rankCode: string,
-): Promise<string> {
-  const rankLabel = RANK_LABELS[rankCode] ?? rankCode;
-  // OI-47: `full_name` is user-editable and this is the sharpest placement of
-  // it anywhere in the tree -- `firstName` is interpolated into the SYSTEM
-  // INSTRUCTION at :204, not into a user turn. Splitting on whitespace already
-  // drops spaces and \n, but NOT \r, U+2028/U+2029/U+0085 or control
-  // characters, all of which survive `.split(/\s+/)` in a Deno regex without
-  // the `u` flag and would land inside the quoted `"..."` in the system prompt.
-  //
-  // This function was ALSO missed by the first survey pass: it calls the Gemini
-  // REST endpoint via `fetch` directly instead of `geminiChat`, so a grep keyed
-  // on the helper did not see it. Widening the search to `systemPrompt|prompt:`
-  // is what surfaced it.
-  const firstName = sanitizeIdentifier(
-    ctx.full_name?.split(/\s+/)[0],
-    { fallback: "soldier", maxLen: 32 },
-  );
-  const goalCopy = goalToCopy(ctx.primary_goal);
-
-  const systemPrompt = asAuthoredPrompt(`You are AVYA, an AI fitness coach for the
-Indian Navy-themed fitness app ICANBEFITTER. The user just promoted
-to rank ${rankLabel} (code: ${rankCode}). Write a warm but
-disciplined congratulation in 80-120 words.
-
-Hard rules:
-- Address them by name: "${firstName}".
-- Name the specific milestone: ${ctx.total_workouts_done} workouts
-  done, ${ctx.current_streak_weeks}-week streak.
-- Tie motivation to their primary goal: ${goalCopy}.
-- Preview what unlocks at the next rank (don't be too specific —
-  the ladder is documented elsewhere).
-- Military lexicon allowed sparingly (e.g. "mission", "soldier", "rank").
-- NO emojis. NO bullet points. Single flowing paragraph.
-- End with a forward-looking line, not a closing salutation.`);
-
-  // Call Gemini 2.5 Flash via the public REST API. The "messages"
-  // shape is mapped to Gemini's "contents" + "systemInstruction".
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/`
-    + `gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{
-        role: "user",
-        parts: [{ text:
-          `Write the congrats for ${firstName} ranking up to ${rankLabel}.`
-        }],
-      }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 256,
-      },
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`Gemini ${res.status}: ${await res.text()}`);
-  }
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error("Gemini returned empty content");
-  }
-  return String(text).trim();
-}
-
-function goalToCopy(primaryGoal: string | null): string {
-  switch (primaryGoal) {
-    case "lose_fat":      return "fat loss";
-    case "build_muscle":  return "muscle gain";
-    case "gain_strength": return "strength";
-    case "general_fitness":
-    default:              return "general fitness";
-  }
 }
 
 async function sendOneSignalPush(
