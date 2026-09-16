@@ -32,12 +32,11 @@ import {
   shouldSendProactive,
 } from "../_shared/proactive_dedup.ts";
 import { fetchCoachMemory } from "../_shared/coach_memory.ts";
-import { captainPrompt } from "../_shared/captain_manual.ts";
-import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
-import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
+import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
+import { buildWindowClosingMessage } from "./message.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -290,43 +289,7 @@ serve(async (req: Request) => {
       const workoutName = (templateId && templateNameById.get(templateId)) ||
         "your workout";
 
-      // Fallback: existing hardcoded English copy preserved as safety net.
-      const greeting = firstName ? `${firstName} — ` : "";
-      const fallbackMessage =
-        `${greeting}haven't seen ${workoutName} logged yet. Still happening? Even 20 mins counts.`;
-
-      // Generate Captain-voiced copy via Gemini; fall back to English on error.
-      let message = fallbackMessage;
-      try {
-        const userState = {
-          first_name: firstName,
-          workout_name: workoutName,
-          window_closing: true,
-        };
-        const { content } = await geminiChat({
-          model: MODEL_FLASH,
-          systemPrompt: captainPrompt("proactive"),
-          userPrompt:
-            `User state: ${sanitizeJsonForPrompt(userState)}.\n\n` +
-            `Generate a workout window closing nudge — user has a scheduled workout ` +
-            // OI-47: `workoutName` is a BARE interpolation of a user-editable
-            // schedule/template name -- the only free-text field in this family
-            // that no JSON.stringify protects. The other five alerts interpolate
-            // only numbers here.
-            `(${
-              sanitizeIdentifier(workoutName, { fallback: "your session" })
-            }) they haven't logged yet and the day is almost over.`,
-          maxTokens: 120,
-          temperature: 0.7,
-        });
-        if (content && content.trim().length > 0) {
-          message = content.trim();
-        }
-      } catch (e) {
-        console.warn(
-          `[workout-window-closing] Gemini failed for ${userId}, using fallback copy: ${e}`,
-        );
-      }
+      const message = buildWindowClosingMessage(firstName, workoutName);
 
       try {
         const ok = await sendPushNotification({
