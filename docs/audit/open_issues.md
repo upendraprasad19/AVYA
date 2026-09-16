@@ -4726,3 +4726,56 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `cron-ai-removal`,
   during the self-triggered `/code-review` B-pass required before merge
   (CLAUDE.md §4.3).
+
+## OI-210 — future-prediction Edge Function has no live caller anywhere in the shipped app -- decide: wire it up to replace ai-proxy's predict path, or delete it
+
+- **Status**: OPEN
+- **Blocked on**: founder decision (see below — surfaced and answered once
+  already, but the answer was "leave as-is for now", not a final call on
+  wire-up-vs-delete)
+- **Verified**: 2026-09-16, B-pass on the cron-ai-removal batch
+  (`docs/reviews/247d945d1ba0-review.md` Finding 1), independently
+  re-verified before acting: `grep -rn "futurePredictionFunction" lib/`
+  → only the declaration at `app_constants.dart:26`, never called again
+  anywhere in `lib/`; `grep -n "future-prediction"
+  docs/operations/CRON_REGISTRY.md` → no match; `grep -rln
+  "future-prediction" supabase/migrations/*.sql` → no match (not
+  `pg_cron`-scheduled). The prediction card users actually see comes from
+  a DIFFERENT, entirely untouched path: `lib/core/services/
+  prediction_service.dart`'s `regeneratePrediction()` (manual/PRO-monthly
+  refresh) and `lib/features/onboarding/providers/
+  onboarding_provider.dart`'s onboarding-completion prediction (fires on
+  EVERY new signup) both call `AiService.instance.predict()` →
+  `ai-proxy` with `type: 'prediction'` — a separate, still-Gemini-calling
+  path this batch never touched (`ai-proxy`'s own prompt: "Be specific
+  with numbers but realistic").
+- **Why this matters**: this batch's stated motivation was reducing
+  Gemini quota pressure after a production 429 exhaustion incident. This
+  batch spent ~3 commits + 3 diagnose-docs (`9c3d7a`, `e5c9b2`, `b2f7c4`)
+  hardening `future-prediction` — real trend math, a streak-forecast
+  fix, a timezone fix, a sanity-clamp fix — none of which currently
+  reduces any live Gemini call, because nothing calls this function. The
+  highest-frequency actual prediction call in the app (every onboarding
+  completion) is on the untouched `ai-proxy` path and remains uncapped.
+- **Founder decision so far (2026-09-16)**: presented 4 options (leave
+  as-is + file this OI / wire future-prediction in now, expanding this
+  batch's scope / delete future-prediction as dead code / investigate
+  first). Founder chose "leave as-is, file a follow-up decision" —
+  this batch's future-prediction work ships as a real, harmless
+  improvement to currently-unreachable code; this OI carries the actual
+  wire-up-vs-delete decision for a future batch, not resolved now.
+- **Suggested fix (either direction, not both)**: (1) WIRE UP — redirect
+  `prediction_service.dart`'s `regeneratePrediction()` and
+  `onboarding_provider.dart`'s onboarding-completion prediction call to
+  invoke `future-prediction` instead of `ai-proxy` `type='prediction'`.
+  Real scope: two client call sites, a new `functions.invoke('future-
+  prediction', ...)` call each, response-shape reconciliation (
+  `future-prediction`'s response schema vs `AiChatResponse`'s), and its
+  own plan-review round given it changes a live, PRO-relevant user flow.
+  Actually closes the 429-mitigation goal for predictions. OR (2) DELETE
+  — remove `future-prediction/` (index.ts, trend.ts, index_test.ts,
+  `AppConstants.futurePredictionFunction`) entirely; the app keeps using
+  `ai-proxy`'s predict path as it does today, unaffected either way.
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch
+  `cron-ai-removal`, during the self-triggered `/code-review` B-pass
+  required before merge (CLAUDE.md §4.3).
