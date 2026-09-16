@@ -33,16 +33,15 @@ import {
   markProactiveSent,
   shouldSendProactive,
 } from "../_shared/proactive_dedup.ts";
-import { captainPrompt } from "../_shared/captain_manual.ts";
-import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
-import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
+import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import {
   fetchNotificationPrefs,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
 import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
+import { buildPlateauMessage } from "./message.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -201,38 +200,7 @@ Deno.serve(async (req: Request) => {
       const firstName = preferredName
           ? sanitizeIdentifier(preferredName.split(" ")[0], { maxLen: 32 })
           : null;
-      const greeting = firstName ? `${firstName} — ` : "";
-
-      // Fallback: existing hardcoded English copy preserved as safety net.
-      const fallbackMessage =
-        `${greeting}weight hasn't moved in a while. Before we change anything — are you consistently hitting your daily protein target?`;
-
-      // Generate Captain-voiced copy via Gemini; fall back to English on error.
-      let message = fallbackMessage;
-      try {
-        const userState = {
-          first_name: firstName,
-          plateau_risk_score: (memory as Record<string, unknown>)
-            .plateau_risk_score,
-        };
-        const { content } = await geminiChat({
-          model: MODEL_FLASH,
-          systemPrompt: captainPrompt("proactive"),
-          userPrompt:
-            `User state: ${sanitizeJsonForPrompt(userState)}.\n\n` +
-            `Generate a plateau diagnostic nudge — user's weight has not moved in ` +
-            `a while. Ask a single diagnostic question before changing anything.`,
-          maxTokens: 120,
-          temperature: 0.7,
-        });
-        if (content && content.trim().length > 0) {
-          message = content.trim();
-        }
-      } catch (e) {
-        console.warn(
-          `[plateau-alert] Gemini failed for ${userId}, using fallback copy: ${e}`,
-        );
-      }
+      const message = buildPlateauMessage(firstName);
 
       try {
         const ok = await sendPushNotification({
