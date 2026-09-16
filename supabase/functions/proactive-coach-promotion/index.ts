@@ -126,7 +126,7 @@ serve(async (req: Request): Promise<Response> => {
       channel: "in_app",
       user_message: "",
       ai_response: congrats,
-      model_used: "gemini-2.5-flash",
+      model_used: "congrats_template",
       tool_calls: {
         kind: "proactive_promotion",
         rank_code,

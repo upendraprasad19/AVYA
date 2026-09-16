@@ -20,7 +20,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### future_prediction_streak_forecast (1 bugs)
 - 2026-09-16 9c3d7a — `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,…
 
-### proactive_coach_promotion_congrats (1 bugs)
+### proactive_coach_promotion_congrats (2 bugs)
+- 2026-09-16 a1f7d3 — `proactive-coach-promotion`'s `ai_coach_interactions` insert hardcoded `model_used: "gemini-2.5-flash"` unconditionally, unchanged by this batch's earlier fix (`f4d771d2`, diagnose `b7c9e2`) that…
 - 2026-09-16 b7c9e2 — `proactive-coach-promotion` (fired by the `trg_dispatch_proactive_coach_promotion` Postgres trigger on every rank_promotions INSERT) composed its congrats copy with a raw `fetch()` call straight to…
 
 ### active_workout_resume_guard (1 bugs)
@@ -1224,6 +1225,7 @@ rather than a Hive box. (1 bugs)
 | 2026-09-16 | a1c6b9 | Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"… | coach_chat_history_replay | test/contracts/coach_chat_history_replay_writer_to_reader_test.dart |
 | 2026-09-16 | d4a8f6 | The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called… | device_session_identity_binding | test/contracts/signout_unbinds_sdk_identity_test.dart |
 | 2026-09-16 | 9c3d7a | `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
+| 2026-09-16 | a1f7d3 | `proactive-coach-promotion`'s `ai_coach_interactions` insert hardcoded `model_used: "gemini-2.5-flash"` unconditionally, unchanged by this batch's earlier fix (`f4d771d2`, diagnose `b7c9e2`) that… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |
 | 2026-09-16 | b7c9e2 | `proactive-coach-promotion` (fired by the `trg_dispatch_proactive_coach_promotion` Postgres trigger on every rank_promotions INSERT) composed its congrats copy with a raw `fetch()` call straight to… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |
 | 2026-09-15 | e8f4a1 | Raised by the founder as the still-unanswered half of Obs 5 (diagnose 6c2f91): "whether to also add a 'resume in-progress workout' indicator on the Train tab and/or a confirmation before… | active_workout_resume_guard | test/contracts/active_workout_resume_guard_behavioral_test.dart |
 | 2026-09-15 | 2a9f3c | Founder-reported screenshot from internal testing: Profile > My Submissions tab stuck on an infinite loading spinner — "My submissions and added exercises not being shown". No error, no retry option,… | submissions_load_resilience | test/contracts/submissions_load_timeout_behavioral_test.dart |

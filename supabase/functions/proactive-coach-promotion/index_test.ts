@@ -56,3 +56,19 @@ Deno.test("proactive-coach-promotion no longer calls Gemini — no fetch to gene
     throw new Error("expected the now-unused GEMINI_API_KEY reference to be removed");
   }
 });
+
+Deno.test("the ai_coach_interactions insert no longer mislabels model_used as gemini-2.5-flash, since composeCongrats is now template-only", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  if (src.includes('model_used: "gemini-2.5-flash"')) {
+    throw new Error(
+      'expected model_used: "gemini-2.5-flash" to be gone — composeCongrats no longer calls ' +
+        "Gemini, so this mislabels every promotion event in any future audit that greps model_used",
+    );
+  }
+  if (!src.includes('model_used: "congrats_template"')) {
+    throw new Error(
+      'expected model_used: "congrats_template" — matching the sibling convention in ' +
+        'evaluate-rank-promotions ("ceremony_template") and i-see-you-callout ("i_see_you_template")',
+    );
+  }
+});
