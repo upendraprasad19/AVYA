@@ -12,10 +12,9 @@ import {
   shouldSendProactive,
 } from "../_shared/proactive_dedup.ts";
 import { fetchCoachMemory } from "../_shared/coach_memory.ts";
-import { captainPrompt } from "../_shared/captain_manual.ts";
-import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
-import { sanitizeIdentifier, sanitizeJsonForPrompt } from "../_shared/sanitize_for_prompt.ts";
+import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
+import { composeMessage } from "./message.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllPages } from "../_shared/paged_fetch.ts";
 import {
@@ -153,40 +152,7 @@ Deno.serve(async (req) => {
         { fallback: "champ", maxLen: 32 },
       );
 
-      // Fallback: existing hardcoded English copy preserved as safety net.
-      const fallbackMessage = composeMessage(firstName, prs);
-
-      // Generate Captain-voiced copy via Gemini; fall back to English on error.
-      let message = fallbackMessage;
-      try {
-        const prSummary = prs.slice(0, 3).map((p) => ({
-          exercise: p.exercise_id,
-          weight_kg: p.weight_kg,
-          reps: p.reps,
-        }));
-        const userState = {
-          first_name: firstName,
-          new_prs: prSummary,
-          total_pr_count: prs.length,
-        };
-        const { content } = await geminiChat({
-          model: MODEL_FLASH,
-          systemPrompt: captainPrompt("proactive"),
-          userPrompt:
-            `User state: ${sanitizeJsonForPrompt(userState)}.\n\n` +
-            `Generate a PR celebration nudge — user just set ${prs.length} new ` +
-            `personal record(s) in their workout.`,
-          maxTokens: 120,
-          temperature: 0.7,
-        });
-        if (content && content.trim().length > 0) {
-          message = content.trim();
-        }
-      } catch (e) {
-        console.warn(
-          `[pr-detection] Gemini failed for ${userId}, using fallback copy: ${e}`,
-        );
-      }
+      const message = composeMessage(firstName, prs);
 
       try {
         const ok = await sendPushNotification({
@@ -239,27 +205,3 @@ Deno.serve(async (req) => {
     );
   }
 });
-
-/** Build a single-line celebratory message from up to 2 PRs (+N more). */
-function composeMessage(firstName: string, prs: PRRow[]): string {
-  if (prs.length === 0) return "";
-
-  const fmt = (p: PRRow) => {
-    const weight = p.weight_kg ?? 0;
-    const reps = p.reps ?? 0;
-    if (weight > 0) {
-      return `${p.exercise_id} ${weight}kg`;
-    }
-    return `${p.exercise_id} ${reps} reps`;
-  };
-
-  if (prs.length === 1) {
-    return `${firstName} — new ${fmt(prs[0])} PR. Want to bump next week's target?`;
-  }
-  if (prs.length === 2) {
-    return `${firstName} — new PRs: ${fmt(prs[0])}, ${fmt(prs[1])}. Strong session.`;
-  }
-  // 3+ PRs
-  const tail = prs.length - 2;
-  return `${firstName} — new PRs: ${fmt(prs[0])}, ${fmt(prs[1])} +${tail} more. Strong session.`;
-}
