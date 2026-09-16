@@ -20,9 +20,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### streak_guardian_message_composition, future_prediction_streak_forecast, morning_alert_ai_removal (1 bugs)
 - 2026-09-16 f8a3c6 — Two more RED/stale-citation defects surfaced by proactively running the FULL set of Flutter contract tests referencing any of this batch's 9 touched functions, after Round 3's review found a similar…
 
-### future_prediction_streak_forecast (2 bugs)
+### future_prediction_streak_forecast (3 bugs)
 - 2026-09-16 e5c9b2 — This batch's own prior fix (`593094e3`, diagnose `9c3d7a`) added a schedule-row existence probe to `future-prediction/index.ts` meant to mirror `completionRateOverWindow`'s notion of "the last 4…
 - 2026-09-16 9c3d7a — `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,…
+- 2026-09-16 b2f7c4 — `future-prediction`'s new real-trend-math path (this same batch, Task 10, `trend.ts`) computed `predictWeight`/`predictLift` via unbounded least-squares linear regression with no sanity clamp on the…
 
 ### proactive_coach_promotion_congrats (3 bugs)
 - 2026-09-16 c4e8a1 — `test/contracts/proactive_coach_promotion_test.dart` had 3 RED tests on this branch, introduced by `f4d771d2` (the very first fix commit in this batch, before either plan-review round even ran) and…
@@ -1232,6 +1233,7 @@ rather than a Hive box. (1 bugs)
 | 2026-09-16 | f8a3c6 | Two more RED/stale-citation defects surfaced by proactively running the FULL set of Flutter contract tests referencing any of this batch's 9 touched functions, after Round 3's review found a similar… | streak_guardian_message_composition, future_prediction_streak_forecast, morning_alert_ai_removal | test/contracts/streak_guardian_eligibility_test.dart, test/contracts/snapshot_contract_consolidated_test.dart |
 | 2026-09-16 | e5c9b2 | This batch's own prior fix (`593094e3`, diagnose `9c3d7a`) added a schedule-row existence probe to `future-prediction/index.ts` meant to mirror `completionRateOverWindow`'s notion of "the last 4… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
 | 2026-09-16 | 9c3d7a | `future-prediction`'s new real-trend-math path (this same batch, Task 10) computed `predicted_streak_weeks` by passing `completionRateOverWindow`'s return value straight into `predictStreakWeeks`,… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
+| 2026-09-16 | b2f7c4 | `future-prediction`'s new real-trend-math path (this same batch, Task 10, `trend.ts`) computed `predictWeight`/`predictLift` via unbounded least-squares linear regression with no sanity clamp on the… | future_prediction_streak_forecast | supabase/functions/future-prediction/index_test.ts |
 | 2026-09-16 | c4e8a1 | `test/contracts/proactive_coach_promotion_test.dart` had 3 RED tests on this branch, introduced by `f4d771d2` (the very first fix commit in this batch, before either plan-review round even ran) and… | proactive_coach_promotion_congrats | test/contracts/proactive_coach_promotion_test.dart |
 | 2026-09-16 | a1f7d3 | `proactive-coach-promotion`'s `ai_coach_interactions` insert hardcoded `model_used: "gemini-2.5-flash"` unconditionally, unchanged by this batch's earlier fix (`f4d771d2`, diagnose `b7c9e2`) that… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |
 | 2026-09-16 | b7c9e2 | `proactive-coach-promotion` (fired by the `trg_dispatch_proactive_coach_promotion` Postgres trigger on every rank_promotions INSERT) composed its congrats copy with a raw `fetch()` call straight to… | proactive_coach_promotion_congrats | supabase/functions/proactive-coach-promotion/index_test.ts |

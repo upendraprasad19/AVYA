@@ -66,6 +66,34 @@ Deno.test("predictLift: fewer than 2 PRs falls back", () => {
   assertEquals(predictLift([], 60), 60);
 });
 
+Deno.test("predictWeight: a plausible short-term dip does not extrapolate to a physically impossible 90-day forecast", () => {
+  // B-pass finding 2 (247d945d1ba0): this exact fixture (5 weigh-ins, 70->65kg
+  // over 14 days) extrapolated UNCLAMPED to 32.2kg -- below any realistic
+  // human body weight. Clamp bounds it to within 30% of the LAST observed
+  // weight (65kg): floor 45.5kg.
+  const rows = [
+    { date: "2026-08-01", weight_kg: 70 },
+    { date: "2026-08-04", weight_kg: 68.7 },
+    { date: "2026-08-08", weight_kg: 67.2 },
+    { date: "2026-08-11", weight_kg: 66.0 },
+    { date: "2026-08-15", weight_kg: 65.0 },
+  ];
+  const result = predictWeight(rows, 999);
+  assertEquals(result, 45.5);
+});
+
+Deno.test("predictLift: a plausible short-term decline does not extrapolate to a negative lift", () => {
+  // B-pass finding 2 (247d945d1ba0): this exact fixture (2 PRs, 100->80kg
+  // 8 days apart) extrapolated UNCLAMPED to -145kg. Clamp floors at 0.
+  const rows = [
+    { completed_at: "2026-08-01T00:00:00Z", weight_kg: 100 },
+    { completed_at: "2026-08-09T00:00:00Z", weight_kg: 80 },
+  ];
+  const result = predictLift(rows, 60);
+  assertEquals(result, 0);
+  assertEquals(result >= 0, true);
+});
+
 Deno.test("predictStreakWeeks: maps adherence rate onto the existing 13-week ceiling", () => {
   assertEquals(predictStreakWeeks(1.0), 13);
   assertEquals(predictStreakWeeks(0.5), 7); // round(0.5*13) = round(6.5) = 7
