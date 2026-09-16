@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**116 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**117 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -124,3 +124,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-204 | Full-rescan sync architecture (_syncExerciseLogs/_syncNutritionLogs) times… | none | 2026-09-16, `client_errors` telemetry… | [:4385](open_issues.md#L4385) |
 | OI-205 | Already-authenticated user opening a valid /reset link is silently… | none | 2026-09-16, B-pass on the… | [:4440](open_issues.md#L4440) |
 | OI-206 | retire_worktree.dart's regenerable-ignored-paths allowlist is missing… | none | 2026-09-16, live read of… | [:4511](open_issues.md#L4511) |
+| OI-208 | AuthNotifier._teardown() swallows internal failures with no signal to… | none | 2026-09-16, B-pass on the… | [:4553](open_issues.md#L4553) |

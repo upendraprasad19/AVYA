@@ -13,6 +13,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### coach_chat_history_replay (1 bugs)
 - 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
 
+### device_session_identity_binding (2 bugs)
+- 2026-09-16 d4a8f6 — The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called…
+- 2026-07-27 e7b3c5 — Sign-out cleared Hive and Supabase but released nothing the device holds outside them. After user A signed out the handset was still OneSignal external_id = A and Crashlytics userIdentifier = A, so…
+
 ### active_workout_resume_guard (1 bugs)
 - 2026-09-15 e8f4a1 — Raised by the founder as the still-unanswered half of Obs 5 (diagnose 6c2f91): "whether to also add a 'resume in-progress workout' indicator on the Train tab and/or a confirmation before…
 
@@ -398,9 +402,6 @@ rather than a Hive box. (1 bugs)
 
 ### code_review_pass_enforcement (1 bugs)
 - 2026-07-27 b2e6c4 — The catastrophic-tier review gate was satisfied by an untracked file. It hashed the staged diff but checked the working tree for the review, so a docs/reviews/<hash>-review.md that was never git-added…
-
-### device_session_identity_binding (1 bugs)
-- 2026-07-27 e7b3c5 — Sign-out cleared Hive and Supabase but released nothing the device holds outside them. After user A signed out the handset was still OneSignal external_id = A and Crashlytics userIdentifier = A, so…
 
 ### llm_prompt_input_sanitization (1 bugs)
 - 2026-07-27 f4a9c2 — User-editable text was interpolated raw into LLM prompts across the Edge Function tree. A newline in a display name, a meal description, or a conversation turn starts what reads to the model as a…
@@ -1215,6 +1216,7 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-09-16 | d8e2f4 | Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when… | error_telemetry_helper | test/contracts/ai_breakdown_notifier_save_meal_telemetry_test.dart |
 | 2026-09-16 | a1c6b9 | Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"… | coach_chat_history_replay | test/contracts/coach_chat_history_replay_writer_to_reader_test.dart |
+| 2026-09-16 | d4a8f6 | The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called… | device_session_identity_binding | test/contracts/signout_unbinds_sdk_identity_test.dart |
 | 2026-09-15 | e8f4a1 | Raised by the founder as the still-unanswered half of Obs 5 (diagnose 6c2f91): "whether to also add a 'resume in-progress workout' indicator on the Train tab and/or a confirmation before… | active_workout_resume_guard | test/contracts/active_workout_resume_guard_behavioral_test.dart |
 | 2026-09-15 | 2a9f3c | Founder-reported screenshot from internal testing: Profile > My Submissions tab stuck on an infinite loading spinner — "My submissions and added exercises not being shown". No error, no retry option,… | submissions_load_resilience | test/contracts/submissions_load_timeout_behavioral_test.dart |
 | 2026-09-15 | 6c2f91 | Founder-reported, live-reproduced jointly with the agent in Chrome on the amar@gmail.com test account: mid active-workout, after logging all 4 sets of an exercise, tapping SWAP on the next exercise… | active_workout_swap_add_exercise_navigation | test/contracts/swap_add_exercise_double_pop_behavioral_test.dart |

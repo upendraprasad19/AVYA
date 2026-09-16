@@ -311,6 +311,62 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   per this record's own plan-review "Remediation" section) and held exactly.
   False-alarm rate 0/3 → no lens removed; `modelled_on_is_a_checkable_claim` extended per above.
 
+- **2026-09-16 (email-confirm-ux OI-51 follow-up)** — blast-radius **account**
+  — branch `email-confirm-ux`, a second, later B-pass on the SAME branch: the
+  OI-51 device-identity-release fix on `confirm_email_screen.dart` (diagnose
+  `d4a8f6`) discovered and fixed while pushing the branch — distinct from the
+  earlier same-day `email-confirm-ux` entry below, which reviewed the whole
+  feature batch before this fix existed. **5 findings (0 P0, 0 P1, 2 P2,
+  3 P3); 0 false_alarm — all 5 accepted**, 4 fixed via doc corrections, 1
+  filed as OI-208 rather than fixed inline. Review:
+  `docs/reviews/a558ff1b978b-review.md` (renamed from the dispatch-time
+  hash `22569be9cd62` after the doc corrections below moved the staging
+  hash — see that file's own header note). Run as one agent (3 files, one a
+  12-line code diff).
+  **Tuning 1 — a diagnose-doc's claimed FAILURE MECHANISM is a checkable
+  claim, the same way lens 3 already re-derives a claimed blast-radius tier
+  and lens 9 re-derives a claimed "modelled on X".** The doc's `symptom:`
+  field said the bug was reachable via "any step in `_teardown()` throwing" —
+  plausible-reading prose, and false: every step in `_teardown()` already
+  swallows its own throw in its own try/catch, and the caller's try/catch
+  around the whole call also does not rethrow, so an internal step throwing
+  structurally cannot escape `signOut()`. The fix itself was still correct
+  (it matches an already-shipped precedent for the identical call shape) —
+  only the AUTHOR's own explanation of why was wrong, caught by reading the
+  actual code path rather than accepting the doc's narrative. Add to the
+  lens set's general method: when a diagnose-doc states WHY a bug is
+  reachable, trace the claimed code path yourself before accepting it,
+  exactly as already done for WHERE a claim points (asserted_fixture_value)
+  and WHAT a claim's value is (blast_radius_mismatch).
+  **Tuning 2 — mutating the same code path a step further, past what the fix
+  addresses, found a real but correctly out-of-scope gap — and the right
+  move was filing an OI, not fixing it and not dropping it.** The same
+  swallow-without-rethrow shape that made Finding 1's claimed mechanism
+  impossible ALSO means a genuine `_teardown()` TIMEOUT (not a throw) leaves
+  `signOut()` returning normally to every caller — so none of the three
+  call sites' try/catch guards (this fix and its two precedents) can ever
+  fire for that case, because nothing throws. Real, pre-existing, identical
+  across all three sites, not introduced by any of their guards. Filed as
+  OI-208 rather than redesigning `_teardown()`'s signal contract inline —
+  the established "distinguish 'the doc is wrong, fix now' from 'the system
+  has a gap, file it'" split (see the 2026-09-14 (c) entry below) applied a
+  further time, here between two findings from the SAME trace rather than
+  two findings from different files.
+  **Tuning 3 — two of the five findings were confirmable by pure arithmetic,
+  with no test execution needed, and are worth a specific callout as the
+  cheapest possible form of asserted_fixture_value.** A mutation-proof
+  citing "line 211" for a REVERTED state that removes exactly one line above
+  it is checkable by counting, not running: removing one line shifts
+  everything below it up by exactly one, so the reverted state's line is
+  necessarily 210. Likewise a claimed "8 of 10 pass when 1 fails" is
+  arithmetically wrong on its own terms (10 − 1 = 9) without needing to know
+  anything about the test file at all — confirmed by `grep -c` against the
+  real file only as a second check, not the first. **Before re-running
+  anything to verify a numeric mutation claim, check whether the claim is
+  already self-contradictory or off by a checkable arithmetic step.**
+  False-alarm rate 0/5 → no lens removed; general method note added per
+  Tuning 1.
+
 - **2026-09-14 (e)** — blast-radius **platform** — branch `telegram-admin-bot`, Task 13 Step 8
   push-gate fix (migration 137: re-asserts the anon/authenticated revoke on
   `founder_metrics_ops()` that migrations 135/136 each omitted — caught by the FIRST full

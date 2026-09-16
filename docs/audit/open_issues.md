@@ -4549,3 +4549,36 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   `isRegenerableIgnored('deno.lock')`. Filed only, not implemented, per
   founder instruction (documentation-only batch).
 - **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `deno-lock-retire-fix`
+
+## OI-208 — AuthNotifier._teardown() swallows internal failures with no signal to callers -- a timeout leaves all 3 signOut() call sites unable to react (OI-51 residual)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-16, B-pass on the confirm_email_screen OI-51 fix
+  (Finding 2). `_teardown()`'s three
+  steps (`auth_provider.dart:891-905`) each swallow their own throw in their
+  own try/catch, and `_performSignOut`'s own try/catch around
+  `_teardown().timeout(signOutTimeout)` (`:871-884`) ALSO does not rethrow —
+  it logs + records telemetry and falls through. So a genuine TIMEOUT (not a
+  throw) during teardown means `signOut()` returns NORMALLY to every caller.
+  All three sites that wrap `AuthNotifier.signOut()` in try/catch specifically
+  for OI-51 (`confirm_email_screen.dart`, `settings_screen.dart`,
+  `perform_sign_out.dart`) exist to catch a throw and defensively call
+  `releaseDeviceSessionIdentity()` on it — none of their catches can fire in
+  the timeout case, because nothing throws. If the timeout lands after step 3
+  (the real Supabase `signOut()`) but before `unbindSessionIdentity()`
+  completes at the end of `_teardown()` (`:907`), the user's cloud session is
+  already gone but the device's OneSignal `external_id` / Crashlytics
+  `userIdentifier` binding is left stale — the exact OI-51 exposure, reached
+  via a fourth path (timeout) that no per-call-site catch can guard against,
+  because there is nothing to catch.
+- **Scope note**: Identical across all 3 call sites and pre-dates every one
+  of them — not introduced or worsened by any of the try/catch guards those
+  sites carry (this OI-51 fix included). The actual fix needs `_teardown()`
+  itself to expose whether it genuinely completed (not just whether an
+  exception escaped it), which changes the shared sign-out contract every
+  caller relies on — real design work, not a single call site's guard, and
+  deliberately not attempted inline under review-response pressure for a
+  12-line diagnose-doc-driven fix.
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch
+  `email-confirm-ux`, during the B-pass on diagnose `d4a8f6`.
