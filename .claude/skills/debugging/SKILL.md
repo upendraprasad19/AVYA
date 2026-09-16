@@ -1266,3 +1266,57 @@ added, false of the flip being performed.
 - **Prior incidents:** OI-187 (2026-09-10; filed as OI-178) — caught **before** the query ran, only
   because the sink was traced first; the board entry had already been committed
   telling a future reader to run it, and needed correcting in `5f8d6930`.
+
+### 2.65 A shared helper's own swallow-without-rethrow defeats EVERY caller's identical defensive catch, for one specific failure mode (NEW 2026-09-16)
+
+- **Telltale:** three separate call sites all wrap the same shared method
+  (`AuthNotifier.signOut()`) in an identical `try { await x(); } catch (e) {
+  ...defensive cleanup... }` block, each one modeled correctly on the last —
+  and the defensive cleanup still doesn't run for a specific real-world
+  failure. Reading any ONE call site looks fine; the gap is inside the
+  SHARED method all three depend on.
+- **Root-cause shape:** the shared method's own internal error handling
+  swallows a failure completely (logs it, does not rethrow) as a *deliberate*
+  design choice — here, so that a third-party SDK throwing mid-teardown
+  can't abort the rest of a Hive/Supabase sign-out sequence. That design
+  choice is CORRECT for its own purpose and simultaneously means the method
+  can **never surface** that failure to any caller, for ANY reason,
+  including a genuine timeout of the whole sequence. Every caller's
+  try/catch — copied correctly from an established, working precedent — is
+  therefore defending against a case that provably cannot reach it.
+- **Worked instance (OI-208, diagnose `d4a8f6`):** `AuthNotifier._teardown()`
+  wraps each of its three steps in its OWN try/catch (swallow + log, no
+  rethrow), and `_performSignOut`'s own try/catch around
+  `_teardown().timeout(signOutTimeout)` ALSO swallows without rethrowing. So
+  `signOut()` returns NORMALLY whether teardown fully succeeds, partially
+  fails, or times out. Three call sites (`confirm_email_screen.dart`,
+  `settings_screen.dart`, `perform_sign_out.dart`) each wrap `signOut()` in
+  try/catch specifically to call `releaseDeviceSessionIdentity()` on
+  failure — a real, working pattern for the narrow case where something
+  OUTSIDE `_teardown()` throws (e.g. a post-teardown state write after the
+  notifier is disposed). None of the three can react to a `_teardown()`
+  TIMEOUT specifically, because nothing throws for a timeout either — found
+  only by a B-pass tracing the actual code path a diagnose-doc's `symptom:`
+  field had described from plausible-sounding prose rather than verified
+  code, which surfaced that the doc's OWN claimed mechanism ("any step in
+  `_teardown()` throws") was itself impossible.
+- **Fix pattern:** do not add a fourth copy of the same defensive catch
+  somewhere else — it inherits the identical blind spot. The shared method
+  needs to change its OWN contract: either rethrow (breaking every caller
+  that currently relies on swallow-on-purpose) or expose a distinguishable
+  "did this actually complete" signal the caller can check regardless of
+  whether an exception occurred. That is a change to the shared contract
+  every caller depends on, not a per-call-site fix — filed as its own OI
+  rather than folded into whichever call site happened to surface it.
+- **Class rule:** *a defensive catch block, however many times correctly
+  copied, cannot exceed the exception vocabulary of the method it wraps.*
+  Before trusting N identical try/catch guards around one shared call,
+  trace that shared call's OWN internal exception handling and ask what
+  failure modes it can and cannot ever let escape.
+- **Prior incidents:** OI-51 (e7b3c5, 2026-07-27 — original device-identity
+  release gap) → an undocumented `settings_screen.dart` round-2 (comment:
+  "the DERIVED gate found this site — no reviewer did, and neither did I")
+  → this instance (3rd recurrence of the base gap, in new code) → OI-208
+  (the timeout residual, found while fixing the 3rd recurrence, not yet
+  fixed). See `docs/reviews/a558ff1b978b-review.md` for the B-pass that
+  found it.
