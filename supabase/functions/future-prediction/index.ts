@@ -86,8 +86,30 @@ export async function generateLocalPrediction(
     liftPrediction("deadlift", liftFallback.deadlift),
   ]);
 
+  // completionRateOverWindow returns 0.0 for BOTH "zero scheduled rows in
+  // the window" (no history — should fall back) AND "real 0% completion on
+  // a non-empty schedule" (a genuine signal). It only distinguishes a query
+  // ERROR via the -1.0 sentinel, so a bare `adherenceRate < 0` check reads a
+  // brand-new user's empty schedule as "0% adherence" and predicts 0
+  // streak-weeks instead of falling back. Probe for schedule-row existence
+  // directly to tell the two apart, without changing the shared helper's
+  // contract (also used by evaluate-rank-promotions).
+  const streakWindowSince = istDateStr(new Date(Date.now() - 4 * 7 * 24 * 3600 * 1000));
+  const { data: scheduleProbeRows } = await supabase
+    .from("scheduled_workouts")
+    .select("status")
+    .eq("user_id", userId)
+    .gte("scheduled_date", streakWindowSince)
+    .order("scheduled_date", { ascending: true });
+  const hasScheduleHistory = (scheduleProbeRows ?? []).some(
+    (r: Record<string, unknown>) => r.status !== "rest",
+  );
+
   const adherenceRate = await completionRateOverWindow(supabase, userId, 4);
-  const predictedStreak = predictStreakWeeks(adherenceRate < 0 ? null : adherenceRate, streakFallback);
+  const predictedStreak = predictStreakWeeks(
+    !hasScheduleHistory || adherenceRate < 0 ? null : adherenceRate,
+    streakFallback,
+  );
 
   const taglines: Record<string, string[]> = {
     build_muscle: [

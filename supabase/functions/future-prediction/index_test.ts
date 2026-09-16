@@ -99,6 +99,11 @@ Deno.test("generateLocalPrediction falls back to the static formulas when there 
   assertEquals(result.predicted_weight_kg, 78.5); // 80 + (75-80)*0.3
   assertEquals(result.source, "local");
   assertEquals(call > 0, true);
+  // A brand-new user (onboarding trigger, zero scheduled_workouts rows in
+  // the trailing 4 weeks) must fall back to the flat streak heuristic, NOT
+  // the 0-weeks that predictStreakWeeks(0.0, fallback) would compute if the
+  // "zero scheduled rows" case were mistaken for a real 0% adherence rate.
+  assertEquals(result.predicted_streak_weeks, 10); // streakFallback for days_per_week=4
 });
 
 Deno.test("generateLocalPrediction is now async and calls the trend helpers (source-shape — the real DB-backed path needs live env)", async () => {

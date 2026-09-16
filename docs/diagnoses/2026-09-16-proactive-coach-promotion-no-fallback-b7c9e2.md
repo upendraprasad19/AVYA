@@ -78,7 +78,7 @@ impact_analysis: |
   composeCongrats never performs I/O and cannot itself fail; the
   remaining failure surface (the ai_coach_interactions INSERT, the
   OneSignal push) is unchanged and was already correctly handled
-  per-step by the existing code (index.ts:148-164, :169-175).
+  per-step by the existing code (index.ts:124-140, :145-151).
 touched_layers_checked:
   - { tier: 1, name: "Client code", status: not_applicable, evidence: "Server-side Edge Function only; no Flutter client code touched by this fix." }
   - { tier: 6, name: "Edge Function code vs deploy", status: fixed_in_this_batch, evidence: "supabase/functions/proactive-coach-promotion/index.ts and the new congrats.ts changed in this worktree but NOT yet deployed — deploy requires separate explicit founder authorization per CLAUDE.md §4.3. deno check --node-modules-dir=none passed clean on index.ts; deno test --no-check --allow-all --node-modules-dir=none supabase/functions/proactive-coach-promotion/ passed 7/7." }
