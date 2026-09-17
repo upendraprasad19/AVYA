@@ -10,6 +10,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-09-17 e7b2d4 — Founder, logged in as Upendra, doing his morning workout in the active-workout screen: searching the SWAP EXERCISE picker for his own custom exercise `Single Leg Front Lever` returned nothing. The…
 - 2026-05-15 a5d29c — Founder searched "Single Leg Front" in the active-workout SWAP EXERCISE picker on a fresh install. The picker returned "No matching exercises found" even though his custom exercise `Single Leg Front…
 
+### diet_plan_generation_quality (1 bugs)
+- 2026-09-17 d3c7a9 — The generated diet plan shown to Upendra (2026-09-17 PDF export) contained structurally absurd meals: breakfast = idli + red rice + basmati rice + whey (three starch servings, no dairy/fruit), lunch =…
+
 ### quote_picker_category_derivation (2 bugs)
 - 2026-09-17 b7e1f4 — Founder completed a Push + Core Phase 3 workout (Hanging Leg Raise 4 sets, Self-Resisted Triceps Extension 1 set, Dumbbell Fly 1 set) and the post-completion receipt card showed "Glute work.…
 - 2026-09-16 e3d8fa — Founder completed an all-legs Phase 3 workout (Barbell Back Squat, Leg Extension, Leg Curl (Lying), Handstand Hold, Front Lever Hold) and the post-completion receipt card showed the caption "Lats lit.…
@@ -1245,6 +1248,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-17 | e7b2d4 | Founder, logged in as Upendra, doing his morning workout in the active-workout screen: searching the SWAP EXERCISE picker for his own custom exercise `Single Leg Front Lever` returned nothing. The… | custom_exercises_mutations | test/contracts/can_offer_in_picker_behavioral_test.dart |
+| 2026-09-17 | d3c7a9 | The generated diet plan shown to Upendra (2026-09-17 PDF export) contained structurally absurd meals: breakfast = idli + red rice + basmati rice + whey (three starch servings, no dairy/fruit), lunch =… | diet_plan_generation_quality | test/nutrition/diet_plan_quality_constraints_test.dart (10 behavioral guards; existing test/nutrition/diet_plan_generator_test.dart archetypes all still green) |
 | 2026-09-17 | b7e1f4 | Founder completed a Push + Core Phase 3 workout (Hanging Leg Raise 4 sets, Self-Resisted Triceps Extension 1 set, Dumbbell Fly 1 set) and the post-completion receipt card showed "Glute work.… | quote_picker_category_derivation | test/contracts/quote_picker_category_from_exercises_test.dart |
 | 2026-09-16 | d8e2f4 | Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when… | error_telemetry_helper | test/contracts/ai_breakdown_notifier_save_meal_telemetry_test.dart |
 | 2026-09-16 | a1c6b9 | Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"… | coach_chat_history_replay | test/contracts/coach_chat_history_replay_writer_to_reader_test.dart |

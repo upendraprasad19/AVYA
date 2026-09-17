@@ -45,24 +45,41 @@ class _FakeFoodRepo implements FoodRepository {
 }
 
 /// Builds a small but realistic food universe. Mirrors actual rows from
-/// assets/data/food_database.json (verified 2026-04-26).
+/// assets/data/food_database.json (verified 2026-04-26). 2026-09
+/// meal-quality batch: fiber values + extra vegetables rows added so the
+/// Pass 0 group quotas fire per-slot (plan-review round 1, finding 5 —
+/// the old fixture's single vegetables row starved the dinner quota once
+/// day-uniqueness was introduced).
 List<Map<String, dynamic>> _seedFoods() => [
       // staples
-      _f('F0001', 'White Rice (cooked)', 'staples', 130, 2.7, 28, 0.3, 158, '1 cup'),
-      _f('F0002', 'Brown Rice (cooked)', 'staples', 112, 2.6, 24, 0.9, 195, '1 cup'),
-      _f('F0003', 'Roti (Whole Wheat)', 'staples', 297, 9.8, 59, 3.7, 40, '1 roti'),
-      _f('F0007', 'Poha (Flattened Rice)', 'staples', 130, 2.6, 27, 1.5, 180, '1 plate'),
+      _f('F0001', 'White Rice (cooked)', 'staples', 130, 2.7, 28, 0.3, 158, '1 cup', fiber: 0.4),
+      _f('F0002', 'Brown Rice (cooked)', 'staples', 112, 2.6, 24, 0.9, 195, '1 cup', fiber: 1.8),
+      _f('F0003', 'Roti (Whole Wheat)', 'staples', 297, 9.8, 59, 3.7, 40, '1 roti', fiber: 3.9),
+      _f('F0007', 'Poha (Flattened Rice)', 'staples', 130, 2.6, 27, 1.5, 180, '1 plate', fiber: 1.0),
+      _f('F0008', 'Steel Cut Oats', 'staples', 379, 13.0, 68, 6.5, 40, '40g', fiber: 10.0),
+      _f('F0009', 'Whole Wheat Bread', 'staples', 250, 9.0, 45, 3.0, 28, '1 slice', fiber: 4.5),
       // pulses
-      _f('F0011', 'Toor Dal (cooked)', 'pulses', 116, 7.5, 20, 0.4, 200, '1 bowl'),
-      _f('F0014', 'Rajma (cooked)', 'pulses', 127, 8.7, 23, 0.5, 200, '1 bowl'),
-      _f('F0016', 'Masoor Dal (cooked)', 'pulses', 116, 9.0, 20, 0.4, 200, '1 bowl'),
-      _f('F0017', 'Sprouts (Mixed)', 'pulses', 70, 7.0, 12, 0.5, 100, '1 cup'),
-      _f('F0018', 'Soybean (boiled)', 'pulses', 173, 17.0, 10, 9.0, 100, '1 cup'),
+      _f('F0011', 'Toor Dal (cooked)', 'pulses', 116, 7.5, 20, 0.4, 200, '1 bowl', fiber: 2.0),
+      _f('F0014', 'Rajma (cooked)', 'pulses', 127, 8.7, 23, 0.5, 200, '1 bowl', fiber: 2.4),
+      _f('F0016', 'Masoor Dal (cooked)', 'pulses', 116, 9.0, 20, 0.4, 200, '1 bowl', fiber: 2.2),
+      _f('F0017', 'Sprouts (Mixed)', 'pulses', 70, 7.0, 12, 0.5, 100, '1 cup', fiber: 1.8),
+      _f('F0018', 'Soybean (boiled)', 'pulses', 173, 17.0, 10, 9.0, 100, '1 cup', fiber: 6.0),
+      // vegan-density rows mirroring real DB F0373/F0374/F1014 — without
+      // them the vegan archetype's day-uniqueness collapses the protein
+      // band (plan-review round 2, finding 3)
+      _f('F0030', 'Soy Chunks (cooked)', 'protein', 120, 18.0, 9, 0.5, 150, '1 bowl', isVeg: true, isVegan: true, fiber: 4.0),
+      _f('F0030b', 'Soya Chaap', 'protein', 120, 18.0, 9, 6, 150, '1 piece', isVeg: true, isVegan: true, fiber: 3.0),
+      _f('F0029b', 'Tofu (Firm)', 'protein', 170, 17.0, 2, 10, 126, '100g', isVeg: true, isVegan: true, fiber: 2.0),
       // protein (non-veg + paneer + tofu)
       _f('F0021', 'Chicken Breast (grilled)', 'protein', 165, 31.0, 0, 3.6, 100, '100g', isVeg: false),
       _f('F0023', 'Egg (Whole, boiled)', 'protein', 130, 13.0, 1.1, 8.7, 50, '1 egg', isVeg: true),
       _f('F0025', 'Paneer', 'protein', 265, 18.0, 1.2, 21.0, 100, '100g', isVeg: true),
       _f('F0026', 'Fish Curry', 'protein', 160, 16.0, 6, 8, 200, '1 bowl', isVeg: false),
+      // real-DB density rows (F0330/F0893): the build archetype needs the
+      // protein density the real DB carries — fixture was thinner than
+      // production data (round-3 review, finding 6)
+      _f('F0033x', 'Goan Fish Curry', 'protein', 178, 17.0, 6, 8, 200, '1 bowl', isVeg: false),
+      _f('F0021x', 'Chicken Breast (Pan-fried)', 'protein', 187, 33.0, 0, 6, 100, '100g', isVeg: false),
       _f('F0027', 'Mutton Curry', 'protein', 235, 18.0, 4, 17, 200, '1 bowl', isVeg: false),
       _f('F0028', 'Tandoori Chicken', 'protein', 175, 25.0, 1, 7, 120, '1 leg piece', isVeg: false),
       _f('F0029', 'Tofu', 'protein', 76, 8.0, 1.9, 4.8, 100, '100g', isVeg: true, isVegan: true),
@@ -76,18 +93,30 @@ List<Map<String, dynamic>> _seedFoods() => [
       _f('F0050', 'Almonds', 'nuts_seeds', 580, 21.0, 22, 50, 14, '10 almonds', isVeg: true, isVegan: true),
       _f('F0051', 'Peanuts (Roasted)', 'nuts_seeds', 580, 26.0, 16, 49, 30, '1 handful', isVeg: true, isVegan: true),
       _f('F0056', 'Peanut Butter', 'nuts_seeds', 590, 25.0, 20, 50, 16, '1 tbsp', isVeg: true, isVegan: true),
+      // a >300 kcal/serving nuts_seeds row — the per-serving cap must
+      // exclude it from generation (plan-review round 2, finding 3)
+      _f('F0057', 'Almond Butter Jar (Pintola)', 'nuts_seeds', 620, 20.0, 18, 55, 60, '60g jar serving', isVeg: true, isVegan: true, upf: true),
       // beverages
       _f('F0046', 'Protein Shake (Whey + Milk)', 'beverages', 100, 30.0, 7, 2, 300, '1 glass', isVeg: true),
       // fruits
       _f('F0040', 'Banana', 'fruits', 89, 1.1, 23, 0.3, 118, '1 medium', isVeg: true, isVegan: true),
       _f('F0041', 'Apple', 'fruits', 52, 0.3, 14, 0.2, 180, '1 medium', isVeg: true, isVegan: true),
-      // vegetables
-      _f('F0061', 'Mixed Sabzi', 'vegetables', 80, 3.0, 10, 4, 150, '1 bowl', isVeg: true, isVegan: true),
+      _f('F0042', 'Papaya', 'fruits', 43, 0.5, 11, 0.3, 150, '1 cup', isVeg: true, isVegan: true),
+      // vegetables — enough rows that lunch AND dinner quotas both fire
+      // under day-uniqueness
+      _f('F0061', 'Mixed Sabzi', 'vegetables', 80, 3.0, 10, 4, 150, '1 bowl', isVeg: true, isVegan: true, fiber: 3.5),
+      _f('F0062', 'Palak Sabzi', 'vegetables', 60, 2.5, 6, 3, 150, '1 bowl', isVeg: true, isVegan: true, fiber: 2.8),
+      _f('F0063', 'Bhindi Masala', 'vegetables', 85, 2.2, 9, 4.5, 150, '1 bowl', isVeg: true, isVegan: true, fiber: 3.2),
+      _f('F0064', 'Cauliflower Sabzi', 'vegetables', 55, 2.0, 8, 2, 150, '1 bowl', isVeg: true, isVegan: true, fiber: 2.5),
+      _f('F0065', 'Cucumber Salad', 'vegetables', 20, 0.8, 4, 0.2, 120, '1 bowl', isVeg: true, isVegan: true, fiber: 1.2),
+      // an UPF-tagged packaged row — never generated (regression pin for
+      // the observed Pringles-in-dinner defect)
+      _f('F0099', 'Pringles sour cream 40g', 'staples', 1353, 5.0, 58, 31, 40, '40g', isVeg: true, upf: true),
     ];
 
 Map<String, dynamic> _f(String id, String name, String cat, num cal, num prot,
     num carb, num fat, num servingG, String servingDesc,
-    {bool isVeg = true, bool isVegan = false}) {
+    {bool isVeg = true, bool isVegan = false, num fiber = 0, bool upf = false}) {
   final factor = servingG / 100.0;
   return {
     'id': id,
@@ -97,6 +126,7 @@ Map<String, dynamic> _f(String id, String name, String cat, num cal, num prot,
     'protein_per_100g': prot,
     'carbs_per_100g': carb,
     'fat_per_100g': fat,
+    'fiber_per_100g': fiber,
     'standard_serving_g': servingG,
     'standard_serving_desc': servingDesc,
     'calories_std': (cal * factor).toDouble(),
@@ -106,6 +136,7 @@ Map<String, dynamic> _f(String id, String name, String cat, num cal, num prot,
     'is_indian': true,
     'is_veg': isVeg,
     'is_vegan': isVegan,
+    if (upf) 'is_ultra_processed': true,
   };
 }
 
@@ -129,6 +160,10 @@ const _mainAnchors = {
   'Masoor Dal (cooked)',
   'Soybean (boiled)',
   'Tofu',
+  // 2026-09 meal-quality batch vegan-density additions
+  'Soy Chunks (cooked)',
+  'Soya Chaap',
+  'Tofu (Firm)',
 };
 const _snackAnchors = {
   'Whey Protein (scoop)',

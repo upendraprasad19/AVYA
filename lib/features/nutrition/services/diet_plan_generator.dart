@@ -40,6 +40,7 @@ class DietMealPlan {
 
   int get totalCalories => items.fold(0, (s, i) => s + i.calories);
   int get totalProtein => items.fold(0, (s, i) => s + i.protein);
+  int get totalFiber => items.fold(0, (s, i) => s + i.fiber);
 }
 
 /// One food item inside a meal slot.
@@ -52,8 +53,10 @@ class DietPlanFoodItem {
   final int protein;
   final int carbs;
   final int fat;
+  final int fiber;
   final String category;
   final bool isAnchor; // true = the slot's anchor protein
+  final bool isQuotaLocked; // true = Pass 0 group-quota item; Pass 3/4 must not swap it out
 
   DietPlanFoodItem({
     required this.foodId,
@@ -64,8 +67,10 @@ class DietPlanFoodItem {
     required this.protein,
     required this.carbs,
     required this.fat,
+    this.fiber = 0,
     required this.category,
     this.isAnchor = false,
+    this.isQuotaLocked = false,
   });
 }
 
@@ -74,12 +79,14 @@ class DietPlanInputs {
   final int calorieTarget;
   final int proteinTarget;
   final String dietPreference; // 'veg' | 'vegan' | 'non-veg'
+  final int fiberTarget; // from profile['fiber_grams'] ?? 30 (nutrition_provider.dart)
   final int? seed; // optional override for deterministic test runs
 
   const DietPlanInputs({
     required this.calorieTarget,
     required this.proteinTarget,
     required this.dietPreference,
+    this.fiberTarget = 30,
     this.seed,
   });
 }
@@ -169,6 +176,13 @@ class DietPlanGenerator {
     'Masoor Dal (cooked)',
     'Chana Dal (cooked)',
     'Moong Dal (cooked)',
+    // Vegan density additions (2026-09 meal-quality batch): the vegan
+    // archetype's only in-band main anchor was Soybean (boiled); day-
+    // uniqueness then forced dinner down to a ~17g dal. These rows exist
+    // in the DB (F0373/F0374/F1014) with 21-27g protein per serving.
+    'Soy Chunks (cooked)',
+    'Soya Chaap',
+    'Tofu (Firm)',
     'Soybean (boiled)',
     'Tofu',
   };
@@ -195,7 +209,12 @@ class DietPlanGenerator {
     'Biryani (Chicken)',
   };
 
-  // Foods that are vegetarian but NOT vegan (filtered out for vegan)
+  // Foods that are vegetarian but NOT vegan (filtered out for vegan).
+  // Paneer-dish rows living in the 'vegetables' category (Saag Paneer,
+  // Palak Paneer, Matar Paneer, Methi Malai Matar, Paneer Bhurji) are
+  // listed by name here — plan-review round 3 found they bypass the
+  // category-based filter and leak into vegan plans via the lunch/dinner
+  // vegetables filler pool.
   static const _dairyOrEggNames = {
     'Egg (Whole, boiled)',
     'Egg White (boiled)',
@@ -212,6 +231,11 @@ class DietPlanGenerator {
     'Paneer Butter Masala',
     'Dal Makhani',
     'Butter Chicken',
+    'Saag Paneer',
+    'Palak Paneer',
+    'Matar Paneer',
+    'Methi Malai Matar',
+    'Paneer Bhurji',
   };
 
   /// Slot definitions. Each slot has its calorie share, protein share,
@@ -270,9 +294,17 @@ class DietPlanGenerator {
     _ensureIndices(); // O(N) once; O(1) on subsequent calls
     final rng = Random(inputs.seed ?? DateTime.now().day);
 
+    // Day-level food uniqueness (2026-09 meal-quality batch). Hard in
+    // Pass 1 (anchors) + Pass 0 quotas + Pass 2 (fillers); Pass 3/4
+    // recovery swaps are EXEMPT — protein correctness outranks variety,
+    // and the vegan archetype's recovery path depends on cross-meal
+    // freedom (plan-review rounds 2-3). Swap helpers still PREFER
+    // not-yet-used candidates where one exists.
+    final usedIds = <String>{};
+
     final meals = <DietMealPlan>[];
 
-    // ── PASS 1: anchor protein per slot ───────────────────────────
+    // ── PASS 1: anchor protein + group-quota items per slot ──────
     for (final def in _slotDefs) {
       final slotCals = (inputs.calorieTarget * def.calorieShare).round();
       final slotProt = (inputs.proteinTarget * def.proteinShare).round();
@@ -284,14 +316,32 @@ class DietPlanGenerator {
         inputs.dietPreference,
         rng,
         slotProteinTarget: slotProt,
+        usedIds: usedIds,
       );
       if (anchor != null) {
         items.add(anchor);
+        usedIds.add(anchor.foodId);
       } else if (!def.anchorOptional) {
         // Last-ditch fallback: take the highest-protein food we can find in
         // the user's diet_preference. Prevents an empty slot if pool is bare.
         final fallback = _highestProteinFallback(inputs.dietPreference);
         if (fallback != null) items.add(fallback);
+      }
+
+      // ── PASS 0 group quotas (compose-then-fill) ────────────────
+      // Mandatory volume foods placed BEFORE calorie filling so the
+      // staple-first filler order can no longer starve them out.
+      //   lunch/dinner → 1 vegetables item
+      //   breakfast    → 1 dairy-or-fruit item
+      // Quota items are isQuotaLocked: Pass 3/4 may not swap them out
+      // (they are the lowest-protein items by construction — without the
+      // lock, deficit recovery would undo this batch's own quota).
+      // Empty pool ⇒ quota skipped for that slot (counted by tests; the
+      // real 1431-row DB never hits it for veg-pref diets).
+      final quota = _pickQuotaItem(def, inputs.dietPreference, rng, usedIds);
+      if (quota != null) {
+        items.add(quota);
+        usedIds.add(quota.foodId);
       }
 
       meals.add(DietMealPlan(
@@ -309,7 +359,8 @@ class DietPlanGenerator {
       final meal = meals[i];
 
       var remainingCals = meal.targetCalories - meal.totalCalories;
-      var safety = 4; // hard cap to avoid runaway loops
+      var safety = 6; // hard cap to avoid runaway loops (raised 4→6: quota
+      // items consume one iteration before filling starts — review F2)
 
       while (remainingCals > 80 && safety-- > 0) {
         // Recompute avoidIds each iteration so newly added fillers aren't
@@ -322,7 +373,10 @@ class DietPlanGenerator {
           def,
           inputs.dietPreference,
           rng,
+          meal: meal,
+          remainingCals: remainingCals,
           avoidIds: meal.items.map((it) => it.foodId).toSet(),
+          usedIds: usedIds,
           slotProteinSoFar: meal.totalProtein,
           slotProteinTarget: meal.targetProtein,
           anchorCategory: meal.items.isNotEmpty && meal.items.first.isAnchor
@@ -331,6 +385,7 @@ class DietPlanGenerator {
         );
         if (filler == null) break;
         meal.items.add(filler);
+        usedIds.add(filler.foodId);
         remainingCals = meal.targetCalories - meal.totalCalories;
       }
     }
@@ -345,6 +400,8 @@ class DietPlanGenerator {
         meals,
         inputs.dietPreference,
         rng,
+        usedIds: usedIds,
+        neededProtein: deficit95 - totalProtein,
       );
       if (!swapped) break;
       totalProtein = meals.fold<int>(0, (s, m) => s + m.totalProtein);
@@ -371,14 +428,122 @@ class DietPlanGenerator {
         meals,
         inputs.dietPreference,
         rng,
+        usedIds: usedIds,
         softFloor: softFloor105,
+        dailyFloor: deficit95,
         currentTotal: totalProtein,
       );
       if (!trimmed) break;
       totalProtein = meals.fold<int>(0, (s, m) => s + m.totalProtein);
     }
 
+    // ── PASS 5: fiber floor (2026-09 meal-quality batch) ──────────
+    // The original four passes never read the profile's fiber target —
+    // the observed plan delivered ~12g against a 30g target. If the daily
+    // total is under 70% of [inputs.fiberTarget], swap the lowest-fiber
+    // staple for a whole-grain alternative in the same calorie band.
+    // Bounded tries, no-op when no candidate exists (mirrors swapTries).
+    final fiberFloor = (inputs.fiberTarget * 0.7).floor();
+    var totalFiber = meals.fold<int>(0, (s, m) => s + m.totalFiber);
+    var fiberTries = 6;
+
+    while (totalFiber < fiberFloor && fiberTries-- > 0) {
+      final swapped = _swapLowestFiberStaple(meals, inputs.dietPreference, rng, usedIds);
+      if (!swapped) break;
+      totalFiber = meals.fold<int>(0, (s, m) => s + m.totalFiber);
+    }
+
     return meals;
+  }
+
+  // ── Group-quota helpers (Pass 0) ───────────────────────────────
+
+  /// Mandatory volume item for [def]'s slot: 1 vegetables item for
+  /// lunch/dinner, 1 dairy-or-fruit item for breakfast, none for snacks.
+  /// Returns null when the slot has no quota or the filtered pool is empty.
+  DietPlanFoodItem? _pickQuotaItem(
+    _SlotDef def,
+    String dietPref,
+    Random rng,
+    Set<String> usedIds,
+  ) {
+    final List<String> quotaCategories;
+    switch (def.slotKey) {
+      case 'lunch':
+      case 'dinner':
+        quotaCategories = const ['vegetables'];
+        break;
+      case 'breakfast':
+        quotaCategories = const ['dairy', 'fruits'];
+        break;
+      default:
+        return null; // snack slots: fillers are already fruit/nut/dairy
+    }
+
+    for (final cat in quotaCategories) {
+      final pool = _foodsByCategory(cat).where((f) =>
+          !_isUpf(f) &&
+          _passesDiet(f, dietPref) &&
+          _matchesMeal(f, def.slotKey) &&
+          !usedIds.contains(f['id'] as String?));
+      if (pool.isEmpty) continue;
+      final list = pool.toList()..shuffle(rng);
+      return _toItem(list.first, isQuotaLocked: true);
+    }
+    return null;
+  }
+
+  /// Per-category filler caps (plan-review round 1, finding 6: with
+  /// staples capped, pulses stacked "Rajma + Chana Dal + Masoor Dal" in
+  /// one slot through the back door — the same complaint class the batch
+  /// set out to fix).
+  int _categoryCap(String category) {
+    switch (category) {
+      case 'staples':
+        return 1; // soft: the >20%-under-target exception may add a 2nd
+      case 'pulses':
+        return 1;
+      case 'vegetables':
+        return 2;
+      default:
+        return 99; // fruits/dairy/nuts/beverages: bounded by safety + fit filter
+    }
+  }
+
+  int _countCategory(DietMealPlan meal, String category) =>
+      meal.items.where((it) => it.category == category).length;
+
+  /// True when replacing [current] with a [replacement] of [replacementCat]
+  /// keeps the meal inside the per-category caps (Pass 3/4 must not
+  /// re-stack a category through a swap — the cap counts the ANCHOR too:
+  /// a dal anchor IS category 'pulses', so a pulses filler next to it is
+  /// exactly the double-dip the cap exists to prevent).
+  bool _swapRespectsCap(DietMealPlan meal, DietPlanFoodItem current,
+      String replacementCat) {
+    final after = _countCategory(meal, replacementCat) -
+        (current.category == replacementCat ? 1 : 0) +
+        1;
+    if (replacementCat == 'staples') {
+      // Same re-entrant exception as Pass 2: a 2nd staple is allowed only
+      // while the slot is >20% under its calorie target.
+      final count = after;
+      if (count >= 1) {
+        final under = meal.targetCalories - meal.totalCalories;
+        return count <= 1 || under > (meal.targetCalories * 0.2).round();
+      }
+      return true;
+    }
+    if (replacementCat == 'pulses') {
+      // Mirrored pulses exception: 2nd pulses only while the slot is >20%
+      // under its protein target (Pass 2's rule, applied to recovery swaps).
+      if (meal.targetProtein > 0) {
+        final under = meal.targetProtein - meal.totalProtein;
+        final cap = under > (meal.targetProtein * 0.2).round() ? 2 : 1;
+        return after <= cap;
+      }
+      return after <= 1;
+    }
+    return after <= _categoryCap(replacementCat);
   }
 
   // ── Helpers ─────────────────────────────────────────────────────
@@ -388,6 +553,7 @@ class DietPlanGenerator {
     String dietPref,
     Random rng, {
     required int slotProteinTarget,
+    required Set<String> usedIds,
   }) {
     final candidates = <Map<String, dynamic>>[];
     for (final name in def.anchorPoolNames) {
@@ -395,6 +561,22 @@ class DietPlanGenerator {
       if (f != null && _passesDiet(f, dietPref)) candidates.add(f);
     }
     if (candidates.isEmpty) return null;
+
+    // Hard day-uniqueness on anchors (plan-review round 3, finding 1):
+    // Greek Yogurt sits in BOTH the breakfast and snack anchor pools, so
+    // the two snack slots could independently anchor it — the observed
+    // Greek-yogurt-twice bug. For OPTIONAL-anchor slots (snacks) an
+    // exhausted pool means NO anchor this time — the slot legitimately
+    // becomes a filler-only snack (Pass 3 recovers any protein gap; a
+    // repeat here is precisely the dupe this pass exists to kill). For
+    // REQUIRED slots we allow a repeat as the last resort — an empty
+    // mandatory slot is worse than a repeat.
+    var pool =
+        candidates.where((f) => !usedIds.contains(f['id'] as String?)).toList();
+    if (pool.isEmpty) {
+      if (def.anchorOptional) return null;
+      pool = candidates;
+    }
 
     // APK Test #3 / Option D Part C — anchor protein cap.
     //
@@ -413,7 +595,7 @@ class DietPlanGenerator {
     // even that fails, accept the smallest available anchor outright.
     final slotProtCap = (slotProteinTarget * 1.5).round();
 
-    final inBand = candidates.where((f) {
+    final inBand = pool.where((f) {
       final p = (f['protein_std'] as num?)?.toDouble() ?? 0.0;
       return p >= def.anchorMinProtein && p <= slotProtCap;
     }).toList();
@@ -430,14 +612,14 @@ class DietPlanGenerator {
     // safety net since anchors are protected). If every candidate is below
     // floor (rare — weak veg pool), use the highest available so the slot
     // still has a meaningful protein anchor.
-    candidates.sort((a, b) {
+    pool.sort((a, b) {
       final aP = (a['protein_std'] as num?)?.toDouble() ?? 0.0;
       final bP = (b['protein_std'] as num?)?.toDouble() ?? 0.0;
       return bP.compareTo(aP); // descending
     });
 
     // Try: highest-protein anchor <= cap (regardless of floor)
-    for (final f in candidates) {
+    for (final f in pool) {
       final p = (f['protein_std'] as num?)?.toDouble() ?? 0.0;
       if (p <= slotProtCap) {
         return _toItem(f, isAnchor: true);
@@ -445,15 +627,25 @@ class DietPlanGenerator {
     }
 
     // Every anchor exceeds cap — accept the smallest (least over-shoot).
-    final pick = candidates.last;
+    final pick = pool.last;
     return _toItem(pick, isAnchor: true);
   }
+
+  /// Per-serving kcal of a food row (mirrors _toItem math).
+  static int _servingKcal(Map<String, dynamic> f) =>
+      (((f['calories_per_100g'] as num?)?.toDouble() ?? 0.0) *
+              ((f['standard_serving_g'] as num?)?.toDouble() ?? 100.0) /
+              100.0)
+          .round();
 
   DietPlanFoodItem? _pickFiller(
     _SlotDef def,
     String dietPref,
     Random rng, {
+    required DietMealPlan meal,
+    required int remainingCals,
     required Set<String> avoidIds,
+    required Set<String> usedIds,
     int slotProteinSoFar = 0,
     int slotProteinTarget = 0,
     String? anchorCategory,
@@ -480,14 +672,70 @@ class DietPlanGenerator {
       }).toList();
     }
 
+    // Hard invariants that NEVER yield (plan-review rounds 1-3):
+    //  - is_ultra_processed rows are never generated
+    //  - per-meal dedupe (avoidIds)
+    // Degradation order for the ELASTIC constraints, tried in stages:
+    //   stage 1: meal_fit + fit-filter(serving ≤ remainingCals+50) + day-unique
+    //   stage 2: relax meal_fit
+    //   stage 3: relax fit-filter (nuts_seeds keep their hard ≤300 kcal/serving cap)
+    //   stage 4: relax day-uniqueness
+    // Category caps + the re-entrant staples exception are applied by the
+    // caller-side loop below, before stage relaxation is reached.
     for (final cat in categories) {
-      final pool = _foodsByCategory(cat)
-          .where((f) =>
-              !avoidIds.contains(f['id']) && _passesDiet(f, dietPref))
-          .toList();
-      if (pool.isEmpty) continue;
-      pool.shuffle(rng);
-      return _toItem(pool.first);
+      // Category caps. The staples cap YIELDS BEFORE THE CALORIE BAND does
+      // (review F2): a 2nd staple is allowed while the slot is >20% under
+      // its calorie target (re-entrant — no fixed addition count). Pulses
+      // get the mirrored rule on the PROTEIN band: a 2nd pulses while the
+      // slot is >20% under its protein target (the 3-way rajma+chana+masoor
+      // stacking that motivated the cap stays banned).
+      final count = _countCategory(meal, cat);
+      if (cat == 'staples') {
+        final under = meal.targetCalories - meal.totalCalories;
+        if (count >= 2) continue;
+        if (count >= 1 &&
+            under <= (meal.targetCalories * 0.2).round()) {
+          continue;
+        }
+      } else if (cat == 'pulses' && slotProteinTarget > 0) {
+        final under = slotProteinTarget - slotProteinSoFar;
+        if (count >= 2) continue;
+        if (count >= 1 && under <= (slotProteinTarget * 0.2).round()) {
+          continue;
+        }
+      } else if (count >= _categoryCap(cat)) {
+        continue;
+      }
+
+      // Stage relaxation per category, strictest first.
+      for (var stage = 1; stage <= 4; stage++) {
+        final respectMealFit = stage < 2;
+        final respectFit = stage < 3;
+        final respectDayUnique = stage < 4;
+
+        final pool = _foodsByCategory(cat).where((f) {
+          final id = f['id'] as String?;
+          if (id == null || avoidIds.contains(id)) return false;
+          if (_isUpf(f)) return false;
+          if (!_passesDiet(f, dietPref)) return false;
+          if (respectMealFit && !_matchesMeal(f, def.slotKey)) return false;
+          if (respectFit) {
+            final limit = cat == 'nuts_seeds' ? 300 : remainingCals + 50;
+            if (_servingKcal(f) > limit) return false;
+          } else if (cat == 'nuts_seeds' && _servingKcal(f) > 300) {
+            // nuts_seeds serving cap never relaxes away entirely —
+            // it is the anti-Pringles guard for the only fat-dense
+            // filler pool (review F3: per-serving, not kcal/g).
+            return false;
+          }
+          if (respectDayUnique && usedIds.contains(id)) return false;
+          return true;
+        }).toList();
+
+        if (pool.isEmpty) continue;
+        pool.shuffle(rng);
+        return _toItem(pool.first);
+      }
     }
     return null;
   }
@@ -498,11 +746,67 @@ class DietPlanGenerator {
   /// foods). Falls back to same-category swap if no anchor-pool candidate
   /// is available or all are already in the meal. Returns true if any swap
   /// happened.
+  /// Gap-aware recovery pick (2026-09 meal-quality batch). Two failure
+  /// shapes to avoid:
+  ///  - the OLD "highest-protein candidate" grab: a 90g Protein Shake to
+  ///    close an 8g gap — Pass 4 then trimmed it straight back out and
+  ///    the deficit survived unchanged (oscillation);
+  ///  - "smallest SINGLE swap that closes the whole gap": when only a
+  ///    sledgehammer is sufficient, that rule picks it too — same
+  ///    oscillation.
+  /// The working rule is GRADUAL CONVERGENCE: take the smallest unused
+  /// candidate that still increases protein and let the bounded swap
+  /// loop iterate (each iteration upgrades the day's next-lowest item);
+  /// a used candidate is taken only when nothing is unused (variety
+  /// soft-preference, review rounds 2-3), largest first.
+  static double _protStd(Map<String, dynamic> f) =>
+      (f['protein_std'] as num?)?.toDouble() ?? 0.0;
+
+  /// Recovery headroom: the slot's protein ceiling for swap-in candidates
+  /// (1.5× its target — more room than Pass 4's 1.2× trim threshold, so a
+  /// gradual recovery never creates a slot Pass 4 must violently trim).
+  static double _recoveryHeadroom(_SlotDef slotDef, DietMealPlan meal) =>
+      slotDef.anchorOptional || meal.targetProtein <= 0
+          ? double.infinity
+          : meal.targetProtein * 1.5;
+
+  Map<String, dynamic>? _pickRecoveryCandidate(
+    List<Map<String, dynamic>> candidates, {
+    required double currentProtein,
+    required int neededProtein,
+    required Set<String> usedIds,
+    required double maxSlotProtein,
+  }) {
+    if (candidates.isEmpty) return null;
+    final sorted = candidates.toList()
+      ..sort((a, b) => _protStd(a).compareTo(_protStd(b)));
+    var unused = sorted
+        .where((f) => !usedIds.contains(f['id'] as String?))
+        .toList();
+    // Slot-headroom constraint: never stuff a single slot past
+    // [maxSlotProtein] (1.5× its protein target) — a swap that overshoots
+    // the slot by 60g only hands Pass 4 an untrimmable problem and nets
+    // the daily total BELOW the deficit floor. When no headroom-fitting
+    // candidate exists, degrade to unconstrained (never stall recovery).
+    final fitting = unused
+        .where((f) => _protStd(f) <= maxSlotProtein)
+        .toList();
+    if (fitting.isNotEmpty) unused = fitting;
+    if (unused.isEmpty) {
+      final fittingAll =
+          sorted.where((f) => _protStd(f) <= maxSlotProtein).toList();
+      return fittingAll.isNotEmpty ? fittingAll.last : sorted.last;
+    }
+    return unused.first;
+  }
+
   bool _swapLowestForHigherProtein(
     List<DietMealPlan> meals,
     String dietPref,
-    Random rng,
-  ) {
+    Random rng, {
+    required Set<String> usedIds,
+    required int neededProtein,
+  }) {
     DietMealPlan? targetMeal;
     int? targetIdx;
     int? targetMealIdx;
@@ -513,6 +817,10 @@ class DietPlanGenerator {
       for (var idx = 0; idx < m.items.length; idx++) {
         final item = m.items[idx];
         if (item.isAnchor) continue;
+        // Pass 0 quota items are the lowest-protein items by construction —
+        // skipping them here is what keeps the mandatory vegetables in the
+        // plan through deficit recovery (plan-review round 2, finding 4).
+        if (item.isQuotaLocked) continue;
         if (item.protein < lowestProtein) {
           lowestProtein = item.protein;
           targetMeal = m;
@@ -531,6 +839,11 @@ class DietPlanGenerator {
     // Strategy A: try the slot's anchor pool first (highest curated protein).
     // For vegan/limited-pool plans this is what closes the deficit because
     // intra-category swap saturates quickly.
+    // UPF rows are never swap candidates. Day-uniqueness is a SOFT
+    // preference here (Pass 3 is exempt from it — round 2, finding 3 —
+    // because the vegan archetype's recovery needs cross-meal freedom):
+    // prefer a not-yet-used candidate; fall back to a repeat only when no
+    // unique candidate is higher-protein.
     final slotDef = _slotDefs[targetMealIdx];
     final anchorCandidates = <Map<String, dynamic>>[];
     for (final name in slotDef.anchorPoolNames) {
@@ -538,34 +851,49 @@ class DietPlanGenerator {
       if (f == null) continue;
       if (existingIds.contains(f['id'])) continue;
       if (!_passesDiet(f, dietPref)) continue;
+      if (_isUpf(f)) continue;
+      if (!_swapRespectsCap(
+          targetMeal, current, f['category'] as String? ?? '')) {
+        continue;
+      }
       final p = (f['protein_std'] as num?)?.toDouble() ?? 0.0;
       if (p > current.protein) anchorCandidates.add(f);
     }
     if (anchorCandidates.isNotEmpty) {
-      anchorCandidates.sort((a, b) {
-        final aP = (a['protein_std'] as num?)?.toDouble() ?? 0.0;
-        final bP = (b['protein_std'] as num?)?.toDouble() ?? 0.0;
-        return bP.compareTo(aP);
-      });
-      targetMeal.items[targetIdx] = _toItem(anchorCandidates.first);
+      final pick = _pickRecoveryCandidate(
+        anchorCandidates,
+        currentProtein: current.protein.toDouble(),
+        neededProtein: neededProtein,
+        usedIds: usedIds,
+        maxSlotProtein: _recoveryHeadroom(slotDef, targetMeal),
+      )!;
+      targetMeal.items[targetIdx] = _toItem(pick);
       return true;
     }
 
-    // Strategy B: same-category swap (original behavior).
+    // Strategy B: same-category swap (original behavior). The swap must
+    // keep the meal inside the per-category caps — with an anchor already
+    // occupying the category's cap, a same-category swap is refused here
+    // and Pass 3 falls through to Strategy C.
+    final swapMeal = targetMeal;
     final samePool = _foodsByCategory(current.category)
         .where((f) =>
             f['id'] != current.foodId &&
             !existingIds.contains(f['id']) &&
+            !_isUpf(f) &&
+            _swapRespectsCap(swapMeal, current, current.category) &&
             _passesDiet(f, dietPref) &&
             ((f['protein_std'] as num?)?.toDouble() ?? 0.0) > current.protein)
         .toList();
     if (samePool.isNotEmpty) {
-      samePool.sort((a, b) {
-        final aP = (a['protein_std'] as num?)?.toDouble() ?? 0.0;
-        final bP = (b['protein_std'] as num?)?.toDouble() ?? 0.0;
-        return bP.compareTo(aP);
-      });
-      targetMeal.items[targetIdx] = _toItem(samePool.first);
+      final pick = _pickRecoveryCandidate(
+        samePool,
+        currentProtein: current.protein.toDouble(),
+        neededProtein: neededProtein,
+        usedIds: usedIds,
+        maxSlotProtein: _recoveryHeadroom(slotDef, targetMeal),
+      )!;
+      targetMeal.items[targetIdx] = _toItem(pick);
       return true;
     }
 
@@ -584,18 +912,22 @@ class DietPlanGenerator {
     final crossPool = <Map<String, dynamic>>[];
     for (final cat in proteinBearingCats) {
       if (cat == current.category) continue; // already tried in B
+      if (!_swapRespectsCap(targetMeal, current, cat)) continue;
       crossPool.addAll(_foodsByCategory(cat).where((f) =>
           !existingIds.contains(f['id']) &&
+          !_isUpf(f) &&
           _passesDiet(f, dietPref) &&
           ((f['protein_std'] as num?)?.toDouble() ?? 0.0) > current.protein));
     }
     if (crossPool.isEmpty) return false;
-    crossPool.sort((a, b) {
-      final aP = (a['protein_std'] as num?)?.toDouble() ?? 0.0;
-      final bP = (b['protein_std'] as num?)?.toDouble() ?? 0.0;
-      return bP.compareTo(aP);
-    });
-    targetMeal.items[targetIdx] = _toItem(crossPool.first);
+    final pick = _pickRecoveryCandidate(
+      crossPool,
+      currentProtein: current.protein.toDouble(),
+      neededProtein: neededProtein,
+      usedIds: usedIds,
+      maxSlotProtein: _recoveryHeadroom(slotDef, targetMeal),
+    )!;
+    targetMeal.items[targetIdx] = _toItem(pick);
     return true;
   }
 
@@ -624,7 +956,9 @@ class DietPlanGenerator {
     List<DietMealPlan> meals,
     String dietPref,
     Random rng, {
+    required Set<String> usedIds,
     int softFloor = 0,
+    required int dailyFloor,
     int currentTotal = 0,
   }) {
     // Iterate meals from highest-over to lowest-over so we trim where the
@@ -651,11 +985,16 @@ class DietPlanGenerator {
       final canSwapAnchor = def.anchorOptional;
 
       // Find the highest-protein item in this meal that's eligible for swap.
+      // Quota items are never eligible (zero-cost hardening, round 3 Q4:
+      // quota veg is never the highest-protein item while an anchor exists,
+      // but the guard makes the invariant explicit and survives future
+      // slot-def changes).
       int? targetIdx;
       int highestProtein = -1;
       for (var idx = 0; idx < meal.items.length; idx++) {
         final item = meal.items[idx];
         if (item.isAnchor && !canSwapAnchor) continue;
+        if (item.isQuotaLocked) continue;
         if (item.protein > highestProtein) {
           highestProtein = item.protein;
           targetIdx = idx;
@@ -678,10 +1017,12 @@ class DietPlanGenerator {
       final inBand = <Map<String, dynamic>>[];
       final relaxed = <Map<String, dynamic>>[];
       for (final cat in def.fillerCategories) {
+        if (!_swapRespectsCap(meal, current, cat)) continue;
         for (final f in _foodsByCategory(cat)) {
           final id = f['id'] as String?;
           if (id == null || id == current.foodId) continue;
           if (existingIds.contains(id)) continue;
+          if (_isUpf(f)) continue;
           if (!_passesDiet(f, dietPref)) continue;
 
           // Compute per-serving cal + protein (mirror _toItem math).
@@ -707,30 +1048,44 @@ class DietPlanGenerator {
       final candidates = inBand.isNotEmpty ? inBand : relaxed;
 
       if (candidates.isNotEmpty) {
-        // Prefer the candidate with the LOWEST protein that still keeps
-        // the daily total above the soft floor (avoids over-trimming).
-        candidates.sort((a, b) {
-          final aP = (a['protein_std'] as num?)?.toDouble() ?? 0.0;
-          final bP = (b['protein_std'] as num?)?.toDouble() ?? 0.0;
-          return aP.compareTo(bP);
-        });
+        int protOf(Map<String, dynamic> f) =>
+            (((f['protein_per_100g'] as num?)?.toDouble() ?? 0.0) *
+                    (((f['standard_serving_g'] as num?)?.toDouble() ??
+                            100.0) /
+                        100.0))
+                .round();
+        bool landsAbove(Map<String, dynamic> f, int floor) =>
+            currentTotal - current.protein + protOf(f) >= floor;
+
+        // Tier 1: gentlest trim — the LOWEST-protein unused candidate that
+        // keeps the daily total above the soft floor (105%).
+        // Tier 2: any candidate (unused preferred) that still lands at or
+        // above the daily deficit floor (95%) — when every swap
+        // under-corrects the soft floor, staying above the deficit floor
+        // still beats busting the daily ceiling.
+        // Tier 3: highest-protein candidate overall (smallest cut) —
+        // better a few grams over ceiling than under floor.
+        final sortedUnused = candidates
+            .where((f) => !usedIds.contains(f['id'] as String?))
+            .toList()
+          ..sort((a, b) => protOf(a).compareTo(protOf(b)));
+        final sortedAll = candidates.toList()
+          ..sort((a, b) => protOf(a).compareTo(protOf(b)));
+
         Map<String, dynamic>? best;
-        for (final f in candidates) {
-          final fProt =
-              (((f['protein_per_100g'] as num?)?.toDouble() ?? 0.0) *
-                      (((f['standard_serving_g'] as num?)?.toDouble() ??
-                              100.0) /
-                          100.0))
-                  .round();
-          final newTotal = currentTotal - current.protein + fProt;
-          if (softFloor > 0 && newTotal < softFloor) continue;
-          best = f;
-          break; // already sorted ascending, take lowest viable
-        }
-        // If no candidate keeps the total above the soft floor, fall
-        // back to the highest-protein option (smallest cut). Better to
-        // leave a few grams over ceiling than under floor.
-        best ??= candidates.last;
+        best = sortedUnused.cast<Map<String, dynamic>?>().firstWhere(
+              (f) => landsAbove(f!, softFloor),
+              orElse: () => null,
+            );
+        best ??= sortedUnused.cast<Map<String, dynamic>?>().firstWhere(
+              (f) => landsAbove(f!, dailyFloor),
+              orElse: () => null,
+            );
+        best ??= sortedAll.cast<Map<String, dynamic>?>().firstWhere(
+              (f) => landsAbove(f!, dailyFloor),
+              orElse: () => null,
+            );
+        best ??= sortedAll.last;
         meal.items[targetIdx] = _toItem(best);
         return true;
       }
@@ -758,6 +1113,7 @@ class DietPlanGenerator {
     double bestP = 0.0;
     // Use the already-snapshotted list (_ensureIndices called before generate).
     for (final f in _allFoodsCache ?? _foodRepo.getAll()) {
+      if (_isUpf(f)) continue; // "never UPF" holds on the fallback path too (round 2, finding 7)
       if (!_passesDiet(f, dietPref)) continue;
       final p = (f['protein_std'] as num?)?.toDouble() ?? 0.0;
       if (p > bestP) {
@@ -768,7 +1124,82 @@ class DietPlanGenerator {
     return best == null ? null : _toItem(best, isAnchor: true);
   }
 
-  bool _passesDiet(Map<String, dynamic> food, String dietPref) {
+  /// Pass 5: finds the lowest-fiber staple across all meals (skipping
+  /// anchors and quota-locked items) and swaps it for a higher-fiber,
+  /// UPF-clean, diet-compatible staple in the same ±20% calorie band.
+  /// Day-uniqueness is a soft preference. Returns true if a swap happened;
+  /// bounded-tries caller + empty-candidate no-op mirror the Pass 3/4
+  /// pattern so this can never loop (round 2, finding 6).
+  bool _swapLowestFiberStaple(
+    List<DietMealPlan> meals,
+    String dietPref,
+    Random rng,
+    Set<String> usedIds,
+  ) {
+    DietMealPlan? targetMeal;
+    int? targetIdx;
+    int lowestFiber = 1 << 30;
+
+    for (final m in meals) {
+      for (var idx = 0; idx < m.items.length; idx++) {
+        final item = m.items[idx];
+        if (item.isAnchor || item.isQuotaLocked) continue;
+        if (item.category != 'staples') continue;
+        if (item.fiber < lowestFiber) {
+          lowestFiber = item.fiber;
+          targetMeal = m;
+          targetIdx = idx;
+        }
+      }
+    }
+    if (targetMeal == null || targetIdx == null) return false;
+
+    final current = targetMeal.items[targetIdx];
+    final existingIds = targetMeal.items.map((it) => it.foodId).toSet();
+    final calLow = (current.calories * 0.8).floor();
+    final calHigh = (current.calories * 1.2).ceil();
+
+    final candidates = <Map<String, dynamic>>[];
+    for (final f in _foodsByCategory('staples')) {
+      final id = f['id'] as String?;
+      if (id == null || id == current.foodId) continue;
+      if (existingIds.contains(id)) continue;
+      if (_isUpf(f)) continue;
+      if (!_passesDiet(f, dietPref)) continue;
+
+      final servingG = (f['standard_serving_g'] as num?)?.toDouble() ?? 100.0;
+      final factor = servingG / 100.0;
+      final fCal = (((f['calories_per_100g'] as num?)?.toDouble() ?? 0.0) * factor).round();
+      final fFiber = (((f['fiber_per_100g'] as num?)?.toDouble() ?? 0.0) * factor).round();
+      if (fFiber <= current.fiber) continue; // must RAISE fiber
+      if (fCal >= calLow && fCal <= calHigh) candidates.add(f);
+    }
+    if (candidates.isEmpty) return false;
+
+    // Highest fiber wins; prefer not-yet-used candidates.
+    candidates.sort((a, b) {
+      final aF = ((a['fiber_per_100g'] as num?)?.toDouble() ?? 0.0);
+      final bF = ((b['fiber_per_100g'] as num?)?.toDouble() ?? 0.0);
+      return bF.compareTo(aF);
+    });
+    Map<String, dynamic>? pick;
+    for (final f in candidates) {
+      if (!usedIds.contains(f['id'] as String?)) {
+        pick = f;
+        break;
+      }
+    }
+    pick ??= candidates.first;
+    targetMeal.items[targetIdx] = _toItem(pick);
+    return true;
+  }
+
+  bool _passesDiet(Map<String, dynamic> food, String dietPref) => passesDiet(food, dietPref);
+
+  /// Public so the manual swap UI (diet_plan_screen._swapItem) applies the
+  /// SAME diet-preference rule as generation — plan-review round 2, finding 5:
+  /// a veg user could be offered Chicken Breast in the swap sheet.
+  static bool passesDiet(Map<String, dynamic> food, String dietPref) {
     final name = food['name'] as String? ?? '';
     final pref = dietPref.toLowerCase();
     if (pref == 'vegan') {
@@ -788,7 +1219,29 @@ class DietPlanGenerator {
     return true; // non-veg: everything passes
   }
 
-  DietPlanFoodItem _toItem(Map<String, dynamic> f, {bool isAnchor = false}) {
+  // ── Generation-time quality filters (2026-09 meal-quality batch) ──
+  //
+  // Missing-field semantics are deliberate (plan-review round 1, finding 5):
+  // absent `is_ultra_processed` ⇒ false, absent/empty `meal_fit` ⇒ matches
+  // every slot. This keeps untagged v2 boxes and the test fixture generating
+  // safely, and keeps generation alive if a re-seed throws partway.
+
+  static bool _isUpf(Map<String, dynamic> food) =>
+      (food['is_ultra_processed'] as bool?) ?? false;
+
+  static List<String> _mealFit(Map<String, dynamic> food) =>
+      (food['meal_fit'] as List?)?.cast<String>() ?? const [];
+
+  static bool _matchesMeal(Map<String, dynamic> food, String slotKey) {
+    final fit = _mealFit(food);
+    return fit.isEmpty || fit.contains(slotKey);
+  }
+
+  DietPlanFoodItem _toItem(
+    Map<String, dynamic> f, {
+    bool isAnchor = false,
+    bool isQuotaLocked = false,
+  }) {
     final servingG =
         (f['standard_serving_g'] as num?)?.toDouble() ?? 100.0;
     final factor = servingG / 100.0;
@@ -796,6 +1249,7 @@ class DietPlanGenerator {
     final prot = ((f['protein_per_100g'] as num?)?.toDouble() ?? 0.0) * factor;
     final carb = ((f['carbs_per_100g'] as num?)?.toDouble() ?? 0.0) * factor;
     final fat = ((f['fat_per_100g'] as num?)?.toDouble() ?? 0.0) * factor;
+    final fiber = ((f['fiber_per_100g'] as num?)?.toDouble() ?? 0.0) * factor;
     return DietPlanFoodItem(
       foodId: f['id'] as String? ?? '',
       name: f['name'] as String? ?? 'Unknown',
@@ -805,8 +1259,10 @@ class DietPlanGenerator {
       protein: prot.round(),
       carbs: carb.round(),
       fat: fat.round(),
+      fiber: fiber.round(),
       category: f['category'] as String? ?? 'unknown',
       isAnchor: isAnchor,
+      isQuotaLocked: isQuotaLocked,
     );
   }
 }
