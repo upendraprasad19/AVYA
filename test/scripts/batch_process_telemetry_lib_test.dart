@@ -72,5 +72,19 @@ prose
       );
       expect(out, contains('open_s_escapes=unknown'));
     });
+
+    test('missing-dir nulls render unknown per field, NOT zero', () {
+      final out = composeReport(
+        record: const PlanReviewStats(reviewRounds: 0, mechanicalOnly: false),
+        openEscapes: null,
+        recentDiagnoseDocs: null,
+        sTierDocs: 1,
+        recentReviewFiles: null,
+      );
+      expect(out, contains('s_tier_fixes=1/unknown'));
+      expect(out, contains('review_files_7d=unknown'));
+      expect(out, isNot(contains('s_tier_fixes=0/')));
+      expect(out, isNot(contains('s_tier_fixes=/')));
+    });
   });
 }

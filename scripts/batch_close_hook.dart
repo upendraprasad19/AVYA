@@ -29,6 +29,7 @@ import 'batch_close_lib.dart';
 const _statePath = '.claude/.batch_close_state';
 const _killSwitch = '.claude/.batch_close.disabled';
 
+// _git/_gitOut mirror the twins in batch_process_telemetry.dart — fix one, check the other.
 ProcessResult? _git(List<String> args) {
   try {
     return Process.runSync('git', args, stdoutEncoding: systemEncoding);
@@ -159,7 +160,7 @@ Future<String?> _telemetry(String root) async {
       ['$root/scripts/batch_process_telemetry.dart'],
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
-    ).timeout(const Duration(seconds: 10));
+    ).timeout(const Duration(seconds: 10)); // ABANDONS the child on timeout, does NOT kill it — not a kill switch.
   } catch (_) {
     return null; // missing script, spawn failure, timeout — all silent
   }

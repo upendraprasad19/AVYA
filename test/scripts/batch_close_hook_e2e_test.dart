@@ -336,4 +336,37 @@ body
     expect(dec['reason'], contains('process-telemetry:'));
     expect(dec['reason'], contains('review_rounds=0'));
   });
+
+  test('sweep counts 7-day mtime window, s_fix tier, absent ledger is unknown',
+      () async {
+    final d = _repoWithTelemetry();
+    addTearDown(() => _cleanup(d));
+
+    final diag = Directory('${d.path}/docs/diagnoses')
+      ..createSync(recursive: true);
+    final now = DateTime.now();
+    // OLD (8 days back) but s_fix — must be excluded by the mtime window
+    // even though its content matches the tier pattern.
+    final old = File('${diag.path}/old_sfix.md');
+    old.writeAsStringSync('tier: s_fix\n');
+    old.setLastModified(now.subtract(const Duration(days: 8)));
+    File('${diag.path}/recent_sfix.md').writeAsStringSync('tier: s_fix\n');
+    File('${diag.path}/recent_plain.md').writeAsStringSync('tier: a_fix\n');
+    Directory('${d.path}/docs/reviews').createSync(recursive: true);
+    File('${d.path}/docs/reviews/one-bpass.md').writeAsStringSync('review\n');
+    // NO docs/audit/s_tier_escapes.yaml — ledger absent must render unknown.
+
+    final r = await _runHook(d.path);
+    expect(r.exitCode, 0);
+    final dec = _decision(r);
+    expect(dec, isNotNull);
+    expect(dec!['decision'], 'block');
+    expect(dec['reason'], contains('s_tier_fixes=1/2'),
+        reason: 'only the 2 recent diagnose docs count, and only 1 is s_fix '
+            '— the 8-day-old s_fix file is outside the mtime window');
+    expect(dec['reason'], contains('review_files_7d=1'));
+    expect(dec['reason'], contains('open_s_escapes=unknown'),
+        reason: 'ledger ABSENT renders unknown, never 0 (bad-news-vs-no-news) '
+            '— pinned at the wiring level, not just in the pure lib');
+  });
 }

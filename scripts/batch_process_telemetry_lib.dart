@@ -7,6 +7,14 @@
 // `review_rounds: two`) is indistinguishable from an ABSENT one and reads as
 // 0 — same shape, different meaning. Do not treat 0 as "review never ran"
 // without checking the record's shape.
+//
+// NULL RENDERING RULE (composeReport): any null count renders the literal
+// `unknown` for ITS OWN field only, never 0 — bad-news-vs-no-news, same rule
+// as the ledger's openEscapes. Per-field, so s_tier_fixes can render
+// `1/2`, `unknown/2` (diagnose dir missing, some other source knew s_fix),
+// `1/unknown` or `unknown/unknown`; review_files_7d and open_s_escapes
+// render `unknown` alone. A genuine 0 (dir present, nothing recent) renders
+// as `0`, deliberately distinct.
 
 class PlanReviewStats {
   final int reviewRounds;
@@ -56,16 +64,19 @@ EscapeLedgerStats parseEscapeLedger(String content) {
 String composeReport({
   required PlanReviewStats record,
   required int? openEscapes,
-  required int recentDiagnoseDocs,
-  required int sTierDocs,
-  required int recentReviewFiles,
+  required int? recentDiagnoseDocs,
+  required int? sTierDocs,
+  required int? recentReviewFiles,
 }) {
   final esc = openEscapes == null ? 'unknown' : '$openEscapes';
+  final total = recentDiagnoseDocs == null ? 'unknown' : '$recentDiagnoseDocs';
+  final sFix = sTierDocs == null ? 'unknown' : '$sTierDocs';
+  final reviews = recentReviewFiles == null ? 'unknown' : '$recentReviewFiles';
   return [
     'process-telemetry: review_rounds=${record.reviewRounds} '
         'mechanical_only=${record.mechanicalOnly}',
     'process-telemetry: open_s_escapes=$esc',
-    'process-telemetry: s_tier_fixes=$sTierDocs/$recentDiagnoseDocs '
-        'review_files_7d=$recentReviewFiles',
+    'process-telemetry: s_tier_fixes=$sFix/$total '
+        'review_files_7d=$reviews',
   ].join('\n');
 }

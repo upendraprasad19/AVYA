@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'batch_process_telemetry_lib.dart';
 
+// _git/_gitOut mirror the twins in batch_close_hook.dart — fix one, check the other.
 ProcessResult? _git(List<String> args) {
   try {
     return Process.runSync('git', args, stdoutEncoding: systemEncoding);
@@ -21,23 +22,47 @@ String? _gitOut(List<String> args) {
   return (r.stdout as String).trim();
 }
 
-/// Files under [dir] modified within the last 7 days; when [match] is given,
-/// only files whose content contains it. Missing/unreadable dir counts 0.
-int _recentCount(Directory dir, DateTime cutoff, {RegExp? match}) {
+/// Files under [dir] modified within the last 7 days. Null when the DIRECTORY
+/// itself is missing/unreadable (unknown, NOT 0 — the lib's ledger rule); a
+/// per-file read failure counts that file as 0 and never nulls the result.
+int? _recentCount(Directory dir, DateTime cutoff) {
   try {
-    if (!dir.existsSync()) return 0;
+    if (!dir.existsSync()) return null;
     var n = 0;
     for (final e in dir.listSync()) {
       if (e is! File) continue;
       try {
         if (e.statSync().modified.isBefore(cutoff)) continue;
-        if (match != null && !match.hasMatch(e.readAsStringSync())) continue;
         n++;
       } catch (_) {}
     }
     return n;
   } catch (_) {
-    return 0;
+    return null;
+  }
+}
+
+/// ONE pass over [dir] for both diagnose counts — (total recent, recent
+/// s_fix) — replacing the earlier double listSync+statSync sweep. Both null
+/// when the directory itself is missing/unreadable (unknown, NOT 0); a
+/// per-file read failure counts that file as 0 and never nulls the pair.
+({int? total, int? sFix}) _diagnoseSweep(Directory dir, DateTime cutoff) {
+  final sFixPattern = RegExp(r'^tier:\s*s_fix', multiLine: true);
+  try {
+    if (!dir.existsSync()) return (total: null, sFix: null);
+    var total = 0;
+    var sFix = 0;
+    for (final e in dir.listSync()) {
+      if (e is! File) continue;
+      try {
+        if (e.statSync().modified.isBefore(cutoff)) continue;
+        total++;
+        if (sFixPattern.hasMatch(e.readAsStringSync())) sFix++;
+      } catch (_) {}
+    }
+    return (total: total, sFix: sFix);
+  } catch (_) {
+    return (total: null, sFix: null);
   }
 }
 
@@ -66,13 +91,12 @@ void main() {
     } catch (_) {}
 
     final cutoff = DateTime.now().subtract(const Duration(days: 7));
-    final diagnoses = Directory('$root/docs/diagnoses');
+    final sweep = _diagnoseSweep(Directory('$root/docs/diagnoses'), cutoff);
     stdout.writeln(composeReport(
       record: record,
       openEscapes: openEscapes,
-      recentDiagnoseDocs: _recentCount(diagnoses, cutoff),
-      sTierDocs: _recentCount(diagnoses, cutoff,
-          match: RegExp(r'^tier:\s*s_fix', multiLine: true)),
+      recentDiagnoseDocs: sweep.total,
+      sTierDocs: sweep.sFix,
       recentReviewFiles: _recentCount(Directory('$root/docs/reviews'), cutoff),
     ));
   } catch (_) {
