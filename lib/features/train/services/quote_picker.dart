@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/services.dart';
 
+import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+
 class WorkoutQuote {
   final String text;
   final List<String> tags;
@@ -120,20 +122,59 @@ class QuotePicker {
     return 'general';
   }
 
+  /// Derive a quote category for a SINGLE EXERCISE — library ground truth
+  /// first, keyword classifier as the floor.
+  ///
+  /// The name-keyword classifier alone misclassifies names whose words
+  /// disagree with the exercise's real target: "Hanging Leg Raise" is a
+  /// CORE exercise (library `category: "core"`, primary muscles Core/
+  /// Obliques) but `\bLEGS?\b` matches the "LEG" in its name; "Dumbbell
+  /// Fly" is a PUSH exercise (library `category: "push"`,
+  /// `horizontal_push`) but matches no PUSH keyword and fell to 'general'.
+  /// On a Push + Core day that pair produced a legs=1 vs push=1 tie which
+  /// resolved to legs via map insertion order — the founder's "Glute work"
+  /// quote on a push day (2026-09-17, diagnose
+  /// docs/diagnoses/2026-09-17-quote-library-category-lookup-b7e1f4.md).
+  ///
+  /// Library categories are already lowercase and 1:1 with the quote tags
+  /// (push/pull/legs/core/cardio/full_body; 'flexibility' has no quote pool
+  /// and falls through to 'general' quotes in [pickForCategory] — accepted).
+  /// Custom exercises stored in the same box carry a CAPITALIZED category
+  /// ('Push'), hence the lowercase normalization. Exercises absent from the
+  /// box (or a box that is not open — e.g. a widget test without Hive seeded)
+  /// fall back to [categoryForWorkout], which is the pre-lookup behavior;
+  /// the try/catch is best-effort by design and the library-lookup path
+  /// itself is pinned by the Hive-backed sweep test
+  /// (`test/contracts/quote_picker_category_from_exercises_test.dart`).
+  static String categoryForExercise(String exerciseName) {
+    try {
+      final raw = ExerciseRepository.instance.getByExactName(exerciseName);
+      final cat = (raw?['category'] as String?)?.trim().toLowerCase();
+      if (cat != null && cat.isNotEmpty) return cat;
+    } catch (_) {
+      // Hive unavailable (not initialized / box closed) — keyword floor.
+    }
+    return categoryForWorkout(exerciseName);
+  }
+
   /// Derive a quote category from the workout's actual EXERCISES, falling back
   /// to the workout name, then 'general'. Exercise names carry the muscle
   /// signal even when the workout has a generic custom name (Unit 3 obs 2 — a
   /// "test template" of pull exercises should get a pull quote, not a
-  /// name-derived mismatch). Deterministic for a given exercise list (stable
-  /// insertion order → stable tie-break), so the post-completion card and the
-  /// "View Card" sheet never drift.
+  /// name-derived mismatch). Per-exercise resolution goes through
+  /// [categoryForExercise] (library ground truth first — 2026-09-17); the
+  /// workout NAME stays keyword-classified, because workout names ("Push +
+  /// Core", custom template names) are not exercise-library rows.
+  /// Deterministic for a given exercise list (stable insertion order →
+  /// stable tie-break), so the post-completion card and the "View Card"
+  /// sheet never drift.
   static String categoryForExercises(
     List<String> exerciseNames,
     String workoutName,
   ) {
     final counts = <String, int>{};
     for (final n in exerciseNames) {
-      final c = categoryForWorkout(n);
+      final c = categoryForExercise(n);
       if (c != 'general') counts[c] = (counts[c] ?? 0) + 1;
     }
     if (counts.isNotEmpty) {
