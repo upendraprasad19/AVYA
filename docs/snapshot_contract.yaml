@@ -641,6 +641,14 @@ extra_server_written_keys:
       moved 288 -> 251 on 2026-09-16 (cron-ai-removal batch): removing the
       Gemini prediction path and adding the real-trend-math helpers shifted
       line numbers throughout the file.
+      SHIFT-SENSITIVE (de-brittle sweep 2026-09-18): the consuming gate
+      (scripts/check_snapshot_contract.dart) probes each citation with a
+      FIXED ±15-line window and has NO per-entry slack override — so any
+      code added or removed ABOVE this read re-fails the gate (this drifted
+      2026-07-26 and again 2026-09-16, both caught only by full-suite runs).
+      After editing supabase/functions/future-prediction/index.ts above
+      line 251, re-derive the citation: `grep -n "future_prediction"
+      supabase/functions/future-prediction/index.ts`.
 
   - key: beat_my_coach
     written_by: beat-my-coach Edge Function
@@ -662,6 +670,14 @@ extra_server_written_keys:
       Citation moved 568 -> 413 on 2026-09-16 (cron-ai-removal batch):
       removing the AI branch (generateProAlert + the Gemini call) deleted
       ~150 lines above this read.
+      SHIFT-SENSITIVE (de-brittle sweep 2026-09-18): the consuming gate
+      (scripts/check_snapshot_contract.dart) probes each citation with a
+      FIXED ±15-line window and has NO per-entry slack override — so any
+      code added or removed ABOVE this read re-fails the gate (drifted
+      2026-07-26 and again 2026-09-16; this key is the repeat offender).
+      After editing supabase/functions/morning-alert/index.ts above
+      line 413, re-derive the citation: `grep -n "morning_alert"
+      supabase/functions/morning-alert/index.ts`.
 
 # ── Orphan readers (cron functions reading keys the writer doesn't emit) ──
 #
