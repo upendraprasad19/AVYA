@@ -73,7 +73,9 @@ For S-tier fixes: symptom / writer+reader by file:line / fix / test path. `touch
 
 ### 2.8 Batch-close process telemetry
 
-New `scripts/batch_process_telemetry.dart` (+ mutation-proven test, rule 24): aggregates per batch — gate failures by gate, review findings by class (compile/logic/citation), S/M/L fix counts, S-tier escapes. Printed by the existing Stop hook (`batch_close_hook.dart`) at batch close. Local-only for now; CI wiring deliberately not built.
+New `scripts/batch_process_telemetry.dart` (+ mutation-proven test, rule 24): aggregates per batch — the plan-review record's convergence stats (`review_rounds`, `mechanical_only`), S-tier escape ledger status, diagnose/review file counts + `tier: s_fix` share, and gate failures from the `.claude/.gate_failures.log` that `pre-commit.sh` persists (7-day window + top offender). Printed by the existing Stop hook (`batch_close_hook.dart`) at batch close. Local-only for now; CI wiring deliberately not built.
+
+**Scope correction (plan-review R1, 2026-09-18):** review-findings-by-class (compile/logic/citation) and explicit M/L counts are NOT in the shipped reader — plan-review records don't carry a structured finding-class field, and building one is its own change. Tracked on the OI board (telemetry v2).
 
 ### 2.9 S-tier escape ledger
 

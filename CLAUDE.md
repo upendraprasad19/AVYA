@@ -526,8 +526,9 @@ After observations captured + before brainstorming:
 22. **Bug fixes require a diagnose-doc.** Every commit on `main` matching `^(fix|bug|regression)(\([^)]*\))?:` MUST reference `docs/diagnoses/<date>-<slug>-<id>.md` via `closes-diagnose: <bug-id>` in the commit body. Doc must pass `dart run scripts/validate_diagnose_doc.dart <path>`. Subagents dispatched for investigation MUST receive `docs/agent_brief_preamble.md` as prefix. Pre-commit hook + `/build-apk` Gate 10 enforce this.
     **S-tier fixes (§4.12.6) use the slim diagnose template:** symptom, writer+reader by
     file:line, fix, test path; `touched_layers_checked` collapses to the UI + client-code rows
-    (validator still satisfied — non-empty + one verified/fixed row). Recurrence-class bugs
-    take the FULL template at ANY tier.
+    (validator still satisfied — non-empty + one verified/fixed row); frontmatter carries
+    `tier: s_fix` (batch telemetry counts S-fixes by that stamp — an unstamped S-fix is
+    invisible to it). Recurrence-class bugs take the FULL template at ANY tier.
 23. **No stopping mid-batch.** Multi-task instructions ("fix everything", "address each and everything") run through to completion. Valid stops only on: whole batch done / BLOCKED on user-only action / new interrupting instruction. Banned: "context tight", "responsible handoff", "fresh session pickup". Documentation per rule 22 + memory file update for any NEW pattern + CLAUDE.md update for any NEW invariant — always. <!-- deu-quote: rule 23 enumerating the banned stopping excuses -->
 24. **Every NEW `check_*.dart` gate ships mutation-proven.** The same commit adds a test that FAILS when the gate's protection is deliberately neutered — not merely a happy-path test — plus a `mutation_proven: true` entry in `docs/audit/gate_test_ledger.yaml` carrying `test_path:` (a LIST — the closest precedent, `retire_worktree`, is proven across two files) and `evidence:` naming what was neutered and how many tests reddened. `scripts/check_gate_test_ledger.dart` requires every `check_*.dart` to hold **exactly one** ledger state, and a `mutation_proven` claim to name a test that EXISTS, REFERENCES the gate, and CONTAINS a red-path assertion drawn from a **closed literal list** of accepted forms (bare `isNotEmpty` is deliberately rejected — it appears in hundreds of unrelated assertions and would make the check pass for almost any file). **What this proves and what it does not:** a script cannot prove a mutation was RUN. It CAN prove the test exists, names the gate, and asserts a failing path — which makes the Gate-44 class ("its own test never invoked `main()`") mechanically impossible. The residue is self-attested and read by the §4.12 ×2 review — the same trust model as rule 21's `presence_only:` and §4.12.4's `tier: ship_dark_build`. Say so plainly; do not mistake it for a solved problem. **The 84 gates predating 2026-08-10 are enumerated BY NAME** in that script as `grandfathered:`. Membership is by name, not by date — a date-equality check closes nothing, since any future gate could write `grandfathered: 2026-08-10` and pass, and both gates born in that batch carry that very date. An enumerated exemption is terminal, NOT a deferral (§4.2); "backfill later" would be. **A new gate takes NO number.** The filename is the identity — it is what `pre-commit.sh`, `test.yml` and Gate 33 all key on. A number is an optional alias that only a `/build-apk` section needs; if one does, it takes the next free number, which `build_gate_index.dart` prints on every run. Registry: `docs/audit/GATE_INDEX.md` (generated — see the §7 pointer row).
 
@@ -648,22 +649,26 @@ Two standing invariants, codified after a 4-round pre-implementation review of t
    attempt the commit) rather than choosing gates by relevance — "which gates
    are relevant" is exactly the judgement the loop exists to remove.
 
-6. **S/M/L fix tiering (discipline-overhead v2, 2026-09-17).** Three fix classes:
-   **S** = diff touches ONLY feature-tier UI surfaces (`lib/features/{home,train,nutrition,profile}/**`
-   — the classifier, not the agent, decides; auth/ai_coach UI is account-tier ⇒ M), ≤2 files,
-   diff <100 lines, not a recurrence-class bug ⇒ NO ×2 plan review, B-pass SKIPPED; analyze
-   `lib/` + targeted tests + slim diagnose doc only. **M** = everything not S/L ⇒ current
-   pipeline + compile-gate (`flutter analyze lib/` in the worktree BEFORE every reviewer
-   dispatch; reviewer briefs declare compile-class findings out of scope). **L** =
-   payment/auth/sync/schema/EF/plan-engine/CLAUDE.md ⇒ current pipeline UNCHANGED.
-   Auto-escalation: any gate failure, seam symbol, or diff growth ⇒ M — the classifier and
-   gates decide, never the fixing agent. Convergence shortcut: a plan-review round whose
-   findings are ALL mechanical/citation-class closes the record with `mechanical_only: true`
-   (self-attested, same trust model as §4.12.4); §4.12.5 split-and-ship stays the escalation
-   for material findings. S-tier escapes are logged in `docs/audit/s_tier_escapes.yaml`; any
-   P0/P2 escaping an S-fix triggers ONE evidence-based tightening, not reflex ceremony.
-   S-class APK builds accumulate on main — the founder initiates builds, never per-fix by
-   default.
+6. **S/M/L fix tiering (discipline-overhead v2, 2026-09-17; boundary corrected by plan-review R1 2026-09-18).** Three fix classes:
+   **S** = diff touches ONLY `lib/features/{home,train,nutrition,profile}/**` — this four-dir list is a
+   HARD filter, evaluated literally; a classifier feature-tier verdict is NECESSARY but NOT sufficient
+   (the classifier's feature tier also covers `lib/shared/**`, `test/**`, `docs/**`, `scripts/**`, none
+   of which are S-eligible), and auth/ai_coach UI is account-tier ⇒ M. Plus: ≤2 PRODUCT-code files
+   (tests + diagnose doc are excluded from the count — a rule-21/22-compliant fix is minimum 3 files
+   total), diff <100 lines, not a recurrence-class bug ⇒ NO ×2 plan review, B-pass SKIPPED; analyze
+   `lib/` + targeted tests + slim diagnose doc (frontmatter `tier: s_fix` — the telemetry reader
+   depends on that stamp) only. **M** = everything not S/L ⇒ current pipeline + compile-gate
+   (`flutter analyze lib/` in the worktree BEFORE every reviewer dispatch; reviewer briefs declare
+   compile-class findings out of scope). **L** = payment/auth/sync/schema/EF/plan-engine/CLAUDE.md ⇒
+   current pipeline UNCHANGED. **Trust model, stated plainly:** S-eligibility is SELF-ATTESTED at
+   commit time — no gate computes it; the mechanical backstop is the merge seam (any ≥account
+   classification still demands the plan-review record) plus auto-escalation (any gate failure, seam
+   symbol, or diff growth mid-fix ⇒ M), and the escape ledger is the feedback loop: S-tier escapes go
+   in `docs/audit/s_tier_escapes.yaml` and any P0/P2 escaping an S-fix triggers ONE evidence-based
+   tightening, not reflex ceremony. Convergence shortcut: a plan-review round whose findings are ALL
+   mechanical/citation-class closes the record with `mechanical_only: true` (self-attested, same
+   trust model as §4.12.4); §4.12.5 split-and-ship stays the escalation for material findings.
+   S-class APK builds accumulate on main — the founder initiates builds, never per-fix by default.
 
 These bind the planning / `/code-review` / `/hermes-pass` / brainstorming flows.
 
