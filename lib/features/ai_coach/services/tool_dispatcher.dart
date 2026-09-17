@@ -256,6 +256,12 @@ class ToolDispatcher {
       throw const ConcurrentEditException(
           "today's workout is no longer scheduled");
     }
+    // C2 review-fix (e8f4a3): never edit a terminal row — a rescheduled-away
+    // day's schedule_<date> is an audit placeholder, not a live plan.
+    if (WorkoutRepository.isInvisibleToStreak(raw['status'] as String?)) {
+      throw const ConcurrentEditException(
+          "today's workout has been rescheduled — re-ask the coach");
+    }
     final schedule = Map<String, dynamic>.from(raw);
     final exercises = (schedule['exercises'] as List?) ?? const [];
     final stillThere = exercises.any((e) {
@@ -387,6 +393,14 @@ class ToolDispatcher {
     try {
       final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
       if (raw is! Map || raw['status'] == 'completed') return;
+      // C2 review-fix (e8f4a3): never auto-complete a terminal row — a
+      // rescheduled-away day's schedule_<date> is an audit placeholder, not a
+      // live plan. Stamping 'completed' over it would resurrect the moved
+      // workout on the OLD date and credit streak for a workout done
+      // elsewhere.
+      if (WorkoutRepository.isInvisibleToStreak(raw['status'] as String?)) {
+        return;
+      }
       // Don't auto-complete a REST day — there's no planned workout to finish,
       // so an ad-hoc coach-logged set shouldn't flip the rest day into a
       // "completed workout" (which would feed streak / deployment wrongly).

@@ -6,6 +6,8 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart'
+    as core_read;
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
@@ -109,20 +111,21 @@ class WorkoutRepository {
   // ── Streak Calculation ───────────────────────────────────────
 
   /// C1/C2 (ai-coach-ux-tool-integrity, spec 2026-09-18) — schedule-row
-  /// statuses INVISIBLE to streak + completion-rate math. `paused` is the
-  /// user CHOOSING not to train (founder rule: never breaks, never burns a
-  /// freeze). `moved`/`dropped` are terminal rows left by rescheduleWeek in
-  /// place of the old raw delete — the day's workout lives elsewhere now, so
-  /// the row must never fall through to the missed arm (the raw-delete HOLE
-  /// class: an absent row broke the walk unconditionally, freeze-proof).
-  static const Set<String> invisibleScheduleStatuses = {
-    'paused',
-    'moved',
-    'dropped',
-  };
+  /// statuses INVISIBLE to streak + completion-rate math. DELEGATES to
+  /// `WorkoutScheduleReadService.invisibleScheduleStatuses` (the canonical
+  /// home, next to the display read path that now enforces it — C2 review,
+  /// diagnose e8f4a3). Semantics unchanged:
+  /// `paused` is the user CHOOSING not to train (founder rule: never breaks,
+  /// never burns a freeze). `moved`/`dropped` are terminal rows left by
+  /// rescheduleWeek in place of the old raw delete — the day's workout lives
+  /// elsewhere now, so the row must never fall through to the missed arm (the
+  /// raw-delete HOLE class: an absent row broke the walk unconditionally,
+  /// freeze-proof).
+  static const Set<String> invisibleScheduleStatuses =
+      core_read.WorkoutScheduleReadService.invisibleScheduleStatuses;
 
   static bool isInvisibleToStreak(String? status) =>
-      status != null && invisibleScheduleStatuses.contains(status);
+      core_read.WorkoutScheduleReadService.isInvisibleToStreak(status);
 
   /// Earliest date the user could legitimately have completed a workout.
   ///

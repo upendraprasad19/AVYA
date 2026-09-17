@@ -1,4 +1,5 @@
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
 import '../../../core/services/hive_service.dart';
 
@@ -100,6 +101,15 @@ class RescheduleWeekPlanner {
       final status = s['status']?.toString();
       final name = (s['workout_name'] ?? s['name'] ?? 'Workout').toString();
 
+      // C2 review-fix (e8f4a3): terminal rows (moved/dropped) are audit
+      // placeholders — the workout lives elsewhere now. Never re-plan them
+      // (pre-fix only completed/paused were protected, so a SECOND reschedule
+      // of the same week re-planned the terminal rows C2 had just written).
+      // MUTATION-PROVEN: commenting out BOTH this skip and the second-pass
+      // skip reddens both tests in group 'C2 review — planner never re-plans
+      // terminal rows'.
+      if (WorkoutRepository.isInvisibleToStreak(status)) continue;
+
       if (status == 'completed' || status == 'paused') {
         // Don't touch completed or paused entries — they're sacred.
         moves.add(RescheduleMove(
@@ -129,7 +139,12 @@ class RescheduleWeekPlanner {
       if (!isWorkoutEntry(s)) continue;
 
       final status = s['status']?.toString();
-      if (status == 'completed' || status == 'paused') continue;
+      // C2 review-fix (e8f4a3): terminal rows are never re-planned (see the
+      // first pass). completed/paused stay protected exactly as before.
+      if (status == 'completed' ||
+          WorkoutRepository.isInvisibleToStreak(status)) {
+        continue;
+      }
       if (available.contains(weekday)) continue;
 
       final name = (s['workout_name'] ?? s['name'] ?? 'Workout').toString();

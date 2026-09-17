@@ -235,4 +235,111 @@ void main() {
       },
     );
   });
+
+  group('C2 review — planner never re-plans terminal rows (e8f4a3)', () {
+    // Issue 2: RescheduleWeekPlanner's protection checks only skipped
+    // completed/paused, so a SECOND reschedule in the same week re-planned
+    // (moved/dropped) the terminal rows C2 had just written. Terminal rows
+    // are audit placeholders — the workout lives elsewhere now (or was
+    // dropped). MUTATION PROOF: removing the isInvisibleToStreak skip in
+    // RescheduleWeekPlanner.plan reddens both tests below.
+    test(
+      'a moved row is skipped entirely; a planned row still plans normally',
+      () async {
+        final monday = DateTime(today.year, today.month, today.day)
+            .subtract(Duration(days: (today.weekday - 1) % 7));
+        final mondayStr = istDateStr(monday);
+        final wednesday = monday.add(const Duration(days: 2));
+        final wednesdayStr = istDateStr(wednesday);
+        final friday = monday.add(const Duration(days: 4));
+
+        await HiveService.instance.workoutBox.put('schedule_$mondayStr', {
+          'date': mondayStr,
+          'week': 1,
+          'day_of_week': 0,
+          'workout_name': 'Push A',
+          'status': 'moved',
+          'type': 'custom_template',
+          'moved_to': wednesdayStr,
+          'moved_via': 'ai_coach',
+          'moved_at': DateTime.now().toIso8601String(),
+          'exercises': [
+            {'exercise_name': 'Bench Press'},
+          ],
+        });
+        await HiveService.instance.workoutBox.put('schedule_$wednesdayStr', {
+          'date': wednesdayStr,
+          'week': 1,
+          'day_of_week': 2,
+          'workout_name': 'Pull B',
+          'status': 'planned',
+          'type': 'custom_template',
+          'exercises': [
+            {'exercise_name': 'Row'},
+          ],
+        });
+
+        final moves = await RescheduleWeekPlanner.instance.plan(
+          daysAvailable: [3, 5], // Wed + Fri (weekday numbers, Mon=1)
+          weekStart: mondayStr,
+        );
+
+        expect(
+          moves.where((m) => m.fromDate == mondayStr),
+          isEmpty,
+          reason: 'the terminal moved row must not appear in the plan at all '
+              '— pre-fix it was re-planned (moved onto the free available '
+              'day) on a second reschedule of the same week.',
+        );
+        expect(
+          moves.any((m) => m.action == RescheduleAction.drop),
+          isFalse,
+          reason: 'a terminal row must never be dropped by the planner.',
+        );
+        expect(
+          moves.any((m) =>
+              m.fromDate == wednesdayStr && m.action == RescheduleAction.keep),
+          isTrue,
+          reason: 'the live planned row on an available day must still be '
+              'kept — the skip is scoped to terminal rows only.',
+        );
+        // The moved row must not occupy the free Friday slot either.
+        expect(
+          moves.any((m) => m.toDate == istDateStr(friday)),
+          isFalse,
+          reason: 'the planner must not relocate anything onto a day because '
+              'a terminal row pretended to be a live workout.',
+        );
+      },
+    );
+
+    test('a dropped row is skipped entirely', () async {
+      final monday = DateTime(today.year, today.month, today.day)
+          .subtract(Duration(days: (today.weekday - 1) % 7));
+      final mondayStr = istDateStr(monday);
+
+      await HiveService.instance.workoutBox.put('schedule_$mondayStr', {
+        'date': mondayStr,
+        'week': 1,
+        'day_of_week': 0,
+        'workout_name': 'Legs B',
+        'status': 'dropped',
+        'type': 'custom_template',
+        'dropped_via': 'ai_coach',
+        'dropped_at': DateTime.now().toIso8601String(),
+        'exercises': [
+          {'exercise_name': 'Squat'},
+        ],
+      });
+
+      final moves = await RescheduleWeekPlanner.instance.plan(
+        daysAvailable: [2],
+        weekStart: mondayStr,
+      );
+
+      expect(moves.where((m) => m.fromDate == mondayStr), isEmpty,
+          reason: 'a terminal dropped row must never be re-planned (pre-fix '
+              'it was moved to the available day or dropped again).');
+    });
+  });
 }

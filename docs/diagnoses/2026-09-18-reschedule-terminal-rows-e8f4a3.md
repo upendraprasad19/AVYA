@@ -140,3 +140,107 @@ against the dead pre-H-16 scheme.
 - OI-174 — cloud exlog/schedule tombstone residual for the moved-out date
   (upsert fan-out covers the row; the cloud-side delete of the old date
   remains tracked there, unchanged by this fix).
+
+## Review-fixes append (2026-09-18, C2 commit 9fec098d review round)
+
+The review found the READER side of this fix was only half-wired: terminal
+rows were WRITTEN but `getScheduleForDate` — the read path behind every
+display surface — still returned them verbatim.
+
+### Issue 1 (critical): a 'moved' row for TODAY rendered a live Start CTA
+
+- **Writer/reader by file:line:** writer
+  `tool_dispatcher._executeRescheduleWeek → WorkoutWriteService.upsertScheduled`
+  (terminal stamp, tool_dispatcher.dart:717-727 / 749-759); reader
+  `WorkoutScheduleReadService.getScheduleForDate` (workout_schedule_read_service.dart,
+  pre-fix :875-899 — only special-cased `completed`) consumed by
+  `todayWorkoutProvider` (home_provider.dart:518-527) →
+  `home_screen._buildTodayRow` (:789-858, branches only on
+  isRestDay/isCompleted, so `moved` fell through to the planned-workout
+  render).
+- **Fix:** the canonical invisibility predicate
+  (`invisibleScheduleStatuses` / `isInvisibleToStreak`) MOVED to
+  `WorkoutScheduleReadService` (core, next to the read path that now enforces
+  it — avoids a core→features import cycle); `WorkoutRepository`'s statics
+  (C1 streak walk + completion rate, tool_dispatcher citation) DELEGATE to it,
+  API unchanged. `getScheduleForDate` now filters invisible statuses (terminal
+  rows read ABSENT); a new RAW getter `getScheduleRowForDate` serves
+  audit/restore callers that need every row.
+- **Display readers swept** (all route through `getScheduleForDate`, so the
+  one filter covers every one of them): `todayWorkoutProvider` (Home Today
+  card), `CalendarWeekNotifier` + `WeeklyCalendar` (Home week strip),
+  `getCurrentCalendarWeek` (week-strip snapshot), `getWeek` (train week
+  renderer, `week_selector` current-week chips, phase completion rate),
+  `holdWeeks` / `holdWeekSessionProgress` / `hold_chip_group` rows,
+  `workoutDayForDate` (the START gate — hero cards), `swap_sheet`
+  (source/target day labels + 3-rest-day simulation), `swap_service`
+  (`isTravelDay` — 'travel' is not an invisible status, unaffected;
+  `_simulateSwap` — a moved day now simulates as rest, which is correct:
+  the day is empty), `ai_coach_provider` completion check (checks
+  'completed' only). Dev `simulation_service` too.
+- **Readers verified RAW-safe (deliberately NOT filtered):**
+  `sync_workout.dart` restore paths read `workoutBox` keys directly (never
+  through `getScheduleForDate`) — untouched. `week_selector._toPastPhases`
+  reads `pastPhaseBlocks` rows strictly BEFORE `plan_start_date` — reschedule
+  never writes there. `ai_snapshot_builder` raw reads carry `status` verbatim
+  in the payload, so the coach sees the terminal status honestly. The streak
+  walk + completion rate (C1) iterate raw keys and apply
+  `isInvisibleToStreak` themselves — unchanged.
+- **Same-class leaks found and fixed in the sweep** (raw `schedule_` readers
+  that would ACT on a terminal row as if live):
+  `tool_dispatcher._maybeCompleteScheduledDay` would auto-complete a moved
+  row (stamping `completed` over the terminal stamp — resurrecting the
+  workout on the old date + streak credit) — guarded;
+  `tool_dispatcher._executeSwapExercise` would edit exercises inside a
+  terminal row — now throws `ConcurrentEditException`;
+  `injury_swap_planner.plan` would propose substitutes from a terminal
+  row's exercises — skipped.
+
+### Issue 2 (high): planner re-planned terminal rows on a second reschedule
+
+- **Writer/reader by file:line:** writer `reschedule_week` executor (terminal
+  stamps above); reader `RescheduleWeekPlanner.plan`
+  (reschedule_week_planner.dart pre-fix :100-113 first pass, :131-132 second
+  pass — only `completed`/`paused` protected). Second pass relocated/dropped
+  the terminal row onto a free available day.
+- **Fix:** both passes skip `WorkoutRepository.isInvisibleToStreak` statuses
+  entirely (import direction ai_coach→train/repositories has precedent:
+  `pattern_detector.dart:2`, `ai_snapshot_builder.dart:32`). The terminal row
+  neither appears in the plan nor occupies an available-day slot; the same
+  week's LIVE rows plan exactly as before.
+
+### Verification (TDD + mutation)
+
+- New tests: `test/contracts/terminal_row_display_read_path_test.dart`
+  (4 behavioral: moved-TODAY reads absent via `getScheduleForDate` +
+  `workoutDayForDate`; dropped row in the current week reads absent per-day
+  and renders as the `none` placeholder in `getCurrentCalendarWeek`;
+  over-filter guard — completed rows still read through; coach `log_set` on a
+  moved day leaves the terminal row untouched) + 2 planner tests in
+  `test/contracts/reschedule_week_terminal_row_test.dart` (moved + dropped
+  rows never re-planned; live planned row still kept; free slot not occupied).
+- **Mutation 1 (display):** commenting out the `isInvisibleToStreak` filter
+  inside `getScheduleForDate` reddened exactly the 2 filter tests
+  (moved-TODAY + dropped-week); the over-filter guard and the log_set guard
+  stayed green (correct — they pin different code). Reverted, green.
+- **Mutation 2 (planner):** removing BOTH `isInvisibleToStreak` skips (first
+  + second pass — together they reproduce the pre-fix behavior) reddened
+  BOTH planner tests. Reverted, green. Neutering only the FIRST pass alone
+  left the planner tests green — the second pass's skip does the protective
+  work for off-available-day rows (which is where a terminal row always sits,
+  since the destination day is the one that is available); both skips are
+  load-bearing together, recorded so nobody "simplifies" one away.
+- Full new+existing terminal/streak/reschedule/swap/hold test set green
+  (reschedule_week_terminal_row, terminal_row_display_read_path,
+  dispatch_reschedule_pause, dismiss_card_terminal_state,
+  hold_display_read_path, today_card_vs_calendar_strip_same_source,
+  coach_derived_completion, coach_completion_prompt,
+  derive_only_tool_surface, workout_write_service/, streak set,
+  swap set, week_selector). `flutter analyze lib/`: zero warnings/errors in
+  touched files (45 pre-existing infos elsewhere, none in touched files).
+
+### Trivial doc fix included
+
+`lib/features/train/CLAUDE.md:55` documented the dead
+`exerciseName.hashCode` exlog key scheme; corrected to the canonical
+`WorkoutWriteService.exlogKey` UUID-v5 form (H-16).
