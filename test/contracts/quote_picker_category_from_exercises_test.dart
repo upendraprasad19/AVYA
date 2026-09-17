@@ -6,13 +6,61 @@
 // QuotePicker.categoryForExercises votes on the exercise names (which carry the
 // muscle signal), falling back to the workout name, then 'general'.
 //
-// Pure function — no Hive / rootBundle (categoryForExercises only uses the
-// keyword logic in categoryForWorkout, never loads the JSON pool).
+// 2026-09-17: per-exercise resolution upgraded from name-keyword guessing to
+// LIBRARY GROUND TRUTH (ExerciseRepository.getByExactName → row['category']),
+// keyword classifier demoted to the fallback floor for names absent from the
+// box. Name keywords misclassify when a name's words disagree with its real
+// target — "Hanging Leg Raise" (core) matched \bLEGS?\b, "Dumbbell Fly"
+// (push) matched nothing — producing a legs-vs-push tie that resolved to
+// legs and rendered the "Glute work" quote on the founder's Push + Core day.
+//
+// Hive IS seeded here (mirror of coaching_content_test.dart's setUpAll) because
+// categoryForExercises now reads exerciseBox; the categoryForWorkout-only
+// assertions remain valid as the FALLBACK floor's contract.
 
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/train/services/quote_picker.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late Directory tempDir;
+  late List<Map<String, dynamic>> lib;
+
+  setUpAll(() async {
+    tempDir = await Directory.systemTemp.createTemp('test_quote_picker');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (_) async => tempDir.path,
+    );
+    Hive.init(tempDir.path);
+
+    lib = (jsonDecode(
+      File('assets/data/exercise_library.json').readAsStringSync(),
+    ) as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+
+    final exBox = await Hive.openBox(HiveService.exerciseBoxName);
+    for (final m in lib) {
+      await exBox.put(m['id'], m);
+    }
+    HiveService.instance.markInitializedForTests();
+  });
+
+  tearDownAll(() async {
+    await Hive.close();
+    if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+  });
+
   group('QuotePicker.categoryForExercises (Unit 3 obs 2)', () {
     test('pull exercises win over a generic custom workout name', () {
       expect(
@@ -137,6 +185,77 @@ void main() {
         ], 'Legs'),
         'legs',
       );
+    });
+  });
+
+  group('library ground truth wins over name keywords (2026-09-17)', () {
+    test(
+        'founder case — Push + Core day resolves to push, NOT the '
+        '"Glute work" legs quote', () {
+      // Pre-fix vote: Hanging Leg Raise → legs (\bLEGS?\b), Triceps
+      // Extension → push, Dumbbell Fly → general (no keyword) → 1-1 tie →
+      // legs via insertion order → legs/glutes quote on a push day.
+      expect(
+        QuotePicker.categoryForExercise('Hanging Leg Raise'),
+        'core', // library: category=core, primary_muscles=Core/Obliques
+        reason: 'Hanging Leg Raise is a CORE exercise; "LEG" is movement '
+            'direction, not leg-day',
+      );
+      expect(
+        QuotePicker.categoryForExercise('Dumbbell Fly'),
+        'push', // library: category=push, horizontal_push, Chest
+        reason: 'Dumbbell Fly matched no PUSH keyword and fell to general',
+      );
+      expect(
+        QuotePicker.categoryForExercises([
+          'Hanging Leg Raise',
+          'Self-Resisted Triceps Extension',
+          'Dumbbell Fly',
+        ], 'Push + Core'),
+        'push',
+        reason: 'core=1 (Hanging Leg Raise) vs push=2 → push wins the vote',
+      );
+    });
+
+    test('REVERSE guard is unnecessary — library says Reverse Fly is pull',
+        () {
+      expect(QuotePicker.categoryForExercise('Reverse Fly'), 'pull');
+      expect(QuotePicker.categoryForExercise('Cable Fly'), 'push');
+      expect(QuotePicker.categoryForExercise('Incline Dumbbell Fly'), 'push');
+    });
+
+    test('a name absent from the box still falls back to keywords', () {
+      // Not a library row: keyword floor must behave exactly as pre-lookup.
+      expect(QuotePicker.categoryForExercise('Zzzz Not A Real Exercise'),
+          'general');
+      expect(
+        QuotePicker.categoryForExercises(
+            ['Zzzz Not A Real Exercise'], 'Push Day'),
+        'push', // name fallback, keyword path
+      );
+    });
+
+    test(
+        'WHOLE-LIBRARY sweep — every library row resolves to its own '
+        'category (the class-killer)', () {
+      final mismatches = <String>[];
+      var checked = 0;
+      for (final m in lib) {
+        final name = m['name'] as String?;
+        final cat = (m['category'] as String?)?.trim().toLowerCase();
+        if (name == null || name.isEmpty) continue;
+        if (cat == null || cat.isEmpty) continue;
+        checked++;
+        final resolved = QuotePicker.categoryForExercise(name);
+        if (resolved != cat) {
+          mismatches.add('$name: library=$cat resolved=$resolved');
+        }
+      }
+      expect(checked, greaterThan(200),
+          reason: 'sweep must actually cover the seeded library');
+      expect(mismatches, isEmpty,
+          reason: 'library ground truth must win for every row:\n'
+              '${mismatches.take(10).join('\n')}');
     });
   });
 }
