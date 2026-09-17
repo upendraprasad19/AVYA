@@ -109,9 +109,14 @@ const List<int> _backoffSeconds = [1, 5, 30, 300, 1800, 7200, _oneDaySeconds];
 
 /// Maximum retry count before dead-letter. Hardcoded to match
 /// `_backoffSeconds.length` (Dart const eval can't access `.length` on a
-/// const list in a const context). Test
-/// `test/contracts/sync_queue_retry_budget_consistency_test.dart` (lands
-/// in B2 continuation) pins them together at runtime.
+/// const list in a const context). The pair is pinned at runtime by the
+/// backoff-budget consistency group in
+/// `test/contracts/sync_queue_auto_drain_test.dart` — ⚠ corrected
+/// 2026-09-17: this comment previously promised
+/// `test/contracts/sync_queue_retry_budget_consistency_test.dart`
+/// "(lands in B2 continuation)", a file that has never existed (verified by
+/// glob + docs/audit/2026-09-02/findings-by-lens.md:206); the real test was
+/// added rather than leaving the phantom citation.
 const int maxRetries = 7;
 
 /// Returns true if the op should be dead-lettered given its retry count and
@@ -170,6 +175,14 @@ class SyncQueue {
   /// Setting this instead GUARANTEES a fresh due-ops pass starts after
   /// every caller's request, even one that arrived mid-drain.
   bool _rerunRequested = false;
+
+  /// Force-sticky flag (plan-review round 2): a `force: true` drain call
+  /// arriving while a pass is in flight marks the COALESCED RERUN pass
+  /// forced too — the caller's tap must never be absorbed as an unforced
+  /// pass. Captured at the TOP of each pass before being reset, and reset
+  /// in `finally` alongside [_rerunRequested] so an exception mid-pass
+  /// cannot leak a forced pass into the next drain call.
+  bool _rerunForce = false;
 
   /// Callback invoked when an op is dead-lettered. `SyncService` wires this
   /// up in `init()` to call the `log-client-error` Edge Function.
@@ -243,6 +256,11 @@ class SyncQueue {
     // Fire immediately — if it succeeds we remove the op; if it fails
     // we leave it in the queue for the next drain.
     await _runOne(op);
+    // Notify AFTER the immediate attempt too: on success `_runOne` removes
+    // the op with no other notify path (every other mutator notifies), so
+    // without this the pending-count stream could stay at 1 until an
+    // unrelated event — plan-review round 2 Finding 4 (pre-existing gap).
+    _notifyPending();
   }
 
   /// Drain due ops. Idempotent — safe to call from multiple triggers.
@@ -252,31 +270,52 @@ class SyncQueue {
   /// [_rerunRequested] so the already-running call loops once more before
   /// releasing [_draining], guaranteeing a fresh pass starts after every
   /// call to this method returns.
-  Future<void> drain() async {
+  ///
+  /// `force` (manual "Retry now" only — auto triggers stay unforced):
+  /// retries ops even while they sit inside a backoff window, so the tap
+  /// can never be a silent no-op. A force request arriving WHILE a pass is
+  /// in flight forces the coalesced rerun pass; it is merged at the TOP of
+  /// the loop (capture-then-apply) so it can never be consumed one pass
+  /// late or dropped (plan-review round 2 Finding 1). All rerun state is
+  /// reset in `finally` so an exception mid-pass cannot poison the next
+  /// drain with a forced pass (round 2 Finding 3).
+  Future<void> drain({bool force = false}) async {
     if (_draining) {
       _rerunRequested = true;
+      if (force) _rerunForce = true;
       return;
     }
     _draining = true;
     try {
+      var passForce = force;
       do {
         _rerunRequested = false;
+        final rerunWasForce = _rerunForce;
+        _rerunForce = false;
+        if (rerunWasForce) passForce = true;
         final ops = _loadAll();
         final now = DateTime.now();
         for (final op in ops) {
-          if (!_isDue(op, now)) continue;
+          if (!passForce && !_isDue(op, now)) continue;
           await _runOne(op);
         }
         _notifyPending();
       } while (_rerunRequested);
     } finally {
       _draining = false;
+      _rerunRequested = false;
+      _rerunForce = false;
     }
   }
 
   /// Count of currently-queued ops. Used on app launch to populate the
   /// initial banner state without having to subscribe.
   int get pendingCountSync => _loadAll().length;
+
+  /// All currently-queued ops — the public read the banner display policy
+  /// needs (`SyncStateNotifier._stateFor` ages ops by `firstAttemptAt`,
+  /// which a bare count cannot express). Wraps the private `_loadAll()`.
+  List<PendingSyncOp> pendingOps() => _loadAll();
 
   /// True when a marker for [opType] and [userId] is ALREADY queued (OI-150 /
   /// review round 2 N9).

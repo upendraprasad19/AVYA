@@ -55,6 +55,24 @@ status: scaffold
 | `syncBox` | last_sync_timestamps + `pending_sync_<id>` rows (the retry queue — **corrected 2026-09-16**: this row said "planned, not yet implemented" for months after `lib/core/services/sync_queue.dart` shipped; see that file's header for the drain triggers and diagnose docs/diagnoses/ for the auto-drain gap this same date closed) |
 | `configBox` | subscription status, feature flags, app config |
 
+#### SyncBanner display policy (2026-09-17)
+
+The "N changes waiting to sync" count is NOT the raw queue depth: it shows
+**pending ops older than the 6-minute grace window**
+(`syncBannerGraceWindow` in `lib/shared/providers/sync_state_provider.dart`,
+applied by one state funnel `_stateFor` behind the
+`disable_sync_banner_grace` kill-switch — which restores the raw count).
+Rationale: a login-time `user_progress` version conflict enqueues an op
+that the next 5-min auto-drain tick typically self-heals (observed live
+2026-09-17, test2/web: enqueue 23:17:40 IST → cleared 23:22:38 IST); the
+banner flashing for that window reads as an error when nothing needs the
+user. Consequence: the banner can **undercount** transiently (an aged op
+succeeds while a young op is still queued) — the intended tradeoff. The
+manual **Retry** tap issues a FORCED drain (`drain(force: true)`,
+`disable_sync_force_retry` kill-switch): it retries ops even inside their
+backoff window, so the tap can never be a silent no-op; auto drains
+(app-launch, connectivity, 5-min timer) stay unforced.
+
 #### workoutBox Key Patterns
 | Key Pattern | Value |
 |-------------|-------|
