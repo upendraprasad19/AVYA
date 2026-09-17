@@ -521,6 +521,13 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
     // instead would leave a bodyweight user staring at a near-empty list — the
     // cap is applied to the wrong set. All three reads are covered: the custom
     // list, the empty-query default view, and the search results.
+    //
+    // custom-picker-fix (2026-09-17): the library lists keep the fail-closed
+    // `canPerform`; the CUSTOM list uses `canOfferInPicker(isCustom: true)` —
+    // a user-authored custom with an UNVERIFIABLE requirement (empty
+    // `equipment_needed`, the creation sheet's hardcoded shape) is always
+    // offered. Provenance is list membership, not a per-row `is_custom` check:
+    // restored custom rows carry no such field.
     final cap = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
     List<Map<String, dynamic>> doable(List<Map<String, dynamic>> rows) =>
         cap == null
@@ -529,8 +536,16 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
                 .where((e) =>
                     EquipmentCapability.canPerform(e['equipment_needed'], cap))
                 .toList();
+    List<Map<String, dynamic>> doableCustom(List<Map<String, dynamic>> rows) =>
+        cap == null
+            ? rows
+            : rows
+                .where((e) => EquipmentCapability.canOfferInPicker(
+                    e['equipment_needed'], cap,
+                    isCustom: true))
+                .toList();
 
-    final custom = doable(repo.getCustomExercises());
+    final custom = doableCustom(repo.getCustomExercises());
 
     List<Map<String, dynamic>> bundled;
     List<Map<String, dynamic>> matchedCustom;

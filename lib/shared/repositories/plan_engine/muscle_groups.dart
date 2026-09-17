@@ -39,3 +39,12 @@ const Map<String, String> _muscleToGroup = <String, String>{
 /// so it can delegate here without shifting the frozen baseline.
 String? muscleGroupOf(String token) =>
     _muscleToGroup[token.toLowerCase().trim()];
+
+/// ADDITIVE read-only view of [_muscleToGroup]'s keys (2026-09-17,
+/// custom-picker-fix). The map CONTENT stays frozen — this getter exists so
+/// the custom-exercise sheet's muscle chips can assert their tokens are
+/// library-canonical (every UI token must be a member; pinned by
+/// test/contracts/custom_muscle_vocabulary_test.dart). A new UI token
+/// requires adding its key here first, which is a deliberate act — not a
+/// silent map edit.
+Set<String> get canonicalMuscleTokens => _muscleToGroup.keys.toSet();

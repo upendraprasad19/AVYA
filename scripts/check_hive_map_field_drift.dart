@@ -359,7 +359,16 @@ const _alwaysOk = <String>{
   // NOT fields of the schedule_*/exlog_* Hive maps (those emit `sets`/`reps`,
   // never `default_*`); the prefix heuristic mis-attributes them because
   // sync_workout.dart also walks those prefixes for the schedule/log sync.
-  'default_sets', 'default_reps',
+  'default_sets', 'default_reps', 'default_duration_seconds',
+  // custom-picker-fix (B-pass F2, 2026-09-17) — `default_duration_seconds`
+  // is the Hive-CANONICAL duration key on the exercise-definition map
+  // (emitted by CreateCustomExerciseSheet._save AND
+  // WorkoutRepository.createCustomExercise), read by
+  // parseTimedDurationSecs (train_provider.dart) as a fallback after the
+  // cloud-named `default_duration_secs`. NOT an exlog_*/schedule_* field
+  // (exlog duration lives on wlog_* top-level / per-set keys); the prefix
+  // heuristic mis-attributes it because train_provider.dart also reads
+  // exlog_* rows. Sibling of `default_sets`/`default_reps` directly above.
   // Unit 3 (coach-memory-snapshot) — snapshot OUTPUT key names in
   // ai_snapshot_builder.proactiveTrimKeys + the enrich re-add branches. These
   // are health-domain SERIES keys of the snapshot MAP (populated by _getSleep7d

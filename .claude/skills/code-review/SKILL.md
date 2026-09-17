@@ -231,6 +231,54 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-17** — blast-radius **platform** — branch `custom-picker-fix`
+  (custom exercises invisible in all 3 pickers: OI-89 fail-closed
+  capability filter vs the creation sheet's hardcoded empty
+  `equipment_needed`; diagnose `e7b2d4`. Reader-side picker exemption +
+  muscle capture + edit mode; Option B filed as OI-211). **6 findings (1
+  P1, 3 P2, 2 P3); 1 false_alarm — 5 accepted and fixed in-batch, 1
+  resolved by writing this artifact.** Review:
+  `docs/reviews/5e1a43da8881-review.md`. Run as one agent over the staged
+  diff; the reviewer independently re-derived all 5 mutation-proof claims
+  (all reproduced exactly).
+  **Tuning 1 — lens 6 (`guard_without_its_mirror`), sibling-seam sweep:
+  when a batch narrows a guard for one POPULATION, grep for every OTHER
+  call site applying the un-narrowed guard to that same population — not
+  just within the touched files.** `git grep -n "canPerform(" lib/` after
+  the picker exemption found `swap_service.dart:256` (OI-89 seam 9, the
+  AI-driven swap executor) still refusing the exact population the UI
+  swap sheet had just started offering — an asymmetry the batch CREATED
+  (the picker previously refused it too), so the diff hunk itself could
+  never show it. The fix site's own seam inventory (`exercise_seam_lib`)
+  knew about seam 9 but nothing tied its capability policy to the new
+  predicate. **Generalized: a guard-narrowing batch owes a full grep of
+  the narrowed predicate's call sites, not a review of the diff's own
+  sites.**
+  **Tuning 2 — writer_reader_drift extended to TWIN-NAME fields: a batch
+  that adds an EDIT path to a row family must sweep the field set for
+  cloud-vs-Hive name twins, because the EDIT (not the restore) is what
+  forks a row carrying both.** `default_duration_secs` (cloud column,
+  kept verbatim by restore) vs `default_duration_seconds` (Hive-canonical,
+  written by both UI and AI writers) coexisted harmlessly while rows were
+  write-once; the first edit that preserved unknowns while adding the
+  canonical key forked them, and the two readers (`train_provider.dart`'s
+  parser read only the cloud name; `exercise_selector.dart`'s L2 read
+  only the Hive name) then disagreed per reader. The reviewer's suggested
+  fix (drop the twin on edit) plus the main-thread extension (the parser
+  must read BOTH keys — a pre-existing drift the fork fix alone would
+  have left) together closed it; pinned behaviorally by
+  `custom_duration_key_convergence_test.dart`.
+  **Tuning 3 — the anti-fabrication check for `bpass: accepted` is now
+  experienced as the EXPECTED first finding, not a process failure: a
+  plan-review record authored before the B-pass runs will always
+  initially lack `bpass_review:`.** Writing the record with
+  `bpass: accepted` before the pass runs is the failure; the flow that
+  worked here is record → B-pass → fix findings → write review artifact
+  with the FINAL staging hash → add `bpass_review:` → stage (the review
+  file is hash-excluded, so staging it does not move its own name).
+  False-alarm rate 1/6 (16%) → no lens removed; lens 6's sibling-seam
+  sweep and writer_reader_drift's twin-name sweep added per above.
+
 - **2026-09-16 (a)** — blast-radius **platform** — worktree `apk43-obs-fixes`
   (not yet a merged branch), APK 1.0.0+43 observation batch, Obs 1 (nutrition
   save-meal silent-catch telemetry, diagnose `d8e2f4`) + Obs 2 (AI coach

@@ -6,9 +6,14 @@ part of 'screen.dart';
 ///   * `submitted_to_library=true` only     -> PENDING  (warn)
 ///   * neither                               -> DRAFT    (textMute)
 class _CustomExerciseChip extends StatelessWidget {
-  const _CustomExerciseChip({required this.exercise});
+  const _CustomExerciseChip({required this.exercise, this.onTap});
 
   final Map<String, dynamic> exercise;
+
+  /// Tap → edit this custom exercise in CreateCustomExerciseSheet's edit
+  /// mode (custom-picker-fix). The map carries the `_key` field injected by
+  /// `_collectCustomExercises`, which the edit path saves back to.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -22,46 +27,49 @@ class _CustomExerciseChip extends StatelessWidget {
             ? ('PENDING', AppColors.warn)
             : ('DRAFT', AppColors.textMute);
 
-    return Container(
-      constraints: const BoxConstraints(minWidth: 140, maxWidth: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.line2),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.h3.copyWith(
-              fontSize: 13,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (approved) ...[
-                Icon(Icons.check_circle_outline, size: 11, color: statusColor),
-                const SizedBox(width: 4),
-              ],
-              Text(
-                statusLabel,
-                style: AppTypography.monoXs.copyWith(
-                  color: statusColor,
-                  letterSpacing: 1.8,
-                  fontWeight: FontWeight.w700,
-                ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 140, maxWidth: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          border: Border.all(color: AppColors.line2),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.h3.copyWith(
+                fontSize: 13,
+                color: AppColors.textPrimary,
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (approved) ...[
+                  Icon(Icons.check_circle_outline, size: 11, color: statusColor),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  statusLabel,
+                  style: AppTypography.monoXs.copyWith(
+                    color: statusColor,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### custom_exercises_mutations (2 bugs)
+- 2026-09-17 e7b2d4 — Founder, logged in as Upendra, doing his morning workout in the active-workout screen: searching the SWAP EXERCISE picker for his own custom exercise `Single Leg Front Lever` returned nothing. The…
+- 2026-05-15 a5d29c — Founder searched "Single Leg Front" in the active-workout SWAP EXERCISE picker on a fresh install. The picker returned "No matching exercises found" even though his custom exercise `Single Leg Front…
+
 ### error_telemetry_helper (2 bugs)
 - 2026-09-16 d8e2f4 — Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when…
 - 2026-05-08 b0fd76 — Telemetry payload had no contract (any shape was accepted, breaking structured log queries); restore had a race condition where stale tmpl_* keys from earlier broken restores accumulated and caused…
@@ -1049,9 +1053,6 @@ rather than a Hive box. (1 bugs)
 ### cron_auth (1 bugs)
 - 2026-05-15 5a65bd — pr-detection Edge Function cron returns 401 every 15 minutes; same shape affects 6 other C-4-gated proactive trigger functions (re-engagement, plateau-alert, protein-gap-alert, workout-window-closing,…
 
-### custom_exercises_mutations (1 bugs)
-- 2026-05-15 a5d29c — Founder searched "Single Leg Front" in the active-workout SWAP EXERCISE picker on a fresh install. The picker returned "No matching exercises found" even though his custom exercise `Single Leg Front…
-
 ### sync_natural_key_guard (1 bugs)
 - 2026-05-15 9f4ab2 — Hypothetical (defence-in-depth) — no production occurrence yet. If the natural-key columns on `workout_logs`, `workout_log_exercises`, `workout_log_sets`, or `nutrition_logs` ever become NULLable…
 
@@ -1242,6 +1243,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-17 | e7b2d4 | Founder, logged in as Upendra, doing his morning workout in the active-workout screen: searching the SWAP EXERCISE picker for his own custom exercise `Single Leg Front Lever` returned nothing. The… | custom_exercises_mutations | test/contracts/can_offer_in_picker_behavioral_test.dart |
 | 2026-09-16 | d8e2f4 | Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when… | error_telemetry_helper | test/contracts/ai_breakdown_notifier_save_meal_telemetry_test.dart |
 | 2026-09-16 | a1c6b9 | Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"… | coach_chat_history_replay | test/contracts/coach_chat_history_replay_writer_to_reader_test.dart |
 | 2026-09-16 | d4a8f6 | The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called… | device_session_identity_binding | test/contracts/signout_unbinds_sdk_identity_test.dart |

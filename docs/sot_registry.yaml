@@ -5740,28 +5740,42 @@ concepts:
       `custom_exercise_<id>` (Hive) and cloud table
       `user_custom_exercises`. Concept established by diagnose-doc
       `2026-05-15-swap-picker-custom-miss-a5d29c.md` (7th writer/reader
-      drift instance).
+      drift instance). custom-picker-fix (2026-09-17, diagnose
+      `2026-09-17-custom-picker-equipment-failclosed-e7b2d4.md`) added the
+      edit-mode writer (sheet → upsertCustomExercise, source edit_sheet)
+      and the muscle-capture field.
     writers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 1274-1350
+        line_range: 1325-1440
         method: createCustomExercise
         notes: |
-          Hive-side: routes through WorkoutWriteService.upsertCustomExercise
-          (audit 2026-05-21 / A3). Was a direct customBox.put before A3.
+          AI-coach path. Hive-side: routes through
+          WorkoutWriteService.upsertCustomExercise (audit 2026-05-21 / A3).
+          Captures primaryMuscles + normalizes equipment via
+          EquipmentVocab.normalize.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 988-1013
+        line_range: 993-1035
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,
-          fans out to syncCustomItemsNow + pushSnapshot, telemetry pair.
-          audit-fixwave F9: this is the CANONICAL writer, but the primary UI
-          path (the template-builder "+ CREATE CUSTOM" sheet,
-          create_custom_exercise_sheet.dart) still does a DIRECT
-          customBox.put('custom_exercise_<ms>') + syncCustomItemsNow() (no
-          mutex / no telemetry pair) and is pinned by
-          custom_exercise_writer_to_reader_test. Correct box + table; the two
-          write paths coexist. Prefer routing the sheet through upsertCustomExercise
-          in a future cleanup.
+          fans out to syncCustomItemsNow + pushSnapshot, telemetry pair,
+          stamps source/updated_at and back-fills created_at when absent.
+          custom-picker-fix (2026-09-17): the sheet's EDIT mode now routes
+          through here (source `edit_sheet`).
+      - file: lib/features/train/widgets/create_custom_exercise_sheet.dart
+        line_range: 200-275
+        method: _save
+        notes: |
+          CREATE mode keeps the DIRECT customBox.put('custom_exercise_<ms>')
+          + syncCustomItemsNow() (pre-existing path, pinned by
+          custom_exercise_writer_to_reader_test). DECISION (custom-picker-fix
+          round-2, recording over the old "prefer routing in a future
+          cleanup" note): the raw put is DELIBERATELY retained for create —
+          it is unawaited and ordered before pop + onCreated, and the
+          awaited service would reorder those steps. EDIT mode routes
+          through upsertCustomExercise (WriteSource.editSheet) and MUST
+          preserve id/created_at/equipment_needed/approved_for_library
+          (buildEditPayload — round-2 P1-1/P1-2).
       - file: lib/core/services/sync/sync_community.dart
         line_range: 290-360
         method: _restoreCustomExercises
@@ -5778,20 +5792,39 @@ concepts:
           Accepts entries with EITHER `type == 'exercise'` OR custom_exercise_
           key prefix (post-fix for the type-stamp gap a5d29c).
       - file: lib/features/train/widgets/exercise_swap_sheet.dart
-        line_range: 60-85
+        line_range: 80-135
         method: _loadExercises
         semantic: display
-        fields_read: [name, category, primary_muscles]
+        fields_read: [name, category, primary_muscles, equipment_needed]
+        notes: |
+          custom-picker-fix (2026-09-17): library rows filter via
+          canPerform (fail-closed); the CUSTOM list filters via
+          canOfferInPicker(isCustom: true) — a user-authored custom with an
+          unverifiable (empty) equipment requirement stays visible. Provenance
+          is list membership, NOT a per-row is_custom field (restored rows
+          carry none).
+      - file: lib/features/train/screens/active_workout/exercise_picker_sheet.dart
+        line_range: 31-62
+        method: _loadAllExercises
+        semantic: display
+        fields_read: [name, category, equipment_needed]
+        notes: |
+          custom-picker-fix: filter-then-merge — library (canPerform) and
+          customs (canOfferInPicker isCustom: true) filter SEPARATELY, then
+          merge library-first. No per-row discriminator.
       - file: lib/features/train/screens/active_workout/screen.dart
         line_range: 1-9999
         method: _showExercisePickerSheet
         semantic: display
         fields_read: [name, category]
       - file: lib/features/train/screens/template_builder_screen.dart
-        line_range: 510-525
-        method: self-contained
+        line_range: 518-565
+        method: _refresh
         semantic: display
-        fields_read: [name, category]
+        fields_read: [name, category, equipment_needed]
+        notes: |
+          custom-picker-fix: library reads keep doable() (canPerform); the
+          custom list uses doableCustom() → canOfferInPicker(isCustom: true).
     hive_key_prefix: custom_exercise_
     hive_key_formula: "'custom_exercise_${cloudRow.id}'"
     sync_methods: [_syncCustomItems]

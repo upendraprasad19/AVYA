@@ -308,7 +308,9 @@ class SwapExerciseData {
 ///
 /// Returns 30 if everything fails. The UI must NEVER render `0s` for a timed
 /// exercise — that's the Bug #16 regression we're guarding against.
-int _parseTimedDurationSecs(Map<String, dynamic> m) {
+/// Public so the dual-key duration contract is directly behavior-testable
+/// (custom-picker-fix B-pass F2).
+int parseTimedDurationSecs(Map<String, dynamic> m) {
   // 1. Prefer explicit numeric fields if present.
   final prescribed = m['prescribed_time_secs'];
   if (prescribed is int && prescribed > 0) return prescribed;
@@ -317,6 +319,18 @@ int _parseTimedDurationSecs(Map<String, dynamic> m) {
   final defaultSecs = m['default_duration_secs'];
   if (defaultSecs is int && defaultSecs > 0) return defaultSecs;
   if (defaultSecs is num && defaultSecs > 0) return defaultSecs.toInt();
+
+  // custom-picker-fix (B-pass F2): the UI creation sheet and the AI writer
+  // (WorkoutRepository.createCustomExercise) both store the Hive-canonical
+  // `default_duration_seconds`; restore keeps the CLOUD column name
+  // `default_duration_secs`. Read both — a UI-created timed custom was
+  // otherwise invisible to this parser and fell through to the reps-text
+  // heuristic (or the 30s floor).
+  final defaultSeconds = m['default_duration_seconds'];
+  if (defaultSeconds is int && defaultSeconds > 0) return defaultSeconds;
+  if (defaultSeconds is num && defaultSeconds > 0) {
+    return defaultSeconds.toInt();
+  }
 
   // 2. Parse the text field (`reps`/`prescribed_reps`/`default_reps`).
   final raw = (m['reps'] as String?) ??
@@ -376,7 +390,7 @@ List<ExerciseData> _parseExerciseMaps(List? raw) {
     // default_reps was "30-60 sec" which int.tryParse() returned null on.
     final String repsValue;
     if (loggingType == 'timed') {
-      repsValue = '${_parseTimedDurationSecs(m)}';
+      repsValue = '${parseTimedDurationSecs(m)}';
     } else {
       repsValue = m['reps'] as String? ??
           m['prescribed_reps'] as String? ??

@@ -80,8 +80,11 @@ extension _YourExercisesSection on _TrainScreenState {
                   scrollDirection: Axis.horizontal,
                   itemCount: exercises.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) =>
-                      _CustomExerciseChip(exercise: exercises[i]),
+                  itemBuilder: (_, i) => _CustomExerciseChip(
+                    exercise: exercises[i],
+                    onTap: () => _openEditCustomExerciseSheet(
+                        context, exercises[i]),
+                  ),
                 ),
               );
             },
@@ -128,6 +131,26 @@ extension _YourExercisesSection on _TrainScreenState {
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// Edit mode (custom-picker-fix): tapping a chip opens the sheet
+  /// prefilled. The map carries `_key`; the sheet saves to the SAME key via
+  /// `WorkoutWriteService.upsertCustomExercise`. No snackbar needed — the
+  /// ValueListenableBuilder above rebuilds the chips as soon as the Hive
+  /// write lands, and the chip's own status label (DRAFT/PENDING/APPROVED)
+  /// is the visible confirmation.
+  void _openEditCustomExerciseSheet(
+      BuildContext context, Map<String, dynamic> exercise) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: CreateCustomExerciseSheet(existing: exercise),
       ),
     );
   }

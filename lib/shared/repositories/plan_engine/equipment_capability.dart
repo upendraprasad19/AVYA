@@ -33,4 +33,36 @@ class EquipmentCapability {
     if (needed.isEmpty) return false; // fail CLOSED — see doc above
     return needed.every(effective.contains);
   }
+
+  /// Picker visibility, distinct from [canPerform]'s hard capability check.
+  ///
+  /// A USER-AUTHORED custom exercise whose equipment requirement is
+  /// UNVERIFIABLE (empty / null / all-unmappable after normalization) is
+  /// always offered in a picker: the user created it, has already performed
+  /// it, and the picker is an explicit user choice — not a generated
+  /// prescription. `canPerform`'s fail-closed rule would hide every such
+  /// row forever, because the creation sheet has no equipment field and
+  /// stores `[]` by design (create_custom_exercise_sheet.dart), which made
+  /// every custom exercise invisible in all three pickers (swap / add /
+  /// template builder) the moment OI-89's flag defaulted ON.
+  ///
+  /// The fast path fires ONLY on an unparseable requirement. A custom row
+  /// WITH parseable equipment (AI-authored via
+  /// `WorkoutRepository.createCustomExercise`, which normalizes free text)
+  /// still takes the fail-closed [canPerform] path. Library / community
+  /// rows are never exempted: pass `isCustom: false` — provenance comes
+  /// from LIST MEMBERSHIP (the caller filtered `getCustomExercises()`),
+  /// never from row content, because restored custom rows carry no
+  /// `is_custom` field (the cloud table has no such column; restore stamps
+  /// only `type: 'exercise'`).
+  static bool canOfferInPicker(
+    Object? equipmentNeeded,
+    Set<String> effective, {
+    required bool isCustom,
+  }) {
+    if (isCustom && EquipmentVocab.fromProfile(equipmentNeeded).isEmpty) {
+      return true;
+    }
+    return canPerform(equipmentNeeded, effective);
+  }
 }

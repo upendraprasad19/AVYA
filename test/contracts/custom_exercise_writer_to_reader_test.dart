@@ -63,6 +63,11 @@ void main() {
         "'type'", // 'exercise' (separates from saved meals)
         "'submitted_to_library'", // community gating
         "'approved_for_library'", // submission status
+        // custom-picker-fix (2026-09-17): the chip selection, not a
+        // hardcoded empty list — re-arms the plan-generator supplement
+        // path (_eligibleCustomExercises skips customs with empty
+        // primary_muscles).
+        "'primary_muscles': _resolvedMuscles",
       ];
       for (final f in requiredFields) {
         expect(

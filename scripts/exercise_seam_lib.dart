@@ -56,9 +56,10 @@ const seamAllowlist = <String, SeamEntry>{
       '_applyHistoryAdjustments all take the capability set as a REQUIRED '
       'parameter, so a missed call site fails to compile.'),
   'lib/features/train/screens/template_builder_screen.dart': SeamEntry(3,
-      'Seam 7. :518 customs, :524 the default empty-query getAll().take(30), '
-      ':528 search. Filtered BEFORE .take(30) or a bodyweight user sees a '
-      'near-empty list.'),
+      'Seam 7. customs via doableCustom (canOfferInPicker — unverifiable-'
+      'equipment customs stay visible), the default empty-query '
+      'getAll().take(30), and search — all filtered BEFORE .take(30) or a '
+      'bodyweight user sees a near-empty list.'),
   'lib/features/nutrition/services/diet_plan_generator.dart': SeamEntry(2,
       'NOT an exercise seam - nutrition. Listed rather than excluded by a '
       'narrower regex, because a narrower regex is a blind spot nobody reviews.'),
@@ -74,13 +75,19 @@ const seamAllowlist = <String, SeamEntry>{
       'The PlannedExercise type itself plus its fromMap - definition, not '
       'emission.'),
   'lib/features/train/widgets/exercise_swap_sheet.dart': SeamEntry(2,
-      'Seam 6. Takes an explicit capability set. NOTE its `equipment` field '
-      'holds the OUTGOING exercise requirement, not the user capability - '
-      'filtering by it inverts the check.'),
+      'Seam 6. Takes an explicit capability set. Library rows use '
+      'canPerform (fail-closed); the custom list uses canOfferInPicker — '
+      'a user-authored custom with an unverifiable (empty) requirement '
+      'stays visible. NOTE its `equipment` field holds the OUTGOING '
+      'exercise requirement, not the user capability - filtering by it '
+      'inverts the check.'),
   'lib/features/train/screens/active_workout/exercise_picker_sheet.dart':
       SeamEntry(2,
-          'Seam 8. getAll() + customs, filtered on category and name only until '
-          'this batch. Takes an explicit capability set.'),
+          'Seam 8. getAll() + customs, filtered on category and name only '
+          'until the OI-89 batch; since custom-picker-fix the two lists '
+          'filter SEPARATELY (library: canPerform; customs: '
+          'canOfferInPicker) then merge — no per-row is_custom check, '
+          'restored rows carry no such field.'),
   'lib/shared/repositories/plan_engine/cardio_finisher.dart': SeamEntry(1,
       'Seam 10. equipmentNeeded is null on this construction - same problem as '
       'warmup_cooldown.'),

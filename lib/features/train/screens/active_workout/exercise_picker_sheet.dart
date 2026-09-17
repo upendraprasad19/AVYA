@@ -36,14 +36,29 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     // library rows including Barbell Back Squat. Same defect as the swap sheet
     // on a different screen — found a review round later, which is why
     // check_exercise_seams.dart now pins the inventory.
+    //
+    // custom-picker-fix (2026-09-17): filtered SEPARATELY then merged, NOT on
+    // one merged list with a per-row `is_custom` discriminator — restored
+    // custom rows carry no `is_custom` field (the cloud table has no such
+    // column), so a row-shape check misses exactly the restore population.
+    // Provenance is list membership: customs with an UNVERIFIABLE requirement
+    // (empty `equipment_needed` — the creation sheet stores `[]` by design)
+    // are always offered; library rows keep the fail-closed check.
     final cap = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
-    final all = [...library, ...custom];
-    _allExercises = cap == null
-        ? all
-        : all
+    final filteredLibrary = cap == null
+        ? library
+        : library
             .where((e) =>
                 EquipmentCapability.canPerform(e['equipment_needed'], cap))
             .toList();
+    final filteredCustom = cap == null
+        ? custom
+        : custom
+            .where((e) => EquipmentCapability.canOfferInPicker(
+                e['equipment_needed'], cap,
+                isCustom: true))
+            .toList();
+    _allExercises = [...filteredLibrary, ...filteredCustom];
     _filtered = _allExercises;
   }
 
