@@ -367,8 +367,24 @@ class RazorpayService {
     return err;
   }
 
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    debugPrint('RazorpayService: payment success — paymentId=${response.paymentId}, orderId=${response.orderId}');
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    unawaited(handlePaymentConfirmed(
+      paymentId: response.paymentId ?? '',
+      orderId: response.orderId,
+      signature: response.signature,
+    ));
+  }
+
+  /// Platform-neutral confirmation path — the ONE verification pipeline
+  /// (native SDK event AND web checkout.js success callback both land
+  /// here). Body extracted verbatim from the pre-web-branch
+  /// _handlePaymentSuccess; only the response.* plumbing changed.
+  Future<void> handlePaymentConfirmed({
+    required String paymentId,
+    String? orderId,
+    String? signature,
+  }) async {
+    debugPrint('RazorpayService: payment success — paymentId=$paymentId, orderId=$orderId');
 
     // Capture ScaffoldMessenger BEFORE any awaits to avoid
     // use_build_context_synchronously lint.
@@ -425,7 +441,7 @@ class RazorpayService {
       // event-based handle to clear by. The 10-min time ceiling is
       // a fallback only now.
       await SubscriptionService.instance
-          .markPaymentInFlight(orderId: response.orderId);
+          .markPaymentInFlight(orderId: orderId);
     } catch (e, st) {
       debugPrint('RazorpayService: markPaymentInFlight failed: $e');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
@@ -462,9 +478,9 @@ class RazorpayService {
     // whole payment path.
     try {
       await _pollAndActivate(
-        paymentId: response.paymentId ?? '',
-        orderId: response.orderId ?? '',
-        signature: response.signature ?? '',
+        paymentId: paymentId,
+        orderId: orderId ?? '',
+        signature: signature ?? '',
       );
     } catch (e, st) {
       debugPrint('RazorpayService: _pollAndActivate threw: $e');

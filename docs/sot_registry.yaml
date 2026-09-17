@@ -2621,13 +2621,16 @@ concepts:
           dossier shows "CONFIRMING ⟳ AWAITING WEBHOOK CONFIRMATION"
           copy.
       - file: lib/core/services/razorpay_service.dart
-        line_range: 360-380
-        method: RazorpayService._handlePaymentSuccess
+        line_range: 382-500
+        method: RazorpayService.handlePaymentConfirmed
         semantic: pass-through
         fields_read: []
         notes: |
-          Writes order via markPaymentInFlight FIRST so the grace
-          window opens before any subsequent verify race fires.
+          Platform-neutral confirmation path (native SDK event AND web
+          checkout.js success callback both land here — web-razorpay
+          batch 2026-09-17). Writes order via markPaymentInFlight FIRST
+          so the grace window opens before any subsequent verify race
+          fires.
     regression_test: test/subscription/payment_grace_window_test.dart
     telemetry:
       success_op_types: [subscription_refresh_grace_skip, subscription_refresh_success]
