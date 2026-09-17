@@ -40,6 +40,8 @@ Map<String, String> _cleanEnv() {
 
 late final String _hook;
 late final String _lib;
+late final String _telemetryCli;
+late final String _telemetryLib;
 
 ProcessResult _git(String cwd, List<String> args) => Process.runSync(
       'git',
@@ -110,6 +112,25 @@ Map<String, dynamic>? _decision(({int exitCode, String stdout}) r) {
   return null;
 }
 
+/// Fixture with the telemetry CLI + its lib copied in and a plan-review record
+/// for the CURRENT branch (whatever `git init` named it — never hardcoded).
+/// Built on [_repoWithUnpushed] so the existing fixture stays untouched.
+Directory _repoWithTelemetry({String? recordContent}) {
+  final d = _repoWithUnpushed();
+  File('${d.path}/scripts/batch_process_telemetry.dart')
+      .writeAsStringSync(File(_telemetryCli).readAsStringSync());
+  File('${d.path}/scripts/batch_process_telemetry_lib.dart')
+      .writeAsStringSync(File(_telemetryLib).readAsStringSync());
+  Directory('${d.path}/docs/plan-reviews').createSync(recursive: true);
+  if (recordContent != null) {
+    final branch =
+        _git(d.path, ['branch', '--show-current']).stdout.toString().trim();
+    File('${d.path}/docs/plan-reviews/${branch.replaceAll('/', '-')}.md')
+        .writeAsStringSync(recordContent);
+  }
+  return d;
+}
+
 
 /// Remove a fixture directory without ever failing the test.
 ///
@@ -133,6 +154,10 @@ void main() {
   setUpAll(() {
     _hook = '${Directory.current.path}/scripts/batch_close_hook.dart';
     _lib = '${Directory.current.path}/scripts/batch_close_lib.dart';
+    _telemetryCli =
+        '${Directory.current.path}/scripts/batch_process_telemetry.dart';
+    _telemetryLib =
+        '${Directory.current.path}/scripts/batch_process_telemetry_lib.dart';
   });
 
   test('BLOCKS once when a batch has landed unpushed', () async {
@@ -270,5 +295,45 @@ void main() {
     // `timeout:` takes precedence over the file annotation, so the file got the
     // fix and this test kept the old ceiling. Inheriting the file budget is the
     // point; do not re-add a tighter one without re-reading §4.9.
+  });
+
+  test('telemetry appears on the hook stdout channel when a record exists',
+      () async {
+    final d = _repoWithTelemetry(recordContent: '''
+---
+branch: test
+review_rounds: 2
+mechanical_only: false
+---
+body
+''');
+    addTearDown(() => _cleanup(d));
+
+    final r = await _runHook(d.path);
+    expect(r.exitCode, 0);
+    final dec = _decision(r);
+    expect(dec, isNotNull);
+    expect(dec!['decision'], 'block');
+    // Same channel as the checklist: the JSON `reason` field on stdout.
+    expect(dec['reason'], contains('process-telemetry:'));
+    expect(dec['reason'], contains('review_rounds=2'));
+    expect(dec['reason'], contains('mechanical_only=false'));
+  });
+
+  test('corrupted record still exits 0 and the checklist still emits',
+      () async {
+    final d = _repoWithTelemetry(recordContent: '@@@ not a record at all @@@');
+    addTearDown(() => _cleanup(d));
+
+    final r = await _runHook(d.path);
+    expect(r.exitCode, 0, reason: 'every error path exits 0');
+    final dec = _decision(r);
+    expect(dec, isNotNull, reason: 'checklist must still emit');
+    expect(dec!['decision'], 'block');
+    expect(dec['reason'], contains('§5'));
+    // Telemetry degrades to the defaults (parse fell back, rounds read 0)
+    // rather than crashing the hook or vanishing from the payload.
+    expect(dec['reason'], contains('process-telemetry:'));
+    expect(dec['reason'], contains('review_rounds=0'));
   });
 }

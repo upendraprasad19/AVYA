@@ -137,6 +137,37 @@ Future<String> _readStdin() async {
       );
 }
 
+/// Batch-close process telemetry (§4.12.6 companion), appended to the block
+/// reason so it lands on the SAME stdout channel the checklist prints on —
+/// the JSON `reason` field. Raw stdout lines would corrupt the payload the
+/// harness parses, and stderr is invisible at batch close.
+///
+/// The CLI is spawned with [Platform.resolvedExecutable] — the VM binary
+/// ALREADY running this hook, i.e. the real SDK dart.exe and never the
+/// `flutter/bin/dart` wrapper whose lock contention `scripts/_dart_bin.sh`
+/// exists to avoid (measured 13x per invocation there). `_dart_bin.sh` is
+/// shell-only and cannot be sourced from Dart; this is its same outcome from
+/// inside a Dart process.
+///
+/// ANY failure — script missing, spawn failed, non-zero exit, timeout — is
+/// silent: null, no telemetry line, checklist unaffected.
+Future<String?> _telemetry(String root) async {
+  ProcessResult? r;
+  try {
+    r = await Process.run(
+      Platform.resolvedExecutable,
+      ['$root/scripts/batch_process_telemetry.dart'],
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    ).timeout(const Duration(seconds: 10));
+  } catch (_) {
+    return null; // missing script, spawn failure, timeout — all silent
+  }
+  if (r.exitCode != 0) return null;
+  final out = (r.stdout as String).trim();
+  return out.isEmpty ? null : out;
+}
+
 void main() async {
   try {
     var stopHookActive = false;
@@ -219,9 +250,16 @@ void main() async {
       exit(0);
     }
 
+    // Telemetry sits AFTER every early exit below (no repo, kill switch,
+    // stop_hook_active, nothing unpushed, already reported) — it can only
+    // fire on the same event the checklist does.
+    var reason = renderBlockReason(verdict);
+    final telemetry = await _telemetry(root);
+    if (telemetry != null) reason = '$reason\n$telemetry\n';
+
     stdout.writeln(jsonEncode({
       'decision': 'block',
-      'reason': renderBlockReason(verdict),
+      'reason': reason,
     }));
     exit(0);
   } catch (_) {
