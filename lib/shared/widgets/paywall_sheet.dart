@@ -277,18 +277,26 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     ));
 
     if (kIsWeb) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Payments are only available in the mobile app. Download ICANBEFITTER to upgrade.',
-            style: AppTypography.bodySm,
+      // §4.6 kill-switch — old pre-web-checkout behavior preserved verbatim.
+      // ⚠ Per-browser scope (plan-review round-1 P2-7): configBox is
+      // device-local, so this rolls back ONE browser, not the fleet; fleet
+      // rollback = redeploy.
+      if (ref.read(razorpayServiceProvider).webCheckoutDisabled) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Payments are only available in the mobile app. Download ICANBEFITTER to upgrade.',
+              style: AppTypography.bodySm,
+            ),
+            backgroundColor: AppColors.card,
+            duration: const Duration(seconds: 4),
           ),
-          backgroundColor: AppColors.card,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-      return;
+        );
+        return;
+      }
+      // Web checkout active — flow exactly like mobile: sheet pops,
+      // openCheckout opens the browser checkout (razorpay_service web branch).
     }
 
     setState(() => _isProcessing = true);

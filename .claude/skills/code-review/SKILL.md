@@ -231,6 +231,38 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-17 (b)** — blast-radius **account** — branch `web-razorpay-checkout`
+  (web Razorpay checkout: checkout.js bridge via dart:js_interop, shared
+  handlePaymentConfirmed extraction, kill-switch). **8 findings (0 P0, 0 P1,
+  4 P2, 4 P3); 0 false_alarm — all 8 accepted and fixed in the same session.**
+  Review: `docs/reviews/7446a3c8a418-review.md`. Run as one agent (15 files).
+  **Tuning 1 — a fix can be silently UNDONE by the author's own later
+  `git checkout -- <file>` during mutation-proofing: the file carried
+  UNCOMMITTED lint fixes when the restore ran, and the reviewer's fresh
+  analyze caught the reverted lint (Finding 8) that the author believed was
+  already shipped. Add to the general fix-application method: after ANY
+  mutation-restore cycle, re-verify that every earlier uncommitted edit in
+  the same file still exists — mutation restores and pending fixes share one
+  working tree, and "I fixed that" is only true if the fix is still there
+  (or committed). Commit lint fixes BEFORE starting mutation cycles.**
+  **Tuning 2 — a mid-batch SoT `line_range:` update rotted within the SAME
+  batch: correct at its own commit, stale 3 commits later (Finding 4),
+  invisible to the parity gate (gate keys on the class name). This is
+  2026-09-16(d) Tuning 4's "re-derive citations LAST" applied to the batch
+  scale rather than the finding scale: not just later FIXES shift lines —
+  the batch's own ordinary follow-on commits do too, so the registry
+  re-derivation must be scheduled as the FINAL code touch of the batch, not
+  bundled into the commit that renames the method.**
+  **Tuning 3 — a comment's negative capability claim ("checkout.js has NO
+  failure callback") was false per the vendor's own docs and was doing
+  load-bearing work: it justified an unwired error path. Lens 6 found it by
+  checking the claim against the SDK's documented API instead of the diff's
+  internal consistency. Add to lens 6's method: a comment that explains why
+  something is NOT wired is a checkable claim — verify against the
+  dependency's actual API surface, because "impossible" claims create blind
+  spots that survive every other lens.**
+  False-alarm rate 0/8 → no lens removed; lenses 6 and 8 extended per above.
+
 - **2026-09-17** — blast-radius **platform** — branch `custom-picker-fix`
   (custom exercises invisible in all 3 pickers: OI-89 fail-closed
   capability filter vs the creation sheet's hardcoded empty
