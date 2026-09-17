@@ -70,8 +70,11 @@ Pattern precedent is already in-repo and modern:
 `lib/features/dev/xls_saver_web.dart`).
 
 - **`web/index.html`** — add
-  `<script src="https://checkout.razorpay.com/v1/checkout.js"></script>`
-  before `flutter_bootstrap.js` (`:158`).
+  `<script defer src="https://checkout.razorpay.com/v1/checkout.js"></script>`
+  (`defer` = non-render-blocking: a hanging CDN connection must not delay
+  first paint for visitors who never open the paywall — plan-review round 1
+  P2-6; Flutter's bootstrap is async so the SDK is present long before any
+  checkout opens) before `flutter_bootstrap.js` (`:158`).
 - **`lib/core/services/razorpay_web_checkout_web.dart`** (web-only,
   `dart:js_interop`) — `@JS('Razorpay')` external interface; `open(options)`
   with `handler` (success) and `modal.ondismiss` injected into the options;
@@ -138,7 +141,11 @@ missing/unopened configBox can never silently disable payments.
 `paywall_sheet.dart:279-292` is rewritten as:
 
 - kill-switch ON → the existing mobile-app snackbar, verbatim (rollback
-  path preserved per §4.6; reachable without a redeploy via configBox);
+  path preserved per §4.6). ⚠ Scope honesty (plan-review round 1 P2-7):
+  `configBox` is device-local — on web, per-browser — so the switch rolls
+  back ONE browser, not the fleet; fleet-wide web rollback requires a
+  redeploy. Paywall and service branch read the ONE shared predicate
+  (`RazorpayService.webCheckoutDisabled`), pinned by test.
 - kill-switch OFF → fall through to the normal mobile flow (sheet pops,
   `openCheckout` fires, web branch opens the JS checkout).
 
