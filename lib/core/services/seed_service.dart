@@ -102,7 +102,13 @@ class SeedService {
   /// launch, if the stored version is less than this, foods are re-seeded.
   /// putAll() is idempotent — existing entries are overwritten with the
   /// same data while new entries are added.
-  static const int _foodLibraryVersion = 2;
+  ///
+  /// v3 (2026-09 meal-quality batch): every row gained `meal_fit` +
+  /// `is_ultra_processed`. WITHOUT the bump, existing installs keep
+  /// untagged v2 rows and the generator's quality filters silently no-op
+  /// (missing field ⇒ UPF=false / matches-all) — plan-review round 1,
+  /// finding 1.
+  static const int _foodLibraryVersion = 3;
   static const String _foodVersionKey = 'food_library_version';
 
   final HiveService _hive = HiveService.instance;

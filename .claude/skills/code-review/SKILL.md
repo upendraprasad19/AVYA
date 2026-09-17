@@ -277,6 +277,23 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   False-alarm rate 0/6 → no lens removed; lens 6 and the general method extended
   per above.
 
+- **2026-09-17 (c)** — blast-radius **platform** — branch `diet-plan-quality`
+  (diet plan generator meal-quality constraints + tagged food DB v3).
+  **6 findings (1 blocker, 2 majors, 3 minors); 0 false_alarm — all
+  remediated in-batch.** Review: `docs/reviews/diet-plan-quality-bpass.md`.
+  **Tuning — DATA-append commits need the SAME duplicate/name/source
+  contract checks the code gets: the B-pass caught 4 appended food-DB rows
+  duplicating existing NAMES (append script checked ids only), plus a
+  `source` tag that inflated a pinned count 93->103 — 2 RED assertions that
+  would have shipped on main. When a batch appends rows to a curated data
+  asset, run the asset's own contract tests (required-fields, duplicate
+  names, pinned counts) BEFORE the append is believed, and give appended
+  rows a DISTINCT source tag. Second lesson: the fixture suite and the
+  real-data suite disagree in BOTH directions — a fixture-only green hid 4
+  real-data defects (vegan name-blocklist leak, thin anchor pool), and the
+  B-pass's veg-preference finding showed the same class on a second
+  preference. Any filter built against a curated fixture must be re-proven
+  against the full production dataset in the same batch.**
 - **2026-09-17 (b)** — blast-radius **account** — branch `web-razorpay-checkout`
   (web Razorpay checkout: checkout.js bridge via dart:js_interop, shared
   handlePaymentConfirmed extraction, kill-switch). **8 findings (0 P0, 0 P1,

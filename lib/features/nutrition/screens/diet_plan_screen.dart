@@ -32,6 +32,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   late List<_MealPlan> _mealPlans;
   bool _saved = false;
   bool _checkedSaved = false;
+  // Cached so _swapItem applies the SAME diet-preference rule as generation
+  // (plan-review round 2, finding 5: a veg user could be offered chicken).
+  String _dietPref = 'veg';
 
   @override
   void initState() {
@@ -44,6 +47,13 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   }
 
   void _generatePlan() {
+    // Cache diet preference for the swap filter on BOTH paths (fresh +
+    // saved-plan load) — B-pass finding 3: a vegan user loading a saved
+    // plan otherwise got veg-filtered (dairy-allowed) swap alternatives.
+    final profile = UserRepository.instance.getProfile() ?? const {};
+    _dietPref =
+        (profile['diet_preference'] as String?)?.toLowerCase() ?? 'veg';
+
     // Check for saved plan on first entry only
     if (!_checkedSaved) {
       _checkedSaved = true;
@@ -67,6 +77,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     final profile = UserRepository.instance.getProfile() ?? const {};
     final dietPref =
         (profile['diet_preference'] as String?)?.toLowerCase() ?? 'veg';
+    _dietPref = dietPref;
 
     final now = DateTime.now();
     final seed = DateTime(now.year, now.month, now.day).hashCode;
@@ -76,6 +87,9 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         calorieTarget: calorieTarget,
         proteinTarget: proteinTarget,
         dietPreference: dietPref,
+        // Same source as DailyNutritionData.fiberTarget
+        // (nutrition_provider.dart:362) — no second default.
+        fiberTarget: (profile['fiber_grams'] as num?)?.toInt() ?? 30,
         seed: seed,
       ),
     );
@@ -107,13 +121,42 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
 
   void _swapItem(int mealIndex, int itemIndex) {
     final item = _mealPlans[mealIndex].items[itemIndex];
+    // Same quality rules as generation (2026-09 meal-quality batch):
+    // ultra-processed rows and diet-incompatible rows are never offered,
+    // so a manual swap cannot re-introduce the Pringles-class defect.
+    // meal_fit is deliberately NOT enforced here — the user's tap IS the
+    // meal intent (plan-review round 2, finding 12a).
     final alternatives = FoodRepository.instance
         .getByCategory(item.category)
-        .where((f) => (f['id'] as String?) != item.foodId)
+        .where((f) =>
+            (f['id'] as String?) != item.foodId &&
+            !((f['is_ultra_processed'] as bool?) ?? false) &&
+            DietPlanGenerator.passesDiet(f, _dietPref))
         .take(5)
         .toList();
 
-    if (alternatives.isEmpty) return;
+    if (alternatives.isEmpty) {
+      // B-pass finding 6: silent no-op gave the tap zero feedback; the UPF +
+      // diet filters narrow pools, so this is now reachable (all-UPF
+      // categories).
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No alternatives available for this item',
+            style: AppTypography.body.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary),
+          ),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -342,6 +385,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     final proteinTarget = targets['protein']?.round() ?? 184;
     final carbTarget = targets['carbs']?.round() ?? 0;
     final fatTarget = targets['fat']?.round() ?? 0;
+    final fiberTarget = (UserRepository.instance.getProfile()?['fiber_grams'] as num?)?.toInt() ?? 30;
 
     final now = DateTime.now();
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -367,7 +411,7 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
             pw.Text('Generated on $dateStr', style: subHeaderStyle),
             pw.SizedBox(height: 4),
             pw.Text(
-              'Target: $calorieTarget kcal  |  Protein: ${proteinTarget}g  |  Carbs: ${carbTarget}g  |  Fat: ${fatTarget}g',
+              'Target: $calorieTarget kcal  |  Protein: ${proteinTarget}g  |  Carbs: ${carbTarget}g  |  Fat: ${fatTarget}g  |  Fiber: ${fiberTarget}g',
               style: subHeaderStyle,
             ),
             pw.Divider(),

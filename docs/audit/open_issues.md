@@ -4817,6 +4817,13 @@ design (billing brainstorm "not yet designed" item). The
 also lands with this work, not before.
 
 
+## OI-214 — Diet plan Option A: curated Indian meal-template layer (recipe-first selection + portion scaling)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-17 · filed via mint_oi.sh from branch `diet-plan-quality`
+
 ## OI-215 — Device verification expansion: Patrol flows for the UI-bug cluster, screenshot tests, canary APK
 
 - **Status**: OPEN
@@ -4862,5 +4869,6 @@ covers convergence stats, gate failures, escape ledger, and the `tier: s_fix` sh
 aggregate review findings by class because plan-review records carry no structured finding-class
 field. Fix: records gain an optional `findings_by_class:` frontmatter map (compile/logic/citation/
 material), the telemetry reader sums it across recent records, and M/L counts derive from diagnose
-docs stamped `tier: m_fix`/`tier: l_fix` (extending the `tier: s_fix` stamp from CLAUDE.md
-§4.12.6/rule 22).
+  docs stamped `tier: m_fix`/`tier: l_fix` (extending the `tier: s_fix` stamp from CLAUDE.md
+  §4.12.6/rule 22).
+

@@ -116,6 +116,12 @@ const _explicitAllowList = <String, String>{
       'Advisory link-rot check; walks all docs/*.md + CLAUDE.md files. '
           'Too broad for pre-commit (touches .claude/worktrees links that may be '
           'stale by design). Run manually / in audit batches.',
+  'validate_food_tag_export.dart':
+      'Per-artifact validator for the food-DB tagged export (takes the export '
+          'file PATH as an argument — nothing to validate at commit time unless '
+          'an export is being swapped). Invoked manually by the '
+          'diet-plan-meal-quality batch flow (diagnose d3c7a9) before replacing '
+          'assets/data/food_database.json.',
 
   // On-demand audit scripts (require flutter test --reporter=json or full git
   // log scan — too slow for pre-commit, not suitable for the check_* loop).
