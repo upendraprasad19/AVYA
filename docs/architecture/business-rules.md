@@ -53,3 +53,16 @@ canUnlock = completionRate >= 0.8 AND weeksElapsed >= 4
 
 ## Calorie Calculation
 Hybrid BMR: Katch-McArdle when body fat % available (`370 + 21.6 × lean_mass_kg`), Mifflin-St Jeor fallback. Both apply -50 BMR offset and -100 TDEE offset. Activity level derived from lifestyle + training days → TDEE.
+
+## Paused days × streak (spec 2026-09-18, founder decision)
+
+A scheduled day with `status='paused'` (coach pausePlan / future manual pause)
+is INVISIBLE to the streak walk-back and to `completionRateOverWindow`: it
+never breaks the streak, never consumes a freeze, and never counts against
+rank completion-rate gates. Same for `moved`/`dropped` terminal rows left by
+rescheduleWeek. Rationale: pausing is a legitimate choice, not a miss; the
+alternative (scored as missed) guaranteed a dead streak after every vacation.
+Writer: `WorkoutScheduleService.pauseRange`; readers: `WorkoutRepository
+._calculateStreak` / `.completionRateOverWindow` via the shared
+`isInvisibleToStreak` set. Verify: `test/contracts/streak_paused_day_not_missed_test.dart`
+(rule index: `HOME-04A` in `docs/architecture/functionality-flow.md`).
