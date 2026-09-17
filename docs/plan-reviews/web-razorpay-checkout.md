@@ -6,7 +6,8 @@ plan: docs/superpowers/plans/2026-09-17-web-razorpay-checkout.md
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: accepted (docs/reviews/7446a3c8a418-review.md — 8 findings, all fixed in-batch; account tier)
+bpass: accepted
+bpass_review: docs/reviews/7446a3c8a418-review.md (8 findings — 4 P2, 4 P3 — all fixed in-batch; account tier)
 founder_decisions: one-time orders (auto-renew → OI at close) · test keys now, live flip later · no allowlist, test-mode exposure accepted · checkout visible (no feature flag, kill-switch only)
 
 ## Round 1 (context-blind qa-agent, on plan @ ca339463)
