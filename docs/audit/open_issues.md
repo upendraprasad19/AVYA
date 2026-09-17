@@ -4816,3 +4816,21 @@ design (billing brainstorm "not yet designed" item). The
 `update_user_subscription_status()` trigger widening (brainstorm decision 5)
 also lands with this work, not before.
 
+
+## OI-215 — Device verification expansion: Patrol flows for the UI-bug cluster, screenshot tests, canary APK
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-18 · filed via mint_oi.sh from branch `discipline-v2`
+
+Follow-up from the discipline-overhead-v2 design (spec:
+`docs/superpowers/specs/2026-09-17-discipline-overhead-v2-design.md` §4, "design C"). Evidence:
+of 65 fix commits Sept 2026, ~60% are product bugs and the biggest cluster is founder-visible
+UI/UX defects (the 5-observation batch of 2026-09-16: toast color, text wrap, double-pop, empty
+states, spinner) — every pre-merge review stage is a code reader and CANNOT see these; the
+founder is the QA loop. Scope: expand `docs/operations/DEVICE_TESTING.md`'s 4 Patrol flows to
+cover the recurring UI-bug classes (toast/error states, text overflow, empty states,
+double-pop/navigation), per-screen screenshot comparisons, and a canary APK flow so S-class UI
+fixes get device verification before the founder reports them. Real engineering — own batch,
+not bundled into discipline-v2.
