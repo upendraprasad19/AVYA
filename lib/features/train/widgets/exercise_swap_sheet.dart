@@ -85,15 +85,21 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
         widget.currentExerciseName.toLowerCase());
     _customExercises = ExerciseRepository.instance.getCustomExercises();
     // ⑦ OI-89 seam 6: drop what the user cannot perform. BOTH lists — a
-    // user's own custom exercise is just as unusable if it needs a barbell they
-    // do not have.
+    // user's own custom exercise is just as unusable if it needs a barbell
+    // they do not have. ONE exception (custom-picker-fix, 2026-09-17): a
+    // custom row with an UNVERIFIABLE requirement (empty `equipment_needed`
+    // — the creation sheet stores `[]` by design) is always offered; the
+    // fail-closed rule was hiding every user-authored custom from the
+    // picker. Customs WITH parseable equipment still fail closed below.
     final cap = widget.capability;
     if (cap != null) {
       _allLibraryExercises = _allLibraryExercises
           .where((e) => EquipmentCapability.canPerform(e['equipment_needed'], cap))
           .toList();
       _customExercises = _customExercises
-          .where((e) => EquipmentCapability.canPerform(e['equipment_needed'], cap))
+          .where((e) => EquipmentCapability.canOfferInPicker(
+              e['equipment_needed'], cap,
+              isCustom: true))
           .toList();
     }
   }

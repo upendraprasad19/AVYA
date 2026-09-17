@@ -218,6 +218,13 @@ class SwapService {
     }
 
     Map<String, dynamic>? newLib;
+    // custom-picker-fix (B-pass F4): provenance is knowable HERE — whether
+    // the target resolved from the library or from the user's customBox
+    // scan below. The picker exemption policy
+    // (EquipmentCapability.canOfferInPicker) applies identically: a
+    // user-authored custom with an UNVERIFIABLE equipment requirement is a
+    // valid swap target; library rows stay fail-closed.
+    bool targetIsCustom = false;
     final libRaw = _hive.exerciseBox.get(toExerciseId);
     if (libRaw is Map) {
       newLib = Map<String, dynamic>.from(libRaw);
@@ -231,6 +238,7 @@ class SwapService {
         final candName = (candMap['name'] as String?) ?? '';
         if (candId == toExerciseId || candName == toExerciseId) {
           newLib = candMap;
+          targetIsCustom = true;
           break;
         }
       }
@@ -253,7 +261,9 @@ class SwapService {
     // The AI coach surfaces the message to the user.
     final capability = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
     if (capability != null &&
-        !EquipmentCapability.canPerform(newLib['equipment_needed'], capability)) {
+        !EquipmentCapability.canOfferInPicker(
+            newLib['equipment_needed'], capability,
+            isCustom: targetIsCustom)) {
       throw SwapExerciseException(
         'equipment_unavailable',
         '"${(newLib['name'] as String?) ?? toExerciseId}" needs equipment you '

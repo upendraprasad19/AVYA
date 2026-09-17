@@ -4779,3 +4779,19 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Identified**: 2026-09-16 · filed via mint_oi.sh from branch
   `cron-ai-removal`, during the self-triggered `/code-review` B-pass
   required before merge (CLAUDE.md §4.3).
+
+## OI-211 — Custom exercise equipment field + [] to ['none'] backfill of existing rows (Option B from custom-picker-fix)
+
+- **Status**: OPEN
+- **Blocked on**: founder batch scheduling
+- **Verified**: never
+- **Identified**: 2026-09-17 · filed via mint_oi.sh from branch `custom-picker-fix`
+- **Detail** (diagnose `e7b2d4`): the picker-visibility bug was fixed reader-side (canOfferInPicker — customs with unverifiable equipment always offered) because it needs no data migration. The DATA half remains: the creation sheet still stores `equipment_needed: []`, which only works because the picker exempts empty-requirement customs. Root-cause completion: (1) add an equipment multi-select to CreateCustomExerciseSheet writing normalized `EquipmentVocab` tokens; (2) one-time idempotent repair of existing custom_exercise_ rows `[] → ['none']` in Hive AND cloud `user_custom_exercises` (restore path included); (3) then the L2 append's exclusion-only guard becomes capability-checked for customs too. Needs a live cloud apply authorization (§4.3).
+
+## OI-212 — Custom foods unsearchable from the main food search bar (search never reads customBox)
+
+- **Status**: OPEN
+- **Blocked on**: founder product decision (separate Your Foods section vs unified search)
+- **Verified**: never
+- **Identified**: 2026-09-17 · filed via mint_oi.sh from branch `custom-picker-fix`
+- **Detail**: `FoodRepository.search` (food_repository.dart:37-43) queries only the seeded ~5K foodBox, never customBox — a custom food is unreachable from the main search box and only surfaces via the dedicated "Your Foods" section. No filter-drop bug (no analogous equipment-style regression found in custom-food or saved-meal readers), but the same "I can't find it when I search" confusion as the exercise picker bug. Decide: fold customBox into search results with a custom badge, or keep the section split deliberately.
