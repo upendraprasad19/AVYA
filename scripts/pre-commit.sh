@@ -382,6 +382,8 @@ for MARK in "$GATE_FAILDIR"/*; do
   [ -e "$MARK" ] || continue   # no failures -> unexpanded glob -> skip
   FAILED_NAME="$(basename "$MARK")"
   # Persist gate failures for batch-close telemetry (§4.12.6); best-effort, never fails the commit.
+  # Append-only by design (unbounded but tiny — one ~40B line per failure, and a
+  # failure aborts the commit); per-worktree copies die at retirement. Accepted pulse semantics (B-pass 2026-09-18).
   printf '%s %s\n' "$(date +%s)" "$FAILED_NAME" >> "$REPO_ROOT/.claude/.gate_failures.log" 2>/dev/null || true
   echo "[pre-commit] GATE FAIL: $FAILED_NAME — re-run for details: dart run scripts/$FAILED_NAME"
   GATE_FAIL=1

@@ -22,15 +22,18 @@ String? _gitOut(List<String> args) {
   return (r.stdout as String).trim();
 }
 
-/// Files under [dir] modified within the last 7 days. Null when the DIRECTORY
-/// itself is missing/unreadable (unknown, NOT 0 — the lib's ledger rule); a
-/// per-file read failure counts that file as 0 and never nulls the result.
+/// Markdown files under [dir] modified within the last 7 days. Null when the
+/// DIRECTORY itself is missing/unreadable (unknown, NOT 0 — the lib's ledger
+/// rule); a per-file read failure counts that file as 0 and never nulls the
+/// result. `.md`-only so editor temp/lock files cannot inflate the count
+/// (B-pass 2026-09-18).
 int? _recentCount(Directory dir, DateTime cutoff) {
   try {
     if (!dir.existsSync()) return null;
     var n = 0;
     for (final e in dir.listSync()) {
       if (e is! File) continue;
+      if (!e.path.endsWith('.md')) continue;
       try {
         if (e.statSync().modified.isBefore(cutoff)) continue;
         n++;

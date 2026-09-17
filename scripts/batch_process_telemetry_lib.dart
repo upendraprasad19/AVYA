@@ -58,15 +58,18 @@ EscapeLedgerStats parseEscapeLedger(String content) {
   if (!content.contains(RegExp(r'^escapes:', multiLine: true))) {
     return const EscapeLedgerStats(openEscapes: null);
   }
-  // The `$` anchor is load-bearing: without it open-PREFIXED statuses
-  // (`status: opened`, `status: open_ticket`) count as open. The trailing
+  // The `^\s*status:` anchor is load-bearing twice: without the key anchor,
+  // any line ENDING in `status: open` counts (e.g. `open_status: open`, or a
+  // prose sentence); without the `$`, open-PREFIXED statuses
+  // (`status: opened`, `status: open_ticket`) count. The trailing
   // `\s*` additionally tolerates trailing whitespace before the line ending.
   // (Empirically verified 2026-09-18: Dart/ECMAScript multiline `$` DOES
   // match before `\r`, so bare-`$` already handles CRLF — the trailing
   // `\s*` is belt-and-braces, and the CRLF test pins that behaviour.)
   return EscapeLedgerStats(
-    openEscapes:
-        RegExp(r'status:\s*open\s*$', multiLine: true).allMatches(content).length,
+    openEscapes: RegExp(r'^\s*status:\s*open\s*$', multiLine: true)
+        .allMatches(content)
+        .length,
   );
 }
 
@@ -147,10 +150,12 @@ String composeReport({
     'process-telemetry: open_s_escapes=$esc',
     'process-telemetry: s_tier_fixes=$sFix/$total '
         'review_files_7d=$reviews',
-    // topGate null renders `none`, never `unknown`: with a parseable log it
-    // genuinely means "no failures in-window"; an unparseable/absent log
-    // already renders unknown via gate_failures_7d.
+    // topGate null has TWO meanings and they must not collapse: with a
+    // parseable log it genuinely means "no failures in-window" (`none`);
+    // with an unparseable/absent log it means nothing was measured, and
+    // `gate_failures_7d` already renders `unknown` — so `top_gate` must
+    // render `unknown` too, never a clean `none` beside an unknown count.
     'process-telemetry: gate_failures_7d=$gf '
-        'top_gate=${topGate ?? 'none'}',
+        'top_gate=${gateFailures7d == null ? 'unknown' : (topGate ?? 'none')}',
   ].join('\n');
 }

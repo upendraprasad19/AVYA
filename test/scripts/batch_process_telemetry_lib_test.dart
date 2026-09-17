@@ -39,6 +39,14 @@ prose
       expect(parseEscapeLedger('not: a ledger').openEscapes, isNull);
     });
 
+    test('a non-status key ending in "status: open" does NOT count (B-pass anchor)', () {
+      expect(
+        parseEscapeLedger('escapes:\n  - open_status: open\n  - my_status: open\n')
+            .openEscapes,
+        0,
+      );
+    });
+
     test('counts open escapes with CRLF line endings (Windows checkout)', () {
       expect(
         parseEscapeLedger('escapes:\r\n  - bug: a1b2c3\r\n    status: open\r\n')
@@ -92,6 +100,7 @@ prose
       expect(out, contains('s_tier_fixes=1/unknown'));
       expect(out, contains('review_files_7d=unknown'));
       expect(out, contains('gate_failures_7d=unknown'));
+      expect(out, contains('top_gate=unknown'));
       expect(out, isNot(contains('s_tier_fixes=0/')));
       expect(out, isNot(contains('s_tier_fixes=/')));
     });

@@ -407,5 +407,7 @@ body
     expect(dec2, isNotNull);
     expect(dec2!['reason'], contains('gate_failures_7d=unknown'));
     expect(dec2['reason'], isNot(contains('gate_failures_7d=0')));
+    // No-news must not hide beside unknown: top_gate renders unknown too.
+    expect(dec2['reason'], contains('top_gate=unknown'));
   });
 }
