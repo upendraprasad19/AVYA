@@ -4816,3 +4816,10 @@ design (billing brainstorm "not yet designed" item). The
 `update_user_subscription_status()` trigger widening (brainstorm decision 5)
 also lands with this work, not before.
 
+
+## OI-214 — Diet plan Option A: curated Indian meal-template layer (recipe-first selection + portion scaling)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-17 · filed via mint_oi.sh from branch `diet-plan-quality`
