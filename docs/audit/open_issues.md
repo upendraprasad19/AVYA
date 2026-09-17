@@ -4795,3 +4795,24 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Verified**: never
 - **Identified**: 2026-09-17 · filed via mint_oi.sh from branch `custom-picker-fix`
 - **Detail**: `FoodRepository.search` (food_repository.dart:37-43) queries only the seeded ~5K foodBox, never customBox — a custom food is unreachable from the main search box and only surfaces via the dedicated "Your Foods" section. No filter-drop bug (no analogous equipment-style regression found in custom-food or saved-meal readers), but the same "I can't find it when I search" confusion as the exercise picker bug. Decide: fold customBox into search results with a custom badge, or keep the section split deliberately.
+
+## OI-213 — Razorpay auto-renew subscriptions (web): mandates, subscription.charged webhooks, cancel-at-period-end — one-time orders shipped 2026-09-17, renewals deliberately deferred
+
+- **Status**: OPEN
+- **Blocked on**: founder product decision on timing (revenue tradeoff: auto-renew reduces lapse churn; requires the revoke path design first — nothing in the codebase takes entitlement away today, and a renewal charge without a revoke path makes refunds unenforceable)
+- **Verified**: 2026-09-17 — claims traced from the web-launch batch (spec 2026-09-17-web-razorpay-checkout-design.md, decisions section) and the multi-source billing brainstorm memory
+- **Identified**: 2026-09-17 · filed via mint_oi.sh from branch `main`
+
+The web launch (merged `02a7eba8`) ships ONE-TIME orders on the existing
+`create-razorpay-order` / `razorpay-webhook` / `verify-payment` pipeline.
+Auto-renew needs: Razorpay Subscriptions (plans + mandates), a
+`create-razorpay-subscription` EF, new webhook events (`subscription.charged`
+etc. — the current webhook's idempotency is keyed on `razorpay_payment_id`
+pre-SELECT + 23505, which does not cover subscription cycle events), a
+cancel path (note: `delete-account`'s Razorpay-cancel step reads
+`razorpay_subscription_id`, which has readers and ZERO writers today — a
+live-money no-op the day this ships), and the revoke/entitlement-takedown
+design (billing brainstorm "not yet designed" item). The
+`update_user_subscription_status()` trigger widening (brainstorm decision 5)
+also lands with this work, not before.
+
