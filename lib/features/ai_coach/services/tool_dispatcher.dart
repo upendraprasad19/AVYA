@@ -26,7 +26,11 @@ import '../../home/providers/home_provider.dart'
         nutritionSummaryProvider,
         recentFoodLogsProvider;
 import '../../nutrition/providers/nutrition_provider.dart'
-    show dailyNutritionProvider, macroTargetsProvider, weeklyNutritionProvider;
+    show
+        aiTextLogRemainingProvider,
+        dailyNutritionProvider,
+        macroTargetsProvider,
+        weeklyNutritionProvider;
 import '../../profile/services/profile_write_service.dart';
 import '../../profile/providers/profile_provider.dart'
     show userProfileProvider, userStatsProvider;
@@ -1669,6 +1673,16 @@ class ToolDispatcher {
       ref.invalidate(macroTargetsProvider);
     } catch (e, st) {
       debugPrint('[tool_dispatcher] invalidate macroTargetsProvider failed: $e\n$st');
+    }
+    // C4 — the coach meal path increments featureAiTextLogPro
+    // (_executeLogByText) but never refreshed the "X remaining" read;
+    // the manual path invalidates it (food_logger_section.dart). Same
+    // reader, same rule.
+    try {
+      ref.invalidate(aiTextLogRemainingProvider);
+    } catch (e, st) {
+      debugPrint(
+          '[tool_dispatcher] invalidate aiTextLogRemainingProvider failed: $e\n$st');
     }
   }
 

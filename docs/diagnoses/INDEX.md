@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### nutrition_ai_text_log_remaining (1 bugs)
+- 2026-09-18 e6c2a9 — Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that after the AI coach logs a meal from chat (log_meal_by_text), the Nutrition…
+
 ### schedule_terminal_rows (1 bugs)
 - 2026-09-18 d6b9c7 — Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C3) found that all three AI-coach overwrite tools guard only against 'completed' and…
 
@@ -1249,6 +1252,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-18 | e6c2a9 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that after the AI coach logs a meal from chat (log_meal_by_text), the Nutrition… | nutrition_ai_text_log_remaining | test/contracts/coach_meal_log_invalidates_remaining_test.dart |
 | 2026-09-18 | d6b9c7 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C3) found that all three AI-coach overwrite tools guard only against 'completed' and… | schedule_terminal_rows | test/contracts/coach_regen_phase_stamp_behavioral_test.dart |
 | 2026-09-18 | e8f4a3 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that `_executeRescheduleWeek`'s move path raw-deleted the source… | streaks | test/contracts/reschedule_week_terminal_row_test.dart |
 | 2026-09-18 | c1a9d4 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that a PAST scheduled day paused via the AI-coach pausePlan tool… | streaks | test/contracts/streak_paused_day_not_missed_test.dart |
