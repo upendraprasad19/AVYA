@@ -21,11 +21,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 import 'package:icanbefitter/features/ai_coach/services/regenerate_plan_planner.dart';
 import 'package:icanbefitter/features/ai_coach/services/hotel_workout_planner.dart';
+import 'package:icanbefitter/features/ai_coach/services/tool_dispatcher.dart';
+
+/// Exposes a real Riverpod [Ref] so we can drive
+/// `ToolDispatcher.execute(ref, intent)` — the REAL dispatch path (mirrors
+/// `test/contracts/reschedule_week_terminal_row_test.dart`).
+final _refProvider = Provider<Ref>((ref) => ref);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -82,6 +93,10 @@ void main() {
 
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    // Keep the dispatch hermetic (C3 hotel test drives ToolDispatcher):
+    // execute()'s fire-and-forget syncWorkoutData()/pushSnapshot()
+    // short-circuit under this flag.
+    SyncService.pausedForSimulation = true;
 
     // A phase-6 user (the demotion victim in the pre-fix bug).
     await HiveService.instance.userBox.put('profile', {
@@ -94,6 +109,7 @@ void main() {
   });
 
   tearDown(() async {
+    SyncService.pausedForSimulation = false;
     await HiveUserSession.closeAll();
   });
 
@@ -123,5 +139,75 @@ void main() {
       expect(row['phase'], 6,
           reason: 'hotel row missing/wrong phase stamp (COACH-1): $row');
     }
+  });
+
+  // C3 (ai-coach-ux-tool-integrity spec 2026-09-18) — the hotel commit must
+  // not silently un-pause a paused day. The planner filters only 'completed'
+  // out of the raw-schedule queue, so a paused day IS queued for write; the
+  // dispatcher's concurrent-edit guard is the only protection between
+  // sheet-open and confirm.
+  test('hotel: a paused day survives the commit overwrite (C3)', () async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final pausedDate = today.add(const Duration(days: 2));
+    final pausedDateStr = istDateStr(pausedDate);
+    await HiveService.instance.workoutBox.put('schedule_$pausedDateStr', {
+      'date': pausedDateStr,
+      'type': 'workout',
+      'workout_name': 'Push A',
+      'status': 'paused',
+      'paused_via': 'ai_coach',
+      'paused_at': now.toIso8601String(),
+      'exercises': [
+        {'exercise_name': 'Bench Press'},
+      ],
+    });
+
+    final out = await HotelWorkoutPlanner.instance.plan(
+      days: 3,
+      startDate: pausedDateStr,
+    );
+    expect(
+      out.rawSchedules.any((r) => r['date'] == pausedDateStr),
+      isTrue,
+      reason: 'precondition: the hotel planner queues the paused day for '
+          "write (it filters only 'completed') — the dispatcher's guard is "
+          'the only protection',
+    );
+
+    HotelWorkoutPlanner.instance.cache('hotel_pause_1', out.days, out.rawSchedules);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final res = await ToolDispatcher.instance.execute(
+      container.read(_refProvider),
+      ToolIntent(
+        id: 'hotel_pause_1',
+        type: 'generate_hotel_workout',
+        payload: const <String, dynamic>{},
+        confirmationClass: ConfirmationClass.reviewable,
+        previewSummary: '3-day hotel plan over a paused day',
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    expect(res.success, isTrue, reason: 'dispatch must succeed');
+    final schedules = (res.data as Map<String, dynamic>?)?['schedules'] as List? ?? const <dynamic>[];
+    expect(
+      schedules.whereType<Map>().where((m) => m['date'] == pausedDateStr),
+      isEmpty,
+      reason: 'the paused date must be skipped, not reported as scheduled',
+    );
+
+    final row =
+        HiveService.instance.workoutBox.get('schedule_$pausedDateStr') as Map?;
+    expect(row, isNotNull,
+        reason: 'the paused row must survive untouched');
+    expect(row!['status'], 'paused',
+        reason: 'pre-fix the hotel commit overwrote the paused row with a '
+            "fresh status:'planned' row — silently un-pausing the user's "
+            'pause');
+    expect(row['workout_name'], 'Push A');
+    expect(row['paused_via'], 'ai_coach');
+    expect(row['paused_at'], isNotNull);
   });
 }

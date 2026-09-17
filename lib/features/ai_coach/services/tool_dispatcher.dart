@@ -828,12 +828,17 @@ class ToolDispatcher {
     for (final schedule in rawSchedules) {
       final date = schedule['date'] as String;
       try {
-        // Defensive: re-check completed status (concurrent-edit guard).
+        // Defensive: re-check terminal status (concurrent-edit guard).
         // The planner already filters completed days out of the raw
         // schedule list, but a workout completed between sheet-open and
-        // confirm could land here.
+        // confirm could land here. C3 — 'paused' joins 'completed': a pause
+        // is a deliberate user state (invisible to the streak walk);
+        // overwriting the row with a fresh planned entry would silently
+        // un-pause the day.
         final existing = box.get('schedule_$date');
-        if (existing is Map && existing['status'] == 'completed') {
+        if (existing is Map &&
+            (existing['status'] == 'completed' ||
+                existing['status'] == 'paused')) {
           continue;
         }
         // Plan A A-12: route through WorkoutWriteService.
@@ -964,8 +969,12 @@ class ToolDispatcher {
       final date = schedule['date'] as String;
       try {
         final existing = box.get('schedule_$date');
-        if (existing is Map && existing['status'] == 'completed') {
-          // Concurrent-edit safety net.
+        if (existing is Map &&
+            (existing['status'] == 'completed' ||
+                existing['status'] == 'paused')) {
+          // Concurrent-edit safety net. C3 — 'paused' joins 'completed': a
+          // pause is a deliberate user state (invisible to the streak walk);
+          // a fresh planned row over it would silently un-pause the day.
           continue;
         }
         // Plan A A-12: route through WorkoutWriteService.
@@ -1414,8 +1423,18 @@ class ToolDispatcher {
       }
 
       try {
-        await WorkoutScheduleService.instance
+        final assignResult = await WorkoutScheduleService.instance
             .assignTemplateToDate(a.templateId, date);
+        // C3 — map the service's paused-day rejection to a user-facing
+        // failure so the coach tells the user why the day was skipped
+        // (instead of counting it as scheduled).
+        if (assignResult is AssignTemplateRejected &&
+            assignResult.reason ==
+                AssignTemplateRejectionReason.alreadyPaused) {
+          errors.add('${a.date}: That day is paused — lift the pause first '
+              'or pick another day.');
+          continue;
+        }
         scheduled.add({'date': a.date, 'template_id': a.templateId});
       } catch (e, stack) {
         debugPrint(
