@@ -12,6 +12,11 @@ status: scaffold
 ```
 User taps "Upgrade to PRO"
   → Opens Razorpay WebView checkout (amount adjusted for promo if applied)
+    (WEB — since 2026-09-17 / ADR-0019: Razorpay Standard Checkout.js via
+    dart:js_interop instead of the WebView; same order_id + server amount,
+    same verification pipeline below, `payment.failed` wired to the same
+    failure snackbar; kill-switch `disable_web_checkout` preserves the
+    old mobile-only paywall per-browser)
   → User pays
   → Razorpay webhook → Edge Function (razorpay-webhook)
   → Verify HMAC-SHA256 signature (MANDATORY)
