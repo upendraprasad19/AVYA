@@ -24,14 +24,19 @@ void main() {
       expect(src, contains('String? signature'));
     });
 
-    test('native _handlePaymentSuccess DELEGATES (window-scoped — round-2 P1: a bare contains() is satisfied by the method definition itself and can never redden)', () {
+    test('native _handlePaymentSuccess DELEGATES (brace-scoped regex — round-2 P1 + round-3 mutation-4 finding: a substring/window form is satisfied by the method definition itself or the ADJACENT definition and can never redden)', () {
       final delIdx =
           src.indexOf('void _handlePaymentSuccess(PaymentSuccessResponse');
       expect(delIdx, greaterThanOrEqualTo(0));
-      expect(src.substring(delIdx, delIdx + 400),
-          contains('handlePaymentConfirmed('),
-          reason: 'the delegator body within 400 chars of the signature must '
-              'call handlePaymentConfirmed — severing the delegation must redden this');
+      // [^}]* ends at the delegator's own closing brace, so only the
+      // delegator's BODY can satisfy this — the adjacent definition cannot.
+      expect(
+        RegExp(r'void _handlePaymentSuccess\(PaymentSuccessResponse[^}]*handlePaymentConfirmed\(')
+            .hasMatch(src.substring(delIdx)),
+        isTrue,
+        reason: 'the delegator body must call handlePaymentConfirmed — '
+            'severing the delegation (body → return;) must redden this',
+      );
     });
 
     test('poll + in-flight mark reachable through the shared method', () {

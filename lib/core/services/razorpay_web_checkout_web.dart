@@ -26,11 +26,15 @@ void openWebCheckout({
   required void Function(String message) onUnavailable,
 }) {
   try {
-    final jsOptions = options.jsify();
-    if (jsOptions is! JSObject) {
+    final jsAny = options.jsify();
+    if (jsAny == null) {
+      // Unreachable for a Map, but a null here must surface, not crash.
       onUnavailable("Couldn't start payment. Check your connection and try again.");
       return;
     }
+    // JSAny → JSObject via `as` (the documented interop cast form; the `is`
+    // check form trips invalid_runtime_check_with_js_interop_types).
+    final jsOptions = jsAny as JSObject;
     jsOptions['handler'] = ((JSObject resp) {
       final raw = resp.dartify();
       onSuccess(raw is Map
