@@ -40,6 +40,8 @@ Map<String, String> _cleanEnv() {
 
 late final String _hook;
 late final String _lib;
+late final String _telemetryCli;
+late final String _telemetryLib;
 
 ProcessResult _git(String cwd, List<String> args) => Process.runSync(
       'git',
@@ -110,6 +112,25 @@ Map<String, dynamic>? _decision(({int exitCode, String stdout}) r) {
   return null;
 }
 
+/// Fixture with the telemetry CLI + its lib copied in and a plan-review record
+/// for the CURRENT branch (whatever `git init` named it — never hardcoded).
+/// Built on [_repoWithUnpushed] so the existing fixture stays untouched.
+Directory _repoWithTelemetry({String? recordContent}) {
+  final d = _repoWithUnpushed();
+  File('${d.path}/scripts/batch_process_telemetry.dart')
+      .writeAsStringSync(File(_telemetryCli).readAsStringSync());
+  File('${d.path}/scripts/batch_process_telemetry_lib.dart')
+      .writeAsStringSync(File(_telemetryLib).readAsStringSync());
+  Directory('${d.path}/docs/plan-reviews').createSync(recursive: true);
+  if (recordContent != null) {
+    final branch =
+        _git(d.path, ['branch', '--show-current']).stdout.toString().trim();
+    File('${d.path}/docs/plan-reviews/${branch.replaceAll('/', '-')}.md')
+        .writeAsStringSync(recordContent);
+  }
+  return d;
+}
+
 
 /// Remove a fixture directory without ever failing the test.
 ///
@@ -133,6 +154,10 @@ void main() {
   setUpAll(() {
     _hook = '${Directory.current.path}/scripts/batch_close_hook.dart';
     _lib = '${Directory.current.path}/scripts/batch_close_lib.dart';
+    _telemetryCli =
+        '${Directory.current.path}/scripts/batch_process_telemetry.dart';
+    _telemetryLib =
+        '${Directory.current.path}/scripts/batch_process_telemetry_lib.dart';
   });
 
   test('BLOCKS once when a batch has landed unpushed', () async {
@@ -270,5 +295,119 @@ void main() {
     // `timeout:` takes precedence over the file annotation, so the file got the
     // fix and this test kept the old ceiling. Inheriting the file budget is the
     // point; do not re-add a tighter one without re-reading §4.9.
+  });
+
+  test('telemetry appears on the hook stdout channel when a record exists',
+      () async {
+    final d = _repoWithTelemetry(recordContent: '''
+---
+branch: test
+review_rounds: 2
+mechanical_only: false
+---
+body
+''');
+    addTearDown(() => _cleanup(d));
+
+    final r = await _runHook(d.path);
+    expect(r.exitCode, 0);
+    final dec = _decision(r);
+    expect(dec, isNotNull);
+    expect(dec!['decision'], 'block');
+    // Same channel as the checklist: the JSON `reason` field on stdout.
+    expect(dec['reason'], contains('process-telemetry:'));
+    expect(dec['reason'], contains('review_rounds=2'));
+    expect(dec['reason'], contains('mechanical_only=false'));
+  });
+
+  test('corrupted record still exits 0 and the checklist still emits',
+      () async {
+    final d = _repoWithTelemetry(recordContent: '@@@ not a record at all @@@');
+    addTearDown(() => _cleanup(d));
+
+    final r = await _runHook(d.path);
+    expect(r.exitCode, 0, reason: 'every error path exits 0');
+    final dec = _decision(r);
+    expect(dec, isNotNull, reason: 'checklist must still emit');
+    expect(dec!['decision'], 'block');
+    expect(dec['reason'], contains('§5'));
+    // Telemetry degrades to the defaults (parse fell back, rounds read 0)
+    // rather than crashing the hook or vanishing from the payload.
+    expect(dec['reason'], contains('process-telemetry:'));
+    expect(dec['reason'], contains('review_rounds=0'));
+  });
+
+  test('sweep counts 7-day mtime window, s_fix tier, absent ledger is unknown',
+      () async {
+    final d = _repoWithTelemetry();
+    addTearDown(() => _cleanup(d));
+
+    final diag = Directory('${d.path}/docs/diagnoses')
+      ..createSync(recursive: true);
+    final now = DateTime.now();
+    // OLD (8 days back) but s_fix — must be excluded by the mtime window
+    // even though its content matches the tier pattern.
+    final old = File('${diag.path}/old_sfix.md');
+    old.writeAsStringSync('tier: s_fix\n');
+    old.setLastModified(now.subtract(const Duration(days: 8)));
+    File('${diag.path}/recent_sfix.md').writeAsStringSync('tier: s_fix\n');
+    File('${diag.path}/recent_plain.md').writeAsStringSync('tier: a_fix\n');
+    Directory('${d.path}/docs/reviews').createSync(recursive: true);
+    File('${d.path}/docs/reviews/one-bpass.md').writeAsStringSync('review\n');
+    // NO docs/audit/s_tier_escapes.yaml — ledger absent must render unknown.
+
+    final r = await _runHook(d.path);
+    expect(r.exitCode, 0);
+    final dec = _decision(r);
+    expect(dec, isNotNull);
+    expect(dec!['decision'], 'block');
+    expect(dec['reason'], contains('s_tier_fixes=1/2'),
+        reason: 'only the 2 recent diagnose docs count, and only 1 is s_fix '
+            '— the 8-day-old s_fix file is outside the mtime window');
+    expect(dec['reason'], contains('review_files_7d=1'));
+    expect(dec['reason'], contains('open_s_escapes=unknown'),
+        reason: 'ledger ABSENT renders unknown, never 0 (bad-news-vs-no-news) '
+            '— pinned at the wiring level, not just in the pure lib');
+    expect(dec['reason'], contains('gate_failures_7d=unknown'),
+        reason: 'gate-failures log ABSENT renders unknown, never 0 — '
+            'the sweep fixture writes no .claude/.gate_failures.log');
+  });
+
+  test('gate-failures log: 7-day window, top gate, unparseable is unknown',
+      () async {
+    final d = _repoWithTelemetry();
+    addTearDown(() => _cleanup(d));
+    Directory('${d.path}/.claude').createSync(recursive: true);
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    File('${d.path}/.claude/.gate_failures.log').writeAsStringSync(
+      '${nowSec - 100} check_alpha\n'
+      '${nowSec - 200} check_alpha\n'
+      '${nowSec - 691200} check_beta\n',
+    );
+
+    final r = await _runHook(d.path);
+    expect(r.exitCode, 0);
+    final dec = _decision(r);
+    expect(dec, isNotNull);
+    expect(dec!['decision'], 'block');
+    expect(dec['reason'], contains('gate_failures_7d=2'),
+        reason: 'only the 2 recent lines count — the 8-day-old check_beta '
+            'line is outside the window');
+    expect(dec['reason'], contains('top_gate=check_alpha'));
+
+    // Unparseable content degrades to unknown, never 0.
+    final d2 = _repoWithTelemetry();
+    addTearDown(() => _cleanup(d2));
+    Directory('${d2.path}/.claude').createSync(recursive: true);
+    File('${d2.path}/.claude/.gate_failures.log')
+        .writeAsStringSync('not a gate-failures log\n');
+    final r2 = await _runHook(d2.path);
+    expect(r2.exitCode, 0);
+    final dec2 = _decision(r2);
+    expect(dec2, isNotNull);
+    expect(dec2!['reason'], contains('gate_failures_7d=unknown'));
+    expect(dec2['reason'], isNot(contains('gate_failures_7d=0')));
+    // No-news must not hide beside unknown: top_gate renders unknown too.
+    expect(dec2['reason'], contains('top_gate=unknown'));
   });
 }

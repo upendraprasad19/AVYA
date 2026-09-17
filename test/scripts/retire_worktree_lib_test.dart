@@ -367,6 +367,21 @@ void main() {
       expect(isRegenerableIgnored('.claude/'), isFalse);
     });
 
+    test('the gate-failure telemetry log is regenerable, or every worktree '
+        'where a gate has ever failed becomes permanently unretirable', () {
+      // Fourth instance of the write-a-gitignored-file-into-the-worktree class
+      // (d7b3e9 -> f2a9c7 -> b4d7e9 -> this): the pre-commit gate loop's
+      // failure branch appends `<epoch> <gate-name>` lines to
+      // .claude/.gate_failures.log (gitignored via .gitignore:3 `*.log`).
+      // Append-only telemetry; retirement already requires the branch MERGED,
+      // so nothing precious can live there.
+      expect(isRegenerableIgnored('.claude/.gate_failures.log'), isTrue);
+      // Exact-match, as ever.
+      expect(isRegenerableIgnored('.claude/.gate_failures.log.bak'), isFalse);
+      expect(isRegenerableIgnored('backup/.claude/.gate_failures.log'), isFalse);
+      expect(isRegenerableIgnored('.claude/.gate_failures'), isFalse);
+    });
+
     test('handles Windows backslashes', () {
       expect(isRegenerableIgnored(r'android\local.properties'), isTrue);
       expect(isRegenerableIgnored(r'secrets\creds.txt'), isFalse);

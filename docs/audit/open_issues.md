@@ -4816,3 +4816,51 @@ design (billing brainstorm "not yet designed" item). The
 `update_user_subscription_status()` trigger widening (brainstorm decision 5)
 also lands with this work, not before.
 
+
+## OI-215 — Device verification expansion: Patrol flows for the UI-bug cluster, screenshot tests, canary APK
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-18 · filed via mint_oi.sh from branch `discipline-v2`
+
+Follow-up from the discipline-overhead-v2 design (spec:
+`docs/superpowers/specs/2026-09-17-discipline-overhead-v2-design.md` §4, "design C"). Evidence:
+of 65 fix commits Sept 2026, ~60% are product bugs and the biggest cluster is founder-visible
+UI/UX defects (the 5-observation batch of 2026-09-16: toast color, text wrap, double-pop, empty
+states, spinner) — every pre-merge review stage is a code reader and CANNOT see these; the
+founder is the QA loop. Scope: expand `docs/operations/DEVICE_TESTING.md`'s 4 Patrol flows to
+cover the recurring UI-bug classes (toast/error states, text overflow, empty states,
+double-pop/navigation), per-screen screenshot comparisons, and a canary APK flow so S-class UI
+fixes get device verification before the founder reports them. Real engineering — own batch,
+not bundled into discipline-v2.
+
+## OI-216 — snapshot-contract gate: per-entry slack mechanism for shift-sensitive citations
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-18 · filed via mint_oi.sh from branch `discipline-v2`
+
+`scripts/check_snapshot_contract.dart:118-119` hardcodes a fixed ±15-line window for every
+`file:line` citation in `docs/snapshot_contract.yaml` — no per-entry slack exists. The
+`future_prediction`/`morning_alert` reader citations drifted twice (2026-07-26, 2026-09-16) when
+code removal ABOVE the cited line pushed them out of the window; the discipline-v2 sweep
+(1664b475) added SHIFT-SENSITIVE notes but could not convert the mechanism without globally
+weakening every other entry. Fix: per-entry optional `slack: N` field (default 15), consumed by
+the gate; entries that have drifted twice get 40.
+
+## OI-217 — telemetry v2: aggregate plan-review findings by class (compile/logic/citation) + explicit M/L counts
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-18 · filed via mint_oi.sh from branch `discipline-v2`
+
+Follow-up from discipline-overhead-v2 telemetry (spec §2.8 scope correction). The shipped reader
+covers convergence stats, gate failures, escape ledger, and the `tier: s_fix` share; it cannot
+aggregate review findings by class because plan-review records carry no structured finding-class
+field. Fix: records gain an optional `findings_by_class:` frontmatter map (compile/logic/citation/
+material), the telemetry reader sums it across recent records, and M/L counts derive from diagnose
+docs stamped `tier: m_fix`/`tier: l_fix` (extending the `tier: s_fix` stamp from CLAUDE.md
+§4.12.6/rule 22).

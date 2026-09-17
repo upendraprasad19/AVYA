@@ -177,6 +177,11 @@ paths:
   # be the one piece changeable without it.
   - { glob: "scripts/batch_close_hook.dart", tier: platform }
   - { glob: "scripts/batch_close_lib.dart", tier: platform }
+  # The Stop hook embeds the telemetry CLI's stdout into the harness `reason`
+  # payload — the CLI is part of the hook's output contract, so it is pinned
+  # with the hook it serves (the "hook pinned, dependencies not" class below).
+  - { glob: "scripts/batch_process_telemetry.dart", tier: platform }
+  - { glob: "scripts/batch_process_telemetry_lib.dart", tier: platform }
   - { glob: "scripts/check_skill_tuning_history.dart", tier: platform }
   - { glob: "scripts/skill_tuning_lib.dart", tier: platform }
   # THE HOOK WAS PINNED AND ITS DEPENDENCIES WERE NOT — the fourth instance of
