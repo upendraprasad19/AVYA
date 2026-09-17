@@ -17,11 +17,11 @@ symptom: |
 concept: streaks
 sot_registry_entry: streaks
 writers:
-  - { file: lib/core/services/workout_schedule_service.dart, method_or_widget: WorkoutScheduleService.pauseRange, line: 140 }
+  - { file: lib/core/services/workout_schedule_write_service.dart, method_or_widget: WorkoutScheduleWriteService.pauseRange, line: 140 }
   - { file: lib/features/ai_coach/services/tool_dispatcher.dart, method_or_widget: _executeRescheduleWeek (Task 2 — terminal rows), line: 707 }
 readers:
-  - { file: lib/features/train/repositories/workout_repository.dart, method_or_widget: WorkoutRepository._calculateStreak, line: 376 }
-  - { file: lib/features/train/repositories/workout_repository.dart, method_or_widget: WorkoutRepository.completionRateOverWindow, line: 466 }
+  - { file: lib/features/train/repositories/workout_repository.dart, method_or_widget: WorkoutRepository._calculateStreak (decl :309; C1 skip), line: 372 }
+  - { file: lib/features/train/repositories/workout_repository.dart, method_or_widget: WorkoutRepository.completionRateOverWindow (decl :440; C1 skip), line: 462 }
 hive_key_prefix: schedule_
 hive_key_formula: schedule_${istDateStr(date)} with status field (paused/moved/dropped)
 sync_methods: []
@@ -84,17 +84,17 @@ row with `status='paused'` hit the missed arm: streak broke (or a freeze was
 consumed). `completionRateOverWindow` similarly counted a paused day in the
 DENOMINATOR but never the numerator, dragging the rank completion-rate gates
 (TRAIN-38 SubLt ≥0.80) down for every paused week. Writer/reader drift by
-omission: `pauseRange` (workout_schedule_service.dart:140) writes the status,
+omission: `pauseRange` (workout_schedule_write_service.dart:140) writes the status,
 but the readers were never extended to know it.
 
 ## Fix
 
 Shared static set + predicate on `WorkoutRepository`
-(workout_repository.dart:111-130): `invisibleScheduleStatuses =
+(workout_repository.dart:111-125): `invisibleScheduleStatuses =
 {'paused','moved','dropped'}` + `isInvisibleToStreak()`. Both readers skip
 such rows — `_calculateStreak` right after the `travel` guard
-(workout_repository.dart:377-378), `completionRateOverWindow` right after the
-`rest` guard (workout_repository.dart:466-467). One set, two readers — the
+(workout_repository.dart:372-373), `completionRateOverWindow` right after the
+`rest` guard (workout_repository.dart:462-463). One set, two readers — the
 streak walk and the rank rate can never drift apart on which statuses are
 invisible. `moved`/`dropped` are in the set PROACTIVELY for Task 2's terminal
 rows (rescheduleWeek's raw-delete replacement), so a reschedule can never

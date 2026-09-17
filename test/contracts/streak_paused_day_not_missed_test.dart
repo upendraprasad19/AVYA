@@ -1,7 +1,7 @@
 // C1 (ai-coach-ux-tool-integrity spec 2026-09-18) — founder rule: PAUSED =
 // INVISIBLE. A past paused day must neither break the streak nor burn a
 // freeze (writer: pauseRange, workout_schedule_write_service.dart:140; the
-// old reader fell through to the missed arm: workout_repository.dart:384).
+// old reader fell through to the missed arm: workout_repository.dart:402-404).
 // Same for the 'moved'/'dropped' terminal rows Task 2 introduces.
 import 'dart:io';
 
@@ -55,6 +55,44 @@ void main() {
 
       expect(WorkoutRepository.instance.currentStreak(), 2,
           reason: 'paused day-1 is invisible: today(+1) day-1(skip) day-2(+1) = 2');
+    });
+
+    test('a paused day never consumes a freeze (consuming variant)', () async {
+      await seedAnchor(20);
+      final today = nowWall();
+      DateTime daysAgo(int n) => today.subtract(Duration(days: n));
+      String key(DateTime d) => istDateStr(d);
+
+      await HiveService.instance.workoutBox
+          .put('schedule_${key(today)}', {'type': 'PUSH', 'status': 'completed'});
+      await HiveService.instance.workoutBox.put(
+          'schedule_${key(daysAgo(1))}',
+          {'type': 'PUSH', 'status': 'paused', 'paused_via': 'ai_coach'});
+      await HiveService.instance.workoutBox
+          .put('schedule_${key(daysAgo(2))}', {'type': 'PUSH', 'status': 'completed'});
+      // ONE freeze AVAILABLE — pre-C1 the paused day-1 reached the consume
+      // branch (workout_repository.dart consume arm) via the mutating entry
+      // point and burned it: available 1→0 AND used_dates gains key(day-1).
+      await HiveService.instance.userBox.put('progress', {
+        'streak_freezes_available': 1,
+        'streak_freeze_used_dates': <String>[],
+      });
+
+      final streak =
+          WorkoutRepository.instance.consumeMissedDayIfFreezeAvailable();
+      expect(streak, 2,
+          reason: 'paused day-1 invisible under the CONSUMING walk too: '
+              'today(+1) day-1(skip) day-2(+1) = 2');
+
+      // The real protection assertion: persistence, not just the count.
+      // Read back through the canonical reader (user_repository getProgress).
+      final progress = UserRepository.instance.getProgress()!;
+      expect((progress['streak_freezes_available'] as num?)?.toInt(), 1,
+          reason: 'pre-C1 the paused day-1 burned the freeze '
+              '(streak_freezes_available would be 0)');
+      expect(progress['streak_freeze_used_dates'], isEmpty,
+          reason: 'pre-C1 the paused day-1 date entered the permanent '
+              'used-dates ledger (streak_freeze_used_dates)');
     });
 
     test('a moved/dropped terminal row is equally invisible', () async {
