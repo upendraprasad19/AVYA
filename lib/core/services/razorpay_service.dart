@@ -8,7 +8,9 @@ import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/razorpay_web_checkout.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
@@ -61,6 +63,19 @@ class RazorpayService {
 
   /// Global navigator key for showing snackbars after checkout.
   static GlobalKey<NavigatorState>? navigatorKey;
+
+  /// §4.6 kill-switch read for the paywall + web branch. Defensive — a
+  /// missing/unopened configBox defaults to checkout-ACTIVE (same pattern
+  /// as sync_state_provider._autoDrainDisabled).
+  /// ⚠ Per-browser scope on web: rolls back ONE browser, not the fleet.
+  bool get webCheckoutDisabled {
+    try {
+      return isWebCheckoutDisabledByConfig(
+          HiveService.instance.configBox.get('disable_web_checkout'));
+    } catch (_) {
+      return false;
+    }
+  }
 
   void initialize() {
     if (kIsWeb) return;
@@ -231,7 +246,39 @@ class RazorpayService {
       notes: notes,
     );
 
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      if (webCheckoutDisabled) {
+        debugPrint('RazorpayService: web checkout disabled by kill-switch');
+        onFailure?.call();
+        return;
+      }
+      debugPrint('RazorpayService: opening web checkout — plan=$plan, '
+          'order_id=$orderId, amount=$amountPaise paise');
+      openWebCheckout(
+        options: options,
+        onSuccess: (raw) {
+          final parsed = parseWebSuccessPayload(raw);
+          unawaited(handlePaymentConfirmed(
+            paymentId: parsed.paymentId ?? '',
+            orderId: parsed.orderId,
+            signature: parsed.signature,
+          ));
+        },
+        onDismissed: () {
+          // Mirrors the native PAYMENT_CANCELLED path (_handlePaymentError's
+          // non-snackbar branch): user closed the modal — call the failure
+          // callback WITHOUT the error snackbar. Failures inside the modal
+          // surface there, not here (checkout.js has no failure callback).
+          debugPrint('RazorpayService: web checkout dismissed');
+          onFailure?.call();
+        },
+        onUnavailable: (message) {
+          _showOrderCreationFailure(serverError: message);
+          onFailure?.call();
+        },
+      );
+      return;
+    }
     _razorpay?.open(options);
   }
 
