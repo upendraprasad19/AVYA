@@ -349,7 +349,7 @@ body
     // even though its content matches the tier pattern.
     final old = File('${diag.path}/old_sfix.md');
     old.writeAsStringSync('tier: s_fix\n');
-    old.setLastModified(now.subtract(const Duration(days: 8)));
+    old.setLastModifiedSync(now.subtract(const Duration(days: 8)));
     File('${diag.path}/recent_sfix.md').writeAsStringSync('tier: s_fix\n');
     File('${diag.path}/recent_plain.md').writeAsStringSync('tier: a_fix\n');
     Directory('${d.path}/docs/reviews').createSync(recursive: true);
