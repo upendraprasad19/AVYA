@@ -655,7 +655,7 @@ Two standing invariants, codified after a 4-round pre-implementation review of t
    (the classifier's feature tier also covers `lib/shared/**`, `test/**`, `docs/**`, `scripts/**`, none
    of which are S-eligible), and auth/ai_coach UI is account-tier ⇒ M. Plus: ≤2 PRODUCT-code files
    (tests + diagnose doc are excluded from the count — a rule-21/22-compliant fix is minimum 3 files
-   total), diff <100 lines, not a recurrence-class bug ⇒ NO ×2 plan review, B-pass SKIPPED; analyze
+   total), diff <100 lines (WHOLE diff — tests included), not a recurrence-class bug ⇒ NO ×2 plan review, B-pass SKIPPED; analyze
    `lib/` + targeted tests + slim diagnose doc (frontmatter `tier: s_fix` — the telemetry reader
    depends on that stamp) only. **M** = everything not S/L ⇒ current pipeline + compile-gate
    (`flutter analyze lib/` in the worktree BEFORE every reviewer dispatch; reviewer briefs declare

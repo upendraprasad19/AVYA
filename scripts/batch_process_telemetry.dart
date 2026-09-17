@@ -48,6 +48,14 @@ int? _recentCount(Directory dir, DateTime cutoff) {
 /// per-file read failure counts that file as 0 and never nulls the pair.
 ({int? total, int? sFix}) _diagnoseSweep(Directory dir, DateTime cutoff) {
   final sFixPattern = RegExp(r'^tier:\s*s_fix', multiLine: true);
+  // Scan only the FRONTMATTER block (rule 22 places the stamp there) — a body
+  // line that merely QUOTES `tier: s_fix` at line start must not count.
+  String frontmatterOf(String content) {
+    if (!content.startsWith('---')) return content;
+    final parts = content.split(RegExp(r'^---\s*$', multiLine: true));
+    return parts.length > 1 ? parts[1] : content;
+  }
+
   try {
     if (!dir.existsSync()) return (total: null, sFix: null);
     var total = 0;
@@ -57,7 +65,7 @@ int? _recentCount(Directory dir, DateTime cutoff) {
       try {
         if (e.statSync().modified.isBefore(cutoff)) continue;
         total++;
-        if (sFixPattern.hasMatch(e.readAsStringSync())) sFix++;
+        if (sFixPattern.hasMatch(frontmatterOf(e.readAsStringSync()))) sFix++;
       } catch (_) {}
     }
     return (total: total, sFix: sFix);

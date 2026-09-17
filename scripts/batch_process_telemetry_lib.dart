@@ -114,6 +114,9 @@ GateFailuresStats parseGateFailuresLog(String content, int nowEpochSeconds) {
   }
   String? top;
   var best = 0;
+  // Ties go to the earliest-LOGGED gate (map insertion order = first
+  // appearance in the file). Deterministic; documented so nobody mistakes
+  // it for frequency-weighted recency.
   counts.forEach((gate, n) {
     if (n > best) {
       best = n;
