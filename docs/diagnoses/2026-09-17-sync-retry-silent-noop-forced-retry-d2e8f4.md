@@ -30,7 +30,7 @@ recurrence: >-
   fix in b7c2a9.
 sot_registry_entry: not_applicable — retry-queue delivery-trigger + banner display policy internal to lib/core/services/sync_queue.dart and lib/shared/providers/sync_state_provider.dart; no Hive/Postgres writer/reader concept with an external contract (same scope as b7c2a9's record).
 writers:
-  - { file: lib/core/services/sync_queue.dart, method: "SyncQueue.drain — force param (signature :282) now bypasses the _isDue backoff filter for the manual pass (:299); mid-pass force merged at the TOP of the loop (:295) and all rerun state reset in finally (:317-319)", line: 282 }
+  - { file: lib/core/services/sync_queue.dart, method: "SyncQueue.drain — force param (signature :282) now bypasses the _isDue backoff filter for the manual pass (:299); mid-pass force merged at the TOP of the loop (:295) and all rerun state reset in finally (:305-307)", line: 282 }
   - { file: lib/shared/providers/sync_state_provider.dart, method: "SyncStateNotifier.retryNow — now issues drain(force: true) (:227) behind the disable_sync_force_retry kill-switch", line: 222 }
   - { file: lib/core/services/sync_queue.dart, method: "SyncQueue.enqueueFresh — added the missing _notifyPending() after the immediate attempt (:263; pre-existing count-stream gap, round 2 Finding 4)", line: 263 }
 readers:
@@ -67,7 +67,9 @@ proposed_fix: >-
   state resets in `finally` so an exception mid-pass cannot leak a forced
   pass into the next drain call (round 2 Finding 3, P1). Auto triggers
   (splash app-launch, connectivity restore, 5-min timer) stay unforced —
-  force is per-call, never ambient. Also (2): banner display grace
+  force is per-CALL at the trigger sites; one nuance (B-pass Finding 4): a
+  plain call coalesced into an in-flight forced pass rides that pass and
+  is served forced (bounded by idempotent executors + the retry budget). Also (2): banner display grace
   (feat commit, same batch) — the provider now renders only ops older than
   syncBannerGraceWindow (6 min = one drain tick + slack), via ONE state
   funnel (_stateFor) shared by seed/stream/timer, so a self-healing
@@ -84,7 +86,7 @@ regression_test_planned:
   - test/contracts/sync_queue_force_retry_test.dart
   - test/contracts/sync_queue_auto_drain_test.dart
 touched_layers_checked:
-  - { tier: 1_client_code, status: fixed_in_this_batch, evidence: "flutter analyze (4 touched files: No issues found) + both test files 43/43 green (9 new + 34 in the extended file). MUTATION m1 (force gate neutered): removed '!passForce && ' from sync_queue.dart:299 (confirmed applied: grep '!passForce' -> 0 matches), reran sync_queue_force_retry_test.dart -> 5 of 6 reddened (every scenario except the enqueueFresh-notify one — the skip-path, the dead-letter path, the sticky-rerun path, and the never-leak regression all exercise the filter); restored (grep -> 1 match) -> 6/6 green. MUTATION m2 (grace -> Duration.zero, confirmed applied: grep 'minutes: 6' -> 0): reran sync_queue_auto_drain_test.dart -> 2 reddened — the 6-min constant pin (trivial) and the MIXED-AGES count test (fixed ages 2m/7m/30s/26m: all 4 counted, expected 2). NOTE: the 'just under the grace window' test is parameterized OFF the constant, so it self-adjusts and is NOT an m2 discriminator — the fixed-age mixed test is. Restored -> 34/34 green. MUTATION m3 (capture/reset swapped — reset before capture, confirmed applied by reading lines 293-295): reran force-retry file -> exactly 1 reddened (the sticky-rerun scenario: attempts==1, expected 2 — the unforced rerun skipped the 5s-backoff op); restored -> 6/6 green. MUTATION m4 (enqueueFresh notify removed via edit, confirmed applied: grep 'Notify AFTER' -> 0): reran -> exactly 1 reddened (stream-ends-at-0); restored -> green. LESSON RECORDED: the m3 mutation's first regex application SILENTLY FAILED to match (CRLF) and the m4 RESTORE initially landed inside the drain loop instead of enqueueFresh — both caught by re-reading the file/grep before believing results, exactly the confirm-applied trap rule 21 warns about." }
+  - { tier: 1_client_code, status: fixed_in_this_batch, evidence: "flutter analyze (4 touched files: No issues found) + both test files 44/44 green (7 in the force-retry file + 37 in the extended file, 19 of them pre-existing from b7c2a9 + 18 added here). MUTATION m1 (force gate neutered): removed '!passForce && ' from sync_queue.dart:299 (confirmed applied: grep '!passForce' -> 0 matches), reran sync_queue_force_retry_test.dart -> 5 of 6 reddened (every scenario except the enqueueFresh-notify one — the skip-path, the dead-letter path, the sticky-rerun path, and the never-leak regression all exercise the filter); restored (grep -> 1 match) -> 6/6 green. MUTATION m2 (grace -> Duration.zero, confirmed applied: grep 'minutes: 6' -> 0): reran sync_queue_auto_drain_test.dart -> 2 reddened — the 6-min constant pin (trivial) and the MIXED-AGES count test (fixed ages 2m/7m/30s/26m: all 4 counted, expected 2). NOTE: the 'just under the grace window' test is parameterized OFF the constant, so it self-adjusts and is NOT an m2 discriminator — the fixed-age mixed test is. Restored -> 34/34 green. MUTATION m3 (capture/reset swapped — reset before capture, confirmed applied by reading lines 293-295): reran force-retry file -> exactly 1 reddened (the sticky-rerun scenario: attempts==1, expected 2 — the unforced rerun skipped the 5s-backoff op); restored -> 6/6 green. MUTATION m4 (enqueueFresh notify removed via edit, confirmed applied: grep 'Notify AFTER' -> 0): reran -> exactly 1 reddened (stream-ends-at-0); restored -> green. MUTATION m5 (B-pass Finding 5 — finally rerun-flag resets removed): reran -> the new exception-path scenario reddens (the poisoned forced pass runs the backoff-windowed op); restored -> green. LESSON RECORDED: the m3 mutation's first regex application SILENTLY FAILED to match (CRLF) and the m4 RESTORE initially landed inside the drain loop instead of enqueueFresh — both caught by re-reading the file/grep before believing results, exactly the confirm-applied trap rule 21 warns about." }
   - { tier: 2_hive, status: verified, evidence: "no Hive key shape or box changed — pending_sync_<id> rows written/read exactly as before; the new public pendingOps() accessor wraps the existing _loadAll(). The behavioral tests drive the REAL syncBox (Hive.init tempDir + openBox + markInitializedForTests, per bodyweight_capability_leak_test.dart precedent)." }
   - { tier: 3_postgres_schema, status: not_applicable, evidence: "no schema involvement — drain() calls the same registered executors with the same payloads" }
   - { tier: 4_postgres_data, status: not_applicable, evidence: "no new write path — only a new bypass of the backoff filter on the existing path" }
@@ -175,11 +177,16 @@ through ONE funnel `_stateFor` (seed/stream/1-min aging timer) applying
   retryNow force + fallback, auto/splash drains stay unforced, defensive
   kill-switch getters).
 
-Mutation proofs (each confirmed applied by grep before the green run):
-m1 `!passForce && ` removed → scenario-1 skip + scenario-4 never-leak
-redden; m2 grace → `Duration.zero` → "just under the window" reddens;
-m3 capture/reset swapped → sticky-rerun reddens; m4 enqueueFresh notify
-removed → stream-ends-at-0 reddens.
+Mutation proofs (each confirmed applied by grep/read before the green run):
+m1 `!passForce && ` removed → 5 of 6 reddened (every scenario except the
+enqueueFresh-notify one); m2 grace → `Duration.zero` → 2 reddened (the
+6-min constant pin + the MIXED-AGES count test — the "just under the
+window" test is parameterized off the constant and self-adjusts, so it is
+NOT an m2 discriminator); m3 capture/reset swapped → the sticky-rerun
+scenario reddens; m4 enqueueFresh notify removed → stream-ends-at-0
+reddens; m5 finally rerun-flag resets removed → the B-pass-added
+exception-path scenario reddens (poisoned forced pass runs the
+backoff-windowed op).
 
 ## Post-review remediation (plan-review rounds 1 + 2)
 

@@ -3,8 +3,8 @@ branch: sync-banner-force-retry
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
-bpass_review: TBD
+bpass: accepted
+bpass_review: docs/reviews/efcfe7745ebe-review.md
 ---
 
 # Plan-review record — sync-banner-force-retry
@@ -13,7 +13,10 @@ Two changes to the sync retry-queue surface, born from the 2026-09-17
 founder observation (test2 on web: "1 change waiting to sync" appeared at
 23:17:40 IST from a login-time `user_progress` version conflict and
 self-cleared at 23:22:38 IST via the 5-min auto-drain wired by
-diagnose `b7c2a9` — the fix working as designed, but with two UX gaps):
+diagnose `b7c2a9` — the fix working as designed, but with two UX gaps).
+Both landed in ONE commit (`e6dfd9a3`, `fix(sync):`) — they share the same
+two lib files and test files, so hunk-splitting them into the originally
+planned fix/feat pair was rejected as pure risk:
 
 - **(b) `fix(sync)`** — manual Retry silently no-ops on an op inside a
   backoff window (`drain()`'s `_isDue` filter skips it with no feedback);
@@ -150,7 +153,21 @@ Per §4.12.1's split signal: the findings all live in ONE mechanism
 (force/coalesce correctness) now fully specified; the batch remains two
 small changes in two files.
 
-## B-pass
+## B-pass (code-review, self-triggered per §4.3)
 
-`bpass: pending` at authoring time; updated to `accepted` with the review
-path before the `--no-ff` merge (self-initiated per §4.3, account tier).
+`docs/reviews/efcfe7745ebe-review.md` — 6 findings (0 P0, 0 P1, 1 P2,
+5 P3), 0 false alarms, all accepted and fixed in the same session; verdict
+**accepted**. None required a change to the two lib files' logic: 3
+diagnose-doc corrections (the prose mutation paragraph contradicted the
+frontmatter — m1 is 5-of-6 and m2's discriminator is the mixed-ages test,
+not the self-adjusting "just under" one; a finally-block citation was
+:317-319 instead of :305-307; the test-count split read 9+34 against the
+real 6+37), 1 wording nuance with no code change (force is per-CALL at
+trigger sites, but a plain caller coalesced into an in-flight forced pass
+rides that pass — drain()'s doc comment and the diagnose doc now say so),
+1 NEW behavioral test + its m5 mutation proof (exception mid-pass leaves no
+poisoned forced flag — previously pinned structurally only), and 1
+test-robustness guard (the gate-parked scenario now always releases the
+parked pass on premise failure instead of poisoning `_draining` for the
+rest of the file). Post-remediation: 44/44 tests green (7 + 37), analyze
+clean on touched files.

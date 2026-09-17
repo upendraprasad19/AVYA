@@ -231,6 +231,52 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-18 (a)** — blast-radius **account** — branch `sync-banner-force-retry`
+  (sync queue: force-retry on manual Retry, SyncBanner display grace, enqueueFresh
+  count heal). **6 findings (0 P0, 0 P1, 1 P2, 5 P3); 0 false_alarm — all 6
+  accepted and fixed in the same session.** Review:
+  `docs/reviews/efcfe7745ebe-review.md`. Run as one agent (8 files; the reviewer
+  re-derived interleavings, window arithmetic, and mutation outcomes by trace
+  rather than trusting the tests' own comments).
+  **Tuning 1 — lens 6: a per-CALL flag can still be AMBIENT WITHIN one
+  coalesced invocation.** The force flag was correctly per-call at the trigger
+  sites, but `passForce` is declared OUTSIDE the do-while and only ever raised —
+  so a PLAIN caller coalesced into an in-flight forced pass rides that pass and
+  is served forced. Three docs asserted "force is per-call, never ambient" and
+  all three were true only at the call-site level. **When a new per-call flag
+  interacts with an existing coalescing/in-flight mechanism, trace
+  cross-caller contamination INSIDE one invocation, not just across calls —
+  and make the doc say which level the guarantee holds at.**
+  **Tuning 2 — a gate-parked behavioral test must GUARANTEE the parked pass
+  drains on premise failure.** The sticky-rerun scenario parked the queue's
+  executor on a Completer; if the premise assertion failed first, the gate was
+  never completed, `_draining` stayed true for the rest of the FILE, and
+  subsequent tests failed with confusing no-op symptoms (setUp cleared Hive but
+  not the singleton's in-flight flag). Fixed with a try/finally that always
+  completes the gate and swallows the secondary await. **Any test that parks a
+  singleton's in-flight state on a future owes its own finally an unconditional
+  release — the same hygiene rule as teardown-never-throws, one level earlier.**
+  **Tuning 3 — lens 10 generalized: when a doc carries the SAME fact in TWO
+  places (frontmatter evidence field + prose narration), diff them against
+  each other.** The diagnose doc's frontmatter correctly recorded m2's real
+  discriminator (mixed-ages test; the "just under" test self-adjusts with the
+  constant) while its prose paragraph still claimed the parameterized test
+  reddened — a future mutation runner could not tell which record was true
+  without re-running. The same pass found the prose test-count split (9+34)
+  contradicted the file reality (6+37) while the total (43) was right.
+  **Count claims that appear twice in one document get checked twice, once
+  against each other.**
+  **Tuning 4 (remediation-side, author lesson) — a SYNCHRONOUSLY-throwing
+  executor cannot be interleaved against: it unwinds on MICROTASKS, so the
+  test's next statement runs AFTER the pass has fully unwound (finally
+  included) and a mid-pass force request never hits the in-flight guard. The
+  gate-park pattern (executor returns a pending Completer future; test
+  completes it with the throw) is the only reliable way to position a request
+  mid-pass.** Costs one silent test rewrite during F5 remediation; caught by
+  reading the failure trace, not by the diff.
+  False-alarm rate 0/6 → no lens removed; lens 6 and the general method extended
+  per above.
+
 - **2026-09-17 (b)** — blast-radius **account** — branch `web-razorpay-checkout`
   (web Razorpay checkout: checkout.js bridge via dart:js_interop, shared
   handlePaymentConfirmed extraction, kill-switch). **8 findings (0 P0, 0 P1,

@@ -279,6 +279,12 @@ class SyncQueue {
   /// late or dropped (plan-review round 2 Finding 1). All rerun state is
   /// reset in `finally` so an exception mid-pass cannot poison the next
   /// drain with a forced pass (round 2 Finding 3).
+  ///
+  /// Nuance (B-pass Finding 4): force is per-CALL at the trigger sites,
+  /// but a PLAIN call coalesced into an in-flight forced pass rides that
+  /// pass and is served forced — bounded by idempotent executors and the
+  /// unchanged retry budget, and preferable to dropping either caller's
+  /// request.
   Future<void> drain({bool force = false}) async {
     if (_draining) {
       _rerunRequested = true;

@@ -195,22 +195,42 @@ void main() {
       // await, so by the time this statement returns, pass 1 is already
       // parked inside the gated executor future.
       final drained = SyncQueue.instance.drain();
-      expect(attempts, 1,
-          reason: 'the op is due — pass 1 must already be inside the '
-              'executor; if this fails the interleaving assumption is '
-              'wrong, not the production code');
+      // B-pass Finding 6: if the premise below fails, this test must not
+      // leave the executor parked on gate.future forever — that would
+      // keep _draining true for the REST of the file and cascade
+      // confusing failures into tests 4/5/6. The finally guarantees the
+      // parked pass always drains.
+      try {
+        expect(attempts, 1,
+            reason: 'the op is due — pass 1 must already be inside the '
+                'executor; if this fails the interleaving assumption is '
+                'wrong, not the production code');
 
-      // The user taps Retry while pass 1 is in flight: the in-flight
-      // guard must record BOTH a rerun request AND its force.
-      await SyncQueue.instance.drain(force: true);
+        // The user taps Retry while pass 1 is in flight: the in-flight
+        // guard must record BOTH a rerun request AND its force.
+        await SyncQueue.instance.drain(force: true);
 
-      // Pass 1 fails transiently → withRetry → retryCount=2 → 5s backoff
-      // → the op is NOT due on the rerun pass. Only the sticky force can
-      // get it retried.
-      gate.complete(
-        Result.err(NetworkError(message: 'still conflicting', at: DateTime.now())),
-      );
-      await drained;
+        // Pass 1 fails transiently → withRetry → retryCount=2 → 5s backoff
+        // → the op is NOT due on the rerun pass. Only the sticky force can
+        // get it retried.
+        gate.complete(
+          Result.err(
+              NetworkError(message: 'still conflicting', at: DateTime.now())),
+        );
+      } finally {
+        if (!gate.isCompleted) {
+          gate.complete(
+            Result.err(
+                NetworkError(message: 'premise-failure cleanup', at: DateTime.now())),
+          );
+        }
+        try {
+          await drained;
+        } catch (_) {
+          // Cleanup is hygiene — never stack a second failure over the
+          // premise failure this guard exists to make legible.
+        }
+      }
 
       expect(attempts, 2,
           reason: 'the rerun pass must be FORCED (capture-then-apply at '
@@ -218,6 +238,88 @@ void main() {
               'window, so an unforced rerun would skip it and this '
               'assertion reddens if the ordering is swapped (mutation '
               'm3)');
+      expect(SyncQueue.instance.pendingOps(), isEmpty);
+    });
+
+    test('an exception mid-pass leaves NO poisoned force behind — the next '
+        'plain drain is UNFORCED but still functions (B-pass Finding 5: '
+        'the finally reset of _rerunForce was pinned structurally only)',
+        () async {
+      var attempts = 0;
+      final gate = Completer<Result<void, SyncError>>();
+      SyncQueue.instance.registerExecutor(
+        'test_op',
+        (payload) async {
+          attempts++;
+          if (attempts == 1) return gate.future; // parked — see below
+          return Result.ok(null);
+        },
+      );
+
+      await SyncQueue.instance.enqueue(
+        opType: 'test_op',
+        payload: const <String, dynamic>{},
+        initialError: NetworkError(
+          message: 'seed',
+          at: DateTime.now().subtract(const Duration(seconds: 5)),
+        ),
+      );
+
+      // Pass 1 parks inside the executor future (a throwing executor
+      // unwinds on MICROTASKS — too fast to interleave against, so the
+      // throw is delivered via the gate AFTER the force request). The
+      // force request lands mid-pass: without the finally reset,
+      // _rerunForce would survive into the next drain call and force it.
+      final drained = SyncQueue.instance.drain();
+      expect(attempts, 1,
+          reason: 'pass 1 must be parked inside the executor when the '
+              'force request arrives — if this fails the interleaving '
+              'assumption is wrong, not the production code');
+      await SyncQueue.instance.drain(force: true);
+      gate.completeError(StateError('boom'));
+      // The throw propagates out of contract (_runOne has no try/catch)
+      // through drain()'s finally — which must reset the rerun flags.
+      await expectLater(drained, throwsA(isA<StateError>()));
+
+      // The op was left queued by the throw (out of contract). Enqueue a
+      // second, fresh op inside its 1s backoff window, then a PLAIN
+      // drain: it must SKIP that op (unforced — the finally reset did its
+      // job) AND still run a fresh pass for anything due.
+      final windowedErrAt = DateTime.now();
+      await SyncQueue.instance.enqueue(
+        opType: 'test_op',
+        payload: const <String, dynamic>{},
+        initialError: NetworkError(message: 'windowed', at: windowedErrAt),
+      );
+      final afterThrow = attempts;
+      expect(
+        DateTime.now().difference(windowedErrAt).inMilliseconds,
+        lessThan(900),
+        reason: 'test env too slow for the 1s backoff premise — this run '
+            'proves nothing about the unforced-skip assertion',
+      );
+      await SyncQueue.instance.drain();
+      // The SEED op is still queued and DUE (the throw bypassed
+      // removal), so an unforced plain pass legitimately runs it — but it
+      // must NOT touch the windowed op. Discriminate by identity: after
+      // the pass, exactly one op remains (the windowed one) and its
+      // retryCount is still 1 — a poisoned _rerunForce would have forced
+      // a pass that attempted it (rc would be 2). THIS is the m5
+      // discriminator.
+      expect(attempts, afterThrow + 1,
+          reason: 'only the due seed op ran — a poisoned forced pass '
+              'would ALSO have run the windowed op (attempts +2)');
+      expect(SyncQueue.instance.pendingOps(), hasLength(1),
+          reason: 'the seed was removed by its success; the windowed op '
+              'must still be queued');
+      expect(SyncQueue.instance.pendingOps().single.retryCount, 1,
+          reason: 'the windowed op was NOT attempted by the plain pass — '
+              'an attempted-and-failed op would carry retryCount 2');
+
+      // And the queue still functions: a forced pass retries the windowed
+      // op and clears it.
+      await SyncQueue.instance.drain(force: true);
+      expect(attempts, afterThrow + 2);
       expect(SyncQueue.instance.pendingOps(), isEmpty);
     });
 
