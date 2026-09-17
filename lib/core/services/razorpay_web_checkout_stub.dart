@@ -10,6 +10,7 @@
 void openWebCheckout({
   required Map<String, dynamic> options,
   required void Function(Map<String, dynamic> rawSuccess) onSuccess,
+  required void Function(String message) onPaymentFailed,
   required void Function() onDismissed,
   required void Function(String message) onUnavailable,
 }) {

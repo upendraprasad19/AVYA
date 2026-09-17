@@ -111,6 +111,16 @@ class RazorpayService {
     VoidCallback? onSuccess,
     VoidCallback? onFailure,
   }) async {
+    // Web kill-switch — HOISTED above order-create (B-pass P3): a flipped
+    // switch must not waste a server-side Razorpay order. UX lives in the
+    // paywall's own kill-switch branch (mobile-app snackbar, pre-pop); this
+    // early return is defense for any future non-paywall caller.
+    if (kIsWeb && webCheckoutDisabled) {
+      debugPrint('RazorpayService: web checkout disabled by kill-switch');
+      onFailure?.call();
+      return;
+    }
+
     final keyId = AppConstants.razorpayKeyId;
     if (keyId.isEmpty || keyId.contains('REPLACE')) {
       debugPrint('RazorpayService: invalid key ID — aborting checkout');
@@ -247,16 +257,17 @@ class RazorpayService {
     );
 
     if (kIsWeb) {
-      if (webCheckoutDisabled) {
-        debugPrint('RazorpayService: web checkout disabled by kill-switch');
-        onFailure?.call();
-        return;
-      }
+      // One-shot latch (B-pass P3-5): ondismiss is documented to fire on
+      // close; whether it also fires after the success handler is
+      // docs-silent, so a settled checkout must not double-fire into
+      // failure feedback after a success.
+      var settled = false;
       debugPrint('RazorpayService: opening web checkout — plan=$plan, '
           'order_id=$orderId, amount=$amountPaise paise');
       openWebCheckout(
         options: options,
         onSuccess: (raw) {
+          settled = true;
           final parsed = parseWebSuccessPayload(raw);
           unawaited(handlePaymentConfirmed(
             paymentId: parsed.paymentId ?? '',
@@ -264,15 +275,28 @@ class RazorpayService {
             signature: parsed.signature,
           ));
         },
+        onPaymentFailed: (message) {
+          // Mirrors the native non-cancelled _handlePaymentError path:
+          // real card failures get the same app-level snackbar (B-pass
+          // P2-3 — previously the web branch had NO failure feedback).
+          if (settled) return;
+          settled = true;
+          _showPaymentFailedFeedback(message);
+          onFailure?.call();
+        },
         onDismissed: () {
           // Mirrors the native PAYMENT_CANCELLED path (_handlePaymentError's
           // non-snackbar branch): user closed the modal — call the failure
-          // callback WITHOUT the error snackbar. Failures inside the modal
-          // surface there, not here (checkout.js has no failure callback).
+          // callback WITHOUT the error snackbar. Real failures arrive via
+          // onPaymentFailed (payment.failed is wired in the bridge).
+          if (settled) return;
+          settled = true;
           debugPrint('RazorpayService: web checkout dismissed');
           onFailure?.call();
         },
         onUnavailable: (message) {
+          if (settled) return;
+          settled = true;
           _showOrderCreationFailure(serverError: message);
           onFailure?.call();
         },
@@ -546,22 +570,28 @@ class RazorpayService {
   void _handlePaymentError(PaymentFailureResponse response) {
     debugPrint('RazorpayService: payment error — code=${response.code}, message=${response.message}');
     _onFailure?.call();
-    final context = navigatorKey?.currentContext;
-    if (context == null) return;
-    final msg = response.message ?? 'Payment failed';
     // Only show error if it's not a user cancellation
     if (response.code != Razorpay.PAYMENT_CANCELLED) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Payment failed: $msg',
-            style: AppTypography.bodySm.copyWith(color: Colors.white),
-          ),
-          backgroundColor: const Color(0xFF2a1a1a),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showPaymentFailedFeedback(response.message ?? 'Payment failed');
     }
+  }
+
+  /// The "Payment failed" snackbar — SHARED by the native
+  /// _handlePaymentError path and the web onPaymentFailed path (B-pass
+  /// P2-3: the web branch previously had no app-level failure feedback).
+  void _showPaymentFailedFeedback(String msg) {
+    final context = navigatorKey?.currentContext;
+    if (context == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Payment failed: $msg',
+          style: AppTypography.bodySm.copyWith(color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFF2a1a1a),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {

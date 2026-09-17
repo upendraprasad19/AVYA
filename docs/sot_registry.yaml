@@ -2621,7 +2621,7 @@ concepts:
           dossier shows "CONFIRMING ⟳ AWAITING WEBHOOK CONFIRMATION"
           copy.
       - file: lib/core/services/razorpay_service.dart
-        line_range: 382-500
+        line_range: 453-568
         method: RazorpayService.handlePaymentConfirmed
         semantic: pass-through
         fields_read: []

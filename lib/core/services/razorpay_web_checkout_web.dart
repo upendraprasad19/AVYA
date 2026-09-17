@@ -3,17 +3,23 @@
 // `dart.library.js_interop`. MUST NOT be imported directly by native-facing
 // code — the barrel is the only entry point.
 //
-// ⚠ checkout.js has NO failure callback: card failures/retries happen
-// inside Razorpay's own modal; the only close signal is modal.ondismiss.
-// onUnavailable covers the SDK-unavailable case (script blocked/offline).
+// Close/error signals (B-pass corrected): Razorpay Standard Checkout DOES
+// expose a failure event — `payment.failed` — and we WIRE it so real card
+// failures get the same app-level feedback as native. `modal.ondismiss`
+// remains the close signal for user-initiated closes; onUnavailable covers
+// the SDK-unavailable case (script blocked/offline).
 //
 // Spec: docs/superpowers/specs/2026-09-17-web-razorpay-checkout-design.md
 
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
+import 'package:icanbefitter/core/services/error_telemetry.dart';
+
 extension type RazorpayCheckoutInstance._(JSObject _) implements JSObject {
   external void open();
+  external void on(JSString event, JSFunction handler);
 }
 
 @JS('Razorpay')
@@ -22,6 +28,7 @@ external JSFunction get _razorpayCtor;
 void openWebCheckout({
   required Map<String, dynamic> options,
   required void Function(Map<String, dynamic> rawSuccess) onSuccess,
+  required void Function(String message) onPaymentFailed,
   required void Function() onDismissed,
   required void Function(String message) onUnavailable,
 }) {
@@ -47,11 +54,26 @@ void openWebCheckout({
 
     final instance = _razorpayCtor
         .callAsConstructor<RazorpayCheckoutInstance>(jsOptions);
+    // Wire the SDK's real failure event — response.error.description per
+    // Razorpay's standard-checkout docs; defensive on the payload shape.
+    instance.on('payment.failed'.toJS, ((JSObject resp) {
+      final raw = resp.dartify();
+      var msg = 'Payment failed';
+      if (raw is Map) {
+        final err = raw['error'];
+        if (err is Map && err['description'] != null) {
+          msg = err['description'].toString();
+        }
+      }
+      onPaymentFailed(msg);
+    }).toJS);
     instance.open();
-  } catch (_) {
+  } catch (e, st) {
     // SDK missing (checkout.js blocked/offline) or construction failure —
-    // actionable failure, never a silent swallow (rule 17: release error
-    // handling must surface something to the user).
+    // actionable failure + telemetry (B-pass P2: this was the only
+    // telemetry-free catch in the payment path).
+    unawaited(ErrorTelemetry.recordNonFatal(e, st,
+        reason: 'razorpay_web_checkout_unavailable'));
     onUnavailable("Couldn't start payment. Check your connection and try again.");
   }
 }

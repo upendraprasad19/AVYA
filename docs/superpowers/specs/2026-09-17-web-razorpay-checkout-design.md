@@ -76,13 +76,21 @@ Pattern precedent is already in-repo and modern:
   P2-6; Flutter's bootstrap is async so the SDK is present long before any
   checkout opens) before `flutter_bootstrap.js` (`:158`).
 - **`lib/core/services/razorpay_web_checkout_web.dart`** (web-only,
-  `dart:js_interop`) — `@JS('Razorpay')` external interface; `open(options)`
+  `dart:js_interop` + `dart:js_interop_unsafe` — the unsafe library holds
+  `operator []=` and `callAsConstructor`; plan-review round 1 P0-1) —
+  `@JS('Razorpay')` external interface; `open(options)`
   with `handler` (success) and `modal.ondismiss` injected into the options;
   success callback fields map 1:1 from Razorpay's standard web contract:
   `razorpay_payment_id` / `razorpay_order_id` / `razorpay_signature` — the
   same three values the native SDK's `PaymentSuccessResponse` carries.
-  Defensive guard: if `window.Razorpay` is undefined (script blocked /
-  offline), surface an actionable failure instead of throwing.
+  **`payment.failed` is WIRED** (B-pass P2-2 corrected the plan's
+  "checkout.js has no failure callback" claim — Razorpay documents the
+  event) → real card failures get the same app-level "Payment failed"
+  snackbar as native. The bridge's catch-all records
+  `ErrorTelemetry.recordNonFatal` (B-pass P2-1 — it was the only
+  telemetry-free catch in the payment path). Defensive guard: if
+  `window.Razorpay` is undefined (script blocked / offline), surface an
+  actionable failure instead of throwing.
 - **`lib/core/services/razorpay_web_checkout_stub.dart`** — non-web no-ops;
   MUST NOT import `dart:js_interop` / `dart:html` (same rule as the stub
   precedent, whose header documents exactly why).

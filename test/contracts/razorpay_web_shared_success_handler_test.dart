@@ -43,5 +43,21 @@ void main() {
       expect(src, contains('markPaymentInFlight'));
       expect(src, contains('_pollAndActivate('));
     });
+
+    test('web payment.failed wired to the SHARED failure feedback (B-pass P2-3)', () {
+      // Source-grep presence pins (behavioral not feasible — navigatorKey UI
+      // in a JS-bridge callback; the predicate/latch logic is a local
+      // closure). The bridge's payment.failed wiring is additionally
+      // exercised only at web compile (Task 6 flutter build web).
+      expect(src, contains('onPaymentFailed'));
+      expect(src, contains('_showPaymentFailedFeedback('));
+      expect(src, contains('var settled = false;'),
+          reason: 'B-pass P3-5 one-shot latch — ondismiss may fire after success');
+      final webSrc =
+          File('lib/core/services/razorpay_web_checkout_web.dart').readAsStringSync();
+      expect(webSrc, contains("'payment.failed'"));
+      expect(webSrc, contains('recordNonFatal'),
+          reason: 'B-pass P2-1: the bridge catch must carry telemetry');
+    });
   });
 }

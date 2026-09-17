@@ -20,7 +20,7 @@ import 'razorpay_web_checkout_stub.dart'
 /// here silently nulls the id verify-payment polls by.
 ({String? paymentId, String? orderId, String? signature})
     parseWebSuccessPayload(Map<String, dynamic> raw) {
-  String? ns(Object? v) => v == null ? null : v.toString();
+  String? ns(Object? v) => v?.toString();
   return (
     paymentId: ns(raw['razorpay_payment_id']),
     orderId: ns(raw['razorpay_order_id']),
@@ -41,12 +41,14 @@ bool isWebCheckoutDisabledByConfig(Object? rawConfigValue) =>
 void openWebCheckout({
   required Map<String, dynamic> options,
   required void Function(Map<String, dynamic> rawSuccess) onSuccess,
+  required void Function(String message) onPaymentFailed,
   required void Function() onDismissed,
   required void Function(String message) onUnavailable,
 }) =>
     impl.openWebCheckout(
       options: options,
       onSuccess: onSuccess,
+      onPaymentFailed: onPaymentFailed,
       onDismissed: onDismissed,
       onUnavailable: onUnavailable,
     );
