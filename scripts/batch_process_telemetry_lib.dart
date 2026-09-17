@@ -3,6 +3,10 @@
 // Mirror-rule note: absent/unparseable ledger => openEscapes null (unknown),
 // never 0 (bad-news-vs-no-news: an unreadable ledger must not read as "no
 // open escapes").
+// Known blind spot (intentional): an UNPARSEABLE `review_rounds` value (e.g.
+// `review_rounds: two`) is indistinguishable from an ABSENT one and reads as
+// 0 — same shape, different meaning. Do not treat 0 as "review never ran"
+// without checking the record's shape.
 
 class PlanReviewStats {
   final int reviewRounds;
@@ -16,9 +20,10 @@ class EscapeLedgerStats {
 }
 
 PlanReviewStats parsePlanReviewRecord(String content) {
-  final scope = content.startsWith('---')
-      ? content.split(RegExp(r'^---\s*$', multiLine: true))[1]
-      : content;
+  final parts = content.split(RegExp(r'^---\s*$', multiLine: true));
+  // Malformed frontmatter (e.g. starts `---title:`) yields a single part —
+  // fall through to the whole content rather than throwing RangeError.
+  final scope = content.startsWith('---') && parts.length > 1 ? parts[1] : content;
   int? field(String k) {
     final m = RegExp('^$k:\\s*(.+)\$', multiLine: true).firstMatch(scope);
     return m == null ? null : int.tryParse(m.group(1)!.trim());
@@ -36,10 +41,15 @@ EscapeLedgerStats parseEscapeLedger(String content) {
   if (!content.contains(RegExp(r'^escapes:', multiLine: true))) {
     return const EscapeLedgerStats(openEscapes: null);
   }
-  // `$` anchor is load-bearing: without it `status: reopened` counts as open.
+  // The `$` anchor is load-bearing: without it open-PREFIXED statuses
+  // (`status: opened`, `status: open_ticket`) count as open. The trailing
+  // `\s*` additionally tolerates trailing whitespace before the line ending.
+  // (Empirically verified 2026-09-18: Dart/ECMAScript multiline `$` DOES
+  // match before `\r`, so bare-`$` already handles CRLF — the trailing
+  // `\s*` is belt-and-braces, and the CRLF test pins that behaviour.)
   return EscapeLedgerStats(
     openEscapes:
-        RegExp(r'status:\s*open$', multiLine: true).allMatches(content).length,
+        RegExp(r'status:\s*open\s*$', multiLine: true).allMatches(content).length,
   );
 }
 

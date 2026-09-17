@@ -4,7 +4,7 @@ import '../../scripts/batch_process_telemetry_lib.dart';
 
 void main() {
   group('parsePlanReviewRecord', () {
-    test('reads review_rounds, mechanical_only, tier from frontmatter', () {
+    test('reads review_rounds and mechanical_only from frontmatter', () {
       final report = parsePlanReviewRecord('''
 ---
 branch: discipline-v2
@@ -38,6 +38,14 @@ prose
     test('unreadable ledger reports null, NOT zero (bad-news-vs-no-news)', () {
       expect(parseEscapeLedger('not: a ledger').openEscapes, isNull);
     });
+
+    test('counts open escapes with CRLF line endings (Windows checkout)', () {
+      expect(
+        parseEscapeLedger('escapes:\r\n  - bug: a1b2c3\r\n    status: open\r\n')
+            .openEscapes,
+        1,
+      );
+    });
   });
 
   group('composeReport', () {
@@ -52,6 +60,17 @@ prose
       expect(out, contains('review_rounds=2'));
       expect(out, contains('open_s_escapes=0'));
       expect(out, contains('s_tier_fixes=2/3'));
+    });
+
+    test('unknown open-escape count renders unknown, NOT zero', () {
+      final out = composeReport(
+        record: const PlanReviewStats(reviewRounds: 2, mechanicalOnly: false),
+        openEscapes: null,
+        recentDiagnoseDocs: 3,
+        sTierDocs: 2,
+        recentReviewFiles: 4,
+      );
+      expect(out, contains('open_s_escapes=unknown'));
     });
   });
 }
