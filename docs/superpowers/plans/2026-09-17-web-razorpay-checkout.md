@@ -19,6 +19,7 @@
 - `operator []`/`[]=` on JSObject and `callAsConstructor` live in **`dart:js_interop_unsafe`**, not `dart:js_interop` (round-1 review P0-1, verified against the SDK: `JSObjectUnsafeUtilExtension` js_interop_unsafe.dart:45,52; `JSFunctionUnsafeUtilExtension.callAsConstructor` :114). The web bridge MUST import it. The pwa_install precedent never needed it because it declares only top-level `@JS` external functions.
 - Two spec deviations, deliberate, to be visible to reviewers: (1) the callback keys (`handler`/`modal.ondismiss`) are injected by the web impl directly — `jsify` does NOT convert Dart functions, so a pure-map injection helper would be wrong; the pure parity pin is instead `buildRazorpayCheckoutOptions` (Task 2). (2) checkout.js has **no failure callback** — failures surface inside Razorpay's own modal and reach us as `ondismiss` (mapped to the existing `PAYMENT_CANCELLED` no-snackbar path), so the spec's "error-snackbar equivalent" exists only for the SDK-unavailable case (`onUnavailable`).
 - Kill-switch scope honesty (round-1 P2-7): configBox is device-local (on web, per-browser localStorage). `disable_web_checkout` rolls back ONE browser, not the fleet — fleet-wide web rollback requires a redeploy. The paywall + service branch still share the ONE predicate (pinned by the paywall dispatch test).
+- Deferred-script race (round-2 P3, accepted): openCheckout awaits the create-razorpay-order EF round-trip before the web branch, so checkout.js is loaded in essentially all real flows; in the residual cold-load race the missing global surfaces via callAsConstructor → catch → `onUnavailable` snackbar ("Couldn't start payment") + `onFailure` — spurious but recoverable by retap. No pre-load gate needed for a founder-only test flow.
 
 ---
 
@@ -319,7 +320,7 @@ void main() {
 - [ ] **Step 2: Run — expect FAIL (static method doesn't exist)**
 
 Run: `flutter test test/contracts/razorpay_checkout_options_test.dart`
-Expected: compile error (`buildRazorpayCheckoutOptions` not defined).
+Expected: compile error (`buildRazorpayCheckoutOptions` not defined). ⚠ Note (round-2 P3): this will be the FIRST VM test ever to import `razorpay_service.dart` (verified: zero existing `import.*razorpay_service` under `test/`). It should compile fine — `static final _instance` is lazy, the test touches only statics, and `razorpay_flutter`'s Dart side is a pure method-channel API — but if Task 2 Step 2 hits a surprise compile error, treat it as a real finding, not an impossibility.
 
 - [ ] **Step 3: Extract the static + wire `openCheckout` to use it**
 
@@ -416,9 +417,14 @@ void main() {
       expect(src, contains('String? signature'));
     });
 
-    test('native _handlePaymentSuccess DELEGATES (body extracted, not duplicated)', () {
-      expect(src, contains('void _handlePaymentSuccess(PaymentSuccessResponse'));
-      expect(src, contains('handlePaymentConfirmed('));
+    test('native _handlePaymentSuccess DELEGATES (window-scoped — round-2 P1: a bare contains() is satisfied by the method definition itself and can never redden)', () {
+      final delIdx =
+          src.indexOf('void _handlePaymentSuccess(PaymentSuccessResponse');
+      expect(delIdx, greaterThanOrEqualTo(0));
+      expect(src.substring(delIdx, delIdx + 400),
+          contains('handlePaymentConfirmed('),
+          reason: 'the delegator body within 400 chars of the signature must '
+              'call handlePaymentConfirmed — severing the delegation must redden this');
     });
 
     test('poll + in-flight mark reachable through the shared method', () {
@@ -470,7 +476,7 @@ In `razorpay_service.dart`:
 
 ⚠ The extracted body must be VERBATIM from `:349-456` with exactly these substitutions: `response.paymentId ?? ''` → `paymentId` (top debugPrint keeps the plain value); `markPaymentInFlight(orderId: response.orderId)` → `markPaymentInFlight(orderId: orderId)`; `_pollAndActivate(paymentId: response.paymentId ?? '', orderId: response.orderId ?? '', signature: response.signature ?? '')` → `_pollAndActivate(paymentId: paymentId, orderId: orderId ?? '', signature: signature ?? '')`. Everything else — comment blocks included — untouched.
 
-- [ ] **Step 4: Update the SoT registry in the SAME commit (round-1 P1-4 — the gate blocks the commit otherwise)**
+- [ ] **Step 4: Update the SoT registry in the SAME commit (manual discipline — round-2 P2: the parity gate keys on the class name `RazorpayService`, which survives inside the debugPrint string, so it CANNOT catch this entry's drift; do not believe a PASS backstops this)**
 
 `docs/sot_registry.yaml:2623-2630` cites `razorpay_service.dart` with `line_range: 360-380` and method `_handlePaymentSuccess` for the grace-window/markingInFlight writer (markPaymentInFlight-first write, actual write `:398-409`). Task 2 inserted ~25 lines above and Task 3 renamed the writer — update the entry's `line_range:` and method name to the post-extraction location (`handlePaymentConfirmed`), BEFORE committing. Verify the current entry first: `git grep -n "razorpay_service" -- docs/sot_registry.yaml`.
 
@@ -625,11 +631,15 @@ void main() {
         contains('Payments are only available in the mobile app. Download ICANBEFITTER to upgrade.'));
   });
 
-  test('kill-switch is checked BEFORE the sheet pop (rollback UX intact)', () {
-    final switchIdx = src.indexOf('webCheckoutDisabled');
-    final popIdx = src.indexOf('Navigator.of(context).pop();', switchIdx);
-    expect(popIdx, greaterThan(switchIdx),
-        reason: 'the first pop after the kill-switch check must come AFTER it');
+  test('rollback pop+snackbar+return live INSIDE the disabled branch (round-2 P3: a bare "pop after switch" assertion was near-vacuous — the disabled branch contains its own pop)', () {
+    final start = src.indexOf('webCheckoutDisabled');
+    final end = src.indexOf('// Web checkout active', start);
+    expect(end, greaterThan(start),
+        reason: 'the enabled-path comment must come AFTER the kill-switch block');
+    final branch = src.substring(start, end);
+    expect(branch, contains('Navigator.of(context).pop();'));
+    expect(branch, contains('Payments are only available in the mobile app.'));
+    expect(branch, contains('return;'));
   });
 }
 ```
@@ -696,9 +706,9 @@ sh scripts/safe_commit.sh "feat(web): paywall opens checkout on web — old mobi
 
 - [ ] **Step 3: Mutation 3 — options parity.** In `buildRazorpayCheckoutOptions`, change `'amount': amountPaise` → `'amount': 0`. Run the options test: expect the server-amount test to redden (1 of 3). Confirm via `git grep -c "'amount': 0" -- lib/core/services/razorpay_service.dart`. Restore.
 
-- [ ] **Step 4: Mutation 4 — wiring delegation severed (makes the source-grep wiring test non-vacuous, round-1 P1-3).** In `_handlePaymentSuccess`, comment out the `handlePaymentConfirmed(` call (replace its body with `// unawaited(handlePaymentConfirmed(...));`). Run the wiring test: expect **the delegation test + shared-signature test to redden** (2 of 3; the markPaymentInFlight grep test stays green — it pins presence, not delegation). Confirm via `git grep -c "// unawaited(handlePaymentConfirmed" -- lib/core/services/razorpay_service.dart` ≥1. Restore.
+- [ ] **Step 4: Mutation 4 — wiring delegation severed (round-2 P1 fixed form: REMOVE the call, never comment it out — a comment containing the exact grep target can never redden a substring assertion).** In `_handlePaymentSuccess`, replace the delegator body with `return;` (delete the `unawaited(handlePaymentConfirmed(...));` call entirely). Run the wiring test: expect **exactly the window-scoped delegation test to redden** (1 of 3; the definition grep in test 1 and the presence greps in test 3 stay green — that is correct: they pin existence, not delegation). Confirm the mutation applied: `git grep -c "unawaited(handlePaymentConfirmed" -- lib/core/services/razorpay_service.dart` returns 0 (and a read of the delegator shows `return;`). Restore.
 
-- [ ] **Step 5: Mutation 5 — paywall fork (round-1 P1-2).** In `paywall_sheet.dart`, change `ref.read(razorpayServiceProvider).webCheckoutDisabled` → `false`. Run the paywall dispatch test: expect **the shared-predicate test to redden** (1 of 3). Confirm via `git grep -c "webCheckoutDisabled: false" -- lib/shared/widgets/paywall_sheet.dart` — the raw form is `.webCheckoutDisabled` replaced; use `git diff --stat` showing the file modified as the applied-confirmation, then restore.
+- [ ] **Step 5: Mutation 5 — paywall fork (round-1 P1-2).** In `paywall_sheet.dart`, change `ref.read(razorpayServiceProvider).webCheckoutDisabled` → `false`. Run the paywall dispatch test: expect **the shared-predicate test to redden** (1 of 3). Confirm applied: `git grep -c "webCheckoutDisabled" -- lib/shared/widgets/paywall_sheet.dart` returns **0** (round-2 P3: the identifier occurs exactly once in the file; 0 matches = mutation is in). Restore.
 
 - [ ] **Step 6: Record all five mutations (what was mutated, how many reddened) — they go into the plan-review record.**
 
