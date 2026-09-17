@@ -222,7 +222,34 @@ class RazorpayService {
       notes['promo_code'] = promoCode;
     }
 
-    final options = {
+    final options = buildRazorpayCheckoutOptions(
+      keyId: keyId,
+      orderId: orderId,
+      amountPaise: amountPaise,
+      plan: plan,
+      email: user.email ?? '',
+      notes: notes,
+    );
+
+    if (kIsWeb) return;
+    _razorpay?.open(options);
+  }
+
+  /// The single source of the checkout options map — built from the
+  /// SERVER-derived order_id + amount (plan-derived-from-amount security
+  /// rule, docs/architecture/payment.md §1). Consumed by BOTH the native
+  /// open and the web open. @visibleForTesting so the web contract test can
+  /// pin order_id/amount parity without a network round-trip.
+  @visibleForTesting
+  static Map<String, dynamic> buildRazorpayCheckoutOptions({
+    required String keyId,
+    required String orderId,
+    required int amountPaise,
+    required String plan,
+    required String email,
+    required Map<String, String> notes,
+  }) {
+    return {
       'key': keyId,
       'order_id': orderId,
       'amount': amountPaise,
@@ -230,16 +257,13 @@ class RazorpayService {
       'description': 'PRO ${plan == 'yearly' ? 'Yearly' : 'Monthly'} Plan',
       'currency': 'INR',
       'prefill': {
-        'email': user.email ?? '',
+        'email': email,
       },
       'notes': notes,
       'theme': {
         'color': '#D4B270',
       },
     };
-
-    if (kIsWeb) return;
-    _razorpay?.open(options);
   }
 
   /// APK Test #12.2 / Task #6 — shown when the server-side double-pay
