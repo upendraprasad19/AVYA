@@ -35360,7 +35360,7 @@
       "lunch",
       "dinner"
     ],
-    "source": "icanbefitter_seed"
+    "source": "icanbefitter_seed_v3"
   },
   {
     "id": "F1433",
@@ -35385,7 +35385,7 @@
       "lunch",
       "dinner"
     ],
-    "source": "icanbefitter_seed"
+    "source": "icanbefitter_seed_v3"
   },
   {
     "id": "F1434",
@@ -35410,32 +35410,7 @@
       "lunch",
       "dinner"
     ],
-    "source": "icanbefitter_seed"
-  },
-  {
-    "id": "F1435",
-    "name": "Edamame (cooked)",
-    "category": "pulses",
-    "calories_per_100g": 121,
-    "protein_per_100g": 11.9,
-    "carbs_per_100g": 9,
-    "fat_per_100g": 5,
-    "fiber_per_100g": 5.2,
-    "standard_serving_desc": "1 cup",
-    "standard_serving_g": 100,
-    "calories_std": 121.0,
-    "protein_std": 11.9,
-    "carbs_std": 9.0,
-    "fat_std": 5.0,
-    "is_indian": true,
-    "is_veg": true,
-    "is_vegan": true,
-    "is_ultra_processed": false,
-    "meal_fit": [
-      "lunch",
-      "dinner"
-    ],
-    "source": "icanbefitter_seed"
+    "source": "icanbefitter_seed_v3"
   },
   {
     "id": "F1436",
@@ -35460,31 +35435,7 @@
       "lunch",
       "dinner"
     ],
-    "source": "icanbefitter_seed"
-  },
-  {
-    "id": "F1437",
-    "name": "Hemp Seeds",
-    "category": "nuts_seeds",
-    "calories_per_100g": 553,
-    "protein_per_100g": 31.5,
-    "carbs_per_100g": 8.7,
-    "fat_per_100g": 48,
-    "fiber_per_100g": 4,
-    "standard_serving_desc": "20g",
-    "standard_serving_g": 20,
-    "calories_std": 110.60000000000001,
-    "protein_std": 6.300000000000001,
-    "carbs_std": 1.74,
-    "fat_std": 9.600000000000001,
-    "is_indian": true,
-    "is_veg": true,
-    "is_vegan": true,
-    "is_ultra_processed": false,
-    "meal_fit": [
-      "snack"
-    ],
-    "source": "icanbefitter_seed"
+    "source": "icanbefitter_seed_v3"
   },
   {
     "id": "F1438",
@@ -35508,57 +35459,7 @@
     "meal_fit": [
       "snack"
     ],
-    "source": "icanbefitter_seed"
-  },
-  {
-    "id": "F1439",
-    "name": "Tempeh (cooked)",
-    "category": "protein",
-    "calories_per_100g": 193,
-    "protein_per_100g": 20.3,
-    "carbs_per_100g": 7.6,
-    "fat_per_100g": 11,
-    "fiber_per_100g": 4.5,
-    "standard_serving_desc": "100g",
-    "standard_serving_g": 100,
-    "calories_std": 193.0,
-    "protein_std": 20.3,
-    "carbs_std": 7.6,
-    "fat_std": 11.0,
-    "is_indian": true,
-    "is_veg": true,
-    "is_vegan": true,
-    "is_ultra_processed": false,
-    "meal_fit": [
-      "lunch",
-      "dinner"
-    ],
-    "source": "icanbefitter_seed"
-  },
-  {
-    "id": "F1440",
-    "name": "Seitan (cooked)",
-    "category": "protein",
-    "calories_per_100g": 141,
-    "protein_per_100g": 25,
-    "carbs_per_100g": 5,
-    "fat_per_100g": 2,
-    "fiber_per_100g": 1.2,
-    "standard_serving_desc": "100g",
-    "standard_serving_g": 100,
-    "calories_std": 141.0,
-    "protein_std": 25.0,
-    "carbs_std": 5.0,
-    "fat_std": 2.0,
-    "is_indian": true,
-    "is_veg": true,
-    "is_vegan": true,
-    "is_ultra_processed": false,
-    "meal_fit": [
-      "lunch",
-      "dinner"
-    ],
-    "source": "icanbefitter_seed"
+    "source": "icanbefitter_seed_v3"
   },
   {
     "id": "F1441",
@@ -35583,6 +35484,6 @@
       "lunch",
       "dinner"
     ],
-    "source": "icanbefitter_seed"
+    "source": "icanbefitter_seed_v3"
   }
 ]

@@ -74,6 +74,9 @@ List<Map<String, dynamic>> _seedFoods() => [
       _f('F0021', 'Chicken Breast (grilled)', 'protein', 165, 31.0, 0, 3.6, 100, '100g', isVeg: false),
       _f('F0023', 'Egg (Whole, boiled)', 'protein', 130, 13.0, 1.1, 8.7, 50, '1 egg', isVeg: true),
       _f('F0025', 'Paneer', 'protein', 265, 18.0, 1.2, 21.0, 100, '100g', isVeg: true),
+      // real-DB F0393: veg-cut archetype's recovery pool was one candidate
+      // short on the boundary (B-pass round fixture enrichment)
+      _f('F0025b', 'Paneer (Low Fat)', 'protein', 215, 20.0, 3, 15, 100, '100g', isVeg: true),
       _f('F0026', 'Fish Curry', 'protein', 160, 16.0, 6, 8, 200, '1 bowl', isVeg: false),
       // real-DB density rows (F0330/F0893): the build archetype needs the
       // protein density the real DB carries — fixture was thinner than

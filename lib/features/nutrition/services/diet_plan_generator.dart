@@ -415,7 +415,13 @@ class DietPlanGenerator {
     var swapTries = 12;
 
     while (totalProtein < deficit95 && swapTries-- > 0) {
-      if (_upgradeWeakAnchors(meals, inputs.dietPreference, usedIds)) {
+      if (_upgradeWeakAnchors(
+        meals,
+        inputs.dietPreference,
+        usedIds,
+        currentTotal: totalProtein,
+        dailyCeiling: (inputs.proteinTarget * 1.15).ceil(),
+      )) {
         totalProtein = meals.fold<int>(0, (s, m) => s + m.totalProtein);
         continue;
       }
@@ -581,7 +587,9 @@ class DietPlanGenerator {
     final candidates = <Map<String, dynamic>>[];
     for (final name in def.anchorPoolNames) {
       final f = _findFoodByNameIndexed(name);
-      if (f != null && _passesDiet(f, dietPref)) candidates.add(f);
+      if (f == null) continue;
+      if (_isUpf(f)) continue; // "never UPF" holds on the anchor path too (B-pass finding 5)
+      if (_passesDiet(f, dietPref)) candidates.add(f);
     }
     if (candidates.isEmpty) return null;
 
@@ -833,17 +841,27 @@ class DietPlanGenerator {
   bool _upgradeWeakAnchors(
     List<DietMealPlan> meals,
     String dietPref,
-    Set<String> usedIds,
-  ) {
+    Set<String> usedIds, {
+    required int currentTotal,
+    required int dailyCeiling,
+  }) {
     for (var mi = 0; mi < meals.length; mi++) {
       final meal = meals[mi];
       final def = _slotDefs[mi];
       if (meal.items.isEmpty || !meal.items.first.isAnchor) continue;
       final anchor = meal.items.first;
       if (meal.targetProtein <= 0) continue;
-      if (anchor.protein >= meal.targetProtein * 0.6) continue;
+      // 65% (not 60%): the veg-cut evening anchor (Peanuts 7.8g of a 13g
+      // target) sat EXACTLY at 60% and never upgraded — real-DB seeds 4/7
+      // missed the floor by <4g as a result.
+      if (anchor.protein >= meal.targetProtein * 0.65) continue;
 
       Map<String, dynamic>? best;
+      // Snack slots (optional anchors) carry unlimited slot headroom
+      // elsewhere (_recoveryHeadroom) — the upgrade path must agree, else
+      // the veg-cut evening slot could never upgrade to Whey 24g.
+      final headroom =
+          def.anchorOptional ? double.infinity : meal.targetProtein * 1.5;
       for (final name in def.anchorPoolNames) {
         final f = _findFoodByNameIndexed(name);
         if (f == null) continue;
@@ -853,7 +871,11 @@ class DietPlanGenerator {
         if (usedIds.contains(f['id'] as String?)) continue;
         final p = _protStd(f);
         if (p <= anchor.protein) continue;
-        if (p > meal.targetProtein * 1.5) continue; // slot headroom
+        if (p > headroom) continue; // slot headroom
+        // DAY-ceiling guard: the upgrade must never push the daily total
+        // past 115% of target — an upgraded anchor is isAnchor-protected
+        // and Pass 4 cannot trim it back out (the maintain-surplus leak).
+        if (currentTotal - anchor.protein + p > dailyCeiling) continue;
         if (best == null || p > _protStd(best)) best = f;
       }
       if (best == null) continue;
@@ -934,6 +956,7 @@ class DietPlanGenerator {
         maxSlotProtein: _recoveryHeadroom(slotDef, targetMeal),
       )!;
       targetMeal.items[targetIdx] = _toItem(pick);
+      usedIds.add(pick['id'] as String); // register swap-in (B-pass finding 4)
       return true;
     }
 
@@ -960,6 +983,7 @@ class DietPlanGenerator {
         maxSlotProtein: _recoveryHeadroom(slotDef, targetMeal),
       )!;
       targetMeal.items[targetIdx] = _toItem(pick);
+      usedIds.add(pick['id'] as String); // register swap-in (B-pass finding 4)
       return true;
     }
 
@@ -991,11 +1015,16 @@ class DietPlanGenerator {
       currentProtein: current.protein.toDouble(),
       neededProtein: neededProtein,
       usedIds: usedIds,
-      maxSlotProtein: _recoveryHeadroom(slotDef, targetMeal),
-    )!;
-    targetMeal.items[targetIdx] = _toItem(pick);
-    return true;
-  }
+        maxSlotProtein: _recoveryHeadroom(slotDef, targetMeal),
+      )!;
+      targetMeal.items[targetIdx] = _toItem(pick);
+      // Register the swap-in (B-pass finding 4): recovery additions become
+      // "used" so later prefer-unused picks look elsewhere. The swapped-OUT
+      // id is deliberately left burned — re-adding it is the conservative
+      // direction for variety.
+      usedIds.add(pick['id'] as String);
+      return true;
+    }
 
   /// Walks every meal, finds the highest-protein item that's inflating an
   /// over-target meal, and swaps it for a lower-protein filler in the same
@@ -1029,11 +1058,11 @@ class DietPlanGenerator {
   }) {
     // Iterate meals from highest-over to lowest-over so we trim where the
     // surplus is most concentrated first. DAY-LEVEL FALLBACK (2026-09
-    // batch): when the DAY total busts the ceiling but no single slot is
-    // individually over (slots can sit exactly at 1.2x after the lowered
-    // filler threshold), every slot becomes a trim candidate — the
-    // replacement rules below still require a protein REDUCTION landing
-    // above the daily floor, so this cannot over-trim.
+    // batch): when the DAY total busts the ceiling, remaining non-over
+    // slots are APPENDED after the over-shooters — the over slots may hold
+    // nothing trimmable (anchors + quota items only) while a non-over slot
+    // does. The replacement rules below still require a protein REDUCTION
+    // landing above the daily floor, so appending cannot over-trim.
     final overShooters = <int>[];
     for (var mi = 0; mi < meals.length; mi++) {
       final m = meals[mi];
@@ -1042,9 +1071,9 @@ class DietPlanGenerator {
         overShooters.add(mi);
       }
     }
-    if (overShooters.isEmpty) {
-      for (var mi = 0; mi < meals.length; mi++) {
-        if (meals[mi].targetProtein > 0) overShooters.add(mi);
+    for (var mi = 0; mi < meals.length; mi++) {
+      if (meals[mi].targetProtein > 0 && !overShooters.contains(mi)) {
+        overShooters.add(mi);
       }
     }
     overShooters.sort((a, b) {
@@ -1163,6 +1192,7 @@ class DietPlanGenerator {
             );
         best ??= sortedAll.last;
         meal.items[targetIdx] = _toItem(best);
+        usedIds.add(best['id'] as String); // register swap-in (B-pass finding 4)
         return true;
       }
 
@@ -1267,6 +1297,7 @@ class DietPlanGenerator {
     }
     pick ??= candidates.first;
     targetMeal.items[targetIdx] = _toItem(pick);
+    usedIds.add(pick['id'] as String); // register swap-in (B-pass finding 4)
     return true;
   }
 
@@ -1295,6 +1326,12 @@ class DietPlanGenerator {
       return true;
     }
     if (pref == 'veg' || pref == 'vegetarian') {
+      // is_veg authoritative on real data (B-pass finding 2 — the 9-name
+      // blocklist leaked 187 is_veg=false rows, 117 generator-reachable:
+      // 'Anda Paratha' into staples fillers, chicken variants via
+      // Strategy C / _highestProteinFallback). Blocklist remains as the
+      // untagged-row fallback.
+      if (food['is_veg'] == false) return false;
       return !_nonVegNames.contains(name);
     }
     return true; // non-veg: everything passes
@@ -1309,9 +1346,6 @@ class DietPlanGenerator {
 
   static bool _isUpf(Map<String, dynamic> food) =>
       (food['is_ultra_processed'] as bool?) ?? false;
-
-  static List<String> _mealFit(Map<String, dynamic> food) =>
-      (food['meal_fit'] as List?)?.cast<String>() ?? const [];
 
   static bool _matchesMeal(Map<String, dynamic> food, String slotKey) {
     final fit = food['meal_fit'];

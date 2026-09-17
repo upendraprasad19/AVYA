@@ -151,6 +151,32 @@ void main() {
     }
   });
 
+  test('veg purity: no is_veg=false row in vegetarian plans', () {
+    // B-pass finding 2: the veg preference was a 9-name blocklist that
+    // leaked 187 is_veg=false rows on real data (e.g. 'Anda Paratha' into
+    // staples fillers). is_veg is now authoritative, mirroring the vegan fix.
+    for (var seed = 1; seed <= 10; seed++) {
+      final plan = gen.generate(DietPlanInputs(
+        calorieTarget: 2200,
+        proteinTarget: 140,
+        dietPreference: 'veg',
+        fiberTarget: 30,
+        seed: seed,
+      ));
+      for (final meal in plan) {
+        for (final item in meal.items) {
+          final row = rows.firstWhere((r) => r['id'] == item.foodId,
+              orElse: () => <String, dynamic>{});
+          if (row.isNotEmpty) {
+            expect(row['is_veg'], isNot(false),
+                reason: 'seed=$seed ${meal.slotKey}: is_veg=false item '
+                    '${item.name} in a VEG plan');
+          }
+        }
+      }
+    }
+  });
+
   test('no alcohol ever appears in any generated plan', () {
     final alcoholNames = {'Beer (Lager)', 'Whisky (40% ABV)', 'Vodka (40% ABV)',
         'Rum (40% ABV)', 'Gin (40% ABV)'};

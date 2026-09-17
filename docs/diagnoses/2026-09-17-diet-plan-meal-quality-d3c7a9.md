@@ -175,6 +175,24 @@ real_db_phase: >-
   trim candidate — replacement rules still require protein reduction above
   the daily floor). Final state: 23/23 tests green including real-DB
   archetypes x 8 seeds x 4 archetypes within [95%, 115%].
+
+bpass_phase: >-
+  The B-pass (docs/reviews/diet-plan-quality-bpass.md, 10 lenses) found 1
+  blocker + 2 majors + 3 minors, all remediated in-batch: (1) BLOCKER — 4 of
+  the 10 appended vegan rows duplicated existing names and the source tag
+  inflated the pinned seed count 93->103 (2 RED assertions on the v2
+  contract test); fixed via scripts/fix_bpass_f1_duplicate_rows.dart.
+  (2) MAJOR — the veg preference had the same blocklist-leak defect the
+  vegan fix closed; is_veg now authoritative + veg-purity test.
+  (3) MAJOR — _dietPref was never set on the saved-plan path; fixed.
+  (4-6) MINOR — usedIds registration on all recovery swap sites; UPF filter
+  on the anchor path; empty-swap-sheet snackbar. NEW GUARDS added during
+  remediation, both mutation-proven: M9 (day-level Pass 4 trim append — the
+  day ceiling can bust while no slot is individually over 1.2x) and the
+  anchor-upgrade DAY-CEILING guard (upgraded anchors are isAnchor-protected
+  and cannot be trimmed back out, so an upgrade that pushes the day over
+  115% is refused at the source). Post-remediation: 30/30 tests green
+  including real-DB archetypes x 8 seeds x 4 archetypes.
 impact_analysis: >-
   Account-tier: touches the seeded food DB schema (v3), the diet plan shown to
   every user, and the shareable PDF artifact (a marketing surface — the PDF is

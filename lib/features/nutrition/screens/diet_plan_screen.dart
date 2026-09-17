@@ -47,6 +47,13 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
   }
 
   void _generatePlan() {
+    // Cache diet preference for the swap filter on BOTH paths (fresh +
+    // saved-plan load) — B-pass finding 3: a vegan user loading a saved
+    // plan otherwise got veg-filtered (dairy-allowed) swap alternatives.
+    final profile = UserRepository.instance.getProfile() ?? const {};
+    _dietPref =
+        (profile['diet_preference'] as String?)?.toLowerCase() ?? 'veg';
+
     // Check for saved plan on first entry only
     if (!_checkedSaved) {
       _checkedSaved = true;
@@ -128,7 +135,28 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
         .take(5)
         .toList();
 
-    if (alternatives.isEmpty) return;
+    if (alternatives.isEmpty) {
+      // B-pass finding 6: silent no-op gave the tap zero feedback; the UPF +
+      // diet filters narrow pools, so this is now reachable (all-UPF
+      // categories).
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No alternatives available for this item',
+            style: AppTypography.body.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary),
+          ),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
 
     showModalBottomSheet(
       context: context,
