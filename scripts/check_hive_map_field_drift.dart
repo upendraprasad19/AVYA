@@ -114,6 +114,11 @@ const _expectedEmitFields = <String, Set<String>>{
     // `is_hold` is Hive+plan_json only (deliberately kept out of the
     // scheduled_workouts cloud push field-set so it cannot 400).
     'is_hold', 'hold_ordinal',
+    // Reschedule terminal rows (C2, e8f4a3): _executeRescheduleWeek re-stamps
+    // the SOURCE row in place via upsertScheduled instead of raw-deleting it.
+    // Read back by the terminal-row contract test; 'moved'/'dropped' statuses
+    // are skipped by WorkoutRepository.isInvisibleToStreak (c1a9d4).
+    'moved_to', 'moved_via', 'moved_at', 'dropped_via', 'dropped_at',
   },
   // wlog_* writer: WorkoutWriteService.markCompleted (workout summary row).
   // f1c8e4: markCompleted stamps type:'workout_log' + completed_at (ISO) +

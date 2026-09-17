@@ -6,7 +6,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
-### streaks (3 bugs)
+### streaks (4 bugs)
+- 2026-09-18 e8f4a3 — Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that `_executeRescheduleWeek`'s move path raw-deleted the source…
 - 2026-09-18 c1a9d4 — Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that a PAST scheduled day paused via the AI-coach pausePlan tool…
 - 2026-08-13 a3f8d1 — TWO defects in the same six lines of ActiveWorkoutNotifier.completeWorkout's weekly-streak block. (1) FOB-2, flag-gated: getCurrentWeekNumber() clamps to [1,4] and a hold week starts at plan_start+28,…
 - 2026-05-31 5e8a1c — Surfaced by the year-simulation harness: after amar completed Phase 1 (15 of 16 scheduled workouts over 4 weeks, ~85% adherence with a single missed day), the rank did NOT progress — it stayed at SD2…
@@ -1245,6 +1246,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-18 | e8f4a3 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that `_executeRescheduleWeek`'s move path raw-deleted the source… | streaks | test/contracts/reschedule_week_terminal_row_test.dart |
 | 2026-09-18 | c1a9d4 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that a PAST scheduled day paused via the AI-coach pausePlan tool… | streaks | test/contracts/streak_paused_day_not_missed_test.dart |
 | 2026-09-17 | e7b2d4 | Founder, logged in as Upendra, doing his morning workout in the active-workout screen: searching the SWAP EXERCISE picker for his own custom exercise `Single Leg Front Lever` returned nothing. The… | custom_exercises_mutations | test/contracts/can_offer_in_picker_behavioral_test.dart |
 | 2026-09-17 | b7e1f4 | Founder completed a Push + Core Phase 3 workout (Hanging Leg Raise 4 sets, Self-Resisted Triceps Extension 1 set, Dumbbell Fly 1 set) and the post-completion receipt card showed "Glute work.… | quote_picker_category_derivation | test/contracts/quote_picker_category_from_exercises_test.dart |

@@ -664,6 +664,49 @@ class WorkoutWriteService {
     }
   }
 
+  /// C2 (e8f4a3) — re-keys partial `exlog_<fromDate>_*` rows onto `<toDate>`
+  /// so a moved day keeps its logged exercises (the all-logged completion
+  /// backstop and the AI snapshot's recent_logs both read these keys by date).
+  ///
+  /// Keys are NEVER hand-built: destination keys go through the canonical
+  /// [exlogKey] (UUID-v5 name hash, H-16); source rows are matched on their
+  /// own `date` field, which every canonical writer emits.
+  ///
+  /// LOCAL-ONLY by design: the cloud `exercise_logs` rows for the moved-out
+  /// date are not tombstoned here — that residual is tracked on OI-174 and is
+  /// deliberately out of this fix's scope (every local read path, which the
+  /// streak/snapshot readers consume, is fully corrected).
+  Future<void> moveExerciseLogs({
+    required String fromDate,
+    required String toDate,
+  }) async {
+    final c = await _acquireLock('exlog_move_$fromDate');
+    try {
+      final box = HiveService.instance.workoutBox;
+      final keys = box.keys
+          .whereType<String>()
+          .where((k) => k.startsWith('exlog_'))
+          .toList();
+      final p = toDate.split('-');
+      final toDateTime = p.length == 3
+          ? DateTime.utc(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]))
+          : DateTime.now().toUtc();
+      for (final oldKey in keys) {
+        final raw = box.get(oldKey);
+        if (raw is! Map) continue;
+        if (raw['date']?.toString() != fromDate) continue;
+        final row = Map<String, dynamic>.from(raw);
+        final name = row['exercise_name']?.toString();
+        if (name == null || name.isEmpty) continue;
+        row['date'] = toDate;
+        await box.put(exlogKey(toDateTime, name), row);
+        await box.delete(oldKey);
+      }
+    } finally {
+      _releaseLock('exlog_move_$fromDate', c);
+    }
+  }
+
   Future<WriteResult> regenerateWeek({
     required DateTime fromDate,
     required Map<String, dynamic> params,

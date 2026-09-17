@@ -704,10 +704,36 @@ class ToolDispatcher {
               entry: updated,
               source: WriteSource.aiCoach,
             );
-            // Only delete the old key if it isn't the same as the new one
+            // Only stamp the source terminal row if it isn't the same date
             // (defensive — shouldn't happen but a no-op move would dupe).
             if (move.fromDate != move.toDate) {
-              await box.delete('schedule_${move.fromDate}');
+              // C2 (e8f4a3): write a TERMINAL source row instead of the old
+              // raw delete. A raw delete punched a hole in the streak
+              // walk-back (breaks unconditionally on a null row —
+              // freeze-proof) and never reached cloud, so a restore
+              // resurrected the workout on BOTH dates. The terminal row goes
+              // through upsertScheduled, so the cloud fan-out covers it and
+              // WorkoutRepository.isInvisibleToStreak skips it in the walk.
+              final movedOut = Map<String, dynamic>.from(from)
+                ..['status'] = 'moved'
+                ..['moved_to'] = move.toDate
+                ..['moved_via'] = 'ai_coach'
+                ..['moved_at'] = DateTime.now().toIso8601String();
+              final movedRes = await WorkoutWriteService.instance
+                  .upsertScheduled(
+                date: _utcDateFromIstDateStr(move.fromDate) ?? destDate,
+                entry: movedOut,
+                source: WriteSource.aiCoach,
+              );
+              if (!movedRes.success) {
+                errors.add(
+                    '${move.fromDate}: failed to stamp moved-out row: '
+                    '${movedRes.errorMessage}');
+              }
+              // Partial logs travel with the day (re-key lives in the
+              // canonical WriteService — the dispatcher is a router).
+              await WorkoutWriteService.instance
+                  .moveExerciseLogs(fromDate: move.fromDate, toDate: move.toDate!);
             }
             results.add({
               'from': move.fromDate,
@@ -716,7 +742,28 @@ class ToolDispatcher {
             });
             break;
           case RescheduleAction.drop:
-            await box.delete('schedule_${move.fromDate}');
+            // C2 (e8f4a3): terminal 'dropped' row instead of the raw delete —
+            // same hole-in-the-streak-walk + no-cloud-tombstone class as the
+            // move path above. Only when a source row exists (the snapshot
+            // phase already read it); a missing row needs no write.
+            final dropped = sourceSnapshots[move.fromDate];
+            if (dropped != null) {
+              final droppedOut = Map<String, dynamic>.from(dropped)
+                ..['status'] = 'dropped'
+                ..['dropped_via'] = 'ai_coach'
+                ..['dropped_at'] = DateTime.now().toIso8601String();
+              final dropRes = await WorkoutWriteService.instance
+                  .upsertScheduled(
+                date: _utcDateFromIstDateStr(move.fromDate) ?? DateTime.now(),
+                entry: droppedOut,
+                source: WriteSource.aiCoach,
+              );
+              if (!dropRes.success) {
+                errors.add(
+                    '${move.fromDate}: failed to stamp dropped row: '
+                    '${dropRes.errorMessage}');
+              }
+            }
             results.add({
               'from': move.fromDate,
               'dropped': move.workoutName,
