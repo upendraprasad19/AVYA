@@ -381,6 +381,8 @@ GATE_FAIL=0
 for MARK in "$GATE_FAILDIR"/*; do
   [ -e "$MARK" ] || continue   # no failures -> unexpanded glob -> skip
   FAILED_NAME="$(basename "$MARK")"
+  # Persist gate failures for batch-close telemetry (§4.12.6); best-effort, never fails the commit.
+  printf '%s %s\n' "$(date +%s)" "$FAILED_NAME" >> "$REPO_ROOT/.claude/.gate_failures.log" 2>/dev/null || true
   echo "[pre-commit] GATE FAIL: $FAILED_NAME — re-run for details: dart run scripts/$FAILED_NAME"
   GATE_FAIL=1
 done

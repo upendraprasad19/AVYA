@@ -295,6 +295,9 @@ const regenerableIgnoredPaths = <String>[
   // the same bug reachable by a narrower path.
   '.claude/.ci_reconcile_pending.jsonl', // .gitignore:86
   '.claude/.ci_reconcile_pending.jsonl.tmp', // .gitignore:87
+  // Gate-failure telemetry log, appended by the pre-commit gate loop's
+  // failure branch — the b4d7e9 class, fourth instance (§4.12.6).
+  '.claude/.gate_failures.log', // .gitignore:3 (via `*.log`)
   // DELIBERATELY ABSENT: `test/goldens/**/failures/` (.gitignore:183). It is
   // genuinely regenerable, but it is a PATTERN, and this list's whole rule is
   // exact-match-only — three review rounds each found a P0 here from looser
