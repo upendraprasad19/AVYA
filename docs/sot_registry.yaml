@@ -1131,6 +1131,64 @@ concepts:
       after saveDietPlan. Tap-to-log pre-fill depends on
       showFoodSearchSheet(initialQuery: planned.firstFoodName).
 
+  - concept: diet_plan_generation_quality
+    domain: nutrition
+    behavioral_test_path: test/nutrition/diet_plan_quality_constraints_test.dart
+    description: |
+      Generation-time meal-quality constraints on the local Dart diet plan
+      generator (2026-09 batch, diagnose d3c7a9). The generator composes
+      plans from the Hive foodBox (seeded from assets/data/
+      food_database.json, schema v3: every row carries meal_fit
+      (List<String> of breakfast/lunch/dinner/snack; EMPTY = never
+      generated, e.g. alcohol; ABSENT = matches-all, untagged v2 boxes)
+      and is_ultra_processed (bool)). Constraints: Pass 0 group quotas
+      (vegetables in lunch/dinner, dairy-or-fruit breakfast; isQuotaLocked
+      items protected from Pass 3/4 swaps); per-category filler caps
+      (staples<=1 with >20%-under-calorie 2nd, pulses<=1 with
+      >20%-under-protein 2nd, vegetables<=2); day-level food uniqueness
+      (hard in Pass 1 anchors/Pass 0/2 — optional snack anchors skip
+      rather than repeat; soft prefer-unused in Pass 3/4); UPF exclusion
+      (never generated, never swap candidate); nuts_seeds per-serving
+      <=300 kcal cap surviving fit-relaxation; recovery anchor-upgrade
+      (<60% slot target) + gradual gap-aware sizing with 1.5x slot
+      headroom; Pass 4 three-tier trim floor (105% soft, 95% daily,
+      smallest-cut) with day-level fallback; Pass 5 fiber floor vs
+      profile fiber target. Seed version _foodLibraryVersion=3 ships the
+      tags to existing installs.
+    writers:
+      - file: lib/features/nutrition/services/diet_plan_generator.dart
+        method: generate (Pass 0/1/2/3/4/5) + passesDiet (shared with swap UI)
+        notes: |
+          Single writer of generated plans. Vegan preference reads the
+          DB's is_vegan field AUTHORITATIVELY (name blocklists are the
+          fallback for untagged rows only — real-DB leak diagnose d3c7a9).
+      - file: lib/core/services/seed_service.dart
+        method: _foodLibraryVersion (v3 = meal_fit + is_ultra_processed)
+      - file: lib/features/nutrition/screens/diet_plan_screen.dart
+        method: _generateFreshPlan (fiberTarget from profile['fiber_grams'])
+    readers:
+      - file: lib/features/nutrition/screens/diet_plan_screen.dart
+        method: _swapItem
+        semantic: filtered
+        fields_read: [is_ultra_processed, category]
+        notes: |
+          Manual swap alternatives filter by !is_ultra_processed +
+          passesDiet(dietPref). meal_fit deliberately NOT enforced on
+          manual swaps (user tap IS the meal intent).
+      - file: test/nutrition/food_database_tagged_test.dart
+        method: real-DB schema/spot-check/archetype gates
+        semantic: pinning
+        fields_read: [is_ultra_processed, meal_fit, is_vegan, id, name]
+    cloud_table: none
+    sync_methods: []
+    restore_methods: []
+    provider_invalidation_set: []
+    class_constraints: |
+      The saved-plan JSON schema (diet_plan_saved_loaded) is UNCHANGED by
+      generation constraints. Seed version bump is REQUIRED whenever the
+      asset schema extends — without it existing installs keep untagged
+      rows and every filter silently no-ops (missing field semantics).
+
   - concept: weekly_report_data
     domain: ai_coach
     behavioral_test_path: test/contracts/weekly_report_data_behavioral_test.dart

@@ -293,16 +293,16 @@ void main() {
     var quotaSeen = 0;
     for (final meal in plan) {
       for (final item in meal.items) {
-        if (item.category == 'vegetables') {
-          expect(item.isQuotaLocked, isTrue,
-              reason: 'vegetables item ${item.name} in ${meal.slotKey} must '
-                  'carry isQuotaLocked (Pass 3/4 swap protection)');
+        if (item.category == 'vegetables' && item.isQuotaLocked) {
           quotaSeen++;
         }
       }
     }
     expect(quotaSeen, greaterThanOrEqualTo(2),
-        reason: 'lunch + dinner quotas must both place a vegetables item');
+        reason: 'lunch + dinner quotas must both place a quota-LOCKED '
+            'vegetables item. (A 2nd vegetables item may exist as a plain '
+            'Pass 2 filler — vegetables cap is 2 — and it correctly carries '
+            'no flag; the QUOTA one is what must survive recovery.)');
   });
 
   test('per-category filler caps: staples ≤2, pulses ≤1, vegetables ≤2 per slot', () {
@@ -359,28 +359,36 @@ void main() {
 
   test('Pass 5 fiber floor strictly raises daily fiber vs no-pass baseline', () {
     // Behavioral pin: same seed, fiberTarget 0 (floor 0 → Pass 5 dormant)
-    // vs fiberTarget 30 (floor 21 → swaps fire). The comparison makes the
-    // test immune to the fixture's baseline fiber — a vacuous floor
-    // assertion let mutation M6 (Pass 5 disabled) through unnoticed.
-    final base = gen.generate(const DietPlanInputs(
-      calorieTarget: 2200,
-      proteinTarget: 140,
-      dietPreference: 'non-veg',
-      fiberTarget: 0,
-      seed: 42,
-    ));
-    final floored = gen.generate(const DietPlanInputs(
-      calorieTarget: 2200,
-      proteinTarget: 140,
-      dietPreference: 'non-veg',
-      fiberTarget: 30,
-      seed: 42,
-    ));
-    final baseFiber = base.fold<int>(0, (s, m) => s + m.totalFiber);
-    final flooredFiber = floored.fold<int>(0, (s, m) => s + m.totalFiber);
-    expect(flooredFiber, greaterThan(baseFiber),
-        reason: 'Pass 5 produced no fiber gain over the dormant baseline '
-            '($flooredFiber vs $baseFiber) — Pass 5 regressed');
+    // vs fiberTarget 30 (floor 21 → swaps fire). Robust across seeds: for
+    // EVERY seed the floored plan must never lose fiber, and at least one
+    // seed must show a strict gain — a disabled Pass 5 (mutation M6)
+    // reddens the any-gain assertion regardless of fixture composition.
+    var sawGain = false;
+    for (var seed = 1; seed <= 5; seed++) {
+      final base = gen.generate(DietPlanInputs(
+        calorieTarget: 2200,
+        proteinTarget: 140,
+        dietPreference: 'non-veg',
+        fiberTarget: 0,
+        seed: seed,
+      ));
+      final floored = gen.generate(DietPlanInputs(
+        calorieTarget: 2200,
+        proteinTarget: 140,
+        dietPreference: 'non-veg',
+        fiberTarget: 30,
+        seed: seed,
+      ));
+      final baseFiber = base.fold<int>(0, (s, m) => s + m.totalFiber);
+      final flooredFiber = floored.fold<int>(0, (s, m) => s + m.totalFiber);
+      expect(flooredFiber, greaterThanOrEqualTo(baseFiber),
+          reason: 'seed=$seed: Pass 5 LOWERED fiber ($flooredFiber vs '
+              '$baseFiber) — whole-grain swap is fiber-blind');
+      if (flooredFiber > baseFiber) sawGain = true;
+    }
+    expect(sawGain, isTrue,
+        reason: 'Pass 5 produced no fiber gain on ANY seed over the dormant '
+            'baseline — Pass 5 regressed (mutation M6 pin)');
   });
 
   test('Pass 5 no-ops safely when the fiber floor is unreachable', () {

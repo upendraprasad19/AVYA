@@ -131,10 +131,50 @@ mutation_proof:
     - { id: M5, guard: isQuotaLocked skip in Pass 3 target selection, neutered: "if (item.isQuotaLocked) continue;" removed, result: initially NO red on the flag-presence test (the flag is set in Pass 0 and survives regardless — wrong assertion for this guard); the QUOTA PRESENCE test reddened: 'lunch has no vegetables item [Soy Chunks, Toor Dal, Poha, White Rice]' — recovery swapped the quota veg out exactly as predicted by plan-review round 2 finding 4 (1 test reddened after using the right test). Reverted -> green. }
     - { id: M6, guard: Pass 5 fiber floor, neutered: while-loop condition false, result: initially NO red — the test's floor (fiberTarget 8 -> 5g) was below the plan's baseline fiber (quota veg + dal fillers already carry >5g), so it passed vacuously. FIX: rewrote as a strict comparison — same seed, fiberTarget 0 (Pass 5 dormant) vs fiberTarget 30; assert floored fiber STRICTLY greater. RE-RUN: RED — 'Pass 5 produced no fiber gain over the dormant baseline (14 vs 14)' (1 test reddened). Reverted -> green (14 -> 15+). }
     - { id: M7, guard: nuts_seeds per-serving <=300 kcal cap, neutered: cap expression removed (fit filter only), result: initially NO red — the Almond Butter Jar (372 kcal/serving) was blocked by the fit filter in every reachable snack slot (remaining <= ~330 kcal), so the cap appeared redundant. FIX: added a surgical deterministic test with a fixture where the jar is the ONLY nuts_seeds row (stage-4 fit relaxation would otherwise admit it) — RE-RUN: RED — "Expected: not 'Almond Butter Jar' / Actual: 'Almond Butter Jar'" (1 test reddened). Reverted -> green. }
+    - { id: M8, guard: recovery anchor-upgrade (_upgradeWeakAnchors — added in the real-DB phase), neutered: call-site condition false, result: initially NO red on real-DB seeds 42/7 (those seeds pass without the upgrade — seed blind spot); FIX: archetype seeds extended to 1-8; RE-RUN: RED — 'low-cal cut seed=1: protein deficit on the REAL DB (119 g vs >= 123.5 g)' (1 test reddened; the guard is load-bearing for veg AND vegan archetypes). Reverted -> green. }
   residual_gaps:
-    - meal_fit is SOFT (yields first in the degradation order, per review round 2 finding 7) — no behavioral fixture test pins it yet; it will be pinned by the real-DB plan-generation test that rides the tagged-asset commit (post founder HTML review), where 'Special K never in lunch' is directly assertable on the 1431-row DB.
+    - meal_fit is SOFT (yields first in the degradation order, per review round 2 finding 7) — pinned on the REAL DB by test/nutrition/food_database_tagged_test.dart (alcohol never-generate + UPF spot-checks).
     - The no-UPF test remains probabilistic for the Maggi row (30 seeds make a vacuous pass ~0.1% likely, not impossible).
     - Pass 5 swaps are protein-blind (can lower protein by a few g); the archetype band tests passing on the same seeds is the pin that this stays within the band.
+
+real_db_phase: >-
+  After the founder's HTML export was validated (25,758 legacy-field
+  comparisons byte-identical, spot-checks green, 5 alcohol rows DELIBERATELY
+  cleared to empty meal_fit = never-generate), the asset was swapped and a
+  real-DB test file (test/nutrition/food_database_tagged_test.dart) written.
+  Running the archetypes against the REAL 1431-row DB surfaced four defects
+  the curated fixture could never show, all fixed in this batch:
+  (1) VEGAN LEAK: the name-blocklist vegan filter missed real DB rows
+  ('1% Milk', 'Greek Yogurt Plain (2%)', 'Jaouda Perly', 'Nestle Milkybar
+  Moosha', 'Buttermilk (Cultured)'). FIX: the DB's own is_vegan field is now
+  authoritative for the vegan preference (all dals vegan=true on real data —
+  the old comment claiming is_vegan:false would reject dals was a
+  fixture-era assumption); blocklists remain as fallback for untagged rows.
+  Pinned by the vegan-purity test.
+  (2) UNDER-TAGGED UPF ROWS: 6 branded rows the heuristic keywords missed
+  and the founder's glance did not catch (Smith & Jones Pasta Masala,
+  Nestle Milkybar Moosha, 2x Yoga Bar protein items, Pintos Dark-Chocolate
+  PB, Jaouda Perly). FIX: scripts/patch_food_upf_tags.dart + keyword list
+  extended (milkybar/nestle/smith & jones/yoga bar/pintos/jaouda).
+  (3) VEGAN PROTEIN FLOOR: the real DB's vegan anchor pool was too thin
+  (best breakfast anchor Tofu 8g of a 37.5g target). FIX per the
+  pre-sanctioned fallback: 10 protein-dense vegan rows appended under NEW
+  ids F1432-F1441 (scripts/append_vegan_protein_rows.dart — Soya Chunks
+  Nutrela dry 26g/srv, Tempeh 20.3g, Seitan 25g, Sattu, Edamame, Soy Flour,
+  Hemp/Pumpkin Seeds, Black Chana, Green Peas dried; the founder's own
+  coach-made diet charts use exactly the Nutrela soya-chunks item) + added
+  to breakfast/main/snack anchor pools + a new recovery ANCHOR-UPGRADE pass
+  (_upgradeWeakAnchors: an anchor under-delivering <60% of slot target is
+  swapped for the highest-protein unused pool candidate within 1.5x
+  headroom; mutation M8).
+  (4) FILLER THRESHOLD GAP: the pre-existing remainingCals > 80 filler
+  cutoff left 72 kcal (~5g protein) unfilled in a dinner slot, busting the
+  veg-cut floor on the real DB. FIX: threshold 80 -> 50 (the fit filter
+  bounds overshoot) + a day-level Pass 4 fallback (when the DAY total busts
+  the ceiling but no slot is individually over 1.2x, every slot becomes a
+  trim candidate — replacement rules still require protein reduction above
+  the daily floor). Final state: 23/23 tests green including real-DB
+  archetypes x 8 seeds x 4 archetypes within [95%, 115%].
 impact_analysis: >-
   Account-tier: touches the seeded food DB schema (v3), the diet plan shown to
   every user, and the shareable PDF artifact (a marketing surface — the PDF is

@@ -36,6 +36,10 @@ const _upfKeywords = <String>[
   'mcdonald', 'kfc', 'domino', 'pizza hut', 'burger king', 'subway',
   'chips', 'nachos', 'instant noodles', 'instant pasta', 'candy',
   'jelly', 'gum', 'soft drink', 'sausage', 'salami', 'bacon',
+  // added post founder-review (real-DB debug run caught these leaking
+  // into plans — see diagnose d3c7a9 residual notes)
+  'milkybar', 'nestle', 'smith & jones', 'yoga bar', 'pintos', 'jaouda',
+  'protein bar', 'dark chocolate',
 ];
 
 const _breakfastStapleKeywords = <String>[

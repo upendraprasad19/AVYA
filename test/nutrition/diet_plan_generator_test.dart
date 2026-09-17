@@ -148,6 +148,12 @@ const _breakfastAnchors = {
   'Sprouts (Mixed)',
   'Tofu',
   'Protein Shake (Whey + Milk)',
+  // 2026-09 meal-quality batch vegan-density additions
+  'Soya Chunks (Nutrela, dry)',
+  'Soy Chunks (cooked)',
+  'Tofu (Firm)',
+  'Tempeh (cooked)',
+  'Seitan (cooked)',
 };
 const _mainAnchors = {
   'Chicken Breast (grilled)',

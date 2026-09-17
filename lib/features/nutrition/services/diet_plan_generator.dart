@@ -164,6 +164,13 @@ class DietPlanGenerator {
     'Sprouts (Mixed)',
     'Tofu',
     'Protein Shake (Whey + Milk)',
+    // vegan-density additions (2026-09 batch): the vegan breakfast pool was
+    // Tofu(8g)/Sprouts(7g) only — every other breakfast anchor is dairy/egg
+    'Soya Chunks (Nutrela, dry)',
+    'Soy Chunks (cooked)',
+    'Tofu (Firm)',
+    'Tempeh (cooked)',
+    'Seitan (cooked)',
   };
   static const _mainAnchorNames = {
     'Chicken Breast (grilled)',
@@ -183,6 +190,12 @@ class DietPlanGenerator {
     'Soy Chunks (cooked)',
     'Soya Chaap',
     'Tofu (Firm)',
+    // appended real-DB rows (F1432/F1439/F1440 — scripts/
+    // append_vegan_protein_rows.dart): vegan archetype on the real 1431-
+    // row DB landed 116-148g against the 142.5g floor without them
+    'Soya Chunks (Nutrela, dry)',
+    'Tempeh (cooked)',
+    'Seitan (cooked)',
     'Soybean (boiled)',
     'Tofu',
   };
@@ -194,6 +207,8 @@ class DietPlanGenerator {
     'Sprouts (Mixed)',
     'Greek Yogurt',
     'Protein Shake (Whey + Milk)',
+    // founder's own diet charts put soya chunks in the snack slot
+    'Soya Chunks (Nutrela, dry)',
   };
 
   // Foods that are not vegetarian (filtered out for veg/vegan)
@@ -362,7 +377,11 @@ class DietPlanGenerator {
       var safety = 6; // hard cap to avoid runaway loops (raised 4→6: quota
       // items consume one iteration before filling starts — review F2)
 
-      while (remainingCals > 80 && safety-- > 0) {
+      // Threshold 80 -> 50 (2026-09 batch): the fit filter bounds filler
+      // size, so slots with a 50-80 kcal gap no longer stay under-filled
+      // (observed: dinner left 72 kcal / ~5g protein on the table at the
+      // old threshold, busting the veg-cut archetype's floor on the real DB).
+      while (remainingCals > 50 && safety-- > 0) {
         // Recompute avoidIds each iteration so newly added fillers aren't
         // picked again (otherwise we get "Brown Rice × 3" in one slot).
         // Smart exclusion: when slot's current protein already meets >=90%
@@ -396,6 +415,10 @@ class DietPlanGenerator {
     var swapTries = 12;
 
     while (totalProtein < deficit95 && swapTries-- > 0) {
+      if (_upgradeWeakAnchors(meals, inputs.dietPreference, usedIds)) {
+        totalProtein = meals.fold<int>(0, (s, m) => s + m.totalProtein);
+        continue;
+      }
       final swapped = _swapLowestForHigherProtein(
         meals,
         inputs.dietPreference,
@@ -800,6 +823,49 @@ class DietPlanGenerator {
     return unused.first;
   }
 
+  /// Recovery anchor-upgrade (2026-09 batch): when a slot's ANCHOR itself
+  /// under-delivers (< 60% of the slot protein target — the vegan
+  /// breakfast pool's best was Tofu at 8g of a 37.5g target), swap it for
+  /// the highest-protein unused anchor-pool candidate within the 1.5x
+  /// headroom. The upgrade keeps isAnchor=true so Pass 4 protection and
+  /// day-uniqueness bookkeeping stay intact. One upgrade per call
+  /// (bounded by the caller's swapTries loop).
+  bool _upgradeWeakAnchors(
+    List<DietMealPlan> meals,
+    String dietPref,
+    Set<String> usedIds,
+  ) {
+    for (var mi = 0; mi < meals.length; mi++) {
+      final meal = meals[mi];
+      final def = _slotDefs[mi];
+      if (meal.items.isEmpty || !meal.items.first.isAnchor) continue;
+      final anchor = meal.items.first;
+      if (meal.targetProtein <= 0) continue;
+      if (anchor.protein >= meal.targetProtein * 0.6) continue;
+
+      Map<String, dynamic>? best;
+      for (final name in def.anchorPoolNames) {
+        final f = _findFoodByNameIndexed(name);
+        if (f == null) continue;
+        if (!_passesDiet(f, dietPref)) continue;
+        if (_isUpf(f)) continue;
+        if ((f['id'] as String?) == anchor.foodId) continue;
+        if (usedIds.contains(f['id'] as String?)) continue;
+        final p = _protStd(f);
+        if (p <= anchor.protein) continue;
+        if (p > meal.targetProtein * 1.5) continue; // slot headroom
+        if (best == null || p > _protStd(best)) best = f;
+      }
+      if (best == null) continue;
+
+      usedIds.remove(anchor.foodId);
+      meal.items[0] = _toItem(best, isAnchor: true);
+      usedIds.add(best['id'] as String);
+      return true;
+    }
+    return false;
+  }
+
   bool _swapLowestForHigherProtein(
     List<DietMealPlan> meals,
     String dietPref,
@@ -962,13 +1028,23 @@ class DietPlanGenerator {
     int currentTotal = 0,
   }) {
     // Iterate meals from highest-over to lowest-over so we trim where the
-    // surplus is most concentrated first.
+    // surplus is most concentrated first. DAY-LEVEL FALLBACK (2026-09
+    // batch): when the DAY total busts the ceiling but no single slot is
+    // individually over (slots can sit exactly at 1.2x after the lowered
+    // filler threshold), every slot becomes a trim candidate — the
+    // replacement rules below still require a protein REDUCTION landing
+    // above the daily floor, so this cannot over-trim.
     final overShooters = <int>[];
     for (var mi = 0; mi < meals.length; mi++) {
       final m = meals[mi];
       if (m.targetProtein <= 0) continue;
       if (m.totalProtein > (m.targetProtein * 1.2).round()) {
         overShooters.add(mi);
+      }
+    }
+    if (overShooters.isEmpty) {
+      for (var mi = 0; mi < meals.length; mi++) {
+        if (meals[mi].targetProtein > 0) overShooters.add(mi);
       }
     }
     overShooters.sort((a, b) {
@@ -1204,13 +1280,18 @@ class DietPlanGenerator {
     final pref = dietPref.toLowerCase();
     if (pref == 'vegan') {
       if (_nonVegNames.contains(name)) return false;
+      // The DB's own is_vegan field is AUTHORITATIVE on the 1431-row real
+      // data (all dals/pulses vegan=true; every dairy/paneer/whey row
+      // vegan=false). The name blocklists below were built against the
+      // curated fixture and MISSED real rows ('1% Milk', 'Greek Yogurt
+      // Plain (2%)', 'Jaouda Perly', 'Nestle Milkybar Moosha' all leaked
+      // into real vegan plans — caught by the real-DB vegan-purity test).
+      // Blocklists remain as the fallback for untagged rows only.
+      if (food['is_vegan'] == false) return false;
       if (_dairyOrEggNames.contains(name)) return false;
       // Plant-based pulses, grains, legumes, nuts, fruits, vegetables are
-      // all vegan-eligible by default. The exclusion lists above are the
-      // authoritative source — honoring `is_vegan: false` would reject
-      // foods like dal/rajma/sprouts that aren't explicitly tagged but are
-      // perfectly vegan. Only honor `is_vegan == true` as a positive signal
-      // (already implied by passing both blocklists).
+      // all vegan-eligible by default. Only honor `is_vegan == true` as a
+      // positive signal (already implied by passing the checks above).
       return true;
     }
     if (pref == 'veg' || pref == 'vegetarian') {
@@ -1233,8 +1314,14 @@ class DietPlanGenerator {
       (food['meal_fit'] as List?)?.cast<String>() ?? const [];
 
   static bool _matchesMeal(Map<String, dynamic> food, String slotKey) {
-    final fit = _mealFit(food);
-    return fit.isEmpty || fit.contains(slotKey);
+    final fit = food['meal_fit'];
+    // ABSENT field (v2 box mid-reseed / untagged fixture row) => matches
+    // every slot, so untagged boxes generate exactly like pre-batch.
+    // PRESENT-but-EMPTY list is a deliberate founder/editorial choice =
+    // NEVER generated (e.g. the five alcohol rows cleared in the HTML
+    // review). A non-empty list must contain the slot.
+    if (fit == null) return true;
+    return (fit as List).contains(slotKey);
   }
 
   DietPlanFoodItem _toItem(
