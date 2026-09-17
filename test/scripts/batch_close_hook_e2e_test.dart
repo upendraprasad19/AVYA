@@ -368,5 +368,44 @@ body
     expect(dec['reason'], contains('open_s_escapes=unknown'),
         reason: 'ledger ABSENT renders unknown, never 0 (bad-news-vs-no-news) '
             '— pinned at the wiring level, not just in the pure lib');
+    expect(dec['reason'], contains('gate_failures_7d=unknown'),
+        reason: 'gate-failures log ABSENT renders unknown, never 0 — '
+            'the sweep fixture writes no .claude/.gate_failures.log');
+  });
+
+  test('gate-failures log: 7-day window, top gate, unparseable is unknown',
+      () async {
+    final d = _repoWithTelemetry();
+    addTearDown(() => _cleanup(d));
+    Directory('${d.path}/.claude').createSync(recursive: true);
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    File('${d.path}/.claude/.gate_failures.log').writeAsStringSync(
+      '${nowSec - 100} check_alpha\n'
+      '${nowSec - 200} check_alpha\n'
+      '${nowSec - 691200} check_beta\n',
+    );
+
+    final r = await _runHook(d.path);
+    expect(r.exitCode, 0);
+    final dec = _decision(r);
+    expect(dec, isNotNull);
+    expect(dec!['decision'], 'block');
+    expect(dec['reason'], contains('gate_failures_7d=2'),
+        reason: 'only the 2 recent lines count — the 8-day-old check_beta '
+            'line is outside the window');
+    expect(dec['reason'], contains('top_gate=check_alpha'));
+
+    // Unparseable content degrades to unknown, never 0.
+    final d2 = _repoWithTelemetry();
+    addTearDown(() => _cleanup(d2));
+    Directory('${d2.path}/.claude').createSync(recursive: true);
+    File('${d2.path}/.claude/.gate_failures.log')
+        .writeAsStringSync('not a gate-failures log\n');
+    final r2 = await _runHook(d2.path);
+    expect(r2.exitCode, 0);
+    final dec2 = _decision(r2);
+    expect(dec2, isNotNull);
+    expect(dec2!['reason'], contains('gate_failures_7d=unknown'));
+    expect(dec2['reason'], isNot(contains('gate_failures_7d=0')));
   });
 }

@@ -15,6 +15,15 @@
 // `1/unknown` or `unknown/unknown`; review_files_7d and open_s_escapes
 // render `unknown` alone. A genuine 0 (dir present, nothing recent) renders
 // as `0`, deliberately distinct.
+//
+// GATE-FAILURES LOG (parseGateFailuresLog): the writer is pre-commit.sh's
+// aggregate loop ("<epoch-seconds> <gate-name>" per failed gate). Mirror-rule
+// note: an ABSENT file is the CALLER's null (unknown); an UNPARSEABLE file
+// (empty, or no epoch+name-shaped line at all) sets `unparseable` so the
+// caller renders unknown, never 0 — an unreadable log must not read as "no
+// gate failures". A PARSEABLE log with nothing inside the window is a
+// genuine 0. Lines with a non-numeric first token (or wrong token count) are
+// skipped, never fatal — the log is append-only debris from many runs.
 
 class PlanReviewStats {
   final int reviewRounds;
@@ -61,22 +70,84 @@ EscapeLedgerStats parseEscapeLedger(String content) {
   );
 }
 
+class GateFailuresStats {
+  /// Failed-gate lines within the last 7 days (epoch >= now-604800).
+  final int recentTotal;
+
+  /// Most frequent gate name among recent lines; null when none in-window.
+  final String? topGate;
+
+  /// True when the content does not look like a gate-failures log at all —
+  /// empty, or no `<epoch> <name>`-shaped line. Caller renders unknown, never 0.
+  final bool unparseable;
+
+  const GateFailuresStats({
+    required this.recentTotal,
+    required this.topGate,
+    required this.unparseable,
+  });
+}
+
+/// The 7-day window, in seconds — 604800 = 7 * 86400.
+const _gateWindowSeconds = 604800;
+
+GateFailuresStats parseGateFailuresLog(String content, int nowEpochSeconds) {
+  final cutoff = nowEpochSeconds - _gateWindowSeconds;
+  final counts = <String, int>{};
+  var sawValidShape = false;
+  var recentTotal = 0;
+  for (final rawLine in content.split('\n')) {
+    final line = rawLine.trim();
+    if (line.isEmpty) continue;
+    final tokens = line.split(RegExp(r'\s+'));
+    if (tokens.length != 2) continue; // gate names never contain spaces
+    final epoch = int.tryParse(tokens[0]);
+    if (epoch == null) continue; // non-numeric first token: skip, don't abort
+    sawValidShape = true;
+    if (epoch < cutoff) continue; // outside the 7-day window
+    recentTotal++;
+    counts[tokens[1]] = (counts[tokens[1]] ?? 0) + 1;
+  }
+  if (!sawValidShape) {
+    return const GateFailuresStats(
+        recentTotal: 0, topGate: null, unparseable: true);
+  }
+  String? top;
+  var best = 0;
+  counts.forEach((gate, n) {
+    if (n > best) {
+      best = n;
+      top = gate;
+    }
+  });
+  return GateFailuresStats(
+      recentTotal: recentTotal, topGate: top, unparseable: false);
+}
+
 String composeReport({
   required PlanReviewStats record,
   required int? openEscapes,
   required int? recentDiagnoseDocs,
   required int? sTierDocs,
   required int? recentReviewFiles,
+  required int? gateFailures7d,
+  required String? topGate,
 }) {
   final esc = openEscapes == null ? 'unknown' : '$openEscapes';
   final total = recentDiagnoseDocs == null ? 'unknown' : '$recentDiagnoseDocs';
   final sFix = sTierDocs == null ? 'unknown' : '$sTierDocs';
   final reviews = recentReviewFiles == null ? 'unknown' : '$recentReviewFiles';
+  final gf = gateFailures7d == null ? 'unknown' : '$gateFailures7d';
   return [
     'process-telemetry: review_rounds=${record.reviewRounds} '
         'mechanical_only=${record.mechanicalOnly}',
     'process-telemetry: open_s_escapes=$esc',
     'process-telemetry: s_tier_fixes=$sFix/$total '
         'review_files_7d=$reviews',
+    // topGate null renders `none`, never `unknown`: with a parseable log it
+    // genuinely means "no failures in-window"; an unparseable/absent log
+    // already renders unknown via gate_failures_7d.
+    'process-telemetry: gate_failures_7d=$gf '
+        'top_gate=${topGate ?? 'none'}',
   ].join('\n');
 }

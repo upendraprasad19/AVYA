@@ -90,6 +90,25 @@ void main() {
       }
     } catch (_) {}
 
+    // Reader for the writer at pre-commit.sh:385 (<epoch> <gate> per failed
+    // gate). Absent file => nulls (unknown); unparseable content => nulls too,
+    // so it renders unknown, never 0 (bad-news-vs-no-news).
+    int? gateFailures7d;
+    String? topGate;
+    try {
+      final log = File('$root/.claude/.gate_failures.log');
+      if (log.existsSync()) {
+        final stats = parseGateFailuresLog(
+          log.readAsStringSync(),
+          DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        );
+        if (!stats.unparseable) {
+          gateFailures7d = stats.recentTotal;
+          topGate = stats.topGate;
+        }
+      }
+    } catch (_) {}
+
     final cutoff = DateTime.now().subtract(const Duration(days: 7));
     final sweep = _diagnoseSweep(Directory('$root/docs/diagnoses'), cutoff);
     stdout.writeln(composeReport(
@@ -98,6 +117,8 @@ void main() {
       recentDiagnoseDocs: sweep.total,
       sTierDocs: sweep.sFix,
       recentReviewFiles: _recentCount(Directory('$root/docs/reviews'), cutoff),
+      gateFailures7d: gateFailures7d,
+      topGate: topGate,
     ));
   } catch (_) {
     // Telemetry must never break batch close.
