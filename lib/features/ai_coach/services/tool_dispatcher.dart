@@ -1127,6 +1127,10 @@ class ToolDispatcher {
         'paused_count': pausedDates.length,
       });
     } on PausePlanException catch (e) {
+      // C5 — mirror the reschedule/modify-for-injury failure paths: every
+      // dispatcher failure path logs ErrorTelemetry.
+      unawaited(ErrorTelemetry.logEvent('tool_dispatch_pause_plan_failed',
+          message: '${e.code}: ${e.message}'));
       return ToolExecutionResult.failure(_pausePlanErrorMessage(e));
     }
   }
@@ -1609,33 +1613,51 @@ class ToolDispatcher {
     return type == 'log_meal_by_text';
   }
 
+  /// C5 — serializes coach_memory read-modify-writes. Two intent cards from
+  /// one multi-intent turn can execute concurrently (each card guards only
+  /// itself); without this lock one injury append was lost.
+  static Future<void> _coachMemoryLock = Future<void>.value();
+
+  @visibleForTesting
+  Future<void> appendInjuryToCoachMemoryForTest(
+          String bodyPart, String severity) =>
+      _appendInjuryToCoachMemory(bodyPart, severity);
+
   Future<void> _appendInjuryToCoachMemory(
       String bodyPart, String severity) async {
-    final box = HiveService.instance.coachBox;
-    final raw = box.get('coach_memory');
-    final mem = raw is Map
-        ? Map<String, dynamic>.from(raw)
-        : <String, dynamic>{};
+    final prev = _coachMemoryLock;
+    final completer = Completer<void>();
+    _coachMemoryLock = completer.future;
+    await prev;
+    try {
+      final box = HiveService.instance.coachBox;
+      final raw = box.get('coach_memory');
+      final mem = raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : <String, dynamic>{};
 
-    final existing = mem['injuries'];
-    final injuries = existing is List
-        ? existing
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList()
-        : <Map<String, dynamic>>[];
+      final existing = mem['injuries'];
+      final injuries = existing is List
+          ? existing
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
 
-    injuries.add({
-      'part': bodyPart,
-      'severity': severity,
-      'since': DateTime.now().toIso8601String().split('T').first,
-    });
+      injuries.add({
+        'part': bodyPart,
+        'severity': severity,
+        'since': DateTime.now().toIso8601String().split('T').first,
+      });
 
-    mem['injuries'] = injuries;
-    await box.put('coach_memory', mem);
-    // pushSnapshot fires after this in the dispatcher's outer flow; the
-    // snapshot path can opt to forward the injury delta to server-side
-    // coach_memory in a future change.
+      mem['injuries'] = injuries;
+      await box.put('coach_memory', mem);
+      // pushSnapshot fires after this in the dispatcher's outer flow; the
+      // snapshot path can opt to forward the injury delta to server-side
+      // coach_memory in a future change.
+    } finally {
+      completer.complete();
+    }
   }
 
   // ---------------- helpers ----------------
