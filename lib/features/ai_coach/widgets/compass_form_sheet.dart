@@ -211,7 +211,15 @@ class _CompassFormSheetState extends State<CompassFormSheet> {
             _wrapChips(days
                 .map((d) => (
                       value: istDateStr(d.$2),
-                      label: d.$1 == _choice ? 'TOMORROW' : d.$1
+                      // Review round 1 (e8f4a3) finding 8 — label by the
+                      // ACTUAL date, not by the source choice: the chip
+                      // for today+1 is TOMORROW. The old `d.$1 == _choice`
+                      // mislabeled whichever destination chip matched the
+                      // selected SOURCE weekday.
+                      label: istDateStr(d.$2) == istDateStr(today
+                              .add(const Duration(days: 1)))
+                          ? 'TOMORROW'
+                          : d.$1
                     ))
                 .toList(growable: false))
           ],

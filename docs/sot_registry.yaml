@@ -313,13 +313,17 @@ concepts:
         method: logExercise
         notes: appends to exercise_log_index_YYYY-MM-DD on every write
       - file: lib/core/services/workout_write_service.dart
-        line_range: 667-709
+        line_range: 695-812
         method: moveExerciseLogs
         notes: |
           C2 (e8f4a3) — re-keys partial exlog_<fromDate>_* rows onto the
           destination date after an AI-coach reschedule move (terminal source
           row in tool_dispatcher._executeRescheduleWeek). Matches rows on
           their own `date` field; new keys go through the canonical exlogKey.
+          Review round 1: also maintains exercise_log_index_<toDate> (add) +
+          <fromDate> (remove), MERGES a same-exercise destination row
+          (sets[] appended, existing workout_log_id kept) instead of
+          overwriting, and re-stamps workout_log_id to wlog_<toDate>.
           LOCAL-ONLY — cloud exercise_logs residual tracked on OI-174.
     reader_manifest_complete: true
     readers:
@@ -363,7 +367,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1118, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1205, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -441,7 +445,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1121, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1208, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -2813,7 +2817,7 @@ concepts:
         line_range: 920-960
         method: createCustomTemplate tool
       - file: lib/core/services/workout_write_service.dart
-        line_range: 990-1037
+        line_range: 1077-1124
         method: upsertTemplate
         notes: |
           Canonical writer scaffolded 2026-05-21 / audit A3. Routes
@@ -4940,11 +4944,11 @@ concepts:
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
-        line_range: 509-536
+        line_range: 537-582
         method: upsertScheduled
         notes: upserts a scheduled workout entry to workoutBox under schedule_ key
       - file: lib/core/services/workout_write_service.dart
-        line_range: 906-989
+        line_range: 993-1076
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
@@ -5766,7 +5770,7 @@ concepts:
           Captures primaryMuscles + normalizes equipment via
           EquipmentVocab.normalize.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1038-1085
+        line_range: 1125-1172
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,

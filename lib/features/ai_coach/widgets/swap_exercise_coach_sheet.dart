@@ -55,6 +55,9 @@ class CoachSwapSheet extends ConsumerStatefulWidget {
 class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
   List<({String id, String name})> _today = const [];
   bool _loaded = false;
+  /// Review round 1 (e8f4a3) finding 5 — honest empty-state message when a
+  /// schedule row exists but is not swappable (completed / terminal).
+  String? _unavailableMessage;
   String? _selectedFrom;
   _SwapOption? _selectedTo;
 
@@ -68,9 +71,25 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
     final todayKey = istDateStr(nowWall());
     final raw = HiveService.instance.workoutBox.get('schedule_$todayKey');
     final items = <({String id, String name})>[];
+    String? unswappable;
     if (raw is Map) {
       final row = Map<String, dynamic>.from(raw);
-      final exercisesRaw = row['exercises'];
+      final status = row['status']?.toString();
+      // Review round 1 (e8f4a3) finding 5 — SAME raw+guard pattern as
+      // log_workout_sheet.dart: a row whose status is not 'planned' is not
+      // swappable from here. A 'moved' row's exercises live on another
+      // date (picking one submits a swap against a day that no longer
+      // holds them); a completed day is done. Give an HONEST message
+      // instead of a dead-end picker.
+      if (status != null && status != 'planned') {
+        unswappable = status == 'completed'
+            ? 'Today\'s workout is already done — edit it from the '
+                'Train screen.'
+            : 'No swappable workout scheduled today.';
+      }
+    }
+    if (unswappable == null && raw is Map) {
+      final exercisesRaw = raw['exercises'];
       final exercises = exercisesRaw is List ? exercisesRaw : const [];
       for (final ex in exercises) {
         if (ex is! Map) continue;
@@ -85,6 +104,7 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
     }
     setState(() {
       _today = items;
+      _unavailableMessage = unswappable;
       _loaded = true;
     });
   }
@@ -154,8 +174,7 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
                 height: 120,
                 child: Center(child: CircularProgressIndicator()))
             : _today.isEmpty
-                ? _buildEmpty()
-                : _buildBody(),
+                ? _buildEmpty()                : _buildBody(),
       ),
     );
   }
@@ -200,8 +219,12 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
         _header('SWAP EXERCISE', null),
         const SizedBox(height: 12),
         Text(
-          'No workout scheduled today — there is nothing to swap. Ask the '
-          'coach to plan a session first.',
+          // Review round 1 (e8f4a3) finding 5 — honest per-state message
+          // (completed day → Train-screen pointer; terminal → plain
+          // no-swap). Default (no row / empty plan) keeps the original copy.
+          _unavailableMessage ??
+              'No workout scheduled today — there is nothing to swap. Ask '
+                  'the coach to plan a session first.',
           style: AppTypography.bodyS.copyWith(color: AppColors.textMute),
           textAlign: TextAlign.center,
         ),

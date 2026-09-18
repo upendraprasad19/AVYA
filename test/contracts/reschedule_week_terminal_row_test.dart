@@ -26,6 +26,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
@@ -234,6 +235,304 @@ void main() {
                 'status over a live plan (fromDate != toDate guard)');
       },
     );
+  });
+
+  group('C2 review round 1 — move index maintenance + collision + wlog re-stamp (e8f4a3)', () {
+    // FINDING 1 (HIGH): moveExerciseLogs re-keyed rows with raw box.put but
+    // never touched exercise_log_index_<date>. The canonical read
+    // exerciseLogsForIstDate is INDEX-FIRST and early-returns on a resolvable
+    // non-empty destination index — so on a destination date that ALREADY had
+    // logs, the moved rows were invisible, and the source date's index kept
+    // dangling keys.
+    test(
+      'move onto a date that already has logs: canonical read returns BOTH '
+      'rows; source index drops the moved key; wlog re-stamped',
+      () async {
+        final box = HiveService.instance.workoutBox;
+        await box.put('schedule_$fromDate', {
+          'date': fromDate,
+          'workout_name': 'Push A',
+          'status': 'planned',
+          'type': 'custom_template',
+          'exercises': [
+            {'exercise_name': 'Bench Press'},
+          ],
+        });
+
+        // Destination date ALREADY has a log (what logExercise produces:
+        // exlog row + its exercise_log_index_<date> entry).
+        final destKey = WorkoutWriteService.exlogKey(
+            today.add(const Duration(days: 1)), 'Squat');
+        await box.put(destKey, {
+          'date': toDate,
+          'exercise_name': 'Squat',
+          'workout_log_id': 'wlog_$toDate',
+          'sets': [
+            {'weight_kg': 100.0, 'reps': 5},
+          ],
+          'set_number': 1,
+        });
+        await box.put('exercise_log_index_$toDate', [destKey]);
+
+        // Source date partial log + index entry.
+        final oldKey = WorkoutWriteService.exlogKey(today, 'Bench Press');
+        final newKey = WorkoutWriteService.exlogKey(
+            today.add(const Duration(days: 1)), 'Bench Press');
+        await box.put(oldKey, {
+          'date': fromDate,
+          'exercise_name': 'Bench Press',
+          'workout_log_id': 'wlog_$fromDate',
+          'sets': [
+            {'weight_kg': 60.0, 'reps': 8},
+          ],
+          'set_number': 1,
+        });
+        await box.put('exercise_log_index_$fromDate', [oldKey]);
+
+        RescheduleWeekPlanner.instance.cache('mv_idx_1', [
+          RescheduleMove(
+            fromDate: fromDate,
+            toDate: toDate,
+            action: RescheduleAction.move,
+            workoutName: 'Push A',
+          ),
+        ]);
+
+        final result = await dispatch('mv_idx_1');
+        expect(result.success, isTrue);
+
+        // (a) Canonical read sees BOTH rows on the destination date —
+        // pre-fix the destination index (non-empty) early-returned with
+        // only Squat and the moved Bench Press was invisible.
+        final read = WorkoutReadService.instance.exerciseLogsForIstDate(toDate);
+        final names = read.map((r) => r['exercise_name']).toSet();
+        expect(names, containsAll(<String>['Squat', 'Bench Press']),
+            reason: 'the moved row must be visible through the canonical '
+                'INDEX-FIRST read even when the destination date already '
+                'had logs');
+
+        // (b) Destination index lists the new key; source index dropped
+        // the moved key (no dangling entry).
+        final toIndex =
+            (box.get('exercise_log_index_$toDate') as List?)?.cast<String>();
+        final fromIndex =
+            (box.get('exercise_log_index_$fromDate') as List?)?.cast<String>();
+        expect(toIndex, contains(newKey));
+        expect(fromIndex ?? const <String>[], isNot(contains(oldKey)),
+            reason: 'the source date index must not keep the moved key');
+
+        // (c) FINDING 4 — workout_log_id re-stamped to the destination's
+        // canonical wlog key (receipt scopes by workoutLogId; carrying the
+        // source's wlog_<fromDate> excluded the moved rows).
+        final moved = box.get(newKey) as Map?;
+        expect(moved, isNotNull);
+        expect(moved!['workout_log_id'], 'wlog_$toDate');
+      },
+    );
+
+    // FINDING 3 (MED): the raw box.put(exlogKey(toDate, name), row)
+    // OVERWROTE an existing destination log for the same exercise name.
+    // Fix: merge — append the moved row's sets[] to the existing row's
+    // sets, keep the existing row's workout_log_id, and recompute the
+    // simple set-derived aggregates so the row stays self-consistent
+    // (logExercise's own contract: set_number/reps_completed/weight_kg/
+    // volume_kg all derive from sets[] — leaving stale ones would be the
+    // exact writer/reader drift class this fix exists to kill).
+    test(
+      'move collision: same-exercise destination log MERGES sets, keeps its '
+      'own workout_log_id',
+      () async {
+        final box = HiveService.instance.workoutBox;
+        await box.put('schedule_$fromDate', {
+          'date': fromDate,
+          'workout_name': 'Push A',
+          'status': 'planned',
+          'type': 'custom_template',
+          'exercises': [
+            {'exercise_name': 'Bench Press'},
+          ],
+        });
+
+        final destKey = WorkoutWriteService.exlogKey(
+            today.add(const Duration(days: 1)), 'Bench Press');
+        final oldKey = WorkoutWriteService.exlogKey(today, 'Bench Press');
+        await box.put(destKey, {
+          'date': toDate,
+          'exercise_name': 'Bench Press',
+          'workout_log_id': 'wlog_dest_session',
+          'sets': [
+            {'weight_kg': 80.0, 'reps': 6},
+          ],
+          'set_number': 1,
+          'reps_completed': 6,
+          'weight_kg': 80.0,
+          'volume_kg': 480.0,
+        });
+        await box.put('exercise_log_index_$toDate', [destKey]);
+        await box.put(oldKey, {
+          'date': fromDate,
+          'exercise_name': 'Bench Press',
+          'workout_log_id': 'wlog_$fromDate',
+          'sets': [
+            {'weight_kg': 60.0, 'reps': 8},
+            {'weight_kg': 62.5, 'reps': 6},
+          ],
+          'set_number': 2,
+          'reps_completed': 14,
+          'weight_kg': 62.5,
+          'volume_kg': 855.0,
+        });
+        await box.put('exercise_log_index_$fromDate', [oldKey]);
+
+        RescheduleWeekPlanner.instance.cache('mv_col_1', [
+          RescheduleMove(
+            fromDate: fromDate,
+            toDate: toDate,
+            action: RescheduleAction.move,
+            workoutName: 'Push A',
+          ),
+        ]);
+
+        final result = await dispatch('mv_col_1');
+        expect(result.success, isTrue);
+
+        final merged = box.get(destKey) as Map?;
+        expect(merged, isNotNull);
+        final sets = (merged!['sets'] as List).cast<Map>();
+        expect(sets.length, 3,
+            reason: 'pre-fix the moved row OVERWROTE the destination log — '
+                'its 1 set replaced the destination\'s existing set');
+        expect(merged['set_number'], 3);
+        expect(merged['reps_completed'], 20); // 6 + 8 + 6
+        expect(merged['weight_kg'], 80.0);
+        expect(merged['volume_kg'], 480.0 + 480.0 + 375.0);
+        expect(merged['workout_log_id'], 'wlog_dest_session',
+            reason: 'the existing destination row owns the day\'s session — '
+                'the merge must NOT adopt the moved row\'s source wlog id');
+        expect(box.get(oldKey), isNull, reason: 'source row still consumed');
+        // Canonical read still resolves through the index.
+        final read = WorkoutReadService.instance.exerciseLogsForIstDate(toDate);
+        expect(read.map((r) => r['exercise_name']), contains('Bench Press'));
+      },
+    );
+  });
+
+  group('C2 review round 1 — destination terminal guard + stale prompt (e8f4a3)', () {
+    // FINDING 6 (LOW): the destination guard refused completed/paused but
+    // not terminal rows — moving onto a day that was itself moved/dropped
+    // elsewhere clobbered the terminal stamp.
+    test('move onto a TERMINAL destination is refused', () async {
+      await HiveService.instance.workoutBox.put('schedule_$fromDate', {
+        'date': fromDate,
+        'workout_name': 'Push A',
+        'status': 'planned',
+        'type': 'custom_template',
+        'exercises': [],
+      });
+      await HiveService.instance.workoutBox.put('schedule_$toDate', {
+        'date': toDate,
+        'workout_name': 'Legs B',
+        'status': 'moved',
+        'type': 'custom_template',
+        'moved_to': istDateStr(today.add(const Duration(days: 2))),
+        'exercises': [],
+      });
+
+      RescheduleWeekPlanner.instance.cache('mv_term_1', [
+        RescheduleMove(
+          fromDate: fromDate,
+          toDate: toDate,
+          action: RescheduleAction.move,
+          workoutName: 'Push A',
+        ),
+      ]);
+
+      final result = await dispatch('mv_term_1');
+      expect(result.success, isFalse,
+          reason: 'moving onto a day that was rescheduled elsewhere must be '
+              'refused — pre-fix only completed/paused were guarded');
+      expect(result.errorMessage, contains('destination was rescheduled'));
+      final dest = scheduleRow(toDate);
+      expect(dest!['status'], 'moved',
+          reason: 'the terminal destination must be untouched');
+      expect(scheduleRow(fromDate)!['status'], 'planned',
+          reason: 'the source must stay planned when the move is refused');
+    });
+
+    // FINDING 7 (LOW): move/drop never resolved the partial day's
+    // completion_prompt_<fromDate> card — a stale two-button tile kept
+    // rendering for a day that no longer exists as planned.
+    test('move resolves the source day completion_prompt card', () async {
+      await HiveService.instance.workoutBox.put('schedule_$fromDate', {
+        'date': fromDate,
+        'workout_name': 'Push A',
+        'status': 'planned',
+        'type': 'custom_template',
+        'exercises': [],
+      });
+      await HiveService.instance.coachBox.put('completion_prompt_$fromDate', {
+        'kind': 'completion_prompt',
+        'date': fromDate,
+        'planned_count': 4,
+        'logged_count': 1,
+        'created_at': DateTime.now().toIso8601String(),
+        'resolved_at': null,
+      });
+
+      RescheduleWeekPlanner.instance.cache('mv_prompt_1', [
+        RescheduleMove(
+          fromDate: fromDate,
+          toDate: toDate,
+          action: RescheduleAction.move,
+          workoutName: 'Push A',
+        ),
+      ]);
+
+      final result = await dispatch('mv_prompt_1');
+      expect(result.success, isTrue);
+      final prompt =
+          HiveService.instance.coachBox.get('completion_prompt_$fromDate')
+              as Map?;
+      expect(prompt, isNotNull);
+      expect(prompt!['resolved_at'], isNotNull,
+          reason: 'a moved day must resolve its stale completion-prompt '
+              'card (same semantics as the auto-complete backstop)');
+    });
+
+    test('drop resolves the source day completion_prompt card', () async {
+      await HiveService.instance.workoutBox.put('schedule_$fromDate', {
+        'date': fromDate,
+        'workout_name': 'Legs B',
+        'status': 'planned',
+        'type': 'custom_template',
+        'exercises': [],
+      });
+      await HiveService.instance.coachBox.put('completion_prompt_$fromDate', {
+        'kind': 'completion_prompt',
+        'date': fromDate,
+        'planned_count': 4,
+        'logged_count': 1,
+        'created_at': DateTime.now().toIso8601String(),
+        'resolved_at': null,
+      });
+
+      RescheduleWeekPlanner.instance.cache('dr_prompt_1', [
+        RescheduleMove(
+          fromDate: fromDate,
+          action: RescheduleAction.drop,
+          workoutName: 'Legs B',
+        ),
+      ]);
+
+      final result = await dispatch('dr_prompt_1');
+      expect(result.success, isTrue);
+      final prompt =
+          HiveService.instance.coachBox.get('completion_prompt_$fromDate')
+              as Map?;
+      expect(prompt!['resolved_at'], isNotNull,
+          reason: 'a dropped day must resolve its stale completion-prompt '
+              'card');
+    });
   });
 
   group('C2 review — planner never re-plans terminal rows (e8f4a3)', () {

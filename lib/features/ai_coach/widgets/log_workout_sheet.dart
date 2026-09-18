@@ -39,10 +39,17 @@ class _ExerciseCapture {
         reps = TextEditingController(text: planReps ?? ''),
         weight = TextEditingController(text: planWeight ?? '');
 
-  bool get isComplete =>
-      sets.text.trim().isNotEmpty &&
-      reps.text.trim().isNotEmpty &&
-      weight.text.trim().isNotEmpty;
+  bool get isComplete {
+    final setsTxt = sets.text.trim();
+    final repsTxt = reps.text.trim();
+    final weightTxt = weight.text.trim();
+    if (setsTxt.isEmpty || repsTxt.isEmpty || weightTxt.isEmpty) return false;
+    // Review round 1 (e8f4a3) finding 9 — parse validity: garbage like
+    // 'abc' must DISABLE confirm, not coerce to 0.0 / 0 / 1 at dispatch.
+    return double.tryParse(weightTxt) != null &&
+        int.tryParse(repsTxt) != null &&
+        int.tryParse(setsTxt) != null;
+  }
 
   void dispose() {
     sets.dispose();

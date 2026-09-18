@@ -1893,6 +1893,18 @@ extension SyncServiceWorkout on SyncService {
           // re-pushes on next launch.
           mergedStatus = 'completed';
           mergedCompletedAt = localCompletedAt;
+        } else if (WorkoutScheduleReadService.isTerminalScheduleRow(
+                localStatus) &&
+            cloudStatus == 'planned') {
+          // Review round 1 (e8f4a3) — symmetric arm: a local TERMINAL row
+          // (moved/dropped) is newer truth. The workout now lives on
+          // `moved_to` (or was dropped outright); the cloud still holding
+          // the pre-move 'planned' row must NOT resurrect it — that is the
+          // exact double-count the terminal rows were written to kill. The
+          // terminal metadata (moved_to/moved_at/...) survives via the
+          // `...existingMap` spread below; mergedCompletedAt stays null so
+          // a terminal row never reads as completed.
+          mergedStatus = localStatus;
         } else if (localStatus == 'completed' &&
             cloudStatus == 'completed' &&
             localCompletedAt != null &&
@@ -2135,4 +2147,18 @@ extension SyncServiceWorkout on SyncService {
     if (userId == null) return;
     await _restoreScheduledWorkouts(userId, since ?? _kSyncDomainRestoreSince);
   }
+
+  /// Review round 1 (e8f4a3) — test seam: runs `_restoreScheduledWorkouts`
+  /// with INJECTED cloud rows (no Supabase query), so the timestamp-merge
+  /// arms are behaviorally testable (seed a local terminal row + a
+  /// cloud-shaped planned row, run the REAL merge path, assert the outcome).
+  @visibleForTesting
+  Future<void> restoreScheduledWorkoutsForTest(
+    String userId, {
+    Object? preFetched,
+    String? since,
+  }) =>
+      _restoreScheduledWorkouts(
+          userId, since ?? _kSyncDomainRestoreSince,
+          preFetched: preFetched);
 }

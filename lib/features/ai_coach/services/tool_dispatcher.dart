@@ -710,11 +710,26 @@ class ToolDispatcher {
                     '${move.toDate}: destination not empty ($destStatus)');
                 continue;
               }
+              // Review round 1 (e8f4a3) finding 6 — a TERMINAL destination
+              // (moved/dropped elsewhere) is as un-writable as completed:
+              // overwriting it would clobber the audit row pointing at
+              // where the workout actually lives.
+              if (WorkoutRepository.isTerminalScheduleRow(destStatus)) {
+                errors.add(
+                    '${move.toDate}: destination was rescheduled elsewhere');
+                continue;
+              }
             }
+            // Review round 1 (e8f4a3) finding 10 — build the destination
+            // DateTime via the IST-safe helper (UTC-midnight round-trip),
+            // NOT `DateTime.parse` (device-local midnight — the Test #11.1
+            // double-shift trap). Same convention the moved-out stamp 30
+            // lines below already follows.
+            final destDate =
+                _utcDateFromIstDateStr(move.toDate!) ?? DateTime.now();
             // Re-stamp date + day_of_week on the moved entry.
             final updated = Map<String, dynamic>.from(from);
             updated['date'] = move.toDate;
-            final destDate = DateTime.parse(move.toDate!);
             updated['day_of_week'] = destDate.weekday - 1; // 0=Mon..6=Sun
             updated['rescheduled_via'] = 'ai_coach';
             updated['rescheduled_at'] = DateTime.now().toIso8601String();
@@ -756,6 +771,12 @@ class ToolDispatcher {
               // canonical WriteService — the dispatcher is a router).
               await WorkoutWriteService.instance
                   .moveExerciseLogs(fromDate: move.fromDate, toDate: move.toDate!);
+              // Review round 1 (e8f4a3) finding 7 — the moved day no longer
+              // has partial logs here; resolve its stale
+              // `completion_prompt_<fromDate>` card (same resolve semantics
+              // as the auto-complete backstop — stamp resolved_at, LOCAL-ONLY
+              // kind-tagged row) so the two-button tile stops rendering.
+              await _resolveCompletionPromptIfPresent(move.fromDate);
             }
             results.add({
               'from': move.fromDate,
@@ -785,6 +806,9 @@ class ToolDispatcher {
                     '${move.fromDate}: failed to stamp dropped row: '
                     '${dropRes.errorMessage}');
               }
+              // Review round 1 (e8f4a3) finding 7 — same stale-prompt
+              // resolve as the move path (see there).
+              await _resolveCompletionPromptIfPresent(move.fromDate);
             }
             results.add({
               'from': move.fromDate,

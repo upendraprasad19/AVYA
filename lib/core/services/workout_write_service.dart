@@ -365,6 +365,25 @@ class WorkoutWriteService {
   Future<void> _appendToIndex(Box box, String dateStr, String key) =>
       addToExlogIndex(box, dateStr, key);
 
+  /// Inverse of [addToExlogIndex] — removes [key] from
+  /// `exercise_log_index_<dateStr>` if present. PRIVATE and called ONLY from
+  /// [moveExerciseLogs] (a mutating writer): addToExlogIndex/reconcile are
+  /// deliberately UNION-only (add, never remove) so a restore and a
+  /// concurrent log can't lose each other's entries, but a MOVED row's old
+  /// key is genuinely stale on the source date's index — leaving it there
+  /// makes the reader resolve a dangling key (harmless on read) and breaks
+  /// the "index == truth" invariant the canonical read leans on. Idempotent
+  /// no-op when the key or the index is absent.
+  Future<void> _removeFromExlogIndex(
+      Box box, String dateStr, String key) async {
+    final indexKey = 'exercise_log_index_$dateStr';
+    final raw = box.get(indexKey);
+    if (raw is! List) return;
+    final list = raw.cast<String>().toList();
+    if (!list.remove(key)) return;
+    await box.put(indexKey, list);
+  }
+
   /// Defense-in-depth: rebuilds every `exercise_log_index_<date>` as the UNION
   /// of the actual `exlog_<date>_<hash>` keys present in the workout box (never
   /// removes a present key). Run after a background restore so any index drift
@@ -672,6 +691,29 @@ class WorkoutWriteService {
   /// [exlogKey] (UUID-v5 name hash, H-16); source rows are matched on their
   /// own `date` field, which every canonical writer emits.
   ///
+  /// Review round 1 (e8f4a3) additions, all inside THIS writer (CQRS — the
+  /// read helpers must never mutate):
+  ///   • INDEX MAINTENANCE — the re-key previously wrote raw `box.put` and
+  ///     never touched `exercise_log_index_<date>`. The canonical read
+  ///     `WorkoutReadService.exerciseLogsForIstDate` is INDEX-FIRST and
+  ///     early-returns on a resolvable non-empty destination index, so moved
+  ///     rows were invisible on any date that already had logs, and the
+  ///     source date's index kept dangling keys. Now: new key appended to
+  ///     `exercise_log_index_<toDate>` (via [addToExlogIndex]) and the old
+  ///     key removed from `exercise_log_index_<fromDate>` (via
+  ///     [_removeFromExlogIndex]).
+  ///   • DESTINATION COLLISION — an existing destination row for the same
+  ///     exercise name is MERGED (moved row's `sets[]` appended; the existing
+  ///     row's `workout_log_id` and identity kept) instead of overwritten.
+  ///     The set-derived aggregates (`set_number`/`reps_completed`/
+  ///     `weight_kg`/`volume_kg`) are recomputed from the merged list to the
+  ///     same derived-fields contract [logExercise] stamps — stale aggregates
+  ///     beside a longer `sets[]` would be the writer/reader drift class.
+  ///   • WLOG RE-STAMP — `workout_log_id` is re-keyed to `wlog_<toDate>` so
+  ///     the destination receipt (scoped by workoutLogId) includes the moved
+  ///     rows. Only when the row CARRIES an id (restore-shaped legacy rows
+  ///     may not).
+  ///
   /// LOCAL-ONLY by design: the cloud `exercise_logs` rows for the moved-out
   /// date are not tombstoned here — that residual is tracked on OI-174 and is
   /// deliberately out of this fix's scope (every local read path, which the
@@ -680,6 +722,7 @@ class WorkoutWriteService {
     required String fromDate,
     required String toDate,
   }) async {
+    if (fromDate == toDate) return; // nothing to move (dispatcher also guards)
     final c = await _acquireLock('exlog_move_$fromDate');
     try {
       final box = HiveService.instance.workoutBox;
@@ -698,9 +741,53 @@ class WorkoutWriteService {
         final row = Map<String, dynamic>.from(raw);
         final name = row['exercise_name']?.toString();
         if (name == null || name.isEmpty) continue;
-        row['date'] = toDate;
-        await box.put(exlogKey(toDateTime, name), row);
+        final newKey = exlogKey(toDateTime, name);
+        final existing = box.get(newKey);
+        if (existing is Map) {
+          // Collision merge — see the doc comment above.
+          final existingSets = (existing['sets'] as List? ?? const [])
+              .cast<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          final movedSets = (row['sets'] as List? ?? const [])
+              .cast<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          final mergedSets = [...existingSets, ...movedSets];
+          var totalReps = 0;
+          var maxWeight = 0.0;
+          var volume = 0.0;
+          for (final s in mergedSets) {
+            final w = (s['weight_kg'] as num?)?.toDouble() ?? 0.0;
+            final r = (s['reps'] as num?)?.toInt() ?? 0;
+            totalReps += r;
+            if (w > maxWeight) maxWeight = w;
+            volume += w * r;
+          }
+          final merged = Map<String, dynamic>.from(existing);
+          merged['sets'] = mergedSets;
+          merged['set_number'] = mergedSets.length;
+          merged['reps_completed'] = totalReps;
+          merged['weight_kg'] = maxWeight;
+          merged['volume_kg'] = volume;
+          merged['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+          // Keep the existing row's workout_log_id — its session owns the
+          // destination day (the moved row's source id is stale here).
+          await box.put(newKey, merged);
+        } else {
+          row['date'] = toDate;
+          // Re-stamp the session id to the destination's canonical wlog key
+          // so receipt scoping (workout_log_id == wlog_<date>) includes the
+          // moved rows. Restore-shaped rows may not carry one — leave those.
+          if (row['workout_log_id'] != null) {
+            row['workout_log_id'] = wlogKey(toDateTime);
+          }
+          await box.put(newKey, row);
+        }
         await box.delete(oldKey);
+        // Index maintenance (Finding 1) — the canonical read is INDEX-FIRST.
+        await addToExlogIndex(box, toDate, newKey);
+        await _removeFromExlogIndex(box, fromDate, oldKey);
       }
     } finally {
       _releaseLock('exlog_move_$fromDate', c);

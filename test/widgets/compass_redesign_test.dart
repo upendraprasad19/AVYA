@@ -344,5 +344,169 @@ void main() {
               'preview card, exactly like the model path');
       await tester.runAsync(tearDownHive);
     });
+
+    // FINDING 5 (MED): _loadToday read the raw schedule row with no status
+    // guard — a dead-end picker on moved/completed days (a moved row's
+    // exercises don't belong to today anymore; a completed day is done).
+    // Fix: the SAME raw+guard pattern log_workout_sheet.dart uses, with an
+    // HONEST message per state.
+    testWidgets('terminal moved day shows the honest empty state, no intents',
+        (tester) async {
+      await tester.runAsync(setUpHive);
+      final todayKey = istDateStr(nowWall());
+      await tester.runAsync(() => HiveService.instance.workoutBox.put(
+        'schedule_$todayKey',
+        {
+          'type': 'workout',
+          'status': 'moved',
+          'moved_to': istDateStr(nowWall().add(const Duration(days: 1))),
+          'exercises': <Map<String, dynamic>>[
+            {'exercise_id': 'ex_bench', 'exercise_name': 'Bench Press'},
+          ],
+        },
+      ));
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: CoachSwapSheet())),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('SWAP WHICH EXERCISE?'), findsNothing,
+          reason: 'a moved day has nothing to swap — the picker must not '
+              'render the moved-away exercises');
+      expect(find.textContaining('No swappable workout scheduled today'),
+          findsOneWidget);
+      expect(container.read(pendingToolIntentsProvider), isEmpty);
+      await tester.runAsync(tearDownHive);
+    });
+
+    testWidgets('completed day points at the Train screen instead',
+        (tester) async {
+      await tester.runAsync(setUpHive);
+      final todayKey = istDateStr(nowWall());
+      await tester.runAsync(() => HiveService.instance.workoutBox.put(
+        'schedule_$todayKey',
+        {
+          'type': 'workout',
+          'status': 'completed',
+          'exercises': <Map<String, dynamic>>[
+            {'exercise_id': 'ex_bench', 'exercise_name': 'Bench Press'},
+          ],
+        },
+      ));
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: CoachSwapSheet())),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('already done'), findsOneWidget,
+          reason: 'the completed-day message must say WHERE to edit instead '
+              'of the generic no-workout text');
+      expect(find.textContaining('Train screen'), findsOneWidget);
+      expect(container.read(pendingToolIntentsProvider), isEmpty);
+      await tester.runAsync(tearDownHive);
+    });
+  });
+
+  group('B4 review — scheduleForm TOMORROW labels the actual date', () {
+    // FINDING 8 (LOW): the destination chip whose WEEKDAY matched the SOURCE
+    // choice was labeled 'TOMORROW'. Fix: the chip whose DATE == today+1.
+    // Discriminating assertion: pick the source = weekday(today+2) (never
+    // tomorrow's weekday — the 7 chips cover 7 distinct weekdays), then the
+    // destination Wrap's labels must show 'TOMORROW' at index 1 (today+1),
+    // NOT at the source's index (today+2 — the pre-fix position).
+    testWidgets('TOMORROW sits on the chip for today+1, not the source day',
+        (tester) async {
+      String? composed;
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: CompassFormSheet(
+        action: CompassAction.scheduleForm,
+        onCompose: (m) => composed = m,
+      ))));
+      await tester.pumpAndSettle();
+
+      final today = nowWall();
+      final sourceWeekday = const [
+        'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+        'Sunday',
+      ][today.add(const Duration(days: 2)).weekday - 1];
+
+      await tester.tap(find.text(sourceWeekday).first);
+      await tester.pumpAndSettle();
+
+      // Destination row = the LAST Wrap's Texts, in chip order i=0..6.
+      final wraps = find.byType(Wrap);
+      expect(wraps, findsNWidgets(2));
+      final destLabels = tester
+          .widgetList<Text>(
+              find.descendant(of: wraps.last, matching: find.byType(Text)))
+          .map((t) => t.data)
+          .toList();
+      expect(destLabels.length, 7);
+      expect(destLabels[1], 'TOMORROW',
+          reason: 'the chip for today+1 must be labeled TOMORROW (pre-fix '
+              'the label sat on whichever chip matched the SOURCE weekday — '
+              'here index 2)');
+      expect(destLabels[2], sourceWeekday,
+          reason: 'the source day\'s own date chip must keep its weekday '
+              'label');
+      expect(destLabels.where((l) => l == 'TOMORROW').length, 1);
+      expect(composed, isNull, reason: 'form not submitted yet');
+    });
+  });
+
+  group('B1 review — parse-validity gates the confirm button', () {
+    // FINDING 9 (LOW): isComplete only checked non-empty; 'abc' coerced to
+    // 0.0 / 0 / 1 at dispatch. Fix: each field must PARSE (weight double,
+    // reps/sets int) before confirm enables.
+    testWidgets('garbage in the KG field disables LOG WORKOUT',
+        (tester) async {
+      await tester.runAsync(setUpHive);
+      final todayKey = istDateStr(nowWall());
+      await tester.runAsync(() => HiveService.instance.workoutBox.put(
+        'schedule_$todayKey',
+        {
+          'type': 'workout',
+          'status': 'planned',
+          'exercises': <Map<String, dynamic>>[
+            {
+              'exercise_id': 'ex_bench',
+              'exercise_name': 'Bench Press',
+              'sets': 4,
+              'reps': 8,
+              'suggested_weight': 60.0,
+            },
+          ],
+        },
+      ));
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: LogWorkoutSheet())),
+      ));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Sanity: valid prefill → enabled.
+      var btn = tester.widget<WardButton>(
+          find.widgetWithText(WardButton, 'LOG WORKOUT'));
+      expect(btn.onPressed, isNotNull,
+          reason: 'prefilled values parse — confirm must be enabled');
+
+      await tester.enterText(
+          find.widgetWithText(TextField, 'KG').first, 'abc');
+      await tester.pump();
+
+      btn = tester.widget<WardButton>(
+          find.widgetWithText(WardButton, 'LOG WORKOUT'));
+      expect(btn.onPressed, isNull,
+          reason: '\'abc\' does not parse as a double — confirm must DISABLE '
+              'instead of coercing to 0.0 at dispatch');
+      expect(container.read(pendingToolIntentsProvider), isEmpty);
+      await tester.runAsync(tearDownHive);
+    });
   });
 }

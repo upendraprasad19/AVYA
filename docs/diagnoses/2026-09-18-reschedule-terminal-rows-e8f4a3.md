@@ -269,3 +269,132 @@ display surface — still returned them verbatim.
 `lib/features/train/CLAUDE.md:55` documented the dead
 `exerciseName.hashCode` exlog key scheme; corrected to the canonical
 `WorkoutWriteService.exlogKey` UUID-v5 form (H-16).
+
+## Review round 1 append (2026-09-18, 10 findings — all fixed in this batch)
+
+Writer/reader pairs named per finding; every fix landed with a behavioral
+regression test + a mutation proof (what was mutated → which tests reddened;
+all mutations compiled clean and were verified applied by reading the red
+output, not just the exit code).
+
+### F1 (HIGH) — moveExerciseLogs never maintained exercise_log_index_<date>
+
+- **Writer/reader:** writer
+  `WorkoutWriteService.moveExerciseLogs` (workout_write_service.dart, raw
+  `box.put` re-key); reader
+  `WorkoutReadService.exerciseLogsForIstDate` (workout_read_service.dart:263)
+  — INDEX-FIRST, early-returns on a resolvable non-empty destination index.
+  A date that already had logs therefore never saw the moved rows, and the
+  source date's index kept dangling keys.
+- **Fix:** after each re-key, the new key is appended to
+  `exercise_log_index_<toDate>` via the existing `addToExlogIndex`, and the
+  old key removed from `exercise_log_index_<fromDate>` via a NEW private
+  `_removeFromExlogIndex` (the union helpers never remove — the removal
+  mutation belongs INSIDE the writer, not in a read helper; CQRS).
+- **Test:** reschedule_week_terminal_row_test "move onto a date that already
+  has logs" — seeds BOTH rows + index entries, asserts the canonical read
+  returns BOTH rows and the source index drops the moved key.
+- **MUTATION:** removed the two index-maintenance lines → the F1 test
+  reddened on the canonical read (moved Bench Press invisible; source index
+  kept the dangling key). Reverted, green.
+
+### F2 (HIGH) — restore timestamp-merge lacked a terminal-row arm
+
+- **Writer/reader:** writer `SyncService._restoreScheduledWorkouts`
+  (sync_workout.dart, the status merge); reader `schedule_<date>` (every
+  schedule read). Local 'moved'/'dropped' + cloud 'planned' fell to the
+  cloud-authoritative arm → the restore RESURRECTED the moved-away workout.
+- **Fix:** symmetric arm —
+  `WorkoutScheduleReadService.isTerminalScheduleRow(localStatus) &&
+  cloudStatus == 'planned'` → keep local (`mergedStatus = localStatus`).
+  Terminal metadata survives via the `...existingMap` spread.
+- **Test:** NEW behavioral `test/sync/restore_terminal_row_merge_test.dart`
+  — runs the REAL merge path via a new `@visibleForTesting
+  restoreScheduledWorkoutsForTest` seam (preFetched rows, no Supabase).
+  Local moved + cloud planned → stays moved; dropped variant; control
+  (cloud completed still wins over local planned) stays green.
+- **MUTATION:** removed the arm → both terminal tests reddened
+  (status merged to 'planned'), the control stayed green. Reverted, green.
+
+### F3 (MED) — move collided: raw put OVERWROTE a same-exercise destination row
+
+- **Fix:** destination existing → MERGE: moved row's `sets[]` appended to
+  the existing row's sets; existing row's `workout_log_id` kept; the
+  set-derived aggregates (`set_number`/`reps_completed`/`weight_kg`/
+  `volume_kg`) recomputed from the merged list to logExercise's own
+  derived-fields contract — stale aggregates beside a longer `sets[]`
+  would be the exact writer/reader drift class this fix exists to kill.
+  (Deviation from the finding's "recompute nothing else": documented here
+  — recomputing the four aggregates is required for row self-consistency;
+  no dedup/logging-type/PR machinery is re-run.)
+- **Test:** "move collision" — merged row has 3 sets, set_number 3,
+  recomputed reps/weight/volume, keeps `wlog_dest_session`.
+- **MUTATION:** replaced the merge branch with the pre-fix overwrite →
+  the test reddened (and, because the overwritten row kept the SOURCE
+  `date`, the loop re-matched and deleted the destination row too — the
+  overwrite bug class is worse than lossless overwrite). Reverted, green.
+
+### F4 (MED) — moved rows carried the SOURCE workout_log_id
+
+- **Fix:** re-stamp `workout_log_id = wlogKey(<toDate>)` when the row
+  carries an id (restore-shaped legacy rows may not).
+- **Test:** part (c) of the F1 test.
+- **MUTATION:** removed the re-stamp → the assertion reddened
+  (expected `wlog_2026-09-19`). Reverted, green.
+
+### F5 (MED) — swap sheet dead-end on non-planned days
+
+- **Writer/reader:** reader `CoachSwapSheet._loadToday`
+  (swap_exercise_coach_sheet.dart) — no status guard, mirrors the raw+guard
+  pattern of `log_workout_sheet.dart:94-100`. Completed → "Today's workout
+  is already done — edit it from the Train screen."; moved/dropped/other →
+  "No swappable workout scheduled today."
+- **Test:** 2 widget tests in compass_redesign_test.dart (moved + completed).
+- **MUTATION:** guard disabled (`&& false`) → moved-day test reddened (the
+  dead-end picker rendered). Reverted, green.
+
+### F6 (LOW) — reschedule destination guard missed terminal rows
+
+- **Fix:** `WorkoutRepository.isTerminalScheduleRow(destStatus)` refusal
+  with message `<date>: destination was rescheduled elsewhere`.
+- **Test:** "move onto a TERMINAL destination is refused" (asserts the
+  destination stays 'moved' and the source stays 'planned').
+- **MUTATION:** refusal disabled → test reddened (success:true, pre-fix
+  behavior). Reverted, green.
+
+### F7 (LOW) — move/drop left a stale completion_prompt_<fromDate> card
+
+- **Fix:** both paths call the existing `_resolveCompletionPromptIfPresent`
+  (same resolve semantics as the auto-complete backstop — stamp
+  `resolved_at` on the LOCAL-ONLY kind-tagged coachBox row).
+- **Test:** move + drop prompt tests.
+- **MUTATION:** both calls removed → both tests reddened (resolved_at
+  null). Reverted, green.
+
+### F8 (LOW) — scheduleForm TOMORROW labeled the source weekday, not today+1
+
+- **Fix:** the destination chip whose DATE == today+1 is labeled TOMORROW.
+- **Test:** TOMORROW must sit at index 1 of the destination Wrap while the
+  source (today+2) chip keeps its weekday label.
+- **MUTATION:** reverted to the `d.$1 == _choice` label → test reddened
+  (expected 'TOMORROW', actual 'Saturday' at index 1). Reverted, green.
+
+### F9 (LOW) — log sheet coerced non-numeric input
+
+- **Fix:** `_ExerciseCapture.isComplete` additionally requires each field
+  to PARSE (weight double.tryParse, reps/sets int.tryParse) — confirm
+  disables on garbage instead of dispatching 0.0/0/1.
+- **Test:** enter 'abc' in KG → LOG WORKOUT disabled (WardButton
+  onPressed null), no intents; valid prefill stays enabled (control).
+- **MUTATION:** reverted to non-empty-only → test reddened (button
+  enabled with 'abc'). Reverted, green.
+
+### F10 (LOW, pre-existing) — DateTime.parse(move.toDate!) double-shift trap
+
+`_executeRescheduleWeek` built the destination DateTime with
+`DateTime.parse` (device-local midnight — the Test #11.1 trap) while the
+moved-out stamp 30 lines below used `_utcDateFromIstDateStr`. Fixed to
+`_utcDateFromIstDateStr(move.toDate!) ?? DateTime.now()` (convention
+alignment; `weekday` arithmetic unchanged). **No new test — timezone-
+dependent; covered by the existing IST contract tests.** Stated here and
+in the commit body per the batch instruction.
