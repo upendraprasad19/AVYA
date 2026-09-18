@@ -1,16 +1,15 @@
 // Test #10 obs 5 — AI coach Compass tools sheet.
 //
 // Naval-themed shortcut palette opened from the compass-rose button on
-// the LEFT of the AI coach composer. Commands grouped into 4 families
-// matching the AI tool inventory in docs/architecture/ai.md:
-//   DRILL   · WORKOUT      → 5 cmds (8 workout tools subset)
-//   GALLEY  · NUTRITION    → 3 cmds (4 nutrition tools subset)
-//   ORDERS  · PLAN         → 4 cmds (5 plan tools subset)
-//   INTEL   · PROGRESS     → 3 cmds (3 progress tools)
-// 15 commands total. Tap a command → caller's `onSelect` fires with
-// the prefill string, sheet pops itself. The AI coach screen sets the
-// composer text + focuses the input. NO auto-fire — user always edits
-// before sending so the LLM gets specific intent.
+// the LEFT of the AI coach composer. C6/B4 (spec 2026-09-18): the sheet is
+// now a LAUNCHER, not a text-prefill palette. Structured commands open
+// native capture sheets (log workout / swap) or light forms (injury /
+// reschedule / switch goal / history); the remaining commands keep
+// one-line prefills. /PR and /TARGET are REMOVED — they advertised logPR /
+// adjustCaloricTarget, both deleted 2026-05-31 by ADR-0012 (derive-only
+// surface); tapping them could only produce a dead-end conversation.
+// NO prefill contains a [placeholder] token — placeholder commands became
+// forms precisely so an unfilled "[exercise]" can never reach the model.
 
 import 'package:flutter/material.dart';
 
@@ -18,12 +17,28 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 
+/// What tapping a command does. Exported because the AI coach screen's
+/// input bar routes on it (structured capture lives there — it needs the
+/// composer's WidgetRef for pending intents).
+enum CompassAction {
+  logWorkout, // B1 — opens the structured log-workout sheet
+  swap, // B2 — opens the structured swap sheet
+  logMeal, // B3 — conversational prefill (canonical logMealByText writer)
+  injuryForm, // B4 — light form (InjuryVocab picker)
+  scheduleForm, // B4 — light form (day + date picker)
+  switchForm, // B4 — light form (FitnessGoals picker)
+  historyForm, // B4 — light form (exercise name)
+  prefill, // plain one-line composer prefill
+}
+
 /// One command in a family.
 class _Cmd {
   final String slash; // e.g. '/SWAP'
   final String desc;
   final String prefill;
-  const _Cmd(this.slash, this.desc, this.prefill);
+  final CompassAction action;
+  const _Cmd(this.slash, this.desc, this.prefill,
+      {this.action = CompassAction.prefill});
 }
 
 /// One family group inside the sheet.
@@ -35,44 +50,41 @@ class _Family {
 
 const List<_Family> _families = [
   _Family('DRILL · WORKOUT', [
-    _Cmd('/LOG', 'Log workout', 'Log my workout: '),
-    _Cmd('/SWAP', 'Swap exercise', 'Swap [exercise] for '),
+    _Cmd('/LOG', 'Log workout', '', action: CompassAction.logWorkout),
+    _Cmd('/SWAP', 'Swap exercise', '', action: CompassAction.swap),
     _Cmd('/SHORTEN', 'Shorten today', 'Cut today\'s workout to 30 min'),
     _Cmd('/HOTEL', 'Travel workout',
         'I\'m travelling — give me a hotel-room workout'),
-    _Cmd('/INJURY', 'Modify for injury',
-        'Modify my plan — my [body part] hurts'),
+    _Cmd('/INJURY', 'Modify for injury', '', action: CompassAction.injuryForm),
   ]),
   _Family('GALLEY · NUTRITION', [
-    _Cmd('/LOG MEAL', 'Log a meal', 'Log meal: '),
+    _Cmd('/LOG MEAL', 'Log a meal', 'Log meal: ',
+        action: CompassAction.logMeal),
     _Cmd('/SUGGEST', 'Meal idea', 'Suggest a 600 kcal high-protein meal'),
-    _Cmd('/TARGET', 'Adjust calorie target',
-        'Adjust my calorie target to '),
   ]),
   _Family('ORDERS · PLAN', [
     _Cmd('/SHUFFLE', 'Regenerate plan', 'Regenerate this week\'s plan'),
-    _Cmd('/SCHEDULE', 'Reschedule day', 'Reschedule [day] to '),
+    _Cmd('/SCHEDULE', 'Reschedule day', '', action: CompassAction.scheduleForm),
     _Cmd('/PAUSE', 'Pause plan', 'Pause my plan for '),
-    _Cmd('/SWITCH', 'Change goal', 'Switch my goal to '),
+    _Cmd('/SWITCH', 'Change goal', '', action: CompassAction.switchForm),
   ]),
   _Family('INTEL · PROGRESS', [
     _Cmd('/PROGRESS', 'Progress summary', 'Show my progress this month'),
-    _Cmd('/HISTORY', 'Exercise history', 'Show my [exercise] history'),
-    _Cmd('/PR', 'Log a PR', 'Log a PR: '),
+    _Cmd('/HISTORY', 'Exercise history', '', action: CompassAction.historyForm),
   ]),
 ];
 
 class CompassToolsSheet extends StatelessWidget {
   const CompassToolsSheet({super.key, required this.onSelect});
 
-  /// Caller receives the prefill string. The sheet pops itself before
-  /// the callback fires so the caller can immediately request focus on
-  /// the composer without a double-frame race.
-  final ValueChanged<String> onSelect;
+  /// Caller receives the command's action + prefill. The sheet pops itself
+  /// before the callback fires so the caller can immediately act (open a
+  /// capture sheet, or prefill + focus the composer).
+  final void Function(String prefill, CompassAction action) onSelect;
 
   static Future<void> show(
     BuildContext context, {
-    required ValueChanged<String> onSelect,
+    required void Function(String prefill, CompassAction action) onSelect,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -127,9 +139,9 @@ class CompassToolsSheet extends StatelessWidget {
               const SizedBox(height: 14),
               ..._families.map((fam) => _FamilyBlock(
                     family: fam,
-                    onSelect: (prefill) {
+                    onSelect: (cmd) {
                       Navigator.of(ctx).pop();
-                      onSelect(prefill);
+                      onSelect(cmd.prefill, cmd.action);
                     },
                   )),
               const SizedBox(height: 6),
@@ -157,7 +169,7 @@ class _FamilyBlock extends StatelessWidget {
   });
 
   final _Family family;
-  final ValueChanged<String> onSelect;
+  final ValueChanged<_Cmd> onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +193,7 @@ class _FamilyBlock extends StatelessWidget {
           Container(height: 1, color: AppColors.line2),
           ...family.commands.map((cmd) => _CommandRow(
                 cmd: cmd,
-                onTap: () => onSelect(cmd.prefill),
+                onTap: () => onSelect(cmd),
               )),
         ],
       ),

@@ -6,6 +6,16 @@ extension _InputBar on _AiCoachScreenState {
   // INPUT BAR — with inline message counter
   // ────────────────────────────────────────────────────────────────
 
+  /// B4 — inserts a composed Compass prefill into the composer and focuses
+  /// it (the exact behaviour the compass onSelect previously inlined).
+  void _applyPrefill(String prefill) {
+    _messageController.text = prefill;
+    _messageController.selection = TextSelection.collapsed(
+      offset: prefill.length,
+    );
+    _inputFocusNode.requestFocus();
+  }
+
   Widget _buildInputBar(
       bool isSending, int messageCount, bool isPro) {
     final isLimitReached =
@@ -80,13 +90,26 @@ extension _InputBar on _AiCoachScreenState {
                         ? null
                         : () => CompassToolsSheet.show(
                               context,
-                              onSelect: (prefill) {
-                                _messageController.text = prefill;
-                                _messageController.selection =
-                                    TextSelection.collapsed(
-                                  offset: prefill.length,
-                                );
-                                _inputFocusNode.requestFocus();
+                              onSelect: (prefill, action) {
+                                switch (action) {
+                                  case CompassAction.logWorkout:
+                                    showLogWorkoutSheet(context, ref);
+                                    break;
+                                  case CompassAction.swap:
+                                    showCoachSwapSheet(context, ref);
+                                    break;
+                                  case CompassAction.injuryForm:
+                                  case CompassAction.scheduleForm:
+                                  case CompassAction.switchForm:
+                                  case CompassAction.historyForm:
+                                    showCompassFormSheet(context, action,
+                                        onCompose: _applyPrefill);
+                                    break;
+                                  case CompassAction.logMeal:
+                                  case CompassAction.prefill:
+                                    _applyPrefill(prefill);
+                                    break;
+                                }
                               },
                             ),
                     padding: EdgeInsets.zero,

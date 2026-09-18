@@ -74,6 +74,13 @@ const seamAllowlist = <String, SeamEntry>{
   'lib/shared/repositories/plan_engine/models.dart': SeamEntry(2,
       'The PlannedExercise type itself plus its fromMap - definition, not '
       'emission.'),
+  'lib/features/ai_coach/widgets/swap_exercise_coach_sheet.dart': SeamEntry(2,
+      'B2 Compass swap picker (spec 2026-09-18). Library getAll() + custom '
+      'getCustomExercises() feed the substitute list; BOTH are filtered by '
+      'EquipmentCapability.canOfferInPicker with '
+      'TrainingHistoryAnalyzer.resolveCapabilityFromProfile() BEFORE '
+      'rendering — the same predicate swap_service.dart enforces at '
+      'execute, so every option shown is one the swap path accepts.'),
   'lib/features/train/widgets/exercise_swap_sheet.dart': SeamEntry(2,
       'Seam 6. Takes an explicit capability set. Library rows use '
       'canPerform (fail-closed); the custom list uses canOfferInPicker — '
