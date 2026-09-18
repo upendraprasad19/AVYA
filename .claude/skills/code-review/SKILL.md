@@ -231,6 +231,26 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-18 (b)** — blast-radius **platform** — branch `discipline-v2`
+  (S/M/L fix tiering + batch telemetry + hook wiring). **6 findings (0 P0, 0 P1,
+  6 P2); 0 false_alarm — all 6 fixed in-batch** (`7de94167`). Review:
+  `docs/reviews/discipline-v2-bpass.md`. ⚠ **Process lesson (the 5th instance of
+  `feedback_gates_unsatisfiable_at_merge`): the B-pass REPORT must be written to
+  `docs/reviews/<x>.md` with a line-anchored `verdict: accepted` BEFORE the merge,
+  and the plan-review record's `bpass_review:` field must point at it — `bpass:
+  accepted` alone hard-fails the CI record gate at the merge commit, unfixable
+  after.** The controller folded the B-pass findings into the record's prose and
+  skipped the pointer file; CI caught it post-push.
+  **Tuning 1 — the "hook pinned, dependencies not" class has a THIRD member: the
+  hook's output CONTRACT.** The telemetry CLI's stdout is embedded into the Stop
+  hook's harness-visible `reason` payload, yet both telemetry scripts fell through
+  the `scripts/**` feature catch-all — a telemetry-only commit would have cleared
+  no review gate while changing what the harness parses at batch close. When a
+  helper's OUTPUT is consumed by a pinned gate/hook, pin the helper too.
+  **Tuning 2 — null-valued enum fields need a no-news state, not a default.**
+  `top_gate` rendered `none` (a clean answer) beside `gate_failures_7d=unknown`
+  (no answer) — the pair contradicted itself. When one field signals "unknown",
+  every sibling field on the same line must say `unknown` too.
 - **2026-09-18 (a)** — blast-radius **account** — branch `sync-banner-force-retry`
   (sync queue: force-retry on manual Retry, SyncBanner display grace, enqueueFresh
   count heal). **6 findings (0 P0, 0 P1, 1 P2, 5 P3); 0 false_alarm — all 6

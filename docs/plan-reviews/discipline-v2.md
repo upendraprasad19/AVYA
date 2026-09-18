@@ -5,6 +5,7 @@ mechanical_only: false
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
+bpass_review: docs/reviews/discipline-v2-bpass.md
 tier: standard
 date: 2026-09-18
 ---
