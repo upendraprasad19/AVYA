@@ -95,7 +95,6 @@ const deliberatelyPreciousIgnoredPaths = <String>[
   '.config/',
   'migrate_working_dir/',
   'coverage/',
-  'deno.lock',
   'node_modules/zod',
   'node_modules/.deno/',
 
