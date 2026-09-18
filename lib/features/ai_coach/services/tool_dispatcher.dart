@@ -26,7 +26,11 @@ import '../../home/providers/home_provider.dart'
         nutritionSummaryProvider,
         recentFoodLogsProvider;
 import '../../nutrition/providers/nutrition_provider.dart'
-    show dailyNutritionProvider, macroTargetsProvider, weeklyNutritionProvider;
+    show
+        aiTextLogRemainingProvider,
+        dailyNutritionProvider,
+        macroTargetsProvider,
+        weeklyNutritionProvider;
 import '../../profile/services/profile_write_service.dart';
 import '../../profile/providers/profile_provider.dart'
     show userProfileProvider, userStatsProvider;
@@ -256,6 +260,15 @@ class ToolDispatcher {
       throw const ConcurrentEditException(
           "today's workout is no longer scheduled");
     }
+    // C2 review-fix (e8f4a3): never edit a terminal row — a rescheduled-away
+    // day's schedule_<date> is an audit placeholder, not a live plan.
+    // C1-regression fix (f7a3b1 family): TERMINAL rows only — a paused day
+    // stays swappable exactly as before this batch (paused = pending, not
+    // absent, outside the streak/rank math).
+    if (WorkoutRepository.isTerminalScheduleRow(raw['status'] as String?)) {
+      throw const ConcurrentEditException(
+          "today's workout has been rescheduled — re-ask the coach");
+    }
     final schedule = Map<String, dynamic>.from(raw);
     final exercises = (schedule['exercises'] as List?) ?? const [];
     final stillThere = exercises.any((e) {
@@ -387,6 +400,15 @@ class ToolDispatcher {
     try {
       final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
       if (raw is! Map || raw['status'] == 'completed') return;
+      // C2 review-fix (e8f4a3): never auto-complete a terminal row — a
+      // rescheduled-away day's schedule_<date> is an audit placeholder, not a
+      // live plan. Stamping 'completed' over it would resurrect the moved
+      // workout on the OLD date and credit streak for a workout done
+      // elsewhere. TERMINAL rows only (see the swap guard note) — a paused
+      // day pre-batch could still be completed via the all-logged backstop.
+      if (WorkoutRepository.isTerminalScheduleRow(raw['status'] as String?)) {
+        return;
+      }
       // Don't auto-complete a REST day — there's no planned workout to finish,
       // so an ad-hoc coach-logged set shouldn't flip the rest day into a
       // "completed workout" (which would feed streak / deployment wrongly).
@@ -688,11 +710,26 @@ class ToolDispatcher {
                     '${move.toDate}: destination not empty ($destStatus)');
                 continue;
               }
+              // Review round 1 (e8f4a3) finding 6 — a TERMINAL destination
+              // (moved/dropped elsewhere) is as un-writable as completed:
+              // overwriting it would clobber the audit row pointing at
+              // where the workout actually lives.
+              if (WorkoutRepository.isTerminalScheduleRow(destStatus)) {
+                errors.add(
+                    '${move.toDate}: destination was rescheduled elsewhere');
+                continue;
+              }
             }
+            // Review round 1 (e8f4a3) finding 10 — build the destination
+            // DateTime via the IST-safe helper (UTC-midnight round-trip),
+            // NOT `DateTime.parse` (device-local midnight — the Test #11.1
+            // double-shift trap). Same convention the moved-out stamp 30
+            // lines below already follows.
+            final destDate =
+                _utcDateFromIstDateStr(move.toDate!) ?? DateTime.now();
             // Re-stamp date + day_of_week on the moved entry.
             final updated = Map<String, dynamic>.from(from);
             updated['date'] = move.toDate;
-            final destDate = DateTime.parse(move.toDate!);
             updated['day_of_week'] = destDate.weekday - 1; // 0=Mon..6=Sun
             updated['rescheduled_via'] = 'ai_coach';
             updated['rescheduled_at'] = DateTime.now().toIso8601String();
@@ -704,10 +741,42 @@ class ToolDispatcher {
               entry: updated,
               source: WriteSource.aiCoach,
             );
-            // Only delete the old key if it isn't the same as the new one
+            // Only stamp the source terminal row if it isn't the same date
             // (defensive — shouldn't happen but a no-op move would dupe).
             if (move.fromDate != move.toDate) {
-              await box.delete('schedule_${move.fromDate}');
+              // C2 (e8f4a3): write a TERMINAL source row instead of the old
+              // raw delete. A raw delete punched a hole in the streak
+              // walk-back (breaks unconditionally on a null row —
+              // freeze-proof) and never reached cloud, so a restore
+              // resurrected the workout on BOTH dates. The terminal row goes
+              // through upsertScheduled, so the cloud fan-out covers it and
+              // WorkoutRepository.isInvisibleToStreak skips it in the walk.
+              final movedOut = Map<String, dynamic>.from(from)
+                ..['status'] = 'moved'
+                ..['moved_to'] = move.toDate
+                ..['moved_via'] = 'ai_coach'
+                ..['moved_at'] = DateTime.now().toIso8601String();
+              final movedRes = await WorkoutWriteService.instance
+                  .upsertScheduled(
+                date: _utcDateFromIstDateStr(move.fromDate) ?? destDate,
+                entry: movedOut,
+                source: WriteSource.aiCoach,
+              );
+              if (!movedRes.success) {
+                errors.add(
+                    '${move.fromDate}: failed to stamp moved-out row: '
+                    '${movedRes.errorMessage}');
+              }
+              // Partial logs travel with the day (re-key lives in the
+              // canonical WriteService — the dispatcher is a router).
+              await WorkoutWriteService.instance
+                  .moveExerciseLogs(fromDate: move.fromDate, toDate: move.toDate!);
+              // Review round 1 (e8f4a3) finding 7 — the moved day no longer
+              // has partial logs here; resolve its stale
+              // `completion_prompt_<fromDate>` card (same resolve semantics
+              // as the auto-complete backstop — stamp resolved_at, LOCAL-ONLY
+              // kind-tagged row) so the two-button tile stops rendering.
+              await _resolveCompletionPromptIfPresent(move.fromDate);
             }
             results.add({
               'from': move.fromDate,
@@ -716,7 +785,31 @@ class ToolDispatcher {
             });
             break;
           case RescheduleAction.drop:
-            await box.delete('schedule_${move.fromDate}');
+            // C2 (e8f4a3): terminal 'dropped' row instead of the raw delete —
+            // same hole-in-the-streak-walk + no-cloud-tombstone class as the
+            // move path above. Only when a source row exists (the snapshot
+            // phase already read it); a missing row needs no write.
+            final dropped = sourceSnapshots[move.fromDate];
+            if (dropped != null) {
+              final droppedOut = Map<String, dynamic>.from(dropped)
+                ..['status'] = 'dropped'
+                ..['dropped_via'] = 'ai_coach'
+                ..['dropped_at'] = DateTime.now().toIso8601String();
+              final dropRes = await WorkoutWriteService.instance
+                  .upsertScheduled(
+                date: _utcDateFromIstDateStr(move.fromDate) ?? DateTime.now(),
+                entry: droppedOut,
+                source: WriteSource.aiCoach,
+              );
+              if (!dropRes.success) {
+                errors.add(
+                    '${move.fromDate}: failed to stamp dropped row: '
+                    '${dropRes.errorMessage}');
+              }
+              // Review round 1 (e8f4a3) finding 7 — same stale-prompt
+              // resolve as the move path (see there).
+              await _resolveCompletionPromptIfPresent(move.fromDate);
+            }
             results.add({
               'from': move.fromDate,
               'dropped': move.workoutName,
@@ -767,12 +860,17 @@ class ToolDispatcher {
     for (final schedule in rawSchedules) {
       final date = schedule['date'] as String;
       try {
-        // Defensive: re-check completed status (concurrent-edit guard).
+        // Defensive: re-check terminal status (concurrent-edit guard).
         // The planner already filters completed days out of the raw
         // schedule list, but a workout completed between sheet-open and
-        // confirm could land here.
+        // confirm could land here. C3 — 'paused' joins 'completed': a pause
+        // is a deliberate user state (invisible to the streak walk);
+        // overwriting the row with a fresh planned entry would silently
+        // un-pause the day.
         final existing = box.get('schedule_$date');
-        if (existing is Map && existing['status'] == 'completed') {
+        if (existing is Map &&
+            (existing['status'] == 'completed' ||
+                existing['status'] == 'paused')) {
           continue;
         }
         // Plan A A-12: route through WorkoutWriteService.
@@ -903,8 +1001,12 @@ class ToolDispatcher {
       final date = schedule['date'] as String;
       try {
         final existing = box.get('schedule_$date');
-        if (existing is Map && existing['status'] == 'completed') {
-          // Concurrent-edit safety net.
+        if (existing is Map &&
+            (existing['status'] == 'completed' ||
+                existing['status'] == 'paused')) {
+          // Concurrent-edit safety net. C3 — 'paused' joins 'completed': a
+          // pause is a deliberate user state (invisible to the streak walk);
+          // a fresh planned row over it would silently un-pause the day.
           continue;
         }
         // Plan A A-12: route through WorkoutWriteService.
@@ -1053,6 +1155,10 @@ class ToolDispatcher {
         'paused_count': pausedDates.length,
       });
     } on PausePlanException catch (e) {
+      // C5 — mirror the reschedule/modify-for-injury failure paths: every
+      // dispatcher failure path logs ErrorTelemetry.
+      unawaited(ErrorTelemetry.logEvent('tool_dispatch_pause_plan_failed',
+          message: '${e.code}: ${e.message}'));
       return ToolExecutionResult.failure(_pausePlanErrorMessage(e));
     }
   }
@@ -1353,8 +1459,18 @@ class ToolDispatcher {
       }
 
       try {
-        await WorkoutScheduleService.instance
+        final assignResult = await WorkoutScheduleService.instance
             .assignTemplateToDate(a.templateId, date);
+        // C3 — map the service's paused-day rejection to a user-facing
+        // failure so the coach tells the user why the day was skipped
+        // (instead of counting it as scheduled).
+        if (assignResult is AssignTemplateRejected &&
+            assignResult.reason ==
+                AssignTemplateRejectionReason.alreadyPaused) {
+          errors.add('${a.date}: That day is paused — lift the pause first '
+              'or pick another day.');
+          continue;
+        }
         scheduled.add({'date': a.date, 'template_id': a.templateId});
       } catch (e, stack) {
         debugPrint(
@@ -1525,33 +1641,51 @@ class ToolDispatcher {
     return type == 'log_meal_by_text';
   }
 
+  /// C5 — serializes coach_memory read-modify-writes. Two intent cards from
+  /// one multi-intent turn can execute concurrently (each card guards only
+  /// itself); without this lock one injury append was lost.
+  static Future<void> _coachMemoryLock = Future<void>.value();
+
+  @visibleForTesting
+  Future<void> appendInjuryToCoachMemoryForTest(
+          String bodyPart, String severity) =>
+      _appendInjuryToCoachMemory(bodyPart, severity);
+
   Future<void> _appendInjuryToCoachMemory(
       String bodyPart, String severity) async {
-    final box = HiveService.instance.coachBox;
-    final raw = box.get('coach_memory');
-    final mem = raw is Map
-        ? Map<String, dynamic>.from(raw)
-        : <String, dynamic>{};
+    final prev = _coachMemoryLock;
+    final completer = Completer<void>();
+    _coachMemoryLock = completer.future;
+    await prev;
+    try {
+      final box = HiveService.instance.coachBox;
+      final raw = box.get('coach_memory');
+      final mem = raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : <String, dynamic>{};
 
-    final existing = mem['injuries'];
-    final injuries = existing is List
-        ? existing
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList()
-        : <Map<String, dynamic>>[];
+      final existing = mem['injuries'];
+      final injuries = existing is List
+          ? existing
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
 
-    injuries.add({
-      'part': bodyPart,
-      'severity': severity,
-      'since': DateTime.now().toIso8601String().split('T').first,
-    });
+      injuries.add({
+        'part': bodyPart,
+        'severity': severity,
+        'since': DateTime.now().toIso8601String().split('T').first,
+      });
 
-    mem['injuries'] = injuries;
-    await box.put('coach_memory', mem);
-    // pushSnapshot fires after this in the dispatcher's outer flow; the
-    // snapshot path can opt to forward the injury delta to server-side
-    // coach_memory in a future change.
+      mem['injuries'] = injuries;
+      await box.put('coach_memory', mem);
+      // pushSnapshot fires after this in the dispatcher's outer flow; the
+      // snapshot path can opt to forward the injury delta to server-side
+      // coach_memory in a future change.
+    } finally {
+      completer.complete();
+    }
   }
 
   // ---------------- helpers ----------------
@@ -1589,6 +1723,16 @@ class ToolDispatcher {
       ref.invalidate(macroTargetsProvider);
     } catch (e, st) {
       debugPrint('[tool_dispatcher] invalidate macroTargetsProvider failed: $e\n$st');
+    }
+    // C4 — the coach meal path increments featureAiTextLogPro
+    // (_executeLogByText) but never refreshed the "X remaining" read;
+    // the manual path invalidates it (food_logger_section.dart). Same
+    // reader, same rule.
+    try {
+      ref.invalidate(aiTextLogRemainingProvider);
+    } catch (e, st) {
+      debugPrint(
+          '[tool_dispatcher] invalidate aiTextLogRemainingProvider failed: $e\n$st');
     }
   }
 

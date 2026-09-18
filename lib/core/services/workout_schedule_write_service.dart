@@ -136,6 +136,19 @@ class WorkoutScheduleWriteService {
 
       final map = Map<String, dynamic>.from(raw);
       if (map['status'] == 'completed') continue;
+      // e8f4a3 B-pass P2a — terminal rows are NEVER "paused": a 'moved' row's
+      // workout lives on another date (moved_to is the audit pointer) and a
+      // 'dropped' row is gone, so stamping 'paused' over them would destroy
+      // the terminal trail. Terminal rows legitimately exist on FUTURE dates
+      // (a within-week move of Friday's workout leaves Friday 'moved' while
+      // today is Wednesday), so this range can absolutely contain one.
+      // Same immutability invariant the swap guard, auto-complete guard and
+      // both planners enforce (C3). Pinned by
+      // pause_range_routes_through_write_service_test.dart.
+      if (WorkoutScheduleReadService.isTerminalScheduleRow(
+          map['status'] as String?)) {
+        continue;
+      }
 
       map['status'] = 'paused';
       map['paused_via'] = 'ai_coach';

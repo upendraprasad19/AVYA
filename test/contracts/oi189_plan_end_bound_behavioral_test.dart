@@ -464,6 +464,73 @@ void main() {
       expect(scheduleRow(planEnd), isNotNull);
     });
 
+    // C3 (ai-coach-ux-tool-integrity spec 2026-09-18) — the regen commit must
+    // not silently un-pause a paused day. The planner filters only
+    // 'completed' out of the raw-schedule queue, so a paused day IS queued
+    // for write; the dispatcher's concurrent-edit guard is the only
+    // protection between preview and confirm.
+    test('paused day in-window survives the regen commit (C3): row untouched, '
+        'date absent from results', () async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final planStart = today.subtract(const Duration(days: 14));
+      await seedWindow(planStart, endOffset: 24); // plan_end = today+10
+      final pausedDate = today.add(const Duration(days: 3));
+      await seedRow(
+        pausedDate,
+        name: 'PAUSED_DAY',
+        status: 'paused',
+      );
+
+      final result = await RegeneratePlanPlanner.instance.plan(
+        weeks: 1,
+        goal: 'general_fitness',
+        equipment: 'full_gym',
+        daysPerWeek: 4,
+        startDate: svc.dateKey(pausedDate),
+      );
+      // Precondition: the planner queues the paused day for write — it
+      // filters only 'completed'.
+      expect(
+        result.rawSchedules.any((s) => s['date'] == svc.dateKey(pausedDate)),
+        isTrue,
+        reason: "precondition: RegeneratePlanPlanner queues the paused day "
+            "(it filters only 'completed') — the dispatcher's guard is the "
+            'only protection',
+      );
+
+      const intentId = 'intent_c3_paused_regen';
+      RegeneratePlanPlanner.instance.cache(
+        intentId,
+        result.plan,
+        result.rawSchedules,
+        result.phase,
+        result.regenStartWeek,
+      );
+      final res = await ToolDispatcher.instance.execute(
+        makeContainer().read(_refProvider),
+        intentFor(intentId, 'regenerate_plan_block'),
+      );
+      expect(res.success, isTrue);
+      final schedules =
+          (res.data as Map<String, dynamic>?)?['schedules'] as List? ??
+              const <dynamic>[];
+      expect(
+        schedules
+            .whereType<Map>()
+            .where((m) => m['date'] == svc.dateKey(pausedDate)),
+        isEmpty,
+        reason: 'the paused date must be skipped, not reported as scheduled',
+      );
+      final row = scheduleRow(pausedDate);
+      expect(row, isNotNull, reason: 'the paused row must survive untouched');
+      expect(row!['status'], 'paused',
+          reason: 'pre-fix the regen commit overwrote the paused row with a '
+              "fresh status:'planned' row — silently un-pausing the user's "
+              'pause');
+      expect(row['workout_name'], 'PAUSED_DAY');
+    });
+
     test(
       'block FITS the phase but rows exist past plan_end: clearsPastPhaseEnd '
       'reports them (D2: the preview must say what the commit sweeps)',

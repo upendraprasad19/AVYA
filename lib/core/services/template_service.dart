@@ -48,6 +48,7 @@ class AssignTemplateRejected extends AssignTemplateResult {
 
 enum AssignTemplateRejectionReason {
   alreadyCompleted,
+  alreadyPaused,
   templateMissing,
 }
 
@@ -101,6 +102,19 @@ class TemplateService {
         ));
         return const AssignTemplateRejected(
             AssignTemplateRejectionReason.alreadyCompleted);
+      }
+
+      // C3 — a paused day is a deliberate user state (invisible to the
+      // streak walk); overwriting it with a status:'planned' custom_template
+      // entry would silently un-pause the day. Symmetric with the completed
+      // guard above.
+      if (existingMap['status'] == 'paused') {
+        unawaited(ErrorTelemetry.logEvent(
+          'template_assign_rejected_paused',
+          message: 'date=$dateKey templateId=$templateId',
+        ));
+        return const AssignTemplateRejected(
+            AssignTemplateRejectionReason.alreadyPaused);
       }
 
       final isAlreadyTemplate = existingMap['type'] == 'custom_template';

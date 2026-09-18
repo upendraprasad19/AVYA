@@ -365,6 +365,25 @@ class WorkoutWriteService {
   Future<void> _appendToIndex(Box box, String dateStr, String key) =>
       addToExlogIndex(box, dateStr, key);
 
+  /// Inverse of [addToExlogIndex] — removes [key] from
+  /// `exercise_log_index_<dateStr>` if present. PRIVATE and called ONLY from
+  /// [moveExerciseLogs] (a mutating writer): addToExlogIndex/reconcile are
+  /// deliberately UNION-only (add, never remove) so a restore and a
+  /// concurrent log can't lose each other's entries, but a MOVED row's old
+  /// key is genuinely stale on the source date's index — leaving it there
+  /// makes the reader resolve a dangling key (harmless on read) and breaks
+  /// the "index == truth" invariant the canonical read leans on. Idempotent
+  /// no-op when the key or the index is absent.
+  Future<void> _removeFromExlogIndex(
+      Box box, String dateStr, String key) async {
+    final indexKey = 'exercise_log_index_$dateStr';
+    final raw = box.get(indexKey);
+    if (raw is! List) return;
+    final list = raw.cast<String>().toList();
+    if (!list.remove(key)) return;
+    await box.put(indexKey, list);
+  }
+
   /// Defense-in-depth: rebuilds every `exercise_log_index_<date>` as the UNION
   /// of the actual `exlog_<date>_<hash>` keys present in the workout box (never
   /// removes a present key). Run after a background restore so any index drift
@@ -661,6 +680,178 @@ class WorkoutWriteService {
     } finally {
       _releaseLock(keys[1], c2);
       _releaseLock(keys[0], c1);
+    }
+  }
+
+  /// C2 (e8f4a3) — re-keys partial `exlog_<fromDate>_*` rows onto `<toDate>`
+  /// so a moved day keeps its logged exercises (the all-logged completion
+  /// backstop and the AI snapshot's recent_logs both read these keys by date).
+  ///
+  /// Keys are NEVER hand-built: destination keys go through the canonical
+  /// [exlogKey] (UUID-v5 name hash, H-16); source rows are matched on their
+  /// own `date` field, which every canonical writer emits.
+  ///
+  /// Review round 1 (e8f4a3) additions, all inside THIS writer (CQRS — the
+  /// read helpers must never mutate):
+  ///   • INDEX MAINTENANCE — the re-key previously wrote raw `box.put` and
+  ///     never touched `exercise_log_index_<date>`. The canonical read
+  ///     `WorkoutReadService.exerciseLogsForIstDate` is INDEX-FIRST and
+  ///     early-returns on a resolvable non-empty destination index, so moved
+  ///     rows were invisible on any date that already had logs, and the
+  ///     source date's index kept dangling keys. Now: new key appended to
+  ///     `exercise_log_index_<toDate>` (via [addToExlogIndex]) and the old
+  ///     key removed from `exercise_log_index_<fromDate>` (via
+  ///     [_removeFromExlogIndex]).
+  ///   • DESTINATION COLLISION — an existing destination row for the same
+  ///     exercise name is MERGED (moved row's `sets[]` appended; the existing
+  ///     row's `workout_log_id` and identity kept) instead of overwritten.
+  ///     The set-derived aggregates (`set_number`/`reps_completed`/
+  ///     `weight_kg`/`volume_kg`) are recomputed from the merged list to the
+  ///     same derived-fields contract [logExercise] stamps — stale aggregates
+  ///     beside a longer `sets[]` would be the writer/reader drift class.
+  ///     Review round 2 (e8f4a3 B1): preserve-don't-shrink — a side with NO
+  ///     `sets[]` but top-level aggregates (the restore-shaped row
+  ///     sync_workout.dart writes when the workout_log_sets join is empty)
+  ///     contributes its own aggregates instead of being recomputed from an
+  ///     empty sets list, so a collision can only GROW the totals.
+  ///   • WLOG RE-STAMP — `workout_log_id` is re-keyed to `wlog_<toDate>` so
+  ///     the destination receipt (scoped by workoutLogId) includes the moved
+  ///     rows. Only when the row CARRIES an id (restore-shaped legacy rows
+  ///     may not).
+  ///
+  /// LOCAL-ONLY by design: the cloud `exercise_logs` rows for the moved-out
+  /// date are not tombstoned here — no cloud exlog tombstone protocol exists,
+  /// so moved-out-date rows linger in cloud and a restore can resurrect the
+  /// from-date logs. Residual tracked in the e8f4a3 B-pass addendum at
+  /// docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md (NOT OI-174 —
+  /// that is plan_end pruning; an earlier draft of this comment miscited it).
+  Future<void> moveExerciseLogs({
+    required String fromDate,
+    required String toDate,
+  }) async {
+    if (fromDate == toDate) return; // nothing to move (dispatcher also guards)
+    final c = await _acquireLock('exlog_move_$fromDate');
+    try {
+      final box = HiveService.instance.workoutBox;
+      final keys = box.keys
+          .whereType<String>()
+          .where((k) => k.startsWith('exlog_'))
+          .toList();
+      final p = toDate.split('-');
+      final toDateTime = p.length == 3
+          ? DateTime.utc(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]))
+          : DateTime.now().toUtc();
+      for (final oldKey in keys) {
+        final raw = box.get(oldKey);
+        if (raw is! Map) continue;
+        if (raw['date']?.toString() != fromDate) continue;
+        final row = Map<String, dynamic>.from(raw);
+        final name = row['exercise_name']?.toString();
+        if (name == null || name.isEmpty) continue;
+        final newKey = exlogKey(toDateTime, name);
+        final existing = box.get(newKey);
+        if (existing is Map) {
+          // Collision merge — see the doc comment above.
+          final existingSets = (existing['sets'] as List? ?? const [])
+              .cast<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          final movedSets = (row['sets'] as List? ?? const [])
+              .cast<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          final mergedSets = [...existingSets, ...movedSets];
+
+          // Review round 2 (e8f4a3 B1) — preserve-don't-shrink. The restore
+          // writer (sync_workout.dart _restoreExerciseLogs) emits exlog rows
+          // with TOP-LEVEL aggregates and NO `sets[]` when the
+          // workout_log_sets join is empty. Recomputing from `mergedSets`
+          // alone shrank such a row on a collision (set_number 3→1, reps
+          // 30→8 …): silent data loss on real user rows. Each side
+          // therefore contributes its sets-derived totals when it CARRIES
+          // `sets[]`, and its OWN top-level aggregates otherwise. When both
+          // sides carry `sets[]` this is numerically identical to the
+          // round-1 recompute from the merged list (logExercise's
+          // derived-fields contract — pinned by the round-1 collision test).
+          int sideSetCount(Map r, List<Map<String, dynamic>> s) =>
+              s.isNotEmpty
+                  ? s.length
+                  : ((r['set_number'] as num?)?.toInt() ?? 0);
+          int sideReps(Map r, List<Map<String, dynamic>> s) {
+            if (s.isNotEmpty) {
+              var total = 0;
+              for (final s2 in s) {
+                total += (s2['reps'] as num?)?.toInt() ?? 0;
+              }
+              return total;
+            }
+            return (r['reps_completed'] as num?)?.toInt() ?? 0;
+          }
+
+          double sideMaxWeight(Map r, List<Map<String, dynamic>> s) {
+            if (s.isNotEmpty) {
+              var maxW = 0.0;
+              for (final s2 in s) {
+                final w = (s2['weight_kg'] as num?)?.toDouble() ?? 0.0;
+                if (w > maxW) maxW = w;
+              }
+              return maxW;
+            }
+            return (r['weight_kg'] as num?)?.toDouble() ?? 0.0;
+          }
+
+          double sideVolume(Map r, List<Map<String, dynamic>> s) {
+            if (s.isNotEmpty) {
+              var v = 0.0;
+              for (final s2 in s) {
+                final w = (s2['weight_kg'] as num?)?.toDouble() ?? 0.0;
+                final reps = (s2['reps'] as num?)?.toInt() ?? 0;
+                v += w * reps;
+              }
+              return v;
+            }
+            return (r['volume_kg'] as num?)?.toDouble() ?? 0.0;
+          }
+
+          final existingMaxWeight = sideMaxWeight(existing, existingSets);
+          final movedMaxWeight = sideMaxWeight(row, movedSets);
+          final merged = Map<String, dynamic>.from(existing);
+          // Only stamp `sets[]` when the merge actually carries per-set
+          // detail — a both-sides-restore-shaped merge must not grow an
+          // empty `sets[]` onto the surviving row.
+          if (mergedSets.isNotEmpty) {
+            merged['sets'] = mergedSets;
+          }
+          merged['set_number'] =
+              sideSetCount(existing, existingSets) +
+                  sideSetCount(row, movedSets);
+          merged['reps_completed'] =
+              sideReps(existing, existingSets) + sideReps(row, movedSets);
+          merged['weight_kg'] =
+              movedMaxWeight > existingMaxWeight ? movedMaxWeight : existingMaxWeight;
+          merged['volume_kg'] =
+              sideVolume(existing, existingSets) + sideVolume(row, movedSets);
+          merged['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+          // Keep the existing row's workout_log_id — its session owns the
+          // destination day (the moved row's source id is stale here).
+          await box.put(newKey, merged);
+        } else {
+          row['date'] = toDate;
+          // Re-stamp the session id to the destination's canonical wlog key
+          // so receipt scoping (workout_log_id == wlog_<date>) includes the
+          // moved rows. Restore-shaped rows may not carry one — leave those.
+          if (row['workout_log_id'] != null) {
+            row['workout_log_id'] = wlogKey(toDateTime);
+          }
+          await box.put(newKey, row);
+        }
+        await box.delete(oldKey);
+        // Index maintenance (Finding 1) — the canonical read is INDEX-FIRST.
+        await addToExlogIndex(box, toDate, newKey);
+        await _removeFromExlogIndex(box, fromDate, oldKey);
+      }
+    } finally {
+      _releaseLock('exlog_move_$fromDate', c);
     }
   }
 

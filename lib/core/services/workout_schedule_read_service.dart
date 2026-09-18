@@ -871,8 +871,76 @@ class WorkoutScheduleReadService {
 
   // ── Queries ─────────────────────────────────────────────────────
 
+  /// C1/C2 (ai-coach-ux-tool-integrity, spec 2026-09-18) — schedule-row
+  /// statuses INVISIBLE to streak + completion-rate math AND to the DISPLAY
+  /// read path. CANONICAL home of the predicate:
+  ///   - `paused` — the user CHOSE not to train (founder rule: never breaks,
+  ///     never burns a freeze).
+  ///   - `moved` / `dropped` — TERMINAL rows left by rescheduleWeek in place
+  ///     of the old raw delete (writer:
+  ///     `tool_dispatcher._executeRescheduleWeek` →
+  ///     `WorkoutWriteService.upsertScheduled`). The day's workout lives
+  ///     elsewhere now, so the row must read as ABSENT everywhere a
+  ///     non-terminal row would render as a live/planned workout —
+  ///     `WorkoutRepository.isInvisibleToStreak` (the streak walk, C1)
+  ///     DELEGATES here.
+  /// Raw-row readers (sync restore, audit) use [getScheduleRowForDate] and
+  /// must NOT filter — they need every row.
+  static const Set<String> invisibleScheduleStatuses = {
+    'paused',
+    'moved',
+    'dropped',
+  };
+
+  static bool isInvisibleToStreak(String? status) =>
+      status != null && invisibleScheduleStatuses.contains(status);
+
+  /// TERMINAL rows — `moved`/`dropped` only, NOT `paused`.
+  ///
+  /// C1 regression fix (2026-09-18): the display filter below originally used
+  /// the full [invisibleScheduleStatuses] set, which silently removed PAUSED
+  /// days from `currentPhaseCompletionRate`'s denominator — paused would
+  /// count as ABSENT instead of scheduled-not-done, letting a paused week
+  /// read 100% complete and falsely unlock the next phase
+  /// (test/contracts/phase_adherence_rate_test.dart pins paused = counts to
+  /// total, not done). The correct split:
+  ///   - streak walk + rank completion-rate: skip {paused, moved, dropped}
+  ///     (the founder "paused = invisible" rule — C1);
+  ///   - phase-progress / display / tool-guard reads: skip TERMINAL rows only
+  ///     — a paused day is a day the user intends to resume, so it stays
+  ///     pending everywhere else, exactly as before this batch.
+  static const Set<String> terminalScheduleStatuses = {
+    'moved',
+    'dropped',
+  };
+
+  static bool isTerminalScheduleRow(String? status) =>
+      status != null && terminalScheduleStatuses.contains(status);
+
   /// Get scheduled data for a specific date.
+  ///
+  /// DISPLAY/QUERY read path — TERMINAL rows ([terminalScheduleStatuses])
+  /// read as ABSENT (null), so a 'moved' row for today never renders a live
+  /// Start CTA (todayWorkoutProvider → Home Today card) and a 'dropped' row
+  /// in the current week never renders as a planned workout (week strip,
+  /// train week renderer, hold rows, swap sheet — all route through here).
+  /// A PAUSED row deliberately remains VISIBLE here (counts as pending for
+  /// phase progression — see [terminalScheduleStatuses]). Audit/restore
+  /// callers that must see every row use [getScheduleRowForDate].
   Map<String, dynamic>? getScheduleForDate(DateTime date) {
+    final map = getScheduleRowForDate(date);
+    if (map == null) return null;
+    if (isTerminalScheduleRow(map['status'] as String?)) return null;
+    return map;
+  }
+
+  /// RAW row read for [date] — NO invisible-status filtering.
+  ///
+  /// The only read surface that sees terminal `moved`/`dropped` rows (and
+  /// `paused`). For sync restore, audit and streak-walk callers that need
+  /// every row. The completed-in-the-future → planned demotion still applies
+  /// (that guard is about `completed_at`, not visibility).
+  Map<String, dynamic>? getScheduleRowForDate(DateTime date) {
     final key = '$_schedulePrefix${_dateKey(date)}';
     final data = _hive.workoutBox.get(key);
     if (data == null) return null;

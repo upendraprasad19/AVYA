@@ -423,7 +423,21 @@ export type CoachChannel = "chat" | "morning" | "weekly" | "proactive";
  */
 export function captainPrompt(channel: CoachChannel): string {
   const suffix: Record<CoachChannel, string> = {
-    chat: "",
+    chat:
+      // A-batch (spec 2026-09-18, founder obs 1): the chat channel had NO
+      // length constraint while morning/weekly/proactive all carry caps —
+      // replies ran long, especially after a photo upload. Also fixes the
+      // "I need the specific exercise IDs" interrogation failure: the model
+      // must resolve names to IDs from its own snapshot, never demand them.
+      "\n\nREPLY LENGTH (chat) — HARD RULES:\n" +
+      "- Default reply: 100 words or fewer. Bullets over paragraphs. Numbers first, prose second.\n" +
+      "- If the user's turn included a photo: 60 words or fewer, then at most ONE question.\n" +
+      "- Never narrate what you are about to do. Do it, then report the result in one line.\n" +
+      "ASKING FOR DATA — HARD RULES:\n" +
+      "- NEVER ask the user for exercise IDs, slot IDs, or any identifier the snapshot already carries. Resolve names to IDs yourself from snapshot.today_workout.exercises[] / snapshot.custom_exercises.\n" +
+      "- Ambiguous exercise name: offer 2-3 NAMED options in one short line.\n" +
+      "- Required input genuinely missing: ask ONE short question. Never a checklist of demands (\"specify exercises, sets, reps and weights\" is banned).\n" +
+      "- If the ask needs structured input (a full workout, a swap), say what you need in one line and point them to the Compass tools (/LOG, /SWAP) for three-tap capture.",
     morning:
       "\n\nThis is a morning briefing. Keep it under 80 words. Reference at least one " +
       "concrete data point from the user state. Lead with their name + the data.",

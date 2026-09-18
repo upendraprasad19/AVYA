@@ -1,4 +1,5 @@
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
 import '../../../core/services/hive_service.dart';
 
@@ -53,6 +54,12 @@ class InjurySwapPlanner {
       final raw = HiveService.instance.workoutBox.get('schedule_$dateStr');
       if (raw is! Map) continue;
       if (raw['status'] == 'completed') continue;
+      // C2 review-fix (e8f4a3): a terminal (moved/dropped) row is an audit
+      // placeholder — no live workout there to substitute for. TERMINAL rows
+      // only — paused stays substitutable pre-batch.
+      if (WorkoutRepository.isTerminalScheduleRow(raw['status'] as String?)) {
+        continue;
+      }
 
       final exercisesRaw = raw['exercises'];
       if (exercisesRaw is! List) continue;

@@ -29,7 +29,11 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/template_service.dart'
-    show AssignTemplateOk, TemplateService;
+    show
+        AssignTemplateOk,
+        AssignTemplateRejected,
+        AssignTemplateRejectionReason,
+        TemplateService;
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
@@ -334,6 +338,72 @@ void main() {
             'When no displaced_ backup exists, unscheduleTemplateFromDate must '
             'delete schedule_<date> entirely. Non-null result means the '
             '_hive.workoutBox.delete(scheduleKey) branch is broken.',
+      );
+    },
+  );
+
+  // ── Test 4: paused day is rejected with alreadyPaused (C3) ──────────────
+  // C3 (ai-coach-ux-tool-integrity spec 2026-09-18): a paused day is a
+  // deliberate user state (invisible to the streak walk). assignTemplateToDate
+  // must reject it instead of overwriting the row with a status:'planned'
+  // custom_template entry — silently un-pausing the user's pause. Symmetric
+  // with the alreadyCompleted guard above.
+  test(
+    'assignTemplateToDate rejects a paused day with alreadyPaused — the '
+    'paused row is untouched and no displaced backup is written',
+    () async {
+      await _seedTemplate();
+      final dateKey = formatDateKey(_testDate);
+      await HiveService.instance.workoutBox.put('schedule_$dateKey', {
+        'date': dateKey,
+        'type': 'workout',
+        'workout_name': _originalWorkoutName,
+        'status': 'paused',
+        'paused_via': 'ai_coach',
+        'paused_at': DateTime(2026, 7, 14, 10).toIso8601String(),
+        'exercises': [
+          {
+            'exercise_id': 'bench_press',
+            'exercise_name': 'Bench Press',
+            'sets': 4,
+          }
+        ],
+      });
+
+      final result = await TemplateService.instance.assignTemplateToDate(
+        _templateId,
+        _testDate,
+      );
+
+      expect(
+        result,
+        isA<AssignTemplateRejected>(),
+        reason:
+            "pre-fix assignTemplateToDate overwrote the paused row with a "
+            "status:'planned' custom_template entry — silently un-pausing "
+            'the user pause. Post-fix it must reject.',
+      );
+      expect(
+        (result as AssignTemplateRejected).reason,
+        AssignTemplateRejectionReason.alreadyPaused,
+        reason:
+            'the rejection reason must be the new alreadyPaused value so '
+            'callers can show a pause-specific message (distinct from '
+            'alreadyCompleted).',
+      );
+
+      final row =
+          HiveService.instance.workoutBox.get('schedule_$dateKey') as Map?;
+      expect(row, isNotNull, reason: 'the paused row must survive untouched');
+      expect(row!['status'], 'paused');
+      expect(row['workout_name'], _originalWorkoutName);
+      expect(row['type'], 'workout',
+          reason: 'the paused row must not be re-typed custom_template');
+      expect(
+        HiveService.instance.workoutBox.get('displaced_$dateKey'),
+        isNull,
+        reason: 'a rejected assign must not back up the paused row either — '
+            'the service returns BEFORE the displaced-write branch.',
       );
     },
   );

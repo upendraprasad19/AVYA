@@ -6,6 +6,8 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart'
+    as core_read;
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
@@ -107,6 +109,32 @@ class WorkoutRepository {
   }
 
   // ── Streak Calculation ───────────────────────────────────────
+
+  /// C1/C2 (ai-coach-ux-tool-integrity, spec 2026-09-18) — schedule-row
+  /// statuses INVISIBLE to streak + completion-rate math. DELEGATES to
+  /// `WorkoutScheduleReadService.invisibleScheduleStatuses` (the canonical
+  /// home, next to the display read path that now enforces it — C2 review,
+  /// diagnose e8f4a3). Semantics unchanged:
+  /// `paused` is the user CHOOSING not to train (founder rule: never breaks,
+  /// never burns a freeze). `moved`/`dropped` are terminal rows left by
+  /// rescheduleWeek in place of the old raw delete — the day's workout lives
+  /// elsewhere now, so the row must never fall through to the missed arm (the
+  /// raw-delete HOLE class: an absent row broke the walk unconditionally,
+  /// freeze-proof).
+  static const Set<String> invisibleScheduleStatuses =
+      core_read.WorkoutScheduleReadService.invisibleScheduleStatuses;
+
+  static bool isInvisibleToStreak(String? status) =>
+      core_read.WorkoutScheduleReadService.isInvisibleToStreak(status);
+
+  /// TERMINAL rows only (`moved`/`dropped`) — NOT `paused`. Display, tool
+  /// guards and the reschedule planner skip terminal rows (the day's workout
+  /// lives elsewhere), while a PAUSED row stays pending everywhere outside
+  /// the streak walk and the rank completion-rate gate — the C1 regression
+  /// fix (phase_adherence_rate contract): see
+  /// `WorkoutScheduleReadService.terminalScheduleStatuses`.
+  static bool isTerminalScheduleRow(String? status) =>
+      core_read.WorkoutScheduleReadService.isTerminalScheduleRow(status);
 
   /// Earliest date the user could legitimately have completed a workout.
   ///
@@ -353,6 +381,8 @@ class WorkoutRepository {
       // Rest days and travel days are invisible — skip them entirely
       if (type == 'rest' || type == 'off') continue;
       if (status == 'travel') continue;
+      // C1 — paused/moved/dropped are invisible (see isInvisibleToStreak).
+      if (isInvisibleToStreak(status)) continue;
 
       // Workout day
       if (status == 'completed') {
@@ -441,6 +471,8 @@ class WorkoutRepository {
       final reason = entry['reason']?.toString();
       // Exclude rest days + pre-onboarding placeholders from both sides.
       if (status == 'rest') continue;
+      // C1 — same invisible set as the streak walk.
+      if (isInvisibleToStreak(status)) continue;
       if (reason == 'pre_onboarding') continue;
       scheduled++;
       if (status == 'completed') completed++;

@@ -116,8 +116,10 @@ export function ranksUpTo(code: string): RankLadderEntry[] {
 }
 
 /// SQL-backed completion-rate computation used by the cron caller —
-/// scans `scheduled_workouts` rows for the user / window. Rest days
-/// and pre-onboarding rows are excluded from both numerator and
+/// scans `scheduled_workouts` rows for the user / window. Rest days,
+/// PAUSED/MOVED/DROPPED rows (the client's
+/// `invisibleScheduleStatuses` parity — see the loop below) and
+/// pre-onboarding rows are excluded from both numerator and
 /// denominator so the rate matches the client's
 /// `WorkoutRepository.completionRateOverWindow` semantics.
 /// Raw-UTC calendar-date cutoff, `windowWeeks` back from now — the SAME
@@ -183,7 +185,20 @@ export async function completionRateOverWindow(
   let scheduled = 0;
   let completed = 0;
   for (const row of data ?? []) {
-    if (row.status === 'rest') continue;
+    // e8f4a3 B-pass P1 — mirror the client's canonical
+    // `WorkoutScheduleReadService.invisibleScheduleStatuses` set
+    // (lib/core/services/workout_schedule_read_service.dart:889 =
+    // {paused, moved, dropped}; the streak walk + client
+    // completionRateOverWindow both skip it). This batch made terminal
+    // moved/dropped rows PERSIST and PUSH to cloud (pre-batch they were
+    // raw-deleted and never reached cloud), so without this skip every
+    // reschedule move/drop permanently deflates the server-side rate behind
+    // the completionRateMinimum promotion gate while the client rank UI
+    // excludes them. Pinned by rank_engine_terminal_status_test.ts.
+    if (
+      row.status === 'rest' || row.status === 'paused' ||
+      row.status === 'moved' || row.status === 'dropped'
+    ) continue;
     // Cloud `scheduled_workouts` has NO `reason` column — it only ever existed
     // in the client's local Hive model. Pre-onboarding placeholder days are
     // written with status='rest' (workout_schedule_read_service.dart:303-309),

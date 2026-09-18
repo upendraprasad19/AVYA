@@ -118,5 +118,63 @@ void main() {
       expect(raw['status'], 'completed',
           reason: 'completed status must be untouched by a no-op pauseRange');
     });
+
+    test(
+      'pauseRange never clobbers a TERMINAL row — moved stays moved, moved_to intact (e8f4a3 B-pass P2a)',
+      () async {
+        // Seed a terminal 'moved' row on a FUTURE date (the normal post-move
+        // shape: a within-week move of Friday leaves Friday 'moved' while
+        // today is Wednesday) + a live planned row the next day so the range
+        // has something it MAY pause. The moved row is seeded with a raw
+        // box.put (the same shape tool_dispatcher's terminal stamp leaves in
+        // Hive after upsertScheduled).
+        final box = HiveService.instance.workoutBox;
+        const movedToStr = '2030-06-20';
+        await box.put('schedule_2030-06-15', {
+          'date': '2030-06-15',
+          'type': 'workout',
+          'workout_name': 'Push Day',
+          'status': 'moved',
+          'moved_to': movedToStr,
+          'moved_via': 'ai_coach',
+          'moved_at': DateTime.now().toIso8601String(),
+          'exercises': <dynamic>[],
+        });
+        await WorkoutWriteService.instance.upsertScheduled(
+          date: DateTime(2030, 6, 16),
+          entry: {
+            'date': '2030-06-16',
+            'type': 'workout',
+            'workout_name': 'Pull Day',
+            'status': 'planned',
+            'exercises': <dynamic>[],
+          },
+          source: WriteSource.planGenerator,
+        );
+
+        final paused = await WorkoutScheduleWriteService.instance.pauseRange(
+          startDate: date,
+          days: 2,
+          reason: 'travel',
+        );
+        expect(paused, ['2030-06-16'],
+            reason: 'only the live planned day may be reported as paused — '
+                'pre-fix the moved day was stamped too');
+
+        final movedRow = box.get('schedule_2030-06-15') as Map;
+        expect(movedRow['status'], 'moved',
+            reason: 'a terminal moved row must never be re-stamped paused — '
+                'pre-fix pauseRange overwrote it, destroying the audit trail');
+        expect(movedRow['moved_to'], movedToStr,
+            reason: 'the moved_to audit pointer must survive a pause that '
+                'spans its date');
+        expect(movedRow.containsKey('paused_via'), isFalse,
+            reason: 'no pause annotation may leak onto a terminal row');
+
+        final plannedRow = box.get('schedule_2030-06-16') as Map;
+        expect(plannedRow['status'], 'paused',
+            reason: 'the live planned day in range is still paused normally');
+      },
+    );
   });
 }
