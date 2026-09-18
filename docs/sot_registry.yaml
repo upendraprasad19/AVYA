@@ -9342,7 +9342,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1554-1559
+        line_range: 1577-1584
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -9743,7 +9743,7 @@ concepts:
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1767-1768
+        line_range: 1790-1796
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart

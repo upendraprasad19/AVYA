@@ -55,8 +55,9 @@ class InjurySwapPlanner {
       if (raw is! Map) continue;
       if (raw['status'] == 'completed') continue;
       // C2 review-fix (e8f4a3): a terminal (moved/dropped) row is an audit
-      // placeholder — no live workout there to substitute for.
-      if (WorkoutRepository.isInvisibleToStreak(raw['status'] as String?)) {
+      // placeholder — no live workout there to substitute for. TERMINAL rows
+      // only — paused stays substitutable pre-batch.
+      if (WorkoutRepository.isTerminalScheduleRow(raw['status'] as String?)) {
         continue;
       }
 

@@ -9,15 +9,19 @@
 // Start CTA on the Home Today card and a 'dropped' row in the current week
 // rendered as a planned workout.
 //
-// THE FIX: getScheduleForDate filters WorkoutRepository.isInvisibleToStreak
-// statuses ({paused, moved, dropped}) — terminal rows read as ABSENT through
-// the display path. Audit/restore callers read RAW via
-// getScheduleRowForDate. The streak walk already filtered these (C1).
+// THE FIX: getScheduleForDate filters the TERMINAL set ({moved, dropped}).
+// C1-regression fix (2026-09-18): the filter originally used the full
+// isInvisibleToStreak set ({paused, moved, dropped}), which silently removed
+// PAUSED days from currentPhaseCompletionRate's denominator — pinned by
+// test/contracts/phase_adherence_rate_test.dart ("paused counts to total but
+// is not done"). Paused reads PRESENT through the display path (pending,
+// pre-batch behavior); only terminal rows read ABSENT. Audit/restore callers
+// read RAW via getScheduleRowForDate. The streak walk keeps the FULL set (C1).
 //
 // Each test below FAILS against the pre-fix behavior (getScheduleForDate
 // returned the terminal row verbatim).
 //
-// MUTATION PROOF: comment out the isInvisibleToStreak filter inside
+// MUTATION PROOF: comment out the isTerminalScheduleRow filter inside
 // getScheduleForDate → the three filter tests in group
 // 'display read path hides terminal rows' redden. Recorded in
 // docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md.
@@ -178,8 +182,36 @@ void main() {
         expect(viaReader, isNotNull);
         expect(viaReader!['status'], 'completed',
             reason: 'completed-day view (Train) relies on the completed row '
-                'reading through — the invisible filter must be scoped to '
-                '{paused, moved, dropped} only.');
+                'reading through — the display filter must be scoped to the '
+                'TERMINAL set {moved, dropped} only.');
+      },
+    );
+
+    test(
+      'C1-regression pin: a PAUSED row reads PRESENT through '
+      'getScheduleForDate (phase progression counts paused as pending)',
+      () async {
+        await HiveService.instance.workoutBox.put('schedule_$todayStr', {
+          'date': todayStr,
+          'week': 1,
+          'day_of_week': today.weekday - 1,
+          'workout_name': 'Push A',
+          'status': 'paused',
+          'paused_via': 'ai_coach',
+          'type': 'workout',
+          'exercises': [
+            {'exercise_name': 'Bench Press'},
+          ],
+        });
+        final viaReader =
+            WorkoutScheduleReadService.instance.getScheduleForDate(today);
+        expect(viaReader, isNotNull,
+            reason: 'paused must read PRESENT through the display path — '
+                'currentPhaseCompletionRate (getWeek path) counts paused as '
+                'scheduled-not-done, so a paused week can never read 100% '
+                'and falsely unlock the next phase (phase_adherence_rate '
+                'contract). Only moved/dropped read absent.');
+        expect(viaReader!['status'], 'paused');
       },
     );
 

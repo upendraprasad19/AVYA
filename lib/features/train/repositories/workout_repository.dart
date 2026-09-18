@@ -127,6 +127,15 @@ class WorkoutRepository {
   static bool isInvisibleToStreak(String? status) =>
       core_read.WorkoutScheduleReadService.isInvisibleToStreak(status);
 
+  /// TERMINAL rows only (`moved`/`dropped`) — NOT `paused`. Display, tool
+  /// guards and the reschedule planner skip terminal rows (the day's workout
+  /// lives elsewhere), while a PAUSED row stays pending everywhere outside
+  /// the streak walk and the rank completion-rate gate — the C1 regression
+  /// fix (phase_adherence_rate contract): see
+  /// `WorkoutScheduleReadService.terminalScheduleStatuses`.
+  static bool isTerminalScheduleRow(String? status) =>
+      core_read.WorkoutScheduleReadService.isTerminalScheduleRow(status);
+
   /// Earliest date the user could legitimately have completed a workout.
   ///
   /// [calculateCurrentStreak] stops the walk-back at this anchor — dates

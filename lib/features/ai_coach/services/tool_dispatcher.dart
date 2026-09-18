@@ -262,7 +262,10 @@ class ToolDispatcher {
     }
     // C2 review-fix (e8f4a3): never edit a terminal row — a rescheduled-away
     // day's schedule_<date> is an audit placeholder, not a live plan.
-    if (WorkoutRepository.isInvisibleToStreak(raw['status'] as String?)) {
+    // C1-regression fix (f7a3b1 family): TERMINAL rows only — a paused day
+    // stays swappable exactly as before this batch (paused = pending, not
+    // absent, outside the streak/rank math).
+    if (WorkoutRepository.isTerminalScheduleRow(raw['status'] as String?)) {
       throw const ConcurrentEditException(
           "today's workout has been rescheduled — re-ask the coach");
     }
@@ -401,8 +404,9 @@ class ToolDispatcher {
       // rescheduled-away day's schedule_<date> is an audit placeholder, not a
       // live plan. Stamping 'completed' over it would resurrect the moved
       // workout on the OLD date and credit streak for a workout done
-      // elsewhere.
-      if (WorkoutRepository.isInvisibleToStreak(raw['status'] as String?)) {
+      // elsewhere. TERMINAL rows only (see the swap guard note) — a paused
+      // day pre-batch could still be completed via the all-logged backstop.
+      if (WorkoutRepository.isTerminalScheduleRow(raw['status'] as String?)) {
         return;
       }
       // Don't auto-complete a REST day — there's no planned workout to finish,

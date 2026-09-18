@@ -83,6 +83,20 @@ related_bugs:
 recurrence: "4th+ instance of the subprocess-e2e timing class; this one predates this batch and was surfaced BY this batch's push, not caused by it."
 ---
 
+## CORRECTION (same day, post-fix review)
+
+The pre-push reds were subsequently identified as a REAL regression from this
+batch: `test/contracts/phase_adherence_rate_test.dart` ("paused workout counts
+to total but is not done") — the C2 display filter had used the FULL
+{paused, moved, dropped} set, silently removing paused days from
+`currentPhaseCompletionRate`'s denominator. Fixed in commit "fix(schedule):
+paused stays pending in display + phase progression (C1-regression)" — see
+docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md. The window
+widening this document describes is retained as defensive hardening (18/18
+targeted green, semantics unchanged) but its attribution of the pre-push reds
+to contention is WITHDRAWN — treat this document as a hardening note, not the
+root cause of those reds.
+
 ## Symptom
 
 Two consecutive pre-push full-suite runs (2026-09-18) reddened exactly one

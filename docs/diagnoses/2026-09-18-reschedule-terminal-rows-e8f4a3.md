@@ -79,6 +79,31 @@ mutation_proven:
   confirmed_applied: "failures observed in the run output (not a compile error, not a zero-red run)"
 ---
 
+## C1-REGRESSION ADDENDUM (2026-09-18, post-push-review)
+
+The review-fix commit (display filter + planner skips via
+`isInvisibleToStreak`) used the FULL {paused, moved, dropped} set on the
+DISPLAY path. That silently removed PAUSED days from
+`currentPhaseCompletionRate`'s denominator (getWeek → getScheduleForDate),
+letting a paused week read as fully complete — pinned red by
+`test/contracts/phase_adherence_rate_test.dart` ("paused workout counts to
+total but is not done"), which reddened both pre-push full-suite runs
+(5857 passed / this 1 failed, twice).
+
+FIX: a narrower TERMINAL set `{moved, dropped}`
+(`WorkoutScheduleReadService.terminalScheduleStatuses` /
+`WorkoutRepository.isTerminalScheduleRow`) now guards the display filter
+(getScheduleForDate), the swap auto-complete + ConcurrentEdit guards, the
+injury planner and the reschedule planner. `paused` reverts to its PRE-BATCH
+semantics everywhere outside the streak walk and the rank completion-rate
+gate (where C1's founder rule keeps it invisible): paused = PENDING — never
+absent, still protecting phase progression from a paused week reading 100%.
+
+MUTATION: reverting getScheduleForDate's filter to the full
+isInvisibleToStreak set reddens the new C1-regression pin ("a PAUSED row
+reads PRESENT through getScheduleForDate") while the moved/dropped filter
+tests stay green. Recorded in the batch retrospective.
+
 ## Summary
 
 The 2026-09-18 tool-integrity audit (spec C2) found that `reschedule_week`'s

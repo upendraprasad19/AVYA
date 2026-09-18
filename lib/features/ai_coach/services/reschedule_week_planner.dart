@@ -105,10 +105,12 @@ class RescheduleWeekPlanner {
       // placeholders — the workout lives elsewhere now. Never re-plan them
       // (pre-fix only completed/paused were protected, so a SECOND reschedule
       // of the same week re-planned the terminal rows C2 had just written).
+      // TERMINAL rows only — paused is protected by its original keep arm
+      // directly below (paused = pending, not absent).
       // MUTATION-PROVEN: commenting out BOTH this skip and the second-pass
       // skip reddens both tests in group 'C2 review — planner never re-plans
       // terminal rows'.
-      if (WorkoutRepository.isInvisibleToStreak(status)) continue;
+      if (WorkoutRepository.isTerminalScheduleRow(status)) continue;
 
       if (status == 'completed' || status == 'paused') {
         // Don't touch completed or paused entries — they're sacred.
@@ -142,7 +144,8 @@ class RescheduleWeekPlanner {
       // C2 review-fix (e8f4a3): terminal rows are never re-planned (see the
       // first pass). completed/paused stay protected exactly as before.
       if (status == 'completed' ||
-          WorkoutRepository.isInvisibleToStreak(status)) {
+          status == 'paused' ||
+          WorkoutRepository.isTerminalScheduleRow(status)) {
         continue;
       }
       if (available.contains(weekday)) continue;
