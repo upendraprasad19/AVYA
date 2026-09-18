@@ -254,7 +254,7 @@ void main() {
           for (final item in meal.items) {
             counts[item.category] = (counts[item.category] ?? 0) + 1;
             expect(
-              (item.name as String).toLowerCase().contains('pringles'), isFalse,
+              item.name.toLowerCase().contains('pringles'), isFalse,
               reason: '$diet seed=$seed: UPF item ${item.name} generated');
             if (item.isAnchor || item.isQuotaLocked) {
               expect(anchorOrQuotaIds.contains(item.foodId), isFalse,
