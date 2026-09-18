@@ -4872,3 +4872,64 @@ material), the telemetry reader sums it across recent records, and M/L counts de
   docs stamped `tier: m_fix`/`tier: l_fix` (extending the `tier: s_fix` stamp from CLAUDE.md
   §4.12.6/rule 22).
 
+
+## OI-218 — Cloud exlog tombstone residual — moved-out-date rows never tombstoned, restore can resurrect + double-count volume
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-18 · filed via mint_oi.sh from branch `oi-filing-reschedule-followups`
+
+From the `ai-coach-ux-tool-integrity` B-pass (`docs/reviews/2026-09-18-ai-coach-ux-tool-integrity-bpass.md`
+finding 3), accepted as a documented-not-fixed residual in
+`docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md` (BP-P2b, finding 9 folds in here).
+`moveExerciseLogs` (`lib/core/services/workout_write_service.dart`) does not tombstone the
+cloud `workout_log_exercises` rows for the moved-OUT date. `_restoreExerciseLogs`
+(`lib/core/services/sync_workout.dart` ~666+) re-creates `exlog_<fromDate>_<hash>` rows from
+those never-tombstoned cloud rows and calls the union-only `addToExlogIndex` on the from-date
+index — so after any move, a restore resurrects the from-date logs while the moved copies live
+at `toDate`, double-counting volume across two dates in the AI snapshot's `recent_logs`.
+Separately, restore-recreated terminal (`moved`/`dropped`) rows on a fresh device lose their
+`moved_to`/`moved_via`/`moved_at`/`dropped_*` audit metadata, because the push payload
+(`sync_workout.dart:1634`) sends `status` but not those fields, and a cloud-only row has no local
+`existingMap` to inherit them from.
+
+**Fix direction (not designed yet):** either tombstone from-date cloud exlogs on move, or extend
+the push payload with the terminal audit fields so a cloud-only restore keeps them.
+
+## OI-219 — is_pr not rescanned across moveExerciseLogs — collision merge can drop a true PR flag
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-18 · filed via mint_oi.sh from branch `oi-filing-reschedule-followups`
+
+From the `ai-coach-ux-tool-integrity` B-pass (finding 6), accepted as a documented-not-fixed
+residual in `docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md` (reviewer-scoped:
+readers are display-only and the flag self-heals on the next edit-sheet save). `moveExerciseLogs`
+(`lib/core/services/workout_write_service.dart`) — a collision merge keeps the EXISTING row's
+`is_pr` (the moved row's is dropped); the non-collision path keeps the moved row's from-date
+`is_pr` semantics with no rescan pass. A moved row carrying the TRUE PR merged into an
+`is_pr:false` existing row loses the PR from PR surfaces until the next edit-sheet save rescans.
+(Double-PR display is NOT reachable — a same-exercise collision always merges into one row.)
+
+**Fix direction:** after the move loop, run the same chronological rescan
+`logExercise`/edit-sheet already use for the affected exercise names on `toDate`.
+
+## OI-221 — tool_dispatcher defensive date-parse fallbacks can clobber the wrong date on a malformed schedule key
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-18 · filed via mint_oi.sh from branch `oi-filing-reschedule-followups`
+
+From the `ai-coach-ux-tool-integrity` B-pass (finding 8), accepted as a documented-not-fixed
+residual in `docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md` (degenerate/defensive
+path, reviewer-scoped as a bounded follow-up). `lib/features/ai_coach/services/tool_dispatcher.dart`
+has two silent-redirect fallbacks: `:761` (`?? destDate` — a failed from-date parse writes the
+TERMINAL row onto the DESTINATION date, clobbering the workout just written there) and `:800`
+(`?? DateTime.now()` — could stamp `'dropped'` over today). Currently unreachable while schedule
+keys are well-formed (the row was just read from `schedule_<fromDate>`), but a parse fallback that
+silently redirects a write is worse than failing the move.
+
+**Fix direction:** the drop path's fallback should be a refusal, not a silent redirect.
