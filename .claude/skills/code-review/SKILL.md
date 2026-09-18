@@ -231,6 +231,31 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-18** — blast-radius **platform** — branch `ai-coach-ux-tool-integrity`
+  (paused/moved/dropped schedule-status semantics: streak/rank invisibility,
+  terminal rows replacing reschedule raw-deletes, exlog re-key + index
+  maintenance, restore-merge terminal arm, Compass capture sheets, Captain
+  chat suffix). **9 findings (0 P0, 1 P1, 2 P2, 4 P3, 2 P4); 0 false_alarm —
+  all fixed or documented as accepted deviations in the same session.**
+  Review: `docs/reviews/2026-09-18-ai-coach-ux-tool-integrity-bpass.md`.
+  **Tuning 1 — when a batch redefines the semantics of a stored VALUE
+  (a status/enum/kind), the server mirror is a separate reader: the client
+  fixed its rate math (rank/streak) but `rank_engine.ts` (the
+  evaluate-rank-promotions cron's own aggregation) still counted the new
+  terminal rows — permanent server-side gate deflation that BOTH plan
+  reviews missed and only the B-pass cross-seam lens caught. Add to the
+  general method: a value-semantics change requires grepping the SERVER
+  tree (supabase/functions/) for the same value, not just lib/.**
+  **Tuning 2 — a new persisted state must teach every READER class, not
+  just its writer: terminal rows needed (a) an index-maintenance arm in
+  `moveExerciseLogs` (the exlog index is a second writer-side structure the
+  re-key must carry along), (b) a restore-merge arm (cloud planned vs local
+  terminal), (c) overwrite guards in EVERY writer that skips only
+  `completed` today (pauseRange was the one the batch missed). Checklist
+  for any new row-status: writer, index/derived structures, restore merge,
+  all `completed`-skipping guards, server mirrors, then tests that seed the
+  state the REAL writer produces (the round-1 fixture seeded no index entry
+  and was blind to the exact bug it existed to catch).**
 - **2026-09-17 (b)** — blast-radius **account** — branch `web-razorpay-checkout`
   (web Razorpay checkout: checkout.js bridge via dart:js_interop, shared
   handlePaymentConfirmed extraction, kill-switch). **8 findings (0 P0, 0 P1,
