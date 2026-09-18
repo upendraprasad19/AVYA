@@ -398,3 +398,89 @@ moved-out stamp 30 lines below used `_utcDateFromIstDateStr`. Fixed to
 alignment; `weekday` arithmetic unchanged). **No new test — timezone-
 dependent; covered by the existing IST contract tests.** Stated here and
 in the commit body per the batch instruction.
+
+## Review round 2 append (2026-09-18, 2 material findings — both fixed)
+
+### B1 (MED) — collision merge shrank restore-shaped rows
+
+- **Writer/reader:** writer
+  `WorkoutWriteService.moveExerciseLogs`'s collision-merge branch
+  (workout_write_service.dart, round-1 code ~:748-772) recomputed
+  `set_number`/`reps_completed`/`weight_kg`/`volume_kg` from
+  `existingSets + movedSets`. But the restore writer
+  (`sync_workout.dart` `_restoreExerciseLogs`, the d4e7c2 asymmetry
+  documented in `lib/features/train/CLAUDE.md` hive_field_name_exlog)
+  emits exlog rows with TOP-LEVEL AGGREGATES and NO `sets[]` when the
+  `workout_log_sets` join is empty (sync_workout.dart ~:777/:803).
+  Colliding a move into such a row recomputed DOWNWARD (set_number 3→1,
+  reps 30→8, volume 720→480) — silent data loss on real user rows, the
+  exact row shape `exlog_aggregate_read_behavioral_test.dart` documents.
+- **Fix (preserve-don't-shrink):** each side of the merge contributes
+  its sets-derived totals when it CARRIES `sets[]`, and its OWN
+  top-level aggregates otherwise (`sideSetCount`/`sideReps`/
+  `sideMaxWeight`/`sideVolume` local helpers in the merge branch).
+  `set_number` = Σ side counts, `reps_completed` = Σ side reps,
+  `weight_kg` = max of side maxima, `volume_kg` = Σ side volumes. When
+  both sides carry `sets[]` this is numerically identical to the
+  round-1 recompute from the merged list (pinned by the round-1
+  collision test, unchanged). `sets[]` is only stamped when non-empty,
+  so a both-sides-restore-shaped merge never grows an empty `sets[]`
+  onto the surviving row.
+- **Test:** reschedule_week_terminal_row_test.dart, round-2 group
+  "move collision into a RESTORE-SHAPED destination row GROWS the
+  aggregates" — restore-shaped existing (set_number 3 / reps 30 /
+  weight 80 / volume 720, no `sets[]`) + sets-carrying moved row →
+  asserts set_number 4, reps 38, weight 80.0 (max), volume 1200,
+  `sets[]` length 1, destination wlog id kept.
+- **MUTATION:** reverted the merge to the round-1 unconditional
+  recompute from `mergedSets` (semantically wrong, compiles clean,
+  verified applied by reading the red output) → the new test reddened
+  `Expected: <4> Actual: <1>` — the exact shrinkage the finding
+  describes. Reverted, green (25/25 across the two touched test files;
+  62/62 across the full round-2 green set).
+
+**Recorded deviation from the finding's concrete shape:** the sketch's
+fallback for "moved row also lacks `sets[]`" said "keep existing
+aggregates entirely". Implemented instead as the same per-side sum
+(each restore-shaped side contributes its own aggregates). Rationale:
+"keep existing entirely" would DELETE the moved row's contribution (the
+moved row is consumed by the merge) — the same data-loss class B1
+exists to kill, just one step later. The per-side sum is strictly
+non-shrinking for the surviving row and lossless for the move, and
+cannot double-count (the two rows are distinct workouts keyed by
+different dates; restore keys rows by (date, name), so overlapping
+aggregates cannot arise).
+
+### B2 (LOW-MED) — swap sheet guard blocked paused days
+
+- **Writer/reader:** reader `CoachSwapSheet._loadToday`
+  (swap_exercise_coach_sheet.dart:84 round-1 guard `status != 'planned'`)
+  refused PAUSED days, but the dispatcher explicitly keeps paused days
+  swappable (tool_dispatcher.dart:263-268 — `_executeSwapExercise`
+  guards TERMINAL rows + completed only; "a paused day stays swappable
+  exactly as before this batch (paused = pending)"). The sheet was
+  stricter than the executor it feeds — a paused day showed the
+  dead-end empty state for a swap that would have executed fine.
+- **Fix:** `paused` passes the guard (`status != 'planned' && status !=
+  'paused'`); completed/moved/dropped/absent stay guarded verbatim, and
+  the moved-day + completed-day widget tests are unchanged.
+- **Test:** compass_redesign_test.dart, B2 group "paused day renders the
+  picker and submits normally" — picker renders with the paused day's
+  exercise (pre-fix: dead-end message) and the full two-step flow
+  submits ONE reviewable `swap_exercise` intent.
+- **MUTATION:** reverted the guard to `status != 'planned'` (compiles
+  clean, verified applied) → the new test reddened (`SWAP WHICH
+  EXERCISE?` found 0 — the dead-end empty state rendered instead).
+  Reverted, green.
+
+### Verification (round 2)
+
+- `flutter analyze` on the four touched files: zero errors/warnings
+  (3 pre-existing infos elsewhere, none introduced).
+- Green set: reschedule_week_terminal_row_test.dart,
+  phase_adherence_rate_test.dart, compass_redesign_test.dart,
+  terminal_row_display_read_path_test.dart,
+  exlog_aggregate_read_behavioral_test.dart — 62/62.
+- docs/sot_registry.yaml `exercise_logs_read_path` moveExerciseLogs
+  writer re-pointed (line_range 695-812 → 726-851 after the merge
+  branch grew).

@@ -709,6 +709,11 @@ class WorkoutWriteService {
   ///     `weight_kg`/`volume_kg`) are recomputed from the merged list to the
   ///     same derived-fields contract [logExercise] stamps — stale aggregates
   ///     beside a longer `sets[]` would be the writer/reader drift class.
+  ///     Review round 2 (e8f4a3 B1): preserve-don't-shrink — a side with NO
+  ///     `sets[]` but top-level aggregates (the restore-shaped row
+  ///     sync_workout.dart writes when the workout_log_sets join is empty)
+  ///     contributes its own aggregates instead of being recomputed from an
+  ///     empty sets list, so a collision can only GROW the totals.
   ///   • WLOG RE-STAMP — `workout_log_id` is re-keyed to `wlog_<toDate>` so
   ///     the destination receipt (scoped by workoutLogId) includes the moved
   ///     rows. Only when the row CARRIES an id (restore-shaped legacy rows
@@ -754,22 +759,76 @@ class WorkoutWriteService {
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
           final mergedSets = [...existingSets, ...movedSets];
-          var totalReps = 0;
-          var maxWeight = 0.0;
-          var volume = 0.0;
-          for (final s in mergedSets) {
-            final w = (s['weight_kg'] as num?)?.toDouble() ?? 0.0;
-            final r = (s['reps'] as num?)?.toInt() ?? 0;
-            totalReps += r;
-            if (w > maxWeight) maxWeight = w;
-            volume += w * r;
+
+          // Review round 2 (e8f4a3 B1) — preserve-don't-shrink. The restore
+          // writer (sync_workout.dart _restoreExerciseLogs) emits exlog rows
+          // with TOP-LEVEL aggregates and NO `sets[]` when the
+          // workout_log_sets join is empty. Recomputing from `mergedSets`
+          // alone shrank such a row on a collision (set_number 3→1, reps
+          // 30→8 …): silent data loss on real user rows. Each side
+          // therefore contributes its sets-derived totals when it CARRIES
+          // `sets[]`, and its OWN top-level aggregates otherwise. When both
+          // sides carry `sets[]` this is numerically identical to the
+          // round-1 recompute from the merged list (logExercise's
+          // derived-fields contract — pinned by the round-1 collision test).
+          int sideSetCount(Map r, List<Map<String, dynamic>> s) =>
+              s.isNotEmpty
+                  ? s.length
+                  : ((r['set_number'] as num?)?.toInt() ?? 0);
+          int sideReps(Map r, List<Map<String, dynamic>> s) {
+            if (s.isNotEmpty) {
+              var total = 0;
+              for (final s2 in s) {
+                total += (s2['reps'] as num?)?.toInt() ?? 0;
+              }
+              return total;
+            }
+            return (r['reps_completed'] as num?)?.toInt() ?? 0;
           }
+
+          double sideMaxWeight(Map r, List<Map<String, dynamic>> s) {
+            if (s.isNotEmpty) {
+              var maxW = 0.0;
+              for (final s2 in s) {
+                final w = (s2['weight_kg'] as num?)?.toDouble() ?? 0.0;
+                if (w > maxW) maxW = w;
+              }
+              return maxW;
+            }
+            return (r['weight_kg'] as num?)?.toDouble() ?? 0.0;
+          }
+
+          double sideVolume(Map r, List<Map<String, dynamic>> s) {
+            if (s.isNotEmpty) {
+              var v = 0.0;
+              for (final s2 in s) {
+                final w = (s2['weight_kg'] as num?)?.toDouble() ?? 0.0;
+                final reps = (s2['reps'] as num?)?.toInt() ?? 0;
+                v += w * reps;
+              }
+              return v;
+            }
+            return (r['volume_kg'] as num?)?.toDouble() ?? 0.0;
+          }
+
+          final existingMaxWeight = sideMaxWeight(existing, existingSets);
+          final movedMaxWeight = sideMaxWeight(row, movedSets);
           final merged = Map<String, dynamic>.from(existing);
-          merged['sets'] = mergedSets;
-          merged['set_number'] = mergedSets.length;
-          merged['reps_completed'] = totalReps;
-          merged['weight_kg'] = maxWeight;
-          merged['volume_kg'] = volume;
+          // Only stamp `sets[]` when the merge actually carries per-set
+          // detail — a both-sides-restore-shaped merge must not grow an
+          // empty `sets[]` onto the surviving row.
+          if (mergedSets.isNotEmpty) {
+            merged['sets'] = mergedSets;
+          }
+          merged['set_number'] =
+              sideSetCount(existing, existingSets) +
+                  sideSetCount(row, movedSets);
+          merged['reps_completed'] =
+              sideReps(existing, existingSets) + sideReps(row, movedSets);
+          merged['weight_kg'] =
+              movedMaxWeight > existingMaxWeight ? movedMaxWeight : existingMaxWeight;
+          merged['volume_kg'] =
+              sideVolume(existing, existingSets) + sideVolume(row, movedSets);
           merged['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
           // Keep the existing row's workout_log_id — its session owns the
           // destination day (the moved row's source id is stale here).

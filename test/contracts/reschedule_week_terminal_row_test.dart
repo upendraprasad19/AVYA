@@ -417,6 +417,95 @@ void main() {
     );
   });
 
+  group('C2 review round 2 — restore-shaped merge preserves aggregates (e8f4a3 B1)', () {
+    // FINDING B1 (MED): the round-1 collision merge recomputed the four
+    // aggregates from `existingSets + movedSets`. But the restore writer
+    // (sync_workout.dart _restoreExerciseLogs) emits exlog rows with
+    // TOP-LEVEL aggregates and NO `sets[]` when the workout_log_sets join
+    // is empty. Colliding a move into such a row recomputed DOWNWARD
+    // (set_number 3→1, reps 30→8 …) — silent data loss on real user rows.
+    // Fix: preserve-don't-shrink — a side with no `sets[]` contributes its
+    // own top-level aggregates.
+    test(
+      'move collision into a RESTORE-SHAPED destination row GROWS the '
+      'aggregates (existing 3 sets kept + moved 1 set added)',
+      () async {
+        final box = HiveService.instance.workoutBox;
+        await box.put('schedule_$fromDate', {
+          'date': fromDate,
+          'workout_name': 'Push A',
+          'status': 'planned',
+          'type': 'custom_template',
+          'exercises': [
+            {'exercise_name': 'Bench Press'},
+          ],
+        });
+
+        final destKey = WorkoutWriteService.exlogKey(
+            today.add(const Duration(days: 1)), 'Bench Press');
+        final oldKey = WorkoutWriteService.exlogKey(today, 'Bench Press');
+        // Restore-shaped destination: top-level aggregates, NO `sets[]` —
+        // exactly the row shape sync_workout.dart writes when the
+        // workout_log_sets join is empty.
+        await box.put(destKey, {
+          'date': toDate,
+          'exercise_name': 'Bench Press',
+          'workout_log_id': 'wlog_$toDate',
+          'set_number': 3,
+          'reps_completed': 30,
+          'weight_kg': 80.0,
+          'volume_kg': 720.0,
+        });
+        await box.put('exercise_log_index_$toDate', [destKey]);
+        // Moved row from the local writer: sets[] present.
+        await box.put(oldKey, {
+          'date': fromDate,
+          'exercise_name': 'Bench Press',
+          'workout_log_id': 'wlog_$fromDate',
+          'sets': [
+            {'weight_kg': 60.0, 'reps': 8},
+          ],
+          'set_number': 1,
+          'reps_completed': 8,
+          'weight_kg': 60.0,
+          'volume_kg': 480.0,
+        });
+        await box.put('exercise_log_index_$fromDate', [oldKey]);
+
+        RescheduleWeekPlanner.instance.cache('mv_col_2', [
+          RescheduleMove(
+            fromDate: fromDate,
+            toDate: toDate,
+            action: RescheduleAction.move,
+            workoutName: 'Push A',
+          ),
+        ]);
+
+        final result = await dispatch('mv_col_2');
+        expect(result.success, isTrue);
+
+        final merged = box.get(destKey) as Map?;
+        expect(merged, isNotNull);
+        // Pre-fix the unconditional recompute from mergedSets shrank every
+        // aggregate to the moved row's single set (set_number 1, reps 8,
+        // volume 480) — the restore-shaped 3 sets / 30 reps / 720 volume
+        // were silently dropped.
+        expect(merged!['set_number'], 4,
+            reason: 'existing restore aggregate 3 + moved 1 set = 4 — the '
+                'merge must never shrink below the pre-move totals');
+        expect(merged['reps_completed'], 38, reason: '30 existing + 8 moved');
+        expect(merged['weight_kg'], 80.0, reason: 'max(80 existing, 60 moved)');
+        expect(merged['volume_kg'], 720.0 + 480.0);
+        expect((merged['sets'] as List).length, 1,
+            reason: 'only the moved side carries per-set detail — the '
+                'restore-shaped side had none to contribute');
+        expect(merged['workout_log_id'], 'wlog_$toDate',
+            reason: 'the destination row still owns the session');
+        expect(box.get(oldKey), isNull, reason: 'source row still consumed');
+      },
+    );
+  });
+
   group('C2 review round 1 — destination terminal guard + stale prompt (e8f4a3)', () {
     // FINDING 6 (LOW): the destination guard refused completed/paused but
     // not terminal rows — moving onto a day that was itself moved/dropped

@@ -76,12 +76,16 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
       final row = Map<String, dynamic>.from(raw);
       final status = row['status']?.toString();
       // Review round 1 (e8f4a3) finding 5 — SAME raw+guard pattern as
-      // log_workout_sheet.dart: a row whose status is not 'planned' is not
-      // swappable from here. A 'moved' row's exercises live on another
+      // log_workout_sheet.dart: a row whose status is terminal or completed
+      // is not swappable from here. A 'moved' row's exercises live on another
       // date (picking one submits a swap against a day that no longer
       // holds them); a completed day is done. Give an HONEST message
       // instead of a dead-end picker.
-      if (status != null && status != 'planned') {
+      // Review round 2 (e8f4a3 B2): `paused` PASSES — the dispatcher
+      // explicitly keeps paused days swappable (paused = pending, not
+      // terminal; tool_dispatcher.dart _executeSwapExercise guards
+      // TERMINAL rows + completed only, and paused days execute fine).
+      if (status != null && status != 'planned' && status != 'paused') {
         unswappable = status == 'completed'
             ? 'Today\'s workout is already done — edit it from the '
                 'Train screen.'

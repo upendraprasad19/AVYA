@@ -313,7 +313,7 @@ concepts:
         method: logExercise
         notes: appends to exercise_log_index_YYYY-MM-DD on every write
       - file: lib/core/services/workout_write_service.dart
-        line_range: 695-812
+        line_range: 726-851
         method: moveExerciseLogs
         notes: |
           C2 (e8f4a3) — re-keys partial exlog_<fromDate>_* rows onto the
@@ -324,6 +324,10 @@ concepts:
           <fromDate> (remove), MERGES a same-exercise destination row
           (sets[] appended, existing workout_log_id kept) instead of
           overwriting, and re-stamps workout_log_id to wlog_<toDate>.
+          Review round 2 (B1): preserve-don't-shrink merge — a side with no
+          sets[] contributes its own top-level aggregates (restore-shaped
+          rows from sync_workout.dart), so a collision never recomputes
+          downward.
           LOCAL-ONLY — cloud exercise_logs residual tracked on OI-174.
     reader_manifest_complete: true
     readers:
@@ -367,7 +371,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1205, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1264, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -445,7 +449,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1208, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1267, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -2817,7 +2821,7 @@ concepts:
         line_range: 920-960
         method: createCustomTemplate tool
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1077-1124
+        line_range: 1136-1180
         method: upsertTemplate
         notes: |
           Canonical writer scaffolded 2026-05-21 / audit A3. Routes
@@ -5770,7 +5774,7 @@ concepts:
           Captures primaryMuscles + normalizes equipment via
           EquipmentVocab.normalize.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1125-1172
+        line_range: 1184-1224
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,

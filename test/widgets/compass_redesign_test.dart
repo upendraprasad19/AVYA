@@ -409,6 +409,70 @@ void main() {
       expect(container.read(pendingToolIntentsProvider), isEmpty);
       await tester.runAsync(tearDownHive);
     });
+
+    // FINDING B2 (LOW-MED, review round 2): the round-1 guard refused ANY
+    // status != 'planned', but the dispatcher explicitly keeps PAUSED days
+    // swappable (paused = pending, not terminal — tool_dispatcher.dart
+    // _executeSwapExercise guards TERMINAL rows + completed only). Fix:
+    // `paused` passes the guard and renders the picker; the submitted swap
+    // executes normally through the dispatcher's own guards.
+    testWidgets('paused day renders the picker and submits normally',
+        (tester) async {
+      await tester.runAsync(setUpHive);
+      final todayKey = istDateStr(nowWall());
+      await tester.runAsync(() => HiveService.instance.workoutBox.put(
+        'schedule_$todayKey',
+        {
+          'type': 'workout',
+          'status': 'paused',
+          'exercises': <Map<String, dynamic>>[
+            {
+              'exercise_id': 'ex_bench',
+              'exercise_name': 'Bench Press',
+              'sets': 4,
+              'reps': 8,
+            },
+          ],
+        },
+      ));
+      await tester.runAsync(() => HiveService.instance.exerciseBox.put(
+        'ex_pushup',
+        {
+          'id': 'ex_pushup',
+          'name': 'Push Up',
+          'equipment_needed': 'bodyweight',
+        },
+      ));
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: CoachSwapSheet())),
+      ));
+      await tester.pumpAndSettle();
+
+      // Pre-fix the guard blocked paused → dead-end empty state.
+      expect(find.text('SWAP WHICH EXERCISE?'), findsOneWidget,
+          reason: 'a paused day is PENDING, not terminal — the picker must '
+              'render exactly as it does for a planned day');
+      expect(find.text('Bench Press'), findsOneWidget);
+      expect(container.read(pendingToolIntentsProvider), isEmpty);
+
+      // Full flow still submits one reviewable intent.
+      await tester.tap(find.text('Bench Press'));
+      await tester.pumpAndSettle();
+      final options = find.byType(InkWell);
+      expect(options, findsWidgets);
+      await tester.tap(options.first, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('SWAP'));
+      await tester.pumpAndSettle();
+
+      final intents = container.read(pendingToolIntentsProvider);
+      expect(intents.length, 1);
+      expect(intents.first.type, 'swap_exercise');
+      expect(intents.first.payload['exerciseId'], 'ex_bench');
+      await tester.runAsync(tearDownHive);
+    });
   });
 
   group('B4 review — scheduleForm TOMORROW labels the actual date', () {
