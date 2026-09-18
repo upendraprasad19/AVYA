@@ -12,6 +12,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### coach_memory_injury_append (1 bugs)
 - 2026-09-18 b2d9f4 — Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C5) found three defects: 1. `_appendInjuryToCoachMemory` (tool_dispatcher.dart)…
 
+### worktree_retirement_ignored_path_classification (1 bugs)
+- 2026-09-18 b7d4c8 — CI red on `main` (push `8bf79dde`, run 35368296446) — Unit Tests job failed with 2 assertion failures in test/scripts/gitignore_classification_test.dart: "the two classifications are disjoint —…
+
 ### schedule_terminal_rows (1 bugs)
 - 2026-09-18 d6b9c7 — Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C3) found that all three AI-coach overwrite tools guard only against 'completed' and…
 
@@ -1262,6 +1265,7 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-09-18 | e6c2a9 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that after the AI coach logs a meal from chat (log_meal_by_text), the Nutrition… | nutrition_ai_text_log_remaining | test/contracts/coach_meal_log_invalidates_remaining_test.dart |
 | 2026-09-18 | b2d9f4 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C5) found three defects: 1. `_appendInjuryToCoachMemory` (tool_dispatcher.dart)… | coach_memory_injury_append | test/contracts/coach_memory_injury_append_mutex_test.dart |
+| 2026-09-18 | b7d4c8 | CI red on `main` (push `8bf79dde`, run 35368296446) — Unit Tests job failed with 2 assertion failures in test/scripts/gitignore_classification_test.dart: "the two classifications are disjoint —… | worktree_retirement_ignored_path_classification | test/scripts/gitignore_classification_test.dart |
 | 2026-09-18 | d6b9c7 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C3) found that all three AI-coach overwrite tools guard only against 'completed' and… | schedule_terminal_rows | test/contracts/coach_regen_phase_stamp_behavioral_test.dart |
 | 2026-09-18 | e8f4a3 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that `_executeRescheduleWeek`'s move path raw-deleted the source… | streaks | test/contracts/reschedule_week_terminal_row_test.dart |
 | 2026-09-18 | f7a3b1 | Two consecutive pre-push full-suite runs (2026-09-18) reddened exactly one test: `test/scripts/safe_push_test.dart` "a push IN FLIGHT leaves result=STARTED carrying a LIVE pid" — 5857 passed / 1… | safe_push_terminal_result_record | test/scripts/safe_push_test.dart |
