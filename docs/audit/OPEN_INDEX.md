@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**127 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**128 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -135,3 +135,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-215 | Device verification expansion: Patrol flows for the UI-bug cluster,… | none | never | [:4827](open_issues.md#L4827) |
 | OI-216 | snapshot-contract gate: per-entry slack mechanism for shift-sensitive… | none | never | [:4845](open_issues.md#L4845) |
 | OI-217 | telemetry v2: aggregate plan-review findings by class… | none | never | [:4860](open_issues.md#L4860) |
+| OI-220 | Contract-sweep gate: pre-push targeted SoT contract testing | none — founder ratified the GATE form… | never | [:4876](open_issues.md#L4876) |

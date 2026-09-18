@@ -4872,3 +4872,46 @@ material), the telemetry reader sums it across recent records, and M/L counts de
   docs stamped `tier: m_fix`/`tier: l_fix` (extending the `tier: s_fix` stamp from CLAUDE.md
   §4.12.6/rule 22).
 
+
+## OI-220 — Contract-sweep gate: pre-push targeted SoT contract testing
+
+- **Status**: OPEN
+- **Blocked on**: none — founder ratified the GATE form (not a manual checklist step) 2026-09-18; build is the deliverable
+- **Verified**: never
+- **Identified**: 2026-09-18 · filed via mint_oi.sh from branch `main`
+- **Detail**: From the ai-coach-ux-tool-integrity retro (memory
+  `project_ai_coach_ux_tool_integrity_2026_09_18.md`): ~2h of that batch went
+  to full-suite runs because a contract regression
+  (`phase_adherence_rate_test.dart` — "paused counts to total but is not
+  done") was first seen at pre-push, twice. The sweep would have caught it in
+  ~2 min. DESIGN (founder-approved):
+  `scripts/contract_sweep.dart` selects contract tests from the push range's
+  changed-file list (reuse `blast_radius_from_diff.dart`'s input) via THREE
+  unioned arms — (a) registry: changed path → `docs/sot_registry.yaml`
+  writers/readers → `behavioral_test_path:`; (b) content-reference:
+  `git grep` test/ for each changed lib/ file's basename (catches
+  cross-contract pins matching no concept); (c) changed test files
+  themselves. Wired into `scripts/pre-push.sh` ABOVE the full suite, all
+  tiers. Collection error → fall back to running the full `test/contracts/`
+  subset (fail-safe to MORE testing, never none — the #47 lesson: uncertainty
+  must not look like a clean sweep). `--warn-only` for the first batch to
+  baseline mapping recall, then hard-fail (§4.11 baseline-first pattern).
+  Rule-24 obligations: mutation-proven ledger entry; fake-runner tests (no
+  real flutter spawn — the `safe_push_test` injection pattern); file-level
+  `@Timeout` + `library;`. pre-push.sh is pinned `platform` in
+  `docs/blast_radius.yaml` → ×2 plan review + B-pass apply.
+- **Rides on the same landing** (from the same retro, founder-approved):
+  (1) value-semantics grep as a PRE-WORK step — a batch changing a stored
+  value's MEANING sweeps `test/` AND `supabase/functions/` for that value
+  before coding (codified reactively in code-review SKILL tuning
+  2026-09-18; becomes a §4.1.5 sibling); (2) execution-mode decision
+  (subagent vs inline) made at batch START, not mid-batch — both land as
+  CLAUDE.md §4 amendments in the gate batch. Rider: riverpod-3
+  widget-harness pitfalls (GoogleFonts warmup + `runAsync` fake-async +
+  `UncontrolledProviderScope` + empty-box seeding) codified into
+  `docs/playbook/common-pitfalls.md` — currently living only in
+  `test/widgets/compass_redesign_test.dart`'s header.
+- **Escalation criterion** (explicit, so the flip is not a judgment call):
+  the `--warn-only` → hard-fail flip happens after ONE clean batch; a
+  mis-selection during baseline is a mapping bug fixed before the flip,
+  never a reason to stay warn-only.
