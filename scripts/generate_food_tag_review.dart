@@ -114,12 +114,6 @@ List<String> _heuristicMealFit(Map<String, dynamic> row) {
   }
 }
 
-String _htmlEscape(String s) => s
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll("'", '&#39;');
-
 void main() {
   final asset = File('assets/data/food_database.json');
   if (!asset.existsSync()) {
