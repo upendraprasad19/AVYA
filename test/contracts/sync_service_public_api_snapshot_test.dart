@@ -114,6 +114,10 @@ void main() {
         'restoreSavedMealsForSyncDomain',
         'restoreScheduleCompletionsForSyncDomain',
         'restoreScheduledWorkoutsForSyncDomain',
+        // e8f4a3 round-1 fix (2026-09-18) — @visibleForTesting seam for the
+        // terminal-row restore-merge arm (preFetched injection sentinel);
+        // delegates to _restoreScheduledWorkouts, production path unchanged.
+        'restoreScheduledWorkoutsForTest',
         'restoreSleepLogsForSyncDomain',
         'restoreStepsLogsForSyncDomain',
         'restoreStreaksForSyncDomain',
