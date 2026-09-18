@@ -83,6 +83,12 @@ class LogWorkoutSheet extends ConsumerStatefulWidget {
 class _LogWorkoutSheetState extends ConsumerState<LogWorkoutSheet> {
   List<_ExerciseCapture> _captures = const [];
   bool _loaded = false;
+  // e8f4a3 B-pass P3c — double-tap latch: the button stays live until the
+  // route finishes popping, and intent ids embed millisecondsSinceEpoch, so
+  // a second tap lands a NEW id that addIntents' id-dedup and the
+  // dispatcher's dispatched_at marker both miss (duplicate log_set
+  // dispatch). First confirm wins; every later call is a no-op.
+  bool _submitted = false;
 
   @override
   void initState() {
@@ -142,7 +148,9 @@ class _LogWorkoutSheetState extends ConsumerState<LogWorkoutSheet> {
       _captures.isNotEmpty && _captures.every((c) => c.isComplete);
 
   void _confirm() {
+    if (_submitted) return; // e8f4a3 B-pass P3c double-tap latch
     if (!_allComplete) return;
+    _submitted = true;
     final dateKey = istDateStr(nowWall());
     final now = DateTime.now();
     final intents = <ToolIntent>[];

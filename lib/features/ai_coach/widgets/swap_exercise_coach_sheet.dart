@@ -60,6 +60,12 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
   String? _unavailableMessage;
   String? _selectedFrom;
   _SwapOption? _selectedTo;
+  // e8f4a3 B-pass P3c — double-tap latch (see log_workout_sheet.dart): the
+  // SWAP button stays live until the route pops and intent ids embed
+  // millisecondsSinceEpoch, so a fast second tap submits a duplicate
+  // swap_exercise intent that dedup cannot catch (and double-dispatch fails
+  // noisily via ConcurrentEditException). First confirm wins.
+  bool _submitted = false;
 
   @override
   void initState() {
@@ -145,9 +151,11 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
   }
 
   void _confirm() {
+    if (_submitted) return; // e8f4a3 B-pass P3c double-tap latch
     final from = _selectedFrom;
     final to = _selectedTo;
     if (from == null || to == null) return;
+    _submitted = true;
     final fromName = _today.firstWhere((t) => t.id == from,
         orElse: () => (id: from, name: from)).name;
     ref.read(pendingToolIntentsProvider.notifier).addIntents([

@@ -313,7 +313,7 @@ concepts:
         method: logExercise
         notes: appends to exercise_log_index_YYYY-MM-DD on every write
       - file: lib/core/services/workout_write_service.dart
-        line_range: 726-851
+        line_range: 728-856
         method: moveExerciseLogs
         notes: |
           C2 (e8f4a3) — re-keys partial exlog_<fromDate>_* rows onto the

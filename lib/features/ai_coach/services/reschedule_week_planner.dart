@@ -110,7 +110,17 @@ class RescheduleWeekPlanner {
       // MUTATION-PROVEN: commenting out BOTH this skip and the second-pass
       // skip reddens both tests in group 'C2 review — planner never re-plans
       // terminal rows'.
-      if (WorkoutRepository.isTerminalScheduleRow(status)) continue;
+      if (WorkoutRepository.isTerminalScheduleRow(status)) {
+        // e8f4a3 B-pass P3b — a terminal row on an AVAILABLE day still
+        // OCCUPIES it as far as destinations go: the dispatcher refuses a
+        // terminal destination ("destination was rescheduled elsewhere",
+        // tool_dispatcher.dart), so proposing one is a dead-end ask. Mark
+        // the day used so the second pass cannot relocate a workout onto
+        // it — a terminal placeholder day is NOT a "free" day. Pinned by
+        // reschedule_week_terminal_row_test.dart's B-pass group.
+        if (available.contains(weekday)) usedAvailableDays.add(weekday);
+        continue;
+      }
 
       if (status == 'completed' || status == 'paused') {
         // Don't touch completed or paused entries — they're sacred.

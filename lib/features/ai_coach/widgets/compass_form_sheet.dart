@@ -38,6 +38,27 @@ Future<void> showCompassFormSheet(
   );
 }
 
+/// e8f4a3 B-pass P3a — parse an IST calendar-date string (`YYYY-MM-DD`, the
+/// scheduleForm destination-chip value) into a UTC-MIDNIGHT DateTime, so
+/// `istDateStr` (toUtc + 5:30) round-trips the SAME calendar day on ANY host
+/// timezone. `DateTime.tryParse('YYYY-MM-DD')` yields device-LOCAL midnight
+/// instead: on a host east of IST (SGT/JPY/AEST) that instant maps to the
+/// PREVIOUS IST date, so the composed ask said "reschedule to the PREVIOUS
+/// day" while
+/// the user tapped TOMORROW (the Test #11.1 double-shift trap). Mirrors
+/// tool_dispatcher._utcDateFromIstDateStr's pattern. Returns null on a
+/// malformed string. Public (not a State method) so the UTC-midnight
+/// contract is pure-level testable.
+DateTime? utcDateFromIstDateStr(String dateStr) {
+  final parts = dateStr.split('-');
+  if (parts.length != 3) return null;
+  final y = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  final d = int.tryParse(parts[2]);
+  if (y == null || m == null || d == null) return null;
+  return DateTime.utc(y, m, d);
+}
+
 class CompassFormSheet extends StatefulWidget {
   final CompassAction action;
   final ValueChanged<String> onCompose;
@@ -260,14 +281,14 @@ class _CompassFormSheetState extends State<CompassFormSheet> {
         final selected = _choice == c.value ||
             (widget.action == CompassAction.scheduleForm &&
                 _targetDate != null &&
-                _targetDate == _parseDate(c.value));
+                _targetDate == utcDateFromIstDateStr(c.value));
         return InkWell(
           onTap: () => setState(() {
             if (widget.action == CompassAction.scheduleForm &&
                 _isWeekday(c.value)) {
               _choice = c.value;
             } else if (widget.action == CompassAction.scheduleForm) {
-              _targetDate = _parseDate(c.value);
+              _targetDate = utcDateFromIstDateStr(c.value);
             } else {
               _choice = c.value;
             }
@@ -299,6 +320,4 @@ class _CompassFormSheetState extends State<CompassFormSheet> {
   bool _isWeekday(String value) =>
       const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
           .contains(value);
-
-  DateTime? _parseDate(String iso) => DateTime.tryParse(iso);
 }

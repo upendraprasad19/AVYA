@@ -609,4 +609,190 @@ void main() {
       await tester.runAsync(tearDownHive);
     });
   });
+
+  group('B-pass P3c — confirm double-tap latch (e8f4a3)', () {
+    // The confirm button stays live until the route finishes popping, and
+    // intent ids embed millisecondsSinceEpoch — a fast second tap lands a
+    // NEW id that addIntents' id-dedup and the dispatcher's dispatched_at
+    // marker both miss. Fix: a _submitted latch; first confirm wins.
+    // MUTATION PROOF: removing the latch reddens both tests below (a real
+    // ≥2ms gap between taps makes the ids distinct, defeating dedup).
+    testWidgets('double-tap LOG WORKOUT submits exactly one batch of intents',
+        (tester) async {
+      await tester.runAsync(setUpHive);
+      final todayKey = istDateStr(nowWall());
+      await tester.runAsync(() => HiveService.instance.workoutBox.put(
+        'schedule_$todayKey',
+        {
+          'type': 'workout',
+          'status': 'planned',
+          'exercises': <Map<String, dynamic>>[
+            {
+              'exercise_id': 'ex_bench',
+              'exercise_name': 'Bench Press',
+              'sets': 4,
+              'reps': 8,
+              'suggested_weight': 60.0,
+            },
+          ],
+        },
+      ));
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: LogWorkoutSheet())),
+      ));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // First tap fires _confirm (submits + pops). A real ≥2ms gap (via
+      // runAsync — escapes the fake-async zone) guarantees the second tap's
+      // ids carry a DIFFERENT millisecondsSinceEpoch, i.e. the exact shape a
+      // human double-tap produces and id-dedup cannot catch.
+      await tester.tap(find.text('LOG WORKOUT'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)));
+      // The sheet is mid-pop (no frame pumped yet) — still mounted, still
+      // tappable, exactly like a fast second tap in production.
+      await tester.tap(find.text('LOG WORKOUT'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      final intents = container.read(pendingToolIntentsProvider);
+      expect(intents.length, 1,
+          reason: 'pre-fix the second tap submitted a duplicate log_set '
+              'intent (2 total) — the latch must make the second _confirm a '
+              'no-op');
+      await tester.runAsync(tearDownHive);
+    });
+
+    testWidgets('double-tap SWAP submits exactly one swap intent',
+        (tester) async {
+      await tester.runAsync(setUpHive);
+      final todayKey = istDateStr(nowWall());
+      await tester.runAsync(() => HiveService.instance.workoutBox.put(
+        'schedule_$todayKey',
+        {
+          'type': 'workout',
+          'status': 'planned',
+          'exercises': <Map<String, dynamic>>[
+            {
+              'exercise_id': 'ex_bench',
+              'exercise_name': 'Bench Press',
+              'sets': 4,
+              'reps': 8,
+            },
+          ],
+        },
+      ));
+      await tester.runAsync(() => HiveService.instance.exerciseBox.put(
+        'ex_pushup',
+        {
+          'id': 'ex_pushup',
+          'name': 'Push Up',
+          'equipment_needed': 'bodyweight',
+        },
+      ));
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: CoachSwapSheet())),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Bench Press'));
+      await tester.pumpAndSettle();
+      final options = find.byType(InkWell);
+      await tester.tap(options.first, warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('SWAP'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)));
+      await tester.tap(find.text('SWAP'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      final intents = container.read(pendingToolIntentsProvider);
+      expect(intents.length, 1,
+          reason: 'pre-fix the second tap submitted a duplicate '
+              'swap_exercise intent (2 total, double-dispatch fails noisily '
+              'via ConcurrentEditException) — the latch must make the second '
+              '_confirm a no-op');
+      await tester.runAsync(tearDownHive);
+    });
+  });
+
+  group('B-pass P3a — scheduleForm date parse round-trips on ANY host '
+      '(e8f4a3)', () {
+    // The chip value is an IST date string; the pre-fix parse path used
+    // DateTime.tryParse → device-LOCAL midnight → istDateStr re-transform
+    // shifted the composed ask back a day on hosts east of UTC+5:30. The
+    // discriminator regardless of the test host's timezone: the parsed
+    // DateTime MUST be UTC midnight (isUtc + hour 0), which istDateStr then
+    // round-trips to the same calendar day on every host.
+    test('utcDateFromIstDateStr returns UTC midnight and istDateStr '
+        'round-trips the chip value verbatim', () {
+      const chip = '2030-06-15';
+      final parsed = utcDateFromIstDateStr(chip);
+      expect(parsed, isNotNull);
+      expect(parsed!.isUtc, isTrue,
+          reason: 'pre-fix DateTime.tryParse returned a device-LOCAL '
+              'midnight — the whole bug');
+      expect(parsed.hour, 0);
+      expect(parsed.year, 2030);
+      expect(parsed.month, 6);
+      expect(parsed.day, 15);
+      // The round-trip the compose path relies on — verbatim on any host.
+      expect(istDateStr(parsed), chip);
+      expect(istDateStr(utcDateFromIstDateStr('2026-01-01')!), '2026-01-01');
+    });
+
+    test('malformed chip values parse to null (no destructive fallback)',
+        () {
+      expect(utcDateFromIstDateStr('garbage'), isNull);
+      expect(utcDateFromIstDateStr('2030-6-15'), isNotNull,
+          reason: 'single-digit components still parse numerically');
+      expect(utcDateFromIstDateStr('2030-xx-15'), isNull);
+    });
+
+    testWidgets('composed message uses the destination chip value verbatim',
+        (tester) async {
+      String? composed;
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: CompassFormSheet(
+        action: CompassAction.scheduleForm,
+        onCompose: (m) => composed = m,
+      ))));
+      await tester.pumpAndSettle();
+
+      final today = nowWall();
+      const weekdayNames = [
+        'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+        'Sunday',
+      ];
+      final sourceWeekday = weekdayNames[
+          today.add(const Duration(days: 2)).weekday - 1];
+      // Destination chips are labeled by weekday name too (except TOMORROW);
+      // today+3's weekday is distinct across the 7 chips. The VALUE is the
+      // IST date string — what the compose must reproduce verbatim.
+      final destWeekdayName = weekdayNames[
+          today.add(const Duration(days: 3)).weekday - 1];
+      final destDate = istDateStr(today.add(const Duration(days: 3)));
+
+      await tester.tap(find.text(sourceWeekday).first);
+      await tester.pumpAndSettle();
+
+      final wraps = find.byType(Wrap);
+      expect(wraps, findsNWidgets(2));
+      await tester.tap(find.descendant(
+          of: wraps.last, matching: find.text(destWeekdayName)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('USE THIS'));
+      await tester.pumpAndSettle();
+
+      expect(composed, 'Reschedule my $sourceWeekday workout to $destDate',
+          reason: 'the composed ask must carry the tapped chip\'s IST date '
+              'string VERBATIM — no local-midnight round-trip that could '
+              'shift the day on hosts east of IST');
+    });
+  });
 }

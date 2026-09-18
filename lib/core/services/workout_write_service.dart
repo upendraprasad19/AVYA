@@ -720,9 +720,11 @@ class WorkoutWriteService {
   ///     may not).
   ///
   /// LOCAL-ONLY by design: the cloud `exercise_logs` rows for the moved-out
-  /// date are not tombstoned here — that residual is tracked on OI-174 and is
-  /// deliberately out of this fix's scope (every local read path, which the
-  /// streak/snapshot readers consume, is fully corrected).
+  /// date are not tombstoned here — no cloud exlog tombstone protocol exists,
+  /// so moved-out-date rows linger in cloud and a restore can resurrect the
+  /// from-date logs. Residual tracked in the e8f4a3 B-pass addendum at
+  /// docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md (NOT OI-174 —
+  /// that is plan_end pruning; an earlier draft of this comment miscited it).
   Future<void> moveExerciseLogs({
     required String fromDate,
     required String toDate,

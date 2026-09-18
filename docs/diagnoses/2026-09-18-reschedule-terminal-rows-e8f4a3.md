@@ -162,9 +162,14 @@ against the dead pre-H-16 scheme.
 
 - `c1a9d4` (2026-09-18, Task 1/C1) — the reader half of this pair: the
   `invisibleScheduleStatuses` skip arms this fix's terminal rows feed.
-- OI-174 — cloud exlog/schedule tombstone residual for the moved-out date
-  (upsert fan-out covers the row; the cloud-side delete of the old date
-  remains tracked there, unchanged by this fix).
+- ~~OI-174~~ — **B-pass correction (2026-09-18):** the cloud exlog
+  tombstone residual for the moved-out date was NEVER tracked on OI-174
+  (that issue is `plan_end` pruning — unrelated). The residual is tracked
+  HERE (B-pass addendum below): no cloud exlog tombstone protocol exists,
+  so moved-out-date cloud `exercise_logs` rows linger and a restore can
+  resurrect the from-date logs. The miscited comment in
+  workout_write_service.dart moveExerciseLogs was corrected in the same
+  batch.
 
 ## Review-fixes append (2026-09-18, C2 commit 9fec098d review round)
 
@@ -484,3 +489,145 @@ aggregates cannot arise).
 - docs/sot_registry.yaml `exercise_logs_read_path` moveExerciseLogs
   writer re-pointed (line_range 695-812 → 726-851 after the merge
   branch grew).
+
+## B-pass append (2026-09-18, 6 findings fixed — server seam + write-tool guards + sheet/planner/form hardening)
+
+Reviewer: context-blind B-pass over `main...HEAD`
+(docs/reviews/2026-09-18-ai-coach-ux-tool-integrity-bpass.md, verdict
+accepted-with-findings). Every fix below carries a behavioral regression
+test that was run RED against the pre-fix code (or a mutation of the fix)
+and GREEN after, with the mutation verified applied by reading the red
+output — not the exit code.
+
+### BP-P1 (HIGH, server seam) — rank cron counted moved/dropped/paused as scheduled-not-completed
+
+- **Writer/reader:** writer
+  `tool_dispatcher._executeRescheduleWeek → WorkoutWriteService.upsertScheduled`
+  (this batch made terminal rows PERSIST and PUSH to cloud — pre-batch they
+  were raw-deleted and never reached cloud) + `pauseRange` ('paused' fans
+  out); reader `supabase/functions/_shared/rank_engine.ts`
+  `completionRateOverWindow` — skipped only `status === 'rest'`, so every
+  reschedule move/drop permanently deflated the SERVER-side rate behind the
+  `completionRateMinimum` promotion gate while the client rank UI
+  (`WorkoutRepository.completionRateOverWindow`, delegating to
+  `WorkoutScheduleReadService.invisibleScheduleStatuses`) excluded them.
+- **Fix:** the skip loop now mirrors the client's canonical
+  `invisibleScheduleStatuses` set — `rest`/`paused`/`moved`/`dropped`
+  excluded from BOTH numerator and denominator (rank_engine.ts
+  completionRateOverWindow loop; doc comment updated). NOT deployed — the
+  live `evaluate-rank-promotions` redeploy is founder-gated.
+- **Test:** NEW Deno `supabase/functions/_shared/rank_engine_terminal_status_test.ts`
+  (3 tests, fake SupabaseClient query chain): parity test (3/5 with
+  paused/moved/dropped present — pre-fix 3/8), numerator guard (terminal
+  rows can never complete anything — pre-fix 1/4), all-terminal window →
+  0.0. RED pre-fix (0.375/0.25 actual), GREEN post-fix; existing
+  rank_engine_test.ts 11/11 unaffected. `deno check --node-modules-dir=none
+  supabase/functions/evaluate-rank-promotions/index.ts` clean.
+- **MUTATION:** neutering the `moved` arm of the skip (a `false ||` in its
+  place, compiles clean) reddened exactly the 2 rate tests. Reverted, green.
+
+### BP-P2a (MED) — pauseRange clobbered terminal rows (the 4th writer of the C3 class, unguarded)
+
+- **Writer/reader:** writer `WorkoutScheduleWriteService.pauseRange`
+  (workout_schedule_write_service.dart, skipped only `completed` before
+  stamping 'paused'); reader every terminal-row reader — a future-dated
+  'moved' row (normal: a within-week move of Friday leaves Friday 'moved'
+  on Wednesday) had its `moved_to`/`moved_at` audit pointer overwritten and
+  the pause fanned out to cloud.
+- **Fix:** `WorkoutScheduleReadService.isTerminalScheduleRow(status)`
+  skip beside the completed skip (import direction core→core, same file
+  already imported). Terminal rows cannot be "paused" — the workout is gone.
+- **Test:** pause_range_routes_through_write_service_test.dart, new
+  behavioral test — moved row (moved_to intact) + planned row across a
+  2-day range: only the planned date is reported/annotated paused; the
+  moved row keeps status 'moved' + `moved_to`, zero pause annotations.
+- **MUTATION:** `false &&`-ing the terminal skip reddened exactly the new
+  test. Reverted, green.
+
+### BP-P2b (DOC) — false OI-174 citation; exlog residual now tracked HERE
+
+- The moveExerciseLogs doc comment cited OI-174 for the cloud exlog
+  tombstone residual; OI-174 is plan_end pruning (verified against the
+  board). Corrected to name the actual residual — no cloud exlog tombstone
+  protocol exists, moved-out-date cloud rows linger, restore can resurrect
+  the from-date logs — and tracked in this doc (see the corrected Related
+  bugs entry above). docs/sot_registry.yaml moveExerciseLogs line_range
+  re-pointed 726-851 → 728-856 for the comment growth.
+
+### BP-P3a (MED) — scheduleForm composed a date shifted back a day on hosts east of IST
+
+- **Writer/reader:** writer `CompassFormSheet._compose` →
+  `istDateStr(_targetDate!)`; the chip value is an IST date string parsed by
+  `DateTime.tryParse` → device-LOCAL midnight → the `istDateStr`
+  re-transform mapped the previous IST date on SGT/JPY/AEST hosts.
+- **Fix:** the parse extracted as a PUBLIC pure function
+  `utcDateFromIstDateStr` (compass_form_sheet.dart) returning
+  `DateTime.utc(y, m, d)` — mirroring tool_dispatcher's
+  `_utcDateFromIstDateStr` — so the chip value round-trips the SAME
+  calendar day on any host.
+- **Tests:** pure UTC-midnight contract test (`isUtc` + hour 0 + verbatim
+  `istDateStr` round-trip — the host-independent discriminator), malformed
+  → null test, and a widget test asserting the composed message carries the
+  tapped chip's date VERBATIM.
+- **MUTATION:** reverting the parse to local `DateTime(y, m, d)` (the exact
+  pre-fix defect, compiles clean) reddened the contract test. Reverted,
+  green.
+
+### BP-P3b (MED) — planner proposed a terminal-row day as a destination (dead-end ask)
+
+- **Writer/reader:** writer the terminal stamps (this fix); reader
+  `RescheduleWeekPlanner.plan` — the first-pass terminal skip ran BEFORE
+  `usedAvailableDays.add`, leaving a terminal row's available day "free",
+  while `tool_dispatcher` refuses a terminal destination ("destination was
+  rescheduled elsewhere"). The user's ask failed with a partial error and
+  no recovery except re-asking.
+- **Fix:** a terminal row on an AVAILABLE day now marks that day USED in
+  the first pass — a terminal placeholder day is not a free destination;
+  a workout that would have landed there is DROPPED (the honest outcome).
+- **Test:** reschedule_week_terminal_row_test.dart, new group — terminal
+  moved row on the week's ONLY available day + planned row elsewhere: no
+  move proposes that day, the planned row is dropped.
+- **MUTATION:** disabling the day-occupancy marking reddened exactly the
+  new test (Pull B planned onto the refused Friday). Reverted, green.
+
+### BP-P3c (LOW-MED) — double-tap on the capture sheets' confirm submitted duplicate intents
+
+- **Writer/reader:** writer `_confirm` in log_workout_sheet.dart /
+  swap_exercise_coach_sheet.dart — no re-entrancy latch; ids embed
+  `millisecondsSinceEpoch`, so a second tap lands a NEW id that
+  `addIntents`' id-dedup and the dispatcher's `intent_<id>_dispatched_at`
+  marker both miss (swap double-dispatch additionally fails noisily via
+  ConcurrentEditException).
+- **Fix:** `bool _submitted` latch in both sheets — first line of `_confirm`
+  returns when set; set before `addIntents`.
+- **Tests:** two widget tests (compass_redesign_test.dart) — tap confirm,
+  real ≥5ms gap via `runAsync` (distinct ids, the exact human double-tap
+  shape), second tap mid-pop, assert exactly 1 batch (1 log intent / 1 swap
+  intent).
+- **MUTATION:** removing each sheet's latch (`if (false) return;`,
+  compiles clean) reddened that sheet's test while the sibling's latch was
+  intact. Both reverted, green.
+
+### Accepted deviations (documented, NOT fixed — reviewer-scoped)
+
+- **P3 is_pr not rescanned across the move** (review finding 6): conscious
+  deviation — readers are display-only and the flag self-heals on the next
+  edit-sheet save; the double-PR display the reviewer probed is NOT
+  reachable (collision merges into ONE row).
+- **P4 defensive date-parse fallbacks** (finding 8) and **P4
+  restore-recreated terminal rows losing moved_to metadata** (finding 9):
+  degenerate/defensive paths; the reviewer scoped both as bounded
+  follow-ups, not batch defects. Finding 9 folds into the cloud-tombstone
+  residual tracked above.
+- Round-2 B3/B4/B5-INFO items: no code change required by the reviewer.
+
+### Verification (B-pass batch)
+
+- `flutter analyze lib/`: zero errors/warnings (45 pre-existing infos,
+  none in touched files).
+- Green: pause_range_routes_through_write_service,
+  reschedule_week_terminal_row, compass_redesign,
+  terminal_row_display_read_path, workout_schedule_service_uses_write_service,
+  streak_paused_day_not_missed, workout_schedule_split_invariant — 57/57.
+- Deno: rank_engine_terminal_status_test 3/3, rank_engine_test 11/11,
+  `deno check` on evaluate-rank-promotions clean. No deploy (founder-gated).

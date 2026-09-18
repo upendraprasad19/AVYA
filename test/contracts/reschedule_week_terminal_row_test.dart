@@ -730,4 +730,74 @@ void main() {
               'it was moved to the available day or dropped again).');
     });
   });
+
+  group('B-pass P3b — planner never proposes a terminal-row day as a '
+      'destination (e8f4a3)', () {
+    // The dispatcher refuses a terminal destination ("destination was
+    // rescheduled elsewhere") — a week holding a terminal row on an
+    // AVAILABLE day used to leave that day "free" (the first-pass terminal
+    // skip ran BEFORE usedAvailableDays.add), so the planner proposed a move
+    // onto it and the dispatcher refused: a dead-end ask with no recovery
+    // except re-asking. Fix: a terminal row on an available day marks the
+    // day USED — it is not a free destination.
+    test('a moved row on the only available day forces a drop, not a dead-end '
+        'move', () async {
+      final monday = DateTime(today.year, today.month, today.day)
+          .subtract(Duration(days: (today.weekday - 1) % 7));
+      final mondayStr = istDateStr(monday);
+      final tuesday = monday.add(const Duration(days: 1));
+      final tuesdayStr = istDateStr(tuesday);
+      final friday = monday.add(const Duration(days: 4));
+      final fridayStr = istDateStr(friday);
+
+      // Terminal moved row on FRIDAY — the week's only available day.
+      await HiveService.instance.workoutBox.put('schedule_$fridayStr', {
+        'date': fridayStr,
+        'week': 1,
+        'day_of_week': 4,
+        'workout_name': 'Push A',
+        'status': 'moved',
+        'type': 'custom_template',
+        'moved_to': istDateStr(monday.add(const Duration(days: 6))),
+        'moved_via': 'ai_coach',
+        'moved_at': DateTime.now().toIso8601String(),
+        'exercises': [
+          {'exercise_name': 'Bench Press'},
+        ],
+      });
+      // Live planned row on TUESDAY — not an available day, needs relocating.
+      await HiveService.instance.workoutBox.put('schedule_$tuesdayStr', {
+        'date': tuesdayStr,
+        'week': 1,
+        'day_of_week': 1,
+        'workout_name': 'Pull B',
+        'status': 'planned',
+        'type': 'custom_template',
+        'exercises': [
+          {'exercise_name': 'Row'},
+        ],
+      });
+
+      final moves = await RescheduleWeekPlanner.instance.plan(
+        daysAvailable: [5], // Friday only
+        weekStart: mondayStr,
+      );
+
+      expect(
+        moves.any((m) => m.toDate == fridayStr),
+        isFalse,
+        reason: 'the planner must never propose the terminal row\'s day as a '
+            'destination — pre-fix Friday stayed "free" and the plan moved '
+            'Pull B onto it, which the dispatcher then refused (dead-end '
+            'ask).',
+      );
+      final pullMove = moves.firstWhere((m) => m.fromDate == tuesdayStr);
+      expect(pullMove.action, RescheduleAction.drop,
+          reason: 'with the only available day occupied by a terminal '
+              'placeholder, the misplaced workout is DROPPED (the honest '
+              'outcome) rather than planned onto a refused destination.');
+      // The terminal row itself still never appears in the plan.
+      expect(moves.where((m) => m.fromDate == fridayStr), isEmpty);
+    });
+  });
 }
