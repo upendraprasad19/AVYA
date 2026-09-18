@@ -696,7 +696,13 @@ exit 0
     // times, because suite contention changes the timing.
     final hookDir = Directory('${repo.remote}/hooks')..createSync(recursive: true);
     final hookPath = '${hookDir.path}/pre-receive';
-    File(hookPath).writeAsStringSync('#!/usr/bin/env sh\nsleep 6\nexit 0\n');
+    // Contention fix (ai-coach-ux-tool-integrity, 2026-09-18): sleep widened
+    // 6s->20s and the sampling deadline below 20s->90s. Under the full
+    // ~5800-test suite the child safe_push.sh could not reliably reach its
+    // STARTED write within the old window — two consecutive pre-push runs
+    // reddened HERE while this file passed 18/18 targeted. The deadline only
+    // bounds how long we wait to SAMPLE; the loop still breaks at first sight.
+    File(hookPath).writeAsStringSync('#!/usr/bin/env sh\nsleep 20\nexit 0\n');
     Process.runSync('chmod', ['+x', hookPath], runInShell: true);
 
     final proc = await Process.start(
@@ -714,7 +720,7 @@ exit 0
     unawaited(proc.stderr.drain<void>());
 
     Map<String, String> seen = <String, String>{};
-    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    final deadline = DateTime.now().add(const Duration(seconds: 90));
     while (DateTime.now().isBefore(deadline)) {
       final rec = readRecord(repo.primary);
       if (rec['result'] == 'STARTED') {

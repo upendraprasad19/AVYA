@@ -21,6 +21,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-08-13 a3f8d1 — TWO defects in the same six lines of ActiveWorkoutNotifier.completeWorkout's weekly-streak block. (1) FOB-2, flag-gated: getCurrentWeekNumber() clamps to [1,4] and a hold week starts at plan_start+28,…
 - 2026-05-31 5e8a1c — Surfaced by the year-simulation harness: after amar completed Phase 1 (15 of 16 scheduled workouts over 4 weeks, ~85% adherence with a single missed day), the rank did NOT progress — it stayed at SD2…
 
+### safe_push_terminal_result_record (2 bugs)
+- 2026-09-18 f7a3b1 — Two consecutive pre-push full-suite runs (2026-09-18) reddened exactly one test: `test/scripts/safe_push_test.dart` "a push IN FLIGHT leaves result=STARTED carrying a LIVE pid" — 5857 passed / 1…
+- 2026-09-10 a7f3c1 — `safe_push.sh` distinguishes THREE outcomes — 0 LANDED, 1 FAILED, 2 UNVERIFIED — and nothing recorded WHICH one happened. The only in-flight evidence was the lock's `holder` file, and…
+
 ### custom_exercises_mutations (2 bugs)
 - 2026-09-17 e7b2d4 — Founder, logged in as Upendra, doing his morning workout in the active-workout screen: searching the SWAP EXERCISE picker for his own custom exercise `Single Leg Front Lever` returned nothing. The…
 - 2026-05-15 a5d29c — Founder searched "Single Leg Front" in the active-workout SWAP EXERCISE picker on a fresh install. The picker returned "No matching exercises found" even though his custom exercise `Single Leg Front…
@@ -122,9 +126,6 @@ Three sub-defects were found and fixed WITHIN this same implementation, before a
 
 ### delete_account_rate_limit, verify_payment_rate_limit (1 bugs)
 - 2026-09-11 f2c8d5 — TWO independent rate limits, plus a privilege gap the fix for both exposes. (A) delete-account's 5/60min limit NEVER FUNCTIONED: its fire-and-forget insert targeted two columns (prompt_snippet,…
-
-### safe_push_terminal_result_record (1 bugs)
-- 2026-09-10 a7f3c1 — `safe_push.sh` distinguishes THREE outcomes — 0 LANDED, 1 FAILED, 2 UNVERIFIED — and nothing recorded WHICH one happened. The only in-flight evidence was the lock's `holder` file, and…
 
 ### `day_of_week` has one meaning in the app — 0=Mon..6=Sun — asserted at `tool_dispatcher.dart:695` in a comment and relied on by every reader (`train_provider.dart:619` and `:816` compute `(week - 1) * 7 + day_of_week + 1`). Dart's `DateTime.weekday` is 1..7, so every writer has to remember to subtract one. Most did. The sync push did not: it discarded the correct stored value and re-derived `parsedDate.weekday`.
 What made it durable rather than transient is the ORDER of the restore's merge. The cloud value was written AFTER the `...existingMap` spread, so it overwrote a correct local 0..6 with a wrong 1..7 on every restore. A field that is a pure function of the row's own date was being round-tripped through the network and coming back worse.
@@ -1259,6 +1260,7 @@ rather than a Hive box. (1 bugs)
 | 2026-09-18 | b2d9f4 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C5) found three defects: 1. `_appendInjuryToCoachMemory` (tool_dispatcher.dart)… | coach_memory_injury_append | test/contracts/coach_memory_injury_append_mutex_test.dart |
 | 2026-09-18 | d6b9c7 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C3) found that all three AI-coach overwrite tools guard only against 'completed' and… | schedule_terminal_rows | test/contracts/coach_regen_phase_stamp_behavioral_test.dart |
 | 2026-09-18 | e8f4a3 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that `_executeRescheduleWeek`'s move path raw-deleted the source… | streaks | test/contracts/reschedule_week_terminal_row_test.dart |
+| 2026-09-18 | f7a3b1 | Two consecutive pre-push full-suite runs (2026-09-18) reddened exactly one test: `test/scripts/safe_push_test.dart` "a push IN FLIGHT leaves result=STARTED carrying a LIVE pid" — 5857 passed / 1… | safe_push_terminal_result_record | test/scripts/safe_push_test.dart |
 | 2026-09-18 | c1a9d4 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that a PAST scheduled day paused via the AI-coach pausePlan tool… | streaks | test/contracts/streak_paused_day_not_missed_test.dart |
 | 2026-09-17 | e7b2d4 | Founder, logged in as Upendra, doing his morning workout in the active-workout screen: searching the SWAP EXERCISE picker for his own custom exercise `Single Leg Front Lever` returned nothing. The… | custom_exercises_mutations | test/contracts/can_offer_in_picker_behavioral_test.dart |
 | 2026-09-17 | b7e1f4 | Founder completed a Push + Core Phase 3 workout (Hanging Leg Raise 4 sets, Self-Resisted Triceps Extension 1 set, Dumbbell Fly 1 set) and the post-completion receipt card showed "Glute work.… | quote_picker_category_derivation | test/contracts/quote_picker_category_from_exercises_test.dart |
