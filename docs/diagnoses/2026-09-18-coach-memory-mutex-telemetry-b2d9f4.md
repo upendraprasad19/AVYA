@@ -26,7 +26,7 @@ symptom: |
        status re-check (tool_dispatcher.dart:399) runs OUTSIDE it; the
        benign-race posture is documented at workout_write_service.dart:430-439.
 concept: coach_memory_injury_append
-sot_registry_entry: coach_memory (injuries list under the coachBox 'coach_memory' singleton)
+sot_registry_entry: null
 writers:
   - { file: lib/features/ai_coach/services/tool_dispatcher.dart, method_or_widget: _appendInjuryToCoachMemory (writer of coach_memory.injuries), line: 1626 }
   - { file: lib/features/ai_coach/services/tool_dispatcher.dart, method_or_widget: _executePausePlan PausePlanException catch (telemetry writer), line: 1129 }
