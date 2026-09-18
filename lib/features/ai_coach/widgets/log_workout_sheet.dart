@@ -101,7 +101,9 @@ class _LogWorkoutSheetState extends ConsumerState<LogWorkoutSheet> {
     final status = row['status']?.toString();
     // Terminal/completed rows are not loggable from here (a 'moved' row's
     // workout lives on another date; a completed day is already done).
-    if (status != null && status != 'planned') {
+    // PAUSED stays loggable (paused = pending — same contract the dispatcher
+    // and the swap sheet honor; R2-B2 consistency).
+    if (status != null && status != 'planned' && status != 'paused') {
       setState(() => _loaded = true);
       return;
     }

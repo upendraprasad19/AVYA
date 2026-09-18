@@ -473,6 +473,42 @@ void main() {
       expect(intents.first.payload['exerciseId'], 'ex_bench');
       await tester.runAsync(tearDownHive);
     });
+
+    testWidgets('paused day renders the LOG sheet picker too (R2-B2 '
+        'consistency — log sheet honors the same paused=pending contract)',
+        (tester) async {
+      await tester.runAsync(setUpHive);
+      final todayKey = istDateStr(nowWall());
+      await tester.runAsync(() => HiveService.instance.workoutBox.put(
+        'schedule_$todayKey',
+        {
+          'type': 'workout',
+          'status': 'paused',
+          'exercises': <Map<String, dynamic>>[
+            {
+              'exercise_id': 'ex_bench',
+              'exercise_name': 'Bench Press',
+              'sets': 4,
+              'reps': 8,
+              'suggested_weight': 60.0,
+            },
+          ],
+        },
+      ));
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: LogWorkoutSheet())),
+      ));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Bench Press'), findsOneWidget,
+          reason: 'paused = pending: the log sheet must render the paused '
+              'day exactly like a planned day (same contract the dispatcher '
+              'and swap sheet honor)');
+      expect(container.read(pendingToolIntentsProvider), isEmpty);
+      await tester.runAsync(tearDownHive);
+    });
   });
 
   group('B4 review — scheduleForm TOMORROW labels the actual date', () {
