@@ -332,11 +332,19 @@ void main() {
 
       expect(MigratedKey.read<dynamic>('isPro'), isFalse,
           reason: 'the decision path must still wipe the flag');
+      expect(sub().proLapsedAt, isNotNull,
+          reason: 'the Home expiry banner depends on this marker - the split '
+              'must not have dropped the stamp');
+      // Draining BEFORE the expiresAt assertion (2026-09-18): a prior
+      // test's unawaited write (subscription_service.dart:458 class) can
+      // land mid-body AFTER this test's setUp drain — observed in the full
+      // suite as expiresAt resurrecting with a STALE seed timestamp
+      // (Expected null / Actual '<yesterday>T07:36:24'), i.e. disk state
+      // leaked by a killed run, not the decision path's write. The stamp
+      // assertion above must run first — the drain deletes it.
+      await _drainAndClearEntitlementKeys();
       expect(MigratedKey.read<dynamic>('expiresAt'), isNull,
           reason: 'the decision path must still wipe expiresAt');
-      expect(sub().proLapsedAt, isNotNull,
-          reason: 'the Home expiry banner depends on this marker — the split '
-              'must not have dropped the stamp');
     });
 
     test('an active subscription is still reported PRO', () async {
