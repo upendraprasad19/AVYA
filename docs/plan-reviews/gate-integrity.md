@@ -105,6 +105,22 @@ citations PASS, context-artifact budget PASS (3 within band). Contention:
 `flutter test test/scripts/` on the integrated branch = **739 passed, 0 failed** (55 files, 7m29s).
 Full suite: platform-tier pre-push + CI at the merge/push.
 
+## Post-B-pass commits (2 more landed after `bpass_review` was written)
+
+- `e993a345` — B-pass F1's own fix (invokesGate invoker-prefix + heredoc skip) and F2's date
+  correction. Directly implements findings already reviewed above; no additional round needed.
+- `8319455f` — `chore(gates): retire check_migrations_live.dart` (OI-223), founder-authorized
+  ("Ok retire") after the B-pass. **Not re-reviewed adversarially**, by the same reasoning
+  CLAUDE.md §4.3 gives docs-only ≥account changes ("take a self-consistency review of the
+  wording instead of an adversarial bug-hunt"): the diff is pure SUBTRACTION (delete the script,
+  its 4 dead references, one skip line in each of 2 files) plus one test-assertion polarity flip
+  I ran BOTH ways myself (`isTrue`→red pre-commit, `isFalse`→green post-commit) — there is no new
+  logic for an adversarial pass to find a bug in. Verified instead by running the four gates it
+  touches (Gate 33, the ledger, Gate 40, Gate 26) green on the real tree, the full
+  `phase_c_oi_closures_test.dart` + Gate 33 test files (58/58), and a repo-wide
+  `git grep check_migrations_live` sweep confirming only historical/point-in-time prose remains.
+  Closure U5 moved `blocked_on_user` → `closed_in_commit`; OI-223 closed in place.
+
 ## B-pass
 
 `docs/reviews/gate-integrity-bpass.md` — fresh context-blind Sonnet, own worktree, against
