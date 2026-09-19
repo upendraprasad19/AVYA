@@ -9,6 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### sot_registry_behavioral_test_path_resolution (1 bugs)
 - 2026-09-19 c7d2e4 — `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture…
 
+### plan_review_record_merge_gate (1 bugs)
+- 2026-09-19 b7e2d4 — A branch whose blast-radius is >= account can be merged to main by `sh scripts/safe_merge.sh <branch>` with ZERO output about its missing docs/plan-reviews/{slug}.md. CI's keystone job…
+
 ### gate_fail_closed_discipline (3 bugs)
 - 2026-09-19 b3e7a1 — Six `scripts/check_*.dart` gates ran NOWHERE — not in pre-commit's loop, not in CI's loop, not from /build-apk, not from any hook — while Gate 33 (`scripts/check_gate_scripts_wired.dart`, whose whole…
 - 2026-07-29 d7a3f9 — CI's Audit Gates job failed on 96c6fac2 — the enforcement-infra merge commit that had already landed on main — with "Gate failed: check_closes_oi_cited.dart". The same commit's local pre-commit hook…
@@ -1268,6 +1271,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-19 | c7d2e4 | `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture… | sot_registry_behavioral_test_path_resolution | test/scripts/sot_behavioral_test_paths_gate_test.dart |
+| 2026-09-19 | b7e2d4 | A branch whose blast-radius is >= account can be merged to main by `sh scripts/safe_merge.sh <branch>` with ZERO output about its missing docs/plan-reviews/{slug}.md. CI's keystone job… | plan_review_record_merge_gate | test/scripts/safe_merge_test.dart |
 | 2026-09-19 | b3e7a1 | Six `scripts/check_*.dart` gates ran NOWHERE — not in pre-commit's loop, not in CI's loop, not from /build-apk, not from any hook — while Gate 33 (`scripts/check_gate_scripts_wired.dart`, whose whole… | gate_fail_closed_discipline | test/scripts/gate_scripts_wired_runners_test.dart |
 | 2026-09-18 | e6c2a9 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that after the AI coach logs a meal from chat (log_meal_by_text), the Nutrition… | nutrition_ai_text_log_remaining | test/contracts/coach_meal_log_invalidates_remaining_test.dart |
 | 2026-09-18 | b2d9f4 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C5) found three defects: 1. `_appendInjuryToCoachMemory` (tool_dispatcher.dart)… | coach_memory_injury_append | test/contracts/coach_memory_injury_append_mutex_test.dart |
