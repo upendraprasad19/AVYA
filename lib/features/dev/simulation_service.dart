@@ -135,8 +135,14 @@ class SimulationService {
     await HiveService.instance.healthBox.delete('streaks');
     await HiveService.instance.healthBox.delete('steps_today');
     await HiveService.instance.healthBox.delete('steps_date');
-    await _clearKeysWithPrefixes(
-        HiveService.instance.nutritionBox, const ['nlog_']);
+    await _clearKeysWithPrefixes(HiveService.instance.nutritionBox, const [
+      'nlog_',
+      // OI-204 — same reasoning as sync_sched_payload_hash_index /
+      // sync_exlog_payload_hash_index above: a single reserved key, not an
+      // `nlog_`-prefixed one. A survivor mis-skips the sim re-drive's
+      // nutrition-log push.
+      'sync_nlog_payload_hash_index',
+    ]);
 
     // Free tier.
     await ref.read(subscriptionServiceProvider).writeSubscriptionState(

@@ -309,10 +309,128 @@ an inline literal -- noted here for anyone auditing gate coverage later.
 - Live before/after `sync_exercise_logs` timeout-rate telemetry on the
   founder's account -- founder-gated (needs multi-day production traffic).
 
+## Task 3 addendum — nutrition-log half (`_syncNutritionLogs`)
+
+Ships in the same batch (branch `oi204-delta-sync`) as a second commit,
+reusing this doc per the brief's explicit instruction — one root cause, one
+doc, two fix commits both citing `closes-diagnose: d3f8a6`.
+
+### Fix
+Extends the SAME `sync_nutrition_log_payload_hash_index` fingerprint-skip
+pattern to `_syncNutritionLogs`. Nutrition's bundle shape is a parent payload
+(`nutrition_logs`) plus N item rows (`nutrition_log_items`), and its per-slot
+push cost is the WORSE of the two OI-204 domains — 1 upsert + 1
+id-resolution SELECT + N item upserts + 1 tail-vacuum DELETE, all
+sequential. An unchanged slot (keyed by `'$date $mealType'`, matching the
+existing same-slot merge, not a raw Hive key) now skips ALL of that as one
+unit. `nlogShouldSkipUpsert` delegates to the SAME private
+`_fingerprintMatchesStored` Task 2 introduced — not redefined.
+Store-on-full-success-only via a local `nlogSlotSynced` flag, false'd in
+BOTH the per-item upsert's catch AND the tail-vacuum's catch (2 swallowing
+catches, vs exlog's 1 — `scripts/check_sync_hash_skip_atomicity.dart`'s
+`nlogSpec.expectedSwallowCatches: 2` pins this count). `resetJourney`'s
+nutritionBox prefix-clear list gained the reserved key
+`sync_nlog_payload_hash_index`, mirroring the sched/exlog precedent.
+
+### Mutation-proof (Step 5, rule 21)
+Flipping the SHARED `_fingerprintMatchesStored`'s equality check
+(`storedFingerprint == currentFingerprint` → `!=`) was traced BY HAND before
+running: 3 of nlog's 10 base tests should redden ("matching fingerprint ->
+skip", "an edited item quantity flips the fingerprint (edit-not-skipped
+proof)", and the Hive round-trip test — "null stored fingerprint" and
+"kill-switch enabled" short-circuit before the mutated clause and stay
+green). Ran BOTH domains' suites together in one pass:
+
+```
+flutter test test/contracts/sync_nutrition_log_payload_hash_index_writer_to_reader_test.dart test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart
+```
+
+Post-mutation, actual output: `+16 -6` (16 passed, 6 failed out of 22 — 10
+nlog + 12 exlog at that point). Exactly the traced 3 reddened in nlog's file
+("nlogPayloadFingerprint an edited item quantity flips the fingerprint
+(edit-not-skipped proof)", "nlogShouldSkipUpsert matching fingerprint ->
+skip", "Hive round-trip fingerprint round-trips through dynamic-typed Hive
+Map and drives the skip decision") plus the already-established 3 in
+exlog's file ("a changed per-set field flips the fingerprint (this is the
+edit-not-skipped proof)", "matching fingerprint -> skip", "Hive
+round-trip..."). Restored (`grep -c` confirmed 0 occurrences of the mutated
+token); re-ran: `+22`, all tests passed in both files.
+
+### Step 7c — rewritten self-heal comment
+`_syncNutritionLogs`'s item-loop `ownerChangedSince` guard carried a comment
+(closure R2-N9) justifying an abandoned pass as safe because *"
+`_syncNutritionLogs` has no fingerprint/skip-unchanged optimisation ... so it
+re-walks EVERY nutrition Hive row on every pass."* This batch makes that
+premise FALSE, so the comment is rewritten IN PLACE (not deleted) to
+re-derive the argument under the new code: an abandoned pass persists
+nothing to `nlogHashIndex` — the postamble's store sits after the
+postamble's OWN `ownerChangedSince` guard (added this batch), which an
+abandoned pass never reaches — so a retry is still safe, and a genuine
+content change still flips the fingerprint on the next pass.
+
+One residue is named, not silently assumed away (plan-review round 1,
+finding M2, non-blocking, NOT structurally fixed this batch): content C1
+fully pushed (fingerprint stored) → edited to C2 → a pass pushes PART of C2
+then abandons via `ownerChangedSince` mid-item-loop (nothing persisted,
+self-heals) → reverted back to C1 before the next pass → the next pass
+fingerprint-matches C1 and SKIPS, while cloud may still hold a half-written
+C2. Narrow: requires an edit-then-EXACT-revert landing inside an
+account-switch race window.
+
+### I9 — clear-on-revert for the merge-disable kill switch
+While `disable_nutrition_slot_merge` is set, `_syncNutritionLogs` reverts to
+the legacy per-key push (`_nutritionLogsRaw()`), a DIFFERENT concept than
+the slot this index is keyed on. The postamble's `else` branch therefore
+does not merely skip READING the index while inert — it DELETES
+`sync_nlog_payload_hash_index` outright. Without this, a stale index
+surviving a disable/re-enable cycle would fingerprint-match unchanged local
+content and SKIP re-pushing exactly the slots the legacy path's "later raw
+key silently overwrites an earlier same-slot one in cloud" behaviour may
+have corrupted — turning the emergency revert into the thing that makes the
+corruption permanent once slot-merge is re-enabled.
+
+Test form used: SOURCE-GREP, not behavioral (brief Step 7's explicit
+either/or choice). A behavioral drive of `_syncNutritionLogs`'s postamble
+needs a live `_supabase.client` and `ownerChangedSince`/auth state; this
+codebase has no DI seam for `SupabaseService` anywhere (`grep -rln
+"MockSupabase|FakeSupabase|_supabase = Mock|SupabaseService(" test/` →
+nothing), the SAME finding already established for the atomicity
+sub-property. The "Hive round-trip" group in this test file opens a real
+Hive box but never invokes `_syncNutritionLogs` itself, so it does not
+supply the missing seam either. The source-grep test anchors on the LAST
+occurrence of `if (!nlogHashSkipDisabled) {` in `sync_nutrition.dart` (the
+string appears TWICE — once in the preamble's index-hydration, which has no
+`else`, and once in the postamble, which does) and asserts the `else` body
+contains the literal `_hive.nutritionBox.delete(SyncService._nlogHashIndexKey)`
+call. This ambiguity was caught by the test itself failing on first run
+(plain `indexOf` found the preamble's occurrence, not the postamble's) —
+fixed to `lastIndexOf` before this addendum was written.
+
+### Files
+`lib/core/services/sync_service.dart` (nlog* pure statics +
+`nlogHashSkipDisabledFor` + `_nlogHashIndexKey` + `_nlogHashSkipDisabled`
+kill-switch getter, placed immediately after the exlog block);
+`lib/core/services/sync/sync_nutrition.dart` (`_syncNutritionLogs`
+restructured: preamble loads the index unless disabled, per-slot skip-check
+inserted before the pre-existing `ownerChangedSince` guard, `nlogSlotSynced`
+flag threaded through the item-loop and vacuum catches, store-on-success
+block, postamble persists-or-clears); `lib/features/dev/simulation_service.dart`
+(`resetJourney` nutritionBox clear list);
+`test/contracts/sync_nutrition_log_payload_hash_index_writer_to_reader_test.dart`
+(new, 14 tests); `docs/sot_registry.yaml` (new concept
+`sync_nutrition_log_payload_hash_index`; plus 4 stale `line_range` citations
+this task's ~85-line `sync_service.dart` insertion shifted a second time —
+`compileDailySnapshot`, `applyRestoreCeiling`, `restoreFailureReason` [all
+three already fixed once by Task 2, shifted again by this task's own
+insertion] and `checkAndSync` [not previously stale — newly caught this
+time] — all repointed to their live line numbers, confirmed via
+`dart run scripts/check_sot_registry_parity.dart`).
+
 ## See also
 - `lib/core/services/sync/sync_workout.dart` (`_syncExerciseLogs`),
+  `lib/core/services/sync/sync_nutrition.dart` (`_syncNutritionLogs`),
   `lib/core/services/sync_service.dart` (the pure statics + shared helper +
-  kill-switch).
+  kill-switches).
 - `b4f7e2` (H1b Part A -- the `_syncScheduledWorkouts` pattern this fix
   extends).
 - `b7e4c1` (the `restoreOpTimeout` ceiling this fix stops tripping, without
@@ -320,4 +438,4 @@ an inline literal -- noted here for anyone auditing gate coverage later.
 - `d9b2c5` (the cross-device-completion contract behind sched's status
   carve-out; verified not to apply to this domain).
 - Task 3 of this batch (nutrition logs, `_syncNutritionLogs` -- reuses
-  `_fingerprintMatchesStored`).
+  `_fingerprintMatchesStored`; see the addendum above).

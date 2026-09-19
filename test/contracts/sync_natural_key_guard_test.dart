@@ -159,7 +159,16 @@ void main() {
       // Wider window than the 800 default: even with comments stripped,
       // the guard's `log['date']` read sits ~1.5K chars above the marker
       // because the c9f2a7 `parentPayload` map is legitimately long code.
-      final pre = windowBefore(marker, windowChars: 2000);
+      // OI-204 widened further (Task 3): the fingerprint-compute-and-
+      // skip-check block (slotId + nlogFp + the try/catch around
+      // nlogPayloadFingerprint/nlogShouldSkipUpsert) now sits BETWEEN the
+      // parentPayload literal and the nutrition_logs upsert call — ~2.7K
+      // chars (comment-stripped) measured via the same scratch-script
+      // technique the workout_log_exercises/workout_log_sets groups above
+      // already document (marker idx 118088, log['date'] idx 115352 ->
+      // distance 2736). 2000 was already stale; 3500 leaves ~750 chars
+      // margin.
+      final pre = windowBefore(marker, windowChars: 3500);
       expect(pre.contains("log['date']"), isTrue,
           reason: 'nutrition_logs guard must read log[date]');
       expect(pre.contains("log['meal_type']"), isTrue,

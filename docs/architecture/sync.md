@@ -117,6 +117,61 @@ unawaited(SyncService.instance.pushSnapshot());       // 4. Refresh AI context (
 - **Water logs:** `onConflict: 'user_id,date'` (UNIQUE constraint added migration 013). One row per user per day.
 - **Scheduled workouts:** `onConflict: 'user_id,scheduled_date'` (UNIQUE constraint added migration 013). One schedule per user per date.
 
+### Sync fingerprint-skip pattern (H1b Part A / OI-204)
+Cited by name from `sync_service.dart` (`_schedHashIndexKey` / `_exlogHashIndexKey` /
+`_nlogHashIndexKey` doc comments) since the original H1b Part A work — this section did
+not exist until OI-204 Task 3 added it, so those citations pointed at nothing until now.
+
+**Problem:** a coalesced, fire-and-forget sync entry (`syncWorkoutData()` /
+`syncNutritionData()`, fired after every single mutation) re-walked the caller's **entire**
+historical Hive log on **every** call — not just what changed since the last successful
+push — and `await`ed a network upsert per row, sequentially. As a user's history grew, a
+single pass routinely took 14-40s, tripping `SyncService.restoreOpTimeout` (45s, diagnose
+`b7e4c1`) — a ceiling meant to catch a genuinely wedged call, not bound normal-case latency
+(OI-204, diagnose `d3f8a6`).
+
+**Mechanism:** a sync-owned fingerprint index — a single reserved Hive key in the relevant
+user-scoped box, mapping `rowKey/slotId -> UUID-v5 fingerprint of the exact push bundle`.
+The **sole writer and sole reader is the sync method itself**, so writer/reader drift is
+structurally impossible. On each pass: compute the current fingerprint, compare against the
+stored one, and skip the upsert(s) entirely when they match (`shouldSkipUpsert`-family pure
+functions). **Store-on-full-success-only**: the fingerprint is recorded only when every
+network write in the bundle succeeded this pass (a local `*Synced`/`*BundleSynced` flag,
+`true` by default, flipped `false` inside any swallowing catch) — a partial failure leaves
+no entry, so the next pass retries. A fingerprint-computation exception fails OPEN to "push
+normally, never store" (never a silent permanent skip — `feedback_bad_news_vs_no_news`).
+Each domain also prunes its index to currently-live keys/slots after the loop, and each
+carries its own kill-switch (`disable_sched_hash_skip` / `disable_exlog_hash_skip` /
+`disable_nlog_hash_skip`) restoring the verbatim pre-pattern unconditional full sweep.
+`scripts/check_sync_hash_skip_atomicity.dart` statically guards the store-on-success
+invariant for every domain (gate-before-refactor, CLAUDE.md §4.11).
+
+**Domains, in the order the pattern was extended:**
+- `_syncScheduledWorkouts` (H1b Part A, diagnose `b4f7e2`, 2026-06-27) — the original.
+  Status-based carve-out: never skips a `completed` row (d9b2c5's cross-device-completion
+  contract). SoT: `sync_scheduled_payload_hash_index`.
+- `_syncExerciseLogs` (OI-204 Task 2, diagnose `d3f8a6`) — bundles the summary row plus its
+  per-set rows as one fingerprint; no status carve-out (verified no out-of-band cloud
+  mutator for `workout_log_exercises`/`workout_log_sets`). SoT:
+  `sync_exercise_log_payload_hash_index`.
+- `_syncNutritionLogs` (OI-204 Task 3, diagnose `d3f8a6`) — the worst per-key cost of the
+  three (parent upsert + id-resolution SELECT + N item upserts + 1 tail-vacuum DELETE, all
+  sequential), so the biggest win. Keyed by SLOT id (`'$date $mealType'`), matching the
+  existing same-slot merge, not a raw Hive key. Additionally goes inert whenever
+  `disable_nutrition_slot_merge` is set (the legacy per-key push predates the slot concept),
+  and while inert its postamble CLEARS the stored index rather than merely skipping the read
+  of it — a stale index surviving a disable/re-enable cycle would mis-skip re-pushing slots
+  the legacy path may have corrupted. SoT: `sync_nutrition_log_payload_hash_index`.
+
+`_syncExerciseLogs` and `_syncNutritionLogs` share one private helper
+(`SyncService._fingerprintMatchesStored`) for the skip DECISION itself — the two were
+byte-identical and had no domain-specific content worth duplicating; each domain keeps its
+own named wrapper (`exlogShouldSkipUpsert` / `nlogShouldSkipUpsert`) and its own fingerprint
+function (the BUNDLING shape genuinely differs per domain).
+
+Full detail: `docs/sot_registry.yaml` (search `payload_hash_index`),
+`docs/diagnoses/2026-09-19-full-rescan-sync-timeout-d3f8a6.md`.
+
 ### Restore conflict policy — local-wins / additive (ADR-0014, diagnose c5a1f2)
 Since the slow-boot guard, returning users reach /home WHILE the cloud restore runs in
 the **background** — so the restore is concurrent with the user logging. Loss-sensitive

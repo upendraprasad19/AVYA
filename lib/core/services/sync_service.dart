@@ -430,6 +430,80 @@ class SyncService {
     };
   }
 
+  /// OI-204 — Hive key for the nutrition-log fingerprint index (nutritionBox),
+  /// keyed by SLOT id (`'$date $mealType'`), not raw Hive key — matches what
+  /// _syncNutritionLogs already merges same-slot logs into before pushing
+  /// (spec §5.2). Inert whenever `disable_nutrition_slot_merge` is set — the
+  /// legacy per-key path predates the slot concept this is keyed on.
+  static const String _nlogHashIndexKey = 'sync_nlog_payload_hash_index';
+
+  /// Kill-switch reverting `_syncNutritionLogs` to the verbatim unconditional
+  /// full-sweep upsert (no fingerprint skip).
+  bool get _nlogHashSkipDisabled {
+    try {
+      return _hive.configBox.get('disable_nlog_hash_skip') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Pure — extracted so the boolean composition itself is directly testable
+  /// (plan-review round 1, finding I12). While `disable_nutrition_slot_merge`
+  /// is set, `_syncNutritionLogs` reverts to the legacy per-key push (a
+  /// different concept than the slot this index is keyed on), so the
+  /// fingerprint-skip mechanism must be inert whenever slot-merge is off,
+  /// independent of the dedicated `disable_nlog_hash_skip` kill switch.
+  static bool nlogHashSkipDisabledFor({
+    required bool killSwitchDisabled,
+    required bool mergeEnabled,
+  }) =>
+      killSwitchDisabled || !mergeEnabled;
+
+  /// Fingerprint of the FULL per-slot push bundle: the parent payload plus
+  /// its item rows (union of a possibly-merged slot). Any change to either
+  /// half flips the fingerprint. Pure; extracted for behavioral coverage.
+  static String nlogPayloadFingerprint(
+    Map<String, dynamic> parentPayload,
+    List<dynamic> items,
+  ) {
+    Map<String, dynamic> sortKeys(Map<String, dynamic> m) =>
+        <String, dynamic>{for (final k in m.keys.toList()..sort()) k: m[k]};
+    final sortedItems = items
+        .whereType<Map>()
+        .map((i) => sortKeys(Map<String, dynamic>.from(i)))
+        .toList();
+    final combined = {
+      'parent': sortKeys(parentPayload),
+      'items': sortedItems,
+    };
+    return _deterministicId(jsonEncode(combined));
+  }
+
+  /// No status-based carve-out — same reasoning as exlogShouldSkipUpsert
+  /// (spec §5.3): no out-of-band cloud mutator for nutrition_logs/
+  /// nutrition_log_items, every edit rewrites the same Hive key. Delegates
+  /// to the SHARED `_fingerprintMatchesStored` Task 2 adds (plan-review
+  /// round 1, finding M11) — do not redefine the body here.
+  static bool nlogShouldSkipUpsert({
+    required bool killSwitchDisabled,
+    required String? storedFingerprint,
+    required String currentFingerprint,
+  }) =>
+      SyncService._fingerprintMatchesStored(
+        killSwitchDisabled: killSwitchDisabled,
+        storedFingerprint: storedFingerprint,
+        currentFingerprint: currentFingerprint,
+      );
+
+  @visibleForTesting
+  static Map<String, String> nlogPrunedHashIndex(
+      Map<String, String> index, Set<String> liveSlots) {
+    return <String, String>{
+      for (final e in index.entries)
+        if (liveSlots.contains(e.key)) e.key: e.value,
+    };
+  }
+
   /// H1a — best-effort flush fired on `AppLifecycleState.paused` (wired to
   /// [HiveService.onAppPaused] in the constructor). Runs the NON-coalesced
   /// variants so a burst that coalesced just before backgrounding still reaches
