@@ -61,6 +61,11 @@ const _helpers = <String>[
   // conflicted fixture, the precise "green check wider than its subject" shape.
   // Registered as an explicit step of its own batch, per the note above.
   'test/scripts/no_conflict_markers_test.dart',
+  // contract_sweep builds a throwaway clone and runs `git branch -D -r
+  // origin/main` in it to exercise the runner's fallback; a leaked GIT_DIR
+  // would aim that deletion at the REAL repo's remote-tracking ref. Registered
+  // as an explicit step of the gate-integrity batch (OI-220), per the note above.
+  'test/scripts/contract_sweep_e2e_test.dart',
 ];
 
 String _strip(String src) => src

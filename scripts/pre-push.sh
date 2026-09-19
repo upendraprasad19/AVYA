@@ -111,6 +111,16 @@ cat > /dev/null
 echo "[pre-push] flutter analyze (always -- runs even when the suite is skipped)..."
 flutter analyze --no-fatal-infos
 
+# Targeted SoT contract sweep (OI-220) -- runs for EVERY tier, above the full
+# suite, so a contract regression surfaces in ~2 min instead of after a full
+# run. `--warn-only || true` is the §4.11 baseline: the flip to hard-fail
+# (after one clean batch) removes BOTH tokens. The Dart runner owns the
+# `flutter test` spawn -- a literal `flutter test` on this line would be
+# pinned to CI's invocation by test/scripts/pre_push_matches_ci_invocation_test.dart.
+# Guards: CONTRACT_SWEEP_SKIP=1 / CONTRACT_SWEEP_NESTED=1 (see the runner header).
+echo "[pre-push] contract sweep (targeted SoT contract tests, warn-only baseline)..."
+"$DART_BIN" run scripts/contract_sweep.dart --warn-only || true
+
 # The local full suite MUST be invoked the same way CI invokes it, or this gate
 # blocks pushes CI would have passed — which is worse than not gating, because
 # the only way past a false red is `--no-verify`, and that disables the REAL
