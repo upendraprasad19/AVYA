@@ -15,7 +15,7 @@
 - Blast radius `platform` for the batch (pinned files); the four touched script files are pinned platform by D16 in Task 5. ×2 context-blind plan review BEFORE execution (§4.12.1); B-pass BEFORE the merge (§4.3); closure YAML `docs/audit/gate-integrity.closure.yaml` (§4.2, ≥4 units).
 - Commits ONLY via `sh scripts/safe_commit.sh "<msg>"` (one positional arg). Never `--no-verify`. Never push from a unit branch.
 - Every new test file that spawns a subprocess: `@Timeout(Duration(minutes: N))` + `library;` as its first two lines; `tearDown` never throws; afterwards `grep -n "timeout:" <file>` → 0 per-test overrides.
-- **Every git call inside a test fixture goes through a scrubbed env** (`GIT_*`, `GITHUB_*`, `PUSH_BEFORE` removed, `includeParentEnvironment: false`) — a leaked `GIT_DIR` redirects a fixture's `git remote remove` / `git branch -D` at the REAL repo (`feedback_mistake_git_hook_env_leak`; `test/scripts/gate_e2e_env_hermetic_test.dart:38-40`). Register every new subprocess test file wherever that hermetic test enumerates them (read it).
+- **Every git call inside a test fixture goes through a scrubbed env** (`GIT_*`, `GITHUB_*`, `PUSH_BEFORE` removed, `includeParentEnvironment: false`) — a leaked `GIT_DIR` redirects a fixture's `git branch -D` at the REAL repo (`feedback_mistake_git_hook_env_leak`). The hermetic gate is `test/contracts/gate_e2e_env_hermetic_test.dart` (NOT under `test/scripts/`): "register" = append the new file's path to its `_helpers` const (`:34-64`); it then asserts the file's env builder strips `GIT_`/`GITHUB_`/`PUSH_BEFORE` (`:80-88`). Register ONLY fixtures that call git (Task 1's e2e); a test that spawns `dart run` alone (Task 3's) has no scrub and must NOT be registered, or the hermetic test goes red for it.
 - Spawn dart in tests via `dartBinOf()` copied from `test/scripts/cron_registry_snapshot_gate_test.dart:33-57` — NEVER `Platform.resolvedExecutable`.
 - Every fix commit (`fix(...)`) carries `closes-diagnose: <6-hex id>` and a diagnose-doc that passes `dart run scripts/validate_diagnose_doc.dart <path>`. Read `scripts/validate_diagnose_doc_lib.dart` first; copy the frontmatter shape of `docs/diagnoses/2026-09-18-safe-push-test-contention-window-f7a3b1.md`.
 - Mutate-and-run (rule 21): each mutation must APPLY (`grep -c` the token), leave the file COMPILING, and be semantically wrong. Commit the green work FIRST, then mutate, then `git checkout -- <file>` (memory `feedback_mistake_mutation_restore_discards_uncommitted_fixes`). A zero-red mutation means "find what absorbed it".
@@ -78,17 +78,20 @@ bool _all(String _) => true;
 
 void main() {
   group('contentReferenceKeys', () {
-    test('basename with extension; parent/basename for ubiquitous names; doc-like by EXTENSION only; test helpers included', () {
+    test('basename with extension; parent/basename for ubiquitous names; doc-like by extension EXCEPT the contract-doc dirs; test helpers included', () {
       final keys = contentReferenceKeys([
         'lib/core/services/sync/sync_workout.dart',
         'supabase/functions/ai-proxy/index.ts',
         'lib/main.dart',
-        'test/contracts/foo_test.dart',   // arm (c) territory — excluded here
-        'docs/audit/open_issues.md',      // .md — excluded
-        'test/helpers/h.dart',            // a test HELPER is a key
-        'docs/sot_registry.yaml',         // docs/ but data — a key
+        'test/contracts/foo_test.dart',           // arm (c) territory — excluded here
+        'docs/superpowers/plans/2026-09-19-x.md', // prose .md — excluded
+        'CLAUDE.md',                              // prose .md — excluded (tests mention it in comments; its gates run at commit)
+        'docs/audit/open_issues.md',              // .md under docs/audit/ — a DATA contract with 10 test readers → a key
+        'docs/architecture/sync.md',              // .md under docs/architecture/ — 39 test readers → a key
+        'test/helpers/h.dart',                    // a test HELPER is a key
+        'docs/sot_registry.yaml',                 // docs/ but data — a key
       ]);
-      expect(keys, {'sync_workout.dart', 'ai-proxy/index.ts', 'lib/main.dart', 'h.dart', 'sot_registry.yaml'});
+      expect(keys, {'sync_workout.dart', 'ai-proxy/index.ts', 'lib/main.dart', 'open_issues.md', 'sync.md', 'h.dart', 'sot_registry.yaml'});
     });
   });
 
@@ -180,8 +183,13 @@ const ubiquitousBasenames = <String>{'index.ts', 'index.dart', 'main.dart', 'mod
 
 bool isDartTest(String p) => p.startsWith('test/') && p.endsWith('_test.dart');
 bool isGolden(String p) => p.startsWith('test/goldens/');
-/// Doc-like by EXTENSION only — docs/*.yaml are data contracts that tests read by name.
-bool isDocLike(String p) => p.endsWith('.md') || p.endsWith('.txt');
+/// Doc-like = prose nobody tests by name: `.md`/`.txt` EXCEPT under docs/audit/
+/// and docs/architecture/, whose .md files are data contracts with test readers
+/// (open_issues.md → 10 tests, sync.md → 39, OPEN_INDEX.md → 5; measured
+/// 2026-09-19). docs/*.yaml are never doc-like.
+const _contractDocDirs = <String>['docs/audit/', 'docs/architecture/'];
+bool isDocLike(String p) =>
+    (p.endsWith('.md') || p.endsWith('.txt')) && !_contractDocDirs.any(p.startsWith);
 
 String basenameOf(String p) => p.substring(p.lastIndexOf('/') + 1);
 
@@ -408,7 +416,7 @@ void main() {
 }
 ```
 
-- [ ] **Step 6: Run → fails** (runner missing). Then register the file in `test/scripts/gate_e2e_env_hermetic_test.dart` (read it; add this file where it enumerates hermetic subprocess tests).
+- [ ] **Step 6: Run → fails** (runner missing). Then register the file in `test/contracts/gate_e2e_env_hermetic_test.dart`'s `_helpers` const (`:34-64`) and run that test → green (it checks `_env()` strips the three families).
 
 - [ ] **Step 7: Write `scripts/contract_sweep.dart`**
 
@@ -450,7 +458,9 @@ String? _arg(List<String> args, String flag) {
   return (i >= 0 && i + 1 < args.length) ? args[i + 1] : null;
 }
 
-/// null => git failed (fallback). `git grep` exit 1 means NO MATCH, not failure.
+/// null => git failed (fallback). `git grep` exit 1 means NO MATCH (it is also
+/// what a nonexistent pathspec dir returns — harmless here: cwd is the repo root
+/// and `test/` exists); exit >= 2 or 128 is a real failure.
 List<String>? _gitLines(List<String> a, {bool noMatchIsEmpty = false}) {
   final r = Process.runSync('git', a, runInShell: true);
   if (r.exitCode == 0) {
@@ -557,7 +567,7 @@ echo "[pre-push] contract sweep (targeted SoT contract tests, warn-only baseline
 "$DART_BIN" run scripts/contract_sweep.dart --warn-only || true
 ```
 
-  (b) `test/scripts/pre_push_analyze_always_e2e_test.dart` — in the env its hook runner builds (`:57` copies `Platform.environment`), add `env['CONTRACT_SWEEP_SKIP'] = '1';` with a 3-line comment: this test pins analyze placement; on Windows the sweep's Dart spawn resolves the REAL flutter (cmd.exe cannot run an extensionless PATH stub) and would select this very test → recursion.
+  (b) `test/scripts/pre_push_analyze_always_e2e_test.dart` — in the env its hook runner builds (`:57` copies `Platform.environment`; `_cleanEnv()` at `:56-65` strips only `GIT_*/GITHUB_*/PUSH_BEFORE/PRE_PUSH_FULL`, so the switch survives), add `env['CONTRACT_SWEEP_SKIP'] = '1';` with a 3-line comment: this test pins analyze placement; on Windows the sweep's Dart spawn resolves the REAL flutter (cmd.exe cannot run an extensionless PATH stub) and would select this very test → recursion. THEN add one behavioural assertion to its existing `prePushFull: true` scenario: `expect(r.stdout, contains('[contract-sweep] skipped'))` — this proves the hook REACHES the sweep line before `run_full_suite()`'s `exit 0` on a real run, which the source-order pin in (c) cannot (an `if false; then … fi` wrapper would pass (c)).
   (c) `test/contracts/contract_sweep_wired_test.dart`:
 
 ```dart
@@ -587,16 +597,16 @@ void main() {
 
 - [ ] **Step 11: Mutate and run** (commit Steps 1–10 first; `grep -c` each token before/after):
   1. lib `buildSelection`: `if (grepResults[k] == null) return fallback(...)` → `if (grepResults[k] == null) continue;` → expected red: "failed git grep falls back" (1).
-  2. lib `registryTestsFor`: `if (f != null && changedPaths.contains(f.group(1))) hit = true;` → `if (f != null && false) hit = true;` → expected red: both registry tests + the union test (≥3).
+  2. lib `registryTestsFor`: `if (f != null && changedPaths.contains(f.group(1))) hit = true;` → `if (f != null && false) hit = true;` → expected red: the three-shape registry test + the union test = 2 (the positive-control test asserts `isEmpty` and CANNOT redden under this mutation — measured by round 2).
   3. lib: `if (!isDartTest(f) || isGolden(f))` → `if (!isDartTest(f))` → expected red: golden-only test + the union test's `skipped`/`tests` assertions (≥2).
   4. runner: `return warnOnly ? 0 : code;` → `return 0;` → expected red: e2e "failing flutter run fails the sweep" (1).
-  5. runner: `noMatchIsEmpty: true` → `false` → `lonely.dart` has no match → grep exit 1 → null → fallback → expected red: the first e2e (argv contains `test/contracts/` instead of the two files; `unmapped` line absent) (1).
+  5. runner: `noMatchIsEmpty: true` → `false` → `lonely.dart` has no match → grep exit 1 → null → fallback → expected red: the first e2e (argv contains `test/contracts/` instead of the two files; `unmapped` line absent) AND the `--dry-run` test (its stdout no longer lists `a_test.dart`) = 2 (measured by round 2).
   6. runner: delete the `CONTRACT_SWEEP_NESTED` guard block → expected red: the recursion-guard e2e (1).
 
 - [ ] **Step 12: Commit**
 
 ```bash
-git add scripts/contract_sweep.dart scripts/contract_sweep_lib.dart scripts/pre-push.sh test/scripts/contract_sweep_lib_test.dart test/scripts/contract_sweep_e2e_test.dart test/contracts/contract_sweep_wired_test.dart test/scripts/pre_push_analyze_always_e2e_test.dart test/scripts/gate_e2e_env_hermetic_test.dart docs/playbook/common-pitfalls.md
+git add scripts/contract_sweep.dart scripts/contract_sweep_lib.dart scripts/pre-push.sh test/scripts/contract_sweep_lib_test.dart test/scripts/contract_sweep_e2e_test.dart test/contracts/contract_sweep_wired_test.dart test/scripts/pre_push_analyze_always_e2e_test.dart test/contracts/gate_e2e_env_hermetic_test.dart docs/playbook/common-pitfalls.md
 sh scripts/safe_commit.sh "feat(gates): contract_sweep -- pre-push targeted SoT contract tests, warn-only baseline (OI-220)
 
 Three unioned arms (registry / content-reference / changed tests) over the
@@ -629,7 +639,7 @@ Report back: branch, sha, per-mutation reds, test totals, and whether the e2e ra
 
 - [ ] **Step 1: §4.1.5 grep** — `grep -n "gate_scripts_wired\|allowlist\|Gate 33" docs/diagnoses/INDEX.md`; read matches; `a9f2c6` (closes-oi bare-invocation misclassification, allowlist comment `:81`) goes in `related_bugs:`.
 
-- [ ] **Step 2: Mint the migrations_live OI** (network needed; from this worktree): `sh scripts/mint_oi.sh "check_migrations_live cannot pass by construction: 125/139 local migrations never registered live (75 founder raw-SQL applies) -- retire in favour of Gate 14 or redesign the matcher"`. Then write the board entry (append, per the board's own section shape at `open_issues.md:1-40`): Status OPEN; Blocked on: FOUNDER — retire (delete the script + its ledger/allowlist/skip entries) or redesign the matcher against `backups/applied_migrations.json`'s raw-SQL history; Verified: 2026-09-19 with the exact run (exit 1, `local migrations: 139, live migrations: 130`, `125 NOT applied live`, 14/139 prefix matches, header `:27-32` admits the heuristic, `grep -ic 14b build-apk.md` → 0); recommendation RETIRE (Gate 14 `check_migrations_applied.dart` + the ledger already own "applied live"). Record the number as `OI-NEW` below.
+- [ ] **Step 2: Mint the migrations_live OI** (network needed — `mint_oi.sh` does `git fetch` + `gh api` and refuses offline; any branch; it `cd`s to the toplevel itself): `sh scripts/mint_oi.sh "check_migrations_live cannot pass by construction: 125/139 local migrations never registered live (75 founder raw-SQL applies) -- retire in favour of Gate 14 or redesign the matcher"`. Then write the board entry (append, per the board's own section shape at `open_issues.md:1-40`; the stub carries Status/Blocked on/Verified so `build_oi_index.dart` does not fail closed): Status OPEN; Blocked on: FOUNDER — retire or redesign the matcher against `backups/applied_migrations.json`'s raw-SQL history. **Retire checklist, complete:** delete `scripts/check_migrations_live.dart`; its `gate_test_ledger.yaml` entry; its `_allowList` entry; its case-skip line in `pre-commit.sh` (`:333`) and `test.yml`; the assertion that the file EXISTS at `test/contracts/phase_c_oi_closures_test.dart:81-85`; and the by-hand invocation at `docs/runbooks/restore-drill.md:63`. Verified: 2026-09-19 with the exact run (exit 1, `local migrations: 139, live migrations: 130`, `125 NOT applied live`, 14/139 prefix matches, header `:27-32` admits the heuristic, `grep -ic 14b build-apk.md` → 0; its ONLY documented runner is by hand via the restore-drill runbook, where it fails); recommendation RETIRE (Gate 14 `check_migrations_applied.dart` + the ledger already own "applied live"). Record the number as `OI-NEW` below.
 
 - [ ] **Step 3: Write the failing lib tests** — `test/scripts/gate_scripts_wired_runners_test.dart`
 
@@ -662,7 +672,9 @@ void main() {
 
   group('invokesGate', () {
     test('comment-only mention is NOT an invocation', () => expect(invokesGate(_preCommit, 'check_commented.dart'), isFalse));
-    test('prose mention is NOT an invocation', () => expect(invokesGate(_preCommit, 'check_prose.dart'), isFalse));
+    test('prose naming the gate WITHOUT the invocation shape is NOT an invocation', () => expect(invokesGate(_preCommit, 'check_prose.dart'), isFalse));
+    test('prose CARRYING the invocation shape (`run scripts/<gate>`) DOES count -- a skill doc is executed by reading it', () =>
+        expect(invokesGate('Then run `dart run scripts/check_doc.dart --record` before the upload.\n', 'check_doc.dart'), isTrue));
     test('case-skip line is NOT an invocation', () => expect(invokesGate(_preCommit, 'check_skipped.dart'), isFalse));
     test('`run scripts/<gate>` on a live line IS', () => expect(invokesGate(_preCommit, 'check_explicit.dart'), isTrue));
   });
@@ -809,27 +821,27 @@ List<String> staleAllowlistViolations(Set<String> gatesOnDisk, Iterable<String> 
 
 - [ ] **Step 6: Run lib tests → green.**
 
-- [ ] **Step 7: Rewrite `check_gate_scripts_wired.dart`.** (a) `_allowList` (`:37-82`) becomes `const _allowList = <String, List<GateRunner>>{ … }` with EXACTLY these 12 entries (keys stay single-quoted with the trailing colon — `apk_release_signed_gate_test.dart:89-91` greps `'check_apk_release_signed.dart':` verbatim; `gate_wiring_args_required_test.dart` slices the map to its first `};`):
+- [ ] **Step 7: Rewrite `check_gate_scripts_wired.dart`.** (a) `_allowList` (`:37-82`) becomes `const _allowList = <String, List<GateRunner>>{ … }` with EXACTLY these 13 entries (14 today minus `snapshot_contract`) (keys stay single-quoted with the trailing colon — `apk_release_signed_gate_test.dart:89-91` greps `'check_apk_release_signed.dart':` verbatim; `gate_wiring_args_required_test.dart` slices the map to its first `};`):
 
 ```dart
   'check_apk_size_within_bounds.dart': [GateRunner.file('.claude/commands/build-apk.md', 'Needs an APK; /build-apk Gate 13.')],
   'check_apk_release_signed.dart': [GateRunner.file('.claude/commands/build-apk.md', 'Needs an APK + apksigner + JDK; /build-apk Gate 48.')],
   'check_hooks_installed.dart': [GateRunner.loop('preCommit', 'CI runners never run setup-hooks.sh, so .git/hooks is absent there by design; case-skipped in test.yml only.')],
   'check_plan_review_record_exists.dart': [GateRunner.file('.github/workflows/test.yml', 'P1.A keystone (§4.12) -- dedicated `plan-review-record` CI job (fetch-depth:0); the shallow loops case-skip it.')],
-  'check_unawaited_has_error_sink.dart': [GateRunner.loop('ci', 'ADVISORY (exit 0 by design, --strict to fail). CI\'s log is its only reader: pre-commit runs every gate as >/dev/null 2>&1, so it stays case-skipped there -- a 1.7 s no-op nobody can read (Gate 22 precedent).')],
+  'check_unawaited_has_error_sink.dart': [GateRunner.loop('ci', 'ADVISORY (exit 0 by design, --strict to fail). CI\'s log is its only reader: pre-commit.sh:368 runs every gate as >/dev/null 2>&1, so it stays case-skipped there -- a 1.7 s no-op nobody can read.')],
   'check_razorpay_key_flavor.dart': [GateRunner.file('.claude/commands/build-apk.md', '.env.prod is gitignored; runs locally before a prod release only.')],
-  'check_migrations_live.dart': [GateRunner.manual('OI-NEW', 'Cannot pass by construction: 125/139 local migrations were applied raw by the founder and never registered live (measured 2026-09-19). Retire-or-redesign is the founder\'s call.')],
-  'check_onconflict_live_arbiter.dart': [GateRunner.manual('OI-165', 'Live rollback-txn SQL via Management API; 403s with the current PAT. Runs nowhere until OI-165 names the token.')],
-  'check_two_user_cross_account.dart': [GateRunner.manual('OI-165', 'Wrapper over check_onconflict_live_arbiter.dart; inherits its 403.')],
+  'check_migrations_live.dart': [GateRunner.manual('OI-NEW', 'Cannot pass by construction: 125/139 local migrations were applied raw by the founder and never registered live (measured 2026-09-19). Its only documented runner is by hand (docs/runbooks/restore-drill.md:63), where it fails. Retire-or-redesign is the founder\'s call.')],
+  'check_onconflict_live_arbiter.dart': [GateRunner.manual('OI-165', 'Live rollback-txn SQL via Management API; 403s with the current PAT. No automated runner until OI-165 names the token.')],
+  'check_two_user_cross_account.dart': [GateRunner.manual('OI-165', 'Wrapper over check_onconflict_live_arbiter.dart; inherits its 403. Documented by-hand runner: docs/runbooks/restore-drill.md:71.')],
   'check_regression_catalog.dart': [GateRunner.file('scripts/pre-commit.sh', 'Explicit merge-commit invocation, not the auto-loop.')],
   'check_test_runtime_budget.dart': [GateRunner.manual('OI-101', 'Spawns the FULL `flutter test --reporter json`; re-arm-or-delete is OI-101 (founder scope call).')],
   'check_no_deferral_euphemism.dart': [GateRunner.file('scripts/pre-commit.sh', 'Scans the STAGED diff -- meaningful only at pre-commit; explicit invocation after the loop.')],
   'check_closes_oi_cited.dart': [GateRunner.file('scripts/commit-msg.sh', 'Commit-msg gate; takes the message file as its REQUIRED argument (a9f2c6).')],
 ```
 
-(`check_snapshot_contract.dart` gets NO entry — it runs in both loops.) Keep the historical comments (`:48-57`). (b) In `main()`: build `boardStatuses` = `mergedBoardStatuses(...)` from `scripts/oi_closure_lib.dart:73-79` (read its parameter names; pass the two board files' contents; if `docs/audit/open_issues.md` is unreadable pass `null`). Replace `:179`'s `continue` with: `if (_allowList.containsKey(script)) { unwired.addAll(runnerViolations(gate: script, runners: _allowList[script]!, read: _readOrNull, caseSkipsOf: (c) => extractCaseSkips(c, caseSkipRegex), boardStatuses: boardStatuses)); continue; }`. Replace `preCommitContent.contains(script)` / `workflowContent.contains(script)` at `:180,:182` with `invokesGate(...)`. After the loop add `unwired.addAll(staleAllowlistViolations(allChecks.toSet(), _allowList.keys));`. Keep `--warn-only` semantics (`:137`, `:241`) exactly.
+(`check_snapshot_contract.dart` gets NO entry — it runs in both loops.) Keep the historical comments (`:48-57`). (b) Define, AFTER the `_allowList` map closes, a plain top-level function — NOT a closure ending in `};` above the map, because `test/contracts/gate_wiring_args_required_test.dart:66-67` slices the file from `const _allowList` to the FIRST `};` in the file: `String? _readOrNull(String path) { final f = File(path); return f.existsSync() ? f.readAsStringSync() : null; }`. In `main()`: build `boardStatuses` = `mergedBoardStatuses(...)` from `scripts/oi_closure_lib.dart:73-79` (read its parameter names; `check_closes_oi_performed.dart:38` already imports that lib the same way; pass the two board files' contents; if `docs/audit/open_issues.md` is unreadable pass `null`). Replace `:179`'s `continue` with: `if (_allowList.containsKey(script)) { unwired.addAll(runnerViolations(gate: script, runners: _allowList[script]!, read: _readOrNull, caseSkipsOf: (c) => extractCaseSkips(c, caseSkipRegex), boardStatuses: boardStatuses)); continue; }`. Replace `preCommitContent.contains(script)` / `workflowContent.contains(script)` at `:180,:182` with `invokesGate(...)`. After the loop add `unwired.addAll(staleAllowlistViolations(allChecks.toSet(), _allowList.keys));`. Keep `--warn-only` semantics (`:137`, `:241`) exactly.
 
-- [ ] **Step 8: Un-dormant** — delete `check_snapshot_contract.dart|\` at `pre-commit.sh:337` and BOTH `check_unawaited_has_error_sink.dart|\` and `check_snapshot_contract.dart|\` from `test.yml`'s case block (`:236-249`). Recount and fix the "14 case-skipped" prose at `pre-commit.sh:134-136` and `:310-312`. Run `dart run scripts/check_snapshot_contract.dart; echo $?` → 0.
+- [ ] **Step 8: Un-dormant** — delete `check_snapshot_contract.dart|\` at `pre-commit.sh:337` and BOTH `check_unawaited_has_error_sink.dart|\` and `check_snapshot_contract.dart|\` from `test.yml`'s case block (`:236-249`). Recount and fix the "14 case-skipped" prose at `pre-commit.sh:134-136` and `:310-312` AND `test.yml`'s arm comment ("Other 4: require live DB / merge context / build artifact." — recount after the two deletions). Run `dart run scripts/check_snapshot_contract.dart; echo $?` → 0.
 
 - [ ] **Step 9: Run the gate on the real tree** — `dart run scripts/check_gate_scripts_wired.dart; echo $?` → PASS, exit 0 (an entry failing means the ENTRY is wrong). Then `flutter test test/contracts/gate_wiring_args_required_test.dart test/contracts/apk_release_signed_gate_test.dart test/scripts/gate_scripts_wired_runners_test.dart` → green.
 
@@ -1004,13 +1016,13 @@ concepts:
   - Widen the key regexes at `:104-105` to `behavioral_test_path(?:_[a-z0-9_]+)?`.
   - One helper: `String? _missingOnDisk(String path) => File('${Directory.current.path}/$path').existsSync() ? null : path;`
   - In the value branch: `final path = value.replaceFirst(RegExp(r'\s+#.*$'), '').trim();` and, when the existing validity test passes, `if (_missingOnDisk(path) != null) missingFiles.add('$currentConcept: behavioral_test_path `$path` does not exist (registry line $lineNo)');` — declare `final missingFiles = <String>[];` beside the other sinks; track `lineNo`.
-  - `presence_only` scan: on `^\s+presence_only\s*:\s*true` take the trailing `#` comment text; on `^\s+presence_only_reason\s*:\s*\|` collect every following line that is MORE indented than the key (stop at the first line that is not); for each text, every match of `RegExp(r'\b(test|docs|scripts|supabase|lib)/[A-Za-z0-9_./-]+')` with trailing `.,;)` trimmed must pass `_missingOnDisk`, else `missingFiles.add('$currentConcept: presence_only cites `$p` which does not exist')`. Count EVERY `presence_only: true` line for the tally and say how many also carry a behavioral path.
+  - `presence_only` scan: on `^\s+presence_only\s*:\s*true` take the trailing `#` comment text; on `^\s+presence_only_reason\s*:\s*[|>]` (literal OR folded block) collect every following line that is MORE indented than the key (stop at the first line that is not; the real block at `:6082` has key indent 4, body 6, and stops at `description:`); for each text, every match of `RegExp(r'\b(test|docs|scripts|supabase|lib)/[A-Za-z0-9_./-]+')` with trailing `.,;)` trimmed must pass `_missingOnDisk`, else `missingFiles.add('$currentConcept: presence_only cites `$p` which does not exist')`. Count EVERY `presence_only: true` line for the tally and say how many also carry a behavioral path.
   - `problems = [...staleRequired, ...missing, ...missingFiles]` at `:128-129`; a `[file-missing]` report block mirroring `check_sot_registry_parity.dart:151-155`.
   - Run on the REAL registry: `dart run scripts/check_sot_behavioral_test_paths.dart; echo $?` → PASS, exit 0, tally re-derived (`grep -cE '^\s+presence_only:\s*true' docs/sot_registry.yaml` → 17).
 
 - [ ] **Step 5: Run the new test → green.** `flutter analyze scripts/check_sot_behavioral_test_paths.dart test/scripts/sot_behavioral_test_paths_gate_test.dart` → 0 warnings.
 
-- [ ] **Step 6: Mutate and run** (commit first): (1) `_missingOnDisk` → `=> null` (one helper backs BOTH sinks, so this reddens every RED PATH test: 4); (2) narrow the key regex back to `behavioral_test_path\s*:` → the sibling-key test (1); (3) drop the comment-strip → the passing trailing-comment test (1); (4) make the block-scalar collector stop immediately (collect zero lines) → the `presence_only_reason` RED test (1). Record counts.
+- [ ] **Step 6: Mutate and run** (commit first): (1) `_missingOnDisk` → `=> null` (one helper backs BOTH sinks, so this reddens every RED PATH test AND the `--warn-only … still NAMES it` test: 5, measured by round 2); (2) narrow the key regex back to `behavioral_test_path\s*:` → the sibling-key test (1); (3) drop the comment-strip → the passing trailing-comment test (1); (4) make the block-scalar collector stop immediately (collect zero lines) → the `presence_only_reason` RED test (1). Record counts.
 
 - [ ] **Step 7: Diagnose-doc** (validator first). Writer = `docs/sot_registry.yaml` `behavioral_test_path:` values (140 concepts); reader = Gate 42 `:103-114`, which read the field's SHAPE, never the file. Tier 1 `fixed_in_this_batch`; others `not_applicable`.
 
@@ -1043,7 +1055,7 @@ Report back: branch, sha, per-mutation reds, the real-registry PASS line.
 - Test: `test/scripts/safe_merge_test.dart` (two helpers + 3 tests)
 - Create: `docs/diagnoses/2026-09-19-safe-merge-silent-on-absent-record-<id>.md`
 
-- [ ] **Step 1: §4.1.5 grep** — `grep -n "safe_merge\|plan-review record" docs/diagnoses/INDEX.md`; `git show --stat ecc01876 | head -20` (the precheck commit; it cites `d4e9a2`). Verify `d4e9a2` and `c9f4e1` resolve in INDEX before citing them in `related_bugs:`; `recurrence:` = third merge-without-record instance (`dcb94a93` 2026-09-10; `0768a0ce` 2026-09-18; the 2026-08-30 unwind CLAUDE.md §7 records).
+- [ ] **Step 1: §4.1.5 grep** — `grep -n "safe_merge\|plan-review record" docs/diagnoses/INDEX.md`. `related_bugs:` = `c9f4e1` ONLY (18 safe_merge mentions; verify it resolves in INDEX). Do NOT cite `d4e9a2` — it is `2026-08-30-profile-full-name-restore-race`, which the precheck commit `ecc01876` reused as a batch id for the commit-msg gate; name `ecc01876` by sha in prose instead. `recurrence:` = third merge-without-record instance (`dcb94a93` 2026-09-10; `0768a0ce` 2026-09-18; the 2026-08-30 unwind CLAUDE.md §7 records). Residues to STATE in the doc (not fix): the precheck fires only on the `safe_merge.sh` path — `gh pr merge` (used 2026-09-16 when the sandbox blocked the primary) and a raw `git merge` bypass it; an `origin/foo` branch spelling is silent (same as the existing bpass precheck); pre-merge the classifier's content rule reads the WORKING TREE (`blast_radius_content_rules_lib.dart:58-62`), so a branch's SECURITY DEFINER migration classifies `platform`, not `catastrophic` — still ≥ account, the warning fires, the tier in the message can understate.
 
 - [ ] **Step 2: Write the failing tests** — append to `test/scripts/safe_merge_test.dart` (read `:1-60`, the `_run(exe, args, cwd)` helper at `:33-42` — it is the ONLY helper; every git call is `_run('git', …)` — and `makeFeatureBranch`'s definition, which the new helper mirrors):
 
@@ -1069,14 +1081,15 @@ Report back: branch, sha, per-mutation reds, the real-registry PASS line.
   }
 
   /// A branch off main that adds ONE file at [path] and no plan-review record.
-  /// Mirrors makeFeatureBranch line for line, parameterising only the path.
+  /// Same shape as makeFeatureBranch (:103-110): `-B <name> main` (explicit
+  /// start point, never the current HEAD), parameterising only the path.
   String makeBranchAdding(String primary, String name, String path) {
-    _run('git', ['checkout', '-q', '-b', name], primary);
+    _run('git', ['checkout', '-q', '-B', name, 'main'], primary);
     File('$primary/$path')
       ..parent.createSync(recursive: true)
       ..writeAsStringSync('-- probe\n');
     _run('git', ['add', '-A'], primary);
-    _run('git', ['commit', '-q', '-m', 'branch: $name'], primary);
+    _run('git', ['commit', '-qm', 'branch: $name'], primary);
     _run('git', ['checkout', '-q', 'main'], primary);
     return name;
   }
@@ -1190,11 +1203,11 @@ Report back: branch, sha, per-mutation reds, `safe_merge_test.dart` total.
 
 **Files:** `docs/blast_radius.yaml`, `CLAUDE.md`, `docs/audit/gate_test_ledger.yaml`, `docs/audit/open_issues.md` (in-place status flips), `docs/audit/gate-integrity.closure.yaml`, `docs/plan-reviews/gate-integrity.md`, `docs/reviews/<sha>-bpass.md`, `.claude/skills/code-review/SKILL.md` (tuning entry).
 
-- [ ] **Step 1: Cherry-pick** each fork's commit(s) onto `gate-integrity`, Task 1 → 4 (`git cherry-pick <sha>`). **The pre-commit hook RUNS on each** (`check_commit_from_worktree.dart:80` / `check_closes_oi_cited.dart:127` exempt `CHERRY_PICK_HEAD` because it fires) — ~98 s each, budgeted. `git log --oneline -7` → spec v1, spec v2, 4 units.
+- [ ] **Step 1: Cherry-pick** each fork's commit(s) onto `gate-integrity`, Task 1 → 4 (`git cherry-pick <sha>`). A CLEAN pick runs NO `pre-commit`/`commit-msg` hook (probed by round 2: only `prepare-commit-msg` + `post-commit` fire; the `CHERRY_PICK_HEAD` exemptions at `check_commit_from_worktree.dart:76-81` / `check_closes_oi_cited.dart:126-130` exist for the CONFLICT path, where `git cherry-pick --continue` DOES run both). The gates ran on each branch; Step 8's commit is the first gate run over the UNION. **Expect a conflict on `docs/diagnoses/INDEX.md` on the 2nd and 3rd fix units** — each fork's pre-commit regenerates and stages it (`pre-commit.sh:183-191`) and the chronological table is latest-first, so three same-day rows insert at the same line. Never hand-merge a generated index: `"$DART_BIN" run scripts/build_bug_index.dart && git add docs/diagnoses/INDEX.md && git cherry-pick --continue` (the `--continue` pays the ~98 s loop; same recipe for `OPEN_INDEX.md` / `GATE_INDEX.md` if they ever collide). `git log --oneline -7` → spec v1, spec v2, 4 units.
 - [ ] **Step 2: Verify one mutation per unit yourself** (the cheapest listed) — trust but verify (§4.9 subagent-numeric rule). Record the observed reds.
-- [ ] **Step 3: `docs/blast_radius.yaml` (D16)** — beside the `scripts/pre-push.sh` pin (`:164`), add `platform` pins for `scripts/contract_sweep.dart`, `scripts/contract_sweep_lib.dart`, `scripts/gate_scripts_wired_lib.dart`, `scripts/check_sot_behavioral_test_paths.dart`. Verify: `printf '%s\n' <each> | dart run scripts/blast_radius_from_diff.dart -` → platform ×4; `dart run scripts/check_blast_radius_coverage.dart` → PASS.
+- [ ] **Step 3: `docs/blast_radius.yaml` (D16)** — beside the `scripts/pre-push.sh` pin (`:164`), add `platform` pins for `scripts/contract_sweep.dart`, `scripts/contract_sweep_lib.dart`, `scripts/gate_scripts_wired_lib.dart`, `scripts/check_sot_behavioral_test_paths.dart`, AND the two libs Gate 33's `manual:` verdicts now depend on — `scripts/oi_closure_lib.dart`, `scripts/check_closes_oi_cited.dart` (both `feature` today). Verify: `printf '%s\n' <each> | dart run scripts/blast_radius_from_diff.dart -` → platform ×6; `dart run scripts/check_blast_radius_coverage.dart` → PASS.
 - [ ] **Step 4: Ledger** — promote `check_gate_scripts_wired.dart` (`gate_test_ledger.yaml:343`; `test_path:` = [`test/scripts/gate_scripts_wired_runners_test.dart`, `test/contracts/gate_wiring_args_required_test.dart`]) and `check_sot_behavioral_test_paths.dart` (`:486-487`; `test_path:` = [`test/scripts/sot_behavioral_test_paths_gate_test.dart`]) to `mutation_proven: true` + `evidence:` (what was neutered, observed reds) — shape from `:596-`. `dart run scripts/check_gate_test_ledger.dart` → PASS.
-- [ ] **Step 5: CLAUDE.md** (D15): §0 pre-push row (the sweep step, warn-only, guards; and re-derive the gate counts — `ls scripts/check_*.dart | wc -l`, the case-skipped count after D8); §4.1.5 item 6 — *"Value-semantics grep (pre-work): a batch that changes a stored value's MEANING sweeps `test/` AND `supabase/functions/` for that value BEFORE coding (codified 2026-09-18 in code-review tuning; #47)."*; §4.12.7 — *"Execution mode (subagent vs inline) is decided and written into the plan at batch START, never mid-batch (OI-220 rider 2)."*; rule 21 — Gate 42 "STRICT by default and now RESOLVES every cited path on disk (OI-195, 2026-09-19)" + replace "6 entries carry it today" with the re-derived count and the command; §7 — new row for `contract_sweep` (arms, fallback, guards, warn-only until the flip, not a check_*, pinned by `contract_sweep_wired_test.dart`, rule-21 mutation counts) and the safe_merge row (absent-record precheck; `safe_merge_test.dart` count re-run). Then `dart run scripts/check_claude_md_citations.dart` → PASS.
+- [ ] **Step 5: CLAUDE.md** (D15): §0 pre-push row (the sweep step, warn-only, guards; and re-derive the gate counts — `ls scripts/check_*.dart | wc -l`, the case-skipped count after D8); §4.1.5 item 6 — *"Value-semantics grep (pre-work): a batch that changes a stored value's MEANING sweeps `test/` AND `supabase/functions/` for that value BEFORE coding (codified 2026-09-18 in code-review tuning; #47)."*; §4.12.7 — *"Execution mode (subagent vs inline) is decided and written into the plan at batch START, never mid-batch (OI-220 rider 2)."*; rule 21 — Gate 42 "STRICT by default and now RESOLVES every cited path on disk (OI-195, 2026-09-19)" + replace "6 entries carry it today" with exactly: "17 concepts carry `presence_only: true`, 10 of which also cite a behavioral path (`grep -cE '^\s+presence_only:\s*true' docs/sot_registry.yaml`)"; §7 — new row for `contract_sweep` (arms, fallback, guards, warn-only until the flip, not a check_*, pinned by `contract_sweep_wired_test.dart`, rule-21 mutation counts) and the safe_merge row (absent-record precheck; `safe_merge_test.dart` count re-run). Then `dart run scripts/check_claude_md_citations.dart` → PASS.
 - [ ] **Step 6: Board** — flip OI-155, OI-195, OI-181 IN PLACE to `- **Status**: CLOSED · 2026-09-19 · diagnose <id> · commit <sha>` (do NOT move them; six CLOSED entries already sit on the open board). OI-220 stays OPEN: rewrite `Blocked on:` to the flip criterion, add a `Shipped:` line (warn-only, commit sha), and replace its "rule-24 ledger entry" sentence with the D1/D5 trust model. The commit carrying the three flips MUST have `closes-oi: OI-155`, `closes-oi: OI-195`, `closes-oi: OI-181` lines.
 - [ ] **Step 7: Closure YAML** `docs/audit/gate-integrity.closure.yaml` — read `scripts/validate_audit_closure.dart:1-60` FIRST; shape from `unitb-deload-reason.closure.yaml`. Entries: U1 OI-220 build (`closed_in_commit`, `commit: gate-integrity@branch`, `notes:` shipped warn-only; flip tracked on OI-220 with its criterion), U2 OI-155 (`closed_in_commit`; note 4 of 6 `manual:`), U3 OI-195, U4 OI-181 (`closed_in_commit`), U5 migrations_live retire-or-redesign (`blocked_on_user`, `reason:` founder call, OI-NEW), plus one entry per B-pass finding after Step 9. `closed_count:` recomputed. `dart run scripts/validate_audit_closure.dart --strict` → PASS.
 - [ ] **Step 8: Commit** Steps 3–7 as `docs(gates): blast-radius pins, ledger promotions, CLAUDE.md riders, board + closure ledger for gate-integrity` with the three `closes-oi:` lines. The commit IS the gate loop.
