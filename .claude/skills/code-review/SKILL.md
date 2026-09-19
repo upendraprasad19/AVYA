@@ -231,6 +231,49 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-19 (b)** — blast-radius **platform** — branch `gate-integrity`
+  (OI-220 pre-push contract sweep · OI-155 Gate 33 typed allowlist · OI-195
+  Gate 42 path resolution · OI-181 safe_merge absent-record precheck; four
+  forks in isolated worktrees, coordinator-integrated). **2 findings (0 P0,
+  0 P1, 1 P2, 1 P3); 0 false_alarm — both fixed in-batch** (`e993a345`).
+  Review: `docs/reviews/gate-integrity-bpass.md`. The reviewer ran in its OWN
+  worktree (`isolation: worktree` + `git reset --hard <sha>`) so its mutation
+  probes could not collide with the coordinator's concurrent
+  `flutter test test/scripts/` run — do this whenever a review and a test run
+  overlap in time; it is the same lesson as "serialise review rounds" without
+  paying the serialisation.
+  **Tuning 1 — lens 6 gains a sub-shape: "the hardening one function ABOVE
+  did not travel."** `extractCaseSkips` had been hardened against
+  comment-restated names; `invokesGate`, directly below it in the same file
+  and backing every `file()` runner, shipped as a bare `contains()` and read
+  heredoc bodies and invoker-less prose as invocations. When a file contains
+  a documented past hardening, ask which SIBLING predicates in that file make
+  the same class of decision and whether the hardening reached them.
+  **Tuning 2 — lens 7 (missing_input) for CHECK SCRIPTS: a non-`check_*`
+  runner is invisible to every gate that enumerates `check_*`.** The sweep is
+  deliberately `contract_sweep.dart` (both loops enumerate `check_*`; the
+  rule-24 ledger rejects non-`check_*` keys), so its wiring needs its OWN pin
+  (`test/contracts/contract_sweep_wired_test.dart` + a behavioural assertion
+  that the real hook reaches the line). Reviewer question: "what enumerates
+  this, and if nothing does, what pins it?"
+  **Tuning 3 — lens 8 (asserted_fixture_value) for REGEXES written into a
+  plan: `grep -c` the regex against the REAL file before believing any
+  selection it drives.** The v1 registry arm matched `^\s+file:` — zero hits
+  against 896 `- file:` items and 176 `{ file: }` maps — and would have
+  shipped inert; caught by plan-review round 1, not by reading.
+  **Tuning 4 — Windows-specific red flag for anything that spawns `flutter`
+  from Dart under a test that stubs `flutter` on PATH:** `Process.runSync(
+  'flutter', …, runInShell: true)` goes through cmd.exe, which cannot execute
+  an extensionless POSIX stub and finds the REAL flutter — a recursion the
+  file-level `@Timeout` cannot interrupt (`runSync` blocks the isolate).
+  Guard with an env sentinel set on the spawn (`CONTRACT_SWEEP_NESTED=1`) and
+  a kill switch the e2e sets; probe `flutter --version` from Dart to see which
+  binary answers.
+  **Tuning 5 — L25 adjacency greps miss LINE-WRAPPED citations.** Finding 2's
+  three wrong dates were found with a `0768a0ce.{0,3}2026-09-18` adjacency
+  grep, which missed the closure YAML's instance because YAML `>` folding put
+  the date on the next line; `git grep <sha> | grep <date>` (two passes, no
+  adjacency) is the widest form. Same family as the analyzer `^\s+` trap.
 - **2026-09-19** — blast-radius **feature** (record commit; the underlying
   bump commit `a4eb42ab` self-declared **platform**) — branch
   `plan-review-record-versionbump44`, filling in a plan-review record the
