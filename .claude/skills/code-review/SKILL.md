@@ -231,6 +231,22 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-19** — blast-radius **feature** (record commit; the underlying
+  bump commit `a4eb42ab` self-declared **platform**) — branch
+  `plan-review-record-versionbump44`, filling in a plan-review record the
+  `aab-versioncode-bump-44` merge (`0768a0ce`) needed but never got: the
+  version-bump exemption in `check_plan_review_record_exists.dart` only
+  covers single-parent direct-to-main commits, never a `--no-ff` merge, so
+  the standard §4.13 worktree+`safe_merge.sh` flow (unlike every prior
+  versionCode bump) failed CI's plan-review-record gate. **0 findings; 0
+  false_alarm.** Review: `docs/reviews/aab-versioncode-bump-44-bpass.md`
+  (two independent zero-finding passes — self + a fresh context-blind
+  subagent — both confirmed the diff touches only the two version literals).
+  **Tuning — none.** Nothing new surfaced; recorded here only because §5.1's
+  gate requires an entry for any `docs/reviews/**.md` addition, and this one
+  genuinely has no lesson beyond the process gap already named in the plan-
+  review record itself (`mechanical_only: true` per CLAUDE.md §4.12.6 has no
+  effect in the gate script — confirmed by grep, zero hits).
 - **2026-09-18 (b)** — blast-radius **platform** — branch `discipline-v2`
   (S/M/L fix tiering + batch telemetry + hook wiring). **6 findings (0 P0, 0 P1,
   6 P2); 0 false_alarm — all 6 fixed in-batch** (`7de94167`). Review:

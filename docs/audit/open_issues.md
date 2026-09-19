@@ -4976,3 +4976,29 @@ keys are well-formed (the row was just read from `schedule_<fromDate>`), but a p
 silently redirects a write is worse than failing the move.
 
 **Fix direction:** the drop path's fallback should be a refusal, not a silent redirect.
+
+## OI-222 — Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-19 · filed via mint_oi.sh from branch `plan-review-record-versionbump44`
+
+`check_plan_review_record_exists.dart`'s version-bump exemption (`isVersionBumpCommit`) only
+applies to single-parent direct-to-main commits — every prior versionCode bump
+(`1e0f91ce`, `64fc2893`) landed that way. Bumping via the standard §4.13 worktree +
+`safe_merge.sh` flow instead produces a `--no-ff` merge commit, which gets NO exemption
+("every merge in the range needs a valid record for its own tier") and fails CI's
+"Plan-review record" job. Hit live 2026-09-19: merge `0768a0ce` (branch
+`aab-versioncode-bump-44`) failed CI on exactly this; fixed by authoring
+`docs/plan-reviews/aab-versioncode-bump-44.md` after the fact rather than avoiding the
+gap. Also confirmed: `mechanical_only: true` (CLAUDE.md §4.12.6) has ZERO hits in the
+gate script — it is not implemented, so declaring it does not reduce the
+`review_rounds >= 2` / `bpass: accepted` requirement for a merge that needs one.
+
+**Fix scope:** add a row to CLAUDE.md §4.9 (Common process pitfalls) documenting that a
+versionCode bump must be committed DIRECTLY to `main` (single-parent, `ALLOW_MAIN_COMMIT=1`
+or equivalent), never via worktree+merge, unless the author is prepared to also author a
+plan-review record for the merge. Out of scope for the fix that discovered this (kept
+feature-tier deliberately, to avoid the exact recursion this OI describes) — CLAUDE.md is
+pinned `platform` tier, so this edit needs its own appropriately-reviewed commit.
