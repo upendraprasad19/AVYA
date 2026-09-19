@@ -67,15 +67,15 @@ void main() {
     test('sync projection maps cloud reps from cumulative reps_completed', () {
       final syncSrc = loadSyncServiceSource().readAsStringSync();
 
-      // Scope to the workout_log_exercises upsert projection block so a
-      // coincidental match elsewhere doesn't pass the test.
-      final upsertMarker = "from('workout_log_exercises').upsert(";
-      final upsertStart = syncSrc.indexOf(upsertMarker);
-      expect(upsertStart, greaterThan(0),
-          reason: 'workout_log_exercises upsert call must exist');
-      final blockEnd = syncSrc.indexOf('}, onConflict:', upsertStart);
-      expect(blockEnd, greaterThan(upsertStart));
-      final projectionBlock = syncSrc.substring(upsertStart, blockEnd);
+      // OI-204 (plan-review round 1, finding C3) -- same repoint as
+      // duration_seconds_aggregate_populated_test.dart's setUpAll.
+      final payloadMarker = 'final summaryPayload = <String, dynamic>{';
+      final payloadStart = syncSrc.indexOf(payloadMarker);
+      expect(payloadStart, greaterThan(0),
+          reason: 'workout_log_exercises summaryPayload map must exist');
+      final payloadEnd = syncSrc.indexOf('};', payloadStart);
+      expect(payloadEnd, greaterThan(payloadStart));
+      final projectionBlock = syncSrc.substring(payloadStart, payloadEnd);
 
       // reps is sourced from the cumulative reps_completed, then clamped to the
       // wle_reps_realistic bound (diagnose e7b3c9 added the clamp+telemetry guard

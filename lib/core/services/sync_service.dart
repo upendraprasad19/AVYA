@@ -354,6 +354,82 @@ class SyncService {
     };
   }
 
+  /// OI-204 — Hive key for the exercise-log fingerprint index (workoutBox). See
+  /// docs/architecture/sync.md "Sync fingerprint-skip pattern" +
+  /// docs/sot_registry.yaml `sync_exercise_log_payload_hash_index`.
+  static const String _exlogHashIndexKey = 'sync_exlog_payload_hash_index';
+
+  /// Kill-switch reverting `_syncExerciseLogs` to the verbatim unconditional
+  /// full-sweep upsert (no fingerprint skip).
+  bool get _exlogHashSkipDisabled {
+    try {
+      return _hive.configBox.get('disable_exlog_hash_skip') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Fingerprint of the FULL per-key push bundle: the summary row payload plus
+  /// its ordered per-set rows. Any change to either half flips the fingerprint.
+  /// Pure; extracted for behavioral coverage.
+  static String exlogPayloadFingerprint(
+    Map<String, dynamic> summary,
+    List<Map<String, dynamic>> sets,
+  ) {
+    Map<String, dynamic> sortKeys(Map<String, dynamic> m) =>
+        <String, dynamic>{for (final k in m.keys.toList()..sort()) k: m[k]};
+    final combined = {
+      'summary': sortKeys(summary),
+      'sets': sets.map(sortKeys).toList(),
+    };
+    return _deterministicId(jsonEncode(combined));
+  }
+
+  /// Shared by exlogShouldSkipUpsert/nlogShouldSkipUpsert (plan-review round
+  /// 1, finding M11) — the two were byte-identical; unlike the per-domain
+  /// fingerprint functions (which genuinely differ in bundling shape), the
+  /// skip DECISION has no domain-specific content, so duplicating it was
+  /// pure divergence risk with no offsetting benefit (a future fix reaching
+  /// one and missing the other). Kept private + wrapped by named per-domain
+  /// functions so Task 1's gate, both test files, and any future domain
+  /// needing a carve-out shape like sched's `status` parameter all keep
+  /// stable, domain-specific call sites.
+  static bool _fingerprintMatchesStored({
+    required bool killSwitchDisabled,
+    required String? storedFingerprint,
+    required String currentFingerprint,
+  }) {
+    if (killSwitchDisabled) return false;
+    return storedFingerprint != null && storedFingerprint == currentFingerprint;
+  }
+
+  /// No status-based carve-out (unlike `schedShouldSkipUpsert`) — deliberate.
+  /// Exercise-log rows have no server-side out-of-band mutator (verified:
+  /// no Edge Function or migration writes to workout_log_exercises/
+  /// workout_log_sets outside a one-shot historical backfill, plus migration
+  /// 057's one-shot dedup DELETEs — see the diagnose-doc's spec §5.3
+  /// correction) and every edit rewrites the SAME Hive key in place, so any
+  /// edit changes the fingerprint on its own. Pure, static.
+  static bool exlogShouldSkipUpsert({
+    required bool killSwitchDisabled,
+    required String? storedFingerprint,
+    required String currentFingerprint,
+  }) =>
+      _fingerprintMatchesStored(
+        killSwitchDisabled: killSwitchDisabled,
+        storedFingerprint: storedFingerprint,
+        currentFingerprint: currentFingerprint,
+      );
+
+  @visibleForTesting
+  static Map<String, String> exlogPrunedHashIndex(
+      Map<String, String> index, Set<String> liveKeys) {
+    return <String, String>{
+      for (final e in index.entries)
+        if (liveKeys.contains(e.key)) e.key: e.value,
+    };
+  }
+
   /// H1a — best-effort flush fired on `AppLifecycleState.paused` (wired to
   /// [HiveService.onAppPaused] in the constructor). Runs the NON-coalesced
   /// variants so a burst that coalesced just before backgrounding still reaches

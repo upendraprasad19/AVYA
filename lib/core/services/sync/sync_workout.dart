@@ -184,6 +184,23 @@ extension SyncServiceWorkout on SyncService {
   /// The summary row (workout_log_exercises) stays for AI features + analytics.
   Future<void> _syncExerciseLogs(String userId) async {
     final workoutBox = _hive.workoutBox;
+
+    // OI-204 — sync-owned fingerprint index so an unchanged exercise log can
+    // skip its idempotent re-upsert instead of re-walking the entire
+    // historical log every coalesced pass. Mirrors H1b Part A
+    // (_syncScheduledWorkouts). See docs/architecture/sync.md "Sync
+    // fingerprint-skip pattern".
+    final bool exlogHashSkipDisabled = _exlogHashSkipDisabled;
+    final Map<String, String> exlogHashIndex = <String, String>{};
+    if (!exlogHashSkipDisabled) {
+      final rawIndex = workoutBox.get(SyncService._exlogHashIndexKey);
+      if (rawIndex is Map) {
+        rawIndex.forEach((k, v) {
+          if (k is String && v is String) exlogHashIndex[k] = v;
+        });
+      }
+    }
+
     for (final key in workoutBox.keys) {
       if (key is! String || !key.startsWith('exlog_')) continue;
       final raw = workoutBox.get(key);
@@ -191,6 +208,14 @@ extension SyncServiceWorkout on SyncService {
       final log = Map<String, dynamic>.from(raw);
 
       try {
+        // OI-204 — set false in the per-set catch below; the fingerprint is
+        // recorded only if this stays true. Guarded by
+        // scripts/check_sync_hash_skip_atomicity.dart. Declared inside the
+        // try (spec §5.1; plan-review round 1 finding M10 — the original
+        // draft declared it before the try, an undocumented asymmetry with
+        // nlog's shape, which spec §5.1 explicitly specifies as "at the top
+        // of the per-key try block").
+        bool exlogBundleSynced = true;
         // ── SUMMARY ROW ──
         // 1 row per exercise. weight_kg = best; reps = cumulative; set_number = total.
         final date = log['date'] as String? ?? '';
@@ -284,7 +309,8 @@ extension SyncServiceWorkout on SyncService {
                 'raw=$rawReps clamped=$clampedReps exercise=${log['exercise_name']}',
           ));
         }
-        await _supabase.client.from('workout_log_exercises').upsert({
+
+        final summaryPayload = <String, dynamic>{
           // id OMITTED (fix 2026-06-02 cross-user collision) — gen_random_uuid()
           // on insert / kept on conflict. The natural key below now includes
           // user_id so two users with the same date+exercise+set don't collide.
@@ -305,15 +331,16 @@ extension SyncServiceWorkout on SyncService {
           // index uniq_wle_user_wlog_ex_set) — workout_log_id is date-only, so
           // without user_id two users' same-date+exercise+set rows collided and
           // DO UPDATE could overwrite the OTHER user's row (cross-user corruption).
-        }, onConflict: 'user_id,workout_log_id,exercise_id,set_number');
+        };
 
-        // ── PER-SET ROWS (F4) ──
+        // ── PER-SET ROWS (F4) — resolved BEFORE either network call, so the
+        // fingerprint below covers the whole bundle.
         // Upserts a row per set into `workout_log_sets`. Natural key is
         // (workout_log_id, exercise_id, set_number) → idempotent across
         // re-syncs and retries. Source: legacy `sets_detail` OR the new
         // WorkoutWriteService `sets` list (Plan A A-5).
+        final pendingSetRows = <Map<String, dynamic>>[];
         if (resolvedSets.isNotEmpty) {
-          final rows = <Map<String, dynamic>>[];
           // Audit 2026-05-15 — belt-and-suspenders null-key guard.
           // Mirrors the summary-row guard above; ensures we never push
           // per-set rows whose natural-key parents (workout_log_id /
@@ -371,7 +398,7 @@ extension SyncServiceWorkout on SyncService {
                       'raw=$rawSetDur clamped=$clampedSetDur set=$setNum exercise=$exerciseId',
                 ));
               }
-              rows.add({
+              pendingSetRows.add({
                 'user_id': userId,
                 'workout_log_id': workoutLogId,
                 'exercise_id': exerciseId,
@@ -384,26 +411,79 @@ extension SyncServiceWorkout on SyncService {
               });
             }
           }
-          if (rows.isNotEmpty) {
+        }
+
+        // OI-204 — skip-check. Fingerprints the FULL bundle (summary + sets);
+        // any change to either half flips it, including one caused by an edit
+        // (spec §5.3). A fingerprint-computation failure must never cause a
+        // silent skip (spec §5.4): any exception here defaults to "not
+        // confirmed synced" — push normally, never abort the key, never
+        // store a bogus fingerprint.
+        bool shouldSkip = false;
+        String? fp;
+        try {
+          // `computedFp` (not `fp`) feeds `currentFingerprint:` below — it is
+          // non-nullable by inference, so this sidesteps any doubt about
+          // whether `fp`'s declared-nullable type would need an explicit `!`.
+          final computedFp =
+              SyncService.exlogPayloadFingerprint(summaryPayload, pendingSetRows);
+          fp = computedFp;
+          shouldSkip = SyncService.exlogShouldSkipUpsert(
+            killSwitchDisabled: exlogHashSkipDisabled,
+            storedFingerprint: exlogHashIndex[key],
+            currentFingerprint: computedFp,
+          );
+        } catch (e) {
+          // OI-204 — fail-open to "push normally, never store" (spec §5.4),
+          // but never SILENTLY: an exception here that persists would make
+          // the whole fingerprint-skip mechanism a permanent, invisible
+          // no-op for this key (plan-review round 1, finding I13 — this
+          // repo tracks exactly this collapse as its own recurring class,
+          // feedback_bad_news_vs_no_news).
+          unawaited(ErrorTelemetry.logEvent(
+            'sync_exlog_fingerprint_failed',
+            message: 'key=$key error=$e',
+          ));
+          fp = null;
+          shouldSkip = false;
+        }
+        if (shouldSkip) {
+          continue; // cloud already holds this exact bundle
+        }
+
+        await _supabase.client.from('workout_log_exercises').upsert(
+          summaryPayload,
+          onConflict: 'user_id,workout_log_id,exercise_id,set_number',
+        );
+
+        if (pendingSetRows.isNotEmpty) {
+          try {
+            await _supabase.client
+                // Fix 2026-06-02: user_id added to the conflict key (matching
+                // new index uniq_wls_user_wlog_ex_set) — prevents cross-user
+                // collision on the date-only workout_log_id. (id was already
+                // omitted — gen_random_uuid() default.)
+                .from('workout_log_sets')
+                .upsert(pendingSetRows, onConflict: 'user_id,workout_log_id,exercise_id,set_number');
+          } catch (e, st) {
+            debugPrint(
+                '[SyncService._syncExerciseLogs] per-set push failed key=$key: $e');
+            // audit-2026-05-11 H-42 — telemetry pair.
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'sync_service_if_7'));
             try {
-              await _supabase.client
-                  // Fix 2026-06-02: user_id added to the conflict key (matching
-                  // new index uniq_wls_user_wlog_ex_set) — prevents cross-user
-                  // collision on the date-only workout_log_id. (id was already
-                  // omitted — gen_random_uuid() default.)
-                  .from('workout_log_sets')
-                  .upsert(rows, onConflict: 'user_id,workout_log_id,exercise_id,set_number');
-            } catch (e, st) {
-              debugPrint(
-                  '[SyncService._syncExerciseLogs] per-set push failed key=$key: $e');
-              // audit-2026-05-11 H-42 — telemetry pair.
-              unawaited(ErrorTelemetry.recordNonFatal(e, st,
-                  reason: 'sync_service_if_7'));
-              try {
-                await _reportSyncFailure(opType: 'upsert_workout_log_sets', error: e);
-              } catch (_) {}
-            }
+              await _reportSyncFailure(opType: 'upsert_workout_log_sets', error: e);
+            } catch (_) {}
+            // OI-204 — the bundle is NOT fully synced; the fingerprint below
+            // must not be recorded, so the next pass retries the sets.
+            exlogBundleSynced = false;
           }
+        }
+
+        // OI-204 — store-on-full-success-only. Gate checked by
+        // scripts/check_sync_hash_skip_atomicity.dart.
+        if (exlogBundleSynced && fp != null) {
+          exlogHashIndex[key] = fp;
         }
       } catch (e, st) {
         debugPrint('[SyncService._syncExerciseLogs] Failed key=$key: $e');
@@ -414,6 +494,19 @@ extension SyncServiceWorkout on SyncService {
           await _reportSyncFailure(opType: 'upsert_exercise_log', error: e);
         } catch (_) {}
       }
+    }
+
+    // OI-204 — persist the pruned index. Store-back only on the live skip
+    // path so the kill-switch leaves the box verbatim.
+    if (!exlogHashSkipDisabled) {
+      final liveKeys = workoutBox.keys
+          .whereType<String>()
+          .where((k) => k.startsWith('exlog_'))
+          .toSet();
+      await workoutBox.put(
+        SyncService._exlogHashIndexKey,
+        SyncService.exlogPrunedHashIndex(exlogHashIndex, liveKeys),
+      );
     }
   }
 

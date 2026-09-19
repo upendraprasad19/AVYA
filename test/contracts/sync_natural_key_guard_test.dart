@@ -90,10 +90,25 @@ void main() {
   group(
       'sync_skipped_null_natural_key guard — workout_log_exercises (summary)',
       () {
+    // OI-204: marker was "from('workout_log_exercises').upsert({" (trailing
+    // literal '{') until the OI-204 restructure moved the summary payload
+    // into a named `summaryPayload` variable — the upsert call is now
+    // `.upsert(\n  summaryPayload,\n  onConflict: ...)`, so a `{` no longer
+    // immediately follows `upsert(`. windowBefore only uses the marker as a
+    // look-BACKWARD anchor (it never inspects what follows it), so dropping
+    // the trailing '{' handles the marker itself.
+    // windowChars ALSO widened: the guard code is unchanged, but it is no
+    // longer close to the marker — the OI-204 restructure moved the ENTIRE
+    // per-set resolution block (guards/clamps for workout_log_sets) plus the
+    // new fingerprint-compute-and-skip-check block to run BEFORE the actual
+    // network call, so ~5.1K chars (comment-stripped) of new/relocated code
+    // now sits between this guard and the marker where ~0 used to. Measured
+    // via a scratch script walking the same stripComments() this file uses;
+    // 800 (the old default) is stale by 4x. 6000 leaves ~900 chars of margin.
     final marker =
-        "from('workout_log_exercises').upsert({";
+        "from('workout_log_exercises').upsert(";
     test('guard validates workout_log_id + exercise_id', () {
-      final pre = windowBefore(marker);
+      final pre = windowBefore(marker, windowChars: 6000);
       // Guard pulls workoutLogId / exerciseId into local guards.
       expect(
         pre.contains('workout_log_exercises') &&
@@ -115,7 +130,13 @@ void main() {
       // windowChars spans the wls_reps_out_of_range clamp now sitting between
       // the set_number guard and the upsert (diagnose d9a4f2); the guard still
       // `continue`s past the upsert, it is just further from the marker now.
-      final pre = windowBefore(marker, windowChars: 2600);
+      // OI-204 widened further: the restructure moved the summary upsert
+      // call AND the fingerprint-compute-and-skip-check block to run BETWEEN
+      // this per-set guard and the (now later) workout_log_sets upsert call
+      // — ~3.2K chars (comment-stripped) measured via the same scratch
+      // script as the summary group above. 2600 was already stale; 4200
+      // leaves ~1K margin.
+      final pre = windowBefore(marker, windowChars: 4200);
       expect(
         pre.contains('workout_log_sets') &&
             pre.contains("'sync_skipped_null_natural_key'"),

@@ -124,6 +124,11 @@ class SimulationService {
       // sim re-drive's scheduled_workouts push. The full key equals this
       // prefix, so startsWith deletes exactly it.
       'sync_sched_payload_hash_index',
+      // OI-204 — same reasoning as sync_sched_payload_hash_index immediately
+      // above: a single reserved key, not an `exlog_`-prefixed one, so the
+      // entries above miss it. A survivor would mis-skip the sim re-drive's
+      // exercise-log push after resetJourney wipes cloud out-of-band.
+      'sync_exlog_payload_hash_index',
     ]);
     await _clearKeysWithPrefixes(HiveService.instance.healthBox,
         const ['weight_', 'sleep_log_', 'water_ml_', 'hydration_', 'step_']);

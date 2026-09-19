@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### exercise_log_sync_fingerprint_skip (1 bugs)
+- 2026-09-19 d3f8a6 — OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in…
+
 ### sot_registry_behavioral_test_path_resolution (1 bugs)
 - 2026-09-19 c7d2e4 — `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture…
 
@@ -1270,6 +1273,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-19 | d3f8a6 | OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in… | exercise_log_sync_fingerprint_skip | test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart |
 | 2026-09-19 | c7d2e4 | `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture… | sot_registry_behavioral_test_path_resolution | test/scripts/sot_behavioral_test_paths_gate_test.dart |
 | 2026-09-19 | b7e2d4 | A branch whose blast-radius is >= account can be merged to main by `sh scripts/safe_merge.sh <branch>` with ZERO output about its missing docs/plan-reviews/{slug}.md. CI's keystone job… | plan_review_record_merge_gate | test/scripts/safe_merge_test.dart |
 | 2026-09-19 | b3e7a1 | Six `scripts/check_*.dart` gates ran NOWHERE — not in pre-commit's loop, not in CI's loop, not from /build-apk, not from any hook — while Gate 33 (`scripts/check_gate_scripts_wired.dart`, whose whole… | gate_fail_closed_discipline | test/scripts/gate_scripts_wired_runners_test.dart |

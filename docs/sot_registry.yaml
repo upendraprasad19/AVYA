@@ -2057,6 +2057,113 @@ concepts:
       fingerprint -> re-pushes next pass. Kill-switch disable_sched_hash_skip
       restores the verbatim pre-H1b unconditional sweep.
 
+  - concept: sync_exercise_log_payload_hash_index
+    domain: workout
+    description: |
+      OI-204 (2026-09-19, diagnose d3f8a6): the sync-owned fingerprint index
+      that gates the idempotent workout_log_exercises + workout_log_sets
+      re-upsert. Maps an exlog_* Hive key -> UUID-v5 fingerprint of the FULL
+      push bundle (the summary payload plus its ordered per-set rows), so an
+      unchanged exercise log skips its re-upsert instead of re-walking the
+      entire historical log every coalesced sync pass (14-40s per pass,
+      routinely tripping the 45s restoreOpTimeout — 34x/25h on the founder's
+      account). The SOLE writer AND reader is _syncExerciseLogs -> writer/
+      reader drift is structurally impossible. The per-user workoutBox file
+      IS the namespace -> auto-clears on swap/sign-out/DPDP; resetJourney
+      ALSO clears it explicitly (mirrors sync_scheduled_payload_hash_index's
+      A-fix-3, since it is a single reserved key, not an exlog_-prefixed one).
+      Extends the proven H1b Part A pattern (sync_scheduled_payload_hash_index
+      above) to a second domain; shares the private _fingerprintMatchesStored
+      helper with Task 3's sync_nutrition_log_payload_hash_index sibling.
+    writers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1-9999
+        method: _syncExerciseLogs (stores index[key]=fp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY -- gated by the local exlogBundleSynced flag, false'd in the per-set catch; prunes to live exlog_ keys + persists after the loop)
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: exlogPayloadFingerprint / exlogShouldSkipUpsert / exlogPrunedHashIndex (pure statics; exlogShouldSkipUpsert wraps the shared private _fingerprintMatchesStored, also used by Task 3's nlogShouldSkipUpsert) + _exlogHashIndexKey const + disable_exlog_hash_skip kill-switch
+      - file: lib/features/dev/simulation_service.dart
+        line_range: 1-9999
+        method: resetJourney (clears the index key in the workoutBox prefix-clear list -- the identical special case sync_sched_payload_hash_index already needed, for the identical reason)
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1-9999
+        method: _syncExerciseLogs (the skip decision reads index[key] for the current row)
+        semantic: latest
+        fields_read: [sync_exlog_payload_hash_index.<exlog_key>]
+    regression_test: test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart
+    behavioral_test_path: test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart
+    hive:
+      box: workoutBox
+      key_prefix: "sync_exlog_payload_hash_index"
+      key_formula: "reserved single key -> Map{exlog_key: SyncService.exlogPayloadFingerprint(summaryPayload, pendingSetRows)}"
+    cloud:
+      table: workout_log_exercises  # PRIMARY -- the fingerprint bundles this
+      # summary row AND its workout_log_sets per-set rows as ONE unit (a
+      # single skip decision gates both network calls for the key).
+      columns: [workout_log_id, user_id, exercise_id, exercise_name, logging_type, set_number, reps, weight_kg, duration_seconds, distance_km, is_pr, has_warmup_sets, completed_at]
+      unique_constraint: "(user_id, workout_log_id, exercise_id, set_number)"
+      also_gates:
+        table: workout_log_sets
+        columns: [user_id, workout_log_id, exercise_id, set_number, weight_kg, reps, duration_secs, distance_km, completed_at]
+        unique_constraint: "(user_id, workout_log_id, exercise_id, set_number)"
+    sync_methods: [_syncExerciseLogs]
+    restore_methods: []
+    atomicity:
+      presence_only: true
+      presence_only_reason: |
+        Spec §8's atomicity behavioral-test requirement (simulate a per-set
+        network failure, assert no fingerprint is stored) needs a test-time
+        fault-injection seam. Checked before falling back to this (OI-204
+        Step 7b, not skipped): `_supabase` is `final SupabaseService
+        _supabase = SupabaseService.instance;` (sync_service.dart:219) -- a
+        singleton with no constructor injection -- and
+        `grep -rln "MockSupabase|FakeSupabase|_supabase = Mock|SupabaseService("
+        test/` returns nothing anywhere in this repo. _syncScheduledWorkouts
+        itself, the pattern this batch extends, has no such test either --
+        its own store-on-200-only group in
+        sync_scheduled_payload_hash_index_writer_to_reader_test.dart is the
+        SAME call-site-count source-grep this concept uses, not a live
+        failure simulation. Adding a DI seam is a separate, reviewed refactor
+        decision, out of scope for this delta-sync fix. The atomicity
+        property is instead covered structurally by three things: (1)
+        scripts/check_sync_hash_skip_atomicity.dart -- the static gate,
+        mutation-proven per rule 24, docs/audit/gate_test_ledger.yaml; (2)
+        exlogShouldSkipUpsert's pure-function tests, proving the skip
+        DECISION is correct for every stored/current fingerprint pair
+        (including the edited-row-never-skipped case); (3) the exact-store-
+        call-site-count test (spec §8 item 4,
+        test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart),
+        proving the fingerprint can only be recorded from the one guarded
+        site the static gate depends on. This entry's GENERAL writer->reader
+        contract is NOT presence-only -- the Hive round-trip group in the
+        same test file is a real behavioral test satisfying rule 21. Only
+        this narrower atomicity-under-failure sub-property is presence-only.
+    class_constraints: |
+      No status-based carve-out (unlike schedShouldSkipUpsert's
+      status=='completed' exemption) -- deliberate, verified not assumed
+      (spec §5.3): grepped all of supabase/functions/ for writes to
+      workout_log_exercises/workout_log_sets -- zero (all 10 referencing
+      files are readers). Three migrations contain historical ONE-SHOT
+      mutations on these tables -- 057_schema_unique_indexes_h25_h26_h27_h28.sql
+      (a one-shot DELETE dedup before creating unique indexes; the spec's
+      original "two migrations" count missed this one), 064 and 083
+      (UPDATEs) -- all three already-applied schema-change backfills, not a
+      recurring process, so no forced-repush carve-out is warranted today.
+      Every edit path (WorkoutWriteService.editLog) rewrites the SAME Hive
+      key in place, so any content change flips the fingerprint on its own.
+      store-on-full-success-only: a per-set push failure leaves NO
+      fingerprint stored (exlogBundleSynced=false) -> re-pushes next pass.
+      Fingerprint-computation failure fails OPEN to "push normally, never
+      store" (spec §5.4), never a silent skip. Kill-switch
+      disable_exlog_hash_skip restores the verbatim pre-OI-204 unconditional
+      full-rescan sweep. Known limitation (spec M1/M2, non-blocking): weeklyFullSync()
+      calls _syncExerciseLogs outside the per-domain coalescer, so two
+      overlapping passes can each read-then-replace the persisted index map
+      (lost update) -- the only possible outcome is a dropped entry -> one
+      extra redundant re-push next pass, never a false skip.
+
   - concept: sync_fanout_nutrition_domain
     domain: nutrition
     description: |
@@ -9611,7 +9718,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1007-1052
+        line_range: 1083-1122
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -9908,11 +10015,11 @@ concepts:
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2188-2245
+        line_range: 2299-2303
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2235-2237
+        line_range: 2311-2313
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:
