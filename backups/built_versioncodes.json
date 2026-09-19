@@ -1,0 +1,21 @@
+{
+  "1.0.0+40": {
+    "artifact": "aab",
+    "built_at": "unknown",
+    "note": "Play Console reported already used (bump commit 2694b2b4 -> +41); seeded 2026-09-15 from git history, not recorded live by this script"
+  },
+  "1.0.0+41": {
+    "artifact": "aab",
+    "built_at": "unknown",
+    "note": "Play Console reported already used (bump commit 64fc2893 -> +42); seeded 2026-09-15 from git history, not recorded live by this script"
+  },
+  "1.0.0+42": {
+    "artifact": "aab",
+    "built_at": "unknown",
+    "note": "already built/uploaded per founder 2026-09-15 (no git trace of the build itself -- exactly the gap this ledger closes); seeded, not recorded live"
+  },
+  "1.0.0+43": {
+    "artifact": "aab",
+    "built_at": "2026-09-15T14:36:08.747585Z"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["CLAUDE.md"],
+  "share": "disabled",
+  "permission": {
+    "edit": "ask",
+    "bash": {
+      "*": "ask",
+      "flutter analyze*": "allow",
+      "flutter test*": "allow",
+      "dart run *": "allow",
+      "dart format *": "allow",
+      "dart fix *": "allow",
+      "dart analyze*": "allow",
+      "npm run *": "allow",
+      "node --check *": "allow",
+      "node scripts/*": "allow",
+      "gh api *": "allow",
+      "gh run list*": "allow",
+      "gh run view*": "allow",
+      "gh pr list*": "allow",
+      "gh pr view*": "allow",
+      "gh auth status*": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git show*": "allow",
+      "git branch*": "allow",
+      "git stash list*": "allow",
+      "git worktree list*": "allow",
+      "sh scripts/new-worktree.sh *": "allow",
+      "sh scripts/safe_commit.sh *": "allow",
+      "sh scripts/safe_push.sh *": "allow",
+      "sh scripts/safe_merge.sh *": "allow",
+      "sh scripts/mint_oi.sh *": "allow",
+      "git commit*": "deny",
+      "git push*": "deny",
+      "git* --no-verify*": "deny",
+      "flutter build apk*": "deny",
+      "flutter build appbundle*": "deny",
+      "supabase db push*": "deny",
+      "supabase functions deploy*": "deny",
+      "supabase secrets*": "deny"
+    },
+    "external_directory": {
+      "~/.claude/projects/**": "allow"
+    }
+  },
+  "mcp": {
+    "supabase": {
+      "type": "remote",
+      "url": "https://mcp.supabase.com/mcp"
+    }
+  }
+}

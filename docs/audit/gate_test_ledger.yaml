@@ -1,0 +1,665 @@
+# Gate test ledger — rule 24 (CLAUDE.md §4.4).
+#
+# Every scripts/check_*.dart carries EXACTLY ONE state:
+#   mutation_proven: true  + test_path: (list) + evidence:   — a NEW gate
+#   grandfathered: 2026-08-10                                — CLOSED list
+#   test_exempt: <reason>                                    — no fixture is constructible
+#
+# Enforced by scripts/check_gate_test_ledger.dart — which carries NO gate
+# number, per the forward-minting rule this batch ships (a new gate takes no
+# number; the filename is the identity). The grandfather
+# list is closed BY NAME in that script, not by this date string — writing the
+# date here does not join the list.
+#
+# Why this exists: "Gate 44's own test never invoked main()". On 2026-08-10, 84
+# gates existed and only 6 test files in the whole repo asserted a red path.
+
+check_adr_index_fresh.dart:
+  grandfathered: 2026-08-10
+
+check_ai_tool_dispatcher_coverage.dart:
+  grandfathered: 2026-08-10
+
+check_alerts.dart:
+  grandfathered: 2026-08-10
+
+check_apk_release_signed.dart:
+  grandfathered: 2026-08-10
+
+check_apk_size_within_bounds.dart:
+  grandfathered: 2026-08-10
+
+check_app_version_matches_pubspec.dart:
+  grandfathered: 2026-08-10
+
+check_applied_migrations_ledger.dart:
+  grandfathered: 2026-08-10
+
+check_authed_invoke_fresh_token.dart:
+  grandfathered: 2026-08-10
+
+check_blast_radius_coverage.dart:
+  grandfathered: 2026-08-10
+
+check_bugfix_commits_have_diagnose.dart:
+  grandfathered: 2026-08-10
+
+check_ci_flutter_version.dart:
+  grandfathered: 2026-08-10
+
+check_claude_md_citations.dart:
+  grandfathered: 2026-08-10
+
+check_client_errors_alert.dart:
+  grandfathered: 2026-08-10
+
+check_closes_oi_cited.dart:
+  grandfathered: 2026-08-10
+
+check_usage_counter_source.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/usage_counter_source_lib_test.dart
+  evidence: >
+    NEW gate 2026-09-04 (OI-162 slice 1). Blocks a TENTH quota being derived
+    from a row count on ai_coach_interactions — a conversation LOG that
+    rolling-context prunes nightly, which is why all nine existing quotas are
+    resettable. Ships BEFORE the refactor it protects (§4.11); starts
+    --warn-only. Baseline re-derived by running the matcher, not inherited:
+    5 Edge Function quota sites + 9 migrations.
+    2026-09-05 (slice 2): migration 129 added to `allowedMigrations` BY NAME.
+    Its three counts are the one-time backfill that seeds usage_counters before
+    the triggers stop reading the log — the fix for this very bug class — and
+    left unlisted the gate blocked its own remedy, which is how a gate gets
+    switched off instead of fixed.
+    ⚠ A per-STATEMENT pattern exemption was implemented FIRST and REVERTED: the
+    B-pass on 004af467 defeated it three ways in one sitting (a real quota read
+    behind a no-op INSERT INTO usage_counters in a data-modifying CTE; a /* */
+    block comment the stripper did not remove; and a legitimate CTE-first
+    backfill that it wrongly FLAGGED). Recorded rather than quietly replaced,
+    because the general lesson is the code-review skill's own: when a guard is
+    a source grep, tightening the pattern never converges — an enumerated,
+    grep-auditable allowlist does. Tests now 16, including "THE SAME backfill
+    text in an unlisted migration IS a violation" (exemption follows the NAME,
+    not the shape) and a block-comment case. The comment stripper gained a
+    /* */ arm in the same change.
+    SIX mutations, each confirmed APPLIED by an assert on the anchor before
+    running, each reddening exactly 1 of 12 tests, tree restored identical
+    afterwards and re-verified 12/12 green:
+    (1) widen the quota filter to match .neq — rolling-context's two legitimate
+    prune counts get flagged;
+    (2) drop Dart comment stripping — a commented-out counter counts;
+    (3) collapse block comments instead of preserving newlines — reported line
+    numbers shift (the real bug that produced this gate's first wrong baseline,
+    off by up to 25 and entirely plausible);
+    (4) widen allowedEdgeFunctionSites to include the new file — proves the
+    allowlist, not the matcher, is what refuses an unlisted file;
+    (5) drop the `count > allowed` branch — an EXTRA counter inside an
+    already-allowlisted file passes;
+    (6) drop the migration allowlist membership test — a NEW migration counting
+    ai_coach_interactions passes.
+    ⚠ RECORDED HONESTLY: two earlier mutation attempts NEVER APPLIED (anchor
+    mismatch, one from a stray \$ escape) and printed "All tests passed",
+    which is proof of nothing — rule 21's named trap, caught only because each
+    mutation asserts its anchor count first. Two further attempts produced a
+    COMPILE error rather than a red test (removing the null-check broke Dart's
+    null promotion in the following else-if); a compile failure is not a
+    mutation proof, so both were replaced with forms that compile.
+
+check_closes_oi_performed.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/oi_closure_lib_test.dart
+    - test/scripts/closes_oi_performed_e2e_test.dart
+  evidence: >
+    NEW gate 2026-08-30. The MIRROR of check_closes_oi_cited.dart: that gate
+    enforces status-change => citation, this one enforces citation =>
+    status-change, closing the shipped hole where OI-150 was cited closed by
+    c2534257 and the board never moved. THREE protective legs, each mutated
+    separately against the REAL gate script (not the lib in isolation), each
+    applied-check confirmed by grep before running.
+    Leg 1 (the core predicate, oi_closure_lib.dart `status != 'CLOSED'` ->
+    `false`): reddened 7 tests — the unit test naming the OI-150 shape plus
+    every e2e exercising FAIL/WARN.
+    Leg 2 (merge-detection guard, check_closes_oi_performed.dart
+    `parents.length < 2` -> `false`): FIRST ATTEMPT WAS ABSORBED — all 6 e2e
+    tests stayed green, because HEAD^2 cannot resolve off ANY single-parent
+    HEAD regardless of the guard, so the fallen-through git call fails for an
+    unrelated reason and the pre-existing _skip() path catches it with the
+    same exit code. Confirmed absorbed by manually neutering the guard and
+    running the file before trusting the green. Fixed by asserting on OUTPUT,
+    not exit code: the real guard exits with nothing (silent-ish by design);
+    the absorbed path prints a SKIPPED line. The tightened assertion reddens
+    1 test once the guard is genuinely gone.
+    Leg 3 (read-at-HEAD, `git show HEAD:<path>` -> a plain working-tree
+    `File(...).readAsStringSync()`): reddens the test built specifically for
+    this class — a board edited on disk but never committed must not satisfy a
+    gate that judges a commit. Same defect shape the B-pass found in this
+    batch's own safe_merge.sh precheck (a working-tree read where a
+    HEAD-relative read was required); this gate's fixture asserts the fix
+    directly rather than trusting the pattern once.
+    All three restored and diffed byte-identical against a pre-mutation backup
+    before the real suite was re-run (20/20 green).
+
+check_code_review_pass_exists.dart:
+  grandfathered: 2026-08-10
+
+check_commit_from_worktree.dart:
+  grandfathered: 2026-08-10
+
+check_container_color_decoration.dart:
+  grandfathered: 2026-08-10
+
+check_context_artifact_budget.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/context_budget_lib_test.dart
+    - test/scripts/context_artifact_budget_e2e_test.dart
+  evidence: >
+    NEW gate 2026-08-30. Guards the size of the artifacts an AGENT loads, the
+    way check_apk_size_within_bounds.dart guards the one USERS download.
+    FIVE protective legs, each mutated separately against the real gate, each
+    mutation VERIFIED APPLIED by a scripted exact-match replace that aborts
+    unless it matches exactly once. That guard earned its keep twice: legs added
+    by review rounds 1 and 2 each broke an earlier mutation's match, and it
+    ABORTED rather than silently no-opping into a green run that would have read
+    as proof.
+    ⚠ Counts are ALL against the SAME 37-test baseline, re-measured after every
+    suite change. They were cited at 29 and then 35 earlier in this same batch
+    and went stale within hours both times — in the ledger of the gate whose
+    entire subject is numbers nobody re-derives. Re-run rather than trust these.
+    (1) DELETE THE HARD GROWTH BAND — every breach degrades to warn and nothing
+    can ever block — 8 red (incl. the e2e asserting exitCode 1). The drift that
+    motivated the gate was +427% on open_issues.md and +404% on OPEN_INDEX.md:
+    two figures, corrected after round 1 caught them cited as one against the
+    wrong file.
+    (2) DELETE THE SHRINK FLOOR — 6 red. ADDED BY ROUND 1, which found the gate
+    had no mirror at all: every negative drift was ok, so a CLAUDE.md truncated
+    to ZERO BYTES reported "PASS: 3 within band". The one shrink test at the
+    time exercised a proportionate 45% reclaim and stayed green under the bug.
+    Floors are asymmetric on purpose: -50% warns (this batch's own legitimate
+    reclaim was -45.5%), -90% blocks.
+    (3) STOP FAILING OPEN — treat an unreadable artifact as a breach instead of
+    SKIPPED — 4 red. Fail-open is load-bearing: a hygiene gate that can wedge
+    every commit is worse than the drift it watches.
+    (4) NARROW THE KEY UNION to baselines.keys, so an artifact tracked in the
+    script but not yet baselined silently escapes the budget forever — 4 red.
+    (5) MAKE THE REPORT DIRECTION-BLIND (shrank := false) — 2 red. ADDED BY
+    ROUND 2, which found the LOGIC two-sided and the REPORT still hardcoding the
+    growth thresholds and the verb "grew": the exact zero-byte fixture round 1
+    built printed "grew past the 50% hard band" for a file that shrank 100% and
+    crossed the -90% floor. A classifier fixed without its report is still
+    wrong where the operator reads it.
+    Restored: 37/37 green. Growth bands stay two-tier — soft 15% warns and never
+    blocks (open_issues.md legitimately grows when an issue is filed), hard 50%
+    blocks, because that is growth nobody reaches by accident.
+
+check_copy_centralization.dart:
+  grandfathered: 2026-08-10
+
+check_cqrs_query_naming.dart:
+  grandfathered: 2026-08-10
+
+check_crashlytics_alert_routing.dart:
+  grandfathered: 2026-08-10
+
+check_cron_registry.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/cron_registry_snapshot_gate_test.dart
+  evidence: >
+    PROMOTED out of the grandfathered set 2026-08-20 (OI-132), because the gate
+    gained a second, file-independent input and that input needed real proof.
+    Five mutations redden, run against real temp repos with the real gate:
+    (1) THE OI-132 SCENARIO — delete the migration .sql while the jobs remain in
+    the live snapshot: 4 jobs named, tagged "LIVE on the project". This is the
+    case the pre-2026-08-20 gate could not see AT ALL, and it is why the gate
+    reported green for five days while two row-destructive cron jobs ran
+    unregistered on prod;
+    (2) delete backups/live_cron_jobs.json — refuses to silently downgrade to
+    the migration scan alone;
+    (3) empty the snapshot to [] — refuses a vacuous pass (the Gate-44 shape);
+    (4) malformed snapshot JSON — refused;
+    (5) a job declared in a migration file but absent from the registry while
+    the snapshot is clean — input A is NOT masked by adding input B;
+    (6) reorder — move input B's read back BELOW input A's
+    "supabase/migrations absent -> exit 0" SKIP, which is where it sat when
+    this input was first written. A tree with no migrations directory then
+    passes having consulted NEITHER input: the never-ran-so-it-passed shape
+    input B exists to close, reintroduced by the edit that added it. Caught by
+    the B-pass on the OI-132 commit itself, not by the original test set —
+    exactly one test reddens under the mutation and the other six stay green.
+    Green path verified separately. What this does NOT prove, stated rather than
+    implied: that the snapshot is FRESH. Nothing in CI can, without Supabase
+    credentials the repo does not have (OI-105).
+
+check_device_tests_exist.dart:
+  grandfathered: 2026-08-10
+
+check_diagnose_index_fresh.dart:
+  grandfathered: 2026-08-10
+
+check_doc_internal_consistency.dart:
+  grandfathered: 2026-08-10
+
+check_edge_function_auth_pattern.dart:
+  grandfathered: 2026-08-10
+
+check_edge_function_payloads.dart:
+  grandfathered: 2026-08-10
+
+check_edge_function_rollback_script.dart:
+  grandfathered: 2026-08-10
+
+check_exlog_key_canonical.dart:
+  grandfathered: 2026-08-10
+
+check_exercise_seams.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/exercise_seam_lib_test.dart
+  evidence: "Baseline 11/11 green. TWO mutations, each on a separate protective leg
+    and each verified to COMPILE first -- a mutation that breaks the build reddens
+    everything and proves nothing (the first attempt did exactly that and was
+    discarded). (1) neutering the NEW-FILE check, by defaulting an unknown path to a
+    synthetic allowlist entry, reddens 1. (2) neutering the COUNT check, by ANDing
+    its condition with false, reddens 1. Restored: 11/11 green. WHY THIS GATE EXISTS:
+    across four review rounds the count of exercise-emitting seams went 5 -> 7 -> 10
+    -> 11, each round finding one the previous had missed -- a swap sheet that
+    declared an `equipment` field and read it nowhere, an active-workout picker
+    filtered on category and name only, a cardio finisher whose jump_rope case was
+    the only one of five ignoring hasGymEquipment, and warmup_cooldown prescribing
+    Dead Hang and Band Pull Apart into every generated day. That is a METHOD failure,
+    not a counting one. On its FIRST live run the gate corrected the author's own
+    hand survey twice, catching two sites that were `//` comments a plain grep had
+    counted. Pinned by FILE with an expected COUNT: line numbers rot, so keying on
+    them fails on every unrelated edit, while a count moves exactly when a seam is
+    added or removed. KNOWN LIMITS, documented in the lib header rather than implied
+    away: the community-download write seam uses an API matching none of the
+    patterns, a call through a variable is invisible to any source scan, and block
+    comments are not stripped. It bounds the class it can see; it does not prove the
+    class is empty."
+
+check_equipment_audit.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/equipment_audit_lib_test.dart
+  evidence: "Baseline 10/10 green. Mutation: disabled the prose scan itself
+    (`if (!text.contains(entry.key)) continue;` -> `if (true) continue;`), which is
+    the whole of the gate's protection -- with it neutered the gate can never report
+    anything. Result: 4 tests reddened (10 -> 6 pass), the three red-path cases plus
+    the --all-tiers scope case. Restored: 10/10 green. Live run over the real library
+    reports 33 findings across 259 rows scoped to the 117 bodyweight-tier rows, and
+    catches all FOUR rows that motivated it -- E238 Bench Dips, E254 Doorframe Curl,
+    E255 Towel Row, E256 Negative Pull Up. WHY THOSE FOUR MATTER: each was already
+    wrong BEFORE scripts/normalize_equipment_library.dart ran, so recovering the
+    pre-normalization values from git cannot reach them, and each is the SOLE
+    core-satisfying row for its movement pattern -- so the floor invariant would have
+    gone green on false data. The capability predicate reads equipment_needed and so
+    did every previous oracle; an oracle sharing a field with its predicate proves
+    THREADING, never TRUTH. This gate reads the exercise NAME and coaching prose
+    instead. DEFAULT IS WARN-ONLY per 4.11 (gate before refactor): --strict exits 1
+    and becomes the default in the commit that finishes the library correction.
+    False positives are real and expected (a pro_tip may mention a barbell only to
+    contrast with it), so findings are triage input, not verdicts.
+
+    FLIPPED STRICT 2026-08-28 in the commit that finished the library correction,
+    exactly as the line above said it would be; --warn-only is now the opt-out and
+    is for in-branch debugging only. That flip added an ACCEPT-LIST, which is a hole
+    in the gate, so it is pinned by 5 further tests (15/15 green) rather than trusted:
+    a pair is keyed on `id|token` and NEVER a bare row id, so a genuinely new finding
+    on an already-accepted row still fails; every key must parse as E### plus a token
+    the scan can actually emit, so a typo cannot silently exempt nothing; and every
+    entry must carry a real reason, because an accept-list whose entries say nothing
+    is an allowlist and an allowlist is how a gate goes quietly inert. The list lives
+    in the PURE lib, not the CLI, for exactly this reason -- policy in an untestable
+    wrapper is policy nothing proves. Two of the twelve NEW rows this batch added
+    tripped the gate on their own prose and were fixed by rewording the row, not by
+    adding an exemption.
+
+check_equipment_vocab_lockstep.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/equipment_vocab_lockstep_lib_test.dart
+  evidence: "Baseline 9/9 green. Mutation: removed 'plyo box' from `_precedence` in
+    equipment_vocab.dart (the exact shape of the regression this gate exists for --
+    a token added to `canonicalTokens` while one of the other three structures is
+    forgotten). Result: the live-lockstep test reddened (9 -> 8 pass, 1 fail) and the
+    gate CLI exited non-zero printing the offending token by name. Restored: 9/9 green,
+    gate PASS, real exit 0 (verified without a pipe -- a trailing `; echo $?` reports
+    the pipeline's code, not dart's). NOTE the silent-failure modes this covers, each
+    verified by reading the code rather than assumed: a canonical token absent from
+    `_precedence` is SKIPPED by normalizeToken's `rank >= 0` guard, so an OR-compound
+    resolves to [] = no-requirement (most permissive); a missing `_chipLabels` entry
+    ships the raw token as UI copy; an alias key that is also canonical is unreachable
+    because `_mapPart` checks canonicalTokens first."
+
+check_gate_index_fresh.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/gate_index_fresh_e2e_test.dart
+  evidence: "Making the gate exit 0 unconditionally reddens 2 e2e tests (stale index, missing index)."
+
+check_gate_scripts_wired.dart:
+  grandfathered: 2026-08-10
+
+check_gate_test_ledger.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/gate_test_ledger_lib_test.dart
+  evidence: "3 mutations, 1 red each: neutering the state-count check, the red-path-assertion check, or the grandfather-membership check. Each reddens exactly the one test written for it."
+
+check_generic_error_telemetry.dart:
+  grandfathered: 2026-08-10
+
+check_goal_token_exhaustiveness.dart:
+  grandfathered: 2026-08-10
+
+check_god_screen_max_lines.dart:
+  grandfathered: 2026-08-10
+
+check_hardcoded_pricing_and_limits.dart:
+  grandfathered: 2026-08-10
+
+check_hive_map_field_drift.dart:
+  grandfathered: 2026-08-10
+
+check_hooks_installed.dart:
+  grandfathered: 2026-08-10
+
+check_id_injection_on_get.dart:
+  grandfathered: 2026-08-10
+
+check_import_map_present.dart:
+  grandfathered: 2026-08-10
+
+check_incident_index_fresh.dart:
+  grandfathered: 2026-08-10
+
+check_jose_version.dart:
+  grandfathered: 2026-08-10
+
+check_local_date_key_drift.dart:
+  grandfathered: 2026-08-10
+
+check_migration_ledger_paired.dart:
+  grandfathered: 2026-08-10
+
+check_migrations_applied.dart:
+  grandfathered: 2026-08-10
+
+check_migrations_live.dart:
+  grandfathered: 2026-08-10
+
+check_mutation_invalidation_set.dart:
+  grandfathered: 2026-08-10
+
+check_naming_audit.dart:
+  grandfathered: 2026-08-10
+
+check_naming_conventions.dart:
+  grandfathered: 2026-08-10
+
+check_nested_claude_md_content.dart:
+  grandfathered: 2026-08-10
+
+check_nlog_key_canonical.dart:
+  grandfathered: 2026-08-10
+
+check_no_conflict_markers.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/no_conflict_markers_test.dart
+  evidence: >
+    3 mutations, each RUN on 2026-08-14 rather than asserted. (1) Replacing the
+    open-marker branch condition with `false` — detection dead — reddens 7 of 12.
+    (2) Making the separator count unconditionally (dropping the `sawOpenOrClose`
+    guard) reddens 1: the false-positive case where a lone rule of `=` is prose,
+    not a merge. (3) Changing the gate's final `exit(1)` to `exit(0)` — it still
+    DETECTS and still prints, but no longer fails — reddens 1, which is the
+    Gate-44 class itself. Baseline 12/12 green before and after each restore.
+
+check_no_deferral_euphemism.dart:
+  grandfathered: 2026-08-10
+
+check_no_http_package.dart:
+  grandfathered: 2026-08-10
+
+check_no_raw_google_fonts.dart:
+  grandfathered: 2026-08-10
+
+check_no_raw_ispro_read.dart:
+  grandfathered: 2026-08-10
+
+check_oi_numbering_unique.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/oi_numbering_lib_test.dart
+    - test/scripts/oi_numbering_gate_e2e_test.dart
+  evidence: "Baseline 24/24 green in the lib file (23 at the 2026-08-17 authoring; a 24th was added since -- every '23' below is that older count) (20 at first authoring; +3 merge-placement e2e added by review round 1). FIVE mutations, each verified as actually applied before the run (a mutation that silently fails to apply reports green and proves nothing): dropping `stdoutEncoding: utf8` reddens 3; dropping the unparseable-board guard in _parseStrict reddens 1; dropping LEG 1 (the merge-base mint check) reddens 2; dropping LEG 3 (the title comparison) reddens 2; and forcing the OLD single-shape three-point selection (the naive base=merge-base(HEAD,origin/main) triple) reddens 10. The encoding mutation is the gate's own real, shipped bug -- its first live run against a branch KNOWN to be colliding reported PASS, because systemEncoding mangled the em-dash separator and 0 of 77 headings parsed. The shape mutation is its SECOND real shipped bug: with the naive triple, base == mainline at both merge placements, making legs 1 and 2 mutually exclusive and leg 3 unreachable for every input -- the gate could not fail. ⚠ SCOPE OF THIS EVIDENCE: all of it is LOCAL. Review round 2 showed CI runs this gate in a SHALLOW checkout where a merge commit reads as parentless, which re-degenerates the comparison; that is fixed by `fetch-depth: 0` on the audit-gates job in test.yml, and NO test in this repo executes the shallow shape -- it was verified by hand against a replica of actions/checkout's fetch sequence. Do not read these mutations as covering the CI environment. 2026-09-12 (oi-allocator; diagnose f3a9c1): +10 e2e in oi_numbering_gate_e2e_test.dart (real bare remote, real clones, the real gate spawned; 8 at first authoring, +2 from the B-pass), lib file 24/24 with its two unreserved-mint fixtures (:340 'uncontested', :585 'clean merge', line numbers as of this commit) now reserving refs/heads/oi/3 the way the allocator does. Check B' (working-tree arm, OI-176) -- THREE mutations, each applied, grep-confirmed, run over BOTH files (26), restored: deleting the `else if (_boardDirty())` arm reddens 1 (the vacuous PASS returns); `baseRev = 'origin/main'` in that arm reddens 1; `baseMerged = <int,String>{}` reddens 2 (the e2e title-edit test + the lib's pre-existing title-edit test). Check C (reservation required) -- SIX mutations over the 8 e2e: `remote?.contains(n) ?? true` reddens 1 (offline); deleting the Check C failures.add reddens 2 (unreserved + midmerge); dropping `.where((n) => !published.contains(n))` reddens 1 (published); `_localReservations() => <int>{}` reddens 1 (localref, remoteref stays green); `_remoteReservations()` returning an empty set reddens 1 (remoteref, localref stays green -- the two lookups are independently load-bearing); unguarding the vacuous PASS print reddens 1 (offline, on isNot(contains('PASS'))). No mutation was a compile error. B-pass 2026-09-13 F3 -- an unreadable MERGE_HEAD (present, not a sha) is UNDETERMINED, found via `git rev-parse --git-path` because the literal `.git/MERGE_HEAD` does not exist in a linked worktree: TWO mutations over the 10 e2e: neutering the `mergeHeadUnreadable` arm reddens 2 (plain clone + linked worktree); restoring the literal path reddens exactly 1 (the linked-worktree test), proving `--git-path` is load-bearing there and only there. SCOPE: the ls-remote path is exercised against a file:// bare remote; the 10 s bound and the SSH handshake cost (2.9-3.2 s measured live) are not under test."
+
+check_onconflict_live_arbiter.dart:
+  grandfathered: 2026-08-10
+
+check_plan_review_record_exists.dart:
+  grandfathered: 2026-08-10
+
+check_profile_write_service_only.dart:
+  grandfathered: 2026-08-10
+
+check_raw_hex_in_features.dart:
+  grandfathered: 2026-08-10
+
+check_razorpay_key_flavor.dart:
+  grandfathered: 2026-08-10
+
+check_reader_manifest_complete.dart:
+  grandfathered: 2026-08-10
+
+check_regression_catalog.dart:
+  grandfathered: 2026-08-10
+
+check_restore_round_trip_coverage.dart:
+  grandfathered: 2026-08-10
+
+check_saved_meal_key_canonical.dart:
+  grandfathered: 2026-08-10
+
+check_schema_column_refs.dart:
+  grandfathered: 2026-08-10
+
+check_schema_payload_parity.dart:
+  grandfathered: 2026-08-10
+
+check_secrets_gitignored.dart:
+  grandfathered: 2026-08-10
+
+check_singleton_provider_migration.dart:
+  grandfathered: 2026-08-10
+
+check_skipped_discipline_budget.dart:
+  grandfathered: 2026-08-10
+
+check_snapshot_contract.dart:
+  grandfathered: 2026-08-10
+
+check_sot_behavioral_test_paths.dart:
+  grandfathered: 2026-08-10
+
+check_sot_registry_citations.dart:
+  mutation_proven: true
+  test_path:
+    - test/contracts/sot_registry_citations_test.dart
+  evidence: >
+    Reverting parseConcepts from the list shape (`- concept: <name>`) to the
+    mapping shape (`  <name>:`) reddens 8 of 28 tests (20 pass / 8 fail),
+    measured 2026-08-10 by actually running the mutation, not asserted. The 8
+    are the subprocess cases that invoke the real gate's main() in a throwaway
+    git repo — so the mutation is caught at the wiring level, not only in pure
+    logic. NOTE: commit d4a8de00's message claimed "3 cases red"; that number
+    predates the 8 subprocess cases and is superseded by this measurement.
+    The mapping shape is the exact mistake that produced a bogus "299 broken
+    docs" reading while this gate was being designed: it parses to an EMPTY
+    concept set, which makes every citation look dangling.
+
+check_sot_registry_completeness.dart:
+  grandfathered: 2026-08-10
+
+check_sot_registry_parity.dart:
+  grandfathered: 2026-08-10
+
+check_std_encoding_import_rot.dart:
+  grandfathered: 2026-08-10
+
+check_sync_fanout.dart:
+  grandfathered: 2026-08-10
+
+check_tab_screen_uses_hive_scaffold.dart:
+  grandfathered: 2026-08-10
+
+check_telemetry_pii_classification.dart:
+  grandfathered: 2026-08-10
+
+check_test_runtime_budget.dart:
+  grandfathered: 2026-08-10
+
+check_two_user_cross_account.dart:
+  grandfathered: 2026-08-10
+
+check_unawaited_has_error_sink.dart:
+  grandfathered: 2026-08-10
+
+check_unbounded_cron_reads.dart:
+  grandfathered: 2026-08-10
+
+check_week_selector_phase_labels.dart:
+  grandfathered: 2026-08-10
+
+check_widget_no_direct_supabase.dart:
+  grandfathered: 2026-08-10
+
+check_workout_schedule_split.dart:
+  grandfathered: 2026-08-10
+
+check_worktree_config_integrity.dart:
+  grandfathered: 2026-08-10
+
+check_writeservice_contracts.dart:
+  grandfathered: 2026-08-10
+
+check_writeservice_only.dart:
+  grandfathered: 2026-08-10
+
+check_skill_tuning_history.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/skill_tuning_lib_test.dart
+    - test/scripts/skill_tuning_history_e2e_test.dart
+  evidence: >
+    NEW 2026-08-25. Gates CLAUDE.md 5.1: a commit that ADDS any review file under
+    docs/reviews/ must also append a same-dated entry to
+    .claude/skills/code-review/SKILL.md's Tuning history. Born from the omission
+    that motivated it - a B-pass produced a 4-finding review that day and nothing
+    was appended; it surfaced only when founder asked whether discipline had been
+    followed. 5.1 had no gate, so the skill's own self-evolution loop was the
+    thing decaying.
+    THREE MUTATIONS, each RE-MEASURED against the files as they now stand rather
+    than carried from an earlier run:
+    (1) WEAKEN THE MATCHER to skillMarkdown.contains(isoDate) -> 4 red. The
+    realistic regression, since a bare contains looks like a simplification. It
+    matters because the fixture's 2026-08-20 entry mentions 2026-08-25 in its
+    PROSE, so contains() lets an OLD entry satisfy a NEW review and the gate goes
+    permanently inert.
+    (2) COLLAPSE THE FAIL-OPEN - return satisfied instead of undetermined when the
+    skill file cannot be read -> 3 red, including the explicit "undetermined is
+    NOT reported as satisfied" case. That test is why the predicate returns an
+    enum rather than a bool: a caller handed false cannot tell "nothing to check"
+    from "could not check" and would claim a PASS it never established.
+    (3) NARROW THE FILE FILTER back to -review.md only -> 2 red. Review round 1
+    measured the input set: of 164 files in docs/reviews/, 81 end -bpass.md and
+    only 79 end -review.md, and the skill's own Tuning history cites -bpass.md for
+    most recent entries. The first version was blind to the MAJORITY convention -
+    the very omission the gate exists to catch, reopened by an over-narrow
+    pattern. The fix identifies a review by WHERE IT LIVES, not by suffix, with
+    only INDEX.md/README.md excluded by name.
+    The e2e additionally proves the gate reads the STAGED blob rather than the
+    working tree (OI-72's failure shape), and that a dateless stray .md cannot
+    MASK a dated review beside it that is missing its entry.
+    A defect in the gate was found BY these tests before commit: the HEAD fallback
+    returned git show's stdout without checking exitCode, so a missing skill file
+    yielded '' rather than null. An empty string is not "unreadable" - it is a
+    file with no entry - so fail-open had silently become fail-closed.
+    SCOPE, so the pass is not read as wider than it is: code-review only.
+    /hermes-pass writes to the same directory but keeps its own tuning section;
+    wiring that needs its own decision and is not assumed here.
+
+check_single_schedule_row_builder.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/schedule_row_builder_gate_lib_test.dart
+  evidence: >
+    NEW 2026-09-08 (OI-166 Unit 1). Asserts that only allowlisted files construct
+    a schedule_<date> Hive row map, detected by the co-occurrence of BOTH row keys,
+    each matched in EITHER spelling - map-literal ('week_character':) or index
+    assignment (row['week_character'] = ...) - independently, so a file that MIXES
+    the two forms is caught as well. Born from the OI-166 inventory, which
+    found FOUR independent implementations of "lay out schedule rows for a phase"
+    carrying 8 real differences - 4 of them live user-visible defects - while three
+    of the four carried comments asserting they mirrored each other. The fourth
+    (hotel_workout_planner.dart) was missed by three plan-review rounds AND by two
+    versions of that inventory, then found in ONE command by running this very
+    heuristic. That is the argument for a gate over a comment: the detection worked,
+    nobody had run it.
+    MUTATIONS RUN, each leaving the file COMPILING and semantically wrong (a compile
+    error is red for the wrong reason and proves nothing):
+    (1) AND -> OR in constructsScheduleRow -> 4 red. Each arm is exercised by its own
+    single-key fixture, so both halves of the conjunction are pinned.
+    (2) NEUTER stripDartComments (return the source unchanged) -> 4 red. This matters
+    in practice rather than theoretically: these files document each other and quote
+    the very keys the heuristic looks for, so an unstripped match would fire on a
+    doc-comment. Comment-stripping before an absent-pattern grep is a standing repo
+    rule.
+    (3) DELETE the allowlist containsKey check -> 2 red (the allowlist test and the
+    Windows backslash-normalisation test, which reaches the allowlist through a
+    different path).
+    (4) DELETE the index-assignment arm of _writesKey (return false after the
+    literal-key check) -> 3 red. This leg exists because the gate SHIPPED WITHOUT IT
+    and a B-pass reviewer defeated it on the first attempt - see the widening note
+    below. All four legs re-derived after that change rather than carried forward;
+    legs 1 and 2 rose from 2 to 4 because the new mirror fixtures catch them too.
+    TWO FIXTURE DEFECTS WERE FOUND BY RUNNING THESE, NOT BY READING THEM, and both
+    are recorded in the test file at their site. Legs 1 and 2 each reddened only ONE
+    test on the first attempt. The week_character fixture used the INDEX form
+    (row['week_character'] = ...) and the doc-comment fixture omitted the COLONS -
+    so neither contained the literal the matcher keys on, and both stayed green under
+    a mutation they were written to detect. A fixture that merely LOOKS like the real
+    thing tests nothing; it must contain the exact token.
+    A THIRD near-miss on 2026-09-08, worth recording because the guard caught it: the
+    first attempt at leg 4 used a python replace whose anchor did not match, so NOTHING
+    was mutated and the suite reported 26/26 GREEN. Only the mandatory grep -c
+    confirmation (0 markers applied) distinguished that from a real proof. A mutation
+    run without an applied-check is not evidence.
+    WIDENED 2026-09-08 by B-pass finding 2, in the same batch that shipped the gate.
+    The first version matched the map-literal form ONLY. The reviewer planted a file
+    building the map and then assigning row['week_character'] = ... - an ordinary Dart
+    idiom - and the gate reported PASS over 480 files without seeing it. Fixed by
+    matching each key in either spelling. The residual is NAMED, not silently left:
+    named-constant keys (row[_kWeekChar] = ...) STILL escape, verified by planting
+    that exact file and watching it PASS, and pinned as an executable test so the
+    limit reddens if anyone ever closes it. A source grep is bounded by what its
+    author could imagine writing; Unit 2's shared builder is the structural fix.
+    LIVE POSITIVE CONTROL: a temporary lib/ file carrying both keys was reported by
+    name and the gate exited 0 under its warn default; removing the file restored
+    PASS across 479 lib/ files. A gate that has never reported anything is
+    indistinguishable from a broken one.
+    WARN IS THE BUILT-IN DEFAULT (const _hardFail = false), not a call-site flag,
+    because pre-commit.sh and test.yml both auto-wire every check_*.dart BY GLOB with
+    no arguments - CLAUDE.md 4.11's baseline window cannot be expressed any other
+    way here. OI-166 Unit 2's final commit flips it, at which point both
+    pendingUnit2 allowlist entries must already be gone.
+    SCOPE, so this is not read as wider than it is: input set is lib/ ONLY. Run
+    repo-wide the same heuristic matches two existing test fixtures plus every
+    behavioural test Unit 2 adds, so an unscoped hard-fail would break the build on
+    the batch's own tests. Two known blind spots are named in the library header -
+    row constructors that omit week_character (template_service.dart and the
+    sync restore overlay); neither is a phase-layout writer.

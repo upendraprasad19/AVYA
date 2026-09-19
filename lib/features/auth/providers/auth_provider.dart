@@ -1,0 +1,1255 @@
+// AUTH_INVALIDATION_EXEMPT: the auth provider IS the source of truth
+// for auth state. It produces the signal that `authUserIdTokenProvider`
+// derives from — it can't self-watch without creating a circular
+// rebuild loop.
+
+import 'dart:async';
+
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/streak_freeze_clamp_migrator.dart';
+import 'package:icanbefitter/core/services/user_config_migrator.dart';
+import 'package:icanbefitter/core/services/body_fat_default_healer.dart';
+import 'package:icanbefitter/core/services/logging_type_repair_migrator.dart';
+import 'package:icanbefitter/core/services/wlog_type_backfill_migrator.dart';
+import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
+
+/// Releases every per-user identity this DEVICE holds outside Hive.
+///
+/// TOP-LEVEL, not a method on [AuthNotifier], because sign-out is not the only
+/// path that ends a session. Review round 1 (2026-07-27) found two others that
+/// clear Hive + Supabase directly and never touch the notifier:
+///
+///   - `main.dart`'s `runZonedGuarded` HiveOwnershipException recovery — which
+///     fires exactly when the cross-account guard trips, i.e. precisely the
+///     "this device may be carrying a stale identity" case.
+///   - `delete_account_screen.dart`'s DPDP hard-delete — and "a handset the
+///     user sold or handed on" is the scenario this whole fix describes, so
+///     leaving account deletion uncovered inverted the intent. Crashlytics
+///     would keep tagging crashes with the deleted user's id.
+///
+/// Guards mirror the BIND sites in `_ensureLocalUser` exactly (`!kIsWeb`,
+/// `!kDebugMode`): an unbind running where the bind never did is a new failure
+/// mode, not a fix. Each step is individually try/caught so a throwing SDK
+/// cannot block the rest — and so this is safe to call from a zone handler.
+///
+/// Does NOT touch the static `onStateChanged` callbacks; see the note in
+/// [AuthNotifier.unbindSessionIdentity] for why clearing those is a regression.
+Future<void> releaseDeviceSessionIdentity() async {
+  if (!kIsWeb) {
+    try {
+      await OneSignal.logout();
+    } catch (e) {
+      debugPrint('[auth/releaseIdentity] OneSignal.logout failed: $e');
+    }
+  }
+  if (!kDebugMode) {
+    try {
+      await FirebaseCrashlytics.instance.setUserIdentifier('');
+    } catch (e) {
+      debugPrint('[auth/releaseIdentity] Crashlytics clear failed: $e');
+    }
+  }
+}
+
+// ── Auth State Stream ───────────────────────────────────────────
+
+/// Streams Supabase auth state changes (sign-in, sign-out, token refresh).
+/// Returns an empty stream if Supabase is not yet initialized.
+final authStateProvider = StreamProvider<AuthState>((ref) {
+  try {
+    return SupabaseService.instance.client.auth.onAuthStateChange;
+  } catch (_) {
+    return const Stream.empty();
+  }
+});
+
+/// Returns the currently authenticated Supabase [User], or null.
+/// Returns null if Supabase is not yet initialized.
+final currentUserProvider = Provider<User?>((ref) {
+  try {
+    return SupabaseService.instance.currentUser;
+  } catch (_) {
+    return null;
+  }
+});
+
+// ── Auth Notifier ───────────────────────────────────────────────
+
+/// Possible states during an auth operation.
+/// `info` is a non-error, expected-happy-path message (e.g. "check your
+/// email to confirm") — distinct from `error` so the UI can render it
+/// without red/alarm styling. Added this batch (diagnose — see
+/// docs/diagnoses/): the confirmation-pending message below was previously
+/// forced into `error` for lack of any other bucket, which is why it
+/// rendered in the same red SnackBar as a genuine sign-in failure.
+enum AuthStatus { idle, loading, success, error, info }
+
+class AuthState2 {
+  final AuthStatus status;
+  // Carries the message for BOTH AuthStatus.error and AuthStatus.info — the
+  // field name predates `info` and renaming it is a larger, purely cosmetic
+  // change touching every call site for no behavioral benefit.
+  final String? errorMessage;
+  final bool otpSent;
+
+  const AuthState2({
+    this.status = AuthStatus.idle,
+    this.errorMessage,
+    this.otpSent = false,
+  });
+
+  AuthState2 copyWith({
+    AuthStatus? status,
+    String? errorMessage,
+    bool? otpSent,
+  }) {
+    return AuthState2(
+      status: status ?? this.status,
+      errorMessage: errorMessage,
+      otpSent: otpSent ?? this.otpSent,
+    );
+  }
+}
+
+class AuthNotifier extends Notifier<AuthState2> {
+  @override
+  AuthState2 build() {
+    ref.onDispose(cancelOAuthWatch);
+    return const AuthState2();
+  }
+
+  SupabaseService get _supabase => SupabaseService.instance;
+  HiveService get _hive => HiveService.instance;
+
+  /// Ensures Supabase is initialized, attempting initialization if needed.
+  /// Returns false and sets an error state if it cannot be initialized.
+  ///
+  /// `@visibleForTesting` non-private so a test subclass can override it to
+  /// short-circuit to `true` (real `_supabase.initialize()` fails in a pure
+  /// VM test) — see `test/contracts/check_email_registered_behavioral_test.dart`.
+  @visibleForTesting
+  Future<bool> ensureSupabaseReady() async {
+    if (_supabase.isInitialized) return true;
+    try {
+      await _supabase.initialize();
+      return true;
+    } catch (e) {
+      // Surface build-config errors clearly; everything else is a connectivity issue.
+      final msg = e is StateError
+          ? e.message
+          : 'Connection failed. Please check your internet and try again.';
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: msg,
+      );
+      return false;
+    }
+  }
+
+  /// Checks whether [email] already belongs to a registered account, via the
+  /// server-side `email_is_registered` RPC (SECURITY DEFINER — public.users
+  /// RLS is owner-only and there's no auth.uid() yet at this point in the
+  /// flow). Returns true/false, or null on error (the error is also
+  /// surfaced through `state` for the screen's existing SnackBar listener).
+  ///
+  /// Never sets `AuthStatus.success` — the screen's `ref.listen` navigates
+  /// to `/restoring` on success, and this check happens with no real session.
+  Future<bool?> checkEmailRegistered(String email) async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    if (!await ensureSupabaseReady()) return null;
+    try {
+      final result = await rpcEmailIsRegistered(email.trim());
+      state = state.copyWith(status: AuthStatus.idle);
+      return result;
+    } catch (e) {
+      unawaited(ErrorTelemetry.logEvent('auth_email_check_failed',
+          message: '[${e.runtimeType}] ${e.toString().split('\n').first}'));
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Could not verify email. Please try again.',
+      );
+      return null;
+    }
+  }
+
+  /// The network leaf of [checkEmailRegistered], extracted so a test
+  /// subclass can override just this and inherit the real state-machine
+  /// (loading/idle/error transitions, telemetry on failure) for a genuine
+  /// behavioral test — see
+  /// `test/contracts/check_email_registered_behavioral_test.dart`.
+  @visibleForTesting
+  Future<bool> rpcEmailIsRegistered(String trimmedEmail) async {
+    final result = await _supabase.client.rpc(
+      'email_is_registered',
+      params: {'p_email': trimmedEmail},
+    );
+    return result as bool;
+  }
+
+  /// Ceiling on the WHOLE email sign-in sequence.
+  ///
+  /// closes-diagnose a9c4e2. On 2026-08-13 23:03 IST the founder signed in on
+  /// the prod web build during a CPU-starved-backend window. `POST /token`
+  /// returned **200 in 309ms** — the credentials were never in question — and
+  /// everything after it hung: `/user` took 9.4s, then 27.3s, then 35.9s
+  /// ("Unhandled server error: context canceled"). The SIGN IN button spun
+  /// forever with no error, no SnackBar, no navigation, no escape affordance.
+  ///
+  /// Nothing on this path carried a deadline. `signInWithPassword` is a network
+  /// call, and [_ensureLocalUser] fans out into `HiveUserSession.openForUser`,
+  /// six one-shot migrators and `hydrateFromCloud` — every one network-touching,
+  /// none bounded. Each swallows its own THROW, but a never-resolving `await`
+  /// does not throw; it simply never returns. So `state` stays
+  /// [AuthStatus.loading], and `sign_in_screen.dart`'s `ref.listen` — which
+  /// navigates only on `success` and SnackBars only on `error` — has nothing to
+  /// react to. The spinner IS the loading state, rendered faithfully forever.
+  ///
+  /// Same wedge class as [signOutTimeout], bounded the same way: ceiling the
+  /// WHOLE sequence so control always leaves the `try` and lands on a state the
+  /// UI can render. Longer than the 20s sign-out ceiling because this path
+  /// legitimately includes first-run cloud hydration; far short of the observed
+  /// 36s-and-climbing so the user gets an actionable error instead of a wedge.
+  static const Duration signInTimeout = Duration(seconds: 40);
+
+  /// Kill-switch for [signInTimeout] (root CLAUDE.md §4.6 — auth is on the
+  /// risky-change list). `true` restores the pre-fix unbounded await verbatim.
+  ///
+  /// Fails CLOSED to the fix being ON: if configBox is not open yet (early boot,
+  /// widget tests) the timeout still applies, because an unbounded sign-in is
+  /// the defect being repaired.
+  /// Test override for [signInTimeoutDisabled]. `null` = read the real flag.
+  /// Exists because configBox is not open in unit tests, so the Hive read
+  /// below always lands in the `catch` and the switch could never be exercised
+  /// — a kill-switch with no test is a kill-switch nobody knows still works.
+  @visibleForTesting
+  static bool? signInTimeoutDisabledForTest;
+
+  static bool get signInTimeoutDisabled {
+    final override = signInTimeoutDisabledForTest;
+    if (override != null) return override;
+    try {
+      return Hive.box(HiveService.configBoxName).get('disable_sign_in_timeout') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The bound applied at [signInWithEmail]'s only call site, extracted behind
+  /// an injectable so the ceiling is behaviorally testable without a live
+  /// Supabase session — same seam as `SupabaseService.coalescedRefresh` and
+  /// `SupabaseService.retryColdStart`.
+  ///
+  /// A source-grep test could only prove `.timeout(` appears in the file; this
+  /// seam lets a test prove a hanging future actually RAISES inside the ceiling
+  /// (`feedback_source_grep_false_confidence.md`).
+  @visibleForTesting
+  static Future<void> boundSignIn(Future<void> Function() run,
+      {Duration? ceiling}) {
+    if (signInTimeoutDisabled) return run();
+    return run().timeout(ceiling ?? signInTimeout);
+  }
+
+  /// Sign in with email + password.
+  Future<void> signInWithEmail(String email, String password) async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    if (!await ensureSupabaseReady()) return;
+    try {
+      await boundSignIn(() => _performEmailSignIn(email, password));
+    } on TimeoutException catch (e, st) {
+      // a9c4e2. The session may well EXIST here — the auth call usually
+      // succeeds and it is the post-auth hydration that wedges — so this
+      // deliberately does NOT sign out. Forcing a sign-out during a backend
+      // brown-out would destroy a valid session and make the user's position
+      // worse. Surface a state the UI can render and let them retry; a retry
+      // re-runs signInWithPassword and picks the session straight back up.
+      unawaited(ErrorTelemetry.logEvent('auth_sign_in_timeout',
+          message: 'email sign-in exceeded ${signInTimeout.inSeconds}s'));
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'auth_sign_in_timeout'));
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage:
+            'Sign in is taking longer than usual. Check your connection and try again.',
+      );
+    } on AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: e.message,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: '[${e.runtimeType}] ${e.toString().split('\n').first}',
+      );
+    }
+  }
+
+  /// The sign-in sequence itself. Bounded by [signInTimeout] at its only call
+  /// site — see [signInWithEmail].
+  Future<void> _performEmailSignIn(String email, String password) async {
+    final response = await _supabase.client.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
+
+    if (response.user == null) {
+      // Pre-auth lane (b6e4f2). Before that lane existed this event could
+      // not be stored at all — the caller is signed out by definition — so
+      // sign-in failures left no trace whatsoever.
+      unawaited(ErrorTelemetry.logEvent('auth_sign_in_failed',
+          message: 'signIn returned a null user with no AuthException'));
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Sign in failed. Please check your credentials.',
+      );
+      return;
+    }
+
+    await _ensureLocalUser(response.user!);
+    // APK Test #12.8 — auth lifecycle event so we can correlate
+    // post-auth bug reports (PRO pill stuck, profile name "USER")
+    // with the exact sign-in instant.
+    unawaited(ErrorTelemetry.logEvent('auth_signed_in',
+        message: 'method=email userId=${response.user!.id.substring(0, 8)}'));
+    state = state.copyWith(status: AuthStatus.success);
+  }
+
+  /// Create a new account with email + password.
+  ///
+  /// [termsAcceptedAt] / [termsVersion] (closes-diagnose
+  /// b3f9e7): the ToS/Privacy
+  /// consent captured at CREATE ACCOUNT tap time, threaded through to
+  /// `_ensureLocalUser` — which writes them to Hive AFTER
+  /// `HiveUserSession.openForUser` has opened the user-scoped box. Writing
+  /// them here directly (the pre-fix approach) is impossible: no session
+  /// exists yet at tap time, so the box can't be opened.
+  Future<void> signUpWithEmail(
+    String email,
+    String password, {
+    String? termsAcceptedAt,
+    String? termsVersion,
+  }) async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    if (!await ensureSupabaseReady()) return;
+    try {
+      final response = await _supabase.client.auth.signUp(
+        email: email,
+        password: password,
+      );
+
+      if (response.user == null) {
+        // Pre-auth lane (b6e4f2) — see the sign-in sibling above.
+        unawaited(ErrorTelemetry.logEvent('auth_sign_up_failed',
+            message: 'signUp returned a null user with no AuthException'));
+        state = state.copyWith(
+          status: AuthStatus.error,
+          errorMessage: 'Sign up failed. Please try again.',
+        );
+        return;
+      }
+
+      // If identities is empty, the user already exists but hasn't confirmed
+      // their email — Supabase returns a fake success to prevent user enumeration.
+      if (response.user!.identities != null &&
+          response.user!.identities!.isEmpty) {
+        state = state.copyWith(
+          status: AuthStatus.error,
+          errorMessage:
+              'An account with this email already exists. Please sign in.',
+        );
+        return;
+      }
+
+      // Email confirmation enabled → session is null, user must confirm email.
+      if (response.session == null) {
+        // Still try to set up local state, but don't require it to succeed.
+        try {
+          await _ensureLocalUser(response.user!,
+              termsAcceptedAt: termsAcceptedAt, termsVersion: termsVersion);
+        } catch (_) {}
+        state = state.copyWith(
+          status: AuthStatus.info,
+          errorMessage:
+              'Check your email (and spam folder) for a confirmation link, then sign in.',
+        );
+        return;
+      }
+
+      // Session present → signed in immediately (email confirmation off).
+      try {
+        await _ensureLocalUser(response.user!,
+            termsAcceptedAt: termsAcceptedAt, termsVersion: termsVersion);
+      } on StateError catch (e) {
+        // Test #10.1 — cross-account guard's verify-after-clear failed
+        // (poisoned local state would leak into this session). The
+        // guard already force-signed-out; surface the failure to UI.
+        state = state.copyWith(
+          status: AuthStatus.error,
+          errorMessage:
+              'Couldn’t clean up the previous session. Please sign in again.',
+        );
+        debugPrint('[signUpWithEmail] poisoned-clear escalation: $e');
+        return;
+      } catch (_) {
+        // Other local setup failures are non-fatal — auth succeeded.
+      }
+      // APK Test #12.8 — distinct sign-up event vs sign-in.
+      unawaited(ErrorTelemetry.logEvent('auth_signed_up',
+          message:
+              'method=email userId=${response.user!.id.substring(0, 8)}'));
+      state = state.copyWith(status: AuthStatus.success);
+    } on AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: e.message,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Sign up failed: ${e.toString().split('\n').first}',
+      );
+    }
+  }
+
+  // ── OAuth completion watch (diagnose d3a7c9) ────────────────────
+  //
+  // `signInWithOAuth` returns the moment the external browser is launched —
+  // it has no session to report, because the session arrives LATER and out of
+  // band on `onAuthStateChange`. NOTHING else in the app picks that up:
+  // `refreshListenable` appears zero times in `lib/`, so the router never
+  // re-runs `_authRedirect` on an auth event, and `sign_in_screen.dart`
+  // navigates only on `AuthStatus.success`. So without this watch the notifier
+  // sits at `loading` forever — BOTH sign-in buttons spin (they share one
+  // `isLoading` derived from this status) and the user never leaves the screen
+  // even though Supabase has already issued the token and stamped
+  // `last_sign_in_at`. Force-quitting appeared to "fix" it only because a cold
+  // boot reads the persisted session.
+  //
+  // Same lesson as diagnose c8f1d3 — nothing observes auth state on your
+  // behalf, so navigate explicitly — which was applied to the password-reset
+  // EXIT path and never to the OAuth ENTRY path.
+
+  /// How long to wait for the redirect to produce a session before releasing
+  /// the UI. Google consent in an external browser can legitimately take a
+  /// while; this only has to be shorter than "the user concludes it's broken".
+  static const Duration oauthSessionWait = Duration(seconds: 90);
+
+  StreamSubscription<AuthState>? _oauthSub;
+  Timer? _oauthTimeout;
+
+  /// Tears down the OAuth watch. Safe to call when nothing is armed, and
+  /// wired to `ref.onDispose` so a disposed notifier cannot leak a listener.
+  @visibleForTesting
+  void cancelOAuthWatch() {
+    _oauthSub?.cancel();
+    _oauthSub = null;
+    _oauthTimeout?.cancel();
+    _oauthTimeout = null;
+  }
+
+  /// The auth-state stream the OAuth watch listens to.
+  ///
+  /// `@visibleForTesting` non-private for the same reason as
+  /// [ensureSupabaseReady]: a test subclass swaps in a controllable stream,
+  /// because a real Supabase client cannot exist in a pure VM test.
+  @visibleForTesting
+  Stream<AuthState> authStateChanges() =>
+      _supabase.client.auth.onAuthStateChange;
+
+  /// The access token of the CURRENT live session, or null when signed out.
+  ///
+  /// `@visibleForTesting` for the same reason as the seams above. This exists
+  /// because `onAuthStateChange` is a `ReplaySubject` (gotrue_client.dart:94,
+  /// exposed at :132) with no `maxSize` — it replays EVERY event it has ever
+  /// emitted to each new subscriber. Reading the event payload would therefore
+  /// resolve the OAuth watch against a HISTORICAL session: sign in, sign out,
+  /// tap Google again in the same process, and the replayed `signedIn` from
+  /// before the sign-out would be mistaken for the redirect returning —
+  /// navigating to /restoring with no session AND disarming the watch, so the
+  /// real session then gets no observer at all. Live client state cannot be
+  /// replayed, so this is immune by construction rather than by filtering.
+  @visibleForTesting
+  String? currentAccessToken() =>
+      _supabase.client.auth.currentSession?.accessToken;
+
+  /// Launches the Google consent flow in the platform browser.
+  ///
+  /// `@visibleForTesting` non-private so a test subclass can stub the launch
+  /// and then drive [authStateChanges] to simulate the redirect returning.
+  @visibleForTesting
+  Future<bool> launchGoogleOAuth() {
+    return _supabase.client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      // Web must redirect to the prod SPA origin, NOT the mobile custom
+      // scheme — same bug class as diagnose e9f2a4 (redirectTo not
+      // matching the platform / Supabase's allowed redirect list).
+      redirectTo: kIsWeb
+          ? 'https://app.icanbefitter.com'
+          : 'io.supabase.icanbefitter://login-callback/',
+    );
+  }
+
+  /// Arms the watch for the session the redirect will produce.
+  ///
+  /// Subscribed BEFORE the browser launches so a fast redirect cannot land in
+  /// the gap between the call and the listener. Only a NON-NULL session
+  /// resolves it — `initialSession` on a signed-out client and `signedOut`
+  /// both carry a null session and must not be mistaken for success.
+  void _watchForOAuthSession() {
+    cancelOAuthWatch();
+    // Snapshot the token we start from. The stream is a ReplaySubject (see
+    // [currentAccessToken]), so the EVENT is not evidence of anything — only a
+    // change in the LIVE session is. Requiring a DIFFERENT token also covers
+    // the degenerate case of arming while a session already exists.
+    final tokenAtArm = currentAccessToken();
+    try {
+      _oauthSub = authStateChanges().listen((_) {
+        final live = currentAccessToken();
+        if (live == null || live == tokenAtArm) return;
+        cancelOAuthWatch();
+        state = state.copyWith(status: AuthStatus.success);
+      });
+    } catch (_) {
+      // No client to listen to. `ensureSupabaseReady` already reports that
+      // class of failure through `state`; don't double-report it here.
+      return;
+    }
+    _oauthTimeout = Timer(oauthSessionWait, () {
+      cancelOAuthWatch();
+      // Back to IDLE, not error: by far the likeliest cause is the user
+      // dismissing the consent screen. Releasing the buttons is the whole
+      // fix — an error toast for a deliberate cancel would be noise.
+      if (state.status == AuthStatus.loading) {
+        state = state.copyWith(status: AuthStatus.idle);
+      }
+    });
+  }
+
+  /// Sign in with Google OAuth.
+  Future<void> signInWithGoogle() async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    if (!await ensureSupabaseReady()) return;
+    _watchForOAuthSession();
+    try {
+      await launchGoogleOAuth();
+    } on AuthException catch (e) {
+      cancelOAuthWatch();
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: e.message,
+      );
+    } catch (e) {
+      cancelOAuthWatch();
+      // Pre-auth lane (b6e4f2). This is the one that would have told us what
+      // was happening during the 2026-08-06 Google sign-in report, had it been
+      // recordable at the time.
+      final s = e.toString();
+      unawaited(ErrorTelemetry.logEvent('auth_oauth_launch_failed',
+          message: s.length > 400 ? s.substring(0, 400) : s));
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Google sign-in failed. Please try again.',
+      );
+    }
+  }
+
+  /// Send OTP to the given phone number (E.164 format).
+  Future<void> signInWithPhone(String phone) async {
+    state = state.copyWith(
+      status: AuthStatus.loading,
+      errorMessage: null,
+      otpSent: false,
+    );
+    if (!await ensureSupabaseReady()) return;
+    try {
+      await _supabase.client.auth.signInWithOtp(phone: phone);
+      state = state.copyWith(status: AuthStatus.idle, otpSent: true);
+    } on AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: e.message,
+      );
+    } catch (e) {
+      final errStr = e.toString();
+      final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
+      unawaited(ErrorTelemetry.logEvent('auth_send_phone_otp_failed',
+          message: clipped));
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Failed to send OTP. Please try again.',
+      );
+    }
+  }
+
+  /// Verify the OTP sent to [phone].
+  Future<void> verifyOtp(String phone, String otp) async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    try {
+      final response = await _supabase.client.auth.verifyOTP(
+        phone: phone,
+        token: otp,
+        type: OtpType.sms,
+      );
+
+      if (response.user == null) {
+        state = state.copyWith(
+          status: AuthStatus.error,
+          errorMessage: 'Invalid OTP. Please try again.',
+        );
+        return;
+      }
+
+      await _ensureLocalUser(response.user!);
+      // APK Test #12.8 — phone OTP success event.
+      unawaited(ErrorTelemetry.logEvent('auth_signed_in',
+          message:
+              'method=phone_otp userId=${response.user!.id.substring(0, 8)}'));
+      state = state.copyWith(status: AuthStatus.success);
+    } on AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: e.message,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'OTP verification failed. Please try again.',
+      );
+    }
+  }
+
+  /// Verifies a signup-confirmation link's token hash and, on success, signs
+  /// the user in — the counterpart to [verifyOtp] for the email-confirmation
+  /// flow reached via `/confirm` (see `confirm_email_screen.dart`).
+  ///
+  /// Uses `tokenHash`, not the default `{{ .ConfirmationURL }}` link, because
+  /// that flow requires the confirmation email to link at a domain we
+  /// control (`app.icanbefitter.com`, for Android App Links) rather than
+  /// Supabase's own domain. `verifyOTP` with a bare token hash is NOT
+  /// PKCE-bound — unlike the old password-recovery link (diagnose c9e2b7),
+  /// it can be completed on any device, which is exactly why the recovery
+  /// flow above also moved to a token/code shape instead of a raw link.
+  Future<void> confirmEmail(String tokenHash) async {
+    // OI-205 interim guard (2026-09-16, plan-review round 1 Finding 1):
+    // /confirm is an autoVerify Android App Link — tapping it from ANY app
+    // hands control straight to the already-running Activity, unlike /reset
+    // (browser-only, no App Link). Refuse outright rather than silently
+    // switching an already-authenticated user's session; the full consent
+    // UX (switch vs. cancel) remains a real product decision, tracked by
+    // OI-205, not decided here. Checked BEFORE the loading state so a
+    // blocked attempt never touches Supabase at all — this ORDERING is
+    // correct-by-inspection (the guard is unconditionally the first
+    // statement in this method) but round 2 correctly noted it is not
+    // independently pinned by a test: proving it end-to-end needs
+    // `SupabaseService.instance.isAuthenticated` to read true, which
+    // requires `SupabaseService.instance.initialize()` to have run — that
+    // throws in a test environment with empty `.env` values, and no seam
+    // exists to fake just the initialized flag (same gap
+    // `confirmEmailAuthGuardState`'s own doc comment already names).
+    // Adding one is a real, separate change to a shared core service, not a
+    // one-line addition to slip into this batch.
+    final guardState = confirmEmailAuthGuardState(
+      state,
+      alreadyAuthenticated: _supabase.isAuthenticated,
+    );
+    if (guardState != null) {
+      state = guardState;
+      return;
+    }
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    try {
+      // Bounded by the same ceiling as signInWithEmail: verifyOTP + the
+      // _ensureLocalUser fan-out below is the identical network-touching
+      // shape (HiveUserSession.openForUser, one-shot migrators,
+      // hydrateFromCloud) that motivated signInTimeout in the first place
+      // (diagnose a9c4e2) — and confirmEmail fires automatically on mount,
+      // with no prior user gesture, so an unbounded hang here is worse, not
+      // better, than the sign-in case it borrows the ceiling from.
+      await boundSignIn(() => _performConfirmEmail(tokenHash));
+    } on TimeoutException catch (e, st) {
+      unawaited(ErrorTelemetry.logEvent('auth_confirm_email_timeout',
+          message: 'email confirm exceeded ${signInTimeout.inSeconds}s'));
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'auth_confirm_email_timeout'));
+      state = confirmEmailErrorState(state, e);
+    } on StateError catch (e) {
+      state = confirmEmailErrorState(state, e);
+      debugPrint('[confirmEmail] poisoned-clear escalation: $e');
+    } catch (e) {
+      state = confirmEmailErrorState(state, e);
+    }
+  }
+
+  /// Pure decision for the OI-205 interim guard — extracted the same way as
+  /// [confirmEmailErrorState] below, so the DECISION (block + which message)
+  /// is testable with a bare bool, without needing a real, initialized
+  /// `SupabaseService` singleton (its `isAuthenticated` only ever reads true
+  /// after `SupabaseService.instance.initialize()`, which throws in a test
+  /// environment with empty `.env` values — there is no seam to fake just
+  /// the initialized flag). Returns `null` when not blocked (proceed as
+  /// normal); a terminal error [AuthState2] when blocked.
+  @visibleForTesting
+  static AuthState2? confirmEmailAuthGuardState(
+    AuthState2 state, {
+    required bool alreadyAuthenticated,
+  }) {
+    if (!alreadyAuthenticated) return null;
+    return state.copyWith(
+      status: AuthStatus.error,
+      errorMessage: alreadyAuthenticatedConfirmMessage,
+    );
+  }
+
+  /// The exact message [confirmEmailAuthGuardState] sets. Exposed as a named
+  /// constant (not a literal re-typed at the call site) so
+  /// `ConfirmEmailScreen` can detect this SPECIFIC case and offer a real
+  /// sign-out action instead of the generic error CTA — plan-review round 2
+  /// found that CTA (`context.go('/sign-in')`) is a silent no-op for exactly
+  /// this population: `_authRedirect`/`postSessionRedirect` bounce an
+  /// already-authenticated, onboarded user straight back to `/home` before
+  /// `SignInScreen` ever renders, so the button never actually let them sign
+  /// out despite the message promising it would.
+  ///
+  /// Deliberately NOT `@visibleForTesting` — unlike [confirmEmailAuthGuardState]
+  /// and [confirmEmailErrorState], this constant's whole purpose is to be read
+  /// by production code in a different file (`confirm_email_screen.dart`), not
+  /// just by tests.
+  static const String alreadyAuthenticatedConfirmMessage =
+      'You’re already signed in. Sign out first to confirm a different account.';
+
+  /// Pure mapping from a thrown error to the resulting error [AuthState2] —
+  /// extracted so this SELECTION logic (which message a given failure gets)
+  /// is directly testable without a live Supabase call, unlike [confirmEmail]
+  /// itself: there is no dependency-injection seam for `verifyOTP`, so a test
+  /// can't otherwise force a `TimeoutException` or `StateError` out of it.
+  ///
+  /// - [TimeoutException] — [boundSignIn]'s ceiling fired; actionable message,
+  ///   distinct from "invalid or expired" (that reads as "request a new link",
+  ///   which is the wrong recovery action for a slow network).
+  /// - [StateError] — `_ensureLocalUser`'s cross-account guard already
+  ///   force-signed-out for safety; confirmation SUCCEEDED at the Supabase
+  ///   level, so mirrors [signUpWithEmail]'s identical handler rather than
+  ///   the generic fallback.
+  /// - [AuthException] — surfaced verbatim, same as every other auth method.
+  /// - anything else — the generic "invalid or expired" fallback.
+  @visibleForTesting
+  static AuthState2 confirmEmailErrorState(AuthState2 state, Object error) {
+    if (error is TimeoutException) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage:
+            'Confirmation is taking longer than usual. Check your connection and try again.',
+      );
+    }
+    if (error is StateError) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage:
+            'Couldn’t clean up the previous session. Please sign in again.',
+      );
+    }
+    if (error is AuthException) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: error.message,
+      );
+    }
+    return state.copyWith(
+      status: AuthStatus.error,
+      errorMessage: 'This confirmation link is invalid or has expired.',
+    );
+  }
+
+  /// The confirmation sequence itself. Bounded by [signInTimeout] at its only
+  /// call site — see [confirmEmail].
+  Future<void> _performConfirmEmail(String tokenHash) async {
+    final response = await _supabase.client.auth.verifyOTP(
+      tokenHash: tokenHash,
+      type: OtpType.signup,
+    );
+
+    if (response.user == null) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'This confirmation link is invalid or has expired.',
+      );
+      return;
+    }
+
+    await _ensureLocalUser(response.user!);
+    unawaited(ErrorTelemetry.logEvent('auth_signed_in',
+        message:
+            'method=email_confirm userId=${response.user!.id.substring(0, 8)}'));
+    state = state.copyWith(status: AuthStatus.success);
+  }
+
+  /// True while [signOut] is tearing the session down.
+  ///
+  /// `_authRedirect` reads this. Between `clearAllData()` and
+  /// `auth.signOut()` the app is simultaneously AUTHENTICATED and
+  /// `onboarding_completed == false` (the box it reads was just wiped), and
+  /// `app_router.dart`'s `!isOnboarded` branch reads that as "this user has
+  /// never onboarded" → `/onboarding`. That is the founder's 2026-08-05
+  /// sign-out report, and it is intermittent only because GoRouter has no
+  /// `refreshListenable` on auth state, so whether a redirect evaluates inside
+  /// the window is timing-dependent.
+  ///
+  /// A `static` (not Riverpod) deliberately: `_authRedirect` is a plain
+  /// function on the router, evaluated synchronously during navigation, with
+  /// no `ref`. Same reason `HiveUserSession.currentOwnerFullId` is static.
+  static bool signOutInProgress = false;
+
+  /// Sign the user out of Supabase.
+  ///
+  /// **Ordering: Hive teardown FIRST, `auth.signOut()` LAST — deliberately.**
+  /// This comment used to claim the reverse ("sign out BEFORE clearing Hive so
+  /// the router never sees authenticated + !onboarded"), which the code has not
+  /// done since 2026-04-28 (`217a8cbd0`, the cross-account file-leak fix). The
+  /// comment was describing an intent the ordering had already abandoned, and
+  /// the window it warned about is real — see [signOutInProgress], which is how
+  /// it is actually closed now.
+  ///
+  /// The order cannot simply be flipped back. `clearAllData()` clears the 7
+  /// user-scoped boxes through `wrapUserScopedBox`, which THROWS when the
+  /// caller is unauthenticated with a non-null owner. End the Supabase session
+  /// first and all 7 clears throw — each caught independently
+  /// (`user_repository.dart:606`), so the teardown still completes via the
+  /// shared boxes plus [HiveUserSession.deleteAllFilesForCurrentUser] — but
+  /// every sign-out would then report 7 failures, fire 7 `recordNonFatal`
+  /// events, and return `ClearResult.hasFailures`. Two live recovery paths key
+  /// off exactly that signal (`_ensureLocalUser` below, `main.dart:74`'s
+  /// interrupted-logout completion), so flipping the order would drown a real
+  /// partial-clear alarm in permanent noise.
+  /// Ceiling on the WHOLE teardown.
+  ///
+  /// B-pass finding 1: a `finally` only runs when control leaves the `try`, and
+  /// a never-resolving `await` never does. None of the four steps below carries
+  /// its own timeout, and `_supabase.client.auth.signOut()` is a network call —
+  /// exactly the wedge class [SyncService.restoreOpTimeout] exists for. A wedge
+  /// there would strand [signOutInProgress] ON forever, and because it is a
+  /// process-global static that pins EVERY session on the device at /sign-in
+  /// until restart, not just this one. Bounding the whole sequence guarantees
+  /// the `finally` is reached.
+  ///
+  /// Shorter than the restore ceiling (45s) on purpose: teardown is local work
+  /// plus one auth call, and the user is staring at a button they just tapped.
+  static const Duration signOutTimeout = Duration(seconds: 20);
+
+  /// The in-flight teardown, so a second caller JOINS instead of racing.
+  ///
+  /// B-pass finding 1, second half: neither sign-out entry point debounces, and
+  /// with two overlapping calls the first to finish would clear the flag while
+  /// the other is still mid-teardown — reopening the exact authenticated +
+  /// wiped-box window this guard closes.
+  static Future<void>? _inFlightSignOut;
+
+  Future<void> signOut() {
+    final existing = _inFlightSignOut;
+    if (existing != null) return existing; // join, never race
+    final run = _performSignOut();
+    _inFlightSignOut = run;
+    return run.whenComplete(() => _inFlightSignOut = null);
+  }
+
+  Future<void> _performSignOut() async {
+    // APK Test #12.8 — capture sign-out before any Hive clear so the
+    // event makes it to cloud even if a subsequent step throws.
+    final signedOutId = _supabase.currentUser?.id;
+    if (signedOutId != null) {
+      unawaited(ErrorTelemetry.logEvent('auth_signed_out',
+          message: 'userId=${signedOutId.substring(0, 8)}'));
+    }
+    // try/finally, not a plain assignment pair: every step below already
+    // swallows its own throw, but an error escaping between them (or the
+    // caller cancelling) must not strand the flag ON — that would pin the
+    // whole app at /sign-in until restart.
+    signOutInProgress = true;
+    try {
+      await _teardown().timeout(signOutTimeout);
+    } catch (e) {
+      // Includes TimeoutException. Teardown is already best-effort per step;
+      // what matters here is that control LEAVES the try so the finally runs.
+      debugPrint('[auth/signOut] teardown did not complete cleanly: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, StackTrace.current,
+          reason: 'auth_signout_teardown_incomplete'));
+    } finally {
+      // Cleared only after the session is genuinely gone, so the next
+      // `_authRedirect` falls through to the ordinary `!isAuthenticated`
+      // branch rather than the wiped-box one.
+      signOutInProgress = false;
+    }
+
+    state = const AuthState2(status: AuthStatus.idle);
+  }
+
+  /// The teardown sequence itself. Order is load-bearing — see [signOut].
+  Future<void> _teardown() async {
+    try {
+      await UserRepository.instance.clearAllData();
+    } catch (e) {
+      debugPrint('[auth/signOut] clearAllData failed: $e');
+    }
+    try {
+      await HiveUserSession.deleteAllFilesForCurrentUser();
+    } catch (e) {
+      debugPrint('[auth/signOut] deleteAllFilesForCurrentUser failed: $e');
+    }
+    try {
+      await _supabase.client.auth.signOut();
+    } catch (e) {
+      debugPrint('[auth/signOut] supabase signOut failed: $e');
+    }
+
+    await unbindSessionIdentity();
+  }
+
+  /// OI-51 — releases every per-user identity this device holds outside Hive.
+  ///
+  /// `_ensureLocalUser` BINDS the device to a user at sign-in (`OneSignal.login`
+  /// + Crashlytics `setUserIdentifier`). Until 2026-07-27 nothing ever unbound
+  /// it, and `signOut` cleared only Hive + Supabase.
+  ///
+  /// The exposure is the SIGNED-OUT WINDOW, not the next user: when B signs in,
+  /// `_ensureLocalUser` overwrites both bindings, so B is attributed correctly.
+  /// But between A signing out and anyone signing in, the device remains
+  /// `external_id = A` — so **A's push notifications keep arriving**, carrying
+  /// A's fitness data (calories, streaks, coach messages), on a handset A may
+  /// have sold, returned, or handed to someone else. Crashes in that window are
+  /// likewise tagged with A's id.
+  ///
+  /// Extracted from [signOut] so it is directly callable in tests: `signOut()`
+  /// itself needs Supabase + Hive + GoRouter and is not unit-testable (the same
+  /// reason `profile_signout_routes_through_auth_notifier_test.dart` is
+  /// source-grep). The static-callback clearing below IS verified behaviourally
+  /// against this method; the two plugin calls are platform channels and are
+  /// pinned by source-grep + channel mocking.
+  ///
+  /// Guards mirror the BIND sites exactly (`!kIsWeb` / `!kDebugMode`) — an
+  /// unbind running where the bind never did would be a new failure mode. Each
+  /// step keeps [signOut]'s per-step try/catch shape: sign-out must complete
+  /// even if a third-party SDK throws.
+  @visibleForTesting
+  Future<void> unbindSessionIdentity() async {
+    await releaseDeviceSessionIdentity();
+
+    // THE STATIC onStateChanged CALLBACKS ARE DELIBERATELY *NOT* CLEARED HERE.
+    //
+    // The first version of this method nulled all three. Review round 1
+    // (2026-07-27) showed that is a REGRESSION, not a fix, and the reasoning is
+    // worth keeping because OI-51's own sub-finding 4 asks for it:
+    //
+    //   `app.dart:45/59/76` (initState) is the ONLY place in `lib/` that
+    //   installs them — verified by `grep -rn "onStateChanged = " lib/`. And
+    //   `ICanBeFitterApp` is constructed exactly once per process
+    //   (`main.dart:123`, `main_dev.dart:36`, `main_prod.dart:33`), so
+    //   initState runs once for the app's lifetime. `_ensureLocalUser` never
+    //   re-installs them. Nulling them on sign-out therefore kills provider
+    //   invalidation PERMANENTLY for every later sign-in in the same process —
+    //   and every call site uses `onStateChanged?.call()`, so nothing throws;
+    //   the invalidation just silently stops.
+    //
+    //   That reintroduces three already-fixed, founder-observed bugs for the
+    //   rest of the session: APK Test #12.2 (PRO pill stuck on FREE),
+    //   #12.4 ("I logged breakfast … nothing got updated in UI"), and OI-37
+    //   (stale rank after promotion).
+    //
+    // OI-51 SUB-FINDING 4 IS WRONG ON ITS PREMISE. It says the closure
+    // "captures Riverpod state" and so needs a reset path. It captures the
+    // ConsumerState's `ref`, which is bound to the process-lived ProviderScope,
+    // NOT to a user. After B signs in, invalidating those providers is exactly
+    // the correct behaviour — they re-read from B's Hive boxes through the
+    // `wrapUserScopedBox` guard. There is no cross-account leak to close here,
+    // so the right number of clears on the sign-out path is zero.
+    //
+    // The genuine half of that sub-finding — that `RankService` had no clear
+    // site ANYWHERE, not even at teardown — is fixed where it belongs, in
+    // `app.dart:dispose()` alongside the other two.
+  }
+
+  /// Reset back to idle.
+  void resetState() {
+    state = const AuthState2();
+  }
+
+  /// Back out of the OTP step to the phone-input step (keeps other state
+  /// idle, so the UI re-renders the phone entry view and lets the user
+  /// edit their number instead of being stuck on OTP entry).
+  void resetPhoneFlow() {
+    state = state.copyWith(
+      status: AuthStatus.idle,
+      otpSent: false,
+    );
+  }
+
+  // ── Private ───────────────────────────────────────────────────
+
+  /// Ensures local Hive state is correct after sign-in.
+  ///
+  /// If the user previously completed onboarding (has a profile in Supabase),
+  /// restores the onboarding flag so they skip onboarding on re-login.
+  Future<void> _ensureLocalUser(
+    User user, {
+    String? termsAcceptedAt,
+    String? termsVersion,
+  }) async {
+    // APK Test #12.8 — entry-point trace. Most lifecycle bugs (PRO pill
+    // stuck, profile name "USER") manifest after this method runs;
+    // having a per-call event lets us correlate downstream failures with
+    // the exact ensureLocalUser invocation.
+    unawaited(ErrorTelemetry.logEvent('auth_user_ensured',
+        message: 'userId=${user.id.substring(0, 8)}'));
+
+    // Layer 2.3 — open per-user namespaced boxes FIRST, before any code
+    // reads user-scoped Hive. Idempotent — re-running for same user is a no-op.
+    // Different user → previous boxes closed first.
+    await HiveUserSession.openForUser(user.id);
+
+    final userBox = _hive.userBox;
+    final existing = userBox.get('profile');
+
+    // B1 layer 2/3: Cross-account safety net — checks if existing profile id
+    // mismatches new user.id (leftover from failed/incomplete sign-out).
+    // Test #5 Plan A: removed the second arm via 'last_authenticated_user_id'
+    // because HiveUserSession.openForUser (called above) provides the same
+    // isolation guarantee for per-user namespaced boxes.
+    bool needsClear = false;
+    String? clearReason;
+
+    if (existing != null) {
+      final existingId = (existing as Map<dynamic, dynamic>?)?['id'] as String?;
+      if (existingId == null || existingId != user.id) {
+        needsClear = true;
+        clearReason = 'profile id mismatch (had=$existingId, now=${user.id})';
+      }
+    }
+    // Test #5 Plan A note: the second arm of the guard ('last_authenticated_user_id'
+    // mismatch via syncBox) is no longer needed because HiveUserSession.openForUser
+    // (called above on line 317) opens per-user namespaced boxes, providing the
+    // same isolation guarantee. Stamping last_authenticated_user_id is also
+    // unnecessary — HiveUserSession.currentOwnerFullId is now the canonical
+    // ownership marker, set by openForUser itself.
+    if (needsClear) {
+      debugPrint('[auth/_ensureLocalUser] Cross-account guard fired: $clearReason. Clearing Hive.');
+      final clearResult = await UserRepository.instance.clearAllData();
+
+      // Test #10.1 — verify-after-clear. Pre-fix, `clearAllData()` could
+      // silently partial-fail (one GuardedBox throw aborted the chain),
+      // leaving stale `userBox['profile']` and configBox flags behind →
+      // the next user inherited the previous user's data.
+      // Now: re-read the keys that define the leak and force-signOut
+      // if either survived.
+      final reCheckProfile = userBox.get('profile');
+      final reCheckOnboarded = userBox.get('onboarding_completed');
+      final reCheckConfigOnboarded =
+          MigratedKey.read<bool>('onboarding_completed') == true;
+      if (reCheckProfile != null ||
+          reCheckOnboarded == true ||
+          reCheckConfigOnboarded ||
+          clearResult.hasFailures) {
+        debugPrint(
+            '[auth/_ensureLocalUser] CRITICAL: clearAllData partial-failed. '
+            'profile=$reCheckProfile, onboarded=$reCheckOnboarded, '
+            'configOnboarded=$reCheckConfigOnboarded, '
+            'clearFailures=${clearResult.failures}');
+        // Force-signOut so user lands on /sign-in instead of a poisoned
+        // home screen. Throws so signUpWithEmail/signInWithEmail can
+        // surface the failure.
+        try {
+          await _supabase.client.auth.signOut();
+        } catch (_) {}
+        // OI-51 round 2: this is the cross-account guard firing -- the single
+        // moment the device is MOST likely to be carrying the wrong user's
+        // identity -- and it force-signs-out without going through signOut().
+        await releaseDeviceSessionIdentity();
+        throw StateError(
+            'Cross-account clear partial-failed; signed out for safety.');
+      }
+    }
+
+    // Test #10.1 — Move user-specific keys from shared `configBox` into
+    // per-user `userBox` (one-shot per device, gated by migrationBox).
+    // MUST run AFTER the cross-account guard so we don't migrate stale
+    // keys from a previous session into the new user's box.
+    try {
+      await UserConfigMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] config→user migration failed: $e');
+      // Non-fatal — readers will see legacy configBox values until next
+      // launch. Cross-account guard would still clear them if needed.
+    }
+
+    // Unit C (bug c) — drop `notification_preferences` from the SHARED
+    // configBox. Delete-only, never copied: configBox has no owner, so a copy
+    // would hand the previous user's preferences to this one. Losing the value
+    // is safe (absent ⇒ server SENDS, decision N2); inheriting a stranger's
+    // "off" is silent and unfixable by the affected user. Own flag, so this
+    // does not re-run the completed 31-key copy sweep.
+    try {
+      await UserConfigMigrator.purgeDeleteOnlyKeys();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] delete-only purge failed: $e');
+    }
+
+    // Unit 4 (d-bf) — heal the fabricated onboarding body-fat 18.0 (clears the
+    // cloud column FIRST, then local) so the profile-edit Katch recompute stops
+    // consuming a made-up value. Idempotent + kill-switched (disable_bodyfat_heal).
+    try {
+      await BodyFatDefaultHealer.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] body-fat default heal failed: $e');
+      // Non-fatal — retries next session (cloud + local stay consistent 18.0).
+    }
+
+    // Bug f8c1a5 (APK Test #16.2) Layer 2 — one-shot clamp of any
+    // corrupted streak_freezes_available value in userBox['progress']
+    // down to the tier cap, plus clear of streak_freezes_last_refill so
+    // a fresh refill can run. Idempotent, gated by migrationBox flag.
+    // Read-side clamp in StreakFreezeNotifier.build is Layer 1 and is
+    // already in effect; this migrator is the durable Hive repair.
+    try {
+      await StreakFreezeClampMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] streak freeze clamp failed: $e');
+      // Non-fatal — read-side clamp still hides the corrupted display.
+    }
+
+    // APK Test #15.4 / B2 backfill — one-shot mirror of pre-bridge muster
+    // answers into userBox['profile']. Gated by migrationBox flag.
+    try {
+      await InductionService.instance.backfillMusterToProfileIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] muster backfill failed: $e');
+      // Non-fatal — backfill is idempotent and retries on next launch.
+    }
+
+    // APK Test #12.2 / Task #2b — one-shot self-repair migration that
+    // walks every `exlog_*` row and corrects `logging_type` drift left
+    // by pre-Test-#12 swap state retention. Idempotent (gated by
+    // migrationBox flag). Non-fatal on failure — next launch retries.
+    try {
+      await LoggingTypeRepairMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] logging_type repair failed: $e');
+    }
+
+    // Bug f1c8e4 — one-shot backfill of `type: 'workout_log'` (+ ISO
+    // `completed_at`) onto legacy `wlog_*` rows the pre-fix markCompleted wrote
+    // without them. Without it the count/history readers (getWeeklyWorkoutCounts,
+    // getWorkoutLogs, badge total, AI snapshot) miss every workout completed on
+    // this install before the fix. Idempotent (gated by migrationBox flag),
+    // local-only (no cloud re-sync — `type` is a Hive-only field). Non-fatal.
+    try {
+      await WlogTypeBackfillMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] wlog type backfill failed: $e');
+    }
+
+    // closes-diagnose: b3f9e7
+    // ToS/Privacy consent stamp (email signup only — signInWithEmail passes
+    // no terms params, so this is a no-op on every returning-user login).
+    // MUST run here: after openForUser (box is open) AND after the
+    // cross-account clear-guard above (a write placed any earlier could be
+    // wiped by clearAllData() if this device previously held a different
+    // user's session) AND before hydrateFromCloud (so its existing,
+    // unchanged Hive→cloud upward-sync picks this up in the same pass).
+    if (termsAcceptedAt != null) {
+      try {
+        final ub = _hive.userBox;
+        await ub.put('terms_accepted_at', termsAcceptedAt);
+        if (termsVersion != null) await ub.put('terms_version', termsVersion);
+      } catch (_) {
+        // Non-fatal — a failure here just leaves cloud NULL, same as the
+        // pre-fix state. The auth flow itself must not block on it.
+      }
+    }
+
+    // ── Cloud hydration ────────────────────────────────────────
+    //
+    // Audit 2026-05-20 / A1 + A9 (AuthSessionBootstrapper extract).
+    // Previously this block did Postgres CRUD on `users`,
+    // `user_profile`, `user_progress` inline (formerly lines 480-770).
+    // All of that now lives in [AuthSessionBootstrapper.hydrateFromCloud]
+    // which owns the same shape (users upsert + ignoreDuplicates,
+    // last_active_at, ToS sync, H-3 full_name self-heal, F2/F3 cloud →
+    // Hive merge, plan regen, gap-closer push).
+    //
+    // We wrap the call in a try/catch here so the silent-swallow
+    // defense (Bug A, 2026-04-26: orphan public.users row blocked sync
+    // for 48h) survives at the orchestration layer — same explicit
+    // detection of Postgres codes 23505 (unique_violation) and 23503
+    // (foreign_key_violation), same canonical ErrorTelemetry sink
+    // (audit A11). The bootstrapper has its own inner telemetry too;
+    // this outer guard catches any escape-hatch path.
+    try {
+      await AuthSessionBootstrapper.instance.hydrateFromCloud(user);
+    } catch (e) {
+      debugPrint('[_ensureLocalUser] hydrateFromCloud failed: $e');
+      String errorType = 'users_upsert_failed';
+      final eStr = e.toString();
+      if (eStr.contains('23505')) errorType = 'users_unique_violation_23505';
+      if (eStr.contains('23503')) errorType = 'users_fk_violation_23503';
+      unawaited(ErrorTelemetry.recordNonFatal(
+        e,
+        StackTrace.current,
+        reason: errorType,
+        extra: {
+          'user_id': user.id,
+          'platform': 'android',
+          'error_message_preview':
+              eStr.length > 1000 ? eStr.substring(0, 1000) : eStr,
+        },
+      ));
+    }
+
+    // APK Test #12.6 — Crashlytics user identifier (first 8 chars of UUID
+    // for privacy; enough to correlate crashes back to a user without
+    // logging the full PII-bearing UUID). Fire-and-forget; failure must
+    // never block the auth flow.
+    if (!kDebugMode) {
+      try {
+        unawaited(FirebaseCrashlytics.instance.setUserIdentifier(
+          user.id.length >= 8 ? user.id.substring(0, 8) : user.id,
+        ));
+      } catch (e) {
+        debugPrint('[auth/_ensureLocalUser] Crashlytics setUserIdentifier failed: $e');
+      }
+    }
+
+    // Bind OneSignal external_id to Supabase user UUID for push targeting.
+    // Test #11.1: persist OneSignal player_id (subscription id) to
+    // `user_progress.onesignal_player_id` so the `delete-account` Edge
+    // Function can unsubscribe pushes when the user erases their account.
+    // Without this, deleted accounts may keep receiving push notifications
+    // until the OS uninstalls the app (migration 049 added the column but
+    // no client-side write existed).
+    //
+    // Audit 2026-05-20 / A1 — player_id push is now owned by
+    // AuthSessionBootstrapper.syncCurrentOneSignalPlayerId.
+    if (!kIsWeb) {
+      try {
+        await OneSignal.login(user.id);
+        unawaited(AuthSessionBootstrapper.instance
+            .syncCurrentOneSignalPlayerId(user.id));
+      } catch (_) {
+        // Non-critical — push notifications will still work on next launch.
+      }
+    }
+  }
+}
+
+/// Riverpod provider for [AuthNotifier].
+final authNotifierProvider =
+    NotifierProvider<AuthNotifier, AuthState2>(AuthNotifier.new);

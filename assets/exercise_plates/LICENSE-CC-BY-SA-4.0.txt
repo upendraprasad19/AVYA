@@ -1,0 +1,28 @@
+Workout Guide visual assets are licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International license (CC BY-SA 4.0).
+
+Copyright (c) 2026 Bryl Lim, except where ATTRIBUTION.md identifies an
+upstream source.
+
+You may share and adapt these assets for any purpose, including commercially,
+provided that you give appropriate credit, link to the license, indicate
+changes, and distribute adaptations under the same license.
+
+License text: https://creativecommons.org/licenses/by-sa/4.0/legalcode
+Human-readable summary: https://creativecommons.org/licenses/by-sa/4.0/
+
+---
+
+ADAPTATION NOTICE (ICANBEFITTER)
+
+The exercise plate drawings in this app are adapted from the above work.
+Changes made: each drawing's viewBox was cropped to its ink bounds -- the
+union of the start and end frames for a two-position movement, the frame's own
+bounds for a static hold -- and the fill was changed from #fff to currentColor
+so the app can tint it. No path data was altered.
+
+These adaptations are redistributed under the same CC BY-SA 4.0 licence.
+
+Upstream source: https://github.com/bryllim/workout-guide
+Commit: aac599224bb9780305239607ef98540b7e0ce389
+Original pose artwork: https://github.com/everkinetic/data (CC BY-SA 4.0)

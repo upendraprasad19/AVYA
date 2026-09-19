@@ -1,0 +1,6 @@
+# S-tier escape ledger (CLAUDE.md §4.12.6). Any P0/P2 that escaped through an
+# S-class fix gets one entry with an evidence-based tightening decision.
+# status: open | closed_with_tightening
+# A fix is recorded here the moment its escape is confirmed, status open,
+# until the tightening lands (then closed_with_tightening with the commit).
+escapes: []

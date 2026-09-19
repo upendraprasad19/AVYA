@@ -1,0 +1,520 @@
+name: Test & Analyze
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# Cancel in-progress runs for the same PR/branch — but NEVER on main.
+# Every main push shares the group `…-refs/heads/main`, so with a blanket
+# cancel-in-progress a second merge KILLS the first merge's run. That run is
+# the only place `plan-review-record` (the §4.12 keystone gate) executes, so
+# the gate silently skips itself for a commit that DID land on main — under
+# exactly the condition it exists to catch (rapid back-to-back merges). PRs
+# keep cancellation: `refs/pull/N/merge` is already unique per PR, so a new
+# push to a PR still supersedes its own stale run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Run all jobs in IST. This is an India-only app whose date logic is
+# IST-anchored (CLAUDE.md "IST throughout"), and several contract tests assert
+# the on-device (IST) scenario — e.g. logout_login_round_trip T1 "Local ISO
+# string (what Hive stores after on-device completion)". Without this the runner
+# is UTC and those tests diverge from local (the SECOND local-vs-CI divergence
+# after CRLF/LF; see diagnose c4d8e1). subosito/flutter-action + Dart honour TZ.
+env:
+  TZ: Asia/Kolkata
+
+jobs:
+  # ── Tier 1: Static Analysis + Unit Tests ───────────────────────
+  # Was ONE job running analyze + the full suite. Measured on run 31350916315 it
+  # was 7m49s and the ENTIRE workflow wall clock — every other job finished with
+  # minutes to spare. Split 2026-08-10 into `analyze` + a sharded `unit-test`.
+  # History worth keeping: this job was cancelled at a 10-min limit when a slower
+  # runner pushed the ~10-min suite over the edge (2026-07-01; C1 merge run
+  # 28517992078 hit 10m15s twice while "All tests passed!" printed just before
+  # the kill). See feedback_local_ci_env_divergence.md — the per-shard budget
+  # below is set with that incident in mind.
+  #
+  # `flutter analyze` was a 47s step running SERIALLY before the 6m38s test step
+  # in one job (measured, run 31350916315). Its own job runs in parallel and
+  # takes it off the critical path for free.
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Flutter analyze (zero warnings allowed)
+        run: flutter analyze --no-fatal-infos
+
+  # SHARDING WAS TRIED AND REVERTED — 2026-08-10, same day it landed. Both of
+  # the plan's own pre-committed abort conditions fired on the first real run
+  # (31364967041), and they are recorded here so this is not re-proposed:
+  #
+  # 1. MEASURED 18.3%, under the 25% floor the plan fixed IN ADVANCE.
+  #    7m49s -> 6m23s. `--total-shards` slices WITHIN each suite
+  #    (test_core/runner.dart:496-502), so every shard still compiled and loaded
+  #    all ~693 files; only test bodies divided. The fixed cost does not shard,
+  #    so the ceiling was always low. The plan predicted no number precisely
+  #    because this was unknown — and the rule it wrote instead says: below 25%,
+  #    sharding is the wrong lever, use path filters.
+  #
+  # 2. IT BROKE A TEST, exactly where round 2 said it would. Shard 2 failed
+  #    `worktree_config_integrity_e2e_test.dart` "--warn-only ... still reports
+  #    the violation": that test asserts on corruption a PREVIOUS test in the
+  #    same file injects, and within-suite sharding handed shard 2 the assertion
+  #    without its predecessor. Round 2's P1-2 named intra-file carryover as the
+  #    real hazard (as opposed to the cross-file isolation the plan had actually
+  #    verified); it was recorded as "may not work" and shipped past. It fired on
+  #    the first run.
+  #
+  # The `analyze` split above is KEPT — it is a genuine, risk-free 47s off the
+  # critical path and is unaffected by either finding.
+  unit-test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    # Restored to 20 min: this is the full suite again, and test.yml's 2026-07-01
+    # note (run 28517992078, cancelled at a 10-min limit while "All tests passed!"
+    # printed) is why that headroom exists.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run unit tests (pure Dart — no device needed)
+        # Golden-image tests are platform-specific (Windows-generated PNGs vs
+        # CI's Linux render differ in font hinting/anti-aliasing); excluded
+        # here, run locally via the pre-push full suite. See dart_test.yaml +
+        # feedback_local_ci_env_divergence.md.
+        run: flutter test test/ --exclude-tags golden --reporter expanded
+
+  # ── Deno Edge-Function tests (added Unit C 2026-07-08, diagnose a7e2c4) ──
+  # Until now NO CI job ran the Deno tests under supabase/functions/**, so a red
+  # test (getProgressSummary maxLatencyMs 3500 vs source 6000) sat unnoticed at HEAD.
+  # This job runs the shape + behavioral tests AND (since the 2026-07-09 type-debt
+  # cleanup) type-checks the FULL tree, so the read-hardening regression guard
+  # actually gates at merge and the type system can no longer regrow silently.
+  deno-edge-functions:
+    name: Deno Edge-Function tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # `cache: true` is setup-deno's OWN module cache, not a hand-rolled
+      # actions/cache step at a guessed DENO_DIR — the action resolves the dir
+      # and save timing itself. `cache-hash` defaults to hashing deno.lock,
+      # which is deliberately untracked here (.gitignore:129, 2026-07-27:
+      # "tracking one would only add a lock-mismatch failure surface with
+      # nothing depending on it"), so the EF tree is hashed instead.
+      #
+      # This is what makes an esm.sh outage survivable: Deno does not re-fetch a
+      # cached, version-pinned remote URL without --reload, so a warm cache skips
+      # the request entirely.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+          cache: true
+          cache-hash: ${{ hashFiles('supabase/functions/**/*.ts') }}
+
+      # Runs ALL Deno tests (the 18 shape tests + Unit C's behavioral tests) so
+      # the read-hardening regression guard gates + a red test can no longer sit
+      # unnoticed. `--no-check` runs the RUNTIME assertions without the TypeScript
+      # type-check pass — kept `--no-check` here so this step stays a pure runtime/
+      # behavioral gate (throw / -1.0 / send-vs-skip); the separate type-check step
+      # below is the dedicated gate for the type system (see 2026-07-09 type-debt
+      # cleanup note).
+      #
+      # RETRIED. Both Deno steps resolve ~50 remote modules from esm.sh and
+      # deno.land. A single upstream 522 reddens `main` on a commit that touched
+      # no Deno code at all — it happened twice in 25 runs (2c4cbddd on
+      # 2026-07-27, 93f6fe41 on 2026-07-28), both times on the identical URL.
+      # A transient CDN failure is not a test result.
+      - name: Deno test (shape + Unit C behavioral)
+        run: |
+          for i in 1 2 3; do
+            if deno test --no-check --allow-all --node-modules-dir=auto supabase/functions/; then exit 0; fi
+            [ "$i" = 3 ] && break
+            echo "::warning::deno test attempt $i failed — retrying in $((i * 15))s (likely a transient remote-module fetch)"
+            sleep $((i * 15))
+          done
+          echo "::error::deno test failed after 3 attempts — this is a real failure, not a fetch blip"
+          exit 1
+
+      # Full-tree type-check. The pre-existing type-annotation debt referenced above
+      # (cross-module SupabaseClient generics, Date overloads, intentBuilder arity,
+      # the heterogeneous tool-registry array) was eliminated tree-wide by the
+      # 2026-07-09 Deno type-debt cleanup (261 errors → 0, zero runtime changes —
+      # verified via a before/after `deno test` pass-count match). This is now a
+      # permanent hard-blocking regression gate against the debt regrowing.
+      - name: Deno type-check (full tree)
+        run: |
+          for i in 1 2 3; do
+            if deno check --node-modules-dir=auto supabase/functions/; then exit 0; fi
+            [ "$i" = 3 ] && break
+            echo "::warning::deno check attempt $i failed — retrying in $((i * 15))s (likely a transient remote-module fetch)"
+            sleep $((i * 15))
+          done
+          echo "::error::deno check failed after 3 attempts — this is a real type error, not a fetch blip"
+          exit 1
+
+  # ── Tier 1.5: Tech-debt audit gates (introduced 2026-05-20, finding I2) ──
+  # Runs every scripts/check_*.dart gate. Each gate is independent; the job
+  # exits non-zero if ANY gate fails. Allow-list (build-only or advisory)
+  # lives in scripts/check_gate_scripts_wired.dart.
+  audit-gates:
+    name: Audit Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # fetch-depth: 0 IS LOAD-BEARING for check_oi_numbering_unique.dart.
+      #
+      # actions/checkout defaults to depth 1. In a shallow clone git reports the
+      # merge commit as PARENTLESS, so the gate's "am I at a merge commit?"
+      # branch (rev-list --parents -n 1 HEAD) never fires, it falls back to
+      # comparing HEAD against origin/main -- which in a shallow checkout ARE
+      # THE SAME COMMIT -- and the cross-branch comparison degenerates: base ==
+      # mainline makes its legs 1 and 2 mutually exclusive, so no collision is
+      # expressible and it prints "PASS (vacuous)".
+      #
+      # Review round 2 (2026-08-17) executed all three shapes against one origin
+      # repo whose main tip was a merge commit carrying a real OI-2 collision:
+      #   full clone                        -> FAIL, names OI-2, rc=1
+      #   git clone --depth 1               -> PASS (vacuous), rc=0
+      #   replay of actions/checkout's own
+      #   init + fetch --depth=1 + checkout -> PASS (vacuous), rc=0
+      # So this gate's own header calling CI "AUTHORITATIVE" was false for want
+      # of this one line, and the round-1 fix that repaired the shape selection
+      # had relabelled the CI no-op as "a checked answer, not a skipped one" --
+      # strictly worse than the bug it replaced, because it reassured.
+      #
+      # The sibling plan-review-record job below already sets this for the same
+      # class of reason (it needs HEAD^1..HEAD^2 reachable).
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run all check_*.dart gates
+        run: |
+          set -e
+          FAIL=0
+          for GATE in scripts/check_*.dart; do
+            NAME="$(basename "$GATE")"
+            case "$NAME" in
+              check_apk_size_within_bounds.dart|\
+              check_apk_release_signed.dart|\
+              check_hooks_installed.dart|\
+              check_plan_review_record_exists.dart|\
+              check_unawaited_has_error_sink.dart|\
+              check_razorpay_key_flavor.dart|\
+              check_migrations_live.dart|\
+              check_onconflict_live_arbiter.dart|\
+              check_two_user_cross_account.dart|\
+              check_regression_catalog.dart|\
+              check_snapshot_contract.dart|\
+              check_test_runtime_budget.dart|\
+              check_closes_oi_cited.dart)
+                # Razorpay: .env.prod gitignored, CI never sees it.
+                # check_closes_oi_cited.dart: a commit-msg gate — takes the
+                # proposed message file as its argument, which does not exist
+                # in this loop. Bare invocation is `Usage: ... <commit-msg-file>`
+                # then a non-zero exit, not a real gate failure. Wired instead
+                # in scripts/commit-msg.sh (mirrors the pre-commit.sh skip for
+                # the identical reason).
+                # Other 4: require live DB / merge context / build artifact.
+                # See scripts/check_gate_scripts_wired.dart allowlist.
+                echo "[skip allow-list] $NAME"
+                continue
+                ;;
+            esac
+            echo "[gate] $NAME"
+            if ! dart run "$GATE"; then
+              echo "::error::Gate failed: $NAME"
+              FAIL=1
+            fi
+          done
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::error::One or more audit gates failed."
+            exit 1
+          fi
+
+      - name: OI board renders (within-file duplicate numbers)
+        # WIRED 2026-08-17. build_oi_index.dart's duplicateIds() check — the one
+        # that catches a single board file holding TWO `## OI-N` headings — ran
+        # NOWHERE in CI. `grep -c build_oi_index .github/workflows/test.yml`
+        # returned 0. Locally it fires only from pre-commit.sh, and only when
+        # docs/audit/open_issues.md is in the STAGED diff, which a `--no-ff`
+        # merge never produces.
+        #
+        # So the within-file half of the OI-collision class had no CI backstop
+        # at all, and OI-112 / diagnose b7e3d1 both asserted that landing was
+        # gated. Reproduced 2026-08-17 in a throwaway repo: two branches each
+        # mint OI-2 in widely separated regions of the OPEN board, git merges
+        # them cleanly, and the merged file carries two `## OI-2` headings.
+        #
+        # This is the generator, so it also rewrites OPEN_INDEX.md; CI's tree is
+        # disposable, and check_oi_index_fresh (in the loop above) is what
+        # enforces the committed copy is current.
+        run: dart run scripts/build_oi_index.dart
+
+      - name: Gate 40 — validate audit closure ledgers (closed==N)
+        # P1.E (discipline-overhaul 2026-06-18): validates docs/audit/*.closure.yaml
+        # and docs/audit/*_audit_closures.yaml. Every item must have a terminal_state;
+        # a non-terminal item fails the closed==N invariant (structural no-deferrals).
+        # Wired explicitly (not in check_*.dart loop) per §4.2 codification.
+        run: dart run scripts/validate_audit_closure.dart
+
+  # ── Plan-review record gate (P1.A keystone, §4.12) ─────────────
+  # The ONE structurally-gateable point for plan-quality: any push to main, in
+  # CI. Every >=account landing in the pushed range must carry a converged
+  # docs/plan-reviews/<branch>.md.
+  #
+  # fetch-depth: 0 IS STILL LOAD-BEARING, for a different reason than before.
+  # The gate no longer touches HEAD^2; it walks PUSH_BEFORE..HEAD. Without full
+  # history the range base is unreachable and the gate now FAILS loudly rather
+  # than narrowing to HEAD^1 and reporting a clean PASS over a partial range.
+  # (The old comment here still described the HEAD^1..HEAD^2 diff — corrected
+  # by round-1 review P3-3.)
+  plan-review-record:
+    name: Plan-review record (>=account merge-to-main)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Check plan-review record exists
+        # PUSH_BEFORE is the previous tip of main, i.e. the base of the range
+        # this push actually landed. The gate walks `PUSH_BEFORE..HEAD` rather
+        # than assuming HEAD is a merge — single-parent commits pushed straight
+        # to main used to skip the gate entirely (OI-58a; `be3b4baf` and
+        # `8c38c855` both shipped account-tier auth code that way). The script
+        # falls back to parsing GITHUB_EVENT_PATH, then to HEAD^1.
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: dart run scripts/check_plan_review_record_exists.dart
+
+  # ── Tier 2: Contract Tests — REMOVED 2026-07-26 (merge-governance batch) ──
+  # `test/contracts/` is a strict SUBDIRECTORY of `test/`, so the
+  # `analyze-and-unit-test` job's `flutter test test/ --exclude-tags golden`
+  # already runs every one of these. Measured at removal time: 432 of the 627
+  # `*_test.dart` files under `test/` live in `test/contracts/`, with no tag
+  # divergence — `dart_test.yaml` defines only `golden`, unused there — so this
+  # job was ~4m53s of identical work on every run.
+  #
+  # Deleting it does NOT reduce coverage, and — contrary to the batch's original
+  # rationale — it does NOT reduce wall-clock either: it finished ~2.5 min before
+  # the run ended (04:55:58 vs 04:58:29 on run 30188423209), so it was never on
+  # the critical path. Measured 2026-08-10 (run 31350916315) the APK job is NOT
+  # either — 3m22s vs the 7m49s test job. What it actually saves is ~5 min of
+  # duplicate runner-minutes per run, and one source of "which job ran this
+  # test?" confusion.
+  #
+  # UPDATE 2026-08-11 (ADR-0018): this paragraph used to end "`scripts/pre-commit.sh`
+  # still runs the `test/contracts/` subset locally as the fast pre-commit gate
+  # — unaffected by this removal", which was the recorded justification for
+  # deleting that job. It no longer holds: pre-commit runs NO tests. The
+  # justification survives on its first ground alone — `test/contracts/` is a
+  # strict subdirectory of `test/`, so the `unit-test` job above already runs
+  # every one of these files. Coverage here is unchanged; what changed is that
+  # this job is now the FIRST place those tests run rather than the second.
+
+  # ── Tier 3: Supabase Integration Tests (requires secrets) ──────
+  # Only runs if SUPABASE_URL secret is configured.
+  # ⚠ THIS JOB RAN ZERO TESTS AND REPORTED GREEN until 2026-08-10.
+  # Both test steps were gated `if: env.SUPABASE_URL != ''` while SUPABASE_URL
+  # was defined ONLY inside each step's own `env:` block. A step's `if:` is
+  # evaluated before its own `env:` applies, so the condition read an unset var
+  # and was always false. Measured on run 31350916315: both steps `skipped`,
+  # job `success`, and `gh secret list` is empty. Its green tick was feeding the
+  # CLAUDE.md §0 claim that "CI is the full-suite source-of-truth".
+  #
+  # Fix: the secrets are hoisted to a JOB-level `env:` below (the `secrets`
+  # context IS available there), so `if: env.SUPABASE_URL != ''` now means what
+  # it always looked like it meant. When the secrets exist the tests run; when
+  # they do not, the job stays green but emits a ::warning:: rather than a
+  # silent pass — a job-level `if:` cannot read `secrets` at all, so "renders as
+  # skipped" would need a probe job plus the workflow's first `needs:` edge,
+  # which is not worth a cosmetic distinction.
+  #
+  # ⚠ ADDING THE SECRETS IS A FOUNDER-ONLY ACTION. Until then this job verifies
+  # NOTHING and says so on every run.
+  supabase-tests:
+    name: Supabase Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_TEST_EMAIL: ${{ secrets.SUPABASE_TEST_EMAIL }}
+      SUPABASE_TEST_PASSWORD: ${{ secrets.SUPABASE_TEST_PASSWORD }}
+
+    steps:
+      - name: Announce whether this job verifies anything
+        run: |
+          # Names ALL FOUR inputs, matching the step guards below. A narrower
+          # announce than the guards is how OI-105 happened: the steps skip, the
+          # job reports green, and nothing says why. Widened when
+          # SUPABASE_TEST_EMAIL / _PASSWORD were introduced — a three-input
+          # announce beside four-input guards would recreate that silent green
+          # keyed on the very secrets this batch adds.
+          MISSING=""
+          [ -z "$SUPABASE_URL" ]           && MISSING="$MISSING SUPABASE_URL"
+          [ -z "$SUPABASE_ANON_KEY" ]      && MISSING="$MISSING SUPABASE_ANON_KEY"
+          [ -z "$SUPABASE_TEST_EMAIL" ]    && MISSING="$MISSING SUPABASE_TEST_EMAIL"
+          [ -z "$SUPABASE_TEST_PASSWORD" ] && MISSING="$MISSING SUPABASE_TEST_PASSWORD"
+          if [ -n "$MISSING" ]; then
+            echo "::warning title=Supabase integration tests did not run::Missing secret(s):$MISSING. This job verifies NOTHING. It is green because there is nothing to fail, not because integration tests passed."
+          else
+            echo "All four Supabase test secrets are configured — integration tests will run."
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # All FOUR inputs, matching hasCredentials. A narrower guard would let a
+      # run with three secrets reach a live signInWithPassword with an empty
+      # field — indistinguishable from a wrong password.
+      # Values are quoted: a password may contain shell metacharacters.
+      - name: Run Supabase tests
+        if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' && env.SUPABASE_TEST_EMAIL != '' && env.SUPABASE_TEST_PASSWORD != ''
+        run: |
+          # --concurrency=1 is REQUIRED, not a speed knob. Both files in this
+          # directory (sync_service_test.dart, auth_restore_test.dart) sign in
+          # as the SAME QA account and both call SupabaseTestHelper.cleanup()
+          # in setUp — a DELETE across 12 tables. The dart test runner defaults
+          # to parallel SUITES, so one file's setUp can wipe the other's rows
+          # between its write and its read, failing with a perfectly correct
+          # writer. Integration suites sharing one cloud account cannot run
+          # concurrently. (Found by round-2 plan review, 2026-08-15; the race
+          # pre-dates that batch — it was simply never hit deterministically.)
+          flutter test test/supabase/ \
+            --concurrency=1 \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=SUPABASE_TEST_EMAIL="$SUPABASE_TEST_EMAIL" \
+            --dart-define=SUPABASE_TEST_PASSWORD="$SUPABASE_TEST_PASSWORD" \
+            --reporter expanded
+
+      - name: Run Edge Function tests
+        if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' && env.SUPABASE_TEST_EMAIL != '' && env.SUPABASE_TEST_PASSWORD != ''
+        run: |
+          # --concurrency=1 for the SAME reason as the step above, and it is
+          # here because the B-pass caught the step above being fixed alone.
+          # `ai_proxy_test.dart:67` and `pgvector_test.dart:79` both sign in as
+          # `SupabaseTestHelper.testEmail` — one QA account, two parallel
+          # suites — and `pgvector_test.dart:98,110` DELETEs
+          # `memory_embeddings` for that user in setUp and tearDown while the
+          # sibling suite is live against the same account.
+          #
+          # Fixing the instance and leaving the mirror is this repo's most
+          # recurrent self-inflicted class. The rule is not "test/supabase/
+          # needs serialising", it is "integration suites sharing one cloud
+          # account cannot run concurrently" — which is true of every step in
+          # this job, so every step gets the flag.
+          flutter test test/edge_functions/ \
+            --concurrency=1 \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=SUPABASE_TEST_EMAIL="$SUPABASE_TEST_EMAIL" \
+            --dart-define=SUPABASE_TEST_PASSWORD="$SUPABASE_TEST_PASSWORD" \
+            --reporter expanded
+
+  # ── Build Gate: Verify APK compiles ─────────────────────────────
+  # Catches compile errors that flutter analyze misses (template issues,
+  # asset problems, Gradle failures).
+  # No `needs:` — this job is an independent compile check and gains nothing
+  # from waiting. It used to sit behind [analyze-and-unit-test, contract-tests],
+  # which serialized the two longest jobs and made total wall-clock their SUM
+  # (6m58s + 7m41s = 14m46s on run 30168462713) instead of their MAX. Running
+  # from t=0 weakens no gate: every job still runs and still fails the workflow
+  # on its own. The dependency also saved nothing on 3 of the last 4 red runs,
+  # which failed in `audit-gates` — a job build-check never depended on.
+  build-check:
+    name: Build Check (APK)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          # Caches ~/.gradle keyed on **/*.gradle* + gradle-wrapper.properties
+          # (all present under android/). Content-keyed, so a stale or missing
+          # cache degrades to the previous uncached behaviour rather than
+          # breaking the build.
+          cache: 'gradle'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build debug APK (validates compilation)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'placeholder_key' }}
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID || 'rzp_test_placeholder' }}
+        run: |
+          # Create a minimal .env for build-time defines
+          echo "SUPABASE_URL=$SUPABASE_URL" > .env
+          echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" >> .env
+          echo "RAZORPAY_KEY_ID=$RAZORPAY_KEY_ID" >> .env
+          flutter build apk --dart-define-from-file=.env --flavor dev --debug
