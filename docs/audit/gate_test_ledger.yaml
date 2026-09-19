@@ -704,3 +704,189 @@ check_single_schedule_row_builder.dart:
     the batch's own tests. Two known blind spots are named in the library header -
     row constructors that omit week_character (template_service.dart and the
     sync restore overlay); neither is a phase-layout writer.
+
+# ---------------------------------------------------------------------------
+# self-learning discipline batch, 2026-09-19 (discipline-gates-tier12) — 8
+# gates mechanizing sub-patterns from feedback_green_check_input_set_width.md
+# and feedback_mistake_guard_without_its_mirror.md. All 8 independently
+# re-verified (analyze + test + a real mutation run) by the coordinating
+# session after a rogue background subagent silently mutated
+# gate_existssync_file_vs_dir_lib.dart mid-batch (stopped via TaskStop;
+# restored + reverified) — trust nothing in this section's evidence that
+# wasn't personally reproduced.
+
+check_blast_radius_stdin_usage.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/blast_radius_stdin_usage_lib_test.dart
+  evidence: >
+    NEW gate 2026-09-19. Blocks a staged line that PIPES a producer into
+    `blast_radius_from_diff.dart` without the trailing bare `-`
+    (feedback_mistake_blast_radius_positional_mode.md, 5 recorded
+    recurrences) — confirmed by reading blast_radius_from_diff.dart:120-149:
+    the script reads stdin ONLY for `args.length==1 && args[0]=='-'`; a pipe
+    with no trailing `-` is silently discarded and the script falls back to
+    `git diff --cached --name-only` on the CURRENT repo, often classifying
+    the wrong (empty) set. THE FIRST-DRAFT VERSION SHIPPED A REAL FALSE
+    POSITIVE, caught only because the coordinating session independently
+    re-verified rather than trusting the building fork's "all green" report:
+    its `bareDashOnly` regex tolerated a trailing `-` only when followed by
+    markdown/shell closing punctuation, so the ACTUAL, CURRENTLY-COMMITTED,
+    CORRECT usage at scripts/pre-push.sh:168 (`blast_radius_from_diff.dart -
+    2>/dev/null \`) would have been misclassified as misuse the moment that
+    line was ever re-staged. Fixed by tokenizing the trailing content and
+    requiring the FIRST token be a bare `-`, with every token after it
+    restricted to shell redirection/line-continuation noise, never a genuine
+    second argument. Regression test added pinning the exact pre-push.sh:168
+    shape plus a BAD mirror (dash + a real extra arg). Mutation (run by the
+    coordinating session, not the building fork): forcing
+    `isPositionalMisuse` to always return `false` reddened 4 of 11 tests —
+    exactly the 4 BAD-shape assertions; the 7 GOOD/mirror cases stayed green
+    since they assert `isFalse` either way. Reverted; 11/11 green,
+    `flutter analyze` clean.
+
+check_safe_wrapper_not_piped.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/safe_wrapper_not_piped_lib_test.dart
+  evidence: >
+    NEW gate 2026-09-19. Blocks a staged line piping `safe_push.sh`/
+    `safe_commit.sh` into `head`/`tail` — both wrappers print their run log
+    then DELETE the temp file, so a truncating pipe destroys the only copy
+    of the diagnostic (CLAUDE.md §4.9, cost one extra 5-minute push cycle on
+    2026-09-02). Zero existing violations confirmed live in the repo before
+    building (grep across scripts/.claude/docs/CLAUDE.md), so this is a
+    hard block with essentially zero false-positive risk. NOTE: the
+    building fork's own chat report claimed "4 of 10 tests reddened" — the
+    file actually holds 6 tests, not 10. Re-run directly by the
+    coordinating session instead of trusting that report: forcing
+    isPipedThroughHeadOrTail to always `return false` reddens exactly 2 of
+    6 tests (the two direct BAD-case assertions). Reverted; 6/6 green,
+    analyze clean.
+
+check_merge_tree_write_tree_form.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/merge_tree_write_tree_form_lib_test.dart
+  evidence: >
+    NEW gate 2026-09-19. Blocks the legacy 3-arg `git merge-tree <base> <a>
+    <b>` form in staged additions — it never emits `<<<<<<<` conflict
+    markers, so grepping its output for conflicts always reports zero
+    (feedback_green_check_input_set_width.md 2026-08-10 instance #2: read
+    as "will auto-merge cleanly" when `--write-tree` on the same refs found
+    3 real conflicts). Two existing repo mentions are PROSE describing the
+    incident, not real invocations — detection requires an inline-code-span
+    token count (not just line-wide) specifically to avoid false-flagging
+    that prose, tested explicitly. Mutation: `_isLegacyInvocation` forced to
+    `return false` reddened 3 of 9 tests (2 direct BAD-case assertions + 1
+    crash via `.single` over an empty violations list). Reverted; 9/9
+    green, analyze clean.
+
+check_teardown_no_unguarded_sibling_await.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/teardown_sibling_await_lib_test.dart
+  evidence: >
+    NEW gate 2026-09-19. Catches feedback_mistake_guard_without_its_mirror.md
+    instance #27 (2026-09-10): a tearDown/tearDownAll block wrapping one
+    cleanup await in try/catch while a sibling cleanup await in the SAME
+    block stays bare — a throwing bare await can mask the guarded cleanup
+    and the real test failure underneath it. Scoped to STAGED test files
+    only, never a full-repo sweep (267 pre-existing tearDown-bearing files
+    are out of scope until touched). Mutation: forcing
+    `guardedAwaitFound` to always return false reddened 3 of 7 tests
+    (exactly the three BAD-shape cases; the four GOOD-shape mirror/edge-case
+    tests stayed green). Reverted; 7/7 green, analyze clean.
+
+check_gate_existssync_file_vs_dir.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/gate_existssync_file_vs_dir_lib_test.dart
+  evidence: >
+    NEW gate 2026-09-19. Blocks a newly-staged `File(...).existsSync()` call
+    inside gate/validator-authoring code (scripts/check_*.dart,
+    scripts/*_lib.dart, scripts/validate_*.dart) — `File.existsSync()`
+    answers FALSE for a DIRECTORY, so a citation/path check built on it
+    silently misreads a real directory as missing
+    (feedback_mistake_guard_without_its_mirror.md instance #32, OI-195).
+    CALIBRATION: `grep -rn "\.existsSync(" scripts/*.dart | wc -l` returns
+    220 existing occurrences, almost all legitimate unambiguous file
+    checks — a repo-wide gate would be pure noise, so this is deliberately
+    scoped to STAGED-ADDED lines within gate-authoring files only, with the
+    pure lib re-checking the file-family pattern itself as defense in
+    depth against a loosened caller pathspec. Escape hatch: trailing
+    `// file-only:` comment. Mutation (re-run independently by the
+    coordinating session after the building fork was killed mid-task
+    without reporting): neutering `_existsSyncCall` to an unmatchable
+    pattern reddened exactly 2 of 6 tests (the two direct detection cases);
+    the GOOD-mirror, escape-hatch, and scope-discipline tests stayed green.
+    Reverted; 6/6 green, analyze clean.
+
+check_analyze_narrower_than_lib_in_tooling.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/analyze_narrower_than_lib_lib_test.dart
+  evidence: >
+    NEW gate 2026-09-19. Blocks a committed script/skill from instructing
+    `flutter analyze <narrow-path>` — feedback_green_check_input_set_width.md
+    #29, where a part-of file's library breakage went CLEAN under anything
+    less than `flutter analyze lib/`. CALIBRATION: scoped analyze
+    invocations are the STANDARD, correct pattern in dozens of
+    docs/diagnoses/*.md evidence citations — a repo-wide gate would flood on
+    that legitimate pattern, so this is deliberately scoped to
+    scripts/*.sh, scripts/*.dart, .claude/skills/**/*.md ONLY (live
+    instructions), never docs/**. A precision fix was needed mid-build:
+    naive substring matching misread real prose in scripts/pre-push.sh:111
+    (`echo "[pre-push] flutter analyze (always..."`) as a scoped
+    invocation — fixed by requiring a genuine command-start position, with
+    a regression test pinning that exact line. Mutation:
+    `_isScopedNarrowerThanLib` forced to `return false` reddened 6 of 13
+    tests (5 BAD-group cases + the scope-agnostic doc test); 7 GOOD-group
+    cases stayed green (13 total - 6 reddened = 7; corrected 2026-09-19
+    B-pass finding, this line previously said 8). Reverted; 13/13 green,
+    analyze clean.
+
+check_migration_contains_assertion_uniqueness.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/migration_contains_uniqueness_lib_test.dart
+  evidence: >
+    NEW check 2026-09-19. WARN-ONLY (always exits 0) — genuine ambiguity
+    risk means a false positive has real cost, so this never hard-blocks;
+    rule 24's mutation-proof requirement is applied to the DETECTION LOGIC
+    regardless. Catches feedback_mistake_guard_without_its_mirror.md
+    instance #22: a test asserted `sql.contains(RegExp(r"RAISE
+    EXCEPTION\s+'consume_quota:"))` against a migration's SQL body, which
+    actually contains TWO `RAISE EXCEPTION 'consume_quota: ...'`
+    statements — `contains()` proves membership, not WHICH occurrence, so a
+    mutation to the wrong guard's message left the assertion green. Scoped
+    to staged test files that call the existing `latestMigrationDefining(`
+    helper (test/helpers/migration_cap_reader.dart); extracts a rough plain
+    literal from bare strings or RegExp arguments and warns if it appears
+    >1x across all migration files. Mutation (re-run independently by the
+    coordinating session; the building fork was stopped after it was found
+    mutating a DIFFERENT gate's file mid-task): forcing
+    `countOccurrencesNormalized` to always return 1 reddened 3 of 10 tests
+    (the two direct unit tests of that function plus the BAD-case
+    integration test). Reverted; 10/10 green, analyze clean.
+
+check_gate_source_literal_whitespace_brittleness.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/gate_source_literal_brittleness_lib_test.dart
+  evidence: >
+    NEW check 2026-09-19. WARN-ONLY (always exits 0), same trust model as
+    its sibling migration-contains check — the judgment ("is this literal
+    comparing against untrusted variable-whitespace source text") is
+    inherently fuzzy. Guards against
+    feedback_mistake_guard_without_its_mirror.md #7/#8 (2026-08-11): a gate
+    matched `'flutter analyze'` as an exact literal against captured source
+    text and was defeated by `'flutter  analyze'` (one extra space).
+    Scoped to scripts/check_*.dart and scripts/*_lib.dart only
+    (gate-authoring code, where compared text is untrusted source/shell
+    content by construction). Mutation: forcing
+    `findBrittleLiteralComparisons` to return `const []` reddened 3 of 8
+    tests (both BAD-literal cases plus the multi-file multi-hit case); the
+    5 GOOD/empty-diff cases stayed green (8 total, not 9; corrected
+    2026-09-19 B-pass finding, this line previously said 9 total/6 green).
+    Reverted; 8/8 green, analyze clean.
