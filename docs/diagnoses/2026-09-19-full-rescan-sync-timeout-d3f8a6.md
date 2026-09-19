@@ -275,6 +275,27 @@ half is detected. An unchanged row whose fingerprint matches the last
   any existing divergence before the index warms.
 
 ## Known limitations
+**Fingerprint-determinism note (OI-204 B-pass, 2026-09-19, Finding 1 of the
+lenses-1-5 reviewer), non-blocking:** `_resolveCompletedAt`'s last-resort
+fallback (`sync_workout.dart:574`, `DateTime.now().toUtc().toIso8601String()`
+-- already telemetry-flagged as `sync_completed_at_fallback` when hit) feeds
+`summaryPayload['completed_at']`, which `exlogPayloadFingerprint` hashes. For
+the rare exlog row that hits this fallback (all six earlier resolution tiers
+-- `created_at`/`completed_at`/`logged_at`/`updated_at_ms`/`completed_at_ms`/
+`dateKeyPrefix` -- exhausted), `completed_at` differs on every sync pass, so
+the fingerprint never repeats and `exlogShouldSkipUpsert` can never return
+`true` for that key. **Fails safe**: no data loss, no incorrect skip -- the
+OI-204 optimization simply never engages for that one row, which falls back
+to the exact pre-fix always-push behavior it already had. Not fixed
+structurally (would need `_resolveCompletedAt` to signal fallback provenance
+so the fingerprint could exclude a non-deterministic `completed_at`) --
+proportionate given the existing telemetry already flags the anomaly, and a
+row reaching this branch at all indicates a pre-existing upstream
+data-quality gap (missing timestamps), not something this batch introduces.
+Nutrition's equivalent parent `created_at` (`mergeNutritionLogsBySlot`) has
+no such fallback -- it only ever takes the earliest already-stored
+`log['created_at']` -- so this is exlog-specific.
+
 **Gate-coverage note (plan-review round 1, finding I7), non-blocking:**
 `check_schema_column_refs.dart` detects a write's column keys via
 `RegExp("\.$method\(\s*\{")` -- i.e. only an inline `.upsert({` literal.
@@ -439,3 +460,40 @@ time] — all repointed to their live line numbers, confirmed via
   carve-out; verified not to apply to this domain).
 - Task 3 of this batch (nutrition logs, `_syncNutritionLogs` -- reuses
   `_fingerprintMatchesStored`; see the addendum above).
+
+## B-pass remediation — atomicity gate hardening (2026-09-19)
+
+Ships in the same batch as a third commit, reusing this doc (same root cause tree: the
+Task 1 gate this batch's §4.11 requirement produced), citing `closes-diagnose: d3f8a6`.
+Whole-branch B-pass (`docs/reviews/oi204-delta-sync-bpass.md`), lenses-6-8 reviewer,
+Finding 1 (P1).
+
+### The defect
+`checkDomainAtomicity` (`scripts/sync_hash_skip_atomicity_lib.dart`) checked for a store
+statement's EXISTENCE via a whole-file regex match (`storeRe.hasMatch(stripped)`, whose
+`\s*` spans newlines the way Dart's `\s` character class always does), then separately
+located WHICH LINE(S) contain a store by re-running the same regex against each individual
+line in isolation. A store statement wrapped across two lines -- a plausible `dart format`
+output for a line past 80 columns, not a contrived shape -- matched the whole-file check but
+matched NEITHER half when re-run per-line, so `storeLineIdxs` came back empty, the
+backward-guard-scan loop never executed, and the function fell through to PASS regardless of
+whether the store was actually guarded. An unconditional (unguarded) multi-line store --
+exactly the atomicity violation this gate exists to catch -- was invisible to it.
+
+### Fix
+Compute `storeLineIdxs` from `storeRe.allMatches(stripped)` (the SAME whole-text match set
+`hasStore` already uses) mapped to line indices via each match's start offset, instead of
+re-running the regex per split line. Both checks now agree on what counts as a store
+regardless of how many lines it spans.
+
+### Mutation-proof (rule 21)
+Two new fixtures added to `test/scripts/sync_hash_skip_atomicity_lib_test.dart`: an
+unconditional store split across two lines (must FAIL) and a correctly-guarded store split
+across two lines (must PASS -- the fix's own mirror case, confirming no new false-positive).
+Reverted the fix, ran the split-store-unguarded test alone: reddened exactly as predicted
+(`Expected: not null, Actual: <null>`) -- the pre-fix checker silently passed the exact
+defect it exists to catch. Restored the fix, re-ran: 15/15 lib tests + 3/3 e2e tests green.
+Re-ran `dart run scripts/check_sync_hash_skip_atomicity.dart` against the real
+`sync_workout.dart`/`sync_nutrition.dart` -- still `OK` (current production code was never
+affected; this closes a future-regression blind spot, not a live defect).
+`docs/audit/gate_test_ledger.yaml`'s evidence extended with this mutation.

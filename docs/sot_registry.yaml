@@ -2281,6 +2281,16 @@ concepts:
       and skips, while cloud may still hold the half-written intermediate
       edit) is not structurally closed this batch -- narrow, documented in
       the diagnose-doc addendum.
+      Known limitation (spec M1, non-blocking, mirrors
+      sync_exercise_log_payload_hash_index's identical entry -- OI-204 B-pass
+      Finding 3, 2026-09-19, flagged this concept's own entry omitted it):
+      weeklyFullSync() calls _syncNutritionLogs outside the per-domain
+      coalescer, so two overlapping passes can each read-then-replace the
+      persisted index map (lost update) -- the only possible outcome is a
+      dropped entry -> one extra redundant re-push next pass, never a false
+      skip (independently re-traced for this domain: a losing pass's
+      persisted fingerprint can only ever be older-than-or-equal-to what's
+      actually on cloud, never a value for content that was never pushed).
 
   - concept: sync_fanout_nutrition_domain
     domain: nutrition

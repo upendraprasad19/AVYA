@@ -156,7 +156,12 @@ per-set catch, 2 for nlog's item + tail-vacuum catches). **That is a changed-COU
 check, not structural "every catch block sets the flag" verification** — a *new*
 swallowing catch that forgets to flip the flag false leaves the total count exactly
 where it was, which the gate cannot distinguish from "nothing changed, still correct."
-Closing that gap would need real catch-block-boundary analysis, which this mechanism
+**The severity is not merely ambiguity: that shape lets the flag stay `true` after a write
+that actually failed, so the store fires for content that was never pushed — a genuine
+FALSE-SKIP (the exact dangerous direction the whole store-on-full-success-only design
+exists to prevent), confirmed reachable by mutation during the OI-204 B-pass (2026-09-19,
+Finding 2) rather than merely theoretical.** Closing that gap would need real
+catch-block-boundary analysis, which this mechanism
 does not attempt — the count comparison is the cheap, mechanically-checkable
 approximation, not a claim of full coverage (an earlier spec draft overclaimed this;
 corrected at plan-review, spec §6 point 2).

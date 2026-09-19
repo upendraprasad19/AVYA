@@ -87,9 +87,29 @@ AtomicityViolation? checkDomainAtomicity(String source, HashSkipDomainSpec spec)
   }
 
   final lines = stripped.split('\n');
+  // OI-204 B-pass Finding 1 (2026-09-19): `storeRe`'s `\s*` matches `\n`
+  // (Dart's `\s` spans newlines regardless of any regex flag), so `hasStore`
+  // above tolerates a store statement wrapped across two lines (e.g. by
+  // `dart format` on a line past 80 columns) -- but re-running `storeRe`
+  // against each SPLIT line in isolation, as this used to do, can never
+  // match either half. That silently emptied `storeLineIdxs`, skipped the
+  // guard-scan loop entirely, and let an UNGUARDED multi-line store pass as
+  // if it were vacuously fine. Fixed by finding matches against the SAME
+  // whole `stripped` text `hasStore` uses, then mapping each match's START
+  // offset to a line index -- so both checks agree on what counts as "a
+  // store", regardless of how many lines it spans.
+  int lineIndexForOffset(int offset) {
+    var pos = 0;
+    for (var i = 0; i < lines.length; i++) {
+      final lineEnd = pos + lines[i].length;
+      if (offset <= lineEnd) return i;
+      pos = lineEnd + 1; // +1 for the '\n' this split() consumed.
+    }
+    return lines.length - 1;
+  }
+
   final storeLineIdxs = <int>[
-    for (var i = 0; i < lines.length; i++)
-      if (storeRe.hasMatch(lines[i])) i,
+    for (final m in storeRe.allMatches(stripped)) lineIndexForOffset(m.start),
   ];
   // The flag may appear anywhere inside an `if (...)` condition, not only as
   // the sole condition — the real code guards with `if (flagName && fp !=

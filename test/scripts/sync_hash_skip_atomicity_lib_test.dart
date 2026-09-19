@@ -150,6 +150,48 @@ Future<void> _syncExerciseLogs(String userId) async {
       expect(v!.message, contains('not visibly guarded'));
     });
 
+    test(
+        'FAILS when the store is unconditional AND split across two lines '
+        '(OI-204 B-pass Finding 1, 2026-09-19: dart-format wraps a long line, '
+        'defeating a naive per-line guard scan)', () {
+      const source = '''
+Future<void> _syncExerciseLogs(String userId) async {
+  bool exlogBundleSynced = true;
+  try {
+    await upsertSets();
+  } catch (e) {
+    exlogBundleSynced = false;
+  }
+  exlogHashIndex[key] =
+      fp;
+}
+''';
+      final v = checkDomainAtomicity(source, exlogSpec);
+      expect(v, isNotNull);
+      expect(v!.message, contains('not visibly guarded'));
+    });
+
+    test(
+        'passes when a CORRECTLY-guarded store is split across two lines '
+        '(the Finding-1 fix must not newly false-positive on a legitimate '
+        'dart-format wrap)', () {
+      const source = '''
+Future<void> _syncExerciseLogs(String userId) async {
+  bool exlogBundleSynced = true;
+  try {
+    await upsertSets();
+  } catch (e) {
+    exlogBundleSynced = false;
+  }
+  if (exlogBundleSynced) {
+    exlogHashIndex[key] =
+        fp;
+  }
+}
+''';
+      expect(checkDomainAtomicity(source, exlogSpec), isNull);
+    });
+
     test('FAILS when a swallowing catch forgets to set the flag false (exlog, expects 1)', () {
       const source = '''
 Future<void> _syncExerciseLogs(String userId) async {

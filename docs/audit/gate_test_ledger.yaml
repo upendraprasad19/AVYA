@@ -720,3 +720,13 @@ check_sync_hash_skip_atomicity.dart:
     to the checker itself (not a test fixture -- see Step 9). e2e test
     (sync_hash_skip_atomicity_e2e_test.dart) proves main() is wired to the lib by running
     the real compiled script as a subprocess against a controlled fixture tree.
+    OI-204 B-pass Finding 1 (2026-09-19): reverted the multi-line-safe `storeLineIdxs`
+    computation (the per-match-offset scan) back to the pre-fix per-line `storeRe.hasMatch`
+    re-scan -- reddens exactly "FAILS when the store is unconditional AND split across two
+    lines" (1 test; `Expected: not null, Actual: <null>`), proving the pre-fix checker
+    silently PASSED an unguarded store wrapped across two lines (a plausible dart-format
+    output, not a contrived shape). The paired positive-control test ("passes when a
+    CORRECTLY-guarded store is split across two lines") stayed green on both sides of the
+    mutation, confirming the fix doesn't newly false-positive on a legitimate wrap. Restored,
+    re-confirmed all 15 lib tests + 3 e2e tests green, re-ran the real gate against
+    lib/core/services/sync/sync_workout.dart + sync_nutrition.dart -- still OK.
