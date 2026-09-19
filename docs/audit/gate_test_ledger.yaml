@@ -704,3 +704,19 @@ check_single_schedule_row_builder.dart:
     the batch's own tests. Two known blind spots are named in the library header -
     row constructors that omit week_character (template_service.dart and the
     sync restore overlay); neither is a phase-layout writer.
+
+check_sync_hash_skip_atomicity.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/sync_hash_skip_atomicity_lib_test.dart
+    - test/scripts/sync_hash_skip_atomicity_e2e_test.dart
+  evidence: >
+    Neutered checkDomainAtomicity's guard-detection (forced `guarded = true`
+    unconditionally) -- reddens "FAILS when the guard is inverted" and "FAILS when the
+    store is not guarded by the flag" (2 tests). Neutered the swallow-count comparison
+    (deleted the setFalseCount mismatch check) -- reddens "FAILS when a swallowing catch
+    forgets to set the flag false (exlog, expects 1)" and "FAILS on nlog fixture with only
+    1 of 2 expected flag-false sites" (2 tests). 4 reds total on 2 independent mutations
+    to the checker itself (not a test fixture -- see Step 9). e2e test
+    (sync_hash_skip_atomicity_e2e_test.dart) proves main() is wired to the lib by running
+    the real compiled script as a subprocess against a controlled fixture tree.

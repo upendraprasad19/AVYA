@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **97** (48 numbered, 49 by filename only).
+Total gates: **98** (48 numbered, 50 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -97,6 +97,7 @@ Total gates: **97** (48 numbered, 49 by filename only).
 | — | `check_sot_registry_parity.dart` | SoT registry parity — file:line references resolve AND no orphan | grandfathered |
 | — | `check_std_encoding_import_rot.dart` | ban importing the REMOVED | grandfathered |
 | 11 | `check_sync_fanout.dart` | Every sync_method and restore_method declared in the registry | grandfathered |
+| — | `check_sync_hash_skip_atomicity.dart` | OI-204 gate-before-refactor (CLAUDE.md §4.11). Verifies the sync-fingerprint | mutation_proven |
 | — | `check_tab_screen_uses_hive_scaffold.dart` | Tech-debt audit 2026-05-20 / B5 / C1 — pins the contract that every | grandfathered |
 | 22 | `check_telemetry_pii_classification.dart` | every `ErrorTelemetry.recordNonFatal` / `logEvent` callsite | grandfathered |
 | 41 | `check_test_runtime_budget.dart` | assert no individual test exceeds the configured runtime budget. | grandfathered |
