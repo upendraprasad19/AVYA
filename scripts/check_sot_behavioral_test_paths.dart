@@ -72,8 +72,17 @@ import 'dart:io';
 /// helper backs BOTH sinks (behavioral_test_path values and presence_only
 /// prose citations) deliberately: a regression in either cannot hide behind
 /// the other's green.
+///
+/// EXISTENCE is the contract, not file-ness: `File(...).existsSync()` answers
+/// FALSE for a directory, so a prose citation of `test/sql/` — a legitimate
+/// thing to write — would be reported as missing with a confidently wrong
+/// message. `typeSync` accepts a file, a directory or a link (integration
+/// hardening 2026-09-19; pinned by the DIRECTORY test).
 String? _missingOnDisk(String path) =>
-    File('${Directory.current.path}/$path').existsSync() ? null : path;
+    FileSystemEntity.typeSync('${Directory.current.path}/$path') ==
+            FileSystemEntityType.notFound
+        ? path
+        : null;
 
 /// Strips a trailing YAML comment (`  # b8d5c2 — note`) and any surrounding
 /// quotes from a scalar value. Three live registry values carry the comment

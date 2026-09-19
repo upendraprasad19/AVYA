@@ -135,6 +135,17 @@ mutation_proven: |
   empty placeholders plus ONE fake concept -> exit 1 naming exactly the two
   injected paths (registry lines 11231/11232 of the scratch copy), 0 false
   positives.
+  Integration hardening (coordinator, Task 5 Step 2, 2026-09-19): the helper
+  shipped as `File(...).existsSync()`, which is FALSE for a directory, so a
+  prose citation of `test/sql/` would be flagged as missing with a confidently
+  wrong message (no live instance — all 4 real prose citations are files).
+  Changed to `FileSystemEntity.typeSync(...) != notFound`; 10th test
+  (DIRECTORY citation passes) was RED against the fork's version (`[file-missing]
+  eta: presence_only cites `test/contracts/` which does not exist`) and GREEN
+  after. M5 revert the helper to `File(...).existsSync()` : 1 red (the
+  DIRECTORY test; the 9 others stay green, so the revert still detects files).
+  Coordinator also re-ran M2 by hand on the integrated branch: 1 red (sibling
+  key), restored to a 0-line diff.
 related_bugs:
   - "0a1e17 (Gate 18 enforced only the forbidden-patterns half of its contract — same half-contract class)"
   - "a9f2c6 (three gates exited 0 while doing nothing about the case they exist for)"
@@ -172,7 +183,9 @@ by running the new red-path test file against the pre-fix gate: 2 green /
   presence_only prose citation(s) resolved on disk.` exit 0. Tally
   re-derived: `grep -cE '^\s+presence_only:\s*true' docs/sot_registry.yaml`
   → 17; 133 + 7 = 140 concepts.
-- `test/scripts/sot_behavioral_test_paths_gate_test.dart` → 9/9 green.
-- Mutations: 7 / 1 / 1 / 2 reds (see frontmatter).
+- `test/scripts/sot_behavioral_test_paths_gate_test.dart` → 9/9 green at the
+  fork's commit; 10/10 after the integration hardening (directory citations).
+- Mutations: 7 / 1 / 1 / 2 reds at the fork's commit, + 1 for the hardening's
+  M5 (see frontmatter).
 - Positive control against the real registry's shape: exit 1, exactly the two
   injected paths named.

@@ -243,6 +243,29 @@ concepts:
   });
 
   test(
+      'presence_only prose citing an existing DIRECTORY is not flagged '
+      '(File.existsSync is false for a directory; existence is the contract)',
+      () {
+    // Coordinator hardening at integration (Task 5 Step 2): the helper first
+    // shipped as `File(...).existsSync()`, which answers FALSE for a directory,
+    // so "see test/sql/ for the live-verify scripts" would have been reported
+    // as a missing path with a confidently wrong message. No live instance
+    // today (all 4 real prose citations are files); this pins the class.
+    write('''
+concepts:
+
+  - concept: eta
+    presence_only: true # source-grep only; the pins live under test/contracts/
+    writers:
+      - file: lib/eta.dart
+        line_range: 1-2
+''');
+    final r = run();
+    expect(r.exitCode, 0, reason: r.out);
+    expect(r.out, isNot(contains('does not exist')), reason: r.out);
+  });
+
+  test(
       'presence_only_reason block citing an existing path (with trailing '
       'punctuation) passes', () {
     write('''
