@@ -1,4 +1,4 @@
-# gate-integrity Implementation Plan (v2 — hardened by plan-review round 1)
+# gate-integrity Implementation Plan (v4 — hardened by plan-review rounds 1–3)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** Dart (scripts + `test/scripts/` subprocess tests), POSIX sh (`safe_merge.sh`, `pre-push.sh`), YAML (ledger, closure, blast-radius), Markdown (CLAUDE.md, playbook, board).
 
-**Spec:** `docs/superpowers/specs/2026-09-19-gate-integrity-design.md` (v2) — every file:line below is verified there (§1, with round-1 corrections marked ⚠); every choice is argued there (§2, D1–D17). Read the spec first.
+**Spec:** `docs/superpowers/specs/2026-09-19-gate-integrity-design.md` (v4) — every file:line below is verified there (§1, with round-1/2/3 corrections marked ⚠); every choice is argued there (§2, D1–D17). Read the spec first.
 
 ## Global Constraints
 
@@ -28,9 +28,9 @@
 
 ### Task 0: Preflight (coordinator)
 
-- [ ] **Step 1** — `git branch --show-current` → `gate-integrity`; `git log --oneline -2` → spec+plan commit(s) on top of `8ffe28fb`; `git status --short` → clean after the v2 commit.
-- [ ] **Step 2** — commit spec v2 + plan v2: `sh scripts/safe_commit.sh "docs(gates): spec + plan v2 for gate-integrity -- hardened by plan-review round 1 (23 findings)"`.
-- [ ] **Step 3** — ×2 review: round 1 DONE (two context-blind reviewers, 23 findings, both `not-converged`; all incorporated in v2). Dispatch round 2 on THIS version (same split: registry units 220+195 / hook units 155+181), lenses per D17. Converge (only P3/mechanical) or split (§4.12.5). Only then dispatch Tasks 1–4.
+- [x] **Step 1** — `git branch --show-current` → `gate-integrity`; `git log --oneline -4` → `6582c78e` (v3), `6b879e60` (v2), `d271c898` (v1) on top of `8ffe28fb`; `git status --short` → clean after each spec+plan commit.
+- [x] **Step 2** — spec + plan committed at each version: v1 `d271c898`, v2 `6b879e60`, v3 `6582c78e`; v4 (this file) commits as `docs(gates): spec + plan v4 for gate-integrity -- round-3 mechanical fixes (8 findings, converged)`.
+- [x] **Step 3** — ×2 review DONE: round 1 (two context-blind reviewers, 23 findings, 2 P0, `not-converged` → v2); round 2 on the hardened plan (19 findings; hooks units converged, one material registry rule fix → v3); round 3 scoped to the v2→v3 diff (8 findings, ALL mechanical/citation-class → `converged`, `mechanical_only: true` per §4.12.6). Lenses per D17. Tasks 1–4 dispatch from v4.
 
 ---
 
@@ -38,7 +38,7 @@
 
 **Files:**
 - Create: `scripts/contract_sweep_lib.dart`, `scripts/contract_sweep.dart`
-- Modify: `scripts/pre-push.sh:112-114` (wiring), `test/scripts/pre_push_analyze_always_e2e_test.dart` (hook env gains `CONTRACT_SWEEP_SKIP=1`), `docs/playbook/common-pitfalls.md` (rider 3 section)
+- Modify: `scripts/pre-push.sh:112-114` (wiring), `test/scripts/pre_push_analyze_always_e2e_test.dart` (hook env gains `CONTRACT_SWEEP_SKIP=1`), `test/contracts/gate_e2e_env_hermetic_test.dart` (register the new e2e in `_helpers`, Step 6), `docs/playbook/common-pitfalls.md` (rider 3 section)
 - Test: `test/scripts/contract_sweep_lib_test.dart` (pure), `test/scripts/contract_sweep_e2e_test.dart` (temp repo + stub flutter), `test/contracts/contract_sweep_wired_test.dart` (pins the wiring line)
 
 **Interfaces:** `buildSelection({changedPaths, registryYaml, grepResults, exists}) → SweepSelection{tests, skipped, droppedMissing, unmappedChanged, fallbackReason}`; runner flags `--warn-only`, `--dry-run`, `--range <spec>`, `--flutter-bin <path>`; env guards `CONTRACT_SWEEP_SKIP=1`, `CONTRACT_SWEEP_NESTED=1`; stdout prefix `[contract-sweep]`.
@@ -85,9 +85,9 @@ void main() {
         'lib/main.dart',
         'test/contracts/foo_test.dart',           // arm (c) territory — excluded here
         'docs/superpowers/plans/2026-09-19-x.md', // prose .md — excluded
-        'CLAUDE.md',                              // prose .md — excluded (tests mention it in comments; its gates run at commit)
+        'CLAUDE.md',                              // prose .md — excluded: 77 test files reference it (over-selection), and it is pinned platform so pre-push runs the full suite anyway
         'docs/audit/open_issues.md',              // .md under docs/audit/ — a DATA contract with 10 test readers → a key
-        'docs/architecture/sync.md',              // .md under docs/architecture/ — 39 test readers → a key
+        'docs/architecture/sync.md',              // .md under docs/architecture/ — 29 test readers → a key
         'test/helpers/h.dart',                    // a test HELPER is a key
         'docs/sot_registry.yaml',                 // docs/ but data — a key
       ]);
@@ -157,6 +157,16 @@ void main() {
       expect(sel.tests, isEmpty);
       expect(sel.unmappedChanged, isEmpty);
     });
+    test('PROSE inside a contract-doc dir is still a key: zero grep hits -> unmapped, no fallback, no tests (by design; 56 of 61 docs/audit/*.md have no test reader)', () {
+      final sel = buildSelection(
+          changedPaths: ['docs/audit/2026-09-01-hermes-report.md'],
+          registryYaml: _registry,
+          grepResults: {'2026-09-01-hermes-report.md': <String>[]},
+          exists: _all);
+      expect(sel.fallbackReason, isNull);
+      expect(sel.tests, isEmpty);
+      expect(sel.unmappedChanged, ['docs/audit/2026-09-01-hermes-report.md']);
+    });
   });
 }
 ```
@@ -185,8 +195,14 @@ bool isDartTest(String p) => p.startsWith('test/') && p.endsWith('_test.dart');
 bool isGolden(String p) => p.startsWith('test/goldens/');
 /// Doc-like = prose nobody tests by name: `.md`/`.txt` EXCEPT under docs/audit/
 /// and docs/architecture/, whose .md files are data contracts with test readers
-/// (open_issues.md → 10 tests, sync.md → 39, OPEN_INDEX.md → 5; measured
-/// 2026-09-19). docs/*.yaml are never doc-like.
+/// (open_issues.md → 10 tests, sync.md → 29, OPEN_INDEX.md → 5; measured
+/// 2026-09-19). docs/*.yaml are never doc-like. Prose that happens to live in
+/// those two dirs (hermes reports, oi*-plan.md — 56 of 61 docs/audit/*.md have
+/// zero test readers) is STILL a key by design: it costs one `git grep` and
+/// surfaces as `unmapped`, which is print-only — never a fallback, never a
+/// failure. CLAUDE.md is doc-like not because tests ignore it (77 reference
+/// it) but because keying on it over-selects a third of the tree, and it is
+/// pinned platform so pre-push runs the full suite for it regardless.
 const _contractDocDirs = <String>['docs/audit/', 'docs/architecture/'];
 bool isDocLike(String p) =>
     (p.endsWith('.md') || p.endsWith('.txt')) && !_contractDocDirs.any(p.startsWith);
@@ -567,7 +583,7 @@ echo "[pre-push] contract sweep (targeted SoT contract tests, warn-only baseline
 "$DART_BIN" run scripts/contract_sweep.dart --warn-only || true
 ```
 
-  (b) `test/scripts/pre_push_analyze_always_e2e_test.dart` — in the env its hook runner builds (`:57` copies `Platform.environment`; `_cleanEnv()` at `:56-65` strips only `GIT_*/GITHUB_*/PUSH_BEFORE/PRE_PUSH_FULL`, so the switch survives), add `env['CONTRACT_SWEEP_SKIP'] = '1';` with a 3-line comment: this test pins analyze placement; on Windows the sweep's Dart spawn resolves the REAL flutter (cmd.exe cannot run an extensionless PATH stub) and would select this very test → recursion. THEN add one behavioural assertion to its existing `prePushFull: true` scenario: `expect(r.stdout, contains('[contract-sweep] skipped'))` — this proves the hook REACHES the sweep line before `run_full_suite()`'s `exit 0` on a real run, which the source-order pin in (c) cannot (an `if false; then … fi` wrapper would pass (c)).
+  (b) `test/scripts/pre_push_analyze_always_e2e_test.dart` — in the env its hook runner builds (`:57` copies `Platform.environment`; `_cleanEnv()` at `:56-65` strips only `GIT_*/GITHUB_*/PUSH_BEFORE/PRE_PUSH_FULL`, so the switch survives), add `env['CONTRACT_SWEEP_SKIP'] = '1';` with a 3-line comment: this test pins analyze placement; on Windows the sweep's Dart spawn resolves the REAL flutter (cmd.exe cannot run an extensionless PATH stub) and would select this very test → recursion. THEN add one behavioural assertion to its existing `prePushFull: true` PLACEMENT scenario at `:142` (there are two `prePushFull: true` scenarios — `:133` is the guard test, `:142` the placement test; both use the exit-0 stub and both reach the sweep line, so pick `:142` by name): `expect(r.stdout, contains('[contract-sweep] skipped'))` — this proves the hook REACHES the sweep line before `run_full_suite()`'s `exit 0` on a real run, which the source-order pin in (c) cannot (an `if false; then … fi` wrapper would pass (c)).
   (c) `test/contracts/contract_sweep_wired_test.dart`:
 
 ```dart
@@ -618,7 +634,9 @@ in pre-push.sh above the full suite for every tier, pinned by
 test/contracts/contract_sweep_wired_test.dart. Not a check_* gate by design.
 
 Mutation-proven: 6 mutations, <N> tests reddened (per-mutation counts in the
-plan-review record). Tests: test/scripts/contract_sweep_lib_test.dart,
+plan-review record; Step 11's expected counts sum to >= 9 = 1+2+>=2+1+2+1 --
+a smaller observed sum means a mutation did not apply or something absorbed
+it, go find out which before committing). Tests: test/scripts/contract_sweep_lib_test.dart,
 test/scripts/contract_sweep_e2e_test.dart, test/contracts/contract_sweep_wired_test.dart.
 
 Rider: docs/playbook/common-pitfalls.md riverpod-3 widget-harness section."
@@ -839,7 +857,18 @@ List<String> staleAllowlistViolations(Set<String> gatesOnDisk, Iterable<String> 
   'check_closes_oi_cited.dart': [GateRunner.file('scripts/commit-msg.sh', 'Commit-msg gate; takes the message file as its REQUIRED argument (a9f2c6).')],
 ```
 
-(`check_snapshot_contract.dart` gets NO entry — it runs in both loops.) Keep the historical comments (`:48-57`). (b) Define, AFTER the `_allowList` map closes, a plain top-level function — NOT a closure ending in `};` above the map, because `test/contracts/gate_wiring_args_required_test.dart:66-67` slices the file from `const _allowList` to the FIRST `};` in the file: `String? _readOrNull(String path) { final f = File(path); return f.existsSync() ? f.readAsStringSync() : null; }`. In `main()`: build `boardStatuses` = `mergedBoardStatuses(...)` from `scripts/oi_closure_lib.dart:73-79` (read its parameter names; `check_closes_oi_performed.dart:38` already imports that lib the same way; pass the two board files' contents; if `docs/audit/open_issues.md` is unreadable pass `null`). Replace `:179`'s `continue` with: `if (_allowList.containsKey(script)) { unwired.addAll(runnerViolations(gate: script, runners: _allowList[script]!, read: _readOrNull, caseSkipsOf: (c) => extractCaseSkips(c, caseSkipRegex), boardStatuses: boardStatuses)); continue; }`. Replace `preCommitContent.contains(script)` / `workflowContent.contains(script)` at `:180,:182` with `invokesGate(...)`. After the loop add `unwired.addAll(staleAllowlistViolations(allChecks.toSet(), _allowList.keys));`. Keep `--warn-only` semantics (`:137`, `:241`) exactly.
+(`check_snapshot_contract.dart` gets NO entry — it runs in both loops.) Keep the historical comments (`:48-57`). (b) Define, AFTER the `_allowList` map closes, a plain top-level function — NOT a closure ending in `};` above the map, because `test/contracts/gate_wiring_args_required_test.dart:66-67` slices the file from `const _allowList` to the FIRST `};` in the file: `String? _readOrNull(String path) { final f = File(path); return f.existsSync() ? f.readAsStringSync() : null; }`. In `main()`: build `boardStatuses` from `mergedBoardStatuses(...)` (`scripts/oi_closure_lib.dart:73-79`; `check_closes_oi_performed.dart:38` already imports that lib the same way). ⚠ Its parameters are `required String openContent, required String closedContent` — NON-nullable, so "pass `null` when the open board is unreadable" cannot target THAT call; `null` lands in `runnerViolations`' `Map<String, String>? boardStatuses` (null = open board unreadable ⇒ every `manual:` fails closed). Spell it exactly:
+
+```dart
+  final open = _readOrNull('docs/audit/open_issues.md');
+  final boardStatuses = open == null
+      ? null
+      : mergedBoardStatuses(
+          openContent: open,
+          closedContent: _readOrNull('docs/audit/closed_issues.md') ?? '');
+```
+
+(an unreadable CLOSED board degrades to "not on the closed board" — a `manual:` target that exists only there then reads as absent and fails, which is the fail-closed direction). Replace `:179`'s `continue` with: `if (_allowList.containsKey(script)) { unwired.addAll(runnerViolations(gate: script, runners: _allowList[script]!, read: _readOrNull, caseSkipsOf: (c) => extractCaseSkips(c, caseSkipRegex), boardStatuses: boardStatuses)); continue; }`. Replace `preCommitContent.contains(script)` / `workflowContent.contains(script)` at `:180,:182` with `invokesGate(...)`. After the loop add `unwired.addAll(staleAllowlistViolations(allChecks.toSet(), _allowList.keys));`. Keep `--warn-only` semantics (`:137`, `:241`) exactly.
 
 - [ ] **Step 8: Un-dormant** — delete `check_snapshot_contract.dart|\` at `pre-commit.sh:337` and BOTH `check_unawaited_has_error_sink.dart|\` and `check_snapshot_contract.dart|\` from `test.yml`'s case block (`:236-249`). Recount and fix the "14 case-skipped" prose at `pre-commit.sh:134-136` and `:310-312` AND `test.yml`'s arm comment ("Other 4: require live DB / merge context / build artifact." — recount after the two deletions). Run `dart run scripts/check_snapshot_contract.dart; echo $?` → 0.
 
@@ -1203,7 +1232,7 @@ Report back: branch, sha, per-mutation reds, `safe_merge_test.dart` total.
 
 **Files:** `docs/blast_radius.yaml`, `CLAUDE.md`, `docs/audit/gate_test_ledger.yaml`, `docs/audit/open_issues.md` (in-place status flips), `docs/audit/gate-integrity.closure.yaml`, `docs/plan-reviews/gate-integrity.md`, `docs/reviews/<sha>-bpass.md`, `.claude/skills/code-review/SKILL.md` (tuning entry).
 
-- [ ] **Step 1: Cherry-pick** each fork's commit(s) onto `gate-integrity`, Task 1 → 4 (`git cherry-pick <sha>`). A CLEAN pick runs NO `pre-commit`/`commit-msg` hook (probed by round 2: only `prepare-commit-msg` + `post-commit` fire; the `CHERRY_PICK_HEAD` exemptions at `check_commit_from_worktree.dart:76-81` / `check_closes_oi_cited.dart:126-130` exist for the CONFLICT path, where `git cherry-pick --continue` DOES run both). The gates ran on each branch; Step 8's commit is the first gate run over the UNION. **Expect a conflict on `docs/diagnoses/INDEX.md` on the 2nd and 3rd fix units** — each fork's pre-commit regenerates and stages it (`pre-commit.sh:183-191`) and the chronological table is latest-first, so three same-day rows insert at the same line. Never hand-merge a generated index: `"$DART_BIN" run scripts/build_bug_index.dart && git add docs/diagnoses/INDEX.md && git cherry-pick --continue` (the `--continue` pays the ~98 s loop; same recipe for `OPEN_INDEX.md` / `GATE_INDEX.md` if they ever collide). `git log --oneline -7` → spec v1, spec v2, 4 units.
+- [ ] **Step 1: Cherry-pick** each fork's commit(s) onto `gate-integrity`, Task 1 → 4 (`git cherry-pick <sha>`). A CLEAN pick runs NO `pre-commit`/`commit-msg` hook (probed by round 2: only `prepare-commit-msg` + `post-commit` fire; the `CHERRY_PICK_HEAD` exemptions at `check_commit_from_worktree.dart:76-81` / `check_closes_oi_cited.dart:126-130` exist for the CONFLICT path, where `git cherry-pick --continue` DOES run both). The gates ran on each branch; Step 8's commit is the first gate run over the UNION. **Expect a conflict on `docs/diagnoses/INDEX.md` on the 2nd and 3rd fix units** — each fork's pre-commit regenerates and stages it (`pre-commit.sh:183-191`) and the chronological table is latest-first, so three same-day rows insert at the same line. Never hand-merge a generated index: `"$DART_BIN" run scripts/build_bug_index.dart && git add docs/diagnoses/INDEX.md && GIT_EDITOR=true git cherry-pick --continue` (round 3 reproduced the sequence: 1st pick clean, 2nd `UU INDEX.md`, regen + add + `--continue` exit 0; `--continue` opens no editor on the harness's non-TTY stdin — git adds `--no-edit --cleanup=strip` itself — and the `GIT_EDITOR=true` prefix makes the same recipe safe from an interactive terminal; the `--continue` pays the ~98 s loop; same recipe for `OPEN_INDEX.md` / `GATE_INDEX.md` if they ever collide). `git log --oneline -8` → spec v1, v2, v3, v4, 4 units.
 - [ ] **Step 2: Verify one mutation per unit yourself** (the cheapest listed) — trust but verify (§4.9 subagent-numeric rule). Record the observed reds.
 - [ ] **Step 3: `docs/blast_radius.yaml` (D16)** — beside the `scripts/pre-push.sh` pin (`:164`), add `platform` pins for `scripts/contract_sweep.dart`, `scripts/contract_sweep_lib.dart`, `scripts/gate_scripts_wired_lib.dart`, `scripts/check_sot_behavioral_test_paths.dart`, AND the two libs Gate 33's `manual:` verdicts now depend on — `scripts/oi_closure_lib.dart`, `scripts/check_closes_oi_cited.dart` (both `feature` today). Verify: `printf '%s\n' <each> | dart run scripts/blast_radius_from_diff.dart -` → platform ×6; `dart run scripts/check_blast_radius_coverage.dart` → PASS.
 - [ ] **Step 4: Ledger** — promote `check_gate_scripts_wired.dart` (`gate_test_ledger.yaml:343`; `test_path:` = [`test/scripts/gate_scripts_wired_runners_test.dart`, `test/contracts/gate_wiring_args_required_test.dart`]) and `check_sot_behavioral_test_paths.dart` (`:486-487`; `test_path:` = [`test/scripts/sot_behavioral_test_paths_gate_test.dart`]) to `mutation_proven: true` + `evidence:` (what was neutered, observed reds) — shape from `:596-`. `dart run scripts/check_gate_test_ledger.dart` → PASS.
@@ -1212,6 +1241,6 @@ Report back: branch, sha, per-mutation reds, `safe_merge_test.dart` total.
 - [ ] **Step 7: Closure YAML** `docs/audit/gate-integrity.closure.yaml` — read `scripts/validate_audit_closure.dart:1-60` FIRST; shape from `unitb-deload-reason.closure.yaml`. Entries: U1 OI-220 build (`closed_in_commit`, `commit: gate-integrity@branch`, `notes:` shipped warn-only; flip tracked on OI-220 with its criterion), U2 OI-155 (`closed_in_commit`; note 4 of 6 `manual:`), U3 OI-195, U4 OI-181 (`closed_in_commit`), U5 migrations_live retire-or-redesign (`blocked_on_user`, `reason:` founder call, OI-NEW), plus one entry per B-pass finding after Step 9. `closed_count:` recomputed. `dart run scripts/validate_audit_closure.dart --strict` → PASS.
 - [ ] **Step 8: Commit** Steps 3–7 as `docs(gates): blast-radius pins, ledger promotions, CLAUDE.md riders, board + closure ledger for gate-integrity` with the three `closes-oi:` lines. The commit IS the gate loop.
 - [ ] **Step 9: B-pass** — `/code-review` on the branch (platform ⇒ mandatory, self-initiated). Fix findings in-branch; add each to the closure YAML; the skill-tuning gate requires a same-dated entry in `.claude/skills/code-review/SKILL.md` (queue: the non-`check_*` runner trap; the `- file:` regex compose-from-memory miss; the Windows cmd.exe-vs-PATH-stub recursion).
-- [ ] **Step 10: Plan-review record** `docs/plan-reviews/gate-integrity.md` — READ `memory/feedback_gates_unsatisfiable_at_merge.md` + `feedback_plan_review_record_frontmatter_format.md` first. Frontmatter: `branch: gate-integrity`, `review_rounds: 2`, `mechanical_only: false`, `ground_truth_verified: true`, `verdict: converged`, `bpass: accepted`, `bpass_review: docs/reviews/<file>`, `tier: standard`, `date: 2026-09-19`. Body: both rounds' findings + fixes, the four mutation ledgers (unit × mutation × observed reds), and the rule-21 proof for `contract_sweep`. Commit it on the branch BEFORE the merge; `sh scripts/safe_merge.sh gate-integrity` from the primary will preview both prechecks — the new one must be SILENT for this branch.
+- [ ] **Step 10: Plan-review record** `docs/plan-reviews/gate-integrity.md` — READ `memory/feedback_gates_unsatisfiable_at_merge.md` + `feedback_plan_review_record_frontmatter_format.md` first. Frontmatter: `branch: gate-integrity`, `review_rounds: 3`, `mechanical_only: true` (round 3, scoped to the v2→v3 diff, returned only mechanical/citation-class findings — the §4.12.6 convergence shortcut; `mechanical_only` is read by `batch_process_telemetry_lib.dart:51` only, not by the keystone gate), `ground_truth_verified: true`, `verdict: converged`, `bpass: accepted`, `bpass_review: docs/reviews/<file>`, `tier: standard`, `date: 2026-09-19`. Body: all three rounds' findings + fixes (23 / 19 / 8), the four mutation ledgers (unit × mutation × observed reds), and the rule-21 proof for `contract_sweep`. Commit it on the branch BEFORE the merge; `sh scripts/safe_merge.sh gate-integrity` from the primary will preview both prechecks — the new one must be SILENT for this branch.
 - [ ] **Step 11: Full-suite scope** — run the new/extended test files inside `flutter test test/scripts/` once (contention check). The merge to `main` and the push run pre-push at platform tier (full `flutter test`, and the new sweep in warn-only) + CI. **Ask the founder before `safe_merge.sh` + `safe_push.sh`.**
 - [ ] **Step 12: §5 close-out** — retrospective `project_gate_integrity_2026_09_19.md`; in-flight memory → archived line; worktree retirement dry-run; context-artifact budget check; skill self-evolution answered.
