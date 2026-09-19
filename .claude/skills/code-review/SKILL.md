@@ -231,6 +231,53 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-19 (c)** — blast-radius **platform** — branch `oi204-delta-sync`
+  (OI-204: extends the proven `_syncScheduledWorkouts` fingerprint-skip
+  pattern to `_syncExerciseLogs`/`_syncNutritionLogs`, plus the
+  gate-before-refactor atomicity checker CLAUDE.md §4.11 required before the
+  first refactor commit). **4 findings (1 P1, 1 P2, 2 P3); 0 false_alarm —
+  all 4 accepted and closed in-batch** (3 fixed in code/docs, 1 verified
+  already correctly — if under-emphasized — disclosed, wording strengthened).
+  Review: `docs/reviews/oi204-delta-sync-bpass.md`. Two fresh reviewers,
+  lenses 1-5 / 6-8, against the three-dot `main...HEAD` diff (23 files; the
+  naive two-dot form is a live trap on any branch whose base independently
+  gained commits after the fork — confirmed here, since `main` picked up 8
+  unrelated gates from a sibling branch mid-session).
+  **Tuning — lens 6 (`guard_without_its_mirror`) gains a specific sub-shape
+  for gates that scan SOURCE TEXT in two passes at different granularities:
+  a whole-text existence check and a per-line follow-up scan can silently
+  disagree, and the disagreement IS the defeat.** Finding 1 (P1): the
+  atomicity gate's `hasStore` matched a store statement against the WHOLE
+  file (tolerating `\s*` spanning a newline, which Dart's `\s` always does),
+  then separately re-ran the SAME regex per INDIVIDUAL LINE to locate which
+  line(s) to guard-scan from. A store wrapped across two lines — a plausible
+  `dart format` output past 80 columns, not a contrived shape — matched the
+  first pass and matched NEITHER half of the second, so the guard-scan list
+  came back empty and an unguarded multi-line store silently passed. Reviewer
+  B reproduced this live against the real gate with a positive control
+  (single-line form correctly failed) before reporting it. **Add to lens 6's
+  method: when a gate computes the same property twice at different
+  granularities (whole-file vs per-line, whole-statement vs per-token), ask
+  whether both passes are guaranteed to agree — a regex whose match spans
+  newlines but whose re-application is scoped per-line is exactly this
+  shape, and it generalizes past this one gate.**
+  **Second — a lens-6 finding whose correct triage was "verify the existing
+  disclosure, then strengthen wording" rather than "write new code."**
+  Finding 2 (P2) reproduced a second, DIFFERENT blind spot in the same gate
+  (a new swallowing catch that forgets to flip its flag false leaves an
+  aggregate COUNT check unchanged) — and this one was ALREADY disclosed
+  accurately in `docs/architecture/sync.md`, confirmed by reading the cited
+  section directly rather than trusting the citation. The finding's real
+  value was that the disclosure's WORDING undersold the severity ("the gate
+  can't distinguish X from Y" reads as benign ambiguity; the actual
+  consequence is a false-skip, the dangerous direction the whole mechanism
+  exists to prevent). **Not every accepted finding needs a code fix — some
+  need the existing accurate-but-underselling prose corrected to name the
+  real consequence, and that's a legitimate, cheaper terminal state than the
+  heavier structural fix the finding's own author correctly declined to
+  demand.**
+  False-alarm rate 0/4 → no lens removed; lens 6 extended per above.
+
 - **2026-09-19 (b)** — blast-radius **platform** — branch `gate-integrity`
   (OI-220 pre-push contract sweep · OI-155 Gate 33 typed allowlist · OI-195
   Gate 42 path resolution · OI-181 safe_merge absent-record precheck; four

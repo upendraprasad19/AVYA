@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **105** (48 numbered, 57 by filename only).
+Total gates: **106** (48 numbered, 58 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -104,6 +104,7 @@ Total gates: **105** (48 numbered, 57 by filename only).
 | — | `check_sot_registry_parity.dart` | SoT registry parity — file:line references resolve AND no orphan | grandfathered |
 | — | `check_std_encoding_import_rot.dart` | ban importing the REMOVED | grandfathered |
 | 11 | `check_sync_fanout.dart` | Every sync_method and restore_method declared in the registry | grandfathered |
+| — | `check_sync_hash_skip_atomicity.dart` | OI-204 gate-before-refactor (CLAUDE.md §4.11). Verifies the sync-fingerprint | mutation_proven |
 | — | `check_tab_screen_uses_hive_scaffold.dart` | Tech-debt audit 2026-05-20 / B5 / C1 — pins the contract that every | grandfathered |
 | — | `check_teardown_no_unguarded_sibling_await.dart` | Blocks a STAGED test file whose tearDown/tearDownAll block mixes a | mutation_proven |
 | 22 | `check_telemetry_pii_classification.dart` | every `ErrorTelemetry.recordNonFatal` / `logEvent` callsite | grandfathered |

@@ -705,6 +705,31 @@ check_single_schedule_row_builder.dart:
     row constructors that omit week_character (template_service.dart and the
     sync restore overlay); neither is a phase-layout writer.
 
+check_sync_hash_skip_atomicity.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/sync_hash_skip_atomicity_lib_test.dart
+    - test/scripts/sync_hash_skip_atomicity_e2e_test.dart
+  evidence: >
+    Neutered checkDomainAtomicity's guard-detection (forced `guarded = true`
+    unconditionally) -- reddens "FAILS when the guard is inverted" and "FAILS when the
+    store is not guarded by the flag" (2 tests). Neutered the swallow-count comparison
+    (deleted the setFalseCount mismatch check) -- reddens "FAILS when a swallowing catch
+    forgets to set the flag false (exlog, expects 1)" and "FAILS on nlog fixture with only
+    1 of 2 expected flag-false sites" (2 tests). 4 reds total on 2 independent mutations
+    to the checker itself (not a test fixture -- see Step 9). e2e test
+    (sync_hash_skip_atomicity_e2e_test.dart) proves main() is wired to the lib by running
+    the real compiled script as a subprocess against a controlled fixture tree.
+    OI-204 B-pass Finding 1 (2026-09-19): reverted the multi-line-safe `storeLineIdxs`
+    computation (the per-match-offset scan) back to the pre-fix per-line `storeRe.hasMatch`
+    re-scan -- reddens exactly "FAILS when the store is unconditional AND split across two
+    lines" (1 test; `Expected: not null, Actual: <null>`), proving the pre-fix checker
+    silently PASSED an unguarded store wrapped across two lines (a plausible dart-format
+    output, not a contrived shape). The paired positive-control test ("passes when a
+    CORRECTLY-guarded store is split across two lines") stayed green on both sides of the
+    mutation, confirming the fix doesn't newly false-positive on a legitimate wrap. Restored,
+    re-confirmed all 15 lib tests + 3 e2e tests green, re-ran the real gate against
+    lib/core/services/sync/sync_workout.dart + sync_nutrition.dart -- still OK.
 # ---------------------------------------------------------------------------
 # self-learning discipline batch, 2026-09-19 (discipline-gates-tier12) — 8
 # gates mechanizing sub-patterns from feedback_green_check_input_set_width.md
