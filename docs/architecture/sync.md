@@ -118,9 +118,10 @@ unawaited(SyncService.instance.pushSnapshot());       // 4. Refresh AI context (
 - **Scheduled workouts:** `onConflict: 'user_id,scheduled_date'` (UNIQUE constraint added migration 013). One schedule per user per date.
 
 ### Sync fingerprint-skip pattern (H1b Part A / OI-204)
-Cited by name from `sync_service.dart` (`_schedHashIndexKey` / `_exlogHashIndexKey` /
-`_nlogHashIndexKey` doc comments) since the original H1b Part A work — this section did
-not exist until OI-204 Task 3 added it, so those citations pointed at nothing until now.
+Cited by name from `sync_service.dart`'s `_exlogHashIndexKey` doc comment (`:358`, added by
+OI-204 Task 2) — this section did not exist until OI-204 Task 3 added it, so that citation
+pointed at nothing until now. `_schedHashIndexKey`'s pre-existing comment (from the original
+H1b Part A work) and `_nlogHashIndexKey`'s own new comment do not cite this section by name.
 
 **Problem:** a coalesced, fire-and-forget sync entry (`syncWorkoutData()` /
 `syncNutritionData()`, fired after every single mutation) re-walked the caller's **entire**

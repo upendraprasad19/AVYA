@@ -419,7 +419,7 @@ block, postamble persists-or-clears); `lib/features/dev/simulation_service.dart`
 `test/contracts/sync_nutrition_log_payload_hash_index_writer_to_reader_test.dart`
 (new, 14 tests); `docs/sot_registry.yaml` (new concept
 `sync_nutrition_log_payload_hash_index`; plus 4 stale `line_range` citations
-this task's ~85-line `sync_service.dart` insertion shifted a second time —
+this task's 74-line `sync_service.dart` insertion shifted a second time —
 `compileDailySnapshot`, `applyRestoreCeiling`, `restoreFailureReason` [all
 three already fixed once by Task 2, shifted again by this task's own
 insertion] and `checkAndSync` [not previously stale — newly caught this
