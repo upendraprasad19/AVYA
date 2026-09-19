@@ -48,7 +48,7 @@ Total gates: **98** (49 numbered, 49 by filename only).
 | — | `check_exercise_seams.dart` | ⑦ OI-89 Gate A — every exercise-emitting seam is enumerated, not eyeballed. | mutation_proven |
 | 17 | `check_exlog_key_canonical.dart` | APK Test #16.1 / Agent A — source-grep gate. Pins the rule that | grandfathered |
 | — | `check_gate_index_fresh.dart` | confirms docs/audit/GATE_INDEX.md is up-to-date relative to its baked | mutation_proven |
-| 33 | `check_gate_scripts_wired.dart` | assert that every `scripts/check_*.dart` file is invoked from BOTH: - scripts/pre-commit.sh (local enforcement) | grandfathered |
+| 33 | `check_gate_scripts_wired.dart` | assert that every `scripts/check_*.dart` file is invoked from BOTH: - scripts/pre-commit.sh (local enforcement) | mutation_proven |
 | — | `check_gate_test_ledger.dart` | rule 24 enforcement — every `scripts/check_*.dart` carries exactly one state | mutation_proven |
 | 15 | `check_generic_error_telemetry.dart` | every user-facing generic error message in lib/ must be | grandfathered |
 | — | `check_goal_token_exhaustiveness.dart` | guarantees a fitness-goal | grandfathered |
@@ -92,7 +92,7 @@ Total gates: **98** (49 numbered, 49 by filename only).
 | — | `check_skill_tuning_history.dart` | a commit that ADDS a `docs/reviews/<x>-review.md` must also append a | mutation_proven |
 | — | `check_skipped_discipline_budget.dart` | assert that no `regression-test-skipped:` waiver entry in `docs/skipped-discipline.md` | grandfathered |
 | — | `check_snapshot_contract.dart` | OI-03 gate — enforces the snapshot contract in docs/snapshot_contract.yaml. | grandfathered |
-| 42 | `check_sot_behavioral_test_paths.dart` | assert every SoT registry concept entry carries either: - `behavioral_test_path:` (cite a real behavioral contract test) | grandfathered |
+| 42 | `check_sot_behavioral_test_paths.dart` | assert every SoT registry concept entry carries either: - `behavioral_test_path:` (cite a real behavioral contract test) | mutation_proven |
 | — | `check_sot_registry_citations.dart` | SoT-citation gate (post38-auth-fixes, 2026-08-08). Takes NO gate number: rule 24 makes the FILENAME the identity, and 44 is hel... | mutation_proven |
 | 7 | `check_sot_registry_completeness.dart` | SoT registry completeness. | grandfathered |
 | — | `check_sot_registry_parity.dart` | SoT registry parity — file:line references resolve AND no orphan | grandfathered |
