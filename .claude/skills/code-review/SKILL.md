@@ -247,6 +247,33 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   genuinely has no lesson beyond the process gap already named in the plan-
   review record itself (`mechanical_only: true` per CLAUDE.md §4.12.6 has no
   effect in the gate script — confirmed by grep, zero hits).
+- **2026-09-19 (b)** — blast-radius **feature** — branch
+  `discipline-gates-tier12` (8 new mechanically-gateable `check_*.dart`
+  gates derived from the repo's 2 highest-recurrence `feedback_*.md` files —
+  `feedback_green_check_input_set_width.md` and
+  `feedback_mistake_guard_without_its_mirror.md`). **4 findings (0 P0, 0 P1,
+  0 P2, 4 P3 — all low); 0 false_alarm — all 4 fixed in-batch.** Review:
+  `docs/reviews/ab9c36f14353-review.md`. All 4 were documentation-only: 2
+  arithmetic errors in `docs/audit/gate_test_ledger.yaml`'s own
+  `evidence:` prose (test totals that didn't sum after the coordinating
+  session's own manual mutation re-runs — the reviewer independently re-ran
+  all 8 gates' mutations rather than trusting the ledger text, and found the
+  2 gates nobody had personally re-verified were exactly the 2 with wrong
+  arithmetic), and 2 wording-precision issues in
+  `gate_existssync_file_vs_dir_lib.dart`'s header comment (a stale,
+  self-referential calibration count; and a past-tense framing of a
+  caught-in-review spec defect that could misread as a confirmed live
+  incident against the cited OI's actual "0 missing, not a live breach"
+  status). No functional defect in any of the 8 gates' detection logic.
+  **Tuning — a new sub-instance of the ledger's own trust model, not a new
+  lesson:** rule 21/24's `mutation_proven:` and `evidence:` fields are
+  self-attested by design (CLAUDE.md §4.4 rule 21 says so explicitly), and
+  this review is a concrete case of that self-attestation drifting on
+  exactly the arithmetic a human proofreader tends to skim past — the
+  fresh-agent B-pass is doing real work here, not rubber-stamping. No skill
+  change warranted; the existing "mutate it and run it, personally" discipline
+  is what caught this, both in the coordinating session (6 of 8 gates,
+  independently) and in this B-pass (the remaining 2).
 - **2026-09-18 (b)** — blast-radius **platform** — branch `discipline-v2`
   (S/M/L fix tiering + batch telemetry + hook wiring). **6 findings (0 P0, 0 P1,
   6 P2); 0 false_alarm — all 6 fixed in-batch** (`7de94167`). Review:
