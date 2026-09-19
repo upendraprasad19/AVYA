@@ -143,6 +143,18 @@ mutation_proven: >
   = FAIL exit 1 "manual:OI-172 is CLOSED -- give the gate a real runner or
   re-file the blocker". Every mutation compiled; none reddened via a compile
   error; none reddened zero.
+  B-pass finding 1 (integration, coordinator, 2026-09-19): `invokesGate` was a
+  bare `contains('run scripts/<gate>')` on non-comment lines, so a heredoc
+  BODY or a prose sentence ("You should run scripts/x by hand") registered as
+  wired -- the shape extractCaseSkips was hardened against one function
+  above. Tightened: (1) invoker-prefixed match (`"$DART_BIN"` / `$DART_BIN` /
+  `${DART_BIN}` / `dart` + `run scripts/<gate>`; census of all 19 live
+  invocation lines = zero false negatives; Gate 33 still PASS on the real
+  tree), (2) heredoc bodies skipped, the opener line still counting. Tests
+  22 -> 26 (two RED-first, two mirrors). M7 invoker prefix -> bare contains =
+  1 red (prose); M8 heredoc tracking dropped = 1 red (heredoc body); both
+  restored from a byte-verified pristine copy (cmp), because the fix was
+  uncommitted and `git checkout --` would have eaten it.
 related_bugs:
   - "a9f2c6 (2026-07-29): gates that silently skip what they cannot parse — the same allowlist's dynamic-wiring inference misclassified a guaranteed crash as wired; that fix ADDED an allowlist entry, this one makes every entry checkable"
   - "d7a3f9 (2026-07-29): CI gate loop missing a skip entry — Gate 33 PASSed on the commit that broke CI; its regression test (gate_wiring_args_required_test) constrains this fix's `_allowList` shape (first `};` slice)"

@@ -9,7 +9,7 @@
 ## 0. Why these four together, and why now
 
 - Zero file overlap between the four units (OI-220 = new `scripts/contract_sweep{,_lib}.dart` + `scripts/pre-push.sh` + `test/scripts/pre_push_analyze_always_e2e_test.dart` (conversion-on-touch) + a `test/contracts/` pin; OI-155 = `scripts/check_gate_scripts_wired.dart` + `scripts/gate_scripts_wired_lib.dart` + `scripts/pre-commit.sh` + `.github/workflows/test.yml` skip blocks + the OI board (one minted entry); OI-195 = `scripts/check_sot_behavioral_test_paths.dart`; OI-181 = `scripts/safe_merge.sh` + `test/scripts/safe_merge_test.dart`). One review cycle instead of four.
-- OI-181 is live: `0768a0ce` (Merge branch 'aab-versioncode-bump-44', 2026-09-18) landed without `docs/plan-reviews/aab-versioncode-bump-44.md` (`git cat-file -e 0768a0ce:docs/plan-reviews/aab-versioncode-bump-44.md` → 128) and CI's keystone job went red; `8ffe28fb` repaired it. Third instance (2026-08-30, 2026-09-10, 2026-09-18).
+- OI-181 is live: `0768a0ce` (Merge branch 'aab-versioncode-bump-44', 2026-09-19 00:34 IST) landed without `docs/plan-reviews/aab-versioncode-bump-44.md` (`git cat-file -e 0768a0ce:docs/plan-reviews/aab-versioncode-bump-44.md` → 128) and CI's keystone job went red; `8ffe28fb` repaired it. Third instance (2026-08-30, 2026-09-10, 2026-09-19).
 - OI-220 pays for itself on batches B and C, which rewrite the most contract-tested subsystem (sync): the retro that spawned it measured ~2h lost in one batch to a contract regression first seen at pre-push, twice.
 - OI-195's `existsSync` makes OI-220's registry arm (which selects tests via `behavioral_test_path:`) trustworthy from day one.
 

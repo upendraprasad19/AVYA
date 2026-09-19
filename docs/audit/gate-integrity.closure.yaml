@@ -103,7 +103,8 @@ findings:
       mutations = 4 reds (block deleted 1, case arm widened 2, three-dot →
       two-dot 1 — the last re-run by hand). Third instance of
       merge-without-record closed (2026-08-30, dcb94a93 2026-09-10, 0768a0ce
-      2026-09-18).
+      2026-09-19 — the merge landed at 00:34 IST; three documents in this batch
+      said 09-18 from one copy-pasted sentence, caught by the B-pass).
 
   - id: U5
     title: "check_migrations_live.dart — cannot pass by construction; retire (Gate 14 owns the concept) or redesign the matcher"
@@ -138,5 +139,35 @@ findings:
       File-only) reddens exactly that test, 9 others green. Recorded in
       c7d2e4's mutation ledger.
 
-total: 6
-closed_count: 6
+  # ── B-pass (context-blind Sonnet, own worktree, against a566f94c) ──
+  # docs/reviews/gate-integrity-bpass.md — SHIP-WITH-FIXES, 2 findings, 15
+  # lenses otherwise clean with commands shown; the reviewer re-derived every
+  # cross-document count and ran the full pre-commit loop itself.
+  - id: BP-1
+    title: "P2 — invokesGate treated PRINTED text (heredoc body, invoker-less prose) as an invocation — the shape extractCaseSkips was hardened against one function above"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    verification: >
+      Reproduced with the reviewer's probe before acting (heredoc body → true;
+      "You should run scripts/x by hand" → true). Not exploited today: all 19
+      live invocation lines are `"$DART_BIN" run …` / `dart run …`. Fixed by
+      requiring an invoker token before `run scripts/<gate>` and skipping
+      heredoc bodies (opener line still counts). Two RED-first tests + two
+      mirror tests (26 in the file); M7 / M8 each redden exactly their own
+      test; Gate 33 still PASS on the real tree; the three Gate 33 test files
+      43/43. Recorded in b3e7a1's mutation ledger.
+
+  - id: BP-2
+    title: "P3 — 0768a0ce dated 2026-09-18 in three authoritative documents; the commit is 2026-09-19 00:34 IST"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    notes: >
+      One copy-pasted sentence reached CLAUDE.md §7, the OI-181 board entry
+      and this ledger's U4 while the diagnose-doc, OI-222 and the fix commit
+      message all had it right. Corrected in all three plus the spec and plan
+      (`git grep 0768a0ce | grep 09-18` → 0 afterwards). The lesson is the
+      one this batch keeps teaching: a date typed from memory is a claim;
+      `git show -s --format=%ad` is the source.
+
+total: 8
+closed_count: 8

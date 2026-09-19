@@ -136,15 +136,43 @@ const dynamicLoopMarker = 'scripts/check_*.dart';
 /// invocation-shaped predicate has zero false negatives today. A
 /// skill/command doc counts: `.claude/commands/build-apk.md` is executed by
 /// being read, and its `dart run scripts/<gate>` lines are real invocations.
+///
+/// B-pass finding 1 (gate-integrity, 2026-09-19): the first version was a
+/// bare `contains('run scripts/<gate>')` on non-comment lines, so PRINTED text
+/// counted — a heredoc body (`cat <<'EOF' … dart run scripts/x … EOF`) or a
+/// prose sentence ("You should run scripts/x by hand") both read as wired,
+/// the exact shape `extractCaseSkips` above was hardened against. Two
+/// tightenings: (1) the needle must be INVOKER-prefixed — every live
+/// invocation line in the repo (19, census 2026-09-19 across pre-commit.sh,
+/// commit-msg.sh, test.yml, build-apk.md) is `"$DART_BIN" run scripts/…`,
+/// `$DART_BIN run …`, `${DART_BIN} run …` or `dart run …`; (2) heredoc bodies
+/// are skipped, the opener line itself still counting (an invocation whose
+/// STDIN is a heredoc is real).
 bool invokesGate(String content, String gate) {
-  final needle = 'run scripts/$gate';
+  final invocation = RegExp(
+      r'''(?:"\$DART_BIN"|'\$DART_BIN'|\$\{DART_BIN\}|\$DART_BIN|\bdart)\s+run\s+scripts/'''
+      '${RegExp.escape(gate)}'
+      r'(?![A-Za-z0-9_])');
+  String? heredocTag;
   for (final raw in content.split('\n')) {
     final line = raw.trim();
+    if (heredocTag != null) {
+      if (line == heredocTag) heredocTag = null; // terminator ends the body
+      continue;
+    }
     if (line.startsWith('#')) continue;
-    if (line.contains(needle)) return true;
+    if (invocation.hasMatch(line)) return true;
+    final open = _heredocOpenRe.firstMatch(line);
+    if (open != null) heredocTag = open.group(2);
   }
   return false;
 }
+
+/// `<<EOF`, `<<-EOF`, `<<'EOF'`, `<<"EOF"` — the tag is group 2. Applied only
+/// to a line that did NOT itself invoke the gate, so `dart run scripts/x <<EOF`
+/// counts while the body that follows it does not.
+final _heredocOpenRe =
+    RegExp('''<<-?\\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\\1''');
 
 final _oiRe = RegExp(r'^OI-\d+$');
 

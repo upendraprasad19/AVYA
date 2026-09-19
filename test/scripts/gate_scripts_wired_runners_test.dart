@@ -76,6 +76,42 @@ void main() {
         () => expect(invokesGate(_preCommit, 'check_skipped.dart'), isFalse));
     test('`run scripts/<gate>` on a live line IS',
         () => expect(invokesGate(_preCommit, 'check_explicit.dart'), isTrue));
+
+    // B-pass finding 1 (gate-integrity, 2026-09-19): the first version was a
+    // bare `contains('run scripts/<gate>')` on non-comment lines, so PRINTED
+    // text registered as an invocation -- the same shape extractCaseSkips was
+    // hardened against one function above it. Two mirrors, one test each.
+    test('B-PASS F1: a heredoc BODY naming the gate is printed, not executed',
+        () => expect(
+            invokesGate(
+                "cat <<'EOF'\nReminder: dart run scripts/check_heredoc.dart\nEOF\n",
+                'check_heredoc.dart'),
+            isFalse));
+    test('B-PASS F1: prose without an invoker token ("You should run scripts/x '
+        'by hand") is NOT an invocation',
+        () => expect(
+            invokesGate(
+                'You should run scripts/check_byhand.dart by hand before releasing.\n',
+                'check_byhand.dart'),
+            isFalse));
+    test('MIRROR: an invocation whose STDIN is a heredoc still counts',
+        () => expect(
+            invokesGate(
+                'dart run scripts/check_stdin.dart <<EOF\nsome input\nEOF\n',
+                'check_stdin.dart'),
+            isTrue));
+    test('MIRROR: every invoker spelling the repo uses counts', () {
+      for (final line in [
+        '"\$DART_BIN" run scripts/check_v.dart',
+        '\$DART_BIN run scripts/check_v.dart',
+        '\${DART_BIN} run scripts/check_v.dart',
+        'if ! "\$DART_BIN" run scripts/check_v.dart; then',
+        '        run: dart run scripts/check_v.dart',
+        'dart run scripts/check_v.dart --record',
+      ]) {
+        expect(invokesGate('$line\n', 'check_v.dart'), isTrue, reason: line);
+      }
+    });
   });
 
   group('runnerViolations', () {
