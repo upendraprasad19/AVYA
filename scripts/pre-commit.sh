@@ -331,7 +331,6 @@ for GATE in scripts/check_*.dart; do
     check_plan_review_record_exists.dart|\
     check_unawaited_has_error_sink.dart|\
     check_razorpay_key_flavor.dart|\
-    check_migrations_live.dart|\
     check_onconflict_live_arbiter.dart|\
     check_two_user_cross_account.dart|\
     check_regression_catalog.dart|\

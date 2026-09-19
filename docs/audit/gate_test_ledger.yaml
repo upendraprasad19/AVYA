@@ -409,9 +409,6 @@ check_migration_ledger_paired.dart:
 check_migrations_applied.dart:
   grandfathered: 2026-08-10
 
-check_migrations_live.dart:
-  grandfathered: 2026-08-10
-
 check_mutation_invalidation_set.dart:
   grandfathered: 2026-08-10
 

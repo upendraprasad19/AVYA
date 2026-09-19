@@ -108,21 +108,21 @@ findings:
 
   - id: U5
     title: "check_migrations_live.dart — cannot pass by construction; retire (Gate 14 owns the concept) or redesign the matcher"
-    terminal_state: blocked_on_user
-    reason: >
-      Founder decision (OI-223, minted by the OI-155 fork with the measured
-      evidence): 125 of 139 local migrations were applied raw by the founder
-      and never registered in Supabase's migrations table (75 `applier:
-      founder` entries in backups/applied_migrations.json), so the gate's
-      prefix matcher reports FAIL on the real project and always will; its
-      only documented runner is by hand (docs/runbooks/restore-drill.md:63),
-      where it fails. Recommendation: RETIRE — Gate 14 (check_migrations_applied
-      + applied_migrations.json) already owns "applied live". Retiring touches
-      six sites (script, ledger entry, allowlist entry, two skip lines, the
-      exists-assertion at test/contracts/phase_c_oi_closures_test.dart:81-85,
-      the runbook line). Until the founder chooses, Gate 33 carries it as
-      manual(OI-223), which turns red the moment OI-223 closes without a real
-      runner — the decision cannot go stale silently.
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    verification: >
+      Founder chose RETIRE (OI-223 closed in place). All six sites done in one
+      commit: scripts/check_migrations_live.dart deleted; its
+      docs/audit/gate_test_ledger.yaml entry removed; its _allowList entry in
+      scripts/check_gate_scripts_wired.dart removed (Gate 33 PASS on the real
+      tree, 96 check_*, down from 97 — the stale-key mirror would have FAILED
+      had the entry survived); the two case-skip lines removed from
+      pre-commit.sh (12 entries, was 13) and test.yml (10, was 11);
+      test/contracts/phase_c_oi_closures_test.dart's OI-34 group INVERTED
+      (asserts absence, not deleted, so a silent reintroduction is caught) —
+      58/58 green; docs/runbooks/restore-drill.md step 5 repointed at Gate 14
+      (check_migrations_applied.dart) with a manual cross-check note. No
+      diagnose-doc (a deletion, not a fix/bug/regression commit).
 
   # ── Integration findings (coordinator, Task 5) ───────────────────
   - id: I1

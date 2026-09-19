@@ -103,20 +103,22 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
 > Pinned by `test/scripts/dart_bin_resolver_test.dart`, whose mirror test fails if any hook
 > reverts to a bare `dart run` or drops the `.` source line.
 
-- **`scripts/pre-commit.sh` (gates only, ~98 s measured):** **97** `check_*.dart` files exist
-  (`ls scripts/check_*.dart | wc -l`, re-run 2026-09-19); the loop runs **84** (13 are
-  case-skipped), and 2 more (`check_no_deferral_euphemism`, `check_skipped_discipline_budget`)
-  are invoked explicitly after it, so real pre-commit coverage is **86 of 97** —
-  `check_regression_catalog` makes 87 on a merge only. **Which gates the skip lists may name
-  is no longer prose:** since OI-155 (2026-09-19) Gate 33's allowlist is a typed map of
-  runners (`file(path)` / `loop(preCommit|ci)` / `manual(OI-NNN)`), each checked on every
-  commit — a `file` runner must INVOKE the gate on a live line, a `loop` runner must not
-  case-skip it, a `manual` runner must name an OPEN or IN_PROGRESS OI on the merged boards
-  (CLOSED / absent / unreadable board ⇒ FAIL), and an allowlist key with no script on disk
-  is itself a violation. Four gates are `manual:` today and run NOWHERE by construction —
-  `migrations_live` (OI-223: cannot pass, 125/139 migrations were applied raw and never
-  registered live), `onconflict_live_arbiter` + `two_user_cross_account` (OI-165, 403), and
-  `test_runtime_budget` (OI-101). Closing any of those OIs turns Gate 33 red until the gate
+- **`scripts/pre-commit.sh` (gates only, ~98 s measured):** **96** `check_*.dart` files exist
+  (`ls scripts/check_*.dart | wc -l`, re-run 2026-09-19 after retiring `check_migrations_live.dart`
+  — see below); the loop runs **84** (12 are case-skipped), and 2 more
+  (`check_no_deferral_euphemism`, `check_skipped_discipline_budget`) are invoked explicitly after
+  it, so real pre-commit coverage is **86 of 96** — `check_regression_catalog` makes 87 on a
+  merge only. **Which gates the skip lists may name is no longer prose:** since OI-155
+  (2026-09-19) Gate 33's allowlist is a typed map of runners (`file(path)` / `loop(preCommit|ci)`
+  / `manual(OI-NNN)`), each checked on every commit — a `file` runner must INVOKE the gate on a
+  live line, a `loop` runner must not case-skip it, a `manual` runner must name an OPEN or
+  IN_PROGRESS OI on the merged boards (CLOSED / absent / unreadable board ⇒ FAIL), and an
+  allowlist key with no script on disk is itself a violation. Three gates are `manual:` today and
+  run NOWHERE by construction — `onconflict_live_arbiter` + `two_user_cross_account` (OI-165,
+  403), and `test_runtime_budget` (OI-101). (A fourth, `migrations_live`, was `manual(OI-223)`
+  for the same reason — cannot pass, 125/139 migrations applied raw and never registered live —
+  and was RETIRED in the same batch: OI-223 closed, the script deleted, Gate 14
+  `check_migrations_applied.dart` already owning "applied live".) Closing any of those OIs turns Gate 33 red until the gate
   gets a real runner — that is the point.
   ⚠ These counts are PROSE and no gate validates them (`check_claude_md_citations.dart` checks
   `§N` heading citations, not numeric claims), so they go stale on any commit that adds a gate —

@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**130 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**129 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -137,4 +137,3 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-220 | Contract-sweep gate: pre-push targeted SoT contract testing | one clean batch under `--warn-only`… | 2026-09-19 — shipped on `gate-integrity`… | [:4878](open_issues.md#L4878) |
 | OI-221 | tool_dispatcher defensive date-parse fallbacks can clobber the wrong date… | none | never | [:4964](open_issues.md#L4964) |
 | OI-222 | Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9 | none | never | [:4982](open_issues.md#L4982) |
-| OI-223 | check_migrations_live cannot pass by construction: 125/139 local… | FOUNDER — retire the gate (recommended)… | 2026-09-19 — exact run from the primary… | [:5008](open_issues.md#L5008) |

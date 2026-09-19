@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **98** (49 numbered, 49 by filename only).
+Total gates: **97** (48 numbered, 49 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -63,7 +63,6 @@ Total gates: **98** (49 numbered, 49 by filename only).
 | — | `check_local_date_key_drift.dart` | Ban device-local `YYYY-MM-DD` date-key construction in lib/, i.e. | grandfathered |
 | — | `check_migration_ledger_paired.dart` | assert that whenever a new | grandfathered |
 | 14 | `check_migrations_applied.dart` | Local migrations match the prod state snapshot. | grandfathered |
-| 14b | `check_migrations_live.dart` | Local migrations match LIVE Supabase migration state. | grandfathered |
 | — | `check_mutation_invalidation_set.dart` | Mutation methods must invalidate the canonical provider set per | grandfathered |
 | 8 | `check_naming_audit.dart` | Forbidden legacy patterns absent. | grandfathered |
 | — | `check_naming_conventions.dart` | Enforce naming conventions documented in docs/naming_conventions.md. | grandfathered |

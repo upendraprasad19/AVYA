@@ -90,10 +90,6 @@ const _allowList = <String, List<GateRunner>>{
   // Each `manual:` cites the OPEN OI that owns the reason, and this gate
   // re-checks that status on every commit. Until 2026-09-19 these entries
   // read "runs in /build-apk skill" — build-apk.md never invoked any of them.
-  'check_migrations_live.dart': [
-    GateRunner.manual('OI-223',
-        'Cannot pass by construction: 125/139 local migrations were applied raw by the founder and never registered live (measured 2026-09-19). Its only documented runner is by hand (docs/runbooks/restore-drill.md:63), where it fails. Retire-or-redesign is the founder\'s call.'),
-  ],
   'check_onconflict_live_arbiter.dart': [
     GateRunner.manual('OI-165',
         'Live rollback-txn SQL via the Management API; 403s with the current PAT. No automated runner until OI-165 names the token.'),
