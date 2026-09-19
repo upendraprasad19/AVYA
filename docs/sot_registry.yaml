@@ -2144,7 +2144,7 @@ concepts:
       No status-based carve-out (unlike schedShouldSkipUpsert's
       status=='completed' exemption) -- deliberate, verified not assumed
       (spec §5.3): grepped all of supabase/functions/ for writes to
-      workout_log_exercises/workout_log_sets -- zero (all 10 referencing
+      workout_log_exercises/workout_log_sets -- zero (all 9 referencing
       files are readers). Three migrations contain historical ONE-SHOT
       mutations on these tables -- 057_schema_unique_indexes_h25_h26_h27_h28.sql
       (a one-shot DELETE dedup before creating unique indexes; the spec's

@@ -274,6 +274,19 @@ half is detected. An unchanged row whose fingerprint matches the last
 - First run starts with an empty index -> every row pushes once, healing
   any existing divergence before the index warms.
 
+## Known limitations
+**Gate-coverage note (plan-review round 1, finding I7), non-blocking:**
+`check_schema_column_refs.dart` detects a write's column keys via
+`RegExp("\.$method\(\s*\{")` -- i.e. only an inline `.upsert({` literal.
+After this batch, `workout_log_exercises`'s columns live in the named
+`summaryPayload` variable, so that gate silently stops validating them
+against `backups/live_schema_columns.json` for this call site -- it does
+not fail, it simply checks nothing there. `nutrition_logs` already has the
+identical blind spot for the identical reason (`parentPayload` is already a
+variable there), so this extends a pre-existing accepted pattern to a
+second table rather than introducing a new one. Not fixed by reverting to
+an inline literal -- noted here for anyone auditing gate coverage later.
+
 ## Verification
 - `test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart`
   -- 12 behavioral assertions (fingerprint stability/sensitivity including
