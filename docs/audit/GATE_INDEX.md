@@ -10,19 +10,21 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **98** (48 numbered, 50 by filename only).
+Total gates: **106** (48 numbered, 58 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
 | — | `check_adr_index_fresh.dart` | confirms docs/adr/INDEX.md is up-to-date relative to docs/adr/NNNN-*.md. | grandfathered |
 | — | `check_ai_tool_dispatcher_coverage.dart` | Every WRITE-kind AI tool registered server-side must have a matching | grandfathered |
 | — | `check_alerts.dart` | SessionStart hook script: queries unacknowledged alerts and emits a JSON | grandfathered |
+| — | `check_analyze_narrower_than_lib_in_tooling.dart` | Blocks a committed script/skill from instructing `flutter analyze` scoped | mutation_proven |
 | 48 | `check_apk_release_signed.dart` | the built APK is signed with the RELEASE certificate, not the | grandfathered |
 | 13 | `check_apk_size_within_bounds.dart` | APK size within ±10% of last shipped size. | grandfathered |
 | 51 | `check_app_version_matches_pubspec.dart` | Build-gate script: asserts `AppConstants.appVersion` in | grandfathered |
 | 39 | `check_applied_migrations_ledger.dart` | assert that `backups/applied_migrations.json` is in the structured-record shape | grandfathered |
 | — | `check_authed_invoke_fresh_token.dart` | every authed Edge Function call from the client sends a FRESH token | grandfathered |
 | — | `check_blast_radius_coverage.dart` | Asserts that every top-level directory under `lib/features/`, | grandfathered |
+| — | `check_blast_radius_stdin_usage.dart` | Blocks a STAGED ADDED line that pipes into | mutation_proven |
 | 10 | `check_bugfix_commits_have_diagnose.dart` | Bug-fix commits since last APK build reference a valid diagnose-doc. | grandfathered |
 | — | `check_ci_flutter_version.dart` | CI / dev / Vercel Flutter-version parity. | grandfathered |
 | 26 | `check_claude_md_citations.dart` | assert that every `§N` and `§N.M` citation across CLAUDE.md + nested CLAUDE.md files | grandfathered |
@@ -47,8 +49,10 @@ Total gates: **98** (48 numbered, 50 by filename only).
 | — | `check_equipment_vocab_lockstep.dart` | ⑦ OI-89 — pre-commit gate: EquipmentVocab's four token structures must agree. | mutation_proven |
 | — | `check_exercise_seams.dart` | ⑦ OI-89 Gate A — every exercise-emitting seam is enumerated, not eyeballed. | mutation_proven |
 | 17 | `check_exlog_key_canonical.dart` | APK Test #16.1 / Agent A — source-grep gate. Pins the rule that | grandfathered |
+| — | `check_gate_existssync_file_vs_dir.dart` | Blocks a STAGED, newly-added `File(...).existsSync()` call inside | mutation_proven |
 | — | `check_gate_index_fresh.dart` | confirms docs/audit/GATE_INDEX.md is up-to-date relative to its baked | mutation_proven |
 | 33 | `check_gate_scripts_wired.dart` | assert that every `scripts/check_*.dart` file is invoked from BOTH: - scripts/pre-commit.sh (local enforcement) | mutation_proven |
+| — | `check_gate_source_literal_whitespace_brittleness.dart` | WARN-ONLY advisory: flags a NEW `.contains('...')` / `== '...'` literal | mutation_proven |
 | — | `check_gate_test_ledger.dart` | rule 24 enforcement — every `scripts/check_*.dart` carries exactly one state | mutation_proven |
 | 15 | `check_generic_error_telemetry.dart` | every user-facing generic error message in lib/ must be | grandfathered |
 | — | `check_goal_token_exhaustiveness.dart` | guarantees a fitness-goal | grandfathered |
@@ -61,6 +65,8 @@ Total gates: **98** (48 numbered, 50 by filename only).
 | — | `check_incident_index_fresh.dart` | confirms docs/incidents/INDEX.md is up-to-date. | grandfathered |
 | 28 | `check_jose_version.dart` | assert `jose` is at or above the configured minimum version across every Edge Function. | grandfathered |
 | — | `check_local_date_key_drift.dart` | Ban device-local `YYYY-MM-DD` date-key construction in lib/, i.e. | grandfathered |
+| — | `check_merge_tree_write_tree_form.dart` | flag the legacy `git merge-tree <base> <a> <b>` (3-arg) form in | mutation_proven |
+| — | `check_migration_contains_assertion_uniqueness.dart` | WARN-ONLY. Never exits 1. See migration_contains_uniqueness_lib.dart for | mutation_proven |
 | — | `check_migration_ledger_paired.dart` | assert that whenever a new | grandfathered |
 | 14 | `check_migrations_applied.dart` | Local migrations match the prod state snapshot. | grandfathered |
 | — | `check_mutation_invalidation_set.dart` | Mutation methods must invalidate the canonical provider set per | grandfathered |
@@ -82,6 +88,7 @@ Total gates: **98** (48 numbered, 50 by filename only).
 | 50 | `check_reader_manifest_complete.dart` | enforces the reader-side manifest in | grandfathered |
 | — | `check_regression_catalog.dart` | Pre-merge gate: walks docs/diagnoses/INDEX.md, verifies every bug | grandfathered |
 | 21 | `check_restore_round_trip_coverage.dart` | every `syncX()` method in `lib/core/services/sync/` must | grandfathered |
+| — | `check_safe_wrapper_not_piped.dart` | Blocks a STAGED ADDED line piping `safe_push.sh`/`safe_commit.sh` through | mutation_proven |
 | — | `check_saved_meal_key_canonical.dart` | Diagnose b8d5c2 (2026-06-03) — source-grep gate. Pins the rule that | grandfathered |
 | — | `check_schema_column_refs.dart` | Supabase column-reference validation against the live schema. | grandfathered |
 | 52 | `check_schema_payload_parity.dart` | every NOT NULL column on user-tagged Supabase tables must | grandfathered |
@@ -99,6 +106,7 @@ Total gates: **98** (48 numbered, 50 by filename only).
 | 11 | `check_sync_fanout.dart` | Every sync_method and restore_method declared in the registry | grandfathered |
 | — | `check_sync_hash_skip_atomicity.dart` | OI-204 gate-before-refactor (CLAUDE.md §4.11). Verifies the sync-fingerprint | mutation_proven |
 | — | `check_tab_screen_uses_hive_scaffold.dart` | Tech-debt audit 2026-05-20 / B5 / C1 — pins the contract that every | grandfathered |
+| — | `check_teardown_no_unguarded_sibling_await.dart` | Blocks a STAGED test file whose tearDown/tearDownAll block mixes a | mutation_proven |
 | 22 | `check_telemetry_pii_classification.dart` | every `ErrorTelemetry.recordNonFatal` / `logEvent` callsite | grandfathered |
 | 41 | `check_test_runtime_budget.dart` | assert no individual test exceeds the configured runtime budget. | grandfathered |
 | — | `check_two_user_cross_account.dart` | WI-2 (regression-prevention batch 2026-06-08) — live-DB TWO-USER | grandfathered |
