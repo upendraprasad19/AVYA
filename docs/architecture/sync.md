@@ -145,7 +145,21 @@ Each domain also prunes its index to currently-live keys/slots after the loop, a
 carries its own kill-switch (`disable_sched_hash_skip` / `disable_exlog_hash_skip` /
 `disable_nlog_hash_skip`) restoring the verbatim pre-pattern unconditional full sweep.
 `scripts/check_sync_hash_skip_atomicity.dart` statically guards the store-on-success
-invariant for every domain (gate-before-refactor, CLAUDE.md §4.11).
+invariant for every domain (gate-before-refactor, CLAUDE.md §4.11). **What it can and
+cannot verify, stated plainly so the guarantee isn't overread:** per domain it confirms
+the success flag is declared `true`, that the index-store assignment is guarded by a
+positive (non-negated) `if` on that flag within six lines above it, and — for the
+swallowing-catch half of the invariant — counts the file's total occurrences of
+`<flag> = false;` and compares that count against a hardcoded expected value
+(`sync_hash_skip_atomicity_lib.dart`'s `expectedSwallowCatches`: 1 for exlog's single
+per-set catch, 2 for nlog's item + tail-vacuum catches). **That is a changed-COUNT
+check, not structural "every catch block sets the flag" verification** — a *new*
+swallowing catch that forgets to flip the flag false leaves the total count exactly
+where it was, which the gate cannot distinguish from "nothing changed, still correct."
+Closing that gap would need real catch-block-boundary analysis, which this mechanism
+does not attempt — the count comparison is the cheap, mechanically-checkable
+approximation, not a claim of full coverage (an earlier spec draft overclaimed this;
+corrected at plan-review, spec §6 point 2).
 
 **Domains, in the order the pattern was extended:**
 - `_syncScheduledWorkouts` (H1b Part A, diagnose `b4f7e2`, 2026-06-27) — the original.
@@ -169,6 +183,19 @@ invariant for every domain (gate-before-refactor, CLAUDE.md §4.11).
 byte-identical and had no domain-specific content worth duplicating; each domain keeps its
 own named wrapper (`exlogShouldSkipUpsert` / `nlogShouldSkipUpsert`) and its own fingerprint
 function (the BUNDLING shape genuinely differs per domain).
+
+**`ownerChangedSince` asymmetry (intentional, not a gap this batch introduced):**
+nutrition's postamble guards its hash-index Hive write with
+`if (ownerChangedSince(userId)) return;` immediately before the write
+(`sync_nutrition.dart:565`, ahead of the `nlogHashIndex` persist/clear at `:570-585`) —
+the same idiom every *other* write inside `_syncNutritionLogs` already follows
+(diagnose `e5c2d1` CLASS 1). Scheduled-workouts' and exercise-logs' postambles
+(`sync_workout.dart`) carry **no** `ownerChangedSince` guard anywhere in that file
+(verified: zero matches) — this is not an inconsistency OI-204 introduced silently; it
+is a pre-existing, nutrition-specific idiom that predates this batch (plan-review round
+1, finding B's-C3). Don't "fix" the asymmetry by bolting the guard onto sched/exlog or
+by removing it from nlog without first re-deriving why `_syncNutritionLogs` alone needed
+it.
 
 Full detail: `docs/sot_registry.yaml` (search `payload_hash_index`),
 `docs/diagnoses/2026-09-19-full-rescan-sync-timeout-d3f8a6.md`.
