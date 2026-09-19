@@ -26,25 +26,48 @@
 //          (or allow-listed).
 // Exit 1 = fail.
 //
-// Allowlist: gates that are intentionally NOT in both surfaces (e.g.
-// build-only gates that run from /build-apk skill) are listed here with
-// reason.
+// Allowlist: gates that are intentionally NOT in both loops are listed here
+// with a TYPED runner (gate_scripts_wired_lib.dart `GateRunner`) that this
+// gate re-verifies on every commit — never free prose.
+//
+// OI-155 (gate-integrity batch, 2026-09-19): until this fix `_allowList` was
+// `Map<String, String>` and its prose was read by nothing. Six entries claimed
+// runners that did not exist ("runs in /build-apk skill Gate 14b" — no such
+// section; `grep -ic 14b .claude/commands/build-apk.md` → 0), so six gates ran
+// NOWHERE while this gate reported PASS. Three runner kinds now exist:
+//   file(path)   — path INVOKES the gate (`run scripts/<gate>`, non-comment)
+//   loop(name)   — the named dynamic loop does NOT case-skip it
+//   manual(OI-N) — nothing runs it; the OI is OPEN/IN_PROGRESS on the boards
+//                  (CLOSED / absent / unreadable board ⇒ FAIL — closing the
+//                  blocker without giving the gate a runner turns this red)
+// and an allowlist key with no scripts/<key> on disk is itself a violation.
+// The dynamic-wiring inference for non-allowlisted gates now also requires an
+// INVOCATION (`invokesGate`), not a `contains(name)` mention.
 
 import 'dart:io';
 
 import 'gate_scripts_wired_lib.dart';
+import 'oi_closure_lib.dart' show mergedBoardStatuses;
 
-const _allowList = <String, String>{
+const _allowList = <String, List<GateRunner>>{
   // Gates that run from /build-apk skill, not pre-commit/CI (too slow
   // or require build artifacts).
-  'check_apk_size_within_bounds.dart':
-      'Needs an APK; runs from /build-apk Gate 13.',
-  'check_apk_release_signed.dart':
-      'Needs an APK + apksigner + JDK; runs from /build-apk Gate 48 (post-build).',
-  'check_hooks_installed.dart':
-      'Local-dev hook-presence check; CI runners never run setup-hooks.sh so .git/hooks is absent by design. Runs in pre-commit (hooks present) only; skipped in the CI workflow case-block.',
-  'check_plan_review_record_exists.dart':
-      'P1.A keystone (§4.12) — runs ONLY in the dedicated `plan-review-record` CI job (push-to-main, fetch-depth:0) where the PUSH_BEFORE..HEAD range base is reachable; the shallow pre-commit + main-test loops skip it via their case-blocks.',
+  'check_apk_size_within_bounds.dart': [
+    GateRunner.file('.claude/commands/build-apk.md',
+        'Needs an APK; /build-apk Gate 13.'),
+  ],
+  'check_apk_release_signed.dart': [
+    GateRunner.file('.claude/commands/build-apk.md',
+        'Needs an APK + apksigner + JDK; /build-apk Gate 48 (post-build).'),
+  ],
+  'check_hooks_installed.dart': [
+    GateRunner.loop('preCommit',
+        'Local-dev hook-presence check; CI runners never run setup-hooks.sh, so .git/hooks is absent there by design. Case-skipped in test.yml only.'),
+  ],
+  'check_plan_review_record_exists.dart': [
+    GateRunner.file('.github/workflows/test.yml',
+        'P1.A keystone (§4.12) -- runs ONLY in the dedicated `plan-review-record` CI job (fetch-depth:0) where the PUSH_BEFORE..HEAD range base is reachable; the shallow pre-commit + main-test loops case-skip it.'),
+  ],
   // check_app_version_matches_pubspec.dart was REMOVED from this allowlist
   // 2026-06-07 (in-sync sweep): the constant kept lagging pubspec, so the gate
   // now runs every commit (pre-commit + CI) — not build-time-only.
@@ -55,31 +78,59 @@ const _allowList = <String, String>{
   // test.yml AND absent from build-apk.md. "Advisory" described how it reports,
   // not where it runs, and nothing ran it. Wired into both loops 2026-08-17;
   // it is a pure lib/ source scan (436 callsites, 1.5s) with no live dependency.
-  'check_unawaited_has_error_sink.dart':
-      'Advisory per L34; surfaced in audit reports, not pre-commit gate.',
-  'check_razorpay_key_flavor.dart':
-      '.env.prod is gitignored; runs locally before prod release only (see docs/operations/SECRET_INVENTORY.md).',
-  // The next 4 gates require live Supabase / build state and were dormant
-  // for that reason. Audit 2026-05-20 B1 wiring surfaced existing tech-debt
-  // they detect — those issues are tracked separately and these gates run
-  // manually via /build-apk skill or in dedicated remediation batches.
-  'check_migrations_live.dart':
-      'Requires live Supabase MCP — runs in /build-apk skill Gate 14b, not pre-commit. 1 unapplied migration tracked separately.',
-  'check_onconflict_live_arbiter.dart':
-      'Requires live DB rollback-txn — runs in /build-apk skill, not pre-commit. 3 schema-arbiter conflicts tracked separately.',
-  'check_two_user_cross_account.dart':
-      'Requires live DB rollback-txn — runs in /build-apk skill alongside check_onconflict_live_arbiter.dart (two-user cross-account isolation, d4b8e2/f7e3a1).',
-  'check_regression_catalog.dart':
-      'Runs explicitly on merge commits via scripts/pre-commit.sh:48 (not auto-loop). 1 missing test for swap_undo_snackbar bug tracked separately.',
-  'check_snapshot_contract.dart':
-      'Requires generated snapshot manifest — runs in /build-apk skill. 1 reader-contract violation tracked separately.',
-  'check_test_runtime_budget.dart':
-      'Runs `flutter test --reporter json` internally — too slow for pre-commit. Manual / CI artifact gate (Gate 41 audit T9).',
-  'check_no_deferral_euphemism.dart':
-      'Scans the STAGED diff (git diff --cached) for deferral-euphemism phrases (§4.2) — meaningful ONLY at pre-commit; CI has no staged index. Hard-fail in scripts/pre-commit.sh (baseline soak cleared 2026-06-28); case-skipped from the auto-loop, invoked explicitly.',
-  'check_closes_oi_cited.dart':
-      'Commit-msg gate for the closes-oi convention (§7 pointer table / docs/audit/open_issues.md:17) — takes the proposed commit message file as its REQUIRED argument, which the check_*.dart loop never supplies. Bare invocation is a usage-error exit, not a real gate verdict. Case-skipped from BOTH scripts/pre-commit.sh and the .github/workflows/test.yml loop; wired instead in scripts/commit-msg.sh. Without this entry, the dynamic-wiring inference below (absence from a case-skip block reads as "covered by the loop") misclassifies a guaranteed crash as wired — a9f2c6.',
+  'check_unawaited_has_error_sink.dart': [
+    GateRunner.loop('ci',
+        'ADVISORY (exit 0 by design, --strict to fail). CI\'s log is its only reader: pre-commit.sh runs every loop gate as >/dev/null 2>&1, so it stays case-skipped there -- a 1.7 s no-op nobody can read. Removed from test.yml\'s case-skip 2026-09-19 (OI-155).'),
+  ],
+  'check_razorpay_key_flavor.dart': [
+    GateRunner.file('.claude/commands/build-apk.md',
+        '.env.prod is gitignored; runs locally before a prod release only (see docs/operations/SECRET_INVENTORY.md).'),
+  ],
+  // The next three gates need live Supabase state and run NOWHERE automated.
+  // Each `manual:` cites the OPEN OI that owns the reason, and this gate
+  // re-checks that status on every commit. Until 2026-09-19 these entries
+  // read "runs in /build-apk skill" — build-apk.md never invoked any of them.
+  'check_migrations_live.dart': [
+    GateRunner.manual('OI-223',
+        'Cannot pass by construction: 125/139 local migrations were applied raw by the founder and never registered live (measured 2026-09-19). Its only documented runner is by hand (docs/runbooks/restore-drill.md:63), where it fails. Retire-or-redesign is the founder\'s call.'),
+  ],
+  'check_onconflict_live_arbiter.dart': [
+    GateRunner.manual('OI-165',
+        'Live rollback-txn SQL via the Management API; 403s with the current PAT. No automated runner until OI-165 names the token.'),
+  ],
+  'check_two_user_cross_account.dart': [
+    GateRunner.manual('OI-165',
+        'Wrapper over check_onconflict_live_arbiter.dart; inherits its 403. Documented by-hand runner: docs/runbooks/restore-drill.md:71.'),
+  ],
+  'check_regression_catalog.dart': [
+    GateRunner.file('scripts/pre-commit.sh',
+        'Explicit merge-commit invocation (MERGE_HEAD present), not the auto-loop.'),
+  ],
+  // check_snapshot_contract.dart has NO entry since 2026-09-19 (OI-155): it
+  // runs in BOTH loops (its case-skip lines were deleted; passes today). Its
+  // old entry claimed "runs in /build-apk skill" — nothing ran it.
+  'check_test_runtime_budget.dart': [
+    GateRunner.manual('OI-101',
+        'Spawns the FULL `flutter test --reporter json`; re-arm-or-delete is OI-101 (founder scope call).'),
+  ],
+  'check_no_deferral_euphemism.dart': [
+    GateRunner.file('scripts/pre-commit.sh',
+        'Scans the STAGED diff (git diff --cached) for deferral-euphemism phrases (§4.2) -- meaningful ONLY at pre-commit (CI has no staged index); explicit invocation after the loop, hard-fail since the 2026-06-28 soak.'),
+  ],
+  'check_closes_oi_cited.dart': [
+    GateRunner.file('scripts/commit-msg.sh',
+        'Commit-msg gate for the closes-oi convention (docs/audit/open_issues.md) -- takes the proposed commit message file as its REQUIRED argument, which the check_*.dart loop never supplies; bare invocation is a usage-error exit (a9f2c6). Case-skipped from BOTH loops.'),
+  ],
 };
+
+/// A file's content, or `null` when it does not exist. A plain top-level
+/// function placed AFTER the map on purpose: gate_wiring_args_required_test
+/// slices this file from `const _allowList` to the FIRST `};`, so nothing
+/// that closes with `};` may sit above the map.
+String? _readOrNull(String path) {
+  final f = File(path);
+  return f.existsSync() ? f.readAsStringSync() : null;
+}
 
 // Explicit allowlist for validate_*.dart and audit_*.dart scripts (P1.H/F2).
 // These are NOT in the check_* dynamic loop, so they need an explicit
@@ -165,8 +216,8 @@ void main(List<String> args) async {
   // is picked up automatically). If we detect this pattern, treat as wired
   // unless the script is in the allowlist or explicitly skipped in a case
   // block right after the loop.
-  final preCommitDynamic = preCommitContent.contains('scripts/check_*.dart');
-  final workflowDynamic = workflowContent.contains('scripts/check_*.dart');
+  final preCommitDynamic = preCommitContent.contains(dynamicLoopMarker);
+  final workflowDynamic = workflowContent.contains(dynamicLoopMarker);
 
   // Extract case-block skip patterns (e.g. `check_foo.dart|\\` lines after
   // a `case "$NAME" in` block). If a script appears here, it's intentionally
@@ -175,11 +226,36 @@ void main(List<String> args) async {
   final preCommitCaseSkips = extractCaseSkips(preCommitContent, caseSkipRegex);
   final workflowCaseSkips = extractCaseSkips(workflowContent, caseSkipRegex);
 
+  // The merged OI boards, for `manual:` runners. `null` = the OPEN board is
+  // unreadable, which every manual runner treats as FAIL (an unverifiable
+  // claim is not a satisfied one). An unreadable CLOSED board degrades to
+  // "not on the closed board" — a target that exists only there then reads
+  // as absent and fails, which is the fail-closed direction.
+  final open = _readOrNull('docs/audit/open_issues.md');
+  final boardStatuses = open == null
+      ? null
+      : mergedBoardStatuses(
+          openContent: open,
+          closedContent: _readOrNull('docs/audit/closed_issues.md') ?? '');
+
   for (final script in allChecks) {
-    if (_allowList.containsKey(script)) continue;
-    final inPreCommit = preCommitContent.contains(script) ||
+    if (_allowList.containsKey(script)) {
+      // Allowlisted: the entry's typed runners are CLAIMS; verify each one.
+      unwired.addAll(runnerViolations(
+        gate: script,
+        runners: _allowList[script]!,
+        read: _readOrNull,
+        caseSkipsOf: (c) => extractCaseSkips(c, caseSkipRegex),
+        boardStatuses: boardStatuses,
+      ));
+      continue;
+    }
+    // Not allowlisted: an explicit INVOCATION in the surface, or coverage by
+    // its dynamic loop. A comment or prose mention is not an invocation
+    // (OI-155) — `contains(script)` used to count one.
+    final inPreCommit = invokesGate(preCommitContent, script) ||
         (preCommitDynamic && !preCommitCaseSkips.contains(script));
-    final inWorkflow = workflowContent.contains(script) ||
+    final inWorkflow = invokesGate(workflowContent, script) ||
         (workflowDynamic && !workflowCaseSkips.contains(script));
     if (!inPreCommit && !inWorkflow) {
       unwired.add('$script (not in pre-commit OR workflow)');
@@ -189,6 +265,11 @@ void main(List<String> args) async {
       unwired.add('$script (not in .github/workflows/test.yml)');
     }
   }
+
+  // Mirror (gate_test_ledger_lib.dart's "entry but no script on disk"): an
+  // allowlist key whose script is gone is stale bookkeeping — the retire
+  // path of OI-101 / OI-223 must delete the entry too.
+  unwired.addAll(staleAllowlistViolations(allChecks.toSet(), _allowList.keys));
 
   // --- validate_*.dart and audit_*.dart (P1.H/F2 extension) ---
   // These are NOT in the dynamic check_* loop. Each must either:
@@ -235,6 +316,11 @@ void main(List<String> args) async {
   stderr.writeln('Fix (check_*): add `dart run scripts/<name>.dart` to BOTH:');
   stderr.writeln('  - scripts/pre-commit.sh');
   stderr.writeln('  - .github/workflows/test.yml');
+  stderr.writeln('Fix (allowlisted check_*): make the _allowList runner TRUE --');
+  stderr.writeln('  file(): that file must `run scripts/<name>` on a live line;');
+  stderr.writeln('  loop(): remove the gate from that loop\'s case-skip block;');
+  stderr.writeln('  manual(): cite an OPEN/IN_PROGRESS OI (a CLOSED one means the');
+  stderr.writeln('  gate needs a real runner now, or must be retired with its entry).');
   stderr.writeln('Fix (validate_*/audit_*): add `dart run scripts/<name>.dart`');
   stderr.writeln('  to pre-commit.sh or test.yml, OR add an entry to');
   stderr.writeln('  _explicitAllowList with a reason (on-demand validators only).');

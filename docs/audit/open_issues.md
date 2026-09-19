@@ -5002,3 +5002,44 @@ or equivalent), never via worktree+merge, unless the author is prepared to also 
 plan-review record for the merge. Out of scope for the fix that discovered this (kept
 feature-tier deliberately, to avoid the exact recursion this OI describes) — CLAUDE.md is
 pinned `platform` tier, so this edit needs its own appropriately-reviewed commit.
+
+## OI-223 — check_migrations_live cannot pass by construction: 125/139 local migrations never registered live (75 founder raw-SQL applies) -- retire in favour of Gate 14 or redesign the matcher
+
+- **Status**: OPEN
+- **Blocked on**: FOUNDER — retire the gate (recommended) or redesign its matcher against `backups/applied_migrations.json`'s raw-SQL history
+- **Verified**: 2026-09-19 — exact run from the primary with the PAT: exit 1, `local migrations: 139, live migrations: 130`, `FAIL — 125 local migration(s) NOT applied live`; 14/139 prefix matches
+- **Identified**: 2026-09-19 · filed via mint_oi.sh from branch `worktree-agent-a57ce47ba764ba91c` (gate-integrity batch, OI-155 unit)
+
+`scripts/check_migrations_live.dart` compares every local `supabase/migrations/*.sql`
+numeric prefix (139 distinct prefixes over 142 files; `all_*` skipped) against the live
+versions the Management API lists at `/v1/projects/<id>/database/migrations` (`:58`). Its own header
+(`:27-32`) admits the local→live matcher is a prefix HEURISTIC. It cannot pass by
+construction: `backups/applied_migrations.json` records **75 `applier: founder`** raw-SQL
+applies (25 `claude`), and a raw-SQL apply never registers a version in Supabase's
+migrations table, so those files are "unapplied" to this gate forever. Only 14 of 139
+prefixes match a live version.
+
+Where it runs today: NOWHERE automated. Case-skipped in `scripts/pre-commit.sh:333` and
+`.github/workflows/test.yml:243`; its allowlist prose in `check_gate_scripts_wired.dart`
+claimed "runs in /build-apk skill Gate 14b" — `grep -ic 14b .claude/commands/build-apk.md`
+→ 0, and build-apk's "first failure stops the build" would have stopped every full-gate
+build had it been wired. Its ONLY documented runner is by hand
+(`docs/runbooks/restore-drill.md:63`), where it fails. The OI-155 fix (gate-integrity
+batch) replaces that prose with a machine-checked `GateRunner.manual('OI-223', …)` entry:
+Gate 33 now re-verifies on every commit that THIS OI is still OPEN/IN_PROGRESS — closing
+it without giving the gate a real runner (or deleting the gate) turns Gate 33 red.
+
+**Recommendation: RETIRE.** Gate 14 (`scripts/check_migrations_applied.dart`) +
+`backups/applied_migrations.json` already own "applied live", and the live matcher
+contradicts the project's own raw-SQL apply history. **Retire checklist (six sites, all
+in one commit):** delete `scripts/check_migrations_live.dart`; its
+`docs/audit/gate_test_ledger.yaml` entry (`:391`); its `_allowList` entry in
+`scripts/check_gate_scripts_wired.dart` (the stale-key mirror there FAILS if the file
+goes and the entry stays); its case-skip lines `scripts/pre-commit.sh:333` +
+`.github/workflows/test.yml:243`; the exists-assertion at
+`test/contracts/phase_c_oi_closures_test.dart:81-85` (OI-34's "exists" pin — repoint it
+to the retirement, do not just delete the group); and the by-hand invocation at
+`docs/runbooks/restore-drill.md:63`. **Redesign alternative:** match by file CONTENT
+hash against `backups/applied_migrations.json` (the ledger Gate 14 already validates)
+instead of by live version prefix — then the gate would be a ledger-vs-disk check, which
+Gate 14 already is, which is the argument for retiring.

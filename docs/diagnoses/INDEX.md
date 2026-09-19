@@ -9,6 +9,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### sot_registry_behavioral_test_path_resolution (1 bugs)
 - 2026-09-19 c7d2e4 — `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture…
 
+### gate_fail_closed_discipline (3 bugs)
+- 2026-09-19 b3e7a1 — Six `scripts/check_*.dart` gates ran NOWHERE — not in pre-commit's loop, not in CI's loop, not from /build-apk, not from any hook — while Gate 33 (`scripts/check_gate_scripts_wired.dart`, whose whole…
+- 2026-07-29 d7a3f9 — CI's Audit Gates job failed on 96c6fac2 — the enforcement-infra merge commit that had already landed on main — with "Gate failed: check_closes_oi_cited.dart". The same commit's local pre-commit hook…
+- 2026-07-29 a9f2c6 — Three gates shipped in this batch exited 0 while doing nothing. An OI whose status read `BLOCKED` vanished from OPEN_INDEX.md with no error; an OI whose status line read `- **Status:** CLOSED` escaped…
+
 ### nutrition_ai_text_log_remaining (1 bugs)
 - 2026-09-18 e6c2a9 — Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that after the AI coach logs a meal from chat (log_meal_by_text), the Nutrition…
 
@@ -424,10 +429,6 @@ rather than a Hive box. (1 bugs)
 
 ### ai_coach_daily_cap_enforcement (1 bugs)
 - 2026-07-29 f4a19c — OI-46 (audit finding, re-verified 2026-07-29) named a `channel='in_app'` gap that does not exist as a live value. The real gaps, found during re-verification: (1) chat's free-tier 10/day cap…
-
-### gate_fail_closed_discipline (2 bugs)
-- 2026-07-29 d7a3f9 — CI's Audit Gates job failed on 96c6fac2 — the enforcement-infra merge commit that had already landed on main — with "Gate failed: check_closes_oi_cited.dart". The same commit's local pre-commit hook…
-- 2026-07-29 a9f2c6 — Three gates shipped in this batch exited 0 while doing nothing. An OI whose status read `BLOCKED` vanished from OPEN_INDEX.md with no error; an OI whose status line read `- **Status:** CLOSED` escaped…
 
 ### usage_counter_display_and_vision_cap_value (1 bugs)
 - 2026-07-29 c9e3b1 — OI-45 named `UsageCounterService.increment()` (usage_counter_service.dart:100-106) as CRITICAL — "cross-device race could let users bypass daily caps... Pattern: final c = read(); write(c+1) with no…
@@ -1267,6 +1268,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-19 | c7d2e4 | `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture… | sot_registry_behavioral_test_path_resolution | test/scripts/sot_behavioral_test_paths_gate_test.dart |
+| 2026-09-19 | b3e7a1 | Six `scripts/check_*.dart` gates ran NOWHERE — not in pre-commit's loop, not in CI's loop, not from /build-apk, not from any hook — while Gate 33 (`scripts/check_gate_scripts_wired.dart`, whose whole… | gate_fail_closed_discipline | test/scripts/gate_scripts_wired_runners_test.dart |
 | 2026-09-18 | e6c2a9 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that after the AI coach logs a meal from chat (log_meal_by_text), the Nutrition… | nutrition_ai_text_log_remaining | test/contracts/coach_meal_log_invalidates_remaining_test.dart |
 | 2026-09-18 | b2d9f4 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C5) found three defects: 1. `_appendInjuryToCoachMemory` (tool_dispatcher.dart)… | coach_memory_injury_append | test/contracts/coach_memory_injury_append_mutex_test.dart |
 | 2026-09-18 | b7d4c8 | CI red on `main` (push `8bf79dde`, run 35368296446) — Unit Tests job failed with 2 assertion failures in test/scripts/gitignore_classification_test.dart: "the two classifications are disjoint —… | worktree_retirement_ignored_path_classification | test/scripts/gitignore_classification_test.dart |

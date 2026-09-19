@@ -238,13 +238,11 @@ jobs:
               check_apk_release_signed.dart|\
               check_hooks_installed.dart|\
               check_plan_review_record_exists.dart|\
-              check_unawaited_has_error_sink.dart|\
               check_razorpay_key_flavor.dart|\
               check_migrations_live.dart|\
               check_onconflict_live_arbiter.dart|\
               check_two_user_cross_account.dart|\
               check_regression_catalog.dart|\
-              check_snapshot_contract.dart|\
               check_test_runtime_budget.dart|\
               check_closes_oi_cited.dart)
                 # Razorpay: .env.prod gitignored, CI never sees it.
@@ -254,8 +252,17 @@ jobs:
                 # then a non-zero exit, not a real gate failure. Wired instead
                 # in scripts/commit-msg.sh (mirrors the pre-commit.sh skip for
                 # the identical reason).
-                # Other 4: require live DB / merge context / build artifact.
-                # See scripts/check_gate_scripts_wired.dart allowlist.
+                # The other 9: build artifact (apk_size, apk_release_signed),
+                # no .git/hooks on a CI runner (hooks_installed), the dedicated
+                # plan-review-record job (plan_review_record_exists), live DB /
+                # PAT (migrations_live, onconflict_live_arbiter,
+                # two_user_cross_account), merge context (regression_catalog),
+                # spawns the full suite (test_runtime_budget). Each has a TYPED
+                # runner in scripts/check_gate_scripts_wired.dart's _allowList
+                # (file / loop / manual:OI-N) that Gate 33 re-verifies.
+                # REMOVED 2026-09-19 (OI-155): check_unawaited_has_error_sink
+                # (advisory, exit 0 — this log is its only reader) and
+                # check_snapshot_contract (no live state; passes) now run here.
                 echo "[skip allow-list] $NAME"
                 continue
                 ;;
