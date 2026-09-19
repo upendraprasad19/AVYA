@@ -127,10 +127,22 @@ impact_analysis: >
   retires or redesigns it (OI-223). pre-commit.sh's loop count moves 75->84
   (13 case-skipped, 97 files); test.yml's skip block 13->11 entries.
 mutation_proven: >
-  Five lib mutations + one real-gate mutation, run against the committed green
-  tree with `grep -c` proving each applied and `git checkout --` + empty
-  `git diff` after each. Observed reds are recorded in the "Mutation ledger"
-  section of this document (appended after the run).
+  Five lib mutations + two real-gate mutations, run after commit a664844c
+  against the committed tree, each with `grep -c` proving it applied and
+  `git checkout --` + a 0-line `git diff` after. Lib (22 tests in
+  test/scripts/gate_scripts_wired_runners_test.dart): M1 invokesGate body ->
+  `return content.contains(gate)` = 5 red (comment-only, prose-without-shape,
+  case-skip invokesGate tests + file-runner comment-only and prose-only red
+  paths); M2 `status == 'CLOSED'` -> `'NEVER'` = 1 red (CLOSED OI); M3 empty
+  the `boardStatuses == null` branch body (compiles) = 1 red (unreadable
+  board); M4 staleAllowlistViolations -> `const []` = 1 red (stale key); M5
+  delete the `caseSkipsOf(c).contains(gate)` arm = 1 red (loop case-skips).
+  Sum 9 of 22, exactly the plan's expected 5+1+1+1+1. Real gate: M6
+  `manual('OI-101')` -> `'OI-9999'` = Gate 33 FAIL exit 1 "manual:OI-9999
+  names no OI on either board"; M6b -> `'OI-172'` (CLOSED on the open board)
+  = FAIL exit 1 "manual:OI-172 is CLOSED -- give the gate a real runner or
+  re-file the blocker". Every mutation compiled; none reddened via a compile
+  error; none reddened zero.
 related_bugs:
   - "a9f2c6 (2026-07-29): gates that silently skip what they cannot parse — the same allowlist's dynamic-wiring inference misclassified a guaranteed crash as wired; that fix ADDED an allowlist entry, this one makes every entry checkable"
   - "d7a3f9 (2026-07-29): CI gate loop missing a skip entry — Gate 33 PASSed on the commit that broke CI; its regression test (gate_wiring_args_required_test) constrains this fix's `_allowList` shape (first `};` slice)"
@@ -208,4 +220,21 @@ security gates still do not run until OI-165 names a working token.
 
 ## Mutation ledger
 
-Appended after the run — see the section below.
+Run after commit `a664844c` against the committed tree. Each row: the token
+`grep -c` proved gone (or present, for the real-gate rows), the run, and the
+restore (`git checkout -- <file>`; `git diff <file> | wc -l` → 0 every time).
+
+| # | file | mutation | applied proof | reddened |
+|---|---|---|---|---|
+| M1 | `gate_scripts_wired_lib.dart` | `invokesGate` body → `return content.contains(gate);` | `final needle = 'run scripts/` 1 → 0 | **5**: invokesGate comment-only · prose-without-shape · case-skip; runnerViolations file-runner comment-only · prose-only |
+| M2 | lib | `status == 'CLOSED'` → `'NEVER'` | `status == 'CLOSED'` 1 → 0 | **1**: manual runner citing a CLOSED OI |
+| M3 | lib | `boardStatuses == null` branch body emptied (`else if` chain intact, compiles) | `OI board is unreadable` 1 → 0 | **1**: manual runner with an unreadable board |
+| M4 | lib | `staleAllowlistViolations` → `const []` | `stale -- delete the entry` 1 → 0 | **1**: allowlist key with no script on disk |
+| M5 | lib | delete the `caseSkipsOf(c).contains(gate)` arm | `case-skips it` 1 → 0 | **1**: loop runner for a case-skipped gate |
+| M6 | `check_gate_scripts_wired.dart` | `manual('OI-101')` → `'OI-9999'` | `OI-9999` 0 → 1 | Gate 33 **FAIL exit 1**: `check_test_runtime_budget.dart: manual:OI-9999 names no OI on either board` |
+| M6b | gate | `manual('OI-101')` → `'OI-172'` (CLOSED on `open_issues.md:3559`) | `manual('OI-172'` 0 → 1 | Gate 33 **FAIL exit 1**: `manual:OI-172 is CLOSED -- give the gate a real runner or re-file the blocker` |
+
+Lib sum **9 of 22** (= the plan's expected 5+1+1+1+1). No mutation reddened
+via a compile error (the runner printed test names, never `Error:`); none
+reddened zero. After the last restore `git status --short` was empty and the
+real gate returned to `PASS: all 108 gate/validator scripts covered`.
