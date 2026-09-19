@@ -61,6 +61,11 @@ Map<String, String> _cleanEnv() {
   });
   // Never inherit a real override of the very variable one scenario sets.
   env.remove('PRE_PUSH_FULL');
+  // This test pins ANALYZE placement, not the OI-220 contract sweep the hook
+  // also runs. On Windows the sweep's Dart spawn resolves the REAL flutter
+  // (cmd.exe cannot run an extensionless PATH stub) and would select this very
+  // test -> recursion. The kill switch makes the sweep exit before any work.
+  env['CONTRACT_SWEEP_SKIP'] = '1';
   return env;
 }
 
@@ -149,6 +154,15 @@ void main() {
             'recorded call would be `test`. Got: $calls');
     expect(calls, contains('test'),
         reason: 'the forced full suite must still run');
+    // OI-220: the contract sweep sits between analyze and run_full_suite().
+    // The source-order pin (test/contracts/contract_sweep_wired_test.dart)
+    // cannot show the line is REACHED -- an `if false; then ... fi` wrapper
+    // would pass it. Seeing the runner's own skip line here proves the hook
+    // executes the sweep before run_full_suite()'s exit 0 on a real run.
+    expect(r.stdout.toString(), contains('[contract-sweep] skipped'),
+        reason: 'the sweep line must be reached (CONTRACT_SWEEP_SKIP=1 makes '
+            'it print its skip verdict) before the forced full suite exits. '
+            'stdout:\n${r.stdout}\nstderr:\n${r.stderr}');
   });
 
   test('FEATURE-tier push: the suite is skipped and analyze still runs', () {

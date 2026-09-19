@@ -341,7 +341,28 @@ check_gate_index_fresh.dart:
   evidence: "Making the gate exit 0 unconditionally reddens 2 e2e tests (stale index, missing index)."
 
 check_gate_scripts_wired.dart:
-  grandfathered: 2026-08-10
+  mutation_proven: true
+  test_path:
+    - test/scripts/gate_scripts_wired_runners_test.dart
+    - test/contracts/gate_wiring_args_required_test.dart
+  evidence: >
+    PROMOTED out of the grandfathered set 2026-09-19 (OI-155, gate-integrity
+    batch, diagnose b3e7a1). The allowlist became typed runners
+    (file / loop / manual) checked by scripts/gate_scripts_wired_lib.dart,
+    and the lib got a pure red-path suite (22 tests). Five lib mutations run
+    after the fix commit, each grep -c-proven and restored to a 0-line diff:
+    invokesGate body -> `content.contains(gate)` reddens 5 (comment / prose /
+    case-skip inference plus the two runnerViolations red paths); the manual
+    branch's `status == 'CLOSED'` -> `'NEVER'` reddens 1 (the forcing-function
+    test); deleting the null-board `out.add` reddens 1 (unreadable board must
+    fail closed); staleAllowlistViolations -> `const []` reddens 1; deleting
+    the loop runner's caseSkipsOf arm reddens 1. 9 of 22 red across the five.
+    Two REAL-gate mutations on the live allowlist: a manual target changed to
+    OI-9999 -> FAIL exit 1 naming "manual:OI-9999 names no OI on either
+    board"; a manual target pointed at a CLOSED OI -> FAIL exit 1. The
+    coordinator re-ran the OI-9999 and CLOSED->NEVER legs by hand on the
+    integrated branch (FAIL exit 1; 1 red / 21 green). No compile-error reds,
+    no zero-red mutations.
 
 check_gate_test_ledger.dart:
   mutation_proven: true
@@ -386,9 +407,6 @@ check_migration_ledger_paired.dart:
   grandfathered: 2026-08-10
 
 check_migrations_applied.dart:
-  grandfathered: 2026-08-10
-
-check_migrations_live.dart:
   grandfathered: 2026-08-10
 
 check_mutation_invalidation_set.dart:
@@ -484,7 +502,30 @@ check_snapshot_contract.dart:
   grandfathered: 2026-08-10
 
 check_sot_behavioral_test_paths.dart:
-  grandfathered: 2026-08-10
+  mutation_proven: true
+  test_path:
+    - test/scripts/sot_behavioral_test_paths_gate_test.dart
+  evidence: >
+    PROMOTED out of the grandfathered set 2026-09-19 (OI-195, gate-integrity
+    batch, diagnose c7d2e4). The gate had never opened a cited
+    behavioral_test_path (it validated the value's SHAPE only); it now
+    resolves every behavioral_test_path(_*) value and every repo-shaped path
+    inside presence_only prose / presence_only_reason blocks on disk, via ONE
+    helper feeding both sinks. Ten subprocess tests drive the REAL script
+    against a temp-dir registry (record field `exitCode`). Mutations, each
+    grep -c-proven and restored: `_missingOnDisk` -> `=> null` reddens 7
+    (every detection test, because one helper backs both sinks); the key
+    regex narrowed to `behavioral_test_path\s*:` reddens 1 (sibling
+    `_cqrs` key, registry line 826); comment-strip removed reddens 1 (a real
+    path with a trailing `# id` note reads as missing); the block-scalar
+    collector made to collect zero lines reddens 2 (reason block, blank line
+    inside a block); reverting the helper to `File(...).existsSync()`
+    reddens 1 (a DIRECTORY citation is reported missing -- the integration
+    hardening). 12 reds across 5 mutations, 10-test file; the coordinator
+    re-ran the sibling-key leg by hand on the integrated branch (1 red).
+    Positive control on the real registry's shape: 140 cited paths as empty
+    placeholders + 1 fake concept -> exit 1 naming exactly the two injected
+    paths, 0 false positives.
 
 check_sot_registry_citations.dart:
   mutation_proven: true

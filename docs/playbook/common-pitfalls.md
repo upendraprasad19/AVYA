@@ -97,6 +97,52 @@ on the `flutter test` invocations in `scripts/pre-push.sh` and `.github/workflow
 close the class in one place. A `check_*.dart` gate asserting "spawns a subprocess ⇒ has
 `@Timeout`" is the other option. Neither is done; both are the real fix and are tracked as such.
 
+## Riverpod-3 widget-harness pitfalls (2026-09-19)
+
+**Symptom.** A `testWidgets` file that opens Hive and renders Wardroom widgets fails in one of four
+unrelated-looking ways: a GoogleFonts network error on whichever test renders a style FIRST; a
+`did not complete` hang on a plain `await box.put(...)`; a picker that taps the wrong tile because
+the box it reads is empty; or a provider assertion that reads a DIFFERENT container from the one
+the widget wrote to. All four have one worked reference implementation:
+`test/widgets/compass_redesign_test.dart`. Read the CODE there, not this summary, when in doubt.
+
+**1. GoogleFonts warms up BEFORE any `path_provider` mock exists** (`:14-20` header, `_FontWarmup`
+`:40-63`, warmup test `:66-74`). The repo bundles no fonts, so every `AppTypography` style is fetched
+at runtime and quietly degrades in the harness — UNTIL a test mocks `path_provider`
+(`setUpHiveForTests` does, `test/helpers/hive_test_setup.dart:26-27`), which answers GoogleFonts'
+fetch-and-save path and turns the degrade into a loud error on the first style rendered afterwards.
+The fix is structural: the FIRST test in the file renders every family+weight the file uses, with no
+mock installed, and Hive is opened INSIDE each test body (`await tester.runAsync(setUpHive)`, `:203`),
+never in a global `setUp` that would run ahead of the warmup. GoogleFonts caches per family+weight,
+so the warmup must enumerate the exact variants (`:42-43` lists why each line is there).
+
+**2. Real I/O inside `testWidgets` goes through `tester.runAsync`** (`:203`, `:205-227`, `:259`). A
+`testWidgets` body runs in a fake-async zone; a bare `await HiveService.instance.workoutBox.put(...)`
+never completes and the runner reports `did not complete` minutes later. Every Hive open, put and
+teardown in that file is wrapped: `await tester.runAsync(() => HiveService.instance.workoutBox.put(...))`.
+The same escape hatch is what makes a REAL wall-clock gap possible (`:647-653`: a 5 ms
+`Future.delayed` inside `runAsync` so two taps get different `millisecondsSinceEpoch` ids — the
+fake clock cannot produce that).
+
+**3. Seed every box the widget reads, or the empty state IS the test's path** (`:299-312`). The
+substitute picker reads `exerciseBox`; with it empty the list is empty and the test would tap the
+BACK tile and pass for the wrong reason. The comment at `:299-300` says so. Conversely the
+empty-box shape is a deliberate assertion in its own test (`:262-275`: `NO WORKOUT SCHEDULED TODAY`
++ `intents` empty, citing §4.4 rule 13) — seed for the path you mean to exercise, assert the empty
+state where the empty state is the subject.
+
+**4. `UncontrolledProviderScope(container: container, …)` with a container YOU own** (`:81` creates
+`ProviderContainer()` in `setUpHive`; `:229-232` hands it to the widget; `:247` reads
+`container.read(pendingToolIntentsProvider)` AFTER the interaction; `:85` disposes it in
+`tearDownHive`). A plain `ProviderScope` creates its own container, so a provider the widget wrote
+to is unreachable from the test — the assertion would read a fresh, empty instance and pass or fail
+for reasons unrelated to the widget. The uncontrolled form is what lets the test observe the exact
+container the widget mutated.
+
+**Teardown mirrors setup** (`:84-87`, `:259`): dispose the container, then `tearDownHiveForTests`,
+both via `runAsync`, at the END of the test body — not in a `tearDown` hook that would run outside
+the widget test's zone.
+
 ## The APK toolchain depends on an Android Studio install nothing in this repo records (2026-08-27)
 
 **Symptom.** `flutter build apk` dies in ~2 minutes with

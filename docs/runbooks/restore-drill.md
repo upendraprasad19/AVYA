@@ -59,11 +59,17 @@ Counts should be ≤ prod (snapshot was 7d old; some growth expected).
 
 ### 5. Run the migration-applied gate against the Branch
 
+`scripts/check_migrations_live.dart` was retired 2026-09-19 (OI-223) — its
+local→live prefix matcher could not pass by construction against the real
+project (125/139 migrations applied raw, never registered live). Use Gate 14
+instead, which is the snapshot-based check this drill can actually satisfy:
+
 ```
-dart run scripts/check_migrations_live.dart
+dart run scripts/check_migrations_applied.dart
 ```
-(Point its DB target at the Branch by overriding env vars for the run.)
-All migrations should be present.
+Cross-check `backups/applied_migrations.json` against the Branch's migration
+history by hand (`list_migrations` MCP call) — this drill is exactly the
+occasion to catch snapshot drift Gate 14 cannot see on its own.
 
 ### 5b. Run the two-user cross-account isolation gate against the Branch
 

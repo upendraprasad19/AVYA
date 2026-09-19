@@ -131,12 +131,13 @@ fi
 #     comment held only for the push to main.)
 #   - the full suite stays blast-radius-tiered there, unchanged.
 #
-# 89 `check_*.dart` files exist; the loop below runs 75 (14 are case-skipped).
-# 2 of those 14 (check_no_deferral_euphemism, check_skipped_discipline_budget)
-# are invoked EXPLICITLY below, so real pre-commit coverage is 77 of 89 — 78 on
-# a merge, where check_regression_catalog also runs. Quoting only "75"
+# 97 `check_*.dart` files exist; the loop below runs 84 (13 are case-skipped).
+# 2 of those 13 (check_no_deferral_euphemism, check_skipped_discipline_budget)
+# are invoked EXPLICITLY below, so real pre-commit coverage is 86 of 97 — 87 on
+# a merge, where check_regression_catalog also runs. Quoting only "84"
 # understates it the same way the old "38" overstated it. Counts corrected
-# 2026-08-17 (they read 86/71/73); re-derive rather than trust them:
+# 2026-09-19 (OI-155: they read 89/75/77 while 97 files existed, and
+# check_snapshot_contract left the skip list); re-derive rather than trust them:
 #   ls scripts/check_*.dart | wc -l
 #   grep -cE '^[[:space:]]+check_[a-z_0-9]+\.dart(\||\))' scripts/pre-commit.sh
 #
@@ -307,11 +308,11 @@ fi
 
 echo "[pre-commit] Running tech-debt audit gates (bounded-parallel)..."
 # Lean-workflow batch (2026-06-01): the check_*.dart gates ran sequentially.
-# 89 gate files exist; this loop runs 75 (14 case-skipped below). Two more
+# 97 gate files exist; this loop runs 84 (13 case-skipped below). Two more
 # (check_no_deferral_euphemism, check_skipped_discipline_budget) are invoked
-# explicitly after the loop, so real pre-commit coverage is 77 of 89.
-# Corrected 2026-08-17 (review round 2): this line said "86 ... 71 (15 skipped)"
-# while CLAUDE.md, corrected earlier in the SAME batch, already said 89/75/77.
+# explicitly after the loop, so real pre-commit coverage is 86 of 97.
+# Corrected 2026-09-19 (OI-155): this line said "89 ... 75 (14 skipped)" while
+# 97 files existed, and check_snapshot_contract was removed from the skips.
 # Run them with BOUNDED concurrency (PRE_COMMIT_GATE_JOBS, default 4) to shave
 # wall-time without spawning 28 Dart VMs at once (same OOM ceiling discipline as
 # Gradle -Xmx on this 16 GB box). MUST preserve the literal `scripts/check_*.dart`
@@ -330,11 +331,9 @@ for GATE in scripts/check_*.dart; do
     check_plan_review_record_exists.dart|\
     check_unawaited_has_error_sink.dart|\
     check_razorpay_key_flavor.dart|\
-    check_migrations_live.dart|\
     check_onconflict_live_arbiter.dart|\
     check_two_user_cross_account.dart|\
     check_regression_catalog.dart|\
-    check_snapshot_contract.dart|\
     check_test_runtime_budget.dart|\
     check_no_deferral_euphemism.dart|\
     check_closes_oi_cited.dart|\
@@ -348,9 +347,12 @@ for GATE in scripts/check_*.dart; do
       # that read as coverage and provided none. It is advisory by design, so
       # wiring it reports without being able to block.
       # Razorpay gate: .env.prod is user-only / gitignored secret state.
-      # Other gates: require live DB / merge context / build artifact —
-      # run via /build-apk skill, NOT pre-commit. See
-      # scripts/check_gate_scripts_wired.dart allowlist for rationale.
+      # Every other skip here has a TYPED runner in
+      # scripts/check_gate_scripts_wired.dart's _allowList (file / loop /
+      # manual:OI-N) that Gate 33 re-verifies on every commit — the old
+      # "run via /build-apk skill" note was false for four of them (OI-155).
+      # check_snapshot_contract.dart was REMOVED from this list 2026-09-19:
+      # it needs no live state and passes, so it runs in both loops now.
       # check_skipped_discipline_budget.dart: ships --warn-only (§4.11
       # gates-before-refactor baseline window — 2 pre-existing open waivers
       # from 2026-05-11 are >14d old; remove --warn-only once waivers are

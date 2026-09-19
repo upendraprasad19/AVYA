@@ -231,6 +231,66 @@ if [ -n "${_REC_CONTENT:-}" ]; then
 fi
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# ABSENT-RECORD PRECHECK (OI-181, 2026-09-19) -- ADVISORY; every failure path
+# stays silent. The bpass precheck above opens with `[ -n "$_REC_CONTENT" ]`,
+# so a branch with NO record at all was the one shape it could never see --
+# and that is the shape that has cost a merge unwind three times (2026-08-30;
+# dcb94a93 on 2026-09-10; 0768a0ce on 2026-09-19, whose repair 8ffe28fb
+# authored the record after the fact).
+#
+# Mirrors check_plan_review_record_exists.dart:617-620 + :790-796: a record is
+# required iff the branch's blast-radius is >= account. Three-dot (merge-base)
+# because the merge commit does not exist yet; refs/heads/ on BOTH sides
+# because a same-named tag resolves first (see the tag test in
+# test/scripts/safe_merge_test.dart); --no-renames + quotePath=false mirror
+# the gate's own diff flags (:309-315). The gate's exemptions (dependabot
+# manifest-only, bare version bump) are deliberately NOT mirrored: 0768a0ce
+# was a version bump and the gate failed it (OI-222).
+#
+# Residues, stated: this fires only on the safe_merge.sh path (`gh pr merge`
+# and a raw `git merge` bypass it); an `origin/foo` spelling is silent (same
+# as the bpass precheck -- refs/heads/origin/foo does not exist); and the
+# classifier's SECURITY DEFINER content rule reads the WORKING TREE
+# (blast_radius_content_rules_lib.dart:58-62), so pre-merge a branch's
+# SECURITY DEFINER migration classifies `platform`, not `catastrophic` --
+# still >= account, the warning fires, but the tier it prints can understate.
+if [ -z "${_REC_CONTENT:-}" ] \
+   && git rev-parse --verify --quiet "refs/heads/${BRANCH}" >/dev/null 2>&1 \
+   && [ -r "$REPO_ROOT/scripts/blast_radius_from_diff.dart" ] \
+   && [ -r "$REPO_ROOT/docs/blast_radius.yaml" ]; then
+  _PRE_DART="dart"
+  if [ -r "$REPO_ROOT/scripts/_dart_bin.sh" ] && sh -n "$REPO_ROOT/scripts/_dart_bin.sh" 2>/dev/null; then
+    . "$REPO_ROOT/scripts/_dart_bin.sh" || true
+    _PRE_DART="$(resolve_dart_bin 2>/dev/null || echo dart)"
+  fi
+  _PRE_PATHS="$(git -c core.quotePath=false diff --no-renames --name-only "refs/heads/main...refs/heads/${BRANCH}" 2>/dev/null || true)"
+  _PRE_TIER=""
+  if [ -n "$_PRE_PATHS" ]; then
+    # Same preamble-tolerant extraction as pre-push.sh:167-170: `dart run` may
+    # prepend a "Running build hooks..." banner on the SAME line, so match the
+    # token anywhere (-oE), never anchored.
+    _PRE_TIER="$(printf '%s\n' "$_PRE_PATHS" \
+      | "$_PRE_DART" run scripts/blast_radius_from_diff.dart - 2>/dev/null \
+      | grep -oE 'Blast-radius: (feature|account|platform|catastrophic)' \
+      | tail -1 | awk '{print $2}' || true)"
+    if [ -z "${_PRE_TIER:-}" ]; then
+      # Bad news vs no news: paths changed but the classifier produced nothing.
+      echo "[safe_merge] NOTE: could not classify '$BRANCH' (classifier produced no tier) -- the absent-record precheck is inconclusive, not clean." >&2
+    fi
+  fi
+  case "${_PRE_TIER:-}" in
+    account|platform|catastrophic)
+      echo "[safe_merge] WARNING: '$BRANCH' is blast-radius=$_PRE_TIER (>= account) but has NO plan-review record at $_REC on that branch." >&2
+      echo "  CI's keystone gate reads the record AT THE MERGE COMMIT, so merging now means the" >&2
+      echo "  only repair is unwinding this merge (it cost exactly that on 2026-08-30, 2026-09-10 and 2026-09-19)." >&2
+      echo "  Write docs/plan-reviews/${_REC_SLUG}.md on '$BRANCH' FIRST (CLAUDE.md §4.12.3)." >&2
+      echo "  (Advisory only -- proceeding. CI is the authoritative gate.)" >&2
+      ;;
+  esac
+fi
+# ---------------------------------------------------------------------------
+
 echo "[safe_merge] main is caught up with origin/main ($LOCAL_MAIN_SHA). Merging '$BRANCH'..."
 
 LOG="$(mktemp 2>/dev/null || echo "/tmp/safe_merge_$$.log")"

@@ -433,4 +433,111 @@ void main() {
     expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
     expect('${r.stdout}${r.stderr}', isNot(contains('unwinding this merge')));
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ABSENT-RECORD PRECHECK (OI-181, 2026-09-19).
+  //
+  // The bpass precheck above starts with `if [ -n "$_REC_CONTENT" ]`, so a
+  // branch with NO record at all was the one shape it could never see — and
+  // that is the shape that has cost a merge unwind three times (2026-08-30,
+  // `dcb94a93` 2026-09-10, `0768a0ce` 2026-09-19). The keystone gate
+  // (check_plan_review_record_exists.dart:617-620, :790-796) requires a
+  // record iff the branch's blast-radius is >= account; this precheck asks the
+  // same question one step earlier, from the three-dot
+  // `refs/heads/main...refs/heads/<branch>` range. ADVISORY like its sibling:
+  // it warns and still merges.
+  //
+  // The tests above run WITHOUT the classifier in the fixture (copyScripts
+  // copies only safe_merge.sh + _git_lock.sh), so the block is silent for all
+  // of them by its own `[ -r ... ]` guards. These three install it.
+
+  /// The absent-record precheck classifies `refs/heads/main...BRANCH`; the
+  /// fixture needs the real classifier to do so (copyScripts copies only
+  /// safe_merge.sh + _git_lock.sh — see :52-57). Idempotent: a second call is a
+  /// no-op. Commits the four files onto the fixture's `main` AND pushes, so
+  /// safe_merge.sh's freshness check (`main` == `origin/main`) still passes.
+  void installClassifier(String primary) {
+    if (File('$primary/docs/blast_radius.yaml').existsSync()) return;
+    for (final rel in [
+      'scripts/blast_radius_from_diff.dart',
+      'scripts/blast_radius_content_rules_lib.dart',
+      'scripts/_dart_bin.sh',
+      'docs/blast_radius.yaml',
+    ]) {
+      final dst = File('$primary/$rel')..parent.createSync(recursive: true);
+      dst.writeAsBytesSync(File('$srcRoot/$rel').readAsBytesSync());
+    }
+    _run('git', ['add', '-A'], primary);
+    _run('git', ['commit', '-q', '-m', 'fixture: classifier'], primary);
+    expect(_run('git', ['push', '-q', 'origin', 'main'], primary).exitCode, 0,
+        reason: 'setup: main must stay equal to origin/main after installing '
+            'the classifier, or safe_merge.sh refuses on freshness');
+  }
+
+  /// A branch off main that adds ONE file at [path] and no plan-review record.
+  /// Same shape as makeFeatureBranch (:103-110): `-B <name> main` (explicit
+  /// start point, never the current HEAD), parameterising only the path.
+  String makeBranchAdding(String primary, String name, String path) {
+    _run('git', ['checkout', '-q', '-B', name, 'main'], primary);
+    File('$primary/$path')
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('-- probe\n');
+    _run('git', ['add', '-A'], primary);
+    _run('git', ['commit', '-qm', 'branch: $name'], primary);
+    _run('git', ['checkout', '-q', 'main'], primary);
+    return name;
+  }
+
+  test('RED PATH: warns when a >= account branch has NO plan-review record',
+      () {
+    installClassifier(primary);
+    // supabase/migrations/** classifies `platform` (docs/blast_radius.yaml:62).
+    final branch = makeBranchAdding(
+        primary, 'no-record-platform', 'supabase/migrations/900_probe.sql');
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+    expect(r.exitCode, 0, reason: 'advisory: ${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', contains('NO plan-review record'),
+        reason: 'the keystone gate will fail this merge in CI; the precheck '
+            'that previews it must say so BEFORE the merge exists');
+    expect('${r.stdout}${r.stderr}', contains('blast-radius=platform'),
+        reason: 'the warning names the tier the real classifier computed, so '
+            'a reader can check it against docs/blast_radius.yaml');
+    expect('${r.stdout}${r.stderr}', contains('unwinding this merge'),
+        reason: 'and must say WHY it matters now rather than later');
+  });
+
+  test(
+      'stays silent for a feature-tier branch with no record even with the '
+      'classifier present', () {
+    installClassifier(primary);
+    final branch = makeBranchAdding(
+        primary, 'no-record-feature-classified', 'feature-only.txt');
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', isNot(contains('NO plan-review record')),
+        reason: 'the gate itself requires no record below account tier; a '
+            'precheck that warns here is noise, and noise is how a real '
+            'warning gets skimmed past');
+  });
+
+  test(
+      'three-dot: a platform-tier change that landed on MAIN after the branch '
+      'was cut does not warn', () {
+    installClassifier(primary);
+    final branch =
+        makeBranchAdding(primary, 'cut-before-main-moved', 'feature.txt');
+    File('$primary/supabase/migrations/901_main_only.sql')
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('-- landed on main after the cut\n');
+    _run('git', ['add', '-A'], primary);
+    _run('git', ['commit', '-q', '-m', 'main: migration'], primary);
+    expect(_run('git', ['push', '-q', 'origin', 'main'], primary).exitCode, 0,
+        reason: 'setup: main must stay equal to origin/main');
+    final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    expect('${r.stdout}${r.stderr}', isNot(contains('NO plan-review record')),
+        reason: 'two-dot (`main..branch` compares the two TREES) would report '
+            "main's own migration as the branch's change and warn about a "
+            'branch that changed one feature-tier file');
+  });
 }

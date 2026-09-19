@@ -78,20 +78,23 @@ void main() {
     });
   });
 
-  group('OI-34 check_migrations_live.dart exists', () {
-    test('script file exists with --release-style live verify', () {
+  group('OI-34 check_migrations_live.dart -- RETIRED (OI-223, 2026-09-19)', () {
+    test('the live-verify script no longer exists on disk', () {
+      // Retired, not merely disabled: the local->live prefix matcher could
+      // not pass by construction (125/139 local migrations were applied raw
+      // by the founder and never registered live -- measured 2026-09-19).
+      // Gate 14 (check_migrations_applied.dart + backups/applied_migrations
+      // .json) already owns "applied live" and has no such false-failure
+      // mode. Founder decision, gate-integrity batch (OI-155/OI-223).
+      // If this assertion goes red because the file exists again, that is a
+      // real re-introduction of the OI-223 defect -- fix the matcher and
+      // ledger it properly, do not just restore the file.
       final f = File('scripts/check_migrations_live.dart');
-      expect(f.existsSync(), isTrue,
-          reason: 'expected scripts/check_migrations_live.dart');
-      final src = f.readAsStringSync();
-      expect(
-        src.contains('api.supabase.com/v1/projects/') &&
-            src.contains('/database/migrations'),
-        isTrue,
-        reason:
-            'live verify script must hit Supabase Management API '
-            '/v1/projects/<id>/database/migrations endpoint',
-      );
+      expect(f.existsSync(), isFalse,
+          reason:
+              'scripts/check_migrations_live.dart was retired (OI-223); its '
+              'reappearance with no ledger/allowlist entry would silently '
+              'run nowhere again, the exact OI-155 shape.');
     });
   });
 
