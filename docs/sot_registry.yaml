@@ -5271,7 +5271,7 @@ concepts:
         method: deleteAll
         notes: delegates to Hive box.deleteAll; wrapped for auto-open guard
       - file: lib/core/services/hive_user_session.dart
-        line_range: 402-423
+        line_range: 425-456
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
@@ -6832,9 +6832,9 @@ concepts:
       - { file: lib/core/services/seed_service.dart, line: 36, method: "SeedService._() constructor → _registerLifecycle()", notes: "Seeds are shared-box; reset is a no-op placeholder." }
     reader_manifest_complete: true
     readers:
-      - { file: lib/core/services/hive_user_session.dart, line: 268, method: "_openForUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Fires after static owner fields + listenable flip to the new user." }
-      - { file: lib/core/services/hive_user_session.dart, line: 400, method: "_closeAllLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Sign-out path." }
-      - { file: lib/core/services/hive_user_session.dart, line: 437, method: "_deleteAllFilesForCurrentUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "DPDP delete-account / factory-reset path." }
+      - { file: lib/core/services/hive_user_session.dart, line: 286, method: "_openForUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Fires after static owner fields + listenable flip to the new user." }
+      - { file: lib/core/services/hive_user_session.dart, line: 418, method: "_closeAllLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Sign-out path." }
+      - { file: lib/core/services/hive_user_session.dart, line: 455, method: "_deleteAllFilesForCurrentUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "DPDP delete-account / factory-reset path." }
     hive:
       box: in_memory_only
       key_prefix: ""

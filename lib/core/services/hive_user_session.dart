@@ -192,7 +192,20 @@ class HiveUserSession {
         await Hive.openBox(boxName);
       }
     }
-    await Future.wait(userScopedBoxRoots.map(openOne));
+    // §4.6 feature-flag protocol (platform-tier path, B-pass finding
+    // 2026-09-20): `disable_parallel_hive_box_open` restores the exact
+    // pre-Obs-4 sequential behavior verbatim, in case a device-specific
+    // Hive/IO quirk makes concurrent opens of the 7 user-scoped boxes
+    // unsafe in practice despite there being no documented open-order
+    // dependency among them.
+    if (HiveService.instance.configBox.get('disable_parallel_hive_box_open') ==
+        true) {
+      for (final root in userScopedBoxRoots) {
+        await openOne(root);
+      }
+    } else {
+      await Future.wait(userScopedBoxRoots.map(openOne));
+    }
 
     _currentOwnerHash = hash;
     _currentOwnerFullId = userId;

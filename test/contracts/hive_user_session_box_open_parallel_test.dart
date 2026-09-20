@@ -67,4 +67,42 @@ void main() {
         reason:
             'obs 4 — the 7 user-scoped boxes must open in parallel, mirroring hive_service.dart:77-82');
   });
+
+  test(
+      'disable_parallel_hive_box_open restores the sequential fallback and '
+      'still opens every box (B-pass finding, 2026-09-20 — §4.6 feature-flag '
+      'protocol for a platform-tier path)', () async {
+    HiveService.instance.configBox.put('disable_parallel_hive_box_open', true);
+    addTearDown(() =>
+        HiveService.instance.configBox.delete('disable_parallel_hive_box_open'));
+
+    await HiveUserSession.openForUser('test-user-sequential-fallback');
+
+    for (final root in [
+      HiveService.userBoxName,
+      HiveService.workoutBoxName,
+      HiveService.nutritionBoxName,
+      HiveService.healthBoxName,
+      HiveService.coachBoxName,
+      HiveService.customBoxName,
+      HiveService.notificationsBoxName,
+    ]) {
+      final boxName = HiveUserSession.namespacedBoxName(
+          root, 'test-user-sequential-fallback');
+      expect(Hive.isBoxOpen(boxName), isTrue,
+          reason: 'the sequential fallback must open every user-scoped box, '
+              'not silently skip the ones a parallel Future.wait would have '
+              'caught in the same pass');
+    }
+  });
+
+  test('openForUser source guards the parallel path behind '
+      'disable_parallel_hive_box_open', () {
+    final src =
+        File('lib/core/services/hive_user_session.dart').readAsStringSync();
+    expect(src, contains("configBox.get('disable_parallel_hive_box_open')"),
+        reason: 'platform-tier paths require a feature-flag guard (§4.6); '
+            'the parallel box-open must remain reversible to the verbatim '
+            'pre-Obs-4 sequential loop without a code change');
+  });
 }
