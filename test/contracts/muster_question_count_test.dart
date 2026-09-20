@@ -2,14 +2,16 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Pin the post-Phase-2 question count for `MusterScreen`. After dropping
-/// Q1 (`why_now`) and Q2 (`definition_of_winning`) per founder direction
-/// (APK Test #15.4 / B2a), exactly 3 questions remain: injuries → wake
-/// time → physique focus. The progress bar shows 3 dots, and the first
-/// question prompt is now the injuries question.
+/// Pin the post-diagnose-e2b8a4 (2026-09-19) question count for
+/// `MusterScreen`. Injuries and wake/workout-time were retired as LIVE
+/// writer/reader drift (injuries duplicated + silently overwrote Details
+/// screen's onboarding answer; wake/workout-time duplicated Edit Profile,
+/// which already has full UI for it). Exactly ONE question remains:
+/// physique focus — moved to run BEFORE the induction narrative + I COMMIT
+/// so nothing is asked after commit.
 ///
 /// Without this lock-down, a future "let's add a question back" change
-/// would silently drift the UX.
+/// would silently drift the UX and reintroduce the double-ask.
 ///
 /// **Why source-grep instead of widget render:** `MusterScreen` uses
 /// `WardButton` which uses `GoogleFonts.getFont('Fraunces', ...)`. In
@@ -18,8 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// assertions pass — and disabling runtime fetching just changes the
 /// failure mode (the bundled fallback isn't shipped in test mode
 /// either). A pure source-grep avoids the widget render entirely while
-/// still pinning the contract: number of question dots + presence/
-/// absence of specific captain-bubble prompts.
+/// still pinning the contract.
 void main() {
   late String src;
 
@@ -28,71 +29,75 @@ void main() {
         .readAsStringSync();
   });
 
-  test('progress bar generates exactly 3 dots, not 5', () {
+  test('no multi-question progress bar or dispatch switch remain', () {
     expect(
-      RegExp(r'List\.generate\(\s*3\s*,').hasMatch(src),
-      isTrue,
-      reason: 'Expected `List.generate(3, ...)` in `_buildProgress` '
-          'so the bar renders 3 dots — one per remaining muster question.',
-    );
-    expect(
-      RegExp(r'List\.generate\(\s*5\s*,').hasMatch(src),
+      RegExp(r'List\.generate\(\s*[35]\s*,').hasMatch(src),
       isFalse,
-      reason: 'Found `List.generate(5, ...)` — Q1 (why_now) and Q2 '
-          '(definition_of_winning) should be dropped (APK Test #15.4 / B2a). '
-          'Update progress bar to 3 dots.',
-    );
-  });
-
-  test('Q1 (why_now) and Q2 (definition_of_winning) widgets/handlers removed',
-      () {
-    expect(src.contains('_whyNowCtrl'), isFalse,
-        reason:
-            '_whyNowCtrl field must be removed (Q1 dropped per founder direction).');
-    expect(src.contains('_winningCtrl'), isFalse,
-        reason:
-            '_winningCtrl field must be removed (Q2 dropped per founder direction).');
-    expect(src.contains('_buildQ1'), isFalse,
-        reason: '_buildQ1 widget must be removed (Q1 dropped).');
-    expect(src.contains('_buildQ2'), isFalse,
-        reason: '_buildQ2 widget must be removed (Q2 dropped).');
-    expect(src.contains('_onSubmitQ1'), isFalse,
-        reason: '_onSubmitQ1 handler must be removed (Q1 dropped).');
-    expect(src.contains('_onSubmitQ2'), isFalse,
-        reason: '_onSubmitQ2 handler must be removed (Q2 dropped).');
-    expect(src.contains('Why now?'), isFalse,
-        reason:
-            'Captain bubble text "Why now?" must be removed from MusterScreen.');
-    expect(src.contains('What does winning'), isFalse,
-        reason:
-            'Captain bubble text "What does winning..." must be removed.');
-  });
-
-  test('injuries / wake / physique-focus questions still present', () {
-    expect(src.contains('_buildQ3'), isTrue,
-        reason: 'Q3 (injuries) must remain — now the first question.');
-    expect(src.contains('_buildQ4'), isTrue,
-        reason: 'Q4 (wake / workout time) must remain — now the second.');
-    expect(src.contains('_buildQ5'), isTrue,
-        reason: 'Q5 (physique focus) must remain — now the third / final.');
-    expect(src.contains('injuries or niggles'), isTrue,
-        reason: 'Injuries captain bubble copy must be intact.');
-  });
-
-  test('switch dispatches Q3/Q4/Q5 in renumbered order (0/1/2)', () {
-    // _buildCurrentQ should map case 0 -> Q3, case 1 -> Q4, case 2 -> Q5.
-    final dispatchPattern = RegExp(
-      r'case\s+0\s*:\s*\n?\s*return\s+_buildQ3\(\)\s*;[\s\S]*?'
-      r'case\s+1\s*:\s*\n?\s*return\s+_buildQ4\(\)\s*;[\s\S]*?'
-      r'case\s+2\s*:\s*\n?\s*return\s+_buildQ5\(\)\s*;',
+      reason: 'MusterScreen must not render a multi-segment progress bar — '
+          'there is exactly one question now, no progression to show.',
     );
     expect(
-      dispatchPattern.hasMatch(src),
-      isTrue,
+      src.contains('_buildCurrentQ'),
+      isFalse,
       reason:
-          '_buildCurrentQ switch must dispatch case 0->_buildQ3, case 1->_buildQ4, '
-          'case 2->_buildQ5 after Q1+Q2 drop. The renumbering keeps the original '
-          'method names (Q3/Q4/Q5) so coachBox keys stay unchanged.',
+          'The question-index switch (_buildCurrentQ) must be gone along '
+          'with the questions it used to dispatch between.',
     );
+  });
+
+  test('injuries and wake/workout-time widgets/handlers removed', () {
+    expect(src.contains('_buildQ3'), isFalse,
+        reason: '_buildQ3 (injuries) must be removed — retired question.');
+    expect(src.contains('_buildQ4'), isFalse,
+        reason:
+            '_buildQ4 (wake/workout time) must be removed — retired question.');
+    expect(src.contains('_onSubmitQ3'), isFalse,
+        reason: '_onSubmitQ3 handler must be removed.');
+    expect(src.contains('_onSubmitQ4'), isFalse,
+        reason: '_onSubmitQ4 handler must be removed.');
+    expect(src.contains('_injuriesCtrl'), isFalse,
+        reason: '_injuriesCtrl field must be removed.');
+    expect(src.contains('_wakeTime'), isFalse,
+        reason: '_wakeTime field must be removed.');
+    expect(src.contains('_workoutTime'), isFalse,
+        reason: '_workoutTime field must be removed.');
+    expect(src.contains('injuries or niggles'), isFalse,
+        reason: 'Injuries captain-bubble copy must be gone.');
+    expect(src.contains('WAKE TIME'), isFalse,
+        reason: 'Wake-time tile copy must be gone.');
+  });
+
+  test('physique-focus question is the only one, asked unconditionally', () {
+    expect(src.contains('_buildQuestion'), isTrue,
+        reason:
+            'A single _buildQuestion method must render the one remaining '
+            'question (physique focus) — no index-based dispatch needed.');
+    expect(src.contains('_physiqueFocus'), isTrue,
+        reason: 'Physique-focus state must remain.');
+    // NOTE: 'extra emphasis' straddles a line break between two adjacent
+    // string literals in muster_screen.dart ('...want extra ' +
+    // 'emphasis? Pick...') — a raw source-grep for the concatenated phrase
+    // never matches even though the RUNTIME string does contain it. Search
+    // for a phrase that lives entirely within one literal instead.
+    expect(src.contains('Pick one, your plan will weight that area'), isTrue,
+        reason: 'Physique-focus captain-bubble copy must be intact.');
+  });
+
+  test('completion navigates onward to induction, not to /home directly', () {
+    expect(src.contains("context.go('/coach/induction')"), isTrue,
+        reason:
+            'MusterScreen must hand off to InductionScreen — muster now '
+            'runs BEFORE the narrative + I COMMIT (diagnose e2b8a4), so '
+            'nothing is asked after commit.');
+    expect(src.contains("context.go('/home')"), isFalse,
+        reason:
+            'MusterScreen must not navigate straight home — that is now '
+            'InductionScreen\'s job, after I COMMIT.');
+    expect(src.contains('completeMuster'), isFalse,
+        reason:
+            'MusterScreen must not stamp completion — the terminal '
+            'induction_completed_at stamp moved to InductionScreen\'s I '
+            'COMMIT handler (renamed completeInduction), since muster is '
+            'no longer the last step.');
   });
 }

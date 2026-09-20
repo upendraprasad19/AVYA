@@ -16,36 +16,25 @@ void main() {
     await tearDownHiveForTests(tempDir);
   });
 
-  test('all 5 muster answers persist to coachBox', () async {
-    await InductionService.instance
-        .recordMusterAnswer('why_now', 'wedding October');
-    await InductionService.instance
-        .recordMusterAnswer('definition_of_winning', 'feel strong');
-    await InductionService.instance
-        .recordMusterAnswer('known_injuries', ['lower back', 'right knee']);
-    await InductionService.instance
-        .recordMusterAnswer('typical_wake_time', '06:30');
-    await InductionService.instance
-        .recordMusterAnswer('preferred_workout_time', '07:00');
+  test('the one muster answer (physique focus) persists to coachBox',
+      () async {
+    // Diagnose e2b8a4 (2026-09-19): injuries and wake/workout-time were
+    // retired as muster questions — recordMusterAnswer now rejects them.
+    // See test/contracts/muster_question_count_test.dart +
+    // muster_profile_bridge_test.dart for the retirement contract.
     await InductionService.instance
         .recordMusterAnswer('body_part_priorities', ['back', 'shoulders']);
 
-    expect(
-        HiveService.instance.coachBox.get('why_now'), 'wedding October');
-    expect(HiveService.instance.coachBox.get('definition_of_winning'),
-        'feel strong');
-    expect(HiveService.instance.coachBox.get('known_injuries'),
-        ['lower back', 'right knee']);
-    expect(HiveService.instance.coachBox.get('typical_wake_time'), '06:30');
-    expect(
-        HiveService.instance.coachBox.get('preferred_workout_time'), '07:00');
     expect(HiveService.instance.coachBox.get('body_part_priorities'),
         ['back', 'shoulders']);
   });
 
-  test('completeMuster sets induction_completed_at', () async {
+  test('completeInduction sets induction_completed_at', () async {
+    // Renamed from completeMuster (diagnose e2b8a4) — muster is no longer
+    // the last step of the sequence, so the terminal stamp is fired from
+    // InductionScreen's I COMMIT handler instead.
     await InductionService.instance.recordCommitment();
-    await InductionService.instance.completeMuster();
+    await InductionService.instance.completeInduction();
     expect(
         HiveService.instance.coachBox.get('induction_completed_at'),
         isA<String>());
@@ -59,15 +48,23 @@ void main() {
     );
   });
 
-  test('Q3 NONE/SKIP stores [none]', () async {
-    // Simulates the skip path in _onSubmitQ3(skipped: true)
-    await InductionService.instance
-        .recordMusterAnswer('known_injuries', ['none']);
-    expect(
-        HiveService.instance.coachBox.get('known_injuries'), ['none']);
+  test('retired muster keys throw ArgumentError', () async {
+    for (final key in [
+      'known_injuries',
+      'typical_wake_time',
+      'preferred_workout_time',
+      'why_now',
+      'definition_of_winning',
+    ]) {
+      expect(
+        () => InductionService.instance.recordMusterAnswer(key, 'value'),
+        throwsA(isA<ArgumentError>()),
+        reason: '$key must be rejected — retired muster question',
+      );
+    }
   });
 
-  test('Q5 None chip stores empty list', () async {
+  test('None chip stores empty list', () async {
     // When user selects 'None' chip, body_part_priorities stores []
     await InductionService.instance
         .recordMusterAnswer('body_part_priorities', <String>[]);

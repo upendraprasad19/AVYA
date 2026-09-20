@@ -1,31 +1,48 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/features/ai_coach/widgets/typing_indicator.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
-import 'package:icanbefitter/shared/widgets/responsive_picker_builder.dart';
 
-/// 3-question muster — captures injuries + schedule + body-part focus.
-/// Sequential reveal with typing pause.
+/// One-question muster — captures physique focus.
 ///
-/// Route: /coach/muster (entered from InductionScreen after I COMMIT)
+/// Route: /coach/muster (entered from Plan screen's "REPORT FOR DUTY",
+/// BEFORE InductionScreen's narrative + I COMMIT — diagnose e2b8a4,
+/// 2026-09-19). Runs first so nothing is asked AFTER the user commits;
+/// I COMMIT is the true final action of the sequence.
 ///
-/// After Q5 commits, fires [InductionService.completeMuster] and navigates
-/// to /home. Each answer is persisted immediately via
-/// [InductionService.recordMusterAnswer].
+/// Answer is persisted immediately via
+/// [InductionService.recordMusterAnswer], then navigates straight to
+/// /coach/induction. [InductionService.completeInduction] (the terminal
+/// `induction_completed_at` stamp) is fired from InductionScreen's I COMMIT
+/// handler, not here — this screen no longer marks the sequence complete.
 ///
 /// Sequence: typing indicator (1100ms) → reveal question → user answers →
-/// CONTINUE → typing indicator → next question. Repeat × 3.
+/// CONTINUE → /coach/induction.
 ///
-/// Note: question identifiers in coachBox keep the original Q3/Q4/Q5
-/// naming (`known_injuries`, `typical_wake_time`, `preferred_workout_time`,
-/// `body_part_priorities`). Q1 (`why_now`) and Q2 (`definition_of_winning`)
-/// were dropped per founder direction (APK Test #15.4 / B2a) — they were
-/// high-friction essay prompts with low AI-context value. Their keys are
-/// retained in `InductionService._allowedMusterKeys` so legacy data still
-/// round-trips on read.
+/// History (diagnose e2b8a4, 2026-09-19): this screen used to ask 3
+/// questions (injuries, wake/workout time, physique focus — renumbered from
+/// the original 5-question muster after Q1/Q2 were dropped per APK Test
+/// #15.4/B2a). Injuries and wake/workout-time were removed as LIVE writer/reader
+/// drift, not just redundant UX:
+///  - Injuries duplicated Details screen's own onboarding collection
+///    (`profile['injuries']`), and muster's `_bridgeToProfile` had no
+///    "don't clobber" guard — muster's answer silently overwrote whatever
+///    the user told Details, since muster always runs after onboarding.
+///  - Wake/workout-time had no onboarding collection point at all, but
+///    Edit Profile already has full UI for both (`profile['wake_up_time']`
+///    / `profile['preferred_workout_time']`) — asking again in muster was
+///    pure duplication. `morning-alert` already degrades gracefully for a
+///    null `wake_up_time` (a 07:00 IST fallback quarter, not silence).
+/// Their coachBox keys (`known_injuries`, `typical_wake_time`,
+/// `preferred_workout_time`) are retained as READ-ONLY in
+/// [InductionService] solely so pre-existing users' old answers still
+/// migrate onto their profile via the one-shot backfill.
 class MusterScreen extends ConsumerStatefulWidget {
   const MusterScreen({super.key});
 
@@ -34,22 +51,10 @@ class MusterScreen extends ConsumerStatefulWidget {
 }
 
 class _MusterScreenState extends ConsumerState<MusterScreen> {
-  /// Current question index 0..2. After Q5 commits, [_completed] flips true.
-  ///
-  /// Indices map to the original Q3 → Q5 sequence (Q1/Q2 were dropped):
-  ///   0 → injuries (was Q3)
-  ///   1 → wake time + workout time (was Q4)
-  ///   2 → body-part focus (was Q5, now single-select)
-  int _qIdx = 0;
   bool _typing = true;
-  bool _completed = false;
+  bool _submitting = false;
 
-  // Q3 — injuries
-  final _injuriesCtrl = TextEditingController();
-  // Q4 — wake/workout time
-  TimeOfDay? _wakeTime;
-  TimeOfDay? _workoutTime;
-  // Q5 — single-select matching profile.physique_focus enum
+  // Single-select matching profile.physique_focus enum
   // (see edit_profile_screen.dart _buildPhysiqueFocusSelector line ~980).
   static const _physiqueFocusOptions = <(String, String)>[
     ('balanced', 'Balanced — all-round'),
@@ -62,113 +67,48 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
   @override
   void initState() {
     super.initState();
-    _showTypingThen(0);
+    _showTyping();
   }
 
-  Future<void> _showTypingThen(int qIdx) async {
-    if (!mounted) return;
-    setState(() {
-      _typing = true;
-      _qIdx = qIdx;
-    });
+  Future<void> _showTyping() async {
     await Future.delayed(const Duration(milliseconds: 1100));
     if (!mounted) return;
     setState(() => _typing = false);
   }
 
-  @override
-  void dispose() {
-    _injuriesCtrl.dispose();
-    super.dispose();
-  }
+  // ── Submit ───────────────────────────────────────────────────────────────
 
-  // ── Submit handlers ────────────────────────────────────────────────────────
-
-  Future<void> _onSubmitQ3({bool skipped = false}) async {
-    final List<String> injuries;
-    if (skipped) {
-      injuries = ['none'];
-    } else {
-      final raw = _injuriesCtrl.text.trim();
-      if (raw.isEmpty) {
-        injuries = ['none'];
-      } else {
-        injuries = raw
-            .split(',')
-            .map((s) => s.trim().toLowerCase())
-            .where((s) => s.isNotEmpty)
-            .toList();
-      }
+  Future<void> _onSubmit() async {
+    if (_physiqueFocus == null || _submitting) return;
+    setState(() => _submitting = true);
+    try {
+      // Wrap single value in 1-element List so the existing coachBox key
+      // shape (List<String>) is preserved. ai_snapshot_builder reads the
+      // PROFILE field this bridges to (profile['physique_focus']), not this
+      // coachBox key directly — see diagnose e2b8a4.
+      await InductionService.instance.recordMusterAnswer(
+        'body_part_priorities',
+        [_physiqueFocus!],
+      );
+      if (!mounted) return;
+      context.go('/coach/induction');
+    } catch (e) {
+      // B-pass finding (e2b8a4 round 2): recordMusterAnswer can throw
+      // (GuardedBox.put's StateError during the documented auth/Hive
+      // owner-disagreement race window — auth_hive_owner_agreement SoT).
+      // Without this catch, _submitting stayed true forever on a throw,
+      // permanently latching CONTINUE unresponsive with no visible error —
+      // reset on failure only; success navigates away so the flag is moot.
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      unawaited(ErrorTelemetry.logEvent(
+        'muster_submit_failed',
+        message: e.toString(),
+      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save — try again, Recruit.')),
+      );
     }
-    await InductionService.instance.recordMusterAnswer('known_injuries', injuries);
-    await _showTypingThen(1); // was 3 — renumbered after dropping Q1/Q2.
-  }
-
-  Future<void> _onSubmitQ4() async {
-    if (_wakeTime == null || _workoutTime == null) {
-      _toast('Both times required, Recruit.');
-      return;
-    }
-    await InductionService.instance
-        .recordMusterAnswer('typical_wake_time', _formatTime(_wakeTime!));
-    await InductionService.instance
-        .recordMusterAnswer('preferred_workout_time', _formatTime(_workoutTime!));
-    await _showTypingThen(2); // was 4 — renumbered after dropping Q1/Q2.
-  }
-
-  Future<void> _onSubmitQ5() async {
-    if (_physiqueFocus == null) {
-      _toast('Pick one focus, Recruit.');
-      return;
-    }
-    // Wrap single value in 1-element List so the existing coachBox key
-    // shape (List<String>) is preserved. ai_coach_repository reads this as
-    // `(coach.get('body_part_priorities') as List?) ?? const <String>[]`
-    // — no consumer change needed. (APK Test #15.4 / B2d.)
-    await InductionService.instance.recordMusterAnswer(
-      'body_part_priorities',
-      [_physiqueFocus!],
-    );
-    await _completeMuster();
-  }
-
-  Future<void> _completeMuster() async {
-    setState(() => _completed = true);
-    await InductionService.instance.completeMuster();
-    // Final message lingers briefly before navigating
-    await Future.delayed(const Duration(seconds: 3));
-    if (!mounted) return;
-    context.go('/home');
-  }
-
-  // ── Utilities ──────────────────────────────────────────────────────────────
-
-  String _formatTime(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
-    );
-  }
-
-  Future<void> _pickTime(bool isWake) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: isWake
-          ? const TimeOfDay(hour: 6, minute: 30)
-          : const TimeOfDay(hour: 7, minute: 0),
-      // Obs#5: keep the OK/Cancel action row on-screen at short viewports.
-      builder: responsivePickerBuilder,
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      if (isWake) {
-        _wakeTime = picked;
-      } else {
-        _workoutTime = picked;
-      }
-    });
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -183,54 +123,18 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!_completed) _buildProgress(),
-              const SizedBox(height: 16),
-              if (_typing && !_completed)
+              if (_typing)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: TypingIndicator(),
                 ),
-              if (!_typing && !_completed) _buildCurrentQ(),
-              if (_completed) _buildFinalMessage(),
+              if (!_typing) _buildQuestion(),
             ],
           ),
         ),
       ),
     );
   }
-
-  Widget _buildProgress() {
-    return Row(
-      children: List.generate(3, (i) {
-        final filled = i <= _qIdx;
-        return Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            height: 3,
-            decoration: BoxDecoration(
-              color: filled ? AppColors.accent : AppColors.border,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildCurrentQ() {
-    switch (_qIdx) {
-      case 0:
-        return _buildQ3(); // injuries (now first)
-      case 1:
-        return _buildQ4(); // wake/workout time
-      case 2:
-        return _buildQ5(); // body part focus (single-select, physique_focus)
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  // ── Captain bubble (matches InductionScreen pattern) ───────────────────────
 
   Widget _buildBubble(String prompt) {
     return Container(
@@ -252,147 +156,20 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
     );
   }
 
-  // ── Q3: Injuries ───────────────────────────────────────────────────────────
-
-  Widget _buildQ3() {
+  Widget _buildQuestion() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildBubble(
-            'Any old injuries or niggles I should plan around? Be specific — knee, '
-            'lower back, shoulder, anything that flares. Comma-separate.'),
-        TextField(
-          controller: _injuriesCtrl,
-          maxLines: 2,
-          autofocus: true,
-          decoration: _inputDecoration(hint: 'lower back, right knee'),
-          style: const TextStyle(color: Colors.white),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextButton(
-                onPressed: () => _onSubmitQ3(skipped: true),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.textDim,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text(
-                  'NONE / SKIP',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: WardButton(
-                label: 'CONTINUE',
-                onPressed: () => _onSubmitQ3(),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // ── Q4: Wake time + workout time ───────────────────────────────────────────
-
-  Widget _buildQ4() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildBubble(
-            'What time do you usually wake up, and when can you train?'),
-        Row(
-          children: [
-            Expanded(
-              child: _buildTimeTile(
-                label: 'WAKE TIME',
-                value: _wakeTime,
-                onTap: () => _pickTime(true),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildTimeTile(
-                label: 'WORKOUT TIME',
-                value: _workoutTime,
-                onTap: () => _pickTime(false),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        WardButton(label: 'CONTINUE', onPressed: _onSubmitQ4),
-      ],
-    );
-  }
-
-  Widget _buildTimeTile({
-    required String label,
-    required TimeOfDay? value,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          border: Border.all(
-            color: value != null ? AppColors.accent : AppColors.border,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: AppColors.accent,
-                letterSpacing: 1.4,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value != null ? _formatTime(value) : '—',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: value != null ? Colors.white : AppColors.textMute,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Q5: Physique focus (single-select, mirrors profile.physique_focus) ────
-
-  Widget _buildQ5() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildBubble(
-            'Where do you want to put extra emphasis? Pick one — your plan '
-            'will weight that area.'),
+            'One quick thing before we deploy — where do you want extra '
+            'emphasis? Pick one, your plan will weight that area.'),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: _physiqueFocusOptions.map((opt) {
             final selected = _physiqueFocus == opt.$1;
             return GestureDetector(
-              onTap: () => _setPhysiqueFocus(opt.$1),
+              onTap: () => setState(() => _physiqueFocus = opt.$1),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 padding:
@@ -419,64 +196,10 @@ class _MusterScreenState extends ConsumerState<MusterScreen> {
         ),
         const SizedBox(height: 16),
         WardButton(
-          label: 'COMPLETE MUSTER',
-          onPressed: _physiqueFocus == null ? null : _onSubmitQ5,
+          label: 'CONTINUE',
+          onPressed: _physiqueFocus == null ? null : _onSubmit,
         ),
       ],
-    );
-  }
-
-  void _setPhysiqueFocus(String key) {
-    setState(() => _physiqueFocus = key);
-  }
-
-  // ── Final message ──────────────────────────────────────────────────────────
-
-  Widget _buildFinalMessage() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 48),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppColors.accent.withValues(alpha: 0.4),
-          ),
-        ),
-        child: const Text(
-          'Muster complete, Recruit. File updated. Tomorrow at 06:30 IST you '
-          'receive your first daily brief. Carry on.',
-          style: TextStyle(
-            fontSize: 16,
-            height: 1.6,
-            color: AppColors.coachBubbleTextBright,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Input decoration ───────────────────────────────────────────────────────
-
-  InputDecoration _inputDecoration({required String hint}) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: AppColors.textMute),
-      filled: true,
-      fillColor: AppColors.card,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppColors.border),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppColors.border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppColors.accent, width: 1.5),
-      ),
     );
   }
 }

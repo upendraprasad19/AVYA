@@ -443,37 +443,51 @@ keys:
 
   - key: known_injuries
     type: list
-    writer_line: 209
+    writer_line: 560
     readers: []
     prompt_passthrough: true
     notes: |
-      Muster Q3. Bridged to profile.injuries via InductionService.
+      RETIRED as a muster question (diagnose e2b8a4, 2026-09-19) — it
+      duplicated Details screen's own onboarding collection and, worse,
+      muster's answer silently overwrote it (no clobber guard). Now reads
+      profile.injuries DIRECTLY (the field onboarding's Details screen
+      writes), not a muster-only coachBox mirror. Old muster answers
+      (pre-retirement) still land here via the one-shot backfill in
+      InductionService, since that backfill also targets profile.injuries.
 
   - key: typical_wake_time
     type: scalar
-    writer_line: 210
+    writer_line: 562
     readers: []
     prompt_passthrough: true
     notes: |
-      Muster Q4. Bridged to profile.wake_up_time.
+      RETIRED as a muster question (diagnose e2b8a4, 2026-09-19) — Edit
+      Profile already has full UI for this field and muster was pure
+      duplication. Now reads profile.wake_up_time DIRECTLY instead of the
+      muster-only coachBox mirror, so it reflects a later Edit Profile
+      change instead of going stale after muster.
 
   - key: preferred_workout_time
     type: scalar
-    writer_line: 211
+    writer_line: 563
     readers: []
     prompt_passthrough: true
     notes: |
-      Muster Q5. Bridged to profile.preferred_workout_time (migration
-      063).
+      RETIRED as a muster question (diagnose e2b8a4, 2026-09-19), same
+      reasoning as typical_wake_time above. Now reads
+      profile.preferred_workout_time DIRECTLY.
 
   - key: body_part_priorities
     type: list
-    writer_line: 213
+    writer_line: 564
     readers: []
     prompt_passthrough: true
     notes: |
-      Muster Q5 (renumbered). Bridged first-element to
-      profile.physique_focus.
+      Muster's one remaining question (physique focus), moved to run
+      BEFORE the induction narrative + I COMMIT (diagnose e2b8a4,
+      2026-09-19). Now reads profile.physique_focus DIRECTLY instead of
+      the muster-only coachBox mirror, so an Edit Profile change made
+      after muster no longer leaves this permanently stale.
 
   - key: pr_timeline_summary
     type: map

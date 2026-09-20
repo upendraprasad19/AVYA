@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
@@ -11,8 +12,10 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Captain's induction sequence: 3 paced messages + I COMMIT contract.
 ///
-/// Routed from REPORT FOR DUTY on Plan screen (router task B6) when the user
-/// has not yet committed ([InductionService.hasCommitted] == false).
+/// Routed from MusterScreen (diagnose e2b8a4, 2026-09-19 — muster's one
+/// remaining question now runs BEFORE this screen, so nothing is asked
+/// AFTER I COMMIT; it's the true final action of the whole sequence, not
+/// followed by more questions).
 ///
 /// Reveal sequence:
 ///   t=0       → typing indicator
@@ -20,12 +23,14 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 ///   t+3800ms  → typing indicator
 ///   t+5200ms  → Msg 2 (rank pledge — gold emphasis) revealed; pause 3000ms
 ///   t+8200ms  → typing indicator
-///   t+9600ms  → Msg 3 (muster bridge) + I COMMIT button revealed
+///   t+9600ms  → Msg 3 (closing) + I COMMIT button revealed
 ///
 /// Tap I COMMIT:
 ///   → [InductionService.recordCommitment()] (Hive + fire-and-forget sync)
+///   → [InductionService.completeInduction()] (terminal stamp — muster's
+///     question already happened, so this is the last outstanding step)
 ///   → "Contract sealed." shown for 700ms
-///   → context.go('/coach/muster')
+///   → context.go('/home')
 class InductionScreen extends ConsumerStatefulWidget {
   const InductionScreen({super.key});
 
@@ -89,11 +94,32 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
   Future<void> _onCommit() async {
     if (_stage == 7) return; // guard double-tap
     setState(() => _stage = 7);
-    await InductionService.instance.recordCommitment();
+    try {
+      await InductionService.instance.recordCommitment();
+      await InductionService.instance.completeInduction();
+    } catch (e) {
+      // B-pass finding (e2b8a4 round 2, same class as MusterScreen's
+      // _onSubmit): either awaited call can throw (GuardedBox.put's
+      // StateError during the documented auth/Hive owner-disagreement race
+      // window). Without this catch, _stage stuck at 7 renders "Contract
+      // sealed." — a FALSE success message — while I COMMIT is never
+      // actually recorded and the user never reaches /home. Reset to 6 so
+      // the button reappears for a retry.
+      if (!mounted) return;
+      setState(() => _stage = 6);
+      unawaited(ErrorTelemetry.logEvent(
+        'induction_commit_failed',
+        message: e.toString(),
+      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save — try again, Recruit.')),
+      );
+      return;
+    }
     if (!mounted) return;
     await Future.delayed(_commitBeat);
     if (!mounted) return;
-    context.go('/coach/muster');
+    context.go('/home');
   }
 
   String get _firstName {
@@ -269,8 +295,7 @@ class _InductionScreenState extends ConsumerState<InductionScreen> {
   Widget _buildMsg3() {
     return const _CoachBubble(
       child: Text(
-        "Before we deploy, your file is missing a few entries. "
-        "Quick muster — five questions, three minutes. Then we're operational.",
+        "Your file's complete, Recruit. Nothing left but to make it official.",
         style: TextStyle(
           fontSize: 15,
           height: 1.6,

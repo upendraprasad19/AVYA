@@ -6,6 +6,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### muster_to_profile_bridge (2 bugs)
+- 2026-09-19 d6f1b8 — Founder-flagged verbosity + a live writer/reader-drift bug found while investigating it. Muster asked 3 questions (injuries, wake/workout time, physique focus) AFTER the induction narrative's "I…
+- 2026-05-12 8c4ee3 — After completing the post-onboarding muster flow (MusterScreen) and entering shoulders as a known injury and legs as the body-part priority, Edit Profile continued to show injuries=['none'] and…
+
+### responsive_picker_host (2 bugs)
+- 2026-09-19 e2b8a4 — THREE friend-reported live-web bugs from the same voice-message batch. Two are live-reproduced in-session (not just hypothesized): (1) on the onboarding DOB date picker, the…
+- 2026-06-13 e8a2c1 — Obs#5 (live web E2E, potential onboarding BLOCKER): on the ~698px web mobile- frame the stock Material TIME picker (muster Q2 wake/train time) showed its OK/Cancel action row BELOW the visible frame…
+
 ### nutrition_ai_text_log_remaining (1 bugs)
 - 2026-09-18 e6c2a9 — Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that after the AI coach logs a meal from chat (log_meal_by_text), the Nutrition…
 
@@ -653,9 +661,6 @@ rather than a Hive box. (1 bugs)
 ### expanded_starved_by_fixed_siblings (1 bugs)
 - 2026-06-13 b9c4f1 — Obs#7 (live web E2E, cosmetic): on the AI food-analysis result card (ai_breakdown_card._buildItemRow), item names ("Boiled Eggs", "Chicken Breast 100g") rendered VERTICALLY — one character per line.…
 
-### responsive_picker_host (1 bugs)
-- 2026-06-13 e8a2c1 — Obs#5 (live web E2E, potential onboarding BLOCKER): on the ~698px web mobile- frame the stock Material TIME picker (muster Q2 wake/train time) showed its OK/Cancel action row BELOW the visible frame…
-
 ### onboarding_preview_commit_calc_parity (1 bugs)
 - 2026-06-13 f1b6d4 — Obs#6 (live web E2E): the onboarding plan-PREVIEW card (plan_screen step 05) showed "2867 KCAL" but the SAVED + home-displayed daily_calories was 3200 — the number the user commits to differed from…
 
@@ -1097,9 +1102,6 @@ rather than a Hive box. (1 bugs)
 ### last_performance_per_set_semantics (1 bugs)
 - 2026-05-12 a8f1c2 — "Active workout screen pre-fills REPS input with 85 on every set of Hanging Leg Raise (4 prescribed sets × 14 reps, bodyweight). 85 is the sum of the user's previous 7-set session…
 
-### muster_to_profile_bridge (1 bugs)
-- 2026-05-12 8c4ee3 — After completing the post-onboarding muster flow (MusterScreen) and entering shoulders as a known injury and legs as the body-part priority, Edit Profile continued to show injuries=['none'] and…
-
 ### workout_log_exercises_input_validation (1 bugs)
 - 2026-05-12 e6a2d4 — "LAST: 50KG · 135 REPS" rendered above Leg Extension in active workout screen — 135 reps per set is unrealistic. Cloud `workout_log_exercises` had 3 corrupt rows from May 7 with set_number=15 +…
 
@@ -1263,6 +1265,8 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-19 | d6f1b8 | Founder-flagged verbosity + a live writer/reader-drift bug found while investigating it. Muster asked 3 questions (injuries, wake/workout time, physique focus) AFTER the induction narrative's "I… | muster_to_profile_bridge | test/contracts/muster_to_profile_bridge_behavioral_test.dart |
+| 2026-09-19 | e2b8a4 | THREE friend-reported live-web bugs from the same voice-message batch. Two are live-reproduced in-session (not just hypothesized): (1) on the onboarding DOB date picker, the… | responsive_picker_host | test/contracts/responsive_picker_host_test.dart, test/contracts/wake_workout_time_picker_dial_only_test.dart, test/contracts/dob_picker_calendar_only_and_builder_test.dart, test/contracts/mobile_frame_mediaquery_test.dart |
 | 2026-09-18 | e6c2a9 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that after the AI coach logs a meal from chat (log_meal_by_text), the Nutrition… | nutrition_ai_text_log_remaining | test/contracts/coach_meal_log_invalidates_remaining_test.dart |
 | 2026-09-18 | b2d9f4 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md, item C5) found three defects: 1. `_appendInjuryToCoachMemory` (tool_dispatcher.dart)… | coach_memory_injury_append | test/contracts/coach_memory_injury_append_mutex_test.dart |
 | 2026-09-18 | b7d4c8 | CI red on `main` (push `8bf79dde`, run 35368296446) — Unit Tests job failed with 2 assertion failures in test/scripts/gitignore_classification_test.dart: "the two classifications are disjoint —… | worktree_retirement_ignored_path_classification | test/scripts/gitignore_classification_test.dart |

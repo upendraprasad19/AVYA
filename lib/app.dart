@@ -190,7 +190,7 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
           );
         };
         // Wrap in mobile device frame for web preview
-        return _MobileFrame(child: child ?? const SizedBox.shrink());
+        return MobileFrame(child: child ?? const SizedBox.shrink());
       },
     );
   }
@@ -198,13 +198,50 @@ class _ICanBeFitterAppState extends ConsumerState<ICanBeFitterApp> {
 
 /// Shows a phone-shaped frame around the app when viewed on wide screens (web).
 /// On narrow screens (actual mobile), it passes through without the frame.
-class _MobileFrame extends StatelessWidget {
+///
+/// Public (no leading underscore) so `test/` can pump it in isolation —
+/// see `test/contracts/mobile_frame_mediaquery_test.dart`.
+///
+/// Diagnose e2b8a4 (2026-09-19): this widget visually constrains [child] to
+/// a narrow phone-shaped box via layout (`Container(width:, height:)` +
+/// `ClipRect`) but, before this fix, never gave [child] a matching
+/// `MediaQuery` — every descendant, including root-navigator overlay
+/// content, still read the OUTER (e.g. 1280x720 desktop) size via
+/// `MediaQuery.of(context)`. `showTimePicker`/`showDatePicker` (default
+/// `useRootNavigator: true`) insert their dialog into the Navigator's
+/// Overlay, which lives INSIDE [child] — so the dialog chose its
+/// portrait/landscape layout and centered itself against the wrong, far
+/// larger, LANDSCAPE-shaped size (1280x720) while actually being painted
+/// and clipped inside the narrow PORTRAIT frame box (~322x652 at that
+/// viewport). The result: a landscape-mode `TimePickerDialog` centered on
+/// a canvas far bigger than the visible clipped window, so only whatever
+/// slice of it happened to fall inside that window rendered — the
+/// hour:minute header did, the dial and OK/Cancel row did not (confirmed
+/// via a live `debugPrint` of `MediaQuery.sizeOf(context)` immediately
+/// before calling `showTimePicker`, which printed the outer 1280x720, not
+/// the frame's actual content box). This was NOT a font/theme/space-budget
+/// bug — `responsivePickerBuilder`'s own theme + `ConstrainedBox` fix
+/// (job #1-4 in that file's doc comment) made no difference because it
+/// reads `MediaQuery.sizeOf(context)` too, and got the same wrong value.
+/// Fixed by wrapping [child] in a `MediaQuery` reporting the frame's real
+/// inner content size, so every descendant — including dialogs raised on
+/// the root navigator — lays out against the box it's actually clipped to.
+///
+/// Round-1 review correction (e2b8a4): the reported size also now subtracts
+/// the outer `Container`'s border width on each axis (`frameBorderWidth`,
+/// implied `Container` decoration-padding — see `_paddingIncludingDecoration`
+/// in Flutter's own `container.dart`) — a ~1.5%/0.8% discrepancy at the
+/// diagnose's own cited viewport, never enough to flip a layout decision,
+/// but the whole point of this widget is that the reported size should
+/// match the box [child] actually gets, not approximately match it.
+class MobileFrame extends StatelessWidget {
   final Widget child;
-  const _MobileFrame({required this.child});
+  const MobileFrame({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final outerMediaQuery = MediaQuery.of(context);
+    final size = outerMediaQuery.size;
 
     // If screen is narrow enough to be a real phone, no frame needed
     if (size.width <= 500) return child;
@@ -213,8 +250,26 @@ class _MobileFrame extends StatelessWidget {
     // Width maintains the 390:844 aspect ratio.
     const maxH = 844.0;
     const maxW = 390.0;
+    const notchHeight = 36.0;
+    const homeIndicatorHeight = 8.0;
+    // e2b8a4 round-1 review finding: `Container`'s BoxDecoration.border
+    // implies decoration-padding equal to the border width on every edge
+    // (Flutter's `Container._paddingIncludingDecoration`), so the Column
+    // below — and therefore [child] — actually receives `frameW/frameH`
+    // minus 2x this, never the bare frame dimensions. Negligible in
+    // practice (~1.5% at the diagnose's own cited viewport, far short of
+    // flipping a portrait/landscape decision) but the MediaQuery this
+    // widget hands to [child] should describe the box it actually gets.
+    const frameBorderWidth = 2.5;
     final frameH = (size.height - 24).clamp(400.0, maxH);
     final frameW = (frameH / maxH * maxW).clamp(300.0, maxW);
+    final contentWidth = frameW - (frameBorderWidth * 2);
+    // The box [child] is actually clipped to, once the border inset and the
+    // notch + home indicator bars are subtracted — this, not `size`, is
+    // what any MediaQuery-driven layout decision inside [child] must be
+    // made against (diagnose e2b8a4).
+    final contentHeight =
+        frameH - (frameBorderWidth * 2) - notchHeight - homeIndicatorHeight;
 
     return Container(
       color: AppColors.bg,
@@ -227,7 +282,7 @@ class _MobileFrame extends StatelessWidget {
             borderRadius: BorderRadius.circular(40),
             border: Border.all(
               color: AppColors.border,
-              width: 2.5,
+              width: frameBorderWidth,
             ),
             boxShadow: [
               BoxShadow(
@@ -243,7 +298,7 @@ class _MobileFrame extends StatelessWidget {
             children: [
               // Notch / status bar
               Container(
-                height: 36,
+                height: notchHeight,
                 color: AppColors.bg,
                 child: Center(
                   child: Container(
@@ -256,11 +311,25 @@ class _MobileFrame extends StatelessWidget {
                   ),
                 ),
               ),
-              // App content
-              Expanded(child: ClipRect(child: child)),
+              // App content — re-scoped to the frame's real content box so
+              // root-navigator overlays (dialogs, pickers) lay out against
+              // what they're actually clipped to, not the outer window.
+              Expanded(
+                child: ClipRect(
+                  child: MediaQuery(
+                    data: outerMediaQuery.copyWith(
+                      size: Size(contentWidth, contentHeight),
+                      viewInsets: EdgeInsets.zero,
+                      viewPadding: EdgeInsets.zero,
+                      padding: EdgeInsets.zero,
+                    ),
+                    child: child,
+                  ),
+                ),
+              ),
               // Home indicator bar
               Container(
-                height: 8,
+                height: homeIndicatorHeight,
                 color: AppColors.bg,
                 child: Center(
                   child: Container(

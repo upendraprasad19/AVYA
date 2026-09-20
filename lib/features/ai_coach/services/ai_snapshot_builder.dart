@@ -522,8 +522,25 @@ class AiSnapshotBuilder {
 
   // ── Private helpers ──────────────────────────────────────────
 
+  // Diagnose e2b8a4 (2026-09-19): known_injuries / typical_wake_time /
+  // preferred_workout_time / body_part_priorities used to read straight
+  // from coachBox — the muster-only mirror of facts that live authoritatively
+  // on the PROFILE (onboarding's `injuries`, Edit Profile's `wake_up_time` /
+  // `preferred_workout_time` / `physique_focus`). That made the snapshot go
+  // stale the moment a user edited any of these via Edit Profile AFTER
+  // muster (nothing ever wrote the coachBox mirror back), and permanently
+  // empty for any new user going through muster's now-retired
+  // injuries/wake/workout-time questions. Reading the profile field
+  // directly — the same field Edit Profile itself writes — fixes both:
+  // the AI coach always sees the freshest value regardless of which
+  // screen (onboarding, muster, or a later profile edit) last set it.
+  // Key NAMES and TYPES in the returned map are unchanged (still
+  // List<String> for known_injuries/body_part_priorities, String? for the
+  // two time fields) — only their Dart source moved, so this needs no
+  // snapshot_contract.yaml change.
   Map<String, dynamic> _getInductionAndMusterKeys() {
     final coach = _hive.coachBox;
+    final profile = UserRepository.instance.getProfile() ?? {};
 
     final committedAt = coach.get('committed_at') as String?;
     int? daysSinceCommitment;
@@ -532,6 +549,8 @@ class AiSnapshotBuilder {
       if (dt != null) daysSinceCommitment = DateTime.now().difference(dt).inDays;
     }
 
+    final physiqueFocus = profile['physique_focus'] as String?;
+
     return {
       'committed_at': committedAt,
       'committed_to_lt_cdr': (coach.get('committed_to_lt_cdr') as bool?) ?? false,
@@ -539,11 +558,11 @@ class AiSnapshotBuilder {
       'why_now': coach.get('why_now') as String?,
       'definition_of_winning': coach.get('definition_of_winning') as String?,
       'known_injuries':
-          (coach.get('known_injuries') as List?) ?? const <String>[],
-      'typical_wake_time': coach.get('typical_wake_time') as String?,
-      'preferred_workout_time': coach.get('preferred_workout_time') as String?,
+          (profile['injuries'] as List?)?.cast<String>() ?? const <String>[],
+      'typical_wake_time': profile['wake_up_time'] as String?,
+      'preferred_workout_time': profile['preferred_workout_time'] as String?,
       'body_part_priorities':
-          (coach.get('body_part_priorities') as List?) ?? const <String>[],
+          physiqueFocus == null ? const <String>[] : [physiqueFocus],
     };
   }
 

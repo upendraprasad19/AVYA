@@ -3,19 +3,33 @@
 // Concept:   muster_to_profile_bridge
 // Writer:    lib/features/ai_coach/services/induction_service.dart
 //            (recordMusterAnswer)
-// Reader:    userBox['profile']['injuries'] — read by
+// Reader:    userBox['profile']['physique_focus'] — read by
 //            lib/features/profile/screens/edit_profile_screen.dart via
 //            UserRepository.instance.getProfile()
 //
+// Retired 2026-09-19 (diagnose e2b8a4): this file used to pin
+// known_injuries -> profile.injuries. That bridge had no "don't clobber"
+// guard, and since muster always ran AFTER onboarding's Details screen
+// (which already collects injuries), muster's answer silently overwrote
+// whatever the user told Details — a live writer/reader-drift bug, not
+// just redundant UX. known_injuries / typical_wake_time /
+// preferred_workout_time are now RETIRED as muster questions entirely
+// (Details screen and Edit Profile own those fields respectively).
+// body_part_priorities (physique focus) is muster's one surviving
+// question, so this file now pins ITS bridge with the same rigor
+// previously given to injuries, plus the retirement itself as a
+// behavioral fact.
+//
 // Assert:
-//   After recordMusterAnswer('known_injuries', [...]), the value appears in
-//   userBox['profile']['injuries'] (bridge completes synchronously).
+//   After recordMusterAnswer('body_part_priorities', [x]), the value
+//   appears in userBox['profile']['physique_focus'] (bridge completes
+//   synchronously).
 //
 //   The bridge:
 //     recordMusterAnswer → _bridgeToProfile → UserRepository.updateProfileFields
 //     → ProfileWriteService.patchProfile → userBox.put('profile', merged)
 //
-//   All steps are awaited before recordMusterAnswer returns.  Cloud sync is
+//   All steps are awaited before recordMusterAnswer returns. Cloud sync is
 //   fire-and-forget and is gated behind `SupabaseService.currentUser != null`
 //   (null in test) — so no network calls happen here.
 
@@ -82,7 +96,7 @@ void main() {
     await HiveService.instance.userBox.put('profile', <String, dynamic>{
       'id': fakeUserId,
       'full_name': 'Test User',
-      'injuries': <String>[],
+      'physique_focus': 'balanced',
     });
   });
 
@@ -91,17 +105,15 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // Test 1 — known_injuries bridges to profile['injuries']
+  // Test 1 — body_part_priorities bridges to profile['physique_focus']
   // -------------------------------------------------------------------------
 
   test(
-    'recordMusterAnswer("known_injuries", [...]) writes injuries into userBox[profile]',
+    'recordMusterAnswer("body_part_priorities", [x]) writes physique_focus into userBox[profile]',
     () async {
-      final injuries = ['lower_back', 'right_knee'];
-
       // ACT — write via the canonical writer.
       await InductionService.instance
-          .recordMusterAnswer('known_injuries', injuries);
+          .recordMusterAnswer('body_part_priorities', ['strength']);
 
       // ASSERT — direct Hive read (same path edit_profile_screen takes via
       // UserRepository.getProfile → userBox.get('profile')).
@@ -109,43 +121,27 @@ void main() {
           HiveService.instance.userBox.get('profile') as Map?;
       expect(profile, isNotNull,
           reason: 'profile must exist in userBox after bridge');
-
-      final stored = (profile!['injuries'] as List?)?.cast<String>();
-      expect(stored, isNotNull,
-          reason: 'profile["injuries"] must be present after bridge');
-      // U1 (a1f6c3): _bridgeToProfile now CANONICALIZES injuries via InjuryVocab
-      // so the plan engine's exact-match filter can use them — 'right_knee' →
-      // 'knee' (the library does not distinguish sides), 'lower_back' passes
-      // through. The raw coachBox['known_injuries'] value stays verbatim.
-      expect(stored, equals(['lower_back', 'knee']),
+      expect(profile!['physique_focus'], 'strength',
           reason:
-              'profile["injuries"] must be the CANONICALIZED muster answer');
+              'profile["physique_focus"] must be the muster answer, single-element unwrapped');
     },
   );
 
   // -------------------------------------------------------------------------
-  // Test 2 — injuries list is also readable via UserRepository.getProfile()
+  // Test 2 — physique_focus is also readable via UserRepository.getProfile()
   // -------------------------------------------------------------------------
 
   test(
-    'injuries value is readable via UserRepository.getProfile() after bridge',
+    'physique_focus value is readable via UserRepository.getProfile() after bridge',
     () async {
-      final injuries = ['left_shoulder'];
-
       await InductionService.instance
-          .recordMusterAnswer('known_injuries', injuries);
+          .recordMusterAnswer('body_part_priorities', ['glutes_legs']);
 
       // Reader path used by edit_profile_screen.
       final profile = await UserRepository.instance.getProfile();
       expect(profile, isNotNull,
           reason: 'UserRepository.getProfile() must return the profile');
-
-      final stored = (profile!['injuries'] as List?)?.cast<String>();
-      // U1 (a1f6c3): 'left_shoulder' canonicalizes to 'shoulder'.
-      expect(stored, equals(['shoulder']),
-          reason:
-              'UserRepository.getProfile()["injuries"] reflects the '
-              'CANONICALIZED muster answer');
+      expect(profile!['physique_focus'], 'glutes_legs');
     },
   );
 
@@ -154,18 +150,19 @@ void main() {
   // -------------------------------------------------------------------------
 
   test(
-    'known_injuries is also persisted in coachBox (muster SoT)',
+    'body_part_priorities is also persisted in coachBox (muster SoT)',
     () async {
-      final injuries = ['neck', 'lower_back'];
-
       await InductionService.instance
-          .recordMusterAnswer('known_injuries', injuries);
+          .recordMusterAnswer('body_part_priorities', ['chest_shoulders_arms']);
 
-      final coachValue = HiveService.instance.coachBox.get('known_injuries');
+      final coachValue =
+          HiveService.instance.coachBox.get('body_part_priorities');
       expect(coachValue, isNotNull,
           reason: 'coachBox must hold the raw muster answer');
-      expect((coachValue as List).cast<String>(), equals(injuries),
-          reason: 'coachBox["known_injuries"] must equal the written list');
+      expect((coachValue as List).cast<String>(),
+          equals(['chest_shoulders_arms']),
+          reason:
+              'coachBox["body_part_priorities"] must equal the written list');
     },
   );
 
@@ -181,11 +178,11 @@ void main() {
         'id': fakeUserId,
         'full_name': 'Kept Name',
         'current_weight_kg': 75.0,
-        'injuries': <String>[],
+        'physique_focus': 'balanced',
       });
 
       await InductionService.instance
-          .recordMusterAnswer('known_injuries', ['knee']);
+          .recordMusterAnswer('body_part_priorities', ['strength']);
 
       final profile =
           HiveService.instance.userBox.get('profile') as Map?;
@@ -193,8 +190,40 @@ void main() {
           reason: 'full_name must survive the patchProfile call');
       expect(profile?['current_weight_kg'], 75.0,
           reason: 'current_weight_kg must survive the patchProfile call');
-      expect((profile?['injuries'] as List?)?.cast<String>(), ['knee'],
-          reason: 'injuries must be the newly patched value');
+      expect(profile?['physique_focus'], 'strength',
+          reason: 'physique_focus must be the newly patched value');
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // Test 5 — the retirement itself: known_injuries / typical_wake_time /
+  // preferred_workout_time no longer bridge anything, because
+  // recordMusterAnswer rejects them outright (diagnose e2b8a4).
+  // -------------------------------------------------------------------------
+
+  test(
+    'retired keys (known_injuries, typical_wake_time, preferred_workout_time) '
+    'throw and write nothing on either side',
+    () async {
+      for (final entry in {
+        'known_injuries': ['lower_back'],
+        'typical_wake_time': '06:30',
+        'preferred_workout_time': '07:00',
+      }.entries) {
+        expect(
+          () => InductionService.instance
+              .recordMusterAnswer(entry.key, entry.value),
+          throwsArgumentError,
+          reason: '${entry.key} must be rejected — retired muster question',
+        );
+        expect(HiveService.instance.coachBox.get(entry.key), isNull,
+            reason: '${entry.key} must not land in coachBox either');
+      }
+      // Profile is untouched by any of the rejected attempts.
+      final profile = HiveService.instance.userBox.get('profile') as Map?;
+      expect(profile?['injuries'], isNull);
+      expect(profile?['wake_up_time'], isNull);
+      expect(profile?['preferred_workout_time'], isNull);
     },
   );
 }

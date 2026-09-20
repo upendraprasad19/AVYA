@@ -52,65 +52,62 @@ void main() {
       expect(firstStamp.isNotEmpty, true);
     });
 
-    test('inductionCompleted is false until completeMuster is called',
+    test('inductionCompleted is false until completeInduction is called',
         () async {
       await InductionService.instance.recordCommitment();
       expect(InductionService.instance.inductionCompleted, false);
-      await InductionService.instance.completeMuster();
+      await InductionService.instance.completeInduction();
       expect(InductionService.instance.inductionCompleted, true);
     });
 
-    test('recordMusterAnswer accepts all 6 allowed keys', () async {
-      await InductionService.instance
-          .recordMusterAnswer('why_now', 'October wedding');
-      await InductionService.instance
-          .recordMusterAnswer('definition_of_winning', 'feel strong');
-      await InductionService.instance
-          .recordMusterAnswer('known_injuries', ['lower back', 'right knee']);
-      await InductionService.instance
-          .recordMusterAnswer('typical_wake_time', '06:30');
-      await InductionService.instance
-          .recordMusterAnswer('preferred_workout_time', '07:00');
+    test('recordMusterAnswer accepts the one allowed key', () async {
       await InductionService.instance
           .recordMusterAnswer('body_part_priorities', ['back', 'shoulders']);
 
-      expect(HiveService.instance.coachBox.get('why_now'), 'October wedding');
-      expect(HiveService.instance.coachBox.get('definition_of_winning'),
-          'feel strong');
-      expect(HiveService.instance.coachBox.get('known_injuries'),
-          ['lower back', 'right knee']);
-      expect(HiveService.instance.coachBox.get('typical_wake_time'), '06:30');
-      expect(HiveService.instance.coachBox.get('preferred_workout_time'),
-          '07:00');
       expect(HiveService.instance.coachBox.get('body_part_priorities'),
           ['back', 'shoulders']);
     });
 
-    test('recordMusterAnswer rejects unknown key', () async {
-      expect(
-        () => InductionService.instance.recordMusterAnswer('rogue_key', 'x'),
-        throwsArgumentError,
-      );
+    test(
+        'recordMusterAnswer rejects unknown AND retired keys '
+        '(diagnose e2b8a4 — injuries/wake/workout-time retired 2026-09-19)',
+        () async {
+      for (final key in [
+        'rogue_key',
+        'why_now',
+        'definition_of_winning',
+        'known_injuries',
+        'typical_wake_time',
+        'preferred_workout_time',
+      ]) {
+        expect(
+          () => InductionService.instance.recordMusterAnswer(key, 'x'),
+          throwsArgumentError,
+          reason: '$key must be rejected',
+        );
+      }
     });
   });
 
   group('REPORT FOR DUTY routing', () {
-    test('navigates to /coach/induction for un-inducted user', () {
-      // coachBox is cleared in setUp — inductionCompleted is false
+    test('navigates to /coach/muster for un-inducted user', () {
+      // coachBox is cleared in setUp — inductionCompleted is false.
+      // Muster now runs FIRST (diagnose e2b8a4) so nothing is asked after
+      // I COMMIT; induction's narrative + commit follow it.
       expect(InductionService.instance.inductionCompleted, false);
       final destination = InductionService.instance.inductionCompleted
           ? '/home'
-          : '/coach/induction';
-      expect(destination, '/coach/induction');
+          : '/coach/muster';
+      expect(destination, '/coach/muster');
     });
 
     test('navigates to /home for already-inducted user', () async {
       await InductionService.instance.recordCommitment();
-      await InductionService.instance.completeMuster();
+      await InductionService.instance.completeInduction();
       expect(InductionService.instance.inductionCompleted, true);
       final destination = InductionService.instance.inductionCompleted
           ? '/home'
-          : '/coach/induction';
+          : '/coach/muster';
       expect(destination, '/home');
     });
   });

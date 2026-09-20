@@ -551,7 +551,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         // so the right response is to take them home, not to show a red box.
         if (err == 'already_onboarded') {
           final inducted = InductionService.instance.inductionCompleted;
-          context.go(inducted ? '/home' : '/coach/induction');
+          context.go(inducted ? '/home' : '/coach/muster');
           return;
         }
         setState(() {
@@ -561,7 +561,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         return;
       }
       final alreadyInducted = InductionService.instance.inductionCompleted;
-      context.go(alreadyInducted ? '/home' : '/coach/induction');
+      context.go(alreadyInducted ? '/home' : '/coach/muster');
     } catch (e) {
       final errStr = e.toString();
       final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;

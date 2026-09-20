@@ -231,6 +231,42 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-20** — blast-radius **account** — branch
+  `web-app-bugs-onboarding-a5a020` (onboarding picker text-wrap/unresponsive
+  fix + muster/induction drift-and-reorder, e2b8a4 + d6f1b8). **5 findings
+  (0 P0, 2 P1, 1 P2, 1 P3, 1 P4); 0 false_alarm — 4 fixed in-batch, 1 (P4)
+  accepted as a documented low-priority residual.** Review:
+  `docs/reviews/8a61d526f062-review.md`.
+  **Tuning 1 — a diagnose-doc's own mutation-testing self-attestation must be
+  independently RE-VERIFIED, never trusted.** Finding 3 challenged the
+  diagnose-doc's claim that `ward_phase_block_test.dart` was "mutation-proven
+  against both [title and weeksLabel]". Rather than accepting either the
+  diagnose-doc's claim or the B-pass report's counter-claim at face value,
+  the fix-round independently live-mutated the widget (removed weeksLabel's
+  `maxLines`/`overflow`, kept `Flexible`) and confirmed the ORIGINAL test
+  really did stay green — the diagnose-doc's self-attestation was genuinely
+  false. A prior-batch mutation claim is a claim about a moment in time, not
+  a durable proof; re-run it before citing it, exactly as this repo's
+  `feedback_audit_findings_require_live_verification.md` already says for
+  live-system claims — this extends the same discipline to a doc's own
+  mutation-testing prose.
+  **Tuning 2 — when a finding names TWO sibling call sites, verify BOTH were
+  actually fixed before marking the finding resolved, not just the one the
+  fix-round happened to touch first.** Finding 1 named `muster_screen.dart`'s
+  `_onSubmit()` AND flagged `induction_screen.dart`'s `_onCommit()` as
+  carrying "the identical unmirrored shape ... not a new pattern there, but
+  newly more exposed by this diff's own addition." The fix-round initially
+  drafted a review-status update claiming both sites were handled on the
+  strength of the first fix alone ("see follow-up note below") — caught
+  before writing it, by actually re-reading `induction_screen.dart` first.
+  It was untouched, and its failure mode was WORSE than the first site (a
+  throw there left `_stage` stuck at 7, which unconditionally renders
+  "Contract sealed." — a false success message — rather than merely a
+  disabled button). Fixed with the identical try/catch pattern + a new
+  mutation-proven source-grep test
+  (`test/contracts/induction_screen_commit_error_reset_test.dart`). A
+  finding's "same class, other site" clause is a second, separate fix
+  obligation — not satisfied by fixing only the site named first.
 - **2026-09-19** — blast-radius **feature** (record commit; the underlying
   bump commit `a4eb42ab` self-declared **platform**) — branch
   `plan-review-record-versionbump44`, filling in a plan-review record the
