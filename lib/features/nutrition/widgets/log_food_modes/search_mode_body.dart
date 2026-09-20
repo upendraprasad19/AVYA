@@ -204,7 +204,7 @@ class _SearchResultsList extends ConsumerWidget {
                 (item['standard_serving_g'] as num?)?.toDouble() ?? 100.0;
             await ref.read(foodLogProvider.notifier).logFood(
                   food: item,
-                  mealType: _mealTypeForNow(),
+                  mealType: ref.read(mealTypeProvider),
                   quantityG: qty,
                 );
             onLogged();
@@ -303,7 +303,7 @@ Future<void> _relogFromHistory(
   );
   await NutritionWriteService.instance.logMeal(
     date: DateTime.now(),
-    mealType: _mealTypeForNow(),
+    mealType: ref.read(mealTypeProvider),
     items: [item],
     source: NutritionWriteSource.manualSearch,
   );
@@ -313,12 +313,4 @@ Future<void> _relogFromHistory(
   // tree (defensive — matches the pattern used elsewhere).
   ref.invalidate(dailyNutritionProvider);
   ref.invalidate(recentFoodLogsProvider);
-}
-
-String _mealTypeForNow() {
-  final hour = DateTime.now().hour;
-  if (hour < 11) return 'breakfast';
-  if (hour < 15) return 'lunch';
-  if (hour < 19) return 'dinner';
-  return 'snacks';
 }
