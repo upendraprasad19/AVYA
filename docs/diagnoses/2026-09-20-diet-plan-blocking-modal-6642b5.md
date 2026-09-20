@@ -2,7 +2,6 @@
 bug_id: 6642b5
 date: 2026-09-20
 batch: food-logging-observations (Task 2)
-tier: s_fix
 status: fixed
 blast_radius: feature
 symptom: |

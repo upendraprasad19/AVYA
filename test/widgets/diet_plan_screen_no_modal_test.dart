@@ -119,6 +119,13 @@ void main() {
     expect(find.text('Saved Diet Plan Found'), findsNothing,
         reason: 'the modal title must not be visible');
 
+    // Verify the saved plan's actual content loaded (mutation proof:
+    // a no-op _loadSavedPlan would still render the icons but not the meals)
+    expect(find.text('Oats'), findsOneWidget,
+        reason: 'saved-plan content (breakfast Oats) must be rendered');
+    expect(find.text('Brown rice'), findsOneWidget,
+        reason: 'saved-plan content (lunch Brown rice) must be rendered');
+
     // Verify the toolbar icons are present (these already give users
     // the actions the old dialog offered)
     expect(find.byIcon(Icons.refresh), findsOneWidget,
