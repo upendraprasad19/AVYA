@@ -5055,3 +5055,60 @@ to the retirement, do not just delete the group); and the by-hand invocation at
 hash against `backups/applied_migrations.json` (the ledger Gate 14 already validates)
 instead of by live version prefix — then the gate would be a ledger-vs-disk check, which
 Gate 14 already is, which is the argument for retiring.
+
+## OI-224 — alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7 days
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-20 — live on dedsavbjuwgarrhphgnl: `cron_call_log` `min(started_at)` 7.04 days back, alert has fired 0 times ever, `cleanup_cron_call_log()` body unchanged (still 7-day / global-newest-success)
+- **Identified**: 2026-08-16 (Hermes pass, `debugging-stuck-issue-89b2e9`) — re-verified + filed 2026-09-20 via mint_oi.sh from branch `oi224-alert-cron-threshold`
+
+`alert_cron_function_dead` (migration 110, `supabase/migrations/110_cron_silence_per_function_and_cleanup_null_guard.sql:112`)
+fires on `days_silent >= 8`, where `days_silent` is computed from `MAX(started_at)`
+over `public.cron_call_log` filtered to `status = 'success'` (`:107`). But
+`cleanup_cron_call_log()` (`:30-47`, run daily as `cron_call_log_cleanup_daily`,
+jobid 23, 03:30 UTC) prunes that same table to `started_at < now() - interval
+'7 days'` (`:37`), sparing only the single newest success row and the single
+newest row of any status — GLOBALLY, not per function.
+
+The ceiling this creates: `days_silent` for ANY function can never exceed roughly
+7 days plus the gap between two consecutive cleanup runs (~24h), because the row
+that would prove a longer silence is deleted before the alert's next tick. The
+`>= 8` threshold sits just past that ceiling — unreachable by construction, not
+by bad luck. Verified LIVE, twice, six weeks apart (2026-08-16 and 2026-09-20):
+`min(started_at)` in `cron_call_log` reached back 7.21 days on the first check
+and 7.04 days on the second; `select count(*) from public.alerts where source =
+'alert_cron_function_dead'` returns 0 both times. The alert has never fired once
+since it was created (migration 110).
+
+Consequence: the ONE alert designed to catch a single dead cron function (as
+opposed to `alert_cron_silence`, which only catches a total fleet outage) cannot
+ever fire. A function that silently stops succeeding — the exact scenario
+`alert_cron_function_dead`'s own doc comment describes, "boot failure, a module
+that fails to load writes NO cron_call_log row at all, and pg_cron still
+reports success" — gets no alert, ever, regardless of how many days pass.
+
+Two independent fixes, either sufficient alone:
+- Lower the threshold below the achievable ceiling (`>= 6` would clear it with
+  margin; `>= 8` needs either a longer cleanup retention or a per-function
+  spare in `cleanup_cron_call_log` rather than one global newest-row).
+- Make `cleanup_cron_call_log` spare the newest SUCCESS row PER FUNCTION_NAME,
+  not one global newest-success row — this also closes a second latent gap:
+  a function that has never once succeeded recently while others have keeps
+  ZERO rows after cleanup regardless of the threshold, because the single
+  global newest-success spare belongs to whichever function ran most recently.
+
+Found by a Hermes pass (L1-F3) on `claude/debugging-stuck-issue-89b2e9`, a
+branch whose own migration work (log-table retention) was independently
+reconstructed and shipped to main as `121_log_table_retention.sql`
+(OI-132/c8e5b3) before this branch was ever merged — this finding is the one
+piece of that pass's output that did NOT get carried forward with the
+reconstruction, and does not appear to have been independently found since.
+The branch itself is being retired as superseded; this is the one live defect
+worth keeping.
+
+**Recommendation**: small, self-contained migration. Pick the threshold fix
+(simplest, lowest blast-radius) unless the per-function-silent-forever gap
+above is also worth closing in the same pass — if so, do the per-function
+spare instead, since it fixes both.
+
