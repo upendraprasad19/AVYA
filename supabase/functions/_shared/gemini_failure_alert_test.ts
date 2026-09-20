@@ -69,3 +69,27 @@ Deno.test("reportGeminiExhaustion never throws when the dedup select errors", as
   const client = fakeClient({ selectResult: { data: null, error: new Error("boom") } });
   await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 500, message: "server error" });
 });
+
+Deno.test(
+  "DISABLE_GEMINI_FAILURE_ALERT=true skips the alert entirely (§4.6 feature-flag protocol, 2026-09-20)",
+  async () => {
+    Deno.env.set("DISABLE_GEMINI_FAILURE_ALERT", "true");
+    try {
+      const client = fakeClient({ selectResult: { data: [], error: null } });
+      await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 429, message: "quota exceeded" });
+      assertEquals(client.inserted.length, 0);
+    } finally {
+      Deno.env.delete("DISABLE_GEMINI_FAILURE_ALERT");
+    }
+  },
+);
+
+Deno.test(
+  "DISABLE_GEMINI_FAILURE_ALERT unset still alerts as before (mirror case)",
+  async () => {
+    Deno.env.delete("DISABLE_GEMINI_FAILURE_ALERT");
+    const client = fakeClient({ selectResult: { data: [], error: null } });
+    await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 429, message: "quota exceeded" });
+    assertEquals(client.inserted.length, 1);
+  },
+);

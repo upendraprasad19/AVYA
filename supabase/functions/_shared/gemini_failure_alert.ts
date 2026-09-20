@@ -33,12 +33,25 @@ export async function reportGeminiExhaustion(
   client: SupabaseLike,
   source: string,
   lastError: { status: number | null; message: string } | null,
+  endpoint?: string,
 ): Promise<void> {
+  // §4.6 feature-flag protocol (platform-tier path, B-pass finding
+  // 2026-09-20): this function's own alerts-table write is new and
+  // untested against production alert volume — a secret toggle lets the
+  // founder silence it without a redeploy if it turns out to be noisy,
+  // while the old (silent) behavior is preserved verbatim when set.
+  if (Deno.env.get("DISABLE_GEMINI_FAILURE_ALERT") === "true") return;
   try {
     const status = lastError?.status ?? null;
     const message = lastError?.message ?? "unknown failure (no lastError captured)";
     const suggestedAction = classify(status);
-    const summary = `${source}: Gemini exhausted all attempts — ${
+    // `endpoint` names WHICH ai-proxy request type failed (food_text_analysis
+    // / scan_meal / cart_auditor) — B-pass finding, 2026-09-20: without it,
+    // three otherwise-identical alerts (same source, same dedup key) were
+    // indistinguishable except by timestamp, defeating the feature's own
+    // stated purpose of fast diagnosis. `source` stays the constant dedup
+    // key so the 30-minute window still spans all three endpoints together.
+    const summary = `${endpoint ?? source}: Gemini exhausted all attempts — ${
       status !== null ? `HTTP ${status}` : "no HTTP status"
     }: ${message}`.slice(0, 500);
 
@@ -62,7 +75,7 @@ export async function reportGeminiExhaustion(
       source,
       severity,
       summary,
-      context_json: { status, message },
+      context_json: { status, message, endpoint: endpoint ?? null },
       suggested_action: suggestedAction,
     });
     if (insertErr) {
