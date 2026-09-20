@@ -1,0 +1,193 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Android signing artifacts — NEVER commit
+# (Tech-debt audit 2026-05-20 I1: key.properties + release.jks were untracked
+# but NOT ignored — one accidental `git add android/` from leaking signing
+# identity + plaintext password. Gate: scripts/check_secrets_gitignored.dart.)
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
+android/app/*.p12
+android/app/upload-keystore.jks
+*.jks
+*.keystore
+*.aab
+*.apk
+
+# Environment
+.env
+.env.dev
+.env.prod
+
+# Claude Code worktrees
+.claude/worktrees/
+.env.local
+supabase/.env
+
+# Supabase Management API access tokens (e.g. supabase/.supabase/supabase access token.txt)
+# Used by .claude/deploy_via_api.js — DO NOT commit any token, ever.
+supabase/.supabase/
+
+# Alert-surfacing tooling credential — service-role key for scripts/check_alerts.dart
+# (SessionStart hook). DELIBERATELY separate from .env so it is NEVER compiled into
+# the app via --dart-define-from-file=.env. One line: SUPABASE_SERVICE_ROLE_KEY=<key>.
+# DO NOT commit. See scripts/check_alerts.dart credential-model header.
+.claude/.alerts.env
+
+# Post-push CI reconciler state — pushes that landed whose CI outcome is not
+# yet known. Written by scripts/arm_ci_reconcile.sh, consumed + rewritten by
+# scripts/reconcile_ci.dart (SessionStart). Machine-local and transient; each
+# clone's pending set is its own. The .tmp sibling is the atomic-rename staging
+# file, which only exists mid-rewrite.
+.claude/.ci_reconcile_pending.jsonl
+.claude/.ci_reconcile_pending.jsonl.tmp
+# Kill switch: `touch` this and the reconciler hook does nothing. Machine-local
+# — disabling it in one clone must not disable it for everyone.
+.claude/.reconcile_ci.disabled
+
+# Edge function deploy payloads (regenerable via .claude/emit_payload.js)
+# Contain inlined source — no point checking them in.
+.claude/_payload_*.json
+.claude/_payload_*.b64
+.claude/_payload_*.txt
+.claude/_deploy_payload_*.json
+.claude/ai-proxy-chunk-*.txt
+# NOTE: backups/edge_function_payloads/ is NOT ignored — several SHA-pinned
+# rollback archives there are already tracked (the deploy convention commits
+# them). Do not blanket-ignore the dir; it would shadow tracked files.
+
+# Knowledgebase (reference docs, not source code)
+Knowledgebase/
+
+# Workspace tooling output / regenerable artifacts (Test #8 cleanup)
+analyze_output.txt
+flutter_test_output.txt
+mockups/
+.hermes/
+.superpowers/
+test/plan_generator/v4_diagnostic_output.md
+assets/*.bak
+.claude/scheduled_tasks.lock
+
+
+# Local Claude Code agent permissions — must never be committed.
+# Audit C-3 (2026-05-11): this file held a Supabase anon JWT.
+.claude/settings.local.json
+
+# Local reference materials (not bundled in APK — bundled assets live in
+# assets/data/*.json). Founder's source docs, exercise/food spreadsheets,
+# naval rank reference imagery, etc. — useful on disk, never shipped.
+assets/*.docx
+assets/*.xlsx
+assets/*.pdf
+assets/calisthenics feature.md
+assets/New folder/
+assets/naval pics/
+
+# Per-session baseline files (capture_baseline.dart / compare_baseline.dart)
+baseline.json
+baseline-lints.json
+
+# Deno lockfile — a local `deno test` byproduct, never tracked. CI runs
+# `deno test --no-check --allow-all --node-modules-dir=auto supabase/functions/`
+# with no lockfile and is green, so tracking one would only add a
+# lock-mismatch failure surface with nothing depending on it. Ignored so it
+# cannot drift into a commit unnoticed (2026-07-27).
+deno.lock
+
+# Deno's `--node-modules-dir=auto` materialisation cache. NOT a blanket
+# node_modules ignore — 142 files under node_modules/pg*, postgres-*, split2,
+# xtend are deliberately VENDORED and tracked, and ignoring the whole directory
+# would hide them. Only these two paths are build artifacts: `.deno/` is the
+# cache itself, and `zod/` is materialised from the `npm:zod@3.25.76` import in
+# _shared/tools/zodToGemini.ts. Confirmed zero tracked files under either
+# (`git ls-files node_modules/.deno` and `.../zod` both return 0) before adding.
+# Without this, a `git add -A` after any local deno run sweeps ~1400 cache files
+# into the commit (2026-07-27).
+#
+# ⚠ RUNNING DENO LOCALLY CLOBBERS THE VENDORED DEPS. `--node-modules-dir=auto`
+# REPLACES node_modules/pg with a SYMLINK to .deno/pg@<ver>/node_modules/pg, so
+# git reports all 22 tracked pg files as deleted and offers a symlink in their
+# place. Ignoring the cache does not prevent this — the ignore only stops the
+# cache being ADDED. After any local deno run, check `git status node_modules`
+# and repair with:
+#     rm -f node_modules/pg node_modules/zod && git checkout -- node_modules/pg
+# CI is unaffected (fresh checkout per run), which is exactly why this only
+# ever bites locally and is easy to commit by accident.
+# NO TRAILING SLASH on `zod` — corrected 2026-08-05, primary-folder cruft
+# triage. The rule was written as `node_modules/zod/`, and a trailing slash in
+# gitignore matches a DIRECTORY ONLY. On this Windows/Git-Bash stack deno does
+# not materialise `zod` as a directory at all: it writes a 34-byte symlink STUB
+# — an ordinary text file containing `.deno/zod@3.25.76/node_modules/zod`. So
+# the rule could never match what deno actually produces, and `node_modules/zod`
+# has been surfacing as an untracked entry the whole time (`git check-ignore -v
+# node_modules/zod` returned no match before this fix, and does match after).
+# The repair line at the top of this block already says `rm -f node_modules/zod`
+# — `rm -f`, i.e. a file — so the file-shape was known; only the pattern was
+# wrong. Deleting the stub is NOT the fix: the next local deno run recreates it.
+# `.deno/` keeps its trailing slash because it genuinely is a directory.
+node_modules/.deno/
+node_modules/zod
+
+# Flutter tool scratch state written by the SDK when it runs in this container.
+# Not project content; it appeared only because the SDK was installed fresh here.
+.config/
+
+# golden_toolkit writes diff artifacts here on a failed golden comparison.
+# They are per-run output of a failing test, never source. Untracked previously,
+# which meant a failed golden run left 8 PNGs staged by the next `git add -A`.
+test/goldens/**/failures/
+
+# Stop-hook state: the HEAD sha the §5 batch-close checklist last reported on.
+# Per-machine and per-clone; committing it would make the hook silent for
+# everyone else at that sha. Kill switch lives beside it.
+.claude/.batch_close_state
+.claude/.batch_close.disabled
+
+# Upstream plate artwork — cloned by scripts/build_exercise_plates.py.
+# Only the cropped output under assets/exercise_plates/ is committed.
+/vendor/

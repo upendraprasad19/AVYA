@@ -1,0 +1,10 @@
+# Gate 15 baseline — known generic-error catch blocks without telemetry.
+#
+# Each line is `<relative-path>:<line>:<phrase>`. Gate 15 grandfathers
+# these and fails only on NEW violations. Reduce over time by adding
+# telemetry to listed catch blocks + removing them from baseline.
+#
+# Format: <path>:<line>:<phrase>
+# Comments and blank lines allowed.
+
+# All pre-existing violations retrofitted in commit <SHA placeholder>. File preserved for future grandfathering.
