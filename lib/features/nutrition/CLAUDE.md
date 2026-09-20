@@ -67,7 +67,7 @@ for `nlog_*` Hive rows + `nutrition_logs` cloud) + `nutrition_read_service.dart`
 - `test/contracts/water_logs_writer_to_reader_test.dart`
 - `test/contracts/ai_breakdown_notifier_save_meal_telemetry_test.dart` (behavioral — the catch block's `ErrorTelemetry.recordNonFatal` call, via fault-injection test seams)
 - `test/contracts/nutrition_log_retag_writer_to_reader_test.dart` (`moveMealLog` rekey + collision-merge clamp-after-merge)
-- `test/widgets/log_food_sheet_locked_slot_test.dart` (`lockedSlot` durability across the sheet's lifetime)
+- `test/widgets/log_food_sheet_locked_slot_test.dart` (header tracks the LIVE `mealTypeProvider` value, not a frozen `lockedSlot` — corrected 2026-09-20 round-2 review: the title is reactive, not durable/static; also pins that opening unlocked re-infers the current time-of-day slot rather than keeping an earlier locked sheet's leftover value)
 - `test/widgets/log_food_sheet_search_respects_locked_slot_test.dart` (Search tab honors `mealTypeProvider`, not wall-clock time)
 - `test/widgets/edit_macros_sheet_retag_test.dart` (Edit Macros sheet's meal-slot selector)
 - `test/widgets/todays_meals_card_suggested_chip_test.dart` (diet-plan "SUGGESTED" chip vs a logged meal)

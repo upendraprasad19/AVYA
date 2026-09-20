@@ -19,6 +19,7 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
+import '../services/meal_slot_inference.dart' show inferMealSlot;
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_generator.dart';
 import 'package:uuid/uuid.dart';
@@ -1349,19 +1350,18 @@ final customFoodProvider =
 
 class MealTypeNotifier extends Notifier<String> {
   @override
-  String build() {
-    // Time-windowed inference, matching `inferMealSlot` in
-    // meal_slot_inference.dart. Kept inline here to avoid an import cycle
-    // from the provider layer; keep windows in sync if edited.
-    final now = DateTime.now();
-    final mins = now.hour * 60 + now.minute;
-    if (mins >= 5 * 60 && mins < 10 * 60 + 30) return 'breakfast';
-    if (mins >= 11 * 60 + 30 && mins < 15 * 60 + 30) return 'lunch';
-    if (mins >= 18 * 60 && mins < 22 * 60) return 'dinner';
-    return 'snacks';
-  }
+  String build() => inferMealSlot(DateTime.now());
 
-  void select(String mealType) => state = mealType;
+  /// Sets the current meal slot. Normalizes `'snack'` (the display-only
+  /// singular used by `TodaysMealsCard._slotOrder`) to the canonical
+  /// `'snacks'` write vocabulary `NutritionWriteService.isAllowedMealType`
+  /// requires — obs 1 follow-up, diagnose
+  /// `2026-09-20-meal-slot-vocabulary-and-reactivity-e1c5b8`.
+  /// Without this, every write routed through a slot tapped from
+  /// `TodaysMealsCard`'s Snack card silently failed `isAllowedMealType` and
+  /// was dropped with no user-visible error.
+  void select(String mealType) =>
+      state = mealType == 'snack' ? 'snacks' : mealType;
 }
 
 final mealTypeProvider =
@@ -1371,6 +1371,7 @@ final mealTypeProvider =
 
 class ScanMealNotifier extends Notifier<ScanMealState> {
   // Test seam for injecting failures in unit tests
+  @visibleForTesting
   static Object? throwBeforeScanForTest;
 
   @override
@@ -1421,6 +1422,15 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
         return;
       }
 
+      // Round-2 plan review finding, 2026-09-20: this exit (a non-200 or
+      // null-data response — a real ai-proxy failure, just not a thrown
+      // exception) had no telemetry, unlike the catch block below it,
+      // which Task 1 of this same batch instrumented. Same failure class,
+      // same fix.
+      unawaited(ErrorTelemetry.logEvent(
+        'scan_meal_notifier_non_200_response',
+        message: 'status=${response.status}',
+      ));
       state = state.copyWith(
         isScanning: false,
         error: 'Could not analyse the image. Please try again.',

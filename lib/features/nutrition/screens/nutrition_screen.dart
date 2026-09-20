@@ -38,14 +38,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
     with HiveTabScaffoldMixin<NutritionScreen> {
   bool _isInsightsExpanded = false;
 
-  // Task 5 (food-logging-observations, Obs 1 — retag) — the 4 meal-type
-  // slots a logged meal can be moved between. Mirrors
-  // `NutritionWriteService._allowedMealTypes` (private to that file); kept
-  // here too since the Edit Macros sheet needs it to validate/default
-  // `currentMealType` before NutritionWriteService.moveMealLog is ever
-  // called.
-  static const _allowedSlotKeys = {'breakfast', 'lunch', 'dinner', 'snacks'};
-
   @override
   void invalidateOnRetry(WidgetRef ref) {
     ref.invalidate(dailyNutritionProvider);
@@ -983,12 +975,19 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
 
     // Task 5 (Obs 1 — retag) — the slot selector defaults to the log's
     // current meal_type, falling back to 'snacks' for any legacy/unknown
-    // value so the selector never lands on an unselectable slot.
-    final currentMealType =
-        (meal['meal_type'] as String? ?? 'snacks').toLowerCase();
-    final selectedMealType = ValueNotifier<String>(
-      _allowedSlotKeys.contains(currentMealType) ? currentMealType : 'snacks',
-    );
+    // value (e.g. the singular 'snack' TodaysMealsCard's slot vocabulary
+    // can still produce on old rows) so the selector never lands on an
+    // unselectable slot.
+    // The SAVE predicate below must compare against the SELECTOR's own
+    // initial value, not the raw `currentMealType` field — round-2 plan
+    // review finding, 2026-09-20: comparing against the raw field meant a
+    // legacy row with meal_type=='snack' (a value the selector can never
+    // hold) always read as "changed" even when the user picked no new
+    // slot, silently retagging on every macros-only edit. Both the
+    // selector's initial value and the SAVE comparison now go through the
+    // same extracted, unit-tested function so they cannot diverge again.
+    final initialSlot = resolveInitialMealSlot(meal);
+    final selectedMealType = ValueNotifier<String>(initialSlot);
 
     showModalBottomSheet(
       context: context,
@@ -1079,7 +1078,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
                       'total_fat': double.tryParse(fatCtrl.text) ?? 0,
                       'total_fiber': double.tryParse(fiberCtrl.text) ?? 0,
                     };
-                    if (newSlot != currentMealType) {
+                    if (newSlot != initialSlot) {
                       NutritionWriteService.instance.moveMealLog(
                         logKey: logId,
                         newMealType: newSlot,
@@ -1337,7 +1336,7 @@ class MealSlotSelector extends StatelessWidget {
 
   final ValueNotifier<String> selectedMealType;
 
-  static const slots = ['breakfast', 'lunch', 'dinner', 'snacks'];
+  static const slots = mealSlotKeys;
 
   @override
   Widget build(BuildContext context) {

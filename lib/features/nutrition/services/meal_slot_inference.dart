@@ -66,3 +66,22 @@ String mealSlotEmoji(String slot) {
 
 /// The four slot keys in display order.
 const List<String> mealSlotKeys = ['breakfast', 'lunch', 'dinner', 'snacks'];
+
+/// Resolves the slot value a meal-slot selector should INITIALIZE to for a
+/// given logged meal, applying the same "unknown/legacy value falls back to
+/// snacks" rule a selector's own initial-value computation must use.
+///
+/// Extracted as a pure function (round-2 plan review, 2026-09-20) so a
+/// SAVE handler's "did the user actually change the slot?" comparison can
+/// be unit-tested without driving a full bottom sheet. Before this
+/// extraction, the Edit Macros sheet computed its selector's initial value
+/// inline but then compared the SAVE-time selection against the raw,
+/// un-fallback'd `meal['meal_type']` field instead of this same resolved
+/// value — so a legacy row with `meal_type == 'snack'` (a value no
+/// selector can ever hold, since the selector's own vocabulary is
+/// `mealSlotKeys`) always read as "the user changed the slot", silently
+/// retagging the log on every macros-only edit.
+String resolveInitialMealSlot(Map<String, dynamic> meal) {
+  final raw = (meal['meal_type'] as String? ?? 'snacks').toLowerCase();
+  return mealSlotKeys.contains(raw) ? raw : 'snacks';
+}

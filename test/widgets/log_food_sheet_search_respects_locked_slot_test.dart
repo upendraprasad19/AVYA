@@ -5,10 +5,13 @@
 // inference (`_mealTypeForNow`) and never read `mealTypeProvider` at all —
 // so opening "LOG TO LUNCH"/"LOG TO DINNER" -> Search tab could silently
 // log to whatever time-of-day says instead of the locked slot the user
-// explicitly tapped. This test forces `mealTypeProvider` to a value that
-// DISAGREES with the real wall-clock time, so it fails deterministically
-// pre-fix whenever the clock doesn't happen to also say "dinner", and
-// passes deterministically post-fix regardless of wall-clock time.
+// explicitly tapped. This test forces `mealTypeProvider` to a value
+// computed to DISAGREE with the real wall-clock inference at whatever time
+// the test happens to run (round-2 plan review, 2026-09-20 — an earlier
+// version hardcoded 'dinner', which only disagreed with the pre-fix
+// inference outside the 18:00-22:00 window, so discrimination depended on
+// CI's run time), so it fails deterministically pre-fix and passes
+// deterministically post-fix regardless of wall-clock time.
 //
 // ⚠ TWO testWidgets, ORDER LOAD-BEARING — same class as
 // test/widgets/diet_plan_screen_no_modal_test.dart's header / root
@@ -34,6 +37,7 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/nutrition/services/meal_slot_inference.dart';
 import 'package:icanbefitter/features/nutrition/widgets/log_food_sheet.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -125,29 +129,31 @@ void main() {
 
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    // Force a mealTypeProvider value that DISAGREES with whatever the
-    // real wall-clock time would infer, to prove the lock — not the
-    // clock — decides the outcome.
-    container.read(mealTypeProvider.notifier).select('dinner');
+    // Pick a locked slot guaranteed to disagree with whatever the real
+    // wall-clock inference returns RIGHT NOW, so the lock — not the
+    // clock — is what decides the outcome, unconditionally.
+    final wallClockSlot = inferMealSlot(DateTime.now());
+    final lockedSlot = wallClockSlot == 'dinner' ? 'lunch' : 'dinner';
+    container.read(mealTypeProvider.notifier).select(lockedSlot);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
+        child: MaterialApp(
           home: Scaffold(
             body: LogFoodSheet(
-                initial: LogFoodMode.search, lockedSlot: 'dinner'),
+                initial: LogFoodMode.search, lockedSlot: lockedSlot),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(container.read(mealTypeProvider), 'dinner');
+    expect(container.read(mealTypeProvider), lockedSlot);
 
     // Type a query, tap the first result, then assert the written Hive
-    // row's meal_type is 'dinner' regardless of the current wall-clock
-    // time.
+    // row's meal_type is the locked slot regardless of the current
+    // wall-clock time.
     await tester.enterText(find.byType(TextField), 'oat');
     await tester.pumpAndSettle();
 
@@ -174,9 +180,92 @@ void main() {
         .toList();
     expect(written, isNotEmpty,
         reason: 'tapping the search result must write an nlog_* row');
-    expect(written.first['meal_type'], 'dinner',
-        reason: 'the locked slot (dinner) must win over time-of-day '
-            'inference, which pre-fix logged wherever _mealTypeForNow() '
-            'said instead');
+    expect(written.first['meal_type'], lockedSlot,
+        reason: 'the locked slot must win over time-of-day inference, '
+            'which pre-fix logged wherever _mealTypeForNow() said instead');
+  });
+
+  testWidgets(
+      'Snack slot CTA (the singular "snack" TodaysMealsCard emits) writes '
+      'meal_type "snacks", not a silently-dropped write (round-2 plan '
+      'review, 2026-09-20)', (tester) async {
+    // Comes AFTER the font-priming test above, so GoogleFonts fallbacks are
+    // already cached process-wide — no separate priming needed here.
+    PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
+    await tester.runAsync(() async {
+      Hive.init(tempDir.path);
+      GuardedBox.testBypassOwnership = true;
+      await HiveService.instance.init();
+      await HiveUserSession.openForUser(testUserId);
+      // The nutritionBox is NOT cleared between tests in this file (both
+      // tests share the same tempDir + testUserId) — without this, the
+      // sibling test's own leftover nlog_* row would still be present and
+      // `written.first` below could pick IT UP instead of this test's
+      // fresh write, since Hive key iteration order is insertion order.
+      await HiveService.instance.nutritionBox.clear();
+      await HiveService.instance.foodBox.put('oats_test_002', {
+        'id': 'oats_test_002',
+        'name': 'Oats',
+        'standard_serving_g': 40.0,
+        'standard_serving_desc': '40g',
+        'calories_std': 150,
+        'calories_per_100g': 375.0,
+        'protein_per_100g': 13.0,
+        'carbs_per_100g': 68.0,
+        'fat_per_100g': 7.0,
+        'fiber_per_100g': 10.0,
+        'category': 'grains',
+      });
+    });
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    // 'snack' (singular) is exactly the value TodaysMealsCard's
+    // onLogSlot callback passes for its Snack CTA — see
+    // TodaysMealsCard._slotOrder. Pre-fix, MealTypeNotifier.select stored
+    // this verbatim and NutritionWriteService.isAllowedMealType (which
+    // only accepts the plural 'snacks') rejected every write with no
+    // user-visible error. Selected directly here (mirroring the sibling
+    // test above) rather than relying solely on LogFoodSheet's own
+    // addPostFrameCallback timing under pumpAndSettle — the write path
+    // this test exists to pin is select()'s normalization itself.
+    container.read(mealTypeProvider.notifier).select('snack');
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: LogFoodSheet(initial: LogFoodMode.search, lockedSlot: 'snack'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The provider must already read the NORMALIZED value.
+    expect(container.read(mealTypeProvider), 'snacks');
+
+    await tester.enterText(find.byType(TextField), 'oat');
+    await tester.pumpAndSettle();
+    expect(find.byType(ListTile), findsWidgets);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.byType(ListTile).first);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pumpAndSettle();
+
+    final box = HiveService.instance.nutritionBox;
+    final written = box.keys
+        .whereType<String>()
+        .where((k) => k.startsWith('nlog_'))
+        .map((k) => Map<String, dynamic>.from(box.get(k) as Map))
+        .toList();
+    expect(written, isNotEmpty,
+        reason: 'the Snack slot write must actually land — pre-fix, '
+            'isAllowedMealType(\'snack\') was false and moveMealLog\'s '
+            'sibling logMeal path returned WriteResult.fail silently');
+    expect(written.first['meal_type'], 'snacks');
   });
 }

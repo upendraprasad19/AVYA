@@ -10,7 +10,7 @@ import 'log_food_modes/cart_mode_body.dart';
 import 'log_food_modes/barcode_mode_body.dart';
 import 'log_food_modes/search_mode_body.dart';
 import '../providers/nutrition_provider.dart' show mealTypeProvider;
-import '../services/meal_slot_inference.dart' show mealSlotLabel;
+import '../services/meal_slot_inference.dart' show inferMealSlot, mealSlotLabel;
 
 /// The five modes hosted by [LogFoodSheet]. AI is the default tab.
 enum LogFoodMode { ai, scan, cart, barcode, search }
@@ -41,8 +41,15 @@ class LogFoodSheet extends ConsumerStatefulWidget {
   final LogFoodMode initial;
 
   /// When set (opened from a specific meal-slot's `+ LOG` CTA), the sheet
-  /// locks `mealTypeProvider` to this slot for the sheet's lifetime and
-  /// titles itself "LOG TO {SLOT}" instead of the generic "LOG FOOD".
+  /// SEEDS `mealTypeProvider` with this slot on open and titles itself
+  /// "LOG TO {SLOT}" instead of the generic "LOG FOOD". The title tracks
+  /// the live provider value thereafter (not the static [lockedSlot]
+  /// param) — a tab's own meal-slot selector (the AI chip, the Barcode
+  /// pill row) can still change it, which is a deliberate user choice, not
+  /// a bug; the title staying in sync with that choice is what "locked"
+  /// means here (B-pass finding, 2026-09-20 — the title previously stayed
+  /// frozen on the originally-tapped slot even after a tab's own selector
+  /// moved the actual write destination elsewhere).
   final String? lockedSlot;
 
   @override
@@ -59,15 +66,19 @@ class _LogFoodSheetState extends ConsumerState<LogFoodSheet> {
   void initState() {
     super.initState();
     _active = widget.initial;
-    final slot = widget.lockedSlot;
-    if (slot != null) {
-      // Deferred so Riverpod isn't mutated during build/init — mirrors
-      // the retired LogToSlotSheet's identical pattern.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ref.read(mealTypeProvider.notifier).select(slot);
-      });
-    }
+    // Always seed mealTypeProvider on open — round-2 plan review finding,
+    // 2026-09-20: when lockedSlot is null (the free-floating "+ LOG FOOD"
+    // entry), the provider previously kept whatever value a PRIOR locked
+    // sheet had last written, since MealTypeNotifier.build() only infers
+    // once per app session. A user opening "LOG TO BREAKFAST" earlier and
+    // "+ LOG FOOD" later would silently log the second entry to breakfast
+    // too. Re-inferring the current time-of-day slot on every unlocked
+    // open closes that leak.
+    final slot = widget.lockedSlot ?? inferMealSlot(DateTime.now());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(mealTypeProvider.notifier).select(slot);
+    });
   }
 
   void _dismiss() {
@@ -104,6 +115,10 @@ class _LogFoodSheetState extends ConsumerState<LogFoodSheet> {
   }
 
   Widget _buildHeader() {
+    // Watches the live provider value (not the static widget.lockedSlot)
+    // so the title never goes stale if a tab's own selector moves the
+    // actual write destination after open — B-pass finding, 2026-09-20.
+    final currentSlot = ref.watch(mealTypeProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 14, 12, 8),
       child: Row(
@@ -123,7 +138,7 @@ class _LogFoodSheetState extends ConsumerState<LogFoodSheet> {
           Text(
             widget.lockedSlot == null
                 ? 'LOG FOOD'
-                : 'LOG TO ${mealSlotLabel(widget.lockedSlot!)}',
+                : 'LOG TO ${mealSlotLabel(currentSlot)}',
             style: AppTypography.mono.copyWith(
               color: AppColors.textPrimary,
               letterSpacing: 2,

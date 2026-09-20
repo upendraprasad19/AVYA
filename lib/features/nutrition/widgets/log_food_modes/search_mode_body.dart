@@ -17,8 +17,7 @@ import '../saved_meals_section.dart';
 /// SEARCH mode body for `LogFoodSheet`. Three sub-filters at the top:
 ///   `[All] [Saved Meals] [Recent]`.
 /// Body switches based on the active filter:
-///   * All        — full-text food search field (same UI as the
-///                  legacy showFoodSearchSheet).
+///   * All        — full-text food search field.
 ///   * Saved Meals — embedded SavedMealsSection.
 ///   * Recent     — most-recent foodlog rows from nutritionBox.
 class SearchModeBody extends ConsumerStatefulWidget {
