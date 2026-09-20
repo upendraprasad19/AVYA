@@ -60,7 +60,7 @@ void main() {
           .ancestor(of: find.text(label), matching: find.byType(Container))
           .first,
     );
-    return (container.decoration as BoxDecoration).color as Color;
+    return (container.decoration! as BoxDecoration).color!;
   }
 
   testWidgets('default selection is MODERATE (pre-selected accent fill)',
