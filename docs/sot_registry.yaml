@@ -615,6 +615,34 @@ concepts:
       Hive nlog_* contract: total_calories computed from items[];
       per-item shape {name, quantity_g, calories, protein, carbs, fat, fiber}.
 
+  - concept: nutrition_log_retag
+    domain: nutrition
+    behavioral_test_path: test/contracts/nutrition_log_retag_writer_to_reader_test.dart
+    description: |
+      Moving a logged meal to a different meal-type slot (obs 1, 2026-09-20
+      brainstorm). Rekeys the nlog_* Hive row (meal_type is embedded in the
+      key: nlog_<date>_<mealType>_<hash>) rather than a field-only update,
+      because the cloud natural key is (user_id, date, meal_type) and a
+      field-only update risks the FK-violation class fixed by diagnose
+      c9f2a7. LOCAL-ONLY cloud consistency (same accepted residual as
+      moveExerciseLogs and this file's own deleteLog/editLog) — the vacated
+      old slot's cloud row is not explicitly tombstoned.
+    writers:
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 354-458
+        method: moveMealLog
+        notes: |
+          Reads the row at the old key, recomputes the key via
+          computeLogKey with the new mealType, merges on collision,
+          writes at the new key, deletes the old key.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/nutrition/widgets/todays_meals_card.dart
+        line_range: 73-86
+        method: TodaysMealsCard.build (grouping by meal_type)
+        semantic: aggregated
+        fields_read: [meal_type, id, log_key]
+
   - concept: food_log_delete_with_undo
     domain: nutrition
     behavioral_test_path: test/contracts/food_log_delete_with_undo_behavioral_test.dart
@@ -5249,9 +5277,9 @@ concepts:
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 351-428
+        line_range: 460-545
         method: deleteLog
-        notes: removes nlog_* entry from nutritionBox + fires cloud delete (shifted +~56 lines by the FC6 _clampMealPayload helper, diagnose 4e8f1b)
+        notes: removes nlog_* entry from nutritionBox + fires cloud delete (shifted +109 lines by the moveMealLog insertion, obs 1 2026-09-20 batch — see nutrition_log_retag)
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/screens/delete_account_screen.dart
@@ -6534,11 +6562,11 @@ concepts:
         fields_read: []
         notes: Fired at :58/:285/:883; invalidates subscriptionInfoProvider + messageLimitProvider.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 755-755
+        line_range: 861-861
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
-        notes: Fired at :780; invalidates the 6 nutrition providers.
+        notes: Fired at :886; invalidates the 6 nutrition providers (shifted by the moveMealLog insertion, obs 1 2026-09-20 batch).
       - file: lib/core/services/rank_service.dart
         line_range: 53-53
         method: onStateChanged
