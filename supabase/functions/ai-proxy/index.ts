@@ -55,6 +55,7 @@ import {
 import type { ToolContext } from "../_shared/tools/index.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
+import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -388,7 +389,7 @@ Analyse this as a meal and return ONLY a JSON object (no markdown, no code block
 Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the exact quantity mentioned. One item per distinct food. All values (protein, carbs, fat, fiber) are in grams — numbers only, no "g" suffix. Fiber must reflect actual dietary fiber content. If quantity is unclear, assume a typical single serving for an Indian adult. Return ONLY the JSON object, nothing else.`;
 
       // Step 2 — call Gemini on the valid reservation.
-      const { content, modelUsed, tokensUsed } = await geminiChat({
+      const { content, modelUsed, tokensUsed, lastError } = await geminiChat({
         model: MODEL_FLASH,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
         userPrompt: asAuthoredPrompt(prompt),
@@ -439,6 +440,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
           JSON.stringify({ error: "Gemini returned no content" }),
           0,
         );
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null);
         return err(502, "Food analysis failed");
       }
 
@@ -583,7 +585,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
 {"meal_name":"short name describing the meal","items":[{"name":"food item name","quantity":"estimated quantity e.g. 1 bowl, 2 rotis, 100g","calories":120,"protein":25,"carbs":3,"fat":2,"fiber":4}]}
 Rules: identify every distinct food item, estimate realistic portion sizes for an Indian adult, use ACCURATE USDA/ICMR nutrition values, all macro values are numbers in grams no g suffix, fiber must reflect actual dietary fiber never return 0 for high-fiber foods, return ONLY the JSON object nothing else`;
 
-      const { content, tokensUsed } = await geminiChat({
+      const { content, tokensUsed, lastError } = await geminiChat({
         model: MODEL_FLASH_LITE,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
         userPrompt: asAuthoredPrompt(scanPrompt),
@@ -598,6 +600,7 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
 
       if (!content) {
         await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null);
         return err(502, "Image analysis failed");
       }
 
@@ -625,7 +628,7 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
 {"items":[{"name":"product name","category":"e.g. dairy, snack, staple, beverage, protein","quantity":"e.g. 1 pack, 500g, 1L","calories_per_serving":120,"protein_per_serving":5,"carbs_per_serving":20,"fat_per_serving":3,"is_healthy":true,"concern":"brief note if unhealthy e.g. high sugar, ultra-processed"}],"summary":{"total_items":5,"healthy_count":3,"unhealthy_count":2,"total_estimated_calories":1500,"total_estimated_protein":45,"health_score":65,"top_suggestion":"Replace Maggi with whole wheat pasta for more fiber and protein"}}
 Rules: identify every distinct food product, use ACCURATE nutrition values from standard USDA/FSSAI data, is_healthy=false for ultra-processed/high-sugar/high-sodium items, health_score is 0-100, provide actionable suggestions for healthier alternatives, return ONLY the JSON object nothing else`;
 
-      const { content, tokensUsed } = await geminiChat({
+      const { content, tokensUsed, lastError } = await geminiChat({
         model: MODEL_FLASH_LITE,
         systemPrompt: "You are a nutrition expert. Return ONLY valid JSON, no markdown.",
         userPrompt: asAuthoredPrompt(cartPrompt),
@@ -640,6 +643,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
 
       if (!content) {
         await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null);
         return err(502, "Cart analysis failed");
       }
 
