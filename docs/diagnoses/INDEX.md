@@ -9,6 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### diet_plan_immediate_load_no_modal (1 bugs)
 - 2026-09-20 6642b5 — Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive…
 
+### nutrition_log_retag (1 bugs)
+- 2026-09-20 a3f6c9 — NutritionWriteService.moveMealLog's collision-merge branch (two logs retagged into the same destination slot+item-hash bucket) wrote merged totals (total_calories/protein/carbs/fat/fiber) WITHOUT ever…
+
 ### scan_meal_image_downscale (1 bugs)
 - 2026-09-20 1dded5 — Scan Meal fails instantly on any full-resolution camera photo with "Check your connection and try again." ai-proxy rejects base64-encoded images over ~5.6MB decoded before calling Gemini.
 
@@ -1282,6 +1285,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-20 | 6642b5 | Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive… | diet_plan_immediate_load_no_modal | test/widgets/diet_plan_screen_no_modal_test.dart |
+| 2026-09-20 | a3f6c9 | NutritionWriteService.moveMealLog's collision-merge branch (two logs retagged into the same destination slot+item-hash bucket) wrote merged totals (total_calories/protein/carbs/fat/fiber) WITHOUT ever… | nutrition_log_retag | test/contracts/nutrition_log_retag_writer_to_reader_test.dart |
 | 2026-09-20 | 1dded5 | Scan Meal fails instantly on any full-resolution camera photo with "Check your connection and try again." ai-proxy rejects base64-encoded images over ~5.6MB decoded before calling Gemini. | scan_meal_image_downscale | test/contracts/scan_meal_image_downscale_test.dart |
 | 2026-09-19 | d3f8a6 | OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in… | exercise_log_sync_fingerprint_skip | test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart |
 | 2026-09-19 | c7d2e4 | `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture… | sot_registry_behavioral_test_path_resolution | test/scripts/sot_behavioral_test_paths_gate_test.dart |

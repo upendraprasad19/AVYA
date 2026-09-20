@@ -629,7 +629,7 @@ concepts:
       old slot's cloud row is not explicitly tombstoned.
     writers:
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 354-458
+        line_range: 354-471
         method: moveMealLog
         notes: |
           Reads the row at the old key, recomputes the key via
@@ -641,7 +641,13 @@ concepts:
         line_range: 73-86
         method: TodaysMealsCard.build (grouping by meal_type)
         semantic: aggregated
-        fields_read: [meal_type, id, log_key]
+        fields_read: [meal_type, meal_type_label]
+        notes: |
+          Corrected 2026-09-20 (review round 1) — the brief's original
+          entry listed [meal_type, id, log_key], but this line range only
+          reads meal_type_label (falling back to meal_type) to bucket the
+          row into a slot; id/log_key are read elsewhere in this same
+          widget (rendering/dismissible keys), not by this grouping loop.
 
   - concept: food_log_delete_with_undo
     domain: nutrition
@@ -5277,9 +5283,9 @@ concepts:
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 460-545
+        line_range: 473-558
         method: deleteLog
-        notes: removes nlog_* entry from nutritionBox + fires cloud delete (shifted +109 lines by the moveMealLog insertion, obs 1 2026-09-20 batch — see nutrition_log_retag)
+        notes: removes nlog_* entry from nutritionBox + fires cloud delete (shifted by the moveMealLog insertion, obs 1 2026-09-20 batch — see nutrition_log_retag)
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/screens/delete_account_screen.dart
@@ -6562,11 +6568,11 @@ concepts:
         fields_read: []
         notes: Fired at :58/:285/:883; invalidates subscriptionInfoProvider + messageLimitProvider.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 861-861
+        line_range: 874-874
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
-        notes: Fired at :886; invalidates the 6 nutrition providers (shifted by the moveMealLog insertion, obs 1 2026-09-20 batch).
+        notes: Fired at :899; invalidates the 6 nutrition providers (shifted by the moveMealLog insertion, obs 1 2026-09-20 batch).
       - file: lib/core/services/rank_service.dart
         line_range: 53-53
         method: onStateChanged

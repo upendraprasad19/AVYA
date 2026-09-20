@@ -406,10 +406,16 @@ class NutritionWriteService {
     row['id'] = newKey;
     row['log_key'] = newKey;
     if (macroUpdates != null) {
-      row.addAll(macroUpdates);
+      // Reject an `items` key here the same way editLog's own recompute
+      // branch owns `items` exclusively — a caller passing items through
+      // macroUpdates would otherwise silently bypass the totals recompute
+      // below and corrupt the row (no current caller does this; guarded
+      // defensively per review round 1).
+      final safeMacroUpdates = Map<String, dynamic>.from(macroUpdates)
+        ..remove('items');
+      row.addAll(safeMacroUpdates);
     }
     row['logged_at'] = DateTime.now().toUtc().toIso8601String();
-    _clampMealPayload(row);
 
     final existingAtDestination = box.get(newKey);
     if (existingAtDestination is Map) {
@@ -433,6 +439,13 @@ class NutritionWriteService {
       row['total_fiber'] =
           mergedItems.fold<double>(0, (a, i) => a + i.fiber).round();
     }
+
+    // FC6 — clamp AFTER the collision-merge recompute (not before), so
+    // whichever version of `row` actually gets written (moved-only OR
+    // merged-with-destination) has its totals + per-item values bounded.
+    // Mirrors editLog/appendItemsToMeal, which both clamp after their own
+    // recompute for the same reason (review round 1 finding).
+    _clampMealPayload(row);
 
     try {
       await box.put(newKey, row);
