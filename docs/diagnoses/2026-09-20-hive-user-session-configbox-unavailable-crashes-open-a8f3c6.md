@@ -8,16 +8,24 @@ symptom: |
   Merging `claude/food-logging-observations-126ab3` into `main` (a conflicted
   merge, resolved with `git commit`, which runs `pre-commit` -> the
   merge-commit regression-catalog walk) reported "at least one recent
-  regression test FAILED" — 32 distinct failing assertions across
+  regression test FAILED" — 32 distinct failing assertions, ALL 32 tracing to
+  the exact same stack frame (`grep -c "hive_user_session.dart 201"` against
+  the captured output → 32, matching the 32 `[E]` failure markers 1:1).
+  Per-file breakdown, taken directly from the `[E]` marker lines themselves
+  (`grep "\[E\]" ... | grep -oE "test/.*\.dart" | sort | uniq -c` — corrected
+  2026-09-20 by an independent B-pass review that caught the first version of
+  this doc undercounting by 9, having enumerated only 3 of the 4 affected
+  files from a partial `tail` inspection rather than the complete list):
   `test/contracts/nutrition_log_retag_writer_to_reader_test.dart` (6),
-  `test/contracts/reschedule_week_terminal_row_test.dart` (11),
-  `test/contracts/streak_paused_day_not_missed_test.dart` (6), plus
-  overflow into files whose own setup runs after these in the shared worker
-  (safe_merge_test.dart / safe_push_test.dart / oi_numbering_gate_e2e_test.dart
-  names appeared interleaved in the raw output, but every one of them still
-  passed — only the count of already-failed tests climbed alongside them,
-  not new failures of their own). Bug-history check (docs/diagnoses/INDEX.md
-  grep for `git_hook_env_leak`) surfaced two prior instances of "merge-commit
+  `test/contracts/profile_provider_single_source_test.dart` (8),
+  `test/contracts/reschedule_week_terminal_row_test.dart` (13),
+  `test/contracts/streak_paused_day_not_missed_test.dart` (5) — sums to 32.
+  Other file names (safe_merge_test.dart / safe_push_test.dart /
+  oi_numbering_gate_e2e_test.dart) appeared interleaved in the raw output
+  because `flutter test` prints a running `+pass -fail` tally across ALL
+  concurrently-loading files, not because those files failed — verified they
+  all passed. Bug-history check (docs/diagnoses/INDEX.md grep for
+  `git_hook_env_leak`) surfaced two prior instances of "merge-commit
   regression-catalog walk fails on tests green everywhere else"
   (diagnose 4f2a9e, d81f3c) — that class was RULED OUT first: the exact
   scrubbedChildEnvironment fix from 4f2a9e is still present and correct in
@@ -28,7 +36,7 @@ symptom: |
 concept: not_applicable
 sot_registry_entry: not_applicable
 writers:
-  - { file: lib/core/services/hive_user_session.dart, method_or_widget: _openForUserLocked, line: 201 }
+  - { file: lib/core/services/hive_user_session.dart, method_or_widget: _openForUserLocked, line: 203 }
 readers:
   - { file: lib/core/services/hive_service.dart, method_or_widget: getBox (configBox getter), line: 198 }
 hive_key_prefix: (n/a — this is a box-availability bug, not a data-key bug)
@@ -105,7 +113,7 @@ impact_analysis: |
   test-harness-wide change with its own blast radius, deliberately not
   bundled into this one-file mutation-proven fix.
 touched_layers_checked:
-  - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "lib/core/services/hive_user_session.dart:201-217 — flutter analyze lib/ reports 0 warnings on the file." }
+  - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "lib/core/services/hive_user_session.dart:201-224 (bool declaration through the if/else box-open branches) — flutter analyze lib/ reports 0 warnings on the file." }
   - { tier: 2, name: "Hive (local state)", status: fixed_in_this_batch, evidence: "test/contracts/hive_user_session_box_open_parallel_test.dart's new 'falls through to the parallel path when configBox is unavailable' test closes configBox mid-test and asserts openForUser still completes and opens every user-scoped box." }
   - { tier: 3, name: "Postgres schema", status: not_applicable, evidence: "No schema touched." }
   - { tier: 12, name: "Client -> server contract", status: not_applicable, evidence: "No wire format or Edge Function contract touched." }
@@ -142,7 +150,8 @@ tracing to the exact same new line.
 
 ## Root cause
 
-Writer: `lib/core/services/hive_user_session.dart:201` —
+Writer (pre-fix location — the wrapped, current version is at line 203):
+`lib/core/services/hive_user_session.dart:201` —
 `HiveService.instance.configBox.get('disable_parallel_hive_box_open')`, added
 unconditionally by diagnose f4c8b1's fix.
 Reader/thrower: `lib/core/services/hive_service.dart:198-204` `getBox()` →
