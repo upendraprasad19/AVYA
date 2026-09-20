@@ -100,9 +100,44 @@ void main() {
       'disable_parallel_hive_box_open', () {
     final src =
         File('lib/core/services/hive_user_session.dart').readAsStringSync();
-    expect(src, contains("configBox.get('disable_parallel_hive_box_open')"),
+    // Whitespace-collapsed so a reformatted line break (e.g. the
+    // defensive try/catch wrap added for diagnose f4c8b1's regression)
+    // can't silently defeat this source-shape check.
+    final collapsed = src.replaceAll(RegExp(r'\s+'), ' ');
+    expect(
+        collapsed,
+        contains(
+            "configBox .get('disable_parallel_hive_box_open')".replaceAll(
+                RegExp(r'\s+'), ' ')),
         reason: 'platform-tier paths require a feature-flag guard (§4.6); '
             'the parallel box-open must remain reversible to the verbatim '
             'pre-Obs-4 sequential loop without a code change');
+  });
+
+  test('openForUser falls through to the parallel path when configBox '
+      'is unavailable, rather than crashing session open', () async {
+    // Reproduces diagnose f4c8b1's root cause directly: a shared box the
+    // flag-read depends on can be missing (test-harness singleton reuse,
+    // or a genuinely early cold start) without that being a session-open
+    // failure. Close the shared configBox out from under the read.
+    if (Hive.isBoxOpen(HiveService.configBoxName)) {
+      await Hive.box(HiveService.configBoxName).close();
+    }
+    try {
+      await expectLater(
+        HiveUserSession.openForUser('test-user-configbox-unavailable'),
+        completes,
+      );
+      final boxName = HiveUserSession.namespacedBoxName(
+          HiveService.userBoxName, 'test-user-configbox-unavailable');
+      expect(Hive.isBoxOpen(boxName), isTrue,
+          reason: 'a configBox read failure must not prevent the '
+              'user-scoped boxes from opening');
+    } finally {
+      // Restore shared state for any test appended after this one.
+      if (!Hive.isBoxOpen(HiveService.configBoxName)) {
+        await Hive.openBox(HiveService.configBoxName);
+      }
+    }
   });
 }

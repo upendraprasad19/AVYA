@@ -158,5 +158,52 @@ void main() {
       // first -- without hardcoding a brittle exact line number.
       expect(findings.single.teardownLine, greaterThan(12));
     });
+
+    test('GOOD: a comment mentioning "await" beside the ONE guarded await is '
+        'not a false-positive sibling (diagnose d3e8a1, 2026-09-20) -- exact '
+        'verbatim shape from test/edge_functions/ai_proxy_test.dart\'s '
+        'tearDownAll, whose own explanatory comment about a PAST bare-await '
+        'incident contains the word "await" in prose', () {
+      const src = '''
+void main() {
+  tearDownAll(() async {
+    if (!setUpSucceeded) return;
+    // Cleanup is hygiene, not an assertion (CLAUDE.md 4.9). A bare await here
+    // turned a fully-passing file RED on 2026-09-10: all 4 tests passed (+4),
+    // then signOut raised AuthRetryableFetchException "Connection reset by
+    // peer" on /auth/v1/logout and made main red. The exception type is
+    // literally named RETRYABLE -- a transient network blip must never be able
+    // to fail a suite whose assertions all held.
+    try {
+      await client.auth.signOut();
+    } catch (_) {}
+  });
+}
+''';
+      expect(
+        findUnguardedSiblingAwaits(src, fileLabel: 'ai_proxy_test.dart'),
+        isEmpty,
+      );
+    });
+
+    test('BAD adversarial control: a real unguarded sibling await is STILL '
+        'caught even when the block also carries a comment mentioning '
+        '"await" -- proves blanking comments does not blind the gate to a '
+        'genuine violation sitting right next to one', () {
+      const src = '''
+void main() {
+  tearDownAll(() async {
+    // A bare await here once caused a red main -- see diagnose d3e8a1.
+    try {
+      await a.delete();
+    } catch (_) {}
+    await b.signOut();
+  });
+}
+''';
+      final findings =
+          findUnguardedSiblingAwaits(src, fileLabel: 'x_test.dart');
+      expect(findings, hasLength(1));
+    });
   });
 }

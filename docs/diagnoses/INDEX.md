@@ -6,12 +6,19 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### coach_chat_history_replay (2 bugs)
+- 2026-09-20 d3e8a1 — CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI…
+- 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
+
 ### diet_plan_immediate_load_no_modal (1 bugs)
 - 2026-09-20 6642b5 — Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive…
 
 ### gemini_failure_alert (2 bugs)
 - 2026-09-20 c7f4d1 — `reportGeminiExhaustion` used a constant `source` string ("ai_proxy_gemini_exhausted") for every one of the 3 ai-proxy request types (food_text_analysis, scan_meal, cart_auditor) it is called from —…
 - 2026-09-20 b6e2a4 — Tasks 9-10 of this batch (commits 72a4aa7d, c84eb796) added `reportGeminiExhaustion` — a new write into the `public.alerts` table, reused by the existing `trg_dispatch_critical_alert_notify` trigger…
+
+### not_applicable (1 bugs)
+- 2026-09-20 a8f3c6 — Merging `claude/food-logging-observations-126ab3` into `main` (a conflicted merge, resolved with `git commit`, which runs `pre-commit` -> the merge-commit regression-catalog walk) reported "at least…
 
 ### auth_hive_owner_agreement (3 bugs)
 - 2026-09-20 f4c8b1 — Task 8 of this batch (commit 5bb7a995) changed HiveUserSession's 7 user-scoped box opens from a sequential `for` loop to `Future.wait(userScopedBoxRoots.map(openOne))`. `hive_user_session.dart` is…
@@ -93,9 +100,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### error_telemetry_helper (2 bugs)
 - 2026-09-16 d8e2f4 — Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when…
 - 2026-05-08 b0fd76 — Telemetry payload had no contract (any shape was accepted, breaking structured log queries); restore had a race condition where stale tmpl_* keys from earlier broken restores accumulated and caused…
-
-### coach_chat_history_replay (1 bugs)
-- 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
 
 ### device_session_identity_binding (2 bugs)
 - 2026-09-16 d4a8f6 — The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called…
@@ -1296,9 +1300,11 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-20 | d3e8a1 | CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI… | coach_chat_history_replay | test/edge_functions/ai_proxy_hard_failure_lib_test.dart |
 | 2026-09-20 | 6642b5 | Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive… | diet_plan_immediate_load_no_modal | test/widgets/diet_plan_screen_no_modal_test.dart |
 | 2026-09-20 | c7f4d1 | `reportGeminiExhaustion` used a constant `source` string ("ai_proxy_gemini_exhausted") for every one of the 3 ai-proxy request types (food_text_analysis, scan_meal, cart_auditor) it is called from —… | gemini_failure_alert | supabase/functions/_shared/gemini_failure_alert_test.ts |
 | 2026-09-20 | b6e2a4 | Tasks 9-10 of this batch (commits 72a4aa7d, c84eb796) added `reportGeminiExhaustion` — a new write into the `public.alerts` table, reused by the existing `trg_dispatch_critical_alert_notify` trigger… | gemini_failure_alert | supabase/functions/_shared/gemini_failure_alert_test.ts |
+| 2026-09-20 | a8f3c6 | Merging `claude/food-logging-observations-126ab3` into `main` (a conflicted merge, resolved with `git commit`, which runs `pre-commit` -> the merge-commit regression-catalog walk) reported "at least… | not_applicable | test/contracts/hive_user_session_box_open_parallel_test.dart |
 | 2026-09-20 | f4c8b1 | Task 8 of this batch (commit 5bb7a995) changed HiveUserSession's 7 user-scoped box opens from a sequential `for` loop to `Future.wait(userScopedBoxRoots.map(openOne))`. `hive_user_session.dart` is… | auth_hive_owner_agreement | test/contracts/hive_user_session_box_open_parallel_test.dart |
 | 2026-09-20 | 1261a4 | Opening "LOG TO LUNCH" (or any locked-slot CTA) and logging via the Search tab or the Barcode tab could silently write to a different meal slot than the one the user explicitly tapped — the sheet's… | meal_slot_inference_drift | test/widgets/log_food_sheet_search_respects_locked_slot_test.dart |
 | 2026-09-20 | e1c5b8 | Four related defects surfaced across B-pass reviewer B and the round-2 context-blind plan review, all in the same meal-slot vocabulary/ reactivity surface Task 5-7 of this batch introduced or touched:… | meal_slot_ui_selection | test/nutrition/meal_slot_vocabulary_test.dart |

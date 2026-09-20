@@ -198,8 +198,26 @@ class HiveUserSession {
     // Hive/IO quirk makes concurrent opens of the 7 user-scoped boxes
     // unsafe in practice despite there being no documented open-order
     // dependency among them.
-    if (HiveService.instance.configBox.get('disable_parallel_hive_box_open') ==
-        true) {
+    bool disableParallelOpen = false;
+    try {
+      disableParallelOpen = HiveService.instance.configBox
+              .get('disable_parallel_hive_box_open') ==
+          true;
+    } catch (e, st) {
+      // configBox not yet initialised (very early cold start), OR — the
+      // case this diagnose actually caught — a shared test-setup helper
+      // whose HiveService singleton's `_initialized` flag outlived a
+      // prior test's teardown (which really closed/deleted the box),
+      // so this read is the first thing in the whole suite to touch
+      // configBox from inside the ubiquitous openForUser path. Mirror
+      // the migrationBox pattern above: fall through to the default
+      // (parallel) behavior rather than let the read crash session open.
+      debugPrint(
+          '[HiveUserSession] configBox unavailable for parallel-open flag: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'hive_user_session_config_box_unavailable'));
+    }
+    if (disableParallelOpen) {
       for (final root in userScopedBoxRoots) {
         await openOne(root);
       }
