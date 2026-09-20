@@ -44,8 +44,27 @@ bool isPositionalMisuse(String addedLine) {
   // touching closing markdown/shell punctuation (`` ` ``/`'`/`"`/`)`).
   final tokens = tail.split(RegExp(r'\s+'));
   final first = tokens.first;
-  final firstIsBareDash = RegExp(r'''^-[`')"]*$''').hasMatch(first);
-  if (!firstIsBareDash) return true;
+
+  // A backtick closes a markdown inline code span that opened before this
+  // invocation (every real citation is written as `` `... | dart run ... -` ``).
+  // Everything from that backtick onward — the rest of THIS token, and every
+  // token after it on the physical line — is prose OUTSIDE the shell
+  // snippet: a sentence-ending period, an arrow summarizing the result, the
+  // paragraph continuing to its next clause. None of that is shell syntax to
+  // validate as redirection noise, so stop there rather than scanning past
+  // it. Found live: two real citations (`docs/reviews/oi204-delta-sync-
+  // bpass.md`, `docs/superpowers/plans/2026-09-19-gate-integrity.md`) both
+  // false-positived here — one from a trailing '.', one from trailing prose
+  // after the closing backtick — neither existed in this gate's own test
+  // fixtures, which only covered a citation ending exactly at the backtick.
+  final backtickIdx = first.indexOf('`');
+  final closesAtBacktick = backtickIdx >= 0;
+  final shellPart = closesAtBacktick ? first.substring(0, backtickIdx) : first;
+
+  final shellPartIsBareDash =
+      shellPart == '-' || RegExp(r'''^-[')"]*$''').hasMatch(shellPart);
+  if (!shellPartIsBareDash) return true;
+  if (closesAtBacktick) return false;
 
   // Everything AFTER that bare `-` must be shell noise the dart process
   // never sees as an argument — redirection (`2>/dev/null`, `>file`,

@@ -12,6 +12,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### sot_registry_behavioral_test_path_resolution (1 bugs)
 - 2026-09-19 c7d2e4 — `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture…
 
+### muster_to_profile_bridge (2 bugs)
+- 2026-09-19 d6f1b8 — Founder-flagged verbosity + a live writer/reader-drift bug found while investigating it. Muster asked 3 questions (injuries, wake/workout time, physique focus) AFTER the induction narrative's "I…
+- 2026-05-12 8c4ee3 — After completing the post-onboarding muster flow (MusterScreen) and entering shoulders as a known injury and legs as the body-part priority, Edit Profile continued to show injuries=['none'] and…
+
+### responsive_picker_host (2 bugs)
+- 2026-09-19 e2b8a4 — THREE friend-reported live-web bugs from the same voice-message batch. Two are live-reproduced in-session (not just hypothesized): (1) on the onboarding DOB date picker, the…
+- 2026-06-13 e8a2c1 — Obs#5 (live web E2E, potential onboarding BLOCKER): on the ~698px web mobile- frame the stock Material TIME picker (muster Q2 wake/train time) showed its OK/Cancel action row BELOW the visible frame…
+
 ### plan_review_record_merge_gate (1 bugs)
 - 2026-09-19 b7e2d4 — A branch whose blast-radius is >= account can be merged to main by `sh scripts/safe_merge.sh <branch>` with ZERO output about its missing docs/plan-reviews/{slug}.md. CI's keystone job…
 
@@ -663,9 +671,6 @@ rather than a Hive box. (1 bugs)
 ### expanded_starved_by_fixed_siblings (1 bugs)
 - 2026-06-13 b9c4f1 — Obs#7 (live web E2E, cosmetic): on the AI food-analysis result card (ai_breakdown_card._buildItemRow), item names ("Boiled Eggs", "Chicken Breast 100g") rendered VERTICALLY — one character per line.…
 
-### responsive_picker_host (1 bugs)
-- 2026-06-13 e8a2c1 — Obs#5 (live web E2E, potential onboarding BLOCKER): on the ~698px web mobile- frame the stock Material TIME picker (muster Q2 wake/train time) showed its OK/Cancel action row BELOW the visible frame…
-
 ### onboarding_preview_commit_calc_parity (1 bugs)
 - 2026-06-13 f1b6d4 — Obs#6 (live web E2E): the onboarding plan-PREVIEW card (plan_screen step 05) showed "2867 KCAL" but the SAVED + home-displayed daily_calories was 3200 — the number the user commits to differed from…
 
@@ -1107,9 +1112,6 @@ rather than a Hive box. (1 bugs)
 ### last_performance_per_set_semantics (1 bugs)
 - 2026-05-12 a8f1c2 — "Active workout screen pre-fills REPS input with 85 on every set of Hanging Leg Raise (4 prescribed sets × 14 reps, bodyweight). 85 is the sum of the user's previous 7-set session…
 
-### muster_to_profile_bridge (1 bugs)
-- 2026-05-12 8c4ee3 — After completing the post-onboarding muster flow (MusterScreen) and entering shoulders as a known injury and legs as the body-part priority, Edit Profile continued to show injuries=['none'] and…
-
 ### workout_log_exercises_input_validation (1 bugs)
 - 2026-05-12 e6a2d4 — "LAST: 50KG · 135 REPS" rendered above Leg Extension in active workout screen — 135 reps per set is unrealistic. Cloud `workout_log_exercises` had 3 corrupt rows from May 7 with set_number=15 +…
 
@@ -1275,6 +1277,8 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-09-19 | d3f8a6 | OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in… | exercise_log_sync_fingerprint_skip | test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart |
 | 2026-09-19 | c7d2e4 | `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture… | sot_registry_behavioral_test_path_resolution | test/scripts/sot_behavioral_test_paths_gate_test.dart |
+| 2026-09-19 | d6f1b8 | Founder-flagged verbosity + a live writer/reader-drift bug found while investigating it. Muster asked 3 questions (injuries, wake/workout time, physique focus) AFTER the induction narrative's "I… | muster_to_profile_bridge | test/contracts/muster_to_profile_bridge_behavioral_test.dart |
+| 2026-09-19 | e2b8a4 | THREE friend-reported live-web bugs from the same voice-message batch. Two are live-reproduced in-session (not just hypothesized): (1) on the onboarding DOB date picker, the… | responsive_picker_host | test/contracts/responsive_picker_host_test.dart, test/contracts/wake_workout_time_picker_dial_only_test.dart, test/contracts/dob_picker_calendar_only_and_builder_test.dart, test/contracts/mobile_frame_mediaquery_test.dart |
 | 2026-09-19 | b7e2d4 | A branch whose blast-radius is >= account can be merged to main by `sh scripts/safe_merge.sh <branch>` with ZERO output about its missing docs/plan-reviews/{slug}.md. CI's keystone job… | plan_review_record_merge_gate | test/scripts/safe_merge_test.dart |
 | 2026-09-19 | b3e7a1 | Six `scripts/check_*.dart` gates ran NOWHERE — not in pre-commit's loop, not in CI's loop, not from /build-apk, not from any hook — while Gate 33 (`scripts/check_gate_scripts_wired.dart`, whose whole… | gate_fail_closed_discipline | test/scripts/gate_scripts_wired_runners_test.dart |
 | 2026-09-18 | e6c2a9 | Tool-integrity audit (2026-09-18, spec docs/superpowers/specs/2026-09-18-ai-coach-ux-tool-integrity-design.md) found that after the AI coach logs a meal from chat (log_meal_by_text), the Nutrition… | nutrition_ai_text_log_remaining | test/contracts/coach_meal_log_invalidates_remaining_test.dart |

@@ -418,4 +418,15 @@ const _alwaysOk = <String>{
   // tool_dispatcher.dart because the same file also reads `schedule_<date>`
   // keys in the write loop immediately above each splice.
   'week_plans',
+  // e2b8a4 (2026-09-19) — `wake_up_time` / `preferred_workout_time` are
+  // canonical userBox['profile'] fields (written by edit_profile_screen.dart's
+  // save at :1857-1858, read back at :257/:270), read off
+  // `UserRepository.instance.getProfile()` by
+  // ai_snapshot_builder._getInductionAndMusterKeys() so the coach snapshot
+  // reflects the freshest profile value instead of a stale muster-only
+  // coachBox mirror (see that method's own header comment). NOT exlog_*/
+  // nlog_*/wlog_* fields (no such writer emits either); the prefix heuristic
+  // mis-attributes them because ai_snapshot_builder.dart also reads those
+  // log prefixes elsewhere for the PR/meals/logs snapshot.
+  'wake_up_time', 'preferred_workout_time',
 };

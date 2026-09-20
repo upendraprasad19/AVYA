@@ -73,6 +73,16 @@ List<String> findDirBlindExistsSyncCalls(String diffText) {
     if (!line.startsWith('+') || line.startsWith('+++')) continue;
 
     final added = line.substring(1);
+    // A line whose first non-whitespace characters are `//` is ENTIRELY a
+    // comment in Dart — never a call site, even when its prose happens to
+    // quote the exact `File(...).existsSync()` shape (e.g. a docstring
+    // explaining why this gate exists, which is exactly what
+    // scripts/check_sot_behavioral_test_paths.dart's own `///` lines do —
+    // found live when this gate's own introduction stopped the
+    // web-app-bugs-onboarding-a5a020 merge on two of them). A line with a
+    // TRAILING `//` comment after real code is NOT skipped here — only a
+    // line that IS a comment from its first character onward.
+    if (added.trimLeft().startsWith('//')) continue;
     if (!_existsSyncCall.hasMatch(added)) continue;
     if (added.contains('// file-only:')) continue;
 

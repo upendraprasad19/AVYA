@@ -84,5 +84,25 @@ void main() {
       ]);
       expect(findDirBlindExistsSyncCalls(diff), isEmpty);
     });
+
+    test(
+        'GOOD: a comment quoting the exact call shape in prose is not a '
+        'call site (scripts/check_sot_behavioral_test_paths.dart:46,76 '
+        'verbatim shapes — false-positived before this fix)', () {
+      final diff = diffFor('scripts/check_something.dart', [
+        '//     `# <id> — note`) and must resolve via File(...).existsSync() from CWD.',
+        '/// EXISTENCE is the contract, not file-ness: `File(...).existsSync()` answers',
+      ]);
+      expect(findDirBlindExistsSyncCalls(diff), isEmpty);
+    });
+
+    test(
+        'BAD: still catches a real call with a TRAILING comment on the same '
+        'line (the fix must not weaken real detection)', () {
+      final diff = diffFor('scripts/check_something.dart', [
+        '  if (!File(citedPath).existsSync()) { // trailing note, not the whole line',
+      ]);
+      expect(findDirBlindExistsSyncCalls(diff), hasLength(1));
+    });
   });
 }

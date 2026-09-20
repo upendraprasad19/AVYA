@@ -1,22 +1,28 @@
-// APK Test #15.4 / Bug 2b — pins the muster → profile bridge contract.
+// APK Test #15.4 / Bug 2b, retired 2026-09-19 (diagnose e2b8a4) — pins the
+// muster → profile bridge contract.
 //
-// Bug class: writer/reader drift. The muster (coach induction Q1-Q5)
-// captures injuries / wake time / preferred workout time / physique
-// focus into coachBox. Edit Profile + plan generator read profile
-// fields from userBox['profile']. Pre-B2b, the muster never mirrored
-// its values into the profile, so the user answered the questions and
-// the profile still read defaults.
+// Bug class: writer/reader drift. The muster used to capture injuries /
+// wake time / preferred workout time / physique focus into coachBox, live-
+// bridging each into userBox['profile'] on every answer. That bridge had
+// no "don't clobber" guard — since muster always ran AFTER onboarding, its
+// injuries answer silently overwrote whatever the user told Details.
+// known_injuries / typical_wake_time / preferred_workout_time are RETIRED
+// as muster questions: injuries is Details screen's job now (no double-ask,
+// no clobber), wake/workout-time is Edit Profile's job (which already had
+// full UI for it — muster was pure duplication). recordMusterAnswer now
+// REJECTS all three.
 //
 // This contract pins:
-//   - Bridged keys land in BOTH coachBox (existing) and
-//     userBox['profile'] (new).
-//   - body_part_priorities only bridges when single-element (post-B2d
-//     migration); legacy multi-select shapes are skipped (no fuzzy
-//     guess).
-//   - why_now / definition_of_winning are NOT mapped to profile.
-//
-// Per docs/architecture/sync.md "Source of Truth Rules" — the muster is the SoT
-// for these facts; profile reads from a mirrored copy.
+//   - The 3 retired keys throw ArgumentError — recordMusterAnswer is no
+//     longer a live writer for them.
+//   - body_part_priorities (physique focus, muster's one surviving
+//     question) still bridges into BOTH coachBox and userBox['profile'],
+//     only when single-element (post-B2d migration) — legacy multi-select
+//     shapes are skipped (no fuzzy guess).
+//   - why_now / definition_of_winning were already dead (Q1/Q2 dropped
+//     per APK Test #15.4/B2a) and are now also rejected, for the same
+//     reason as the other retirees: recordMusterAnswer should only accept
+//     keys a live caller can actually send.
 
 import 'dart:io';
 
@@ -70,36 +76,34 @@ void main() {
     await UserRepository.instance.saveProfile({'id': 'test-uid'});
   });
 
-  test('known_injuries -> profile.injuries', () async {
-    await InductionService.instance
-        .recordMusterAnswer('known_injuries', ['shoulders', 'lower back']);
-
-    // Raw muster answer is stored verbatim in coachBox.
-    expect(HiveService.instance.coachBox.get('known_injuries'),
-        ['shoulders', 'lower back']);
-    // U1 (a1f6c3): the profile (engine-facing) value is CANONICALIZED via
-    // InjuryVocab so the plan engine's exact-match filter matches it
-    // ('shoulders' → shoulder, 'lower back' → lower_back).
-    final profile = UserRepository.instance.getProfile()!;
-    expect(profile['injuries'], ['shoulder', 'lower_back']);
+  test('known_injuries is rejected — retired muster question', () async {
+    expect(
+      () => InductionService.instance
+          .recordMusterAnswer('known_injuries', ['shoulders']),
+      throwsArgumentError,
+    );
+    // No write happened on either side.
+    expect(HiveService.instance.coachBox.get('known_injuries'), isNull);
   });
 
-  test('typical_wake_time -> profile.wake_up_time', () async {
-    await InductionService.instance
-        .recordMusterAnswer('typical_wake_time', '06:30');
-
-    expect(HiveService.instance.coachBox.get('typical_wake_time'), '06:30');
-    expect(UserRepository.instance.getProfile()!['wake_up_time'], '06:30');
+  test('typical_wake_time is rejected — retired muster question', () async {
+    expect(
+      () => InductionService.instance
+          .recordMusterAnswer('typical_wake_time', '06:30'),
+      throwsArgumentError,
+    );
+    expect(HiveService.instance.coachBox.get('typical_wake_time'), isNull);
   });
 
-  test('preferred_workout_time -> profile.preferred_workout_time', () async {
-    await InductionService.instance
-        .recordMusterAnswer('preferred_workout_time', '07:15');
-
-    expect(HiveService.instance.coachBox.get('preferred_workout_time'),
-        '07:15');
-    expect(UserRepository.instance.getProfile()!['preferred_workout_time'],
-        '07:15');
+  test('preferred_workout_time is rejected — retired muster question',
+      () async {
+    expect(
+      () => InductionService.instance
+          .recordMusterAnswer('preferred_workout_time', '07:15'),
+      throwsArgumentError,
+    );
+    expect(
+        HiveService.instance.coachBox.get('preferred_workout_time'), isNull);
   });
 
   test('body_part_priorities single -> profile.physique_focus', () async {
@@ -127,20 +131,20 @@ void main() {
         'balanced');
   });
 
-  test('why_now / definition_of_winning -> no profile write', () async {
-    await InductionService.instance
-        .recordMusterAnswer('why_now', 'October wedding');
-    await InductionService.instance
-        .recordMusterAnswer('definition_of_winning', 'Feel strong');
-
-    expect(HiveService.instance.coachBox.get('why_now'), 'October wedding');
+  test('why_now / definition_of_winning are rejected — dropped pre-B2a',
+      () async {
+    expect(
+      () => InductionService.instance
+          .recordMusterAnswer('why_now', 'October wedding'),
+      throwsArgumentError,
+    );
+    expect(
+      () => InductionService.instance
+          .recordMusterAnswer('definition_of_winning', 'Feel strong'),
+      throwsArgumentError,
+    );
+    expect(HiveService.instance.coachBox.get('why_now'), isNull);
     expect(HiveService.instance.coachBox.get('definition_of_winning'),
-        'Feel strong');
-    final profile = UserRepository.instance.getProfile()!;
-    // No bridged fields landed.
-    expect(profile['injuries'], isNull);
-    expect(profile['wake_up_time'], isNull);
-    expect(profile['preferred_workout_time'], isNull);
-    expect(profile['physique_focus'], isNull);
+        isNull);
   });
 }

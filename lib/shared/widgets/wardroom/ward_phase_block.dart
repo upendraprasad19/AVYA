@@ -73,6 +73,8 @@ class WardPhaseBlock extends StatelessWidget {
                       Expanded(
                         child: Text(
                           title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: AppTypography.h3.copyWith(
                             fontSize: 15,
                             color: active
@@ -82,11 +84,23 @@ class WardPhaseBlock extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Text(
-                        weeksLabel.toUpperCase(),
-                        style: AppTypography.monoXs.copyWith(
-                          color: AppColors.textMute,
-                          letterSpacing: 1.5,
+                      // Flexible (not a bare Text) — a maxLines/overflow set
+                      // on an unconstrained Row child does nothing: ellipsis
+                      // only activates once something actually bounds the
+                      // Text's width. Without this, weeksLabel's intrinsic
+                      // width is claimed FIRST by the Row's layout algorithm,
+                      // so at narrow widths (diagnose e2b8a4's own "FOUNDATION"
+                      // squeeze test) the Row overflows regardless of what
+                      // the Expanded title does.
+                      Flexible(
+                        child: Text(
+                          weeksLabel.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.monoXs.copyWith(
+                            color: AppColors.textMute,
+                            letterSpacing: 1.5,
+                          ),
                         ),
                       ),
                     ],

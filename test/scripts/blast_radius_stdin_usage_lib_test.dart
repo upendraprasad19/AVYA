@@ -100,5 +100,39 @@ void main() {
         isTrue,
       );
     });
+
+    test(
+        'GOOD: markdown citation closed by backtick, followed by a '
+        'sentence-ending period (docs/reviews/oi204-delta-sync-bpass.md:17 '
+        'verbatim shape — false-positived before this fix)', () {
+      expect(
+        isPositionalMisuse(
+            '`git diff main...HEAD --name-only | dart run scripts/blast_radius_from_diff.dart -`. Two fresh'),
+        isFalse,
+      );
+    });
+
+    test(
+        'GOOD: markdown citation closed by backtick, followed by more prose '
+        'on the same physical line (docs/superpowers/plans/2026-09-19-gate-'
+        'integrity.md:1237 verbatim shape — false-positived before this fix)',
+        () {
+      expect(
+        isPositionalMisuse(
+            "Verify: `printf '%s\\n' <each> | dart run scripts/blast_radius_from_diff.dart -` → platform ×6; done."),
+        isFalse,
+      );
+    });
+
+    test(
+        'BAD: still catches a genuine positional arg even when a backtick '
+        'follows it later on the line (the fix must not weaken real '
+        'detection)', () {
+      expect(
+        isPositionalMisuse(
+            'git diff --name-only main head | dart run scripts/blast_radius_from_diff.dart lib/foo.dart`'),
+        isTrue,
+      );
+    });
   });
 }

@@ -22,6 +22,7 @@ import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/utils/name_format.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
+import 'package:icanbefitter/shared/widgets/responsive_picker_builder.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
@@ -669,6 +670,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       initialDate: initial.isAfter(max) ? max : initial,
       firstDate: min,
       lastDate: max,
+      // e2b8a4 round-1 review finding: this call had no builder at all,
+      // exposing it to the SAME DM-Sans-family day/year-cell wrap as
+      // identity_screen.dart's DOB picker (fixed) — same builder, same fix.
+      builder: responsivePickerBuilder,
+      // calendarOnly: identity_screen.dart's sibling call gets this too —
+      // the entry-mode toggle is reachable from the default calendar mode
+      // regardless, and Material's input-mode dialog has its own fixed
+      // width never verified safe at MobileFrame's narrowest content width.
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
     );
     if (picked != null && mounted) {
       setState(() => _dateOfBirth = picked);
@@ -715,6 +725,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final picked = await showTimePicker(
       context: context,
       initialTime: _wakeUpTime ?? const TimeOfDay(hour: 7, minute: 0),
+      // dialOnly: the entry-mode toggle icon (dial <-> keyboard) is reachable
+      // from the default dial mode regardless of this parameter, and
+      // Material's input-mode layout clips its AM/PM toggle + OK button at
+      // MobileFrame's narrow web content width (diagnose e2b8a4) — removing
+      // the toggle removes the only path into that broken state.
+      initialEntryMode: TimePickerEntryMode.dialOnly,
     );
     if (picked != null && mounted) {
       setState(() => _wakeUpTime = picked);
@@ -764,6 +780,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       context: context,
       initialTime:
           _preferredWorkoutTime ?? const TimeOfDay(hour: 7, minute: 0),
+      // See _pickWakeUpTime's comment — same rationale, same diagnose e2b8a4.
+      initialEntryMode: TimePickerEntryMode.dialOnly,
     );
     if (picked != null && mounted) {
       setState(() => _preferredWorkoutTime = picked);

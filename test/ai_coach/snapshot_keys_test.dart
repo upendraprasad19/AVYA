@@ -678,17 +678,21 @@ void main() {
       expect(ctx['days_since_commitment'], 5);
     });
 
-    test('muster answers round-trip', () async {
+    test(
+        'muster + profile answers round-trip (diagnose e2b8a4, 2026-09-19: '
+        'known_injuries/typical_wake_time/preferred_workout_time/'
+        'body_part_priorities now read the PROFILE, not the muster-only '
+        'coachBox mirror — see ai_snapshot_builder.dart '
+        '_getInductionAndMusterKeys)', () async {
       await HiveService.instance.coachBox.put('why_now', 'wedding in October');
       await HiveService.instance.coachBox.put(
           'definition_of_winning', 'feel strong');
-      await HiveService.instance.coachBox
-          .put('known_injuries', ['lower back', 'right knee']);
-      await HiveService.instance.coachBox.put('typical_wake_time', '06:30');
-      await HiveService.instance.coachBox
-          .put('preferred_workout_time', '07:00');
-      await HiveService.instance.coachBox
-          .put('body_part_priorities', ['back', 'shoulders']);
+      await HiveService.instance.userBox.put('profile', {
+        'injuries': ['lower back', 'right knee'],
+        'wake_up_time': '06:30',
+        'preferred_workout_time': '07:00',
+        'physique_focus': 'strength',
+      });
 
       final ctx = AiCoachRepository.instance.buildAiContext();
       expect(ctx['why_now'], 'wedding in October');
@@ -696,7 +700,29 @@ void main() {
       expect(ctx['known_injuries'], ['lower back', 'right knee']);
       expect(ctx['typical_wake_time'], '06:30');
       expect(ctx['preferred_workout_time'], '07:00');
-      expect(ctx['body_part_priorities'], ['back', 'shoulders']);
+      expect(ctx['body_part_priorities'], ['strength']);
+    });
+
+    test(
+        'a coachBox-only write (the RETIRED muster path) no longer reaches '
+        'the snapshot for these 4 keys — proves the fix, not just the new '
+        'behavior', () async {
+      await HiveService.instance.coachBox
+          .put('known_injuries', ['should not appear']);
+      await HiveService.instance.coachBox
+          .put('typical_wake_time', 'should-not-appear');
+      await HiveService.instance.coachBox
+          .put('preferred_workout_time', 'should-not-appear');
+      await HiveService.instance.coachBox
+          .put('body_part_priorities', ['should_not_appear']);
+      // Profile has none of these set.
+      await HiveService.instance.userBox.delete('profile');
+
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      expect(ctx['known_injuries'], isEmpty);
+      expect(ctx['typical_wake_time'], isNull);
+      expect(ctx['preferred_workout_time'], isNull);
+      expect(ctx['body_part_priorities'], isEmpty);
     });
 
     test('days_since_commitment handles malformed committed_at gracefully',

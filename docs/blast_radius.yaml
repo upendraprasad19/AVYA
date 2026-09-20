@@ -336,6 +336,21 @@ paths:
   # directory glob would silently promote whatever lands there next, which
   # is a claim this rule cannot make.
   - { glob: "lib/shared/mixins/hive_tab_scaffold.dart", tier: account }
+  # e2b8a4 B-pass Finding 4 (2026-09-20), same one-file argument as the two
+  # rules above. lib/app.dart's MobileFrame is the single `MaterialApp.router`
+  # `builder:` wrapper for the ENTIRE web app — every screen, dialog, and
+  # root-navigator overlay renders inside its `child` on any web viewport
+  # wider than 500px, and it owns the MediaQuery every one of those
+  # descendants sees. lib/app.dart is a bare file directly under lib/, so it
+  # matches none of the lib/features/**, lib/core/**, or lib/shared/** globs
+  # and falls through to `default_tier: feature` below — a diff touching
+  # ONLY MobileFrame (e.g. a further MediaQuery-propagation tweak) would
+  # clear zero review gate while changing global web layout/orientation
+  # decisions for literally every screen in the app. That is a strictly
+  # larger blast radius than "one feature degraded for some users", the
+  # feature tier's own definition. Scoped to the single file rather than a
+  # directory glob because lib/app.dart is the only file at that path.
+  - { glob: "lib/app.dart", tier: account }
 
   # ----- feature (explicit overrides over default) -----
   - { glob: "lib/features/profile/**", tier: feature }

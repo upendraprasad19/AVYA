@@ -5,7 +5,6 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
-import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Single source for induction state. Idempotency lives here — [hasCommitted]
@@ -14,9 +13,22 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 /// Hive keys (in coachBox):
 ///   committed_at              ISO datetime when user tapped I COMMIT
 ///   committed_to_lt_cdr       bool, set true on commitment
-///   induction_completed_at    ISO datetime when 5-question muster finished
+///   induction_completed_at    ISO datetime when the induction sequence
+///                             (muster + I COMMIT) finished
+///   body_part_priorities      → the one live muster answer (physique focus)
 ///   why_now / definition_of_winning / known_injuries / typical_wake_time /
-///   preferred_workout_time / body_part_priorities  → muster answers
+///   preferred_workout_time    → RETIRED muster questions (diagnose e2b8a4,
+///                             2026-09-19). No longer written by any live
+///                             flow — injuries and wake/workout-time are
+///                             either collected during onboarding
+///                             (`profile['injuries']`) or left to Edit
+///                             Profile (`profile['wake_up_time']` /
+///                             `profile['preferred_workout_time']`), which
+///                             already has UI for both. These keys are kept
+///                             READABLE (never written) solely so
+///                             [backfillMusterToProfileIfNeeded] can still
+///                             migrate pre-existing users' old answers onto
+///                             their profile.
 class InductionService {
   static final InductionService instance = InductionService._();
   InductionService._();
@@ -53,12 +65,12 @@ class InductionService {
     }
   }
 
+  // why_now / definition_of_winning / known_injuries / typical_wake_time /
+  // preferred_workout_time are deliberately absent — retired (see class
+  // header). recordMusterAnswer is muster's only caller and muster no
+  // longer asks any of them; body_part_priorities (physique focus) is the
+  // one still-live question.
   static const _allowedMusterKeys = {
-    'why_now',
-    'definition_of_winning',
-    'known_injuries',
-    'typical_wake_time',
-    'preferred_workout_time',
     'body_part_priorities',
   };
 
@@ -90,19 +102,6 @@ class InductionService {
   Future<void> _bridgeToProfile(String musterKey, dynamic value) async {
     final Map<String, dynamic> fields;
     switch (musterKey) {
-      case 'known_injuries':
-        // U1 (CRIT-2): muster/induction writes FREE-TEXT injuries ("lower back",
-        // "bad knee") straight into profile['injuries'] — the engine's exact-match
-        // filter never matched them. Canonicalize at the SoT write so every caller
-        // is covered. Preserve the ['none'] sentinel when nothing maps (keeps the
-        // completeness-nudge convention intact).
-        final normalized =
-            InjuryVocab.normalize((value as List).map((e) => e.toString()));
-        fields = {'injuries': normalized.isEmpty ? const ['none'] : normalized};
-      case 'typical_wake_time':
-        fields = {'wake_up_time': value as String};
-      case 'preferred_workout_time':
-        fields = {'preferred_workout_time': value as String};
       case 'body_part_priorities':
         final v = (value as List).cast<String>();
         // Only bridge single-select (B2d). Multi-select legacy data
@@ -110,7 +109,8 @@ class InductionService {
         if (v.length != 1) return;
         fields = {'physique_focus': v.first};
       default:
-        // why_now / definition_of_winning — no profile mapping.
+        // Unreachable: recordMusterAnswer's _allowedMusterKeys guard only
+        // ever lets 'body_part_priorities' reach here.
         return;
     }
 
@@ -123,9 +123,13 @@ class InductionService {
     }
   }
 
-  /// Marks the muster complete. Writes Hive + fires sync + pushSnapshot
-  /// fire-and-forget per docs/architecture/sync.md.
-  Future<void> completeMuster() async {
+  /// Marks the whole induction sequence (muster + I COMMIT) complete. Writes
+  /// Hive + fires sync + pushSnapshot fire-and-forget per
+  /// docs/architecture/sync.md. Called from InductionScreen's I COMMIT
+  /// handler (diagnose e2b8a4, 2026-09-19 — muster now runs BEFORE the
+  /// induction narrative, so nothing is asked after I COMMIT; this is the
+  /// terminal stamp for the whole sequence, not just muster).
+  Future<void> completeInduction() async {
     final now = DateTime.now().toIso8601String();
     await HiveService.instance.coachBox.put('induction_completed_at', now);
     final userId =

@@ -90,6 +90,12 @@ class _IdentityScreenState extends State<IdentityScreen> {
       // Obs#5: shared builder applies the Wardroom theme AND keeps the OK/Cancel
       // row reachable at short viewports (the action row clipped on web).
       builder: responsivePickerBuilder,
+      // calendarOnly: e2b8a4 round-1 review finding — the entry-mode toggle
+      // icon is reachable from the default calendar mode regardless of
+      // this parameter, and Material's input-mode dialog has its own fixed
+      // width never verified safe at MobileFrame's narrowest content width
+      // (same reachable-toggle shape as the time picker's dialOnly fix).
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
     );
     if (picked != null) setState(() => _dob = picked);
   }
